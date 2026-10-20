@@ -1,10 +1,10 @@
+import { useNow } from "../../lib/useNow";
 // One summary line per turn, and a flat list of tool rows named by what they
 // touched.
 import {
   createContext,
   Fragment,
   useContext,
-  useEffect,
   useRef,
   useState,
   type ReactElement,
@@ -61,11 +61,7 @@ function WorkingTimer({
   started: number;
   elapsed?: number;
 }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+  const now = useNow(1000);
   return <>{duration(elapsed + now - started)}</>;
 }
 
@@ -539,12 +535,9 @@ export function AgentTurn({
  * keeps the word from changing each time it does.
  */
 function ThinkingWord({ seed }: { seed: string }) {
-  const [word, setWord] = useState(() => thinkingWord(seed));
+  const now = useNow(1000);
+  const word = thinkingWord(seed, now);
   const first = useRef(word);
-  useEffect(() => {
-    const timer = setInterval(() => setWord(thinkingWord(seed)), 1000);
-    return () => clearInterval(timer);
-  }, [seed]);
   // Only a word that changes in place fades in; a remount shows it as it was.
   return (
     <span
