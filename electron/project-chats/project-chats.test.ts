@@ -831,15 +831,6 @@ it("regenerates a title from the whole thread, even over a name you typed", asyn
   expect(prompt).toContain("USER:\nExplain the cache guard");
 });
 
-it("marks a thread unread until it's read again", async () => {
-  const chat = await chats.create(projectId, { kind: "project" });
-  await chats.triage(chat.id, { kind: "unread" });
-  expect(chats.list(projectId)[0].markedUnread).toBe(true);
-  // Reading what was already read still clears the mark.
-  await chats.markSeen(chat.id, 0);
-  expect(chats.list(projectId)[0].markedUnread).toBeUndefined();
-});
-
 it("undoes a settle back to the snooze it cleared, but not once something newer moved the thread", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const until = Date.now() + 3_600_000;

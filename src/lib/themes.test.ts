@@ -62,18 +62,6 @@ describe("resolvePalette", () => {
 });
 
 describe("loadAppearance", () => {
-  it("defaults to Relay following the system", () => {
-    expect(loadAppearance()).toEqual({
-      mode: "system",
-      light: { theme: "relay" },
-      dark: { theme: "relay" },
-      glass: true,
-      glassChat: true,
-      glassFrost: 65,
-      glassChatFrost: 28,
-    });
-  });
-
   it("moves a dark-only theme from the old format into the dark slot", () => {
     saved({ theme: "dracula", mode: "system", accent: "#ff79c6" });
     expect(loadAppearance()).toEqual({

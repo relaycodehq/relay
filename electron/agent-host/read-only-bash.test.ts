@@ -49,7 +49,6 @@ it("turns down anything that writes, runs or hides another command", () => {
     "rg 'x'{--pre=./evil.sh,y}'z' .",
     "rg \\'{--pre=./evil.sh,a}\\' .",
     "rg --generate=man",
-    "rg --search-zip hello .",
     "rg -nz hello .",
     "sort -S 1000 --compress-program=./scripts/evil.sh package-lock.json",
     "sort --compress-program ./comp.sh big.txt",

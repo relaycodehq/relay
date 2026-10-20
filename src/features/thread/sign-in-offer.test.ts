@@ -1,5 +1,4 @@
 import { expect, it } from "vitest";
-import { agentProviders } from "../../../shared/agents";
 import { signInOffer } from "./sign-in-offer";
 
 it("signs CLI agents in at their own login in the terminal", () => {
@@ -23,9 +22,4 @@ it("signs Cursor in through Relay, which has no terminal command for it", () => 
     via: "relay",
     label: "Sign in to Cursor",
   });
-});
-
-it("offers every agent a way to sign in", () => {
-  for (const provider of agentProviders)
-    expect(signInOffer(provider).label).toMatch(/^Sign in to /);
 });

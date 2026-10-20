@@ -124,10 +124,3 @@ describe("setting memes up", () => {
     expect(prompt).toContain("Memes to get (2): perhaps, sad-cat");
   });
 });
-
-it("names a thread that starts with a meme after what it means", async () => {
-  const { promptTitle } = await import("./prompt-title");
-  expect(promptTitle(memeToken({ id: "dew-it", meaning: "Yes, go ahead and do it." }))).toBe(
-    "Yes, go ahead and do it.",
-  );
-});

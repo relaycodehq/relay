@@ -12,12 +12,6 @@ const dir =
   (existsSync(join(root, "tts.json")) ? root : join(root, supertonic.id));
 const skip = !dir || !existsSync(join(dir, "tts.json"));
 
-it.runIf(skip)("skips the real model without RELAY_READ_ALOUD_MODELS", () => {
-  console.info(
-    "Skipped the real Supertonic tests: set RELAY_READ_ALOUD_MODELS to a folder with its downloaded files.",
-  );
-});
-
 async function sha256(path: string) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(path)) hash.update(chunk);

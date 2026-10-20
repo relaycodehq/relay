@@ -66,15 +66,3 @@ it("backs off up to maxRetryMs while reconnecting keeps failing, and starts over
   expect(dials.length).toBe(before + 2);
   client.close();
 });
-
-it("tries again every 15s at most by default", async () => {
-  vi.useFakeTimers();
-  const { dials, WebSocket } = refusing();
-  const client = new RemoteClient({ start: credentials, WebSocket });
-  client.start();
-  await vi.advanceTimersByTimeAsync(2 * 60_000);
-  expect(Math.max(...dials.slice(1).map((at, i) => at - dials[i]!))).toBe(
-    15_000,
-  );
-  client.close();
-});

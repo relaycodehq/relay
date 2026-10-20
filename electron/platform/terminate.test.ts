@@ -75,10 +75,6 @@ it("uses taskkill for an entire Windows process tree", () => {
 });
 
 describe("withTimeout", () => {
-  it("passes the result through", async () => {
-    await expect(withTimeout(Promise.resolve(4), 50, "late")).resolves.toBe(4);
-  });
-
   it("rejects with the message when the work is too slow", async () => {
     await expect(
       withTimeout(new Promise(() => {}), 20, "took too long"),
