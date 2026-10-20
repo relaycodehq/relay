@@ -16,7 +16,7 @@ export function claudeSlug(path: string) {
 
 /**
  * Where a session ran and whether it came from the `claude` command in a
- * terminal, from the first fields that say so. They are matched in the raw
+ * terminal or the Claude app, from the first fields that say so. They are matched in the raw
  * text: a long first prompt can leave its line unfinished in the head read.
  */
 export function claudeOrigin(text: string) {
@@ -26,8 +26,10 @@ export function claudeOrigin(text: string) {
   try {
     return {
       cwd: JSON.parse(cwd) as string,
-      // Relay's own sessions, and `claude -p`, say "sdk-cli".
+      // Relay's own sessions say "sdk-ts", and `claude -p` "sdk-cli".
       terminal: entrypoint === "cli",
+      // The Claude app runs Claude Code too and keeps its sessions in the same place.
+      ...(entrypoint === "claude-desktop" ? { app: true as const } : {}),
     };
   } catch {
     return;

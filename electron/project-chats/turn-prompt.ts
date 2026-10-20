@@ -108,9 +108,11 @@ export function turnPrompt({
   const side = !parent
     ? fork
       ? chat.fromTerminal?.how === "forked" && chat.forkedAt === fork.from.id
-        ? chat.fromTerminal.open
-          ? "\nThis thread continues a copy of your session from a terminal, where it is still open, cut after your answer above. Work may continue there; re-read files before relying on what you saw."
-          : "\nThis thread continues a copy of your session from a terminal, cut after your answer above. Re-read files before relying on what you saw."
+        ? chat.fromTerminal.app
+          ? `\nThis thread continues a copy of your session from the ${agentName(provider)} app, cut after your answer above. Work may continue there; re-read files before relying on what you saw.`
+          : chat.fromTerminal.open
+            ? "\nThis thread continues a copy of your session from a terminal, where it is still open, cut after your answer above. Work may continue there; re-read files before relying on what you saw."
+            : "\nThis thread continues a copy of your session from a terminal, cut after your answer above. Re-read files before relying on what you saw."
         : "\nThis thread was forked from another after your answer above. Work may have continued there since; re-read files before relying on what you saw."
       : ""
     : fork

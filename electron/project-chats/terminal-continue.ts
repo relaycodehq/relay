@@ -135,6 +135,7 @@ export class TerminalContinue {
         session: session.id,
         how: !copy ? "resumed" : cut ? "forked" : "text",
         open: session.live,
+        ...(session.app ? { app: true as const } : {}),
         through: last.id,
       },
     };

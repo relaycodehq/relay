@@ -1,4 +1,4 @@
-// Claude Code and Codex sessions started in a terminal in a project's folder,
+// Claude Code and Codex sessions started in a terminal, or the Claude app, in a project's folder,
 // for a thread to continue. Only listed when asked; nothing is imported until
 // one is picked.
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -15,6 +15,7 @@ import {
   claudeSlug,
   claudeSummary,
 } from "./claude";
+import { ClaudeAppTitles } from "./claude-app";
 import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 import { FileCache, head } from "./scan";
@@ -44,7 +45,8 @@ type File = {
   mtime: number;
   size: number;
 };
-type Origin = { id: string; cwd: string; terminal: boolean } | undefined;
+type Origin =
+  { id: string; cwd: string; terminal: boolean; app?: true } | undefined;
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
@@ -77,6 +79,7 @@ export class TerminalSessions {
     private homes: () => Promise<SessionHome[]>,
     private now = () => Date.now(),
     private open = claudeOpen,
+    private appTitles = new ClaudeAppTitles(),
   ) {}
 
   /** The project's terminal sessions, newest first. */
@@ -84,17 +87,19 @@ export class TerminalSessions {
     const roots = new Set([root, (await real(root)) ?? root]);
     const found = await this.candidates(roots, MOST_ROWS);
     const live = await this.live(found);
+    const named = await this.appNames(found);
     return Promise.all(
       found.map(async ({ file, origin }) => {
         const { title, turns } = await this.summary(file, origin.id);
         return {
           provider: file.provider,
           id: origin.id,
-          title: title || "Untitled session",
+          title: named.get(origin.id) || title || "Untitled session",
           updated: file.mtime,
           turns,
           account: file.account,
           live: live(file, origin.id),
+          ...(origin.app ? { app: true as const } : {}),
           path: file.path,
         } satisfies FoundSession;
       }),
@@ -115,8 +120,18 @@ export class TerminalSessions {
       account: found.file.account,
       path: found.file.path,
       live: live(found.file, found.origin.id),
-      title: (await this.summary(found.file, found.origin.id)).title,
+      ...(found.origin.app ? { app: true as const } : {}),
+      title:
+        (await this.appNames([found])).get(found.origin.id) ||
+        (await this.summary(found.file, found.origin.id)).title,
     };
+  }
+
+  /** The Claude app's titles, looked up only when one of its sessions is listed. */
+  private async appNames(found: { origin: NonNullable<Origin> }[]) {
+    return found.some(({ origin }) => origin.app)
+      ? this.appTitles.get()
+      : new Map<string, string>();
   }
 
   /**
@@ -245,7 +260,8 @@ export class TerminalSessions {
   }
 
   /**
-   * Up to `most` terminal sessions started in one of `roots`, newest first.
+   * Up to `most` terminal and Claude app sessions started in one of `roots`,
+   * newest first.
    * Most files in these folders are Relay's own sessions or another folder's,
    * so heads are read newest first until enough of them are this project's.
    */
@@ -268,7 +284,7 @@ export class TerminalSessions {
         })),
       );
       for (const { file, origin } of checked)
-        if (origin?.terminal && roots.has(origin.cwd))
+        if ((origin?.terminal || origin?.app) && roots.has(origin.cwd))
           out.push({ file, origin });
     }
     return out.slice(0, most);

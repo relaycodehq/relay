@@ -8,7 +8,7 @@ import { codexActivity } from "../agents/activity";
 import { eachLine, headLines, parsed } from "./scan";
 import { Transcript, type Imported } from "./transcript";
 
-/** Where a session ran and whether it came from the `codex` command in a terminal. */
+/** Where a session ran and whether it came from the `codex` command in a terminal or the Codex app. */
 export async function codexOrigin(path: string) {
   let lines = await headLines(path);
   // `session_meta` carries the base instructions; a long set outgrows the usual read.
@@ -26,6 +26,10 @@ export async function codexOrigin(path: string) {
       (payload.originator === "codex-tui" &&
         typeof payload.source === "string") ||
       (payload.source === "cli" && payload.originator !== "relay"),
+    ...(payload.originator === "Codex Desktop" &&
+    typeof payload.source === "string"
+      ? { app: true as const }
+      : {}),
   };
 }
 

@@ -27,6 +27,8 @@ export interface TerminalSession {
   accountLabel?: string;
   /** A terminal had it open when listed, as far as can be told. */
   live: boolean;
+  /** Started in the agent's own app (Claude or Codex), which can carry on with it any time. */
+  app?: true;
   /** The thread that already continues it. */
   chatId?: string;
 }
@@ -34,11 +36,12 @@ export interface TerminalSession {
 /**
  * Whether a thread carries on in a copy of the session rather than the
  * session itself: always for Codex, which can't say whether a terminal still
- * holds it, and for a Claude session a terminal holds.
+ * holds it, for a Claude session a terminal holds, and for one from the
+ * agent's app, which keeps it in its list.
  */
 export const continuesAsCopy = (
-  session: Pick<TerminalSession, "provider" | "live">,
-) => session.provider === "codex" || session.live;
+  session: Pick<TerminalSession, "provider" | "live" | "app">,
+) => session.provider === "codex" || session.live || !!session.app;
 
 export const terminalSessionPickSchema = z
   .object({
@@ -60,6 +63,8 @@ export interface FromTerminal {
   how: "resumed" | "forked" | "text";
   /** A terminal had it open when it was brought over. */
   open: boolean;
+  /** It came from the agent's own app. */
+  app?: true;
   /** The last message brought over from the terminal. */
   through: string;
 }
