@@ -14,7 +14,7 @@ export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
   const qc = useQueryClient(),
     key = projectId
       ? workingTreeKey(projectId)
-      : ["working-tree", pull!.owner, pull!.name];
+      : ["working-tree", "checkout", pull!.server, pull!.owner, pull!.name];
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),
     [notice, setNotice] = useState("");
