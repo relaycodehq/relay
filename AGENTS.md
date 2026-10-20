@@ -148,6 +148,25 @@
   for the iPhone that's `ios/scripts/sim.sh`, hot reload, and the habits that
   keep a layout tweak from taking a dozen 60s builds.
 
+## Commit messages
+
+- **Use Conventional Commits**: `type(scope): subject`, the scope optional.
+  Types: `feat`, `fix`, `perf`, `refactor`, `test`, `docs`, `style`, `build`,
+  `ci`, `chore`, `revert`. Scope is the area, short: `android`, `ios`,
+  `phone`, `terminal`, `worktrees`, `deep-review`, `headless`, `website`.
+  - `fix(terminal): resize from the visible height`
+  - `feat(sidebar): show thread branches and merge status`
+  - `chore: bump version to 0.18.2`
+- **The subject is one lowercase imperative line, under ~72 characters, no
+  trailing period.** No colon-separated tour of every behaviour, no
+  "X, Y, and Z" lists. The why and the non-obvious details go in the body,
+  wrapped, only when they're needed. A breaking change gets `!` after the
+  type and a `BREAKING CHANGE:` footer.
+- **Don't copy the style of older commits in the log.** Before 2026-10-20
+  subjects were plain sentences, and from 2026-10-09 they drifted into
+  changelog paragraphs; neither is the style. Release notes are written
+  separately by the `release` skill.
+
 ## Releases
 
 - **Pushing to main ships nothing; a `v*` tag does.** The Mac mini builds
