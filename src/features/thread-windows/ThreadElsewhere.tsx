@@ -16,7 +16,7 @@ import { api } from "../../lib/api";
 import { chatKey, fetchChat } from "../../lib/chat-events";
 import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
 import { useNow } from "../../lib/useNow";
-import { PeekCalls } from "../handoff/RemotePeek";
+import { PeekCalls } from "./PeekCalls";
 import "../handoff/handoff.css";
 import "../agent-turn/subagents.css";
 import "./thread-windows.css";

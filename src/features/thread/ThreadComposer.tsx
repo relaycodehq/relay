@@ -39,10 +39,10 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
-import { LiveAwayLine } from "../handoff/LiveAwayLine";
+import { HomeComputerLine, LiveAwayLine } from "../handoff/LiveAwayLine";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
-import { WorktreeBranchField } from "./WorktreeBranchField";
+import { DetourNote, NewThreadBranch } from "./NewThreadBranch";
 import "../changes/branch-picker.css";
 import { threadCost } from "../../../shared/thread-cost";
 import { lastComposerSettings } from "../../../shared/projects";
@@ -103,26 +103,36 @@ export interface ProjectCheckout {
 
 /**
  * The branch the thread works on: the checkout's, to switch, or its own
- * worktree's, named before the first message.
+ * worktree's. Before the first message, picking one also says where.
  */
 function ThreadBranch({
   project,
   worktree,
   checkout,
-  newWorktree,
+  unsent,
   disabled,
   onStartThread,
 }: {
   project: Project;
   worktree: ThreadWorktree;
   checkout: ProjectCheckout;
-  /** An unsent thread that will work in a worktree of its own. */
-  newWorktree: boolean;
+  /** A thread of the project's own not started yet, which picks where it works. */
+  unsent: boolean;
   disabled: boolean;
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   // A folder without Git has no branch to show or switch.
   if (project.plain) return null;
+  if (unsent)
+    return (
+      <NewThreadBranch
+        project={project}
+        worktree={worktree}
+        checkout={checkout}
+        disabled={disabled}
+        onStartThread={onStartThread}
+      />
+    );
   const picker = (
     <ProjectBranchPicker
       projectId={project.id}
@@ -131,16 +141,6 @@ function ThreadBranch({
       onStartThread={onStartThread}
     />
   );
-  // Where it starts is the Workspace menu's to say; a carried-on branch keeps its name.
-  if (newWorktree)
-    return worktree.start && "on" in worktree.start ? null : (
-      <WorktreeBranchField
-        projectId={project.id}
-        value={worktree.newBranch}
-        onChange={worktree.setNewBranch}
-        disabled={disabled}
-      />
-    );
   // The deleted worktree's row asks where to carry on; its branch name would be stale.
   if (worktree.unavailable) return null;
   // Its name comes with the thread's title, a moment after sending.
@@ -310,6 +310,7 @@ export function ThreadComposer({
     <ProjectComposer
       ref={ref}
       projectId={project.id}
+      computer={project.computer}
       files={worktree.where}
       keys={{
         draft: draftKey,
@@ -369,7 +370,10 @@ export function ThreadComposer({
               }}
             />
           )}
-          {scope.kind !== "project" || project.plain ? undefined : !chat ? (
+          {scope.kind !== "project" ||
+          project.plain ||
+          // A project on another computer works in its folder there.
+          project.computer ? undefined : !chat ? (
             <NewWorkspacePicker
               project={project}
               worktree={worktree}
@@ -390,20 +394,18 @@ export function ThreadComposer({
             project={project}
             worktree={worktree}
             checkout={checkout}
-            newWorktree={
-              !chat &&
-              scope.kind === "project" &&
-              (worktree.workspace === "worktree" || !!worktree.startOn)
-            }
+            unsent={!chat && scope.kind === "project" && !project.computer}
             disabled={waiting || held}
             onStartThread={onStartThread}
           />
-          <LinksControl
-            links={links}
-            empty={!chat}
-            onProjectSettings={onProjectSettings}
-            onError={setError}
-          />
+          {!project.computer && (
+            <LinksControl
+              links={links}
+              empty={!chat}
+              onProjectSettings={onProjectSettings}
+              onError={setError}
+            />
+          )}
         </>
       }
       below={
@@ -411,6 +413,8 @@ export function ThreadComposer({
           <LiveAwayLine chat={chat} onError={setError} />
         ) : chat && inSetup(chat) ? (
           <SetupLine chat={chat} onError={setError} />
+        ) : !chat && project.computer ? (
+          <HomeComputerLine project={project} />
         ) : undefined
       }
       notice={({ sendGoal }) =>
@@ -423,7 +427,10 @@ export function ThreadComposer({
             onGoal={sendGoal}
           />
         ) : (
-          <StartOnNote project={project} worktree={worktree} />
+          <>
+            <StartOnNote project={project} worktree={worktree} />
+            <DetourNote project={project} worktree={worktree} />
+          </>
         )
       }
       meter={

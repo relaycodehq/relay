@@ -432,6 +432,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A project on another computer: that computer's name, quieter, after its own. */
+.sb .sb-project-name > .sb-project-where {
+  flex: none;
+  max-width: 45%;
+  margin-left: -2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.sb .sb-project-name.offline {
+  opacity: 0.55;
+}
 /* Same chevron as a group label: shown on hover, or while collapsed. */
 .sb .sb-project-chevron {
   flex: none;

@@ -28,6 +28,11 @@ import { DevSwitchMark } from "../features/sidebar/DevSwitchMenu";
 import { RelayMark } from "../ui/RelayMark";
 import { PaneToggles } from "../ui/WorkspacePanes";
 import "./titlebar.css";
+import {
+  projectComputer,
+  usePairedComputers,
+  useWakeComputer,
+} from "../features/handoff/usePairedComputers";
 
 /** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
 export function TitlebarBrand({
@@ -95,9 +100,11 @@ export function ProjectTitle({
   review?: { title: string; open: () => void };
   onError: (error: unknown) => void;
 }) {
+  const computers = usePairedComputers(!!project?.computer);
+  const where = projectComputer(project, computers.data);
   return (
     <div className="project-window-title">
-      {project?.plain ? (
+      {project?.plain || where ? (
         <span className="ci-plain">
           <ProjectBadge project={project} />
         </span>
@@ -111,6 +118,13 @@ export function ProjectTitle({
       <span className="project-window-name">
         {project?.name ?? "Workspace"}
       </span>
+      {where && (
+        <span className="project-window-where">
+          on {where.name}
+          {where.stopped ? " · WSL stopped" : where.online ? "" : " · offline"}
+        </span>
+      )}
+      {where?.stopped && <WakeComputer id={where.id} onError={onError} />}
       <span className="breadcrumb-slash">/</span>
       {review && (
         <>
@@ -131,6 +145,27 @@ export function ProjectTitle({
         <strong>{project?.scratch ? "New chat" : "New thread"}</strong>
       )}
     </div>
+  );
+}
+
+/** WSL stopped the distribution the project lives in; nothing starts it again but this. */
+function WakeComputer({
+  id,
+  onError,
+}: {
+  id: string;
+  onError: (error: unknown) => void;
+}) {
+  const { waking, wake } = useWakeComputer(onError);
+  return (
+    <button
+      type="button"
+      className="breadcrumb-link"
+      disabled={waking}
+      onClick={() => void wake(id)}
+    >
+      {waking ? "Starting…" : "Reconnect"}
+    </button>
   );
 }
 

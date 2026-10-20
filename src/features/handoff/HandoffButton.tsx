@@ -12,6 +12,7 @@ import {
 import { api } from "../../lib/api";
 import { DeviceIcon } from "./DeviceIcon";
 import { canPick, targetLine } from "./clone-there";
+import { reachable } from "./computer-status";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import "./handoff.css";
 
@@ -148,5 +149,5 @@ const placeholders = (paired: PairedComputer[]): HandoffTarget[] =>
   paired.map((c) => ({
     id: c.id,
     name: c.name,
-    online: c.status === "online",
+    online: reachable(c),
   }));

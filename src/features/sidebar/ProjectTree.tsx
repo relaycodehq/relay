@@ -34,6 +34,10 @@ import type { ProjectGroups } from "./useProjectGroups";
 import { groupKey, type SidebarFolds } from "./useSidebarFolds";
 import { NameInput } from "../../ui/NameInput";
 import { useProjectIcon } from "../projects/ProjectBadge";
+import {
+  projectComputer,
+  usePairedComputers,
+} from "../handoff/usePairedComputers";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import {
   firstThreads,
@@ -326,6 +330,8 @@ function ProjectSection({
   tree: ProjectTree;
 }) {
   const chats = threads.filter((c) => c.projectId === p.id);
+  const computers = usePairedComputers(!!p.computer);
+  const where = projectComputer(p, computers.data);
   const isOpen = folds.isOpen(p.id, p.id === current);
   const pages = folds.pages(p.id);
   const busy = chats.some((c) => c.running || agentsSince(c.pending));
@@ -383,12 +389,17 @@ function ProjectSection({
             </button>
             {/* Like a group label, the whole row toggles; only its actions don't. */}
             <button
-              className="sb-project-name"
-              title={p.path}
+              className={`sb-project-name${where && !where.online ? " offline" : ""}`}
+              title={
+                where
+                  ? `${p.path} on ${where.name}${where.online ? "" : ", offline"}`
+                  : p.path
+              }
               aria-expanded={isOpen}
               onClick={() => folds.setOpen(p.id, !isOpen)}
             >
               <span>{p.name}</span>
+              {where && <span className="sb-project-where">{where.name}</span>}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>

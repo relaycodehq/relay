@@ -1,6 +1,6 @@
 // Threads handed off to another computer, as that computer has them.
 import { useQuery } from "@tanstack/react-query";
-import { liveAway, type HandoffView } from "../../../shared/handoff";
+import type { HandoffView } from "../../../shared/handoff";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 
@@ -13,32 +13,6 @@ export function useAwayViews(chats: ChatSummary[]) {
     refetchInterval: 3000,
   });
   return query.data ?? {};
-}
-
-/**
- * The card as if the other computer's turn ran here: working, waiting on
- * you, and moving up and lighting up as it writes.
- */
-export function withAway(chat: ChatSummary, view?: HandoffView): ChatSummary {
-  // A live one's summary already says what runs there, fresher than this.
-  if (liveAway(chat)) return chat;
-  const remote =
-    view?.online && view.sentTo.state === "away" ? view.remote : undefined;
-  if (!remote) return chat;
-  return {
-    ...chat,
-    updated: Math.max(chat.updated, remote.updated),
-    waiting: remote.waiting,
-    asking: remote.asking,
-    blocked: remote.blocked,
-    ...(remote.running
-      ? {
-          running: true,
-          ...(remote.runningSince ? { runningSince: remote.runningSince } : {}),
-          ...(remote.provider ? { runningAgents: [remote.provider] } : {}),
-        }
-      : {}),
-  };
 }
 
 /** The turn there stopped with an error. */

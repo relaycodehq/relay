@@ -35,6 +35,7 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
+import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
 import { SnoozePickDialog } from "./SnoozeMenu";
@@ -350,6 +351,14 @@ export function ProjectSidebar({
             })
           }
           onClose={() => actions.setPickingSnooze(undefined)}
+        />
+      )}
+      {actions.archiving && (
+        <ArchiveWorktreeDialog
+          chat={actions.archiving.chat}
+          files={actions.archiving.files}
+          onArchive={actions.archive}
+          onCancel={actions.cancelArchive}
         />
       )}
       {actions.moving && (

@@ -4,6 +4,7 @@ import dev.relay.android.remote.PairedComputer
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteStatus
 import dev.relay.android.remote.model.RemoteProject
+import dev.relay.android.remote.model.RemoteProjectComputer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -70,6 +71,26 @@ class BrowserLogicTest {
         val chats = listOf(chat("a", updated = now - 5 * 60_000) { copy(running = true) }, chat("b", updated = 0) { copy(waiting = true) }, chat("c"))
         assertEquals("2 working · 3 threads · 5m ago", projectLine(chats, now))
         assertEquals("No threads yet", projectLine(emptyList(), now))
+    }
+
+    @Test
+    fun projectLineSaysWhichComputerAProjectIsOn() {
+        val now = 10 * 60_000L
+        val box = RemoteProjectComputer("thinkcenter")
+        assertEquals("On thinkcenter · 1 thread · 5m ago", projectLine(listOf(chat("a", updated = now - 5 * 60_000)), now, box))
+        assertEquals("On thinkcenter · No threads yet", projectLine(emptyList(), now, box))
+        assertEquals("thinkcenter isn't paired anymore", computerLine(box.copy(gone = true)))
+        assertNull(computerLine(null))
+    }
+
+    @Test
+    fun tasksAndSitesOfAProjectOnAnotherComputerSayWhere() {
+        val box = RemoteProjectComputer("thinkcenter")
+        assertEquals("1 running on thinkcenter", tasksLine(1, box))
+        assertEquals("Nothing running", tasksLine(0))
+        assertNull(tasksLine(null, box))
+        assertEquals("localhost:5173, localhost:3000 on thinkcenter · can't open from here", remoteSitesLine(listOf(5173, 3000), box))
+        assertEquals("On thinkcenter · can't open from here", remoteSitesLine(emptyList(), box))
     }
 
     @Test

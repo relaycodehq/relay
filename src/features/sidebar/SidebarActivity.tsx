@@ -34,7 +34,7 @@ import {
   type StartedFamilies,
 } from "../../../shared/started-families";
 import { SHELF_PAGE, type Shelves } from "./useShelves";
-import { AwayPeek, AwayWhere } from "./AwayCard";
+import { AwayWhere } from "./AwayCard";
 import {
   DraftCard,
   DraftLine,
@@ -259,7 +259,6 @@ function ThreadCard({
   );
   return (
     <ContextMenu.Root>
-      <AwayPeek view={away}>
         <ContextMenu.Trigger
           role="button"
           tabIndex={0}
@@ -403,7 +402,6 @@ function ThreadCard({
             </div>
           )}
         </ContextMenu.Trigger>
-      </AwayPeek>
       <ThreadRowMenu chat={c} rows={rows} />
     </ContextMenu.Root>
   );

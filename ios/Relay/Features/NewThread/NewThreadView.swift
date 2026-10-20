@@ -195,10 +195,15 @@ struct NewThreadView: View {
     private var place: some View {
         VStack(spacing: 6) {
             Menu {
-                Picker("Project", selection: $projectId) {
-                    Label("Scratchpad", systemImage: "note.text").tag(Optional(scratchWhere))
-                    Divider()
-                    ForEach(projects) { Text($0.name).tag(Optional($0.id)) }
+                // Toggles rather than a Picker: a menu shows a toggle's second line.
+                let pick = { (id: String) in Binding(get: { projectId == id }, set: { if $0 { projectId = id } }) }
+                Toggle(isOn: pick(scratchWhere)) { Label("Scratchpad", systemImage: "note.text") }
+                Divider()
+                ForEach(projects) { p in
+                    Toggle(isOn: pick(p.id)) {
+                        Text(p.name)
+                        if let line = computerLine(p.computer) { Text(line) }
+                    }
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -213,6 +218,9 @@ struct NewThreadView: View {
                 .foregroundStyle(Color.primary)
             }
             .accessibilityLabel("Project: \(scratch ? "Scratchpad" : project?.name ?? "none")")
+            if !scratch, let line = computerLine(project?.computer) {
+                Text(line).font(.footnote).foregroundStyle(Color.secondary)
+            }
             if scratch {
                 // A Scratchpad that couldn't be made says why, and asks again on a tap.
                 Button(scratchError ?? scratchHint) { Task { _ = try? await scratchFolder() } }

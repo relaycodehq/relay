@@ -49,9 +49,12 @@ export function useNewThreads(
   const [picking, setPicking] = useState(false);
   /** The add-project palette shows, on this page. */
   const [adding, setAdding] = useState<AddProjectPage | false>(false);
-  function addProject(page: AddProjectPage = "root") {
+  /** The paired computer the palette opens on, when asked for one. */
+  const [addingOn, setAddingOn] = useState<string>();
+  function addProject(page: AddProjectPage = "root", computerId?: string) {
     if (lock.blocked()) return;
     setPicking(false);
+    setAddingOn(computerId);
     setAdding(page);
   }
   /** The palette added a project, or picked one there already: a new thread in it. */
@@ -106,7 +109,10 @@ export function useNewThreads(
       saveComposerSettings(id, {
         ...settings,
         provider: draft.provider,
-        models: { ...settings.models, [draft.provider]: { choice: draft.choice } },
+        models: {
+          ...settings.models,
+          [draft.provider]: { choice: draft.choice },
+        },
         frozen: true,
       });
       if (nav.navigate(p, undefined, id))
@@ -154,6 +160,7 @@ export function useNewThreads(
     picking,
     setPicking,
     adding,
+    addingOn,
     setAdding,
     addProject,
     added,

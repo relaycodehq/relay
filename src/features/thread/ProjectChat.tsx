@@ -342,33 +342,39 @@ export function ProjectChat({
     },
     onSent: followAnswer,
   });
+  // A project on another computer starts every thread there, in its folder;
+  // its first send takes it there, as a phone's does.
+  const home = project.computer;
+  const startOn = home ? undefined : worktree.startOn;
   const newThread = useNewThread(
     () =>
-      api.createProjectChat(
-        project.id,
-        scope,
-        // Starting on another computer, it has a worktree to go there in.
-        scope.kind === "project"
-          ? worktree.startOn
-            ? "worktree"
-            : workspace
-          : undefined,
-        scope.kind === "project" &&
-          (workspace === "worktree" || !!worktree.startOn)
-          ? worktree.newBranch.trim() || undefined
-          : undefined,
-        links.draftLinks,
-        scope.kind === "project" && workspace === "worktree"
-          ? worktree.start
-          : undefined,
-      ),
+      home
+        ? api.createProjectChat(project.id, scope, "checkout")
+        : api.createProjectChat(
+            project.id,
+            scope,
+            // Starting on another computer, it has a worktree to go there in.
+            scope.kind === "project"
+              ? worktree.startOn
+                ? "worktree"
+                : workspace
+              : undefined,
+            scope.kind === "project" &&
+              (workspace === "worktree" || !!worktree.startOn)
+              ? worktree.newBranch.trim() || undefined
+              : undefined,
+            links.draftLinks,
+            scope.kind === "project" && workspace === "worktree"
+              ? worktree.start
+              : undefined,
+          ),
     async (created) => {
       await onCreated(created);
       threadStorage(draftId).links.clear();
     },
   );
   const { send, resume } = useThreadSend({
-    startOn: worktree.startOn,
+    startOn,
     handle,
     newThread,
     root,

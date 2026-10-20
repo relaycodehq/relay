@@ -300,7 +300,9 @@
   right: 6px;
   bottom: 0;
   z-index: 2;
-  padding: 28px 22px 22px 28px;
+  /* The bottom leaves room under the composer for the line a thread on
+     another computer shows there (`.composer-below`). */
+  padding: 28px 22px 30px 28px;
   pointer-events: none;
   background: linear-gradient(
     to bottom,

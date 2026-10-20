@@ -59,6 +59,9 @@ export class ThreadTerminal {
       // every right-click paste below into a copy.
       rightClickSelectsWord: false,
       theme: currentTheme,
+      // Links a program marks itself (OSC 8, as Claude's sign-in prints): xterm
+      // would ask with confirm() and then window.open, which goes nowhere here.
+      linkHandler: { activate: (_event, uri) => void api.openExternal(uri) },
     });
     // Copy on select, once the mouse lets go rather than on every step of
     // the drag.
@@ -303,12 +306,13 @@ export function closeTerminal(
 }
 
 /**
- * Opens the thread's terminal with the agent's sign-in command typed at the
- * prompt, for the user to run. False when a command holds the shell.
+ * Opens the thread's terminal (a draft's, with no `chatId`) with the agent's
+ * sign-in command typed at the prompt, for the user to run. False when a
+ * command holds the shell.
  */
 export function prefillSignIn(
   projectId: string,
-  chatId: string,
+  chatId: string | null,
   provider: AgentProvider,
 ) {
   return typeAtPrompt(projectId, chatId, (key) =>
@@ -333,7 +337,7 @@ export function prefillCommand(
 
 async function typeAtPrompt(
   projectId: string,
-  chatId: string,
+  chatId: string | null,
   type: (key: string) => Promise<boolean>,
 ) {
   const terminal = terminalFor(projectId, chatId);

@@ -19,6 +19,7 @@ import {
   type SettingsCategory,
 } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
+import { onAddProjectRequest } from "../lib/add-project-request";
 import { useShortcut } from "../lib/shortcuts";
 import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
@@ -171,6 +172,10 @@ export default function ProjectShell() {
     setError,
   );
   useOpenedFolders(boot.data, projects, lock, starts.open);
+  const addProjectOn = useStableCallback((computerId?: string) =>
+    starts.addProject("root", computerId),
+  );
+  useEffect(() => onAddProjectRequest(addProjectOn), [addProjectOn]);
   useShortcut("settings", true, () => settings.show());
   useShortcut("new-thread", !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
@@ -532,6 +537,7 @@ export default function ProjectShell() {
       {starts.adding && (
         <AddProjectPalette
           projects={realProjects}
+          computerId={starts.addingOn}
           initialPage={starts.adding}
           onClose={() => starts.setAdding(false)}
           onDone={(p) => void starts.added(p)}

@@ -128,8 +128,11 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .getByRole("button", { name: "Close file", exact: true })
       .click();
     await panelToggle(page).click();
+    // Under 800px the review shows an inline diff instead of side by side.
     await page
-      .locator('.diff-wrapper [data-additions] [data-line="13"]')
+      .locator(
+        '.diff-wrapper :is([data-additions], [data-unified]) [data-line="13"]',
+      )
       .click({ position: { x: 60, y: 8 } });
     await page
       .getByRole("button", { name: "Discuss in thread", exact: true })
@@ -358,9 +361,12 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add GPT-5.6-Luna to favorites" })
       .click();
-    await expect(
-      page.getByLabel("Search models", { exact: true }),
-    ).toBeVisible();
+    // A search covers every agent, so the provider rail steps aside until it's cleared.
+    await expect(page.locator(".model-picker-rail")).toHaveAttribute("inert");
+    await page.getByLabel("Search models", { exact: true }).fill("");
+    await expect(page.locator(".model-picker-rail")).not.toHaveAttribute(
+      "inert",
+    );
     await page.getByRole("button", { name: "Favorites", exact: true }).click();
     await expect(
       page.getByRole("option", { name: "GPT-5.6-Luna", exact: true }),
@@ -524,6 +530,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     );
     await expect(composerInput).toBeFocused();
     await expect(quoteOffer).toHaveCount(0);
+    // A quote's pill leaves a space after it, so typing on doesn't stick to it.
     await page.keyboard.type("Why is it needed?");
     await expect
       .poll(() =>
@@ -534,7 +541,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         ),
       )
       .toContain(
-        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?",
+        "> The cache guard prevents duplicate requests.\n\n Why is it needed?",
       );
     // A later quote lands at the caret, after what was typed.
     await page
@@ -558,7 +565,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         ),
       )
       .toContain(
-        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?\n> The cache guard prevents duplicate requests.\n\n",
+        "> The cache guard prevents duplicate requests.\n\n Why is it needed?\n> The cache guard prevents duplicate requests.\n\n ",
       );
     const laterPill = composerInput.locator(".prompt-pill.quote").last();
     await laterPill.hover();
@@ -761,7 +768,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       "reasoning",
     );
     const branchPicker = page.locator(
-      ".composer-branch-trigger:not(.workspace-trigger)",
+      ".composer-branch-trigger:not(.workspace-trigger, .linked-trigger)",
     );
     await branchPicker.click();
     await page
@@ -784,7 +791,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/54-switch-branch.png",
       animations: "disabled",
     });
-    await page.getByRole("option", { name: "feature", exact: true }).click();
+    // A row reads its age and counts after the name.
+    await page.getByRole("option", { name: /^feature(?!\/)/ }).click();
     await expect(branchPicker).toHaveText("feature");
     expect(git("branch", "--show-current")).toBe("feature");
 

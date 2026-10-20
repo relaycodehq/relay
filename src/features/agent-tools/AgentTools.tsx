@@ -22,6 +22,7 @@ import { ComposerSelect } from "../../ui/ComposerSelect";
 import { SettingsCard, SettingsSelect } from "../../ui/SettingsCard";
 import { ErrorBox, Spinner } from "../../ui/ui";
 import { useAgentAccounts } from "../accounts/agent-accounts";
+import { computerLine } from "../handoff/computer-status";
 import { filterAgentTools } from "./filter";
 import "./agent-tools.css";
 
@@ -148,7 +149,12 @@ export function AgentTools({
               ...(computers.data ?? []).map((c) => ({
                 value: c.id,
                 label: c.name,
-                description: c.status !== "online" ? "Offline" : undefined,
+                description:
+                  c.status === "online"
+                    ? undefined
+                    : c.asleep || c.stopped
+                      ? computerLine(c)
+                      : "Offline",
               })),
             ]}
           />
