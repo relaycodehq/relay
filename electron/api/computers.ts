@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/validation";
+import { computerRouteSchema } from "../../shared/handoff";
+import { checkRoute, wslDistros } from "../handoff/pipe-route";
+import { sshHosts } from "../handoff/ssh-hosts";
+import { installOutput, installRelayOver } from "../handoff/install-over";
 import { projectChatSendSchema } from "../../shared/projects";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -16,12 +20,33 @@ export function computerHandlers(ctx: ApiContext) {
     pairComputer: takes([z.string().max(2000)], (link) =>
       handoffs().computers.pair(link),
     ),
+    checkComputer: takes([computerRouteSchema], (route) => checkRoute(route)),
+    connectComputer: takes([computerRouteSchema], (route) =>
+      handoffs().computers.pairOver(route),
+    ),
+    wslDistros: () => wslDistros(),
+    sshHosts: () => sshHosts(),
+    installRelayOver: takes([computerRouteSchema], (route) =>
+      installRelayOver(route),
+    ),
+    relayInstallOutput: takes([computerRouteSchema], (route) =>
+      installOutput(route),
+    ),
+    wakeComputer: takes([idSchema], (id) => handoffs().computers.wake(id)),
     forgetComputer: takes([idSchema], (id) => handoffs().computers.forget(id)),
     handoffTargets: takes([idSchema], (chatId) =>
       handoffs().sender.targets(chatId),
     ),
     handOffThread: takes([idSchema, idSchema], (chatId, computerId) =>
       handoffs().sender.handOff(chatId, computerId),
+    ),
+    computerFolders: takes(
+      [idSchema, z.string().trim().min(1).max(4096)],
+      (computerId, dir) => handoffs().remote.folders(computerId, dir),
+    ),
+    addRemoteProject: takes(
+      [idSchema, z.string().trim().min(1).max(4096)],
+      (computerId, path) => handoffs().remote.add(computerId, path),
     ),
     startTargets: takes([idSchema], (projectId) =>
       handoffs().sender.startTargets(projectId),
@@ -35,11 +60,13 @@ export function computerHandlers(ctx: ApiContext) {
     startProjectChatOn: takes(
       [idSchema, projectChatSendSchema, idSchema],
       async (chatId, input, computerId) => {
-        if (input.images?.length)
-          throw new Error(
-            "Screenshots don't go along to another computer yet. Send it without them, or start it here.",
-          );
         const { sender } = handoffs();
+        // Its project's own computer: a send starts it there, or holds it for later.
+        const { projectId } = await ctx.projectChats.get(chatId);
+        if (ctx.projects.get(projectId).computer?.id === computerId) {
+          await ctx.projectChats.send(chatId, input);
+          return;
+        }
         await ctx.projectChats.firstMessageOnly(chatId, input);
         await sender.handOff(chatId, computerId);
       },

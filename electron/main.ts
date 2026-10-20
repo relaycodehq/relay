@@ -81,7 +81,9 @@ import { DraftPages } from "./drafts/pages";
 import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
 import { HandoffReceiver } from "./handoff/receiver";
+import { RemoteProjects } from "./handoff/remote-projects";
 import { Handoffs } from "./handoff/sender";
+import { WslHolders } from "./handoff/wsl-holder";
 import { pathReady } from "./platform/shell-path";
 import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
 import { applyLinkedTools, teaTokenFor } from "./source-control";
@@ -148,7 +150,9 @@ let drafts: { store: DraftStore; service: Drafts } | undefined;
 /** Thread sounds while the window is closed; headless Relay wires none. */
 let menubarSounds: MenubarSounds | undefined;
 /** Handing threads to other computers running Relay. */
-let handoffs: { computers: Computers; sender: Handoffs } | undefined;
+let handoffs:
+  | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+  | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
 /** Which working trees the windows show; unset until Relay has started. */
@@ -202,7 +206,9 @@ const quit = new Quit({
   shutDown: async () => {
     const closed = await Promise.allSettled([
       Promise.resolve().then(() => phoneRemote?.close()),
-      Promise.resolve().then(() => handoffs?.computers.close()),
+      Promise.resolve().then(() =>
+        handoffs?.computers.close({ detach: quit.detaching }),
+      ),
     ]);
     for (const result of closed)
       if (result.status === "rejected")
@@ -583,9 +589,12 @@ app
     // Not right at launch: the thread the window opens on first says it's shown.
     setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
     const handoffDir = join(app.getPath("userData"), "handoffs");
-    const computers = new Computers(loaded, seal, unseal);
+    const computers = new Computers(loaded, seal, unseal, {
+      holders: new WslHolders(),
+    });
     handoffs = {
       computers,
+      remote: new RemoteProjects(computers, projects),
       sender: new Handoffs(
         loaded,
         computers,
@@ -601,6 +610,7 @@ app
       unseal,
       {
         projects: () => projects.list(login.client),
+        pairedComputers: () => computers.list(),
         projectPath: (id) => projects.get(id).path,
         chats: api.listChats,
         chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),

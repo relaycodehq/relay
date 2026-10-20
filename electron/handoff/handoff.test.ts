@@ -26,8 +26,11 @@ import type { NewsItem } from "../../shared/thread-news";
 type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
 import { Handoffs, outdated } from "./sender";
+import { RemoteProjects } from "./remote-projects";
+import { ThreadTerminals, threadTerminals } from "../terminal/thread-terminals";
+import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
 import { awaitsReturn } from "../project-chats/handoff";
-import { handoffBridge, setupBridge } from "../../shared/remote";
+import { liveHandoffBridge, setupBridge } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import { workspaceId } from "../../shared/workspaces";
 import type { UpdateState } from "../../shared/updates";
@@ -175,7 +178,11 @@ async function pairedComputers() {
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
           if (method === "createScratch")
             return mini.projects.scratch(join(mini.dir, "scratch"), () => false);
-          if (method === "projectWorkingTree" || method === "threadElsewhere")
+          if (
+            method === "projectWorkingTree" ||
+            method === "projectRebase" ||
+            method === "threadElsewhere"
+          )
             return { ran: method, on: id };
           throw new Error(`Not in this test: ${method}`);
         },
@@ -1021,6 +1028,11 @@ it("runs a live handoff's folder calls on the other computer's worktree, and won
     ran: "projectWorkingTree",
     on: workspaceId(mini.projectId, there),
   });
+  // Its branch catches up there too, as the composer's Rebase offers.
+  expect(sender.forwards("projectRebase", [where, "a".repeat(40)])).toBe(true);
+  expect(
+    await sender.forward("projectRebase", [where, "a".repeat(40)], here),
+  ).toEqual({ ran: "projectRebase", on: workspaceId(mini.projectId, there) });
   // An agent's own worktree beside the thread's never went across.
   expect(
     sender.forwards("projectWorkingTree", [
@@ -1642,19 +1654,19 @@ it("updates the other computer's Relay from here, and tells an older one apart",
   await vi.waitFor(() =>
     expect(updater.calls).toEqual(["check", "download", "install"]),
   );
-  // A Relay from before bridge 10 can't say, and one from before this one's handoffs can't take threads.
+  // A Relay from before bridge 10 can't say, and one from before live handoffs can't take threads.
   expect(outdated(null)).toBe(true);
   expect(
     outdated({
       version: "0.8.0",
-      bridge: handoffBridge - 1,
+      bridge: liveHandoffBridge - 1,
       update: { status: "idle", current: "0.8.0" },
     }),
   ).toBe(true);
   expect(
     outdated({
       version: "0.9.0",
-      bridge: handoffBridge,
+      bridge: liveHandoffBridge,
       update: { status: "idle", current: "0.9.0" },
     }),
   ).toBe(false);
@@ -1887,3 +1899,275 @@ it("leaves nothing owed on the other computer when the thread is taken back mid-
   expect(after.abandonedHandoffs).toHaveLength(1);
   expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
 });
+
+it("adds a folder on the other computer as a project that lives there, and starts its threads there in that folder", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const notes = join(mini.dir, "notes");
+  await mkdir(notes);
+  await writeFile(join(notes, "todo.md"), "- tidy\n");
+
+  // Its folders, the one already a project there marked.
+  const listed = await remote.folders(computerId, mini.dir);
+  expect(listed.dir).toBe(mini.dir);
+  expect(listed.folders).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: "app",
+        repository: true,
+        project: { id: mini.projectId, name: "App" },
+      }),
+      expect.objectContaining({ name: "notes", repository: false }),
+    ]),
+  );
+
+  const project = await remote.add(computerId, notes);
+  const [added] = (await mini.projects.list(null)).filter(
+    (p) => p.path === notes,
+  );
+  expect(project).toMatchObject({
+    name: "Notes",
+    plain: true,
+    computer: { id: computerId, projectId: added!.id, plain: true },
+  });
+  // Added again, it's the same project; nothing here reads its folder.
+  expect((await remote.add(computerId, notes)).id).toBe(project.id);
+  await expect(laptop.projects.inspect(project.id)).rejects.toThrow(
+    "isn't on this one",
+  );
+
+  // Its threads work in the folder there; none gets a worktree.
+  const thread = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "worktree",
+  );
+  expect(thread.worktree).toBeUndefined();
+  const first = input("@codex Tidy the notes");
+  await laptop.chats.firstMessageOnly(thread.id, first);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+      live: true,
+      home: true,
+      folder: true,
+      kept: 0,
+    }),
+  );
+  const [there] = mini.chats.list(added!.id);
+  expect(there).toMatchObject({ cameFrom: { home: true } });
+  expect(there!.worktree).toBeUndefined();
+  await finished(mini.chats, there!.id, 2);
+  expect((await prompts()).at(-1)).toContain("Tidy the notes");
+  // What it answers there mirrors here, the first message included.
+  await vi.waitFor(async () =>
+    expect(
+      (await laptop.chats.get(thread.id)).messages.map((m) => m.role),
+    ).toEqual(["user", "assistant"]),
+  );
+  // It never comes back: there's no folder here for it.
+  await expect(sender.bringBack(thread.id)).rejects.toThrow("runs there only");
+  await expect(sender.abandon(thread.id)).rejects.toThrow("runs there only");
+
+  // Calls about the project itself run on its folder there.
+  const unwatch = vi.fn(() => "unwatched");
+  expect(remote.forwards("projectWorkingTree", [project.id])).toBe(true);
+  expect(
+    await remote.forward("projectWorkingTree", [project.id], unwatch),
+  ).toEqual({ ran: "projectWorkingTree", on: added!.id });
+  expect(remote.forwards("projectWorkingTree", [laptop.projectId])).toBe(false);
+  expect(
+    await remote.forward(
+      "projectRebase",
+      [project.id, "a".repeat(40)],
+      unwatch,
+    ),
+  ).toEqual({ ran: "projectRebase", on: added!.id });
+  // A thread's own folder calls go with the thread.
+  expect(
+    remote.forwards("projectWorkingTree", [workspaceId(project.id, thread.id)]),
+  ).toBe(false);
+  // Watching it here stops the window's last watch, as nothing here can watch it.
+  expect(await remote.forward("watchWorkingTree", [project.id], unwatch)).toBe(
+    "unwatched",
+  );
+  await expect(
+    remote.forward("revealProjectPath", [project.id, ""], unwatch),
+  ).rejects.toThrow("isn't on this one");
+});
+
+it("starts a remote project's thread there from a plain send, as a phone's, and holds a Send later one here until it's due", async () => {
+  const { laptop, mini, computers, computerId } = await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const notes = join(mini.dir, "notes");
+  await mkdir(notes);
+  const project = await remote.add(computerId, notes);
+  const [added] = (await mini.projects.list(null)).filter(
+    (p) => p.path === notes,
+  );
+  const startedThere = async (id: string, body: string) => {
+    await vi.waitFor(async () =>
+      expect((await laptop.chats.get(id)).sentTo).toMatchObject({
+        state: "away",
+        live: true,
+        home: true,
+      }),
+    );
+    let there: string | undefined;
+    await vi.waitFor(() => {
+      there = mini.chats
+        .list(added!.id)
+        .find((c) => c.title.includes(body))?.id;
+      expect(there).toBeDefined();
+    });
+    await finished(mini.chats, there!, 2);
+  };
+
+  const thread = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await laptop.chats.sendYours(thread.id, input("@codex Tidy the notes"));
+  await startedThere(thread.id, "Tidy the notes");
+
+  // Send later keeps it here, shown as scheduled, and starts it there when due.
+  const later = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await laptop.chats.sendYours(later.id, {
+    ...input("@codex Sort the notes"),
+    sendAt: Date.now() + 1500,
+  });
+  const held = await laptop.chats.get(later.id);
+  expect(held.messages).toEqual([]);
+  expect(held.scheduled).toHaveLength(1);
+  expect(held.sentTo).toBeUndefined();
+  // The handoff takes nothing else waiting along.
+  await expect(
+    laptop.chats.sendYours(later.id, {
+      ...input("@codex And file them"),
+      sendAt: Date.now() + 60_000,
+    }),
+  ).rejects.toThrow("Schedule more once it has.");
+  await startedThere(later.id, "Sort the notes");
+  expect((await laptop.chats.get(later.id)).scheduled).toBeUndefined();
+
+  // Refused before it sets off, the thread is new again.
+  await computers.forget(computerId);
+  const orphan = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await expect(
+    laptop.chats.sendYours(orphan.id, input("@codex Count the notes")),
+  ).rejects.toThrow("isn't paired anymore");
+  const after = await laptop.chats.get(orphan.id);
+  expect(after.messages).toEqual([]);
+  expect(after.lastInput).toBeUndefined();
+});
+
+it("opens a remote project's shells on its computer, in its folder, and shows their output on the computer that opened them alone", async () => {
+  // No pty in tests: the shells themselves are ThreadTerminals', as here.
+  const sinks: ((event: TerminalEvent) => void)[] = [];
+  const spies = [
+    vi
+      .spyOn(ThreadTerminals.prototype, "connect")
+      .mockImplementation((send) => void sinks.push(send)),
+    vi
+      .spyOn(ThreadTerminals.prototype, "open")
+      .mockImplementation((_key, cwd) => ({ cwd, backlog: "" })),
+    vi.spyOn(ThreadTerminals.prototype, "write").mockImplementation(() => {}),
+    vi.spyOn(ThreadTerminals.prototype, "adopt").mockImplementation(() => {}),
+    vi.spyOn(ThreadTerminals.prototype, "close").mockImplementation(() => {}),
+  ] as const;
+  const [, open, write, adopt, close] = spies;
+  const passed = vi.spyOn(threadTerminals, "pass").mockImplementation(() => {});
+  cleanup.push(() => {
+    for (const spy of [...spies, passed]) spy.mockRestore();
+  });
+  const { laptop, mini, computers, computerId, remote: miniRemote } =
+    await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const folder = await mini.projects.root(mini.projectId);
+  const project = await remote.add(computerId, folder);
+  const draft = draftTerminalKey(project.id);
+  const size = { cols: 80, rows: 24 };
+
+  expect(remote.forwards("openTerminal", [project.id, null, size])).toBe(true);
+  expect(remote.forwards("openTerminal", [laptop.projectId, null, size])).toBe(
+    false,
+  );
+  expect(remote.forwards("writeTerminal", [draft, "pwd\r"])).toBe(false);
+  expect(
+    await remote.forward("openTerminal", [project.id, null, size], vi.fn()),
+  ).toEqual({ cwd: folder, backlog: "" });
+  // Kept there apart from that computer's own shells, by who opened it.
+  const there = open.mock.calls[0]![0];
+  const device = there.slice(0, -draft.length - 1);
+  expect(there).toBe(`${device}@${draft}`);
+  expect(open).toHaveBeenCalledWith(there, folder, 80, 24, false);
+
+  expect(remote.forwards("writeTerminal", [draft, "pwd\r"])).toBe(true);
+  await remote.forward("writeTerminal", [draft, "pwd\r"], vi.fn());
+  expect(write).toHaveBeenCalledWith(there, "pwd\r");
+  // Output for a shell this computer didn't open isn't shown; its own is.
+  sinks[0]!({ key: `${device}@draft:${randomUUID()}`, data: "not yours" });
+  sinks[0]!({ key: there, data: folder });
+  await vi.waitFor(() =>
+    expect(passed).toHaveBeenCalledWith({ key: draft, data: folder }),
+  );
+  expect(passed).toHaveBeenCalledTimes(1);
+
+  // The draft's shell goes along to the thread its first message started.
+  const chatId = randomUUID();
+  await remote.forward("adoptTerminal", [project.id, chatId], vi.fn());
+  expect(adopt).toHaveBeenCalledWith(there, `${device}@${chatId}`);
+  expect(remote.forwards("writeTerminal", [draft, "x"])).toBe(false);
+  await remote.forward(
+    "openTerminal",
+    [project.id, chatId, size, false, "b"],
+    vi.fn(),
+  );
+
+  // The computer drops; a shell closed meanwhile closes there once it's back.
+  computers.close();
+  await remote.forward("closeTerminal", [chatId], vi.fn());
+  expect(close).not.toHaveBeenCalled();
+  expect(remote.forwards("writeTerminal", [chatId, "x"])).toBe(false);
+  open.mockClear();
+  open.mockImplementation((_key, cwd) => ({ cwd, backlog: "missed\r\n" }));
+  await computers.start();
+  await vi.waitFor(
+    () => expect(close).toHaveBeenCalledWith(`${device}@${chatId}`),
+    { timeout: 30000 },
+  );
+  // The other one is attached again: its flow starts over, and what it
+  // printed while the computer was away replaces what the window shows.
+  await vi.waitFor(() =>
+    expect(passed).toHaveBeenCalledWith({
+      key: `${chatId}~b`,
+      data: "\x1bcmissed\r\n",
+    }),
+  );
+  expect(open).toHaveBeenCalledWith(
+    `${device}@${chatId}~b`,
+    folder,
+    80,
+    24,
+    false,
+  );
+
+  // Removed there, the computer's shells there end with it.
+  const closeAll = vi
+    .spyOn(ThreadTerminals.prototype, "closeAll")
+    .mockImplementation(() => {});
+  cleanup.push(() => closeAll.mockRestore());
+  await miniRemote.revoke(device);
+  expect(closeAll).toHaveBeenCalledTimes(1);
+}, 90000);

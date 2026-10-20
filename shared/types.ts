@@ -497,9 +497,13 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<import("./projects").ChatSummary>;
-  /** An agent's models; Codex's and Claude's carry their own extra fields. */
+  /**
+   * An agent's models; Codex's and Claude's carry their own extra fields.
+   * With `computerId`, as that paired computer's copy lists them.
+   */
   agentModels<P extends import("./agents").AgentProvider>(
     provider: P,
+    computerId?: string,
   ): Promise<
     P extends "codex"
       ? CodexModel[]
@@ -652,10 +656,21 @@ export interface Api
   stopReadAloud(id: number): Promise<void>;
   onReadAloudState(callback: (state: ReadAloudState) => void): () => void;
   onReadAloud(callback: (event: ReadAloudEvent) => void): () => void;
-  /** The agent CLIs as last checked, and whether newer ones are out. */
-  agentVersions(): Promise<AgentVersions>;
+  /**
+   * The agent CLIs as last checked, and whether newer ones are out; with
+   * `computerId`, that paired computer's.
+   */
+  agentVersions(computerId?: string): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
-  checkAgentVersions(): Promise<AgentVersions>;
+  checkAgentVersions(computerId?: string): Promise<AgentVersions>;
+  /**
+   * Whether the agent's CLI is signed in, here or with `computerId` on that
+   * paired computer; null when it can't tell (Claude and Codex only).
+   */
+  agentSignedIn(
+    provider: import("./agents").AgentProvider,
+    computerId?: string,
+  ): Promise<boolean | null>;
   /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
   agentUpdateChecks(): Promise<boolean>;
   saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;
@@ -665,6 +680,15 @@ export interface Api
   onAutoCompact(callback: (value: AutoCompact) => void): () => void;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /**
+   * Starts installing a missing agent CLI (or updating one) without waiting
+   * for it, here or with `computerId` on that paired computer; `agentVersions`
+   * follows it.
+   */
+  installAgent(
+    provider: AgentProvider,
+    computerId?: string,
+  ): Promise<AgentVersions>;
   /**
    * Links an agent's CLI if it says its version: the program at `path`, or
    * one chosen in a file dialog when it's left out. Null if cancelled.

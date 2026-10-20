@@ -17,12 +17,15 @@ home=${RELAY_HOME:-$HOME/.relay}
 say() { printf '%s\n' "$*"; }
 fail() { say "$*" >&2; exit 1; }
 
-# A Node.js 22 or newer that actually runs: a Homebrew `node` can be broken
-# by an upgrade while a keg-only node@22 beside it still works.
+# A Node.js 22.13 or newer that actually runs: a Homebrew `node` can be broken
+# by an upgrade while a keg-only node@22 beside it still works. Before 22.13
+# node:sqlite needs a flag, and without it Relay keeps turns in memory alone,
+# so a restart forgets the ones still running.
 works() {
   [ -x "$1" ] || return 1
   major=$("$1" -p 'process.versions.node.split(".")[0]' 2>/dev/null) || return 1
-  [ "$major" -ge 22 ] 2>/dev/null
+  [ "$major" -ge 22 ] 2>/dev/null || return 1
+  "$1" -e 'require("node:sqlite")' >/dev/null 2>&1
 }
 find_node() {
   if [ -n "${RELAY_NODE:-}" ]; then
@@ -32,7 +35,8 @@ find_node() {
   for candidate in "$(command -v node 2>/dev/null || true)" \
     /opt/homebrew/opt/node@26/bin/node /opt/homebrew/opt/node@24/bin/node \
     /opt/homebrew/opt/node@22/bin/node /usr/local/opt/node@24/bin/node \
-    /usr/local/opt/node@22/bin/node "$HOME/.volta/bin/node"; do
+    /usr/local/opt/node@22/bin/node "$HOME/.volta/bin/node" \
+    "$(cat "$home/node" 2>/dev/null || true)"; do
     if [ -n "$candidate" ] && works "$candidate"; then
       say "$candidate"
       return
@@ -46,16 +50,6 @@ find_node() {
     fi
   done
 }
-node=$(find_node)
-if [ -z "$node" ]; then
-  if [ -n "${RELAY_NODE:-}" ]; then
-    fail "RELAY_NODE does not point to a working Node.js 22 or newer: $RELAY_NODE"
-  fi
-  if command -v node >/dev/null 2>&1; then
-    fail "Relay needs Node.js 22 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
-  fi
-  fail "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
-fi
 command -v tar >/dev/null 2>&1 || fail "Relay's installer needs tar."
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
@@ -75,6 +69,63 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
+# No Node.js 22.13 here, as on a server whose system one is older: Relay brings
+# its own into ~/.relay, where `relay` and its updates keep using it. No sudo.
+node_version=v22.23.2
+fetch_node() {
+  case "$(uname -s)" in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    *) return 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64 | amd64) arch=x64 ;;
+    aarch64 | arm64) arch=arm64 ;;
+    *) return 1 ;;
+  esac
+  # Node's own builds need glibc; on Alpine and other musl systems it's theirs to install.
+  if [ "$os" = linux ] && ldd --version 2>&1 | grep -qi musl; then return 1; fi
+  # Brought here before: the daemon may be running on it, so it stays as is.
+  if works "$home/node-$node_version-$os-$arch/bin/node"; then
+    node="$home/node-$node_version-$os-$arch/bin/node"
+    return 0
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    sum() { sha256sum "$1" | cut -d' ' -f1; }
+  elif command -v shasum >/dev/null 2>&1; then
+    sum() { shasum -a 256 "$1" | cut -d' ' -f1; }
+  else
+    return 1
+  fi
+  file="node-$node_version-$os-$arch.tar.gz"
+  base="https://nodejs.org/dist/$node_version"
+  say "No Node.js 22.13 or newer here; downloading Node.js $node_version for Relay…"
+  fetch "$base/$file" "$tmp/$file" || return 1
+  fetch "$base/SHASUMS256.txt" "$tmp/SHASUMS256.txt" || return 1
+  want=$(grep " $file\$" "$tmp/SHASUMS256.txt" | cut -d' ' -f1)
+  [ -n "$want" ] && [ "$(sum "$tmp/$file")" = "$want" ] || {
+    say "The Node.js download does not match its checksum." >&2
+    return 1
+  }
+  tar -xzf "$tmp/$file" -C "$tmp"
+  (umask 077 && mkdir -p "$home")
+  rm -rf "$home/node-$node_version-$os-$arch"
+  mv "$tmp/node-$node_version-$os-$arch" "$home/"
+  node="$home/node-$node_version-$os-$arch/bin/node"
+}
+node=$(find_node)
+if [ -z "$node" ]; then
+  if [ -n "${RELAY_NODE:-}" ]; then
+    fail "RELAY_NODE does not point to a working Node.js 22.13 or newer: $RELAY_NODE"
+  fi
+  fetch_node || node=
+  if ! works "$node"; then
+    if command -v node >/dev/null 2>&1; then
+      fail "Relay needs Node.js 22.13 or newer; the node on your PATH is $(node --version 2>/dev/null || echo "broken"). Install a newer one: https://nodejs.org/en/download"
+    fi
+    fail "Relay needs Node.js 22.13 or newer: https://nodejs.org/en/download"
+  fi
+fi
 if [ -n "${RELAY_UPDATE_FEED:-}" ]; then
   feed=$RELAY_UPDATE_FEED
 elif [ -n "${RELAY_VERSION:-}" ]; then

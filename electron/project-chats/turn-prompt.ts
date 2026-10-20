@@ -135,7 +135,7 @@ export function turnPrompt({
   const moved =
     !command && movedIn?.owed.includes(heardKey)
       ? movedIn.selected
-        ? `\n\nThe user selected ${JSON.stringify(movedIn.to)} as this thread's active workspace, previously ${JSON.stringify(movedIn.from)}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`
+        ? `\n\nThis thread now works in ${JSON.stringify(movedIn.to)}, previously ${JSON.stringify(movedIn.from)}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`
         : movedIn.copied
           ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
           : movedIn.fresh

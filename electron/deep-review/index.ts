@@ -30,10 +30,11 @@ import {
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import {
-  checkOutForFixes,
   discardReviewCheckout,
+  followReviewedBranch,
   openReviewCheckout,
 } from "./checkout";
+import { noteWorkspaceMove } from "../../shared/workspace-moves";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
@@ -106,6 +107,7 @@ export class DeepReviews {
       scope,
       this.host.worktrees,
       chat.id,
+      pull?.headBranch,
     ).catch((e: unknown) => {
       console.warn("Could not check out the reviewed code for review:", e);
       return undefined;
@@ -340,12 +342,65 @@ export class DeepReviews {
   }
 
   /**
-   * Before a fix request in a review whose worktree Relay made, checks the
-   * reviewed branch out there; throws when it can't, so nothing is sent.
+   * Before a message in a review thread, while no reviewer works: the
+   * review follows the reviewed branch to the folder it's checked out in
+   * now, or into a worktree of its own on it, so the lead's fixes land on
+   * the branch. A fix request in a pull request's review gives it a local
+   * branch first. The thread notes the move, and the lead hears of it.
+   * Nothing it can't do holds up a question, which reads on where the
+   * review is; only a fix that can't get onto the branch is refused.
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
-    const checkout = chat.deepReview?.scope.checkout;
-    if (input.fixes?.length && checkout) await checkOutForFixes(checkout);
+    const state = chat.deepReview;
+    const checkout = state?.scope.checkout;
+    if (!state?.scope.head || !checkout || this.reviewing(chat)) return;
+    const fixing = !!input.fixes?.length;
+    const next = await followReviewedBranch(
+      await this.host.root(chat.projectId),
+      checkout,
+      {
+        head: state.scope.head,
+        dir: this.host.worktrees,
+        chatId: chat.id,
+        fixing,
+      },
+    ).catch((e: unknown) => {
+      console.warn("Could not follow the reviewed branch:", e);
+      if (!fixing) return checkout;
+      const branch = checkout.branch ?? checkout.pr?.head;
+      throw new Error(
+        `Relay couldn't check out ${branch ?? "the reviewed branch"} for the fix. Check it out in a folder of your own and ask again; the review follows it there.`,
+      );
+    });
+    if (next === checkout) return;
+    state.scope.checkout = next;
+    if (next.path !== checkout.path) {
+      noteWorkspaceMove(chat, {
+        how: "switched",
+        to: next.path,
+        ...(next.branch ? { branch: next.branch } : {}),
+      });
+      // The lead's session hears it too: its first turn wasn't one that
+      // notes what it heard. A session not told of an earlier move yet
+      // still works where that one started.
+      const pending = chat.movedIn;
+      chat.movedIn = {
+        from: pending?.from ?? checkout.path,
+        to: next.path,
+        owed: [
+          ...new Set([
+            ...(pending?.owed ?? []),
+            ...Object.keys(chat.scopeHeard ?? {}),
+            `${state.lead.provider}:main`,
+            ...(input.provider ? [`${input.provider}:main`] : []),
+          ]),
+        ],
+        selected: true,
+      };
+      // Its session started in the old folder.
+      this.host.close(chat.id);
+    }
+    await this.host.touch(chat, state.request);
   }
 
   /**

@@ -8,6 +8,8 @@ import type {
   HandoffLive,
   HandoffRemoteStatus,
   HandoffSettings,
+  HandoffThread,
+  RemoteProjectMethod,
 } from "./handoff";
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { UpdateState } from "./updates";
@@ -25,6 +27,7 @@ import type {
   ChatMessage,
   ChatPending,
   ChatScope,
+  FolderEntry,
   KnownMessages,
   LimitResume,
   ProjectChatPatch,
@@ -37,6 +40,7 @@ import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
 import type { RemoteSite } from "./remote-tunnel";
 import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
+import type { TerminalEvent, TerminalOpened } from "./terminals";
 
 export const remoteProtocol = 1;
 const remoteScheme = "relay-remote";
@@ -160,6 +164,16 @@ export interface RemoteProject {
   plain?: boolean;
   /** Where its new threads start, when not the checkout. */
   workspace?: import("./projects").ChatWorkspace;
+  /** Its folder is on another computer this one is paired with; from `remoteProjectsBridge`. */
+  computer?: RemoteProjectComputer;
+}
+
+/** The computer a project lives on, as the desktop's project picker names it. */
+export interface RemoteProjectComputer {
+  /** Its name now, a tailnet name shortened to its first part. */
+  name: string;
+  /** That computer isn't paired anymore, so the project can't be reached. */
+  gone?: true;
 }
 
 /**
@@ -171,7 +185,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 27;
+export const remoteBridgeVersion = 28;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -247,8 +261,6 @@ export const awayBridge = 13;
  * them faster than the link carries them.
  */
 export const compactBridge = 14;
-/** Computers hand threads to each other from the same bridge on; read aloud didn't change handoffs. */
-export const handoffBridge = 11;
 /**
  * From here a computer that took a thread keeps the one it came from up to
  * date (`handoff` events, `handoffChat`) and runs its calls (`handoffCall`),
@@ -277,6 +289,14 @@ export const cloneBridge = 25;
  * project up (`setupProject`, `setupProgress`); before, it ran `runCommand`.
  */
 export const setupBridge = 27;
+/**
+ * From here a paired computer hosts projects another computer shows as its
+ * own (`Project.computer`): it lists its folders, adds one, starts threads in
+ * it and runs its folder's calls (`computerFolders`, `computerAddProject`,
+ * `startInProject`, `projectCall`, `computerCall`), and its shells
+ * (`projectTerminal`, `terminalCall`, `terminal` events).
+ */
+export const remoteProjectsBridge = 28;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -659,8 +679,82 @@ export interface RemoteApi {
     method: HandoffMethod,
     args: unknown[],
   ): Promise<unknown>;
+  /** The folders in `dir` here (`~` is the home folder), for adding one as a project. From `remoteProjectsBridge`. */
+  computerFolders(dir: string): Promise<ComputerFolders>;
+  /** Adds the folder here as a project, or finds the project it already is. */
+  computerAddProject(path: string): Promise<ComputerProject>;
+  /**
+   * Starts a thread in the project's own folder here: its first message is
+   * its first turn, and the thread follows like a live handoff's, by this id.
+   * The same id again changes nothing.
+   */
+  startInProject(
+    id: string,
+    projectId: string,
+    thread: HomeThread,
+  ): Promise<{ chatId: string }>;
+  /** Runs one of `computerCallMethods` here, as this computer answers it for itself. */
+  computerCall(method: ComputerCallMethod, args: unknown[]): Promise<unknown>;
+  /** Runs one of `remoteProjectMethods` on the project here, its id in place of the first argument. */
+  projectCall(
+    projectId: string,
+    method: RemoteProjectMethod,
+    args: unknown[],
+  ): Promise<unknown>;
+  /**
+   * Opens the caller's shell `key` in the project's folder here, starting it
+   * if needed; its output comes back as `terminal` events.
+   */
+  projectTerminal(
+    projectId: string,
+    key: string,
+    size: { cols: number; rows: number },
+    fresh?: boolean,
+  ): Promise<TerminalOpened>;
+  /** One of `terminalOps` on a shell `projectTerminal` opened. */
+  terminalCall(op: TerminalOp, key: string, args: unknown[]): Promise<unknown>;
 }
+/** What a computer does with a shell it opened in a project there, as TerminalApi names it. */
+export const terminalOps = [
+  "write",
+  "resize",
+  "ack",
+  "close",
+  "prefill",
+  "prefillSignIn",
+  "adopt",
+] as const;
+export type TerminalOp = (typeof terminalOps)[number];
 export type HandoffPart = "thread" | "bundle";
+/**
+ * Calls about a paired computer itself, not one of its projects, that a
+ * project living there needs from it (`computerCall`): its agents and their
+ * models.
+ */
+export const computerCallMethods = [
+  "agentModels",
+  "agentVersions",
+  "checkAgentVersions",
+  "agentSignedIn",
+  "installAgent",
+] as const satisfies readonly ApiMethod[];
+export type ComputerCallMethod = (typeof computerCallMethods)[number];
+/** A folder here as `computerFolders` lists it; `project` when it's one already. */
+export interface ComputerFolder extends FolderEntry {
+  project?: { id: string; name: string };
+}
+export interface ComputerFolders {
+  /** This computer's home folder, which `~` stands for. */
+  home: string;
+  /** `dir` as it resolved here. */
+  dir: string;
+  folders: ComputerFolder[];
+}
+/** What starts a thread in a project another computer shows as its own. */
+export type HomeThread = Pick<
+  HandoffThread,
+  "from" | "title" | "scope" | "settings" | "messages"
+>;
 /** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
 export interface ComputerProject {
   id: string;
@@ -668,6 +762,8 @@ export interface ComputerProject {
   repositories: string[];
   /** Its folder, from the home folder as `~`; with a project just made there. */
   folder?: string;
+  /** Its folder has no Git repository; from `remoteProjectsBridge`. */
+  plain?: true;
 }
 /** A clone `cloneProject` started: still going, or the project it made. */
 export type CloneProgress =
@@ -720,6 +816,13 @@ export const remoteMethods = [
   "updateNow",
   "handoffChat",
   "handoffCall",
+  "computerFolders",
+  "computerAddProject",
+  "startInProject",
+  "computerCall",
+  "projectCall",
+  "projectTerminal",
+  "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
@@ -740,6 +843,13 @@ export const computerMethods = [
   "updateNow",
   "handoffChat",
   "handoffCall",
+  "computerFolders",
+  "computerAddProject",
+  "startInProject",
+  "computerCall",
+  "projectCall",
+  "projectTerminal",
+  "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
 /** The bridge from which phones may call `updateMethods` too. */
@@ -802,7 +912,9 @@ export type RemoteEvent =
   /** A draft changed; only to phones from `draftsBridge`. */
   | { kind: "draft"; change: DraftChange }
   /** To the computer a live handoff came from: what runs and waits in its thread now. */
-  | { kind: "handoff"; id: string; live: HandoffLive };
+  | { kind: "handoff"; id: string; live: HandoffLive }
+  /** To the computer a shell here belongs to (`projectTerminal`): its output, or its exit. */
+  | { kind: "terminal"; event: TerminalEvent };
 
 /** What goes over the wire: events, or from `compactBridge` patches the client turns back into them. */
 export type WireEvent =
@@ -887,6 +999,12 @@ export interface PhoneRemoteState {
   lan: boolean;
   /** Where phones reach this computer: local addresses first, then Tailscale's. */
   hosts: string[];
+  /**
+   * The address its bridge listens on, which `relay pipe` connects to: with
+   * no Tailscale, its loopback, which only a pipe reaches (`listening` stays
+   * false then).
+   */
+  bound?: string;
   devices: {
     id: string;
     name: string;

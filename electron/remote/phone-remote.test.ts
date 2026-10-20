@@ -246,7 +246,8 @@ it("without the local network, listens on Tailscale only while it's connected", 
     "127.0.0.1",
   ]);
 
-  // Tailscale goes off: nothing listens, and access comes back with it.
+  // Tailscale goes off: only `relay pipe` on this computer reaches it, and
+  // access comes back with it.
   tailnet.current = { status: "stopped", addresses: [] };
   await remote.start();
   expect(await remote.state()).toMatchObject({

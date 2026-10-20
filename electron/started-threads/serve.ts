@@ -51,7 +51,9 @@ export function agentProjects(
   // Real paths, as the folders asked for are compared after links are followed.
   const real = (p: string) => realpath(p).catch(() => p);
   return {
-    list: () => projects.list(client()),
+    // A project on another computer has no folder here to start threads in.
+    list: async () =>
+      (await projects.list(client())).filter((p) => !p.computer),
     add: (folder) => projects.add(folder, client(), { exact: true }),
     repositoryRoot,
     rules: async () => ({

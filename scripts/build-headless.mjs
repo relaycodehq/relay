@@ -1,13 +1,15 @@
 // Builds the headless Relay into dist-headless/: the `relay` command, the
 // Relay it runs in the background, and the agent host, Claude SDK, Cursor
 // and speech workers beside them as the desktop has them. It runs on plain
-// Node 22+, with nothing native, so one build serves every platform; the
-// speech engines are downloaded where they're set up.
+// Node 22+, so one build serves every platform: the only native code in it
+// is node-pty's, a binary per platform, and the speech engines are
+// downloaded where they're set up.
 //
 //   node scripts/build-headless.mjs [version]
 import {
   chmodSync,
   cpSync,
+  existsSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -48,6 +50,37 @@ function speechRuntime() {
   };
 }
 
+/**
+ * node-pty, for the shells a paired computer opens in a project here: its
+ * library and a binary per platform. npm ships none for Linux, so those come
+ * from `RELAY_PTY_LINUX`, a folder of `linux-<arch>/pty.node` the release
+ * builds in its Linux containers, or from this computer's own source build.
+ * A Relay without one for its platform has no shells.
+ */
+function copyPty() {
+  const pty = "node_modules/node-pty",
+    out = `${headlessOut}/node-pty`;
+  cpSync(`${pty}/package.json`, `${out}/package.json`);
+  cpSync(`${pty}/lib`, `${out}/lib`, {
+    recursive: true,
+    filter: (path) => !/\.(test\.js|map)$/.test(path),
+  });
+  cpSync(`${pty}/prebuilds`, `${out}/prebuilds`, {
+    recursive: true,
+    filter: (path) => !path.endsWith(".pdb"),
+  });
+  const built = `${pty}/build/Release/pty.node`;
+  if (process.platform === "linux" && existsSync(built))
+    cpSync(built, `${out}/prebuilds/linux-${process.arch}/pty.node`);
+  if (process.env.RELAY_PTY_LINUX)
+    cpSync(process.env.RELAY_PTY_LINUX, `${out}/prebuilds`, {
+      recursive: true,
+    });
+  // npm publishes spawn-helper without its executable bit; see build-electron.mjs.
+  for (const arch of ["arm64", "x64"])
+    chmodSync(`${out}/prebuilds/darwin-${arch}/spawn-helper`, 0o755);
+}
+
 export async function buildHeadless(given) {
   const version =
     given === undefined ? syncVersion() : resolveVersion({ version: given });
@@ -84,7 +117,7 @@ export async function buildHeadless(given) {
     outfile: `${headlessOut}/relay-daemon.cjs`,
     // jsonc-parser publishes a UMD main; its ESM build can be bundled completely.
     mainFields: ["module", "main"],
-    // Native modules: terminals aren't reached headless, and the speech
+    // Native modules: node-pty sits beside it (copyPty), and the speech
     // engines are downloaded when set up (see speech-runtime.json below).
     external: [
       "node-pty",
@@ -106,6 +139,7 @@ export async function buildHeadless(given) {
     "node_modules/@resvg/resvg-wasm/index_bg.wasm",
     `${headlessOut}/resvg.wasm`,
   );
+  copyPty();
   writeFileSync(
     `${headlessOut}/speech-runtime.json`,
     JSON.stringify(speechRuntime(), null, 2) + "\n",

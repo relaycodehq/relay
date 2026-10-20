@@ -393,3 +393,33 @@ it("changes links against current queued settings without replacing other prefer
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("re-adding a project on another computer takes what that computer says of it now", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-project-remote-"));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const box = { id: "box", name: "box" };
+    const first = await projects.addRemote(box, {
+      id: "p1",
+      name: "notes",
+      path: "/srv/notes",
+      plain: true,
+    });
+    await projects.remove(first.id);
+    const again = await projects.addRemote(
+      { id: "box", name: "server" },
+      { id: "p1", name: "notes", path: "/srv/notes" },
+    );
+    expect(again.id).toBe(first.id);
+    expect(again.removed).toBeUndefined();
+    expect(again.computer).toEqual({
+      id: "box",
+      name: "server",
+      projectId: "p1",
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

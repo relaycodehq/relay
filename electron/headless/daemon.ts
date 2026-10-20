@@ -2,10 +2,12 @@
 // electron/main.ts starts them, for a computer that's only ever reached from
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
-import { join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { AgentHosts } from "../agent-host/client";
 import {
   hostAgents,
@@ -53,10 +55,11 @@ import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
 import { Computers } from "../handoff/computers";
 import { HandoffReceiver } from "../handoff/receiver";
+import { RemoteProjects } from "../handoff/remote-projects";
 import { Handoffs } from "../handoff/sender";
 import { setComputerName, computerName } from "../platform/computer-name";
 import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
-import { pathReady } from "../platform/shell-path";
+import { finishPath, pathReady } from "../platform/shell-path";
 import { ClockifyPlugin } from "../plugins/clockify/service";
 import { DevOps } from "../plugins/devops/service";
 import { PluginSecrets } from "../plugins/secrets";
@@ -118,8 +121,30 @@ export interface DaemonOptions {
 const fetcher = (url: string | URL | Request, init?: RequestInit) =>
   fetch(url, init);
 
+/**
+ * The Node the daemon runs on goes first on its PATH when the one there is
+ * missing or older than the agent CLIs take (Ubuntu 22.04's is 12): the npm
+ * that installs agents into agent-clis, and the `#!/usr/bin/env node` CLIs it
+ * puts there, run on it then. A Node the user has that is new enough, nvm's
+ * say, stays first, so their projects' tasks and terminals keep it.
+ */
+async function preferOwnNode(env: NodeJS.ProcessEnv) {
+  const version = await promisify(execFile)("node", ["--version"], {
+    env,
+    timeout: 5000,
+  }).then(
+    ({ stdout }) => stdout,
+    () => "",
+  );
+  if (Number(/^v(\d+)\./.exec(version.trim())?.[1] ?? 0) >= 18) return;
+  env.PATH = [dirname(process.execPath), env.PATH]
+    .filter(Boolean)
+    .join(delimiter);
+}
+
 /** Starts everything and resolves once Relay is answering; exits the process when stopped. */
 export async function runDaemon({ home, port, name }: DaemonOptions) {
+  finishPath(preferOwnNode);
   const paths = headlessPaths(home);
   const startedAt = Date.now();
   const releaseHome = await claimHome(paths.pid);
@@ -137,7 +162,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const drafts = new Drafts(draftStore, {
     changed: (change) => phoneRemote?.draftChanged(change),
   });
-  let handoffs: { computers: Computers; sender: Handoffs } | undefined;
+  let handoffs:
+    | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+    | undefined;
   let agentHosts: AgentHosts | undefined;
   // The host runs from a plain file beside this one.
   const hostScript = join(__dirname, "agent-host.mjs");
@@ -337,6 +364,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const computers = new Computers(store, seal, unseal);
   handoffs = {
     computers,
+    remote: new RemoteProjects(computers, projects),
     sender: new Handoffs(
       store,
       computers,
@@ -368,6 +396,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     unseal,
     {
       projects: () => projects.list(login.client),
+      pairedComputers: () => computers.list(),
       projectPath: (id) => projects.get(id).path,
       chats: api.listChats,
       chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
@@ -440,7 +469,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       control?.close();
       try {
         await remote.close();
-        computers.close();
+        computers.close({ detach });
         if (detach) agentHosts?.detach();
         await chats.dispose({ detach });
         await Promise.all([
@@ -512,10 +541,10 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         update: updater.now,
       };
     },
-    async pair() {
+    async pair(pipe = false) {
       if (!remote.devices.settings.enabled || !(await remote.state()).listening)
         await remote.setEnabled(true);
-      const pairing = await remote.pairing();
+      const pairing = await remote.pairing({ pipe });
       return { ...pairing, remote: await remote.state() };
     },
     update: (check) => (check ? updater.check() : updater.install()),

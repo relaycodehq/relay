@@ -2,6 +2,7 @@
 // the background and shows the codes phones and other computers pair with.
 // The work itself happens on those; nothing here is a terminal UI for it.
 import { execFileSync, spawn } from "node:child_process";
+import { connect } from "node:net";
 import { existsSync, openSync, readSync, statSync, closeSync } from "node:fs";
 import { lstat, readFile, realpath, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -53,6 +54,7 @@ import {
 } from "./service";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
+import { keepDistributionsUp, wslDistro } from "./wsl";
 
 const agentName = (provider: string) =>
   agentInfo(provider as AgentProvider)?.cli ?? provider;
@@ -81,6 +83,8 @@ interface Flags {
   projects: string[];
   lines?: number;
   check: boolean;
+  /** `relay pair` for a computer pairing over SSH or wsl.exe. */
+  pipe: boolean;
 }
 
 class Usage extends Error {}
@@ -100,6 +104,7 @@ function parse(argv: string[]) {
     version: false,
     projects: [],
     check: false,
+    pipe: false,
   };
   const words: string[] = [];
   for (let i = 0; i < argv.length; i++) {
@@ -143,6 +148,9 @@ function parse(argv: string[]) {
         break;
       case "--json":
         flags.json = true;
+        break;
+      case "--pipe":
+        flags.pipe = true;
         break;
       case "--force":
         flags.force = true;
@@ -209,6 +217,8 @@ ${bold("Running")}
   relay logs [-f] [-n <lines>] Show the log; -f follows it
   relay update [--check]       Install the newest release; agents keep working through it
   relay run                    Run in the foreground (what the service runs)
+  relay pipe                   Carry another computer's connection over stdin and stdout
+                               (what \`ssh <host> relay pipe\` and wsl.exe run)
   relay uninstall [--purge]    Stop Relay and remove it; --purge deletes its data too
 
 ${bold("Settings")}
@@ -274,6 +284,8 @@ async function main(argv: string[]) {
       return status(home, flags);
     case "pair":
       return pair(home, flags);
+    case "pipe":
+      return pipe(home, flags);
     case "logs":
       return logs(home, flags);
     case "projects":
@@ -414,6 +426,40 @@ async function ensureRunning(home: string, flags: Flags, quiet = false) {
   return (await startDetached(home, script)).status;
 }
 
+/**
+ * Carries a paired computer's bridge over stdin and stdout, for a computer
+ * that reaches this one over SSH or wsl.exe instead of the network; Relay
+ * starts first if it isn't running. Nothing but its bytes goes to stdout.
+ */
+async function pipe(home: string, flags: Flags) {
+  let status = await ensureRunning(home, { ...flags, json: true }, true);
+  // Just started, it may not listen yet.
+  for (let i = 0; i < 100 && !status.remote.bound; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    status = (await running(home)) ?? status;
+  }
+  const { bound, port } = status.remote;
+  if (!bound)
+    throw new Error(
+      status.remote.enabled
+        ? `Relay isn't listening: ${status.remote.error ?? "it didn't start its bridge."}`
+        : "Phone and computer access is off here; relay pair turns it on.",
+    );
+  const socket = connect({
+    host: bound === "0.0.0.0" ? "127.0.0.1" : bound,
+    port,
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once("connect", resolve);
+    socket.once("error", reject);
+  });
+  process.stdin.pipe(socket);
+  socket.pipe(process.stdout);
+  process.stdin.once("end", () => socket.end());
+  await new Promise<void>((resolve) => socket.once("close", () => resolve()));
+  process.stdin.destroy();
+}
+
 async function start(home: string, flags: Flags) {
   await remember(home, flags);
   const already = await running(home);
@@ -467,10 +513,27 @@ function printReach(status: DaemonStatus) {
   const { remote } = status;
   if (remote.listening)
     console.log(
-      `Phones and computers reach it at ${bold(`${remote.hosts.join(", ")}:${remote.port}`)} over Tailscale.`,
+      `Phones and computers reach it at ${bold(`${remote.hosts.join(", ")}:${remote.port}`)} ${reachWay(status)}.`,
     );
+  else if (remote.bound) console.log(ok(`${pipeOnly(status)}.`));
   else console.log(warn(`Not reachable yet: ${reachProblem(status)}`));
 }
+
+/** How phones and computers get to the addresses it listens on. */
+function reachWay({ remote }: DaemonStatus) {
+  const tailnet = remote.hosts.filter((host) =>
+    remote.tailnet.addresses.includes(host),
+  ).length;
+  const name = remote.tailnet.name ? ` (${remote.tailnet.name})` : "";
+  if (!tailnet) return "on the local network";
+  return tailnet === remote.hosts.length
+    ? `over Tailscale${name}`
+    : `on the local network and over Tailscale${name}`;
+}
+
+/** Neither Tailscale nor the local network: only `relay pipe`, through ssh or wsl.exe, gets in. */
+const pipeOnly = (status: DaemonStatus) =>
+  `Computers reach it only through ssh, or wsl.exe from Windows (${reachProblem(status).replace(/\.$/, "")})`;
 
 function reachProblem({ remote }: DaemonStatus) {
   if (remote.error) return remote.error;
@@ -514,11 +577,11 @@ async function status(home: string, flags: Flags) {
       ? row(
           "ok",
           "Reach",
-          dim(
-            `${remote.hosts.join(", ")}:${remote.port} over Tailscale${remote.tailnet.name ? ` (${remote.tailnet.name})` : ""}`,
-          ),
+          dim(`${remote.hosts.join(", ")}:${remote.port} ${reachWay(status)}`),
         )
-      : row("warn", "Reach", `not reachable: ${reachProblem(status)}`),
+      : remote.bound
+        ? row("ok", "Reach", dim(pipeOnly(status)))
+        : row("warn", "Reach", `not reachable: ${reachProblem(status)}`),
   );
   ui.print(row("ok", "Data", dim(tilde(status.home))));
   ui.print(
@@ -630,7 +693,7 @@ async function pair(
   const control = headlessPaths(home).control;
   let pairing;
   try {
-    pairing = await callControl(control, "pair");
+    pairing = await callControl(control, "pair", flags.pipe);
   } catch (e) {
     const fresh = await running(home);
     if (fresh && !fresh.remote.listening) {
@@ -1010,6 +1073,42 @@ if ($path) { [Environment]::SetEnvironmentVariable('Path', (($path -split ';') |
   }
 }
 
+/**
+ * In WSL, which stops the distribution 15 s after the last Windows program
+ * using it exits, and Relay with it. A Windows Relay that works in this
+ * distribution holds it awake; without one, `.wslconfig` can turn the timeout
+ * off, for every distribution, which is why it's off unless asked for.
+ */
+async function setUpWsl(ui: Screen, distro: string) {
+  if (
+    !(await ui.ask(
+      `Keep WSL running while Windows is on? Only needed when no Relay on Windows works in ${distro}: WSL stops it 15 seconds after its last window closes. This sets instanceIdleTimeout=-1 in .wslconfig, which keeps every WSL distribution running, and applies from WSL's next start.`,
+      false,
+    ))
+  )
+    return ui.print(
+      row("off", "WSL", "stops 15 s after its last window closes, unless a Relay on Windows holds it"),
+    );
+  try {
+    const file = await keepDistributionsUp();
+    ui.print(
+      row(
+        "ok",
+        "WSL",
+        dim(file ? `stays running from WSL's next start (${file})` : "stays running"),
+      ),
+    );
+  } catch (e) {
+    ui.print(
+      row(
+        "warn",
+        "WSL",
+        `couldn't reach Windows (${e instanceof Error ? e.message : String(e)}); set instanceIdleTimeout=-1 under [general] in %USERPROFILE%\\.wslconfig yourself`,
+      ),
+    );
+  }
+}
+
 async function setup(home: string, flags: Flags) {
   const ui = new Screen(process.stdout, process.stdin, !flags.yes);
   ui.print(
@@ -1017,7 +1116,16 @@ async function setup(home: string, flags: Flags) {
   );
 
   ui.print(section("This computer"));
-  ui.print(row("ok", "Node.js", dim(process.versions.node)));
+  ui.print(
+    // Before 22.3 there's no getBuiltinModule to ask with either.
+    process.getBuiltinModule?.("node:sqlite")
+      ? row("ok", "Node.js", dim(process.versions.node))
+      : row(
+          "warn",
+          "Node.js",
+          `${process.versions.node} has no node:sqlite, so a restart forgets running turns; 22.13 or newer has it`,
+        ),
+  );
   const git = gitVersion();
   ui.print(
     git
@@ -1070,6 +1178,8 @@ async function setup(home: string, flags: Flags) {
     ui.print(
       row("ok", "Background", dim("running; relay service install starts it with the computer")),
     );
+  const distro = wslDistro();
+  if (distro) await setUpWsl(ui, distro);
   // An installed release keeps itself current unless told not to.
   if (installRoot(__dirname)) {
     const autoUpdate = await ui.ask(

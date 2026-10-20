@@ -12,10 +12,11 @@ $repo = "relaycodehq/relay"
 $dest = if ($env:RELAY_INSTALL) { $env:RELAY_INSTALL } else { Join-Path $env:LOCALAPPDATA "Programs\Relay Headless" }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  throw "Relay needs Node.js 22 or newer: https://nodejs.org/en/download"
+  throw "Relay needs Node.js 22.13 or newer: https://nodejs.org/en/download"
 }
-$major = [int](& node -p "process.versions.node.split('.')[0]")
-if ($major -lt 22) { throw "Relay needs Node.js 22 or newer; this is $(& node --version)." }
+# Before 22.13 node:sqlite needs a flag, and without it a restart forgets running turns.
+$sqlite = & node --no-warnings -p "try { require('node:sqlite'); 'yes' } catch { 'no' }"
+if ($sqlite -ne "yes") { throw "Relay needs Node.js 22.13 or newer; this is $(& node --version)." }
 
 if ($env:RELAY_UPDATE_FEED) { $feed = $env:RELAY_UPDATE_FEED }
 elseif ($env:RELAY_VERSION) { $feed = "https://github.com/$repo/releases/download/v$($env:RELAY_VERSION.TrimStart('v'))/latest.json" }

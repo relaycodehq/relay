@@ -49,7 +49,14 @@ import {
 } from "../projects/project-files";
 import { projectIcon } from "../projects/project-icon";
 import { branchPulls } from "../pull-requests/pull-request-create";
-import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
+import {
+  computerIdSchema,
+  pageSchema,
+  remoteProjects,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
@@ -249,8 +256,13 @@ export function projectHandlers(ctx: ApiContext) {
       async (id, provider) =>
         agentRuntime(provider).commands(await projects.root(id)),
     ),
-    agentModels: takes([agentProviderSchema], (provider) =>
-      agentRuntime(provider).models(),
+    agentModels: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) =>
+        // A project on a paired computer runs that computer's own copy.
+        computerId
+          ? remoteProjects(ctx).agentModels(computerId, provider)
+          : agentRuntime(provider).models(),
     ),
     reloadAgentModels: takes(
       [agentProviderSchema, z.boolean()],

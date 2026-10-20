@@ -24,3 +24,6 @@ dist-website/
 # Secrets
 .env*
 !.env.example
+
+# Notes on remote workspaces, with the machines they were tried on; local only.
+docs/remote-workspaces.md

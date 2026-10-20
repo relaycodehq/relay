@@ -45,8 +45,9 @@ export interface CleanupScene {
   terminal(path: string): boolean;
 }
 
-/** Inside Relay's worktree folder, on a branch Relay named, and not holding the checkout. */
+/** Inside Relay's worktree folder, on a branch Relay named, not a folder it found, and not holding the checkout. */
 function relayMade(worktree: ChatWorktree, checkout: string, folder: string) {
+  if (worktree.adopted) return false;
   const path = resolve(worktree.path!);
   const inside = (parent: string, child: string) => {
     const rel = relative(parent, child);
