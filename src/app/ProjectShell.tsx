@@ -347,7 +347,7 @@ export default function ProjectShell() {
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
             onSendDraft={() => composer.current?.submit()}
-            onAdd={() => starts.addProject()}
+            onAdd={starts.addProject}
             onAttention={setAttention}
             onSettings={settings.show}
             onInbox={() => {
@@ -532,6 +532,7 @@ export default function ProjectShell() {
       {starts.adding && (
         <AddProjectPalette
           projects={realProjects}
+          initialPage={starts.adding}
           onClose={() => starts.setAdding(false)}
           onDone={(p) => void starts.added(p)}
         />

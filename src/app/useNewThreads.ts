@@ -16,6 +16,7 @@ import {
   loadComposerSettings,
   saveComposerSettings,
 } from "../features/agents/composer-settings";
+import type { AddProjectPage } from "../features/add-project/AddProjectPalette";
 import type { PreparedDraft } from "../features/memes/meme-setup";
 import { sameSpot, useShellSpot } from "./shell-spot";
 import type { ShellNavigation } from "./useShellNavigation";
@@ -46,12 +47,12 @@ export function useNewThreads(
   const spotNow = useShellSpot(nav);
   /** ⌘N's picker shows. */
   const [picking, setPicking] = useState(false);
-  /** The add-project palette shows. */
-  const [adding, setAdding] = useState(false);
-  function addProject() {
+  /** The add-project palette shows, on this page. */
+  const [adding, setAdding] = useState<AddProjectPage | false>(false);
+  function addProject(page: AddProjectPage = "root") {
     if (lock.blocked()) return;
     setPicking(false);
-    setAdding(true);
+    setAdding(page);
   }
   /** The palette added a project, or picked one there already: a new thread in it. */
   async function added(p: Project) {

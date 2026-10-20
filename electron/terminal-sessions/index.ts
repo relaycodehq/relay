@@ -20,6 +20,7 @@ import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 import { storedCodexHistory, storedCodexSessions } from "./codex-store";
 import { FileCache, head } from "./scan";
+import { discoverSessionFolders } from "./discovery";
 
 /** An agent's config folder for one account: where its sessions are kept. */
 export interface SessionHome {
@@ -52,8 +53,12 @@ type Origin =
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
-async function files(dir: string, keep: (name: string) => boolean) {
-  const names = await readdir(dir).catch(() => [] as string[]);
+async function files(
+  dir: string,
+  keep: (name: string) => boolean,
+  recursive = false,
+) {
+  const names = await readdir(dir, { recursive }).catch(() => [] as string[]);
   return names.filter(keep).map((name) => join(dir, name));
 }
 
@@ -85,11 +90,11 @@ export class TerminalSessions {
   ) {}
 
   /** The project's terminal sessions, newest first. */
-  async list(root: string): Promise<FoundSession[]> {
+  async list(root: string, most = MOST_ROWS): Promise<FoundSession[]> {
     const roots = new Set([root, (await real(root)) ?? root]);
     const [found, stored] = await Promise.all([
-      this.candidates(roots, MOST_ROWS),
-      this.stored(roots, MOST_ROWS),
+      this.candidates(roots, most),
+      this.stored(roots, most),
     ]);
     const live = await this.live(found);
     const named = await this.appNames(found);
@@ -119,7 +124,11 @@ export class TerminalSessions {
     }
     return [...unique.values()]
       .sort((a, b) => b.updated - a.updated)
-      .slice(0, MOST_ROWS);
+      .slice(0, most);
+  }
+
+  async projectFolders(provider: TerminalAgent) {
+    return discoverSessionFolders(await this.homes(), provider);
   }
 
   /** A listed session found again by its id, as it stands now; never by a path from the page. */
@@ -319,7 +328,7 @@ export class TerminalSessions {
     most: number,
     only?: TerminalSessionPick,
   ) {
-    const all = (await this.files(roots, only)).sort(
+    const all = (await this.files(roots, only, most === Infinity)).sort(
       (a, b) => b.mtime - a.mtime,
     );
     const out: { file: File; origin: NonNullable<Origin> }[] = [];
@@ -372,7 +381,11 @@ export class TerminalSessions {
    * each folder read once: an account's folder that links to the usual home
    * counts as the usual home, so its sessions are the default account's.
    */
-  private async files(roots: Set<string>, only?: TerminalSessionPick) {
+  private async files(
+    roots: Set<string>,
+    only?: TerminalSessionPick,
+    all = false,
+  ) {
     const seen = new Set<string>();
     const out: File[] = [];
     for (const { provider, account, home } of await this.homes()) {
@@ -384,18 +397,25 @@ export class TerminalSessions {
                 [...roots].map((r) => join(home, "projects", claudeSlug(r))),
               ),
             ]
-          : codexDays(join(home, "sessions"), this.now());
+          : all
+            ? [join(home, "sessions")]
+            : codexDays(join(home, "sessions"), this.now());
       for (const dir of dirs) {
         const at = await real(dir);
         if (!at || seen.has(at)) continue;
         seen.add(at);
-        const paths = await files(dir, (name) =>
-          provider === "claude"
-            ? name.endsWith(".jsonl") &&
-              (!only || name === `${only.session}.jsonl`)
-            : name.startsWith("rollout-") &&
-              name.endsWith(".jsonl") &&
-              (!only || name.endsWith(`-${only.session}.jsonl`)),
+        const paths = await files(
+          dir,
+          (relative) => {
+            const name = basename(relative);
+            return provider === "claude"
+              ? name.endsWith(".jsonl") &&
+                  (!only || name === `${only.session}.jsonl`)
+              : name.startsWith("rollout-") &&
+                  name.endsWith(".jsonl") &&
+                  (!only || name.endsWith(`-${only.session}.jsonl`));
+          },
+          provider === "codex" && all,
         );
         const stats = await Promise.all(
           paths.map((path) => stat(path).catch(() => undefined)),

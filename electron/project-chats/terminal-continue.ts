@@ -72,6 +72,7 @@ export class TerminalContinue {
     workspace: ChatWorkspace = "checkout",
     branch?: string,
     links?: LinkedFolder[],
+    sourceRoot?: string,
   ): Promise<ContinuedSession> {
     const key = `${projectId}:${pick.provider}:${pick.session}`;
     const making = this.continuing.get(key);
@@ -81,7 +82,14 @@ export class TerminalContinue {
       id: pick.session,
     });
     if (already) return { chat: already, created: false };
-    const made = this.make(projectId, pick, workspace, branch, links);
+    const made = this.make(
+      projectId,
+      pick,
+      workspace,
+      branch,
+      links,
+      sourceRoot,
+    );
     this.continuing.set(key, made);
     try {
       return { chat: await made, created: true };
@@ -96,6 +104,7 @@ export class TerminalContinue {
     workspace: ChatWorkspace,
     branch?: string,
     links?: LinkedFolder[],
+    sourceRoot?: string,
   ) {
     const { plain } = await this.core.projects.inspect(projectId);
     if (plain && workspace === "worktree")
@@ -104,14 +113,20 @@ export class TerminalContinue {
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
     const root = await this.core.projects.root(projectId);
-    const session = await this.sessions.find(root, pick);
+    const session = await this.sessions.find(sourceRoot ?? root, pick);
     if (!session)
       throw new Error("That session is no longer in this project's folder.");
-    const { messages, cut } = await this.sessions.history(session);
+    const { messages, cut: lastCut } = await this.sessions.history(session);
+    // Bulk imports preserve even an unfinished tail. If the native fork
+    // cannot carry all of it, the full conversation starts a fresh session.
+    const cut =
+      sourceRoot !== undefined && lastCut?.message !== messages.at(-1)?.id
+        ? undefined
+        : lastCut;
     // In a copy, the thread's history ends where the copy is cut, after an
     // answer whose turn finished. Without one, the conversation goes to the
     // agent as text instead.
-    const copy = continuesAsCopy(session);
+    const copy = sourceRoot !== undefined || continuesAsCopy(session);
     const kept =
       copy && cut
         ? messages.slice(0, messages.findIndex((m) => m.id === cut.message) + 1)
@@ -128,6 +143,16 @@ export class TerminalContinue {
       updated: now,
       seenAt: now,
       messages: kept,
+      ...(sourceRoot && sourceRoot !== root
+        ? {
+            movedIn: {
+              from: sourceRoot,
+              to: root,
+              owed: [`${session.provider}:main`],
+              selected: true as const,
+            },
+          }
+        : {}),
       ...(links?.length ? { links } : {}),
       accounts: { [session.provider]: session.account },
       fromTerminal: {

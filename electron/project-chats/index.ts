@@ -83,6 +83,7 @@ import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
+import { ProjectImports } from "./project-import";
 
 /** How often the ledger looks for turns that ended without saying. */
 const LEAK_CHECK_MS = 30_000;
@@ -126,6 +127,7 @@ export class ProjectChats {
   readonly notes: ThreadNotes;
   private creating: ThreadCreate;
   private terminal: TerminalContinue;
+  readonly imports: ProjectImports;
   constructor(
     private store: Store,
     projects: Projects,
@@ -238,11 +240,13 @@ export class ProjectChats {
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
     this.creating = new ThreadCreate(core);
     this.notes = new ThreadNotes(core);
+    const terminalSessions = new TerminalSessions(async () => accountHomes());
     this.terminal = new TerminalContinue(
       core,
       this.worktrees,
-      new TerminalSessions(async () => accountHomes()),
+      terminalSessions,
     );
+    this.imports = new ProjectImports(core, terminalSessions, this.terminal);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>

@@ -170,3 +170,177 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
+
+.import-body {
+  padding: 14px 18px;
+}
+.import-body h2,
+.import-intro h2 {
+  font-size: 15px;
+  font-weight: 550;
+  margin: 0 0 6px;
+}
+.import-body p,
+.import-intro p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+.import-intro {
+  padding: 16px 18px 0;
+}
+.import-app {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  margin: 9px 0;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.import-app:hover {
+  background: var(--hover);
+}
+.import-app > span {
+  flex: 1;
+}
+.import-app strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+}
+.import-app small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+.import-app > svg {
+  color: var(--muted);
+  flex: none;
+}
+.import-projects {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.import-project + .import-project {
+  border-top: 1px solid var(--border);
+}
+.import-project-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+.import-project-head label {
+  display: flex;
+  flex-direction: row;
+  margin: 0;
+  font-weight: 400;
+  gap: 10px;
+  flex: 1;
+  min-width: 180px;
+  align-items: center;
+}
+.import-project-head label > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+.import-project-head strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.import-project-head small {
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.import-project-state {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-project-head .text-button {
+  font-size: 11px;
+}
+.import-chats {
+  padding: 0 0 12px 24px;
+}
+.import-chat-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  margin: 0 0 7px;
+}
+.import-chat-heading .text-button {
+  font-size: 11px;
+  padding: 0;
+}
+.import-chat {
+  display: flex;
+  flex-direction: row;
+  margin: 0;
+  font-weight: 400;
+  align-items: start;
+  gap: 9px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+.import-chat input {
+  margin-top: 3px;
+  flex: none;
+}
+.import-chat > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.import-chat small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.import-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.import-footer > label {
+  display: flex;
+  flex-direction: row;
+  margin: 0 auto 0 0;
+  font-weight: 400;
+  gap: 7px;
+  align-items: center;
+}
+.import-body input[type="checkbox"],
+.import-footer input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  flex: none;
+  accent-color: var(--accent);
+}
+.import-footer > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.import-success {
+  padding: 10px 0;
+}
+.import-success > strong {
+  display: block;
+  margin-bottom: 8px;
+}

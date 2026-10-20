@@ -1,6 +1,14 @@
 // The sidebar's Projects view sections: Scratchpad's chats, and the projects
 // under their heading, which takes projects dragged out of their groups.
-import { ChevronRight, FolderPlus, Plus } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
+import {
+  ChevronRight,
+  FolderOpen,
+  FolderPlus,
+  Link2,
+  Plus,
+  Import as ImportIcon,
+} from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import type { SidebarFolds } from "./useSidebarFolds";
@@ -12,6 +20,9 @@ import {
   type SidebarRows,
 } from "./SidebarThread";
 import { IconButton } from "../../ui/ui";
+import { GitHubMark } from "../../ui/BrandIcons";
+import type { AddProjectPage } from "../add-project/AddProjectPalette";
+import { MenuAction, MenuPopup } from "./SidebarMenu";
 
 /** A section's heading; the label folds the list beneath it. */
 function SectionTitle({
@@ -99,6 +110,50 @@ export function Scratchpad({
   );
 }
 
+/** The ways to add a project, each opening the palette on its page. */
+function AddMenu({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        className="icon-button"
+        title="Add project"
+        aria-label="Add project"
+      >
+        <Plus size={14} />
+      </Menu.Trigger>
+      <MenuPopup side="bottom" align="end">
+        <MenuAction
+          icon={<FolderPlus size={14} />}
+          onClick={() => onAdd("new")}
+        >
+          New project
+        </MenuAction>
+        <MenuAction
+          icon={<FolderOpen size={14} />}
+          onClick={() => onAdd("folder")}
+        >
+          Open a folder
+        </MenuAction>
+        <MenuAction
+          icon={<GitHubMark size={14} />}
+          onClick={() => onAdd("github")}
+        >
+          Clone from GitHub
+        </MenuAction>
+        <MenuAction icon={<Link2 size={14} />} onClick={() => onAdd("url")}>
+          Clone from a URL
+        </MenuAction>
+        <MenuAction
+          icon={<ImportIcon size={14} />}
+          onClick={() => onAdd("import")}
+        >
+          Import from another app…
+        </MenuAction>
+      </MenuPopup>
+    </Menu.Root>
+  );
+}
+
 /** The Projects heading, a note for what failed, and the tree. */
 export function ProjectsSection({
   tree,
@@ -110,7 +165,7 @@ export function ProjectsSection({
   error: string | undefined;
   /** There are no projects yet. */
   empty: boolean;
-  onAdd: () => void;
+  onAdd: (page: AddProjectPage) => void;
 }) {
   const { drag, folds, groups } = tree;
   return (
@@ -136,9 +191,7 @@ export function ProjectsSection({
               <FolderPlus size={13} />
             </IconButton>
           </div>
-          <IconButton label="Add project" onClick={onAdd}>
-            <Plus size={14} />
-          </IconButton>
+          <AddMenu onAdd={onAdd} />
         </div>
       </div>
       {error && <p className="sb-note error">{error}</p>}

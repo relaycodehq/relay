@@ -151,3 +151,46 @@ export function storedCodexHistory(path: string, id: string) {
     db.close();
   }
 }
+
+/** Declared desktop projects and working folders, including those whose folder is now missing. */
+export async function storedCodexFolders(home: string) {
+  const path = join(home, "state_5.sqlite");
+  if (!(await exists(path))) return [];
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const folders = new Map<string, string>();
+    // Older stores predate desktop projects, but still contain CLI threads.
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'project_roots'",
+        )
+        .get()
+    ) {
+      for (const row of db
+        .prepare(
+          "SELECT p.name, r.path FROM projects p JOIN project_roots r ON r.project_id = p.id ORDER BY p.position, r.position",
+        )
+        .all()) {
+        if (typeof row.path === "string" && typeof row.name === "string")
+          folders.set(row.path, row.name);
+      }
+    }
+    for (const row of db
+      .prepare(
+        "SELECT DISTINCT cwd, source, originator FROM threads WHERE archived = 0",
+      )
+      .all()) {
+      const origin = codexSessionOrigin(row);
+      if (
+        (origin.app || origin.terminal) &&
+        typeof row.cwd === "string" &&
+        !folders.has(row.cwd)
+      )
+        folders.set(row.cwd, "");
+    }
+    return [...folders].map(([path, name]) => ({ path, name }));
+  } finally {
+    db.close();
+  }
+}
