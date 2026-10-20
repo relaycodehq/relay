@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import {
   chats,
+  projects,
+  root,
   projectId,
   input,
   useProjectChats,
@@ -8,6 +12,7 @@ import {
   waitForSummary,
 } from "../../tests/fixtures/project-chats-harness";
 import { ThreadWorktrees } from "./worktrees";
+import { ThreadList } from "./thread-list";
 
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
@@ -134,4 +139,70 @@ it("does not expose missing or archived threads through status reads", async () 
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.triage(chat.id, { kind: "archive" });
   await expect(chats.status(chat.id)).rejects.toThrow("Chat not found");
+});
+
+it("builds each project's live list once for explicit and started-thread batches", async () => {
+  const lead = await chats.create(projectId, { kind: "project" });
+  const startedBy = { chatId: lead.id, agent: "codex" as const };
+  const a = await chats.create(
+    projectId,
+    { kind: "project" },
+    "checkout",
+    startedBy,
+  );
+  const b = await chats.create(
+    projectId,
+    { kind: "project" },
+    "checkout",
+    startedBy,
+  );
+  const folder = join(root, "other-project");
+  await mkdir(folder);
+  const other = await projects.add(folder, null, { exact: true });
+  const c = await chats.create(
+    other.id,
+    { kind: "project" },
+    "checkout",
+    startedBy,
+  );
+  const archived = await chats.create(
+    projectId,
+    { kind: "project" },
+    "checkout",
+    startedBy,
+  );
+  await chats.triage(archived.id, { kind: "archive" });
+  const expected = chats
+    .startedThreads(lead.id)
+    .filter((s) => !s.archivedAt)
+    .map((s) => s.id);
+  const lists = vi.spyOn(ThreadList.prototype, "list");
+  const refresh = vi.spyOn(ThreadWorktrees.prototype, "refreshAgentWorktrees");
+  const clone = vi.spyOn(globalThis, "structuredClone");
+  try {
+    const batch = await chats.statuses({ ids: [c.id, b.id, a.id, b.id] });
+    expect(batch.map((s) => s.summary.id)).toEqual([c.id, b.id, a.id, b.id]);
+    expect(lists.mock.calls).toEqual([[projectId], [other.id]]);
+    lists.mockClear();
+    expect(
+      (await chats.statuses({ startedBy: lead.id })).map((s) => s.summary.id),
+    ).toEqual(expected);
+    expect(lists.mock.calls).toEqual([[projectId], [other.id]]);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(
+      clone.mock.calls.some(
+        ([value]) => value && typeof value === "object" && "messages" in value,
+      ),
+    ).toBe(false);
+    await expect(chats.statuses({ ids: [a.id, "missing"] })).rejects.toThrow(
+      "Chat not found",
+    );
+    await expect(chats.statuses({ ids: [a.id, archived.id] })).rejects.toThrow(
+      "Chat not found",
+    );
+  } finally {
+    lists.mockRestore();
+    refresh.mockRestore();
+    clone.mockRestore();
+  }
 });

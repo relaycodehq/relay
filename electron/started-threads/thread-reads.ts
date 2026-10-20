@@ -54,7 +54,7 @@ export class ThreadReads {
   constructor(
     private chats: Pick<
       ProjectChats,
-      "list" | "startedThreads" | "get" | "status"
+      "list" | "startedThreads" | "get" | "statuses"
     >,
     private projects: Pick<ProjectAccess, "real" | "all">,
   ) {}
@@ -77,13 +77,11 @@ export class ThreadReads {
   }
 
   async list(lead: ProjectChat, ids?: string[]) {
-    const listed = await Promise.all(
-      (ids ?? this.children(lead).map((c) => c.id)).map((id) =>
-        this.chats.status(id).catch(() => {
-          throw new Error("There's no such thread; see find_threads.");
-        }),
-      ),
-    );
+    const listed = await this.chats
+      .statuses(ids ? { ids } : { startedBy: lead.id })
+      .catch(() => {
+        throw new Error("There's no such thread; see find_threads.");
+      });
     const names = listed.some(
       ({ summary }) => summary.projectId !== lead.projectId,
     )

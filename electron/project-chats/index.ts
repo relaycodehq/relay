@@ -354,12 +354,7 @@ export class ProjectChats {
     return this.threads.list(projectId);
   }
   private summaryOf(id: string) {
-    const projectId = this.store
-      .get()
-      .chats?.find((c) => c.id === id)?.projectId;
-    return projectId
-      ? this.threads.list(projectId).find((c) => c.id === id)
-      : undefined;
+    return this.threads.byIds([id]).get(id);
   }
   /** What threads are news of, decided once for every window, menubar and phone. */
   onNews(listener: (item: NewsItem) => void) {
@@ -794,10 +789,36 @@ export class ProjectChats {
   }
   /** Progress reads use the cached thread, without cloning its history or refreshing Git. */
   async status(id: string) {
-    const chat = await this.storage.load(id);
-    const summary = this.summaryOf(id);
-    if (!summary || summary.archivedAt) throw new Error("Chat not found.");
-    return chatStatus(summary, { ...chat, ...this.waitingIn(chat) });
+    return (await this.statuses({ ids: [id] }))[0];
+  }
+  /** One live summary list per project, even when a tool waits on many threads. */
+  async statuses(
+    selection: { ids: readonly string[] } | { startedBy: string },
+  ) {
+    const ids =
+      "ids" in selection
+        ? selection.ids
+        : (this.store.get().chats ?? [])
+            .filter(
+              (c) =>
+                c.startedBy?.chatId === selection.startedBy && !c.archivedAt,
+            )
+            .map((c) => c.id);
+    const loaded = new Map(
+      await Promise.all(
+        ids.map(async (id) => [id, await this.storage.load(id)] as const),
+      ),
+    );
+    const summaries = this.threads.byIds(ids);
+    // Explicit IDs retain caller order (and missing-ID errors). Started
+    // threads retain the project grouping and updated order of the sidebar.
+    const ordered = "ids" in selection ? ids : [...summaries.keys()];
+    return ordered.map((id) => {
+      const chat = loaded.get(id)!;
+      const summary = summaries.get(id);
+      if (!summary || summary.archivedAt) throw new Error("Chat not found.");
+      return chatStatus(summary, { ...chat, ...this.waitingIn(chat) });
+    });
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {

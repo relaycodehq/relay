@@ -73,7 +73,7 @@ type Chats = Pick<
   | "startedThreads"
   | "allowDriving"
   | "get"
-  | "status"
+  | "statuses"
   | "create"
   | "send"
   | "cancel"

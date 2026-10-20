@@ -36,7 +36,9 @@ function awaySummary(
   const { asking: _a, stopped: _s, limitResume: _l, goal: _g, ...rest } = c;
   return {
     ...rest,
-    ...(running ? { running, runningSince, runningAgents, waiting: !!waiting } : {}),
+    ...(running
+      ? { running, runningSince, runningAgents, waiting: !!waiting }
+      : {}),
     ...(waiting && !running ? { waiting } : {}),
     ...(blocked ? { blocked } : {}),
     ...(asking ? { asking } : {}),
@@ -79,16 +81,28 @@ export class ThreadList {
         : listed;
     });
   }
-  /** The threads `leadId`'s agent started, in whichever project. */
-  started(leadId: string): ChatSummary[] {
+  /** Build each affected project's live list once for a group of status reads. */
+  byIds(ids: readonly string[]): Map<string, ChatSummary> {
+    const wanted = new Set(ids);
     const projects = new Set(
       (this.core.store.get().chats ?? [])
-        .filter((c) => c.startedBy?.chatId === leadId)
+        .filter((c) => wanted.has(c.id))
         .map((c) => c.projectId),
     );
-    return [...projects].flatMap((p) =>
-      this.list(p).filter((c) => c.startedBy?.chatId === leadId),
+    return new Map(
+      [...projects].flatMap((project) =>
+        this.list(project)
+          .filter((c) => wanted.has(c.id))
+          .map((c) => [c.id, c] as const),
+      ),
     );
+  }
+  /** The threads `leadId`'s agent started, in whichever project. */
+  started(leadId: string): ChatSummary[] {
+    const ids = (this.core.store.get().chats ?? [])
+      .filter((c) => c.startedBy?.chatId === leadId)
+      .map((c) => c.id);
+    return [...this.byIds(ids).values()];
   }
   /** The project's threads as saved, with what runs or waits in each now. */
   private live(projectId: string): ChatSummary[] {
@@ -135,7 +149,9 @@ export class ThreadList {
         // started beside it, then its reviewers' as they started.
         const turns = [
           ...ledger.inThread(c.id).filter(holdsThread),
-          ...(helpers.get(c.id) ?? []).sort((a, b) => a.startedAt - b.startedAt),
+          ...(helpers.get(c.id) ?? []).sort(
+            (a, b) => a.startedAt - b.startedAt,
+          ),
         ];
         const crew = turns.filter((t) => working(t.phase));
         const active = crew.find((t) => t.threadId === c.id) ?? crew[0];

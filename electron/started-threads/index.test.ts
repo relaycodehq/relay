@@ -80,10 +80,24 @@ function fakeChats() {
         if (!chat) throw new Error("No such thread.");
         return structuredClone(chat);
       },
-      status: async (id: string) => {
-        const chat = chats.get(id);
-        if (!chat || chat.archivedAt) throw new Error("No such thread.");
-        return chatStatus(chatSummary(chat), chat);
+      statuses: async (
+        selection: { ids: string[] } | { startedBy: string },
+      ) => {
+        const ids =
+          "ids" in selection
+            ? selection.ids
+            : [...chats.values()]
+                .filter(
+                  (c) =>
+                    c.startedBy?.chatId === selection.startedBy &&
+                    !c.archivedAt,
+                )
+                .map((c) => c.id);
+        return ids.map((id) => {
+          const chat = chats.get(id);
+          if (!chat || chat.archivedAt) throw new Error("No such thread.");
+          return chatStatus(chatSummary(chat), chat);
+        });
       },
       create: async (
         projectId: string,
@@ -356,7 +370,7 @@ test("waiting ends once every thread is done or needs the user", async () => {
   );
 });
 
-test("listing and waiting read progress once per thread without fetching their histories", async () => {
+test("listing and waiting batch progress without fetching target histories", async () => {
   const { lead, chats, api } = fakeChats();
   const threads = new StartedThreads(api);
   const [child] = parse(
@@ -387,7 +401,7 @@ test("listing and waiting read progress once per thread without fetching their h
     },
   );
   const get = vi.spyOn(api, "get");
-  const status = vi.spyOn(api, "status");
+  const status = vi.spyOn(api, "statuses");
   for (const [name, args] of [
     ["list_threads", {}],
     ["wait_for_threads", { ids: [child.id], timeoutSeconds: 1 }],
@@ -401,7 +415,9 @@ test("listing and waiting read progress once per thread without fetching their h
     expect(
       name === "list_threads" ? result[0] : result.threads[0],
     ).not.toHaveProperty("error");
-    expect(status).toHaveBeenCalledExactlyOnceWith(child.id);
+    expect(status).toHaveBeenCalledExactlyOnceWith(
+      name === "list_threads" ? { startedBy: lead.id } : { ids: [child.id] },
+    );
     // The calling thread is read once for authorization; targets need no full read.
     expect(get.mock.calls).toEqual([[lead.id]]);
   }
