@@ -41,19 +41,19 @@ export function CommitSheet({
 }) {
   const qc = useQueryClient();
   const key = workingTreeKey(where);
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => {
-    if (!only) return new Set();
-    const keep = new Set(only);
-    return new Set(
-      tree.changes.map((c) => c.path).filter((p) => !keep.has(p)),
-    );
-  });
+  // Every change goes in unless left out; with `only`, just the picked ones,
+  // so a file that changes while the sheet is open stays out.
+  const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
+  const [picked, setPicked] = useState(() => only && new Set(only));
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const typed = useRef(false);
   const files = tree.changes.filter((c) => !c.conflict);
+  const excluded = picked
+    ? new Set(files.map((c) => c.path).filter((p) => !picked.has(p)))
+    : leftOut;
   const selected = files
     .filter((c) => !excluded.has(c.path))
     .map((c) => c.path);
@@ -175,16 +175,19 @@ export function CommitSheet({
   }
   const canPush =
     push && !!tree.pushTarget && (tree.ahead > 0 || !tree.upstream);
-  const toggle = (paths: string[]) =>
-    setExcluded((s) => {
+  const toggle = (paths: string[]) => {
+    const out = paths.every((p) => !excluded.has(p));
+    const flip = (s: ReadonlySet<string>, add: boolean) => {
       const next = new Set(s);
-      const allIn = paths.every((p) => !s.has(p));
       for (const p of paths) {
-        if (allIn) next.add(p);
+        if (add) next.add(p);
         else next.delete(p);
       }
       return next;
-    });
+    };
+    if (picked) setPicked(flip(picked, !out));
+    else setLeftOut(flip(leftOut, out));
+  };
   const subject = message.split("\n", 1)[0].trim().length;
   return (
     <Modal

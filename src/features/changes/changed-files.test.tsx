@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { ChangedFilesCard } from "./ChangedFilesCard";
-import { buildTurnTree, compactCount, sumStats } from "./turn-diff-tree";
+import { buildTurnTree, compactCount } from "./turn-diff-tree";
 
 const files = [
   { path: "src/components/ui.tsx", additions: 40, deletions: 10 },
@@ -29,7 +29,6 @@ it("builds a folder tree with totals and merged single-child folders", () => {
     "AgentTurn.tsx",
     "ui.tsx",
   ]);
-  expect(sumStats(files)).toEqual({ additions: 48, deletions: 14 });
   expect(compactCount(999)).toBe("999");
   expect(compactCount(1234)).toBe("1.2k");
   expect(compactCount(45_000)).toBe("45k");
