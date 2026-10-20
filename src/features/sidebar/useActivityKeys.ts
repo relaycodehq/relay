@@ -24,7 +24,7 @@ export function askJump(index: number) {
 
 /**
  * The `settle` shortcut on the open thread, and `jump-thread`'s digits onto
- * Activity's first nine threads while `jumping`. Returns whether their hints
+ * Activity's first nine cards while `jumping`. Returns whether their hints
  * show: holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on
  * the first nine cards (or whichever modifiers open them). ⌘ used as part of
  * another shortcut or a ⌘-click never shows them.
@@ -35,18 +35,18 @@ export function useActivityKeys({
   loaded,
   chatId,
   jumping,
-  actions: { open, settle },
+  actions: { settle },
 }: {
   /** Every open thread, started ones included, for `settle`. */
   active: ChatSummary[];
-  /** The numbered cards, in order, for `jump-thread`. */
-  cards: ChatSummary[];
+  /** Opens the numbered cards, in order, for `jump-thread`. */
+  cards: (() => void)[];
   /** Every project's list has answered, so `cards` won't fill in further. */
   loaded: boolean;
   /** The open thread. */
   chatId: string | undefined;
   jumping: boolean;
-  actions: Pick<ThreadActions, "open" | "settle">;
+  actions: Pick<ThreadActions, "settle">;
 }) {
   const [held, setHeld] = useState(false);
   const jumpTo = useRef<(index: number) => boolean>(() => false);
@@ -101,9 +101,9 @@ export function useActivityKeys({
     };
   }, []);
   jumpTo.current = (index) => {
-    const c = cards[index];
-    if (!jumping || !c) return false;
-    open(c);
+    const open = cards[index];
+    if (!jumping || !open) return false;
+    open();
     return true;
   };
   const takeAsked = useRef(() => {});

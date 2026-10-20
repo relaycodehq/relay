@@ -193,8 +193,14 @@ export function ProjectSidebar({
   const activity = view === "activity";
   const cmdHeld = useActivityKeys({
     active: sections.active,
-    // ⌘1–9 count the cards, which started threads and settled leads don't get.
-    cards: families.cards,
+    // Count drafts first, then thread cards; started threads and settled leads
+    // don't get numbers.
+    cards: [
+      ...drafts
+        .filter((d) => !d.chat)
+        .map((d) => () => onOpen(d.project, undefined, d.id)),
+      ...families.cards.map((c) => () => actions.open(c)),
+    ],
     loaded,
     chatId: shown,
     jumping: activity,

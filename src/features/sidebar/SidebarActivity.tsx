@@ -19,8 +19,7 @@ import type { HandoffView } from "../../../shared/handoff";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import type { ActivityDraft } from "../composer/drafts";
-import { mac } from "../../lib/mod-key";
-import { modifiersLabel, useBindings } from "../../lib/shortcuts";
+import { useBindings } from "../../lib/shortcuts";
 import { awayStopped } from "./useAwayViews";
 import {
   familyLine,
@@ -51,6 +50,7 @@ import { rowKeys } from "../../ui/ui";
 import { useStoredState } from "../../lib/persisted-store";
 import { parseFamilyFolds, withFamilyFold } from "../../../shared/family-folds";
 import { ThreadRef } from "./ThreadRef";
+import { CardShortcut } from "./CardShortcut";
 
 export function ActivityView({
   rows,
@@ -97,11 +97,13 @@ export function ActivityView({
   return (
     <>
       <div ref={list} className={`sb-cards ${hints ? "shortcuts" : ""}`}>
-        {unsent.map((d) => (
+        {unsent.map((d, index) => (
           <DraftCard
             key={d.key}
             draft={d}
             selected={d.id === draftId}
+            jump={hints ? jumpBinding : undefined}
+            index={index}
             onOpen={() => onDraft(d.project, d.id)}
             onSendOpen={onSendDraft}
           />
@@ -129,7 +131,7 @@ export function ActivityView({
                 </div>
               </Fragment>
             );
-          const index = families.cards.indexOf(c);
+          const index = unsent.length + families.cards.indexOf(c);
           const open =
             started.length > 0 &&
             (toggled[c.id] ?? !familySettled(started, rows.unread));
@@ -277,14 +279,7 @@ function ThreadCard({
               <ProjectBadge project={p} />
               <span className="sb-card-name">
                 <span className="sb-card-project">{p?.name}</span>
-                {jump && (
-                  <kbd className="sb-card-shortcut" aria-hidden>
-                    <span className={mac ? "glyph" : undefined}>
-                      {modifiersLabel(jump)}
-                    </span>
-                    {index + 1}
-                  </kbd>
-                )}
+                <CardShortcut binding={jump} index={index} />
               </span>
               {state}
               <div className="sb-card-actions">

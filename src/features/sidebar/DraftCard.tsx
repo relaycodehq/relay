@@ -20,17 +20,23 @@ import { useAISettings } from "../agents/useAISettings";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
+import type { KeyCombo } from "../../../shared/shortcuts";
+import { CardShortcut } from "./CardShortcut";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
   draft,
   selected,
+  jump,
+  index,
   onOpen,
   onSendOpen,
 }: {
   draft: ActivityDraft;
   /** It's the one open. */
   selected: boolean;
+  jump: KeyCombo | undefined;
+  index: number;
   onOpen: () => void;
   /** Sends it from the open composer. */
   onSendOpen: () => void;
@@ -56,6 +62,7 @@ export function DraftCard({
         <ProjectBadge project={project} />
         <span className="sb-card-name">
           <span className="sb-card-project">{project.name}</span>
+          <CardShortcut binding={jump} index={index} />
         </span>
         {send.sendable && (
           <div className="sb-card-actions">
