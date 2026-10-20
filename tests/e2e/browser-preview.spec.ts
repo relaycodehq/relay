@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, realpath, rename } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { once } from "node:events";
@@ -49,12 +49,10 @@ test("the Browser surface starts the project's dev server and shows its page ove
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_TEST_PREVIEW_UNLOAD_MS: "4000",
     },
   });

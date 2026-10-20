@@ -3,7 +3,7 @@ import {
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, readFile, rm, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -43,13 +43,10 @@ test("the running-action setting steers with the send key and button, keeps an e
       ),
     ) as Record<string, string>;
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_AGENT_CAPTURE: capture,
       },
     });

@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -49,19 +49,12 @@ test("downloads a voice engine and reads answers aloud through its worker", asyn
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   const port = (server.address() as AddressInfo).port;
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_TEST_READ_ALOUD_ENGINE: resolve(
         "tests/fixtures/read-aloud-engine.cjs",
       ),

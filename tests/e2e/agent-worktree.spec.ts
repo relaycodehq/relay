@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -51,21 +51,14 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
   gitIn(repo, "worktree", "add", "-q", "-b", "newer", newer);
   await writeFile(join(newer, "newer.txt"), "Newer worktree\n");
   await writeFile(join(repo, "main-only.txt"), "Another thread's work\n");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_AGENT_CAPTURE: capture,
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
   let app = await launch();

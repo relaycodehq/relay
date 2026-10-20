@@ -3,7 +3,7 @@ import {
   test,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -88,12 +88,9 @@ require('node:http').createServer((req,res) => {
   ) as Record<string, string>;
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
   const launches = async () =>

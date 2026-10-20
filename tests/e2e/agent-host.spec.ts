@@ -1,10 +1,11 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import {
   mkdtemp,
@@ -21,11 +22,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(
-    ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-  ),
-) as Record<string, string>;
+const env = relayEnv();
 
 const alive = (pid: number) => {
   try {

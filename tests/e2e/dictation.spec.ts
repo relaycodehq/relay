@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import {
   mkdir,
@@ -45,18 +46,11 @@ test("dictates a spoken clip into the composer with the real speech engine", asy
     const repo = join(root, "notes");
     await mkdir(repo);
     execFileSync("git", ["init", "-q", "-b", "main", repo]);
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     await app.evaluate(({ dialog, systemPreferences }, repo) => {

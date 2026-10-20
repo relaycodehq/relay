@@ -1,17 +1,13 @@
 import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox } from "../fixtures/navigation";
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fixtureServer } from "../fixtures/gitea";
 
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(
-    ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-  ),
-) as Record<string, string>;
+const env = relayEnv();
 
 test("activation and second launch restore hidden/minimized windows without replacing their contents", async () => {
   test.skip(
@@ -20,7 +16,6 @@ test("activation and second launch restore hidden/minimized windows without repl
   );
   const data = await mkdtemp(join(tmpdir(), "relay-window-"));
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: data },
   });
   try {
@@ -226,7 +221,6 @@ test("asynchronous credential storage reads existing encrypted logins and round-
   );
   const data = await mkdtemp(join(tmpdir(), "relay-crypto-"));
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: data },
   });
   try {

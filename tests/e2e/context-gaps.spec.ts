@@ -6,7 +6,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -22,7 +22,6 @@ test.beforeAll(async () => {
   };
   delete env.ELECTRON_RUN_AS_NODE;
   app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: env as Record<string, string>,
   });
   page = await app.firstWindow();

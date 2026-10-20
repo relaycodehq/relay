@@ -1,4 +1,10 @@
-import { test, expect, _electron as electron, type Page } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+  type Page,
+} from "../fixtures/electron";
 import {
   mkdir,
   mkdtemp,
@@ -54,18 +60,16 @@ test("drafts go between the desktop and a phone, and one holding the desktop's s
   await writeFile(join(folder, "README.md"), "# Project\n");
   git("add", ".");
   git("commit", "-qm", "Initial");
-  await fakeCli(join(bin, "codex"), await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined),
-  ) as Record<string, string>;
+  await fakeCli(
+    join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
       RELAY_REMOTE_PORT: String(await freePort()),
       RELAY_REMOTE_TAILNET: "127.0.0.1",
@@ -76,7 +80,9 @@ test("drafts go between the desktop and a phone, and one holding the desktop's s
   /** The draft as the phone last heard it. */
   const heard = (key: string): SharedDraft | null | undefined =>
     events
-      .flatMap((e) => (e.kind === "draft" && e.change.key === key ? [e.change.draft] : []))
+      .flatMap((e) =>
+        e.kind === "draft" && e.change.key === key ? [e.change.draft] : [],
+      )
       .at(-1);
   const turns = async () =>
     (await readFile(capture, "utf8").catch(() => ""))

@@ -7,7 +7,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -53,7 +53,6 @@ process.stdin.on('end',()=>{
   delete env.ELECTRON_RUN_AS_NODE;
   testEnv = env as Record<string, string>;
   app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: env as Record<string, string>,
   });
   page = await app.firstWindow();
@@ -308,7 +307,6 @@ test("resumes after a full restart and only retries unfinished files", async () 
   await app.close();
   await writeFile(join(binDir, "mode"), "normal");
   app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: testEnv,
   });
   page = await app.firstWindow();

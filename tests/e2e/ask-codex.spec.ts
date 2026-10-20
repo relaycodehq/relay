@@ -1,12 +1,13 @@
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import {
   mkdtemp,
@@ -67,11 +68,7 @@ test.beforeAll(async () => {
     join(bin, "claude"),
     `require('node:fs').writeFileSync(${JSON.stringify(join(bin, "claude-invocation.json"))}, JSON.stringify({cwd:process.cwd(), args:process.argv.slice(2)}));\n`,
   );
-  env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  env = relayEnv();
   env = { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data };
   await launch();
   await openSignIn(page);

@@ -1,10 +1,11 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join, resolve } from "node:path";
@@ -49,21 +50,14 @@ test("a worktree thread goes to another computer from its header and comes back 
       join(bin, cli),
       await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const apps: ElectronApplication[] = [];
   const launch = async (name: string) => {
     const app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, `data-${name}`),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         // No Tailscale here: loopback stands in for the tailnet.
         RELAY_REMOTE_TAILNET: "127.0.0.1",

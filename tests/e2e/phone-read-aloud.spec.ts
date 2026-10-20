@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { createHash } from "node:crypto";
 import {
   mkdir,
@@ -52,18 +53,11 @@ test("a phone hears an answer in the desktop's voice", async () => {
   let phone: RemoteClient | undefined;
   const engineLog = () => readFile(log, "utf8").catch(() => "");
   try {
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         RELAY_REMOTE_TAILNET: "127.0.0.1",
         RELAY_TEST_READ_ALOUD_ENGINE: resolve(

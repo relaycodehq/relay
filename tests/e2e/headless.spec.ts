@@ -1,10 +1,11 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
@@ -55,11 +56,7 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
       join(bin, cli),
       await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const headlessEnv = {
     ...env,
     ...pathWith(env, bin),
@@ -148,13 +145,10 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
 
     // The laptop runs the desktop app and pairs with a second code.
     const laptop = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data-laptop"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         RELAY_REMOTE_TAILNET: "127.0.0.1",
       },
