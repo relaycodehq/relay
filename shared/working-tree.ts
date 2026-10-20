@@ -43,8 +43,15 @@ export interface WorkingTree {
   /** Pushing makes `pushTarget` the upstream in place of another, as `git push -u` does. */
   pushRetracks?: boolean;
   operation: string | null;
-  /** Lines added and removed across all uncommitted changes, against HEAD. */
-  lines: { additions: number; deletions: number };
+  /**
+   * Lines added and removed across all uncommitted changes, against HEAD,
+   * without lockfiles and generated files; `generated` is what they left out.
+   */
+  lines: {
+    additions: number;
+    deletions: number;
+    generated?: { additions: number; deletions: number };
+  };
   outgoing: { sha: string; subject: string }[];
   /** Gitignored files agents wrote since the last commit; a project's checkout only. */
   ignored?: IgnoredTouch[];

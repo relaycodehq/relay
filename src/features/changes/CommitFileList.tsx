@@ -1,4 +1,7 @@
-import type { WorkingChange } from "../../../shared/working-tree";
+import type {
+  WorkingChange,
+  WorkingTree,
+} from "../../../shared/working-tree";
 import { parentOf } from "../../lib/file-tree";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { changeKind } from "../../../shared/working-tree";
@@ -23,7 +26,7 @@ export function CommitFileList({
   /** Leaves all of `paths` out, or takes them all back when they already are. */
   onToggle: (paths: string[]) => void;
   /** Across every change, so only shown while every file is included. */
-  lines: { additions: number; deletions: number };
+  lines: WorkingTree["lines"];
 }) {
   const [flat, setFlat] = useStoredFlag("relay-commit-files-flat");
   const selected = files.length - excluded.size;
@@ -49,6 +52,15 @@ export function CommitFileList({
           <span className="commit-lines" aria-label="Lines changed">
             <span className="added">+{lines.additions}</span>
             <span className="deleted">−{lines.deletions}</span>
+            {lines.generated && (
+              <span
+                className="commit-lines-aside"
+                title="Lockfiles and generated files"
+              >
+                +{lines.generated.additions} −{lines.generated.deletions} not
+                counted
+              </span>
+            )}
           </span>
         )}
         <ListViewToggle grouped={!flat} onGrouped={(g) => setFlat(!g)} />
