@@ -39,7 +39,11 @@ import type { HtmlRender } from "../../shared/html-render";
 import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
-import type { ProjectChats } from "../project-chats";
+import {
+  chatStatus,
+  type ChatStatus,
+  type ProjectChats,
+} from "../project-chats";
 import {
   answerPreviewTool,
   type PreviewToolName,
@@ -63,10 +67,7 @@ import {
 } from "../relay-mcp";
 import { folderVerdict, realFolder, type FolderRules } from "./project-folder";
 
-/** What a thread looks like to the agent that started it. */
-export type StartedStatus =
-  "working" | "needs-input" | "done" | "stopped" | "failed" | "idle";
-const settled = new Set<StartedStatus>([
+const settled = new Set<ChatStatus["status"]>([
   "needs-input",
   "done",
   "stopped",
@@ -97,6 +98,7 @@ type Chats = Pick<
   | "startedThreads"
   | "allowDriving"
   | "get"
+  | "status"
   | "create"
   | "send"
   | "cancel"
@@ -140,23 +142,6 @@ const fallbackInput = {
 const answers = (chat: ProjectChat) =>
   chat.messages.filter((m) => m.role === "assistant" && !m.parentId);
 
-export function startedStatus(
-  summary: ChatSummary,
-  chat: ProjectChat,
-): StartedStatus {
-  if (inputBlocksThread(summary)) return "needs-input";
-  if (summary.running || summary.pending?.length) return "working";
-  if (chat.queue?.length && !chat.queuePaused) return "working";
-  const last = answers(chat).at(-1);
-  if (!last) return chat.messages.length ? "working" : "idle";
-  return {
-    streaming: "working",
-    complete: "done",
-    cancelled: "stopped",
-    failed: "failed",
-  }[last.status] as StartedStatus;
-}
-
 /** Where a thread is when that's another computer, as the tools say it. */
 function away({ sentTo }: Pick<ChatSummary, "sentTo">) {
   if (!sentTo) return {};
@@ -181,9 +166,6 @@ function away({ sentTo }: Pick<ChatSummary, "sentTo">) {
 /** The start of what the user is asked about. */
 const head = (text: string, limit = 600) =>
   text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
-
-const tail = (text: string, limit: number) =>
-  text.length > limit ? `…${sliceWhole(text, -limit)}` : text;
 
 /** A message's text from `offset`, and where to read on when there's more. */
 function bodyFrom(body: string, offset = 0) {
@@ -813,7 +795,7 @@ export class StartedThreads {
 
   private async settle(lead: ProjectChat, id: string, signal: AbortSignal) {
     const { summary, chat, mine, where } = await this.target(lead, id);
-    const status = startedStatus(summary, chat);
+    const { status } = chatStatus(summary, chat);
     if (status === "working" || status === "needs-input")
       return toolText(
         status === "working"
@@ -1033,7 +1015,7 @@ export class StartedThreads {
         if (last?.status === "failed") {
           // Settling waits for its run to let go of it.
           const settled =
-            startedStatus(summary, chat) === "failed" &&
+            chatStatus(summary, chat).status === "failed" &&
             (await this.chats.triage(id, { kind: "settle" }).then(
               () => true,
               () => false,
@@ -1101,47 +1083,28 @@ export class StartedThreads {
   }
 
   private async list(lead: ProjectChat, ids?: string[]) {
-    const listed = ids
-      ? await Promise.all(
-          ids.map(async (id) => (await this.thread(id)).summary),
-        )
-      : this.children(lead);
-    const names = listed.some((c) => c.projectId !== lead.projectId)
+    const listed = await Promise.all(
+      (ids ?? this.children(lead).map((c) => c.id)).map((id) =>
+        this.chats.status(id).catch(() => {
+          throw new Error("There's no such thread; see find_threads.");
+        }),
+      ),
+    );
+    const names = listed.some(
+      ({ summary }) => summary.projectId !== lead.projectId,
+    )
       ? new Map((await this.realProjects()).map((p) => [p.id, p.name]))
       : undefined;
-    return Promise.all(
-      listed.map(async (summary) => {
-        const chat = await this.chats.get(summary.id);
-        const last = answers(chat).at(-1);
-        const asks = [
-          ...(chat.requests?.map((r) => r.title) ?? []),
-          ...chat.messages.flatMap((m) =>
-            (m.questions ?? []).flatMap((group) =>
-              !group.answers && !group.dismissed
-                ? group.questions.map((q) => q.question)
-                : [],
-            ),
-          ),
-        ];
-        return {
-          id: summary.id,
-          title: summary.title,
-          status: startedStatus(summary, chat),
-          ...(summary.projectId !== lead.projectId
-            ? { project: names?.get(summary.projectId) ?? summary.projectId }
-            : {}),
-          ...(asks.length ? { asks } : {}),
-          ...(summary.branch ? { branch: summary.branch } : {}),
-          // Away, the folder here lacks what's done there.
-          ...(chat.worktree?.path && !summary.sentTo
-            ? { folder: chat.worktree.path }
-            : {}),
-          ...away(summary),
-          ...(last?.body ? { latest: tail(last.body, 600) } : {}),
-          ...(last?.error ? { error: last.error } : {}),
-        };
-      }),
-    );
+    return listed.map(({ summary, ...status }) => ({
+      id: summary.id,
+      title: summary.title,
+      ...status,
+      ...(summary.projectId !== lead.projectId
+        ? { project: names?.get(summary.projectId) ?? summary.projectId }
+        : {}),
+      ...(summary.branch ? { branch: summary.branch } : {}),
+      ...away(summary),
+    }));
   }
 
   private async find(
@@ -1192,7 +1155,14 @@ export class StartedThreads {
 
   private async read(
     _lead: ProjectChat,
-    { id, after, before, message, offset, limit = 50 }: RelayToolArgs<"read_thread">,
+    {
+      id,
+      after,
+      before,
+      message,
+      offset,
+      limit = 50,
+    }: RelayToolArgs<"read_thread">,
   ) {
     const chat = await this.chats.get(id).catch(() => {
       throw new Error("There's no such thread; see find_threads.");

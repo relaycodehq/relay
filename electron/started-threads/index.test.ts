@@ -19,6 +19,8 @@ import type {
 import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
 import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
+import { chatStatus } from "../project-chats";
+import { chatSummary } from "../project-chats/storage";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -77,6 +79,11 @@ function fakeChats() {
         const chat = chats.get(id);
         if (!chat) throw new Error("No such thread.");
         return structuredClone(chat);
+      },
+      status: async (id: string) => {
+        const chat = chats.get(id);
+        if (!chat || chat.archivedAt) throw new Error("No such thread.");
+        return chatStatus(chatSummary(chat), chat);
       },
       create: async (
         projectId: string,
@@ -347,6 +354,57 @@ test("waiting ends once every thread is done or needs the user", async () => {
   expect(result.threads.find((t: any) => t.id === a.id).latest).toBe(
     "Done, tests pass.",
   );
+});
+
+test("listing and waiting read progress once per thread without fetching their histories", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  chats.get(child.id)!.messages.push(
+    {
+      id: "answer",
+      role: "assistant",
+      body: "x".repeat(605) + "Done.",
+      status: "complete",
+      created: 4,
+      provider: "claude",
+      version: 1,
+    },
+    {
+      id: "side-answer",
+      parentId: "side",
+      role: "assistant",
+      body: "Side conversations do not replace the main answer.",
+      status: "failed",
+      error: "Side failure",
+      provider: "claude",
+      created: 5,
+      version: 1,
+    },
+  );
+  const get = vi.spyOn(api, "get");
+  const status = vi.spyOn(api, "status");
+  for (const [name, args] of [
+    ["list_threads", {}],
+    ["wait_for_threads", { ids: [child.id], timeoutSeconds: 1 }],
+  ] as const) {
+    get.mockClear();
+    status.mockClear();
+    const result = parse(await call(threads, lead.id, name, args));
+    expect(name === "list_threads" ? result : result.threads).toMatchObject([
+      { id: child.id, status: "done", latest: "…" + "x".repeat(595) + "Done." },
+    ]);
+    expect(
+      name === "list_threads" ? result[0] : result.threads[0],
+    ).not.toHaveProperty("error");
+    expect(status).toHaveBeenCalledExactlyOnceWith(child.id);
+    // The calling thread is read once for authorization; targets need no full read.
+    expect(get.mock.calls).toEqual([[lead.id]]);
+  }
 });
 
 test("a message to a started thread goes on its own settings, from the lead", async () => {

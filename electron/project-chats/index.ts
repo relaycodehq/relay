@@ -85,6 +85,9 @@ import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
+import { chatStatus } from "./status";
+
+export { chatStatus, type ChatStatus } from "./status";
 
 /** What a first message needs to start its thread on another computer. */
 function startableThere(input: ProjectChatSend, orHere: boolean) {
@@ -788,6 +791,13 @@ export class ProjectChats {
       ...structuredClone(chat),
       ...structuredClone(this.waitingIn(chat)),
     };
+  }
+  /** Progress reads use the cached thread, without cloning its history or refreshing Git. */
+  async status(id: string) {
+    const chat = await this.storage.load(id);
+    const summary = this.summaryOf(id);
+    if (!summary || summary.archivedAt) throw new Error("Chat not found.");
+    return chatStatus(summary, { ...chat, ...this.waitingIn(chat) });
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
