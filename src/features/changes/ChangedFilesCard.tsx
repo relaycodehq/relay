@@ -221,7 +221,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           type="button"
           className="changed-files-fold"
           aria-expanded={!folded}
-          title={folded ? "Show the files" : "Hide the files"}
+          aria-label={folded ? "Show the files" : "Hide the files"}
           onClick={() => setFolded(!folded)}
         >
           <span className="tree-twist">
