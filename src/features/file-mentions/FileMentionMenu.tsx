@@ -1,11 +1,6 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useState,
-  type CSSProperties,
-  type RefObject,
-} from "react";
+import { useEffect, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { usePopupBounds } from "../../lib/usePopupBounds";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { FilePeek } from "./FilePeek";
 import type { MentionItem } from "./mention-items";
@@ -111,38 +106,6 @@ function Row({
   );
 }
 
-/** Over the composer, or under it when there is no room above. */
-function useBounds(visible: boolean, input: RefObject<HTMLElement | null>) {
-  const [style, setStyle] = useState<CSSProperties>({});
-  useLayoutEffect(() => {
-    if (!visible) return;
-    function measure() {
-      const form = (
-        input.current?.closest("form") ?? input.current
-      )?.getBoundingClientRect();
-      if (!form) return;
-      const width = Math.min(form.width, innerWidth - 24);
-      const above = form.top > HEIGHT + 16;
-      setStyle({
-        left: Math.max(12, Math.min(form.left, innerWidth - width - 12)),
-        width,
-        ...(above
-          ? { bottom: innerHeight - form.top + 6 }
-          : { top: form.bottom + 6 }),
-        maxHeight: above ? Math.min(HEIGHT, form.top - 20) : HEIGHT,
-      });
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [visible, input]);
-  return style;
-}
-
 function Hints({ total }: { total: number }) {
   return (
     <div className="mention-hints">
@@ -184,7 +147,11 @@ export function FileMentionMenu({
   input: RefObject<HTMLElement | null>;
 }) {
   const { visible, active, id, items, query } = mentions;
-  const style = useBounds(visible, input);
+  const style = usePopupBounds(
+    visible,
+    () => input.current?.closest("form") ?? input.current,
+    HEIGHT,
+  );
   useEffect(() => {
     if (visible)
       document
