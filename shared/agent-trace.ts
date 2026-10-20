@@ -39,7 +39,9 @@ function nestSubagents(entries: AgentTrace[]) {
     const parent = e.activity.parentId;
     // An orphan, its agent row dropped from a full trace, stays in line.
     if (!parent || !ids.has(parent)) return true;
-    calls.set(parent, [...(calls.get(parent) ?? []), e.activity]);
+    const nested = calls.get(parent);
+    if (nested) nested.push(e.activity);
+    else calls.set(parent, [e.activity]);
     return false;
   });
   return { shown, calls };
