@@ -214,7 +214,7 @@ export const groups: { title: string; rows: Row[] }[] = [
       {
         label: "Agents on another computer",
         cells: {
-          relay: yes("Headless Relay on your own box"),
+          relay: yes("Projects over SSH, WSL or a headless Relay"),
           "t3-code": yes("SSH or a headless server"),
           conductor: part("Their cloud only, Pro"),
           superset: yes("Your hosts, through their relay, Pro"),
