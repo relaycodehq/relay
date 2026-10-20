@@ -59,6 +59,31 @@ export function importsOf(text: string): Import[] {
 
 const toPosix = (path: string) => path.split("\\").join("/");
 
+/** Relative imports resolved within the checkout, whatever this computer's separators. */
+function importTargets({ path: raw, text }: Source) {
+  const path = toPosix(raw);
+  return importsOf(text)
+    .filter(({ specifier }) => specifier.startsWith("."))
+    .map(({ specifier, type }) => ({
+      path,
+      target: posix.join(posix.dirname(path), specifier),
+      type,
+    }));
+}
+
+/** Imports landing inside a forbidden folder, including type-only imports. */
+export function boundaryImports(files: Source[], banned: string[]): string[] {
+  return files.flatMap((file) =>
+    importTargets(file)
+      .filter(({ target }) =>
+        banned.some(
+          (prefix) => target === prefix || target.startsWith(`${prefix}/`),
+        ),
+      )
+      .map(({ path, target }) => `${path} -> ${target}`),
+  );
+}
+
 /**
  * `from folder -> to folder -> one example import`, for the relative imports of
  * the non-test files in `group`'s subfolders (the folder is the first segment
@@ -78,9 +103,8 @@ export function folderEdges(
     const path = toPosix(raw);
     const from = folderOf(path);
     if (!from || /\.test\.[a-z]+$/.test(path)) continue;
-    for (const { specifier, type } of importsOf(text)) {
-      if (!specifier.startsWith(".") || (valuesOnly && type)) continue;
-      const target = posix.join(posix.dirname(path), specifier);
+    for (const { target, type } of importTargets({ path, text })) {
+      if (valuesOnly && type) continue;
       const to = folderOf(target);
       if (!to || to === from) continue;
       const tos = edges.get(from) ?? new Map<string, string>();

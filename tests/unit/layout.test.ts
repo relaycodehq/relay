@@ -1,7 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { describeCycle, findCycles, importsOf } from "./layout-graph";
+import {
+  boundaryImports,
+  describeCycle,
+  findCycles,
+  importsOf,
+} from "./layout-graph";
 
 // The folder rules from AGENTS.md ("Where code goes"), checked so they hold
 // without anyone remembering them.
@@ -19,19 +24,12 @@ function sources(folder: string, kind = /\.(ts|tsx)$/): string[] {
 
 /** Relative imports of `folder`'s files, tests too if asked, that land in one of `banned`. */
 function reaches(folder: string, banned: string[], tests = false): string[] {
-  const found: string[] = [];
-  for (const file of sources(folder)) {
-    if (!tests && /\.test\.tsx?$/.test(file)) continue;
-    const text = readFileSync(join(root, file), "utf8");
-    for (const [, specifier] of text.matchAll(
-      /(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/g,
-    )) {
-      const target = relative(root, resolve(root, dirname(file), specifier));
-      if (banned.some((prefix) => target.startsWith(`${prefix}/`)))
-        found.push(`${file} -> ${target}`);
-    }
-  }
-  return found;
+  return boundaryImports(
+    sources(folder)
+      .filter((file) => tests || !/\.test\.tsx?$/.test(file))
+      .map((path) => ({ path, text: readFileSync(join(root, path), "utf8") })),
+    banned,
+  );
 }
 
 /** Folder cycles in `group` as `a → b → a` with an example import per step. */
@@ -141,4 +139,34 @@ const text = "import x from './string'";
       { specifier: "./sdk", type: true },
     ]);
   });
+
+  it.each(["src/lib/example.ts", "src\\lib\\example.ts"])(
+    "checks source boundaries from %s using the same import scanner",
+    (path) => {
+      expect(
+        boundaryImports(
+          [
+            {
+              path,
+              text: `
+import type { Thing } from "../features/type";
+export { thing } from "../features/export";
+import "../features/effect";
+const lazy = () => import("../features/lazy");
+import { fine } from "../features-other/fine";
+// import { ignored } from "../features/comment";
+const note = 'from "../features/string"';
+`,
+            },
+          ],
+          ["src/features"],
+        ),
+      ).toEqual([
+        "src/lib/example.ts -> src/features/type",
+        "src/lib/example.ts -> src/features/export",
+        "src/lib/example.ts -> src/features/effect",
+        "src/lib/example.ts -> src/features/lazy",
+      ]);
+    },
+  );
 });
