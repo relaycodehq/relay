@@ -1,38 +1,14 @@
-import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
-import { everyWhileShown } from "../../lib/while-shown";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import type { ProviderUsage } from "../../../shared/provider-usage";
+import { useUsageReadings } from "../agents/provider-usage";
 
-const REFRESH_MS = 60_000;
-
-/**
- * Each account's limits, read again every minute while the window shows. The main
- * process caches readings, so several views asking at once cost one.
- */
+/** Account settings observes the same readings as the composer and Usage Room. */
 export function useAccountsUsage(
   provider: AccountProvider,
   ids: readonly string[],
 ): Record<string, ProviderUsage | undefined> {
-  const [usage, setUsage] = useState<Record<string, ProviderUsage>>({});
-  const key = ids.join(",");
-  useEffect(() => {
-    let cancel = false;
-    const load = () => {
-      for (const id of ids)
-        void api
-          .providerUsage(provider, false, id)
-          .then((value) => {
-            if (!cancel) setUsage((prev) => ({ ...prev, [id]: value }));
-          })
-          .catch(() => {});
-    };
-    load();
-    const stop = everyWhileShown(load, REFRESH_MS);
-    return () => {
-      cancel = true;
-      stop();
-    };
-  }, [provider, key]);
-  return usage;
+  const { readings } = useUsageReadings(
+    ids.map((account) => ({ provider, account })),
+  );
+  return Object.fromEntries(ids.map((id, i) => [id, readings[i].data]));
 }

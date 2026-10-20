@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { usePinOnClick } from "../../lib/usePinOnClick";
 import { Flame, RefreshCw } from "lucide-react";
@@ -9,13 +9,12 @@ import {
   type ProviderUsage,
   type UsageMeter,
 } from "../../../shared/provider-usage";
-import { api } from "../../lib/api";
-import { everyWhileShown } from "../../lib/while-shown";
+import { useUsageReadings } from "../agents/provider-usage";
+import { useNow } from "../../lib/useNow";
 import { UsageDial } from "../agents/UsageDial";
 import "../agents/composer-model-picker.css";
 import { agentName, type UsageProvider } from "../../../shared/agents";
 
-const REFRESH_MS = 60_000;
 const PACE_RANK: Record<MeterPace, number> = {
   ok: 0,
   warn: 1,
@@ -58,41 +57,16 @@ export const UsageRing = memo(function UsageRing({
   /** Whose limits: the thread's account; the usual sign-in when left out. */
   account?: string;
 }) {
-  const [usage, setUsage] = useState<ProviderUsage>();
-  const [now, setNow] = useState(() => Date.now());
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    readings: [reading],
+    refresh: refreshUsage,
+  } = useUsageReadings([{ provider, account }]);
+  const usage = reading.data;
+  const now = useNow(20_000);
+  const refreshing = reading.isFetching;
   const pinOnClick = usePinOnClick();
-  const loadRef = useRef<(force: boolean) => Promise<void>>(undefined);
-  useEffect(() => {
-    let cancel = false;
-    setUsage(undefined);
-    const load = (force = false) =>
-      api
-        .providerUsage(provider, force, account)
-        .then((value) => {
-          if (cancel) return;
-          setUsage(value);
-          setNow(Date.now());
-        })
-        // Unreadable usage hides the ring, like an account without limits.
-        .catch(() => {
-          if (!cancel) setUsage({ provider, windows: [], message: null });
-        });
-    loadRef.current = load;
-    void load();
-    // Each read past the main process's cache starts a Claude Code process.
-    const stopRefresh = everyWhileShown(() => void load(), REFRESH_MS);
-    const tick = setInterval(() => setNow(Date.now()), 20_000);
-    return () => {
-      cancel = true;
-      stopRefresh();
-      clearInterval(tick);
-    };
-  }, [provider, account]);
   const refresh = () => {
-    if (refreshing || !loadRef.current) return;
-    setRefreshing(true);
-    void loadRef.current(true).finally(() => setRefreshing(false));
+    void refreshUsage(provider, account).catch(() => {});
   };
   const agent = agentName(provider);
   const state = ringState(usage, now);
