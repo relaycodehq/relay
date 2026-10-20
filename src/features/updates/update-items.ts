@@ -160,10 +160,11 @@ export function agentItem(
       label: "Update",
       title: update?.status === "queued" ? "Waiting for another update…" : "Updating…",
     };
+  // Failing or finishing is part of the same update, so a toast put off stays off for it.
   if (update?.status === "failed")
     return {
       ...base,
-      key: `agent:${agent.provider}:failed:${update.at}`,
+      key: `agent:${agent.provider}:${agent.latest ?? ""}`,
       failed: true,
       phase: "idle",
       label: "Details",
@@ -173,7 +174,7 @@ export function agentItem(
   if (update?.status === "updated" && now - update.at < doneFor)
     return {
       ...base,
-      key: `agent:${agent.provider}:updated:${update.at}`,
+      key: `agent:${agent.provider}:${update.version}`,
       version: update.version,
       phase: "done",
       label: "Update",

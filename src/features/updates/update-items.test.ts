@@ -50,6 +50,13 @@ describe("agentItem", () => {
     expect(failed).toMatchObject({ failed: true, run: "agent-details" });
   });
 
+  it("keeps a put-off toast off when that update fails, back for the next release", () => {
+    const offered = agentItem(claude(), true, 0)!;
+    const failed = agentItem(claude({ update: { status: "failed", message: "EACCES", at: 1 } }), true, 2)!;
+    expect(failed.key).toBe(offered.key);
+    expect(agentItem(claude({ latest: "2.5.0" }), true, 0)!.key).not.toBe(offered.key);
+  });
+
   it("shows the check for a moment after updating, then goes", () => {
     const updated = claude({
       current: "2.4.0",
