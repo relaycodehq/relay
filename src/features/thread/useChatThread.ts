@@ -36,7 +36,7 @@ export function useChatThread(
   });
   const messages = useMemo(
     () => [...(history.data?.messages ?? [])].sort(threadOrder),
-    [history.data],
+    [history.data?.messages],
   );
   const root = messages.find((m) => m.id === rootId);
   const roots = useMemo(() => replyRoots(messages), [messages]);

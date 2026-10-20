@@ -56,6 +56,7 @@ import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
 import { LineDivider } from "../../ui/LineDivider";
+import type { QuestionResponse } from "./question-responses";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -167,7 +168,9 @@ export const Message = memo(function Message({
   answerMessages,
   continuation,
   continues,
-  activity,
+  response,
+  responseExpanded,
+  onToggleResponse,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -206,8 +209,24 @@ export const Message = memo(function Message({
   /** A question-linked follow-up shares the first part's header and activity heading. */
   continuation?: boolean;
   continues?: boolean;
-  activity?: TurnPresentation;
+  response?: QuestionResponse;
+  responseExpanded?: boolean;
+  onToggleResponse?: (id: string, expanded: boolean) => void;
 }) {
+  const activity = useMemo<TurnPresentation | undefined>(
+    () =>
+      response && {
+        summary: continuation ? undefined : response.summary,
+        elapsed: response.elapsed,
+        waiting: response.waiting,
+        expanded:
+          responseExpanded ??
+          (response.waiting || response.summary.status === "streaming"),
+        onToggle: (expanded) =>
+          onToggleResponse?.(response.parts[0]!.id, expanded),
+      },
+    [response, continuation, responseExpanded, onToggleResponse],
+  );
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
   // The answer's own images show in its text; the strip keeps the rest.

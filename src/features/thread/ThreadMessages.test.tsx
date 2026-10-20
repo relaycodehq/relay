@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ChatMessage, ProjectChat } from "../../../shared/projects";
 import { ThreadMessages } from "./ThreadMessages";
+import * as trace from "../../../shared/agent-trace";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -75,9 +76,11 @@ function thread(messages: ChatMessage[]) {
 }
 
 const noop = () => {};
+const rewind = async () => ({ conflicts: [] });
+const queryClient = new QueryClient();
 function view(messages: ChatMessage[]) {
   return (
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <ThreadMessages
         handle={{ chat, busy: false } as never}
         projectPath="/sample/relay"
@@ -109,7 +112,9 @@ function view(messages: ChatMessage[]) {
             openChanges: noop,
             openFile: noop,
             openTurnDiff: noop,
-            rewindTurn: async () => ({ conflicts: [] }),
+            rewindTurn: rewind,
+            commitTurn: noop,
+            canCommitTurn: () => false,
           } as never
         }
         queue={
@@ -135,6 +140,7 @@ afterEach(() => {
   root = undefined;
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  queryClient.clear();
 });
 
 it("keeps one header, timer and fold through a saved question and its follow-up", () => {
@@ -251,4 +257,43 @@ it("keeps every message and the lines under them as the thread grows, each row i
   );
   expect(ids).toEqual(["u1", "a1", "u2", "a2", "u3", "a3"]);
   expect(host.textContent?.match(/macmini/g)).toHaveLength(2);
+});
+
+it("does not rederive completed question responses while another answer streams", () => {
+  const readTurn = vi.spyOn(trace, "readTurn");
+  const asking = message("asking", "assistant", "", {
+    questions: [
+      {
+        id: "q",
+        questions: [{ id: "pick", question: "Which?" }],
+        answers: { pick: ["Private"] },
+        answerMessageId: "reply",
+      },
+    ],
+  });
+  const reply = message("reply", "user", "Private", {
+    asyncQuestionAnswer: true,
+  });
+  const completed = message("completed", "assistant", "Done.");
+  const typed = message("typed", "user", "Next task");
+  const live = message("live", "assistant", "Working", { status: "streaming" });
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => root!.render(view([asking, reply, completed, typed, live])));
+  readTurn.mockClear();
+  act(() =>
+    root!.render(
+      view([
+        asking,
+        reply,
+        completed,
+        typed,
+        { ...live, body: "Working more", version: 2 },
+      ]),
+    ),
+  );
+  expect(readTurn.mock.calls.map(([m]) => m.id)).not.toContain("asking");
+  expect(readTurn.mock.calls.map(([m]) => m.id)).not.toContain("completed");
+  expect(readTurn.mock.calls.map(([m]) => m.id)).toContain("live");
 });

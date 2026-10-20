@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { awayDuring, unreadStart } from "../../../shared/chat-activity";
@@ -37,7 +44,7 @@ import { landedNote, renamedNote } from "./WorktreeControls";
 import { MessageNotes, type MessageNote } from "./MessageNotes";
 import { terminalOriginNote } from "../continue-session/TerminalOrigin";
 import { agentError } from "../../../shared/agent-error";
-import { questionResponses } from "./question-responses";
+import { questionResponses, type QuestionResponse } from "./question-responses";
 import {
   shownWorkspaceMoves,
   workspaceMoveLine,
@@ -160,23 +167,37 @@ export function ThreadMessages({
       ? listed.find((m) => m.role === "user" && !m.parentId)?.id
       : undefined;
   const arrival = useArrival(chat?.id);
-  const answerMessages = useMemo(
-    () =>
-      new Map(messages.filter((m) => m.role === "user").map((m) => [m.id, m])),
-    [messages],
-  );
+  const answers = useRef(new Map<string, ChatMessage>());
+  const answerMessages = useMemo(() => {
+    const next = new Map(
+      messages.filter((m) => m.role === "user").map((m) => [m.id, m]),
+    );
+    if (
+      next.size !== answers.current.size ||
+      [...next].some(([id, m]) => answers.current.get(id) !== m)
+    )
+      answers.current = next;
+    return answers.current;
+  }, [messages]);
   const unread = useMemo(
     () => (arrival && !root ? unreadStart(listed, arrival.away) : undefined),
     [arrival, root, listed],
   );
   const onScreen = listed.slice(-visible);
-  const responses = useMemo(
-    () => questionResponses(onScreen),
-    [listed, visible],
-  );
+  const responseCache = useRef(new Map<string, QuestionResponse>());
+  const responses = useMemo(() => {
+    const next = questionResponses(onScreen, responseCache.current);
+    responseCache.current = next;
+    return next;
+  }, [listed, visible]);
   const [expandedResponses, setExpandedResponses] = useState<
     Record<string, boolean>
   >({});
+  const toggleResponse = useCallback(
+    (id: string, expanded: boolean) =>
+      setExpandedResponses((previous) => ({ ...previous, [id]: expanded })),
+    [],
+  );
   const moves = shownWorkspaceMoves(chat?.workspaceMoves);
   const landed = worktree.status && landedNote(worktree.status);
   /** What happened under `m`, said on one line. */
@@ -321,22 +342,11 @@ export function ThreadMessages({
                 message={m}
                 continuation={continuation}
                 continues={!!response && response.parts.at(-1)!.id !== m.id}
-                activity={
-                  response && {
-                    summary: continuation ? undefined : response.summary,
-                    elapsed: response.elapsed,
-                    waiting: response.waiting,
-                    expanded:
-                      expandedResponses[first!.id] ??
-                      (response.waiting ||
-                        response.summary.status === "streaming"),
-                    onToggle: (expanded) =>
-                      setExpandedResponses((previous) => ({
-                        ...previous,
-                        [first!.id]: expanded,
-                      })),
-                  }
+                response={response}
+                responseExpanded={
+                  first ? expandedResponses[first.id] : undefined
                 }
+                onToggleResponse={toggleResponse}
                 chatId={chat?.id ?? ""}
                 answerMessages={
                   m.questions?.length ? answerMessages : undefined
@@ -354,9 +364,7 @@ export function ThreadMessages({
                 projectRoot={worktree.folder}
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
-                onSignIn={
-                  m.id === listed.at(-1)?.id ? signIn : undefined
-                }
+                onSignIn={m.id === listed.at(-1)?.id ? signIn : undefined}
                 onSteer={root?.side ? undefined : onSteer}
                 onCompose={onCompose}
                 unread={
