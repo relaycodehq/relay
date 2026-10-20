@@ -2,23 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import {
-  inSetup,
-  liveAway,
-  type HandoffView,
-} from "../../../shared/handoff";
+import { inSetup, liveAway, type HandoffView } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
 import { threadDraftKey } from "../../lib/thread-storage";
 import { AbandonDialog } from "./AbandonDialog";
 import "./waiting-strip.css";
+import { retryHandoff } from "./retry-handoff";
 import "./handoff.css";
 
 /** The composer's placeholder while the thread is elsewhere, or on its way. */
 export function awayPlaceholder(chat: ChatSummary) {
   const { sentTo, cameFrom } = chat;
-  if (inSetup(chat))
-    return `Answer the setup on ${sentTo!.computer}…`;
+  if (inSetup(chat)) return `Answer the setup on ${sentTo!.computer}…`;
   if (sentTo?.state === "sending" && sentTo.home)
     return sentTo.error
       ? `It didn't start on ${sentTo.computer}. Try again.`
@@ -157,11 +153,7 @@ export function HandoffStrip({
         role="status"
       >
         <div className="waiting-strip-head">
-          {line.failed ? (
-            <CircleAlert size={15} />
-          ) : (
-            <MonitorUp size={15} />
-          )}
+          {line.failed ? <CircleAlert size={15} /> : <MonitorUp size={15} />}
           <span className="waiting-strip-text" title={line.detail}>
             <b>{line.title}</b>
             {line.detail && <span> · {line.detail}</span>}
@@ -196,7 +188,7 @@ export function HandoffStrip({
                 type="button"
                 className="primary-action"
                 disabled={busy}
-                onClick={() => act(() => api.retryHandoff(chat.id))}
+                onClick={() => act(() => retryHandoff(qc, chat.id))}
               >
                 Try again
               </button>
@@ -205,22 +197,22 @@ export function HandoffStrip({
           {!sentTo.home &&
             (sentTo.state === "away" ||
               (sentTo.state === "returning" && sentTo.error)) && (
-            <button
-              type="button"
-              className={
-                sentTo.conflicts?.length ? undefined : "primary-action"
-              }
-              disabled={busy || !data.online}
-              title={
-                data.online
-                  ? `Stop the work on ${sentTo.computer} and carry on here`
-                  : `${sentTo.computer} has to be reachable to bring it back`
-              }
-              onClick={() => act(() => api.bringBackThread(chat.id))}
-            >
-              {sentTo.error ? "Try again" : "Bring back"}
-            </button>
-          )}
+              <button
+                type="button"
+                className={
+                  sentTo.conflicts?.length ? undefined : "primary-action"
+                }
+                disabled={busy || !data.online}
+                title={
+                  data.online
+                    ? `Stop the work on ${sentTo.computer} and carry on here`
+                    : `${sentTo.computer} has to be reachable to bring it back`
+                }
+                onClick={() => act(() => api.bringBackThread(chat.id))}
+              >
+                {sentTo.error ? "Try again" : "Bring back"}
+              </button>
+            )}
           {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
             <button
               type="button"

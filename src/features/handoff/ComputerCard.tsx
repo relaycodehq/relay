@@ -6,6 +6,7 @@ import { useNow } from "../../lib/useNow";
 import { ErrorBox } from "../../ui/ui";
 import { DeviceIcon } from "./DeviceIcon";
 import { RelayVersion } from "./RelayVersion";
+import { retryHandoff } from "./retry-handoff";
 import {
   computerLine,
   reachable,
@@ -126,7 +127,7 @@ export function ComputerCard({
                   onClick={() =>
                     run(t.chatId, () =>
                       t.retry === "send"
-                        ? api.retryHandoff(t.chatId)
+                        ? retryHandoff(qc, t.chatId)
                         : api.bringBackThread(t.chatId),
                     )
                   }
