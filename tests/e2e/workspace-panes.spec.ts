@@ -1,4 +1,9 @@
-import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -115,6 +120,37 @@ test("chat, changes and files are inline panes that can be reordered", async () 
 
     // A change opens in the Files pane, which takes the diff's place.
     await page.locator('.change-select[aria-label$=" src/a.ts"]').click();
+    // Find opens from the diff's keyboard context and indexes both changed sides.
+    const localDiff = page.locator(".working-diff-frame");
+    await localDiff.locator("[data-line]").first().click();
+    await page.keyboard.press("ControlOrMeta+f");
+    const find = localDiff.getByRole("textbox", { name: "Find in diff" });
+    await expect(find).toBeFocused();
+    await find.fill("export");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ["relay-diff-find", "relay-diff-find-current"].reduce(
+            (count, name) => count + (CSS.highlights.get(name)?.size ?? 0),
+            0,
+          ),
+        ),
+      )
+      .toBe(2);
+    await find.press("Enter");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("2 of 2");
+    await find.press("Shift+Enter");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await find.press("Escape");
+    await expect(find).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () =>
+          CSS.highlights.has("relay-diff-find") ||
+          CSS.highlights.has("relay-diff-find-current"),
+      ),
+    ).toBe(false);
     await page
       .getByRole("button", { name: "Open in editor", exact: true })
       .click();
@@ -158,8 +194,25 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       "Terminal",
       "Terminal 2",
     ]);
+    const fileEditor = panel
+      .locator(".project-inline-editor")
+      .getByRole("textbox", { name: "src/a.ts", exact: true });
+    await fileEditor.press("ControlOrMeta+End");
+    await fileEditor.pressSequentially("// Keep while Files is hidden");
+    const unsaved = panel.getByText("Unsaved changes", { exact: true });
+    await expect(unsaved).toBeVisible();
     await panel.getByRole("tab", { name: "Terminal 2", exact: true }).click();
     await expect(panel.locator(".xterm-rows")).toBeVisible();
+    await expect(fileEditor).toBeHidden();
+    await openSurface(page, "Files");
+    await expect(fileEditor).toContainText("Keep while Files is hidden");
+    await expect(unsaved).toBeVisible();
+    await fileEditor.press("ControlOrMeta+s");
+    await expect(unsaved).toHaveCount(0);
+    await expect
+      .poll(() => readFile(join(repo, "src/a.ts"), "utf8"))
+      .toContain("Keep while Files is hidden");
+    await panel.getByRole("tab", { name: "Terminal 2", exact: true }).click();
     await panel
       .getByRole("button", { name: "Close terminal 2", exact: true })
       .click();
