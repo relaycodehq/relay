@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { pullHostName } from "../../shared/source-control";
@@ -76,7 +75,7 @@ import {
 } from "../../shared/thread-windows";
 import { askJump } from "../features/sidebar/useActivityKeys";
 import { SignInDialog } from "../features/settings/SignInDialog";
-import { ErrorBox, IconButton, Loading } from "../ui/ui";
+import { ErrorBox, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
 const NO_PROJECTS: Project[] = [];
@@ -316,11 +315,6 @@ export default function ProjectShell() {
               onConnectHost={() => setChoosePR(true)}
               onSettings={settings.show}
             />
-          )}
-          {sidebar.hidden && !settings.open && (
-            <IconButton label="Open settings" onClick={() => settings.show()}>
-              <Settings2 size={16} />
-            </IconButton>
           )}
         </div>
       </header>
