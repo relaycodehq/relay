@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ThemedToken } from "@pierre/diffs";
 import { api } from "../../lib/api";
@@ -7,9 +7,6 @@ import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { FileTree, MentionItem } from "./mention-items";
 
-/** What a peek shows of a file: enough to recognise it. */
-const PEEK_LINES = 60;
-
 function syntaxTheme() {
   const { theme, syntax } = document.documentElement.dataset;
   return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
@@ -17,6 +14,7 @@ function syntaxTheme() {
 
 function useTokens(path: string, code: string | undefined) {
   const [tokens, setTokens] = useState<{
+    path: string;
     code: string;
     lines: ThemedToken[][];
   }>();
@@ -27,27 +25,38 @@ function useTokens(path: string, code: string | undefined) {
       const { getFiletypeFromFileName } = await import("@pierre/diffs");
       const lang = getFiletypeFromFileName(path);
       const lines = await tokenize(code, lang, syntaxTheme()).catch(() => null);
-      if (current && lines) setTokens({ code, lines });
+      if (current && lines) setTokens({ path, code, lines });
     })();
     return () => {
       current = false;
     };
   }, [path, code]);
-  return tokens && tokens.code === code ? tokens.lines : undefined;
+  return tokens && tokens.path === path && tokens.code === code
+    ? tokens.lines
+    : undefined;
 }
 
 function FileBody({ where, path }: { where: string; path: string }) {
+  const selection = useMemo(() => ({ where, path }), [where, path]);
+  const [settled, setSettled] = useState<typeof selection>();
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(selection), 120);
+    return () => clearTimeout(timer);
+  }, [selection]);
+  // Moving down the list should not read and tokenize every file crossed.
+  const ready = settled === selection;
   const file = useQuery({
-    queryKey: ["project-file", where, path],
-    queryFn: () => api.projectFile(where, path),
+    queryKey: ["project-file-preview", where, path],
+    queryFn: () => api.projectFilePreview(where, path),
+    enabled: ready,
     staleTime: 30_000,
     retry: false,
   });
-  const all = file.data?.contents.split("\n");
-  const head = all?.slice(0, PEEK_LINES).join("\n");
+  const head = ready ? file.data?.contents : undefined;
   const tokens = useTokens(path, head);
-  if (file.isPending) return <div className="mention-peek-code" />;
-  if (!all) return <p className="mention-empty">No preview for this file.</p>;
+  if (!ready || file.isPending) return <div className="mention-peek-code" />;
+  if (head === undefined)
+    return <p className="mention-empty">No preview for this file.</p>;
   return (
     <>
       <pre className="mention-peek-code">
@@ -70,7 +79,9 @@ function FileBody({ where, path }: { where: string; path: string }) {
         )}
       </pre>
       <div className="mention-peek-foot">
-        {all.length.toLocaleString()} {all.length === 1 ? "line" : "lines"}
+        {file.data!.lines.toLocaleString()}{" "}
+        {file.data!.lines === 1 ? "line" : "lines"}
+        {file.data!.truncated && " · Preview shortened"}
       </div>
     </>
   );

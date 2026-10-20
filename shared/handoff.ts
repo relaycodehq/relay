@@ -207,6 +207,7 @@ export const handoffFolderMethods = [
   "projectThumbnail",
   "projectImage",
   "projectFile",
+  "projectFilePreview",
   "saveProjectFile",
   "createProjectEntry",
   "renameProjectEntry",

@@ -390,6 +390,10 @@ export function projectHandlers(ctx: ApiContext) {
       [fileRootSchema, workingPathSchema],
       async (where, path) => projects.file(await fileRoot(where), path),
     ),
+    projectFilePreview: takes(
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => projects.filePreview(await fileRoot(where), path),
+    ),
     saveProjectFile: takes(
       [
         fileRootSchema,

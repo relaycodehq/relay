@@ -89,6 +89,7 @@ const methods = [
   "renameProjectEntry",
   "trashProjectEntry",
   "projectFile",
+  "projectFilePreview",
   "saveProjectFile",
   "projectWorkingTree",
   "watchWorkingTree",

@@ -73,6 +73,16 @@ test("keeps composer popups in view and leaves keyboard focus in the input", asy
         await page.screenshot({
           path: join(tmpdir(), "relay-composer-popups.png"),
         });
+      if (text === "@README") {
+        // Even an unborn checkout can peek at a file: no HEAD or original is needed.
+        await expect(popup.locator(".mention-peek-code")).toContainText(
+          "Sample project",
+        );
+        await expect(popup.locator(".mention-peek-foot")).toHaveText("1 line");
+        await page.screenshot({
+          path: join(tmpdir(), "relay-mention-peek.png"),
+        });
+      }
       await input.press("Escape");
       await expect(popup).toHaveCount(0);
     }

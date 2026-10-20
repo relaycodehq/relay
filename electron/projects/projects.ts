@@ -23,6 +23,7 @@ import {
 import { git, gitBytes } from "../git/git";
 import { isGitMissing } from "../../shared/working-tree";
 import { folderFiles } from "./folder-files";
+import { filePreview } from "./file-preview";
 import { digest } from "../util/hash";
 import {
   inspectRepository,
@@ -519,6 +520,9 @@ export class Projects {
           : "This checkout has more than 50,000 files. Narrow its Git checkout before browsing here.",
       );
     return [...new Set(names)].sort();
+  }
+  filePreview({ root }: Place, path: string) {
+    return filePreview(root, path);
   }
   async file({ root, plain }: Place, path: string) {
     const file = await readWorkingFile(root, path);

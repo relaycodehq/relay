@@ -30,7 +30,7 @@ import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
-import type { DirListing, FileInfo } from "../project-files";
+import type { DirListing, FileInfo, FilePreview } from "../project-files";
 import type {
   BranchPull,
   CreatedPullRequest,
@@ -415,6 +415,8 @@ export interface ProjectWorktreeApi {
 export interface ProjectFilesApi {
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;
+  /** A bounded text excerpt for a file mention, without editor or Git metadata. */
+  projectFilePreview(where: string, path: string): Promise<FilePreview>;
   /** One level of a folder from disk ("" is the root), ignored files included. */
   projectDirectory(where: string, dir: string): Promise<DirListing>;
   projectFileInfo(where: string, path: string): Promise<FileInfo>;
