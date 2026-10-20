@@ -35,6 +35,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.relay.android.features.applock.LockOverlay
 import dev.relay.android.features.home.ConnectionLine
 import dev.relay.android.features.home.NeedsYou
 import dev.relay.android.features.markdown.LocalOpensLocalhost
@@ -85,6 +86,8 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
     val appearance = overview?.appearance
     val colors = remember(prefs.themeMode, systemDark, appearance) { resolveColors(prefs.themeMode, appearance?.toDesktop(), systemDark) }
     RelayTheme(colors) {
+        // A window over the rest, so it's here whatever else is: a crash's page, open sheets.
+        LockOverlay(container.lock, container::forgetComputers)
         if (crash != null) {
             SystemBars(dark = colors.isDark)
             return@RelayTheme CrashScreen(crash, onCrashSeen)

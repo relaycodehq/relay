@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import dev.relay.android.features.applock.AppLock
 import dev.relay.android.features.home.HomeServices
 import dev.relay.android.features.home.StoreDrafts
 import dev.relay.android.features.images.PendingImages
@@ -73,6 +74,13 @@ class AppContainer(context: Context) {
         dictation.beforeStart = { r.stop() }
     }
 
+    val lock = AppLock(File(app.filesDir, "app-lock.bin"))
+
+    /** Forgot PIN: every computer goes, as the lock did. */
+    suspend fun forgetComputers() {
+        remote.computers.value.forEach { remote.forget(it.id) }
+    }
+
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))
     val home = HomeServices(app, remote, threadSeen, StoreDrafts(Sends.drafts(app.filesDir), remote))
 
@@ -87,7 +95,14 @@ class AppContainer(context: Context) {
         scope.launch { remote.load() }
         scope.launch { ReadAhead.of(remote, ThreadCache.of(app)).run() }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) = remote.wake()
+            override fun onStart(owner: LifecycleOwner) {
+                lock.back()
+                remote.wake()
+            }
+
+            override fun onStop(owner: LifecycleOwner) {
+                lock.left()
+            }
         })
     }
 }

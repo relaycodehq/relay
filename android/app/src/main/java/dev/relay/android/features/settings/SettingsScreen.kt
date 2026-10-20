@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.relay.android.features.applock.AppLock
 import dev.relay.android.features.notifications.NotificationSwitchRow
 import dev.relay.android.features.notifications.ThreadNotifications
 import dev.relay.android.features.updates.LatestAppRows
@@ -47,6 +48,7 @@ fun SettingsScreen(
     remote: Remote,
     updates: Updates,
     notifications: ThreadNotifications,
+    lock: AppLock,
     themeMode: ThemeMode,
     setTheme: (ThemeMode) -> Unit,
     /** Outlives this screen, for a switch or unpair that navigates away. */
@@ -54,7 +56,7 @@ fun SettingsScreen(
 ) {
     val nav = LocalNavigator.current
     Screen("Settings", onBack = nav.backAction) {
-        SettingsList(remote, updates, notifications, themeMode, setTheme, scope)
+        SettingsList(remote, updates, notifications, lock, themeMode, setTheme, scope)
     }
 }
 
@@ -64,6 +66,7 @@ fun SettingsList(
     remote: Remote,
     updates: Updates,
     notifications: ThreadNotifications,
+    lock: AppLock,
     themeMode: ThemeMode,
     setTheme: (ThemeMode) -> Unit,
     scope: CoroutineScope,
@@ -83,6 +86,8 @@ fun SettingsList(
 
         SectionHeader("Notifications")
         ListGroup { NotificationSwitchRow(notifications, name) }
+
+        LockSection(lock)
 
         DictationSection(name)
 
@@ -147,7 +152,7 @@ private fun themeChoices(name: String, known: Boolean) = listOf(
 
 /** A row of a pick-one list: a check on the chosen one. */
 @Composable
-internal fun ChoiceRow(label: String, hint: String, chosen: Boolean, onClick: () -> Unit) {
+internal fun ChoiceRow(label: String, hint: String?, chosen: Boolean, onClick: () -> Unit) {
     ListRow(
         label,
         subtitle = hint,

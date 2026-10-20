@@ -6,6 +6,8 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(Connection.self) private var connection
     @Environment(\.navigate) private var navigate
+    @Environment(AppLock.self) private var lock
+    @State private var lockFlow: PinFlow.Kind?
     @AppStorage(ThemeMode.key) private var theme = ThemeMode.computer
     @AppStorage(ThreadNotices.switchKey) private var notices = true
     @AppStorage(DictationEngine.key) private var dictation = DictationEngine.computer
@@ -70,8 +72,10 @@ struct SettingsView: View {
                 }
             }
             .cardRow()
+            LockSection(flow: $lockFlow)
         }
         .relayBackground()
+        .fullScreenCover(item: $lockFlow) { PinFlow(kind: $0, lock: lock) }
     }
 
     private func choice(_ mode: ThemeMode, name: String, known: Bool) -> (String, String) {
