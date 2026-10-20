@@ -37,6 +37,7 @@ import {
   type WorkingChange,
 } from "../../shared/working-tree";
 import type { Repo, FilePair } from "../../shared/types";
+import { headlineStat, statsByKind } from "../../shared/diff-kinds";
 export async function ignoredPaths(
   root: string,
   paths: string[],
@@ -203,14 +204,17 @@ const untrackedCache = new Map<string, Map<string, number>>();
 // A repository with no commits yet is compared with the empty tree.
 const trackedBase = async (root: string, head: string) =>
   head || (await git(root, ["hash-object", "-t", "tree", "/dev/null"])).trim();
-/** Lines added and removed across the checkout against HEAD, untracked text files included. */
+/**
+ * Lines added and removed across the checkout against HEAD, untracked text
+ * files included and generated ones (lockfiles) left out.
+ */
 async function lineCounts(
   root: string,
   changes: WorkingChange[],
   head: string,
 ) {
   const untracked = changes.filter((c) => c.index === "?");
-  const [diff, added] = await Promise.all([
+  const [diff, untrackedFiles] = await Promise.all([
     untracked.length === changes.length
       ? ""
       : trackedBase(root, head).then((base) =>
@@ -226,36 +230,34 @@ async function lineCounts(
             "--no-textconv",
           ]),
         ),
-    untrackedLineCount(
+    untrackedLines(
       root,
       untracked.map((c) => c.path),
     ),
   ]);
-  const tracked = numstatTotals(diff);
-  return {
-    additions: tracked.additions + added,
-    deletions: tracked.deletions,
-  };
+  return headlineStat(statsByKind([...numstatFiles(diff), ...untrackedFiles]));
 }
-/** Sums `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
-function numstatTotals(output: string) {
+/** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
+function numstatFiles(output: string) {
   const fields = output.split("\0");
-  let additions = 0,
-    deletions = 0;
+  const files: { path: string; additions: number; deletions: number }[] = [];
   for (let i = 0; i < fields.length; i++) {
     const row = /^(\d+|-)\t(\d+|-)\t(.*)$/s.exec(fields[i]);
     if (!row) continue;
-    if (!row[3]) i += 2;
-    additions += Number(row[1]) || 0;
-    deletions += Number(row[2]) || 0;
+    const path = row[3] || fields[(i += 2)] || "";
+    files.push({
+      path,
+      additions: Number(row[1]) || 0,
+      deletions: Number(row[2]) || 0,
+    });
   }
-  return { additions, deletions };
+  return files;
 }
-async function untrackedLineCount(root: string, paths: string[]) {
+async function untrackedLines(root: string, paths: string[]) {
   const previous = untrackedCache.get(root),
     seen = new Map<string, number>();
-  let budget = untrackedBytesPerRefresh,
-    total = 0;
+  let budget = untrackedBytesPerRefresh;
+  const files: { path: string; additions: number; deletions: number }[] = [];
   for (const part of chunks(paths, 64)) {
     const stats = await Promise.all(
       part.map((path) => lstat(join(root, path)).catch(() => null)),
@@ -275,11 +277,13 @@ async function untrackedLineCount(root: string, paths: string[]) {
         return lines;
       }),
     );
-    total += counts.reduce((sum, n) => sum + n, 0);
+    part.forEach((path, i) =>
+      files.push({ path, additions: counts[i], deletions: 0 }),
+    );
   }
   if (seen.size) untrackedCache.set(root, seen);
   else untrackedCache.delete(root);
-  return total;
+  return files;
 }
 function textLines(bytes: Buffer | null) {
   // Git counts a file with a NUL byte as binary, with no lines.

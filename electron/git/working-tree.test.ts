@@ -145,6 +145,23 @@ it("counts lines the way the commit will: renames by their edits, every untracke
     deletions: 1,
   });
 });
+it("leaves lockfiles out of the lines unless they are all that changed", async () => {
+  await writeFile(join(root, "app.ts"), "a\n");
+  await writeFile(join(root, "package-lock.json"), "{\n}\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  await writeFile(join(root, "package-lock.json"), "{\n  \"x\": 1\n}\n");
+  await writeFile(join(root, "yarn.lock"), "a\nb\nc\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 4,
+    deletions: 0,
+  });
+  await writeFile(join(root, "app.ts"), "a\nb\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 1,
+    deletions: 0,
+  });
+});
 it("works in a repository with no commits yet, first commit included", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {

@@ -13,8 +13,9 @@ import {
   Undo2,
 } from "lucide-react";
 import type { TurnFileChange } from "../../../shared/projects";
-import { buildTurnTree, sumStats, type TurnTreeNode } from "./turn-diff-tree";
+import { buildTurnTree, type TurnTreeNode } from "./turn-diff-tree";
 import { DiffStatLabel } from "./DiffStatLabel";
+import { DiffStatBreakdown } from "./DiffStatBreakdown";
 import { IconButton } from "../../ui/ui";
 import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
@@ -64,7 +65,6 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   onRewind?: Rewind;
 }) {
   const tree = useMemo(() => buildTurnTree(files), [files]);
-  const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
   const [allOpen, setAllOpen] = useState(
     files.length <= EXPAND_UP_TO || tree.length < 2,
@@ -226,9 +226,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           <strong>
             {files.length} changed file{files.length === 1 ? "" : "s"}
           </strong>
-          {(total.additions > 0 || total.deletions > 0) && (
-            <DiffStatLabel stat={total} />
-          )}
+          <DiffStatBreakdown files={files} />
           {reverted > 0 && (
             <span className="changed-files-note">
               {reverted === files.length

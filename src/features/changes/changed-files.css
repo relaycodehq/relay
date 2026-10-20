@@ -254,3 +254,45 @@
 .changed-files-prompt.error > span {
   color: #ba6975;
 }
+/* A change's lines split by kind, on hover over its total. */
+.diff-breakdown-trigger .diff-stat > span {
+  text-decoration: underline dashed 1px;
+  text-underline-offset: 3px;
+}
+.diff-breakdown {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px -16px #0009;
+  color: var(--text);
+  font-size: 12px;
+}
+.diff-breakdown table {
+  border-collapse: collapse;
+}
+.diff-breakdown th {
+  padding: 2px 0;
+  color: var(--muted);
+  font-weight: normal;
+  text-align: left;
+}
+.diff-breakdown td {
+  padding: 2px 0 2px 14px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.diff-breakdown-total > * {
+  border-top: 1px solid var(--border);
+  padding-top: 5px;
+}
+.diff-breakdown-total th {
+  color: var(--text);
+}
+.diff-breakdown-aside > * {
+  padding-top: 5px;
+  color: var(--muted);
+  opacity: 0.75;
+}
