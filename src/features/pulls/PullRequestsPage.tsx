@@ -3,6 +3,7 @@
 // everyone else's.
 import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { Popover } from "@base-ui/react/popover";
 import {
   ArrowLeft,
   AlertCircle,
@@ -153,6 +154,19 @@ export function PullRequestsPage({
     retry,
   } = usePullBoard(accounts, projects, state);
   const incomplete = !!pending.length || !!failures.length || !!hostError;
+  const problems = [
+    ...failures.map(({ server, error }) => ({
+      provider: pullHostName(server),
+      error,
+      reload: () => {
+        onRecheckHosts();
+        retry(server);
+      },
+    })),
+    ...(hostError
+      ? [{ provider: "Provider", error: hostError, reload: onRecheckHosts }]
+      : []),
+  ];
   const waiting = `Waiting for ${pending.map(pullHostName).join(", ")}…`;
   const [typed, setTyped] = useState(query);
   useEffect(() => {
@@ -224,7 +238,10 @@ export function PullRequestsPage({
       <header className="pulls-head">
         <div className="pulls-head-text">
           {head.crumb}
-          <h1>{head.title}</h1>
+          <div className="pulls-heading">
+            <h1>{head.title}</h1>
+            {!!problems.length && <PullLoadWarnings problems={problems} />}
+          </div>
           <p>{head.summary}</p>
         </div>
         <div className="pulls-tools">
@@ -309,29 +326,6 @@ export function PullRequestsPage({
           </button>
         </div>
       </header>
-      {(!!failures.length || !!hostError) && (
-        <div className="pulls-notices">
-          {failures.map(({ server, error }) => (
-            <PullLoadNotice
-              key={server}
-              title={`${pullHostName(server)} unavailable`}
-              error={error}
-              onReload={() => {
-                // A refused sign-in may come back as another account.
-                onRecheckHosts();
-                retry(server);
-              }}
-            />
-          ))}
-          {!!hostError && (
-            <PullLoadNotice
-              title="Provider unavailable"
-              error={hostError}
-              onReload={onRecheckHosts}
-            />
-          )}
-        </div>
-      )}
       {!!pending.length && !loading && !query && (
         <p className="pulls-note" role="status">
           {waiting}
@@ -373,42 +367,58 @@ export function PullRequestsPage({
   );
 }
 
-/** A connection hiccup stays beside the results, with the full error on demand. */
-function PullLoadNotice({
-  title,
-  error,
-  onReload,
+/** Connection issues take one small title control; details only open on request. */
+function PullLoadWarnings({
+  problems,
 }: {
-  title: string;
-  error: unknown;
-  onReload: () => void;
+  problems: { provider: string; error: unknown; reload: () => void }[];
 }) {
   return (
-    <section className="pulls-notice" role="alert" aria-label={title}>
-      <div className="pulls-notice-main">
-        <AlertCircle size={16} aria-hidden="true" />
-        <div className="pulls-notice-copy">
-          <strong>{title}</strong>
-          <span>Some pull requests may be missing.</span>
-        </div>
-        <button
-          type="button"
-          className="pulls-notice-reload"
-          aria-label={`Reload: ${title}`}
-          onClick={onReload}
+    <Popover.Root>
+      <Popover.Trigger
+        className="pulls-host-warning"
+        aria-label="Pull request connection issues"
+        title="Some pull requests may be missing. Click for details and reload."
+      >
+        <AlertCircle size={13} aria-hidden="true" />
+        <span>
+          {problems.length === 1
+            ? `${problems[0].provider} unavailable`
+            : `${problems.length} providers unavailable`}
+        </span>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner
+          className="pulls-host-positioner"
+          side="bottom"
+          align="start"
+          sideOffset={8}
+          collisionPadding={12}
         >
-          <RefreshCw size={13} aria-hidden="true" />
-          Reload
-        </button>
-      </div>
-      <details className="pulls-notice-details">
-        <summary>
-          Details
-          <ChevronRight size={12} aria-hidden="true" />
-        </summary>
-        <p>{errorMessage(error)}</p>
-      </details>
-    </section>
+          <Popover.Popup
+            className="pulls-host-popup"
+            aria-label="Pull request connection issues"
+          >
+            {problems.map(({ provider, error, reload }, i) => (
+              <section className="pulls-host-problem" key={i}>
+                <header>
+                  <strong>{provider} unavailable</strong>
+                  <button
+                    type="button"
+                    onClick={reload}
+                    aria-label={`Reload ${provider} pull requests`}
+                  >
+                    <RefreshCw size={12} aria-hidden="true" />
+                    Reload
+                  </button>
+                </header>
+                <p>{errorMessage(error)}</p>
+              </section>
+            ))}
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 

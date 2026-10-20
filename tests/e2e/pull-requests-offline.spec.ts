@@ -87,23 +87,37 @@ test("shows available PRs while a search is stalled and recovers its connection 
 
     phase = "offline";
     for (const response of held) response.destroy();
-    const warning = board.getByRole("alert");
+    const warning = board.getByRole("button", {
+      name: "Pull request connection issues",
+    });
     await expect(warning).toContainText("Gitea unavailable");
-    const details = warning.locator(".pulls-notice-details p");
+    const details = page.getByRole("dialog", {
+      name: "Pull request connection issues",
+    });
     await expect(details).toBeHidden();
     await expect(
       board.getByRole("button", { name: /Available PR/ }).first(),
     ).toBeVisible();
     await expect(board.getByRole("status")).toHaveCount(0);
     await page.screenshot({ path: join(tmpdir(), "relay-pr-offline.png") });
-    await warning.screenshot({ path: join(tmpdir(), "relay-pr-notice.png") });
-    expect((await warning.boundingBox())!.width).toBeLessThanOrEqual(390);
+    await board
+      .locator(".pulls-head-text")
+      .screenshot({ path: join(tmpdir(), "relay-pr-title-warning.png") });
+    const heading = (await board
+      .getByRole("heading", { name: "Pull requests", exact: true })
+      .boundingBox())!;
+    const warningBox = (await warning.boundingBox())!;
+    expect(warningBox.height).toBeLessThanOrEqual(24);
+    expect(warningBox.y).toBeGreaterThanOrEqual(heading.y);
+    expect(warningBox.y + warningBox.height).toBeLessThanOrEqual(
+      heading.y + heading.height,
+    );
     await page.setViewportSize({ width: 900, height: 850 });
-    await warning.getByText("Details", { exact: true }).click();
+    await warning.click();
     await expect(details).toBeVisible();
     await expect(details).toContainText("Could not connect");
     expect(
-      await warning.evaluate(
+      await details.evaluate(
         (element) => element.scrollWidth <= element.clientWidth,
       ),
     ).toBe(true);
@@ -115,9 +129,13 @@ test("shows available PRs while a search is stalled and recovers its connection 
     await page.screenshot({
       path: join(tmpdir(), "relay-pr-notice-expanded.png"),
     });
+    await page.keyboard.press("Escape");
+    await expect(details).toBeHidden();
+    await expect(warning).toBeFocused();
 
     phase = "online";
-    await warning.getByRole("button", { name: /Reload/ }).click();
+    await warning.click();
+    await details.getByRole("button", { name: /Reload/ }).click();
     await expect(
       board.getByRole("button", { name: /Recovered PR/ }).first(),
     ).toBeVisible();
