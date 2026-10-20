@@ -244,7 +244,7 @@ test("refreshing OpenCode's models restarts it, once the user agrees to interrup
   }
 });
 
-test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the thread", async () => {
+test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Default, keeps the thread", async () => {
   test.setTimeout(90000);
   const select = (
     id: string,
@@ -269,6 +269,15 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
           "openrouter/Claude Opus Latest",
         ],
       ]),
+      {
+        ...select("effort", "default", [
+          ["low", "Low"],
+          ["medium", "Medium"],
+          ["high", "High"],
+          ["default", "Default"],
+        ]),
+        category: "thought_level",
+      },
       select("mode", "build", [
         ["build", "Build"],
         ["plan", "Plan"],
@@ -318,6 +327,19 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
     const wonder = page.getByRole("option", { name: "Wonder", exact: true });
     await expect(wonder).toBeVisible();
     await wonder.click();
+    const effort = page.getByRole("combobox", {
+      name: "Reasoning effort",
+      exact: true,
+    });
+    await effort.click();
+    await expect(
+      page.getByRole("option", { name: "Default", exact: true }),
+    ).toHaveCount(1);
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode2-effort-picker.png"),
+    });
+    await page.getByRole("option", { name: "High", exact: true }).click();
+    await expect(effort).toHaveText("High");
     await page
       .getByRole("combobox", { name: "Runtime mode", exact: true })
       .click();
@@ -344,6 +366,11 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
       .filter((m) => m.method === "session/set_config_option")
       .map((m) => [m.params.configId, m.params.value]);
     expect(set).toContainEqual(["model", "opencode/wonder"]);
+    expect(set).toContainEqual(["effort", "high"]);
+    const effortSession = sent.find((m) =>
+      m.method === "session/set_config_option" &&
+      m.params.configId === "effort" && m.params.value === "high",
+    )!.params.sessionId;
     expect(sent.some((m) => m.method === "session/prompt")).toBe(true);
     // The ask the user answered; a helper's own asks are always turned down.
     expect(
@@ -355,6 +382,27 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
     await expect(
       page.getByRole("button", { name: "Choose model and provider" }),
     ).toHaveText(/Wonder/);
+    await expect(effort).toHaveText("High");
+    await effort.click();
+    await page.getByRole("option", { name: "Default", exact: true }).click();
+    await page.getByLabel("Message project").fill("Write notes.md again");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await approval.getByRole("button", { name: "Once", exact: true }).click();
+    await expect(page.getByText("Wrote notes.md.", { exact: true })).toHaveCount(2);
+    const afterReset = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(
+      afterReset
+        // Each fixture process starts numbering sessions at s1; ignore earlier helpers.
+        .slice(sent.length)
+        .filter((m) =>
+          m.method === "session/set_config_option" &&
+          m.params.sessionId === effortSession && m.params.configId === "effort",
+        )
+        .map((m) => m.params.value),
+    ).toEqual(["default"]);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
