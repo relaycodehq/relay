@@ -5,7 +5,7 @@ import type {
   BranchList,
   BranchRef,
 } from "../../../shared/branches";
-import { branchOptions } from "./branch-options";
+import { branchOptions, markCheckedOut } from "./branch-options";
 
 const now = Date.parse("2026-10-16T12:00:00Z");
 const day = 86_400_000;
@@ -124,4 +124,30 @@ it("keeps a worktree with no commits yet out of the merged fold", () => {
       note: "no commits yet",
     },
   ]);
+});
+
+it("says where a branch is checked out when its group doesn't", () => {
+  const branches = [
+    branch("main", { current: true }),
+    branch("relay/in-a-thread", { worktree: true }),
+    branch("relay/landed", { worktree: true, ahead: 0 }),
+    branch("feature", {}),
+  ];
+  const [list, counts] = loaded(branches);
+  const options = markCheckedOut(
+    branchOptions(
+      branches.map((b) => b.name),
+      list,
+      counts,
+      now,
+    ),
+    list,
+  );
+  expect(Object.fromEntries(options.map((o) => [o.value, o.detail]))).toEqual({
+    main: "checkout",
+    // Under Worktrees already.
+    "relay/in-a-thread": undefined,
+    "relay/landed": "worktree",
+    feature: undefined,
+  });
 });

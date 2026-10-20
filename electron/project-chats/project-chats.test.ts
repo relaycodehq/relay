@@ -1007,7 +1007,61 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
   );
   // Its first message makes nothing new: it works in the same folder.
   expect((await chats.get(byThread.id)).worktree?.path).toBe(made.path);
-  await expect(
+  // A draft asking for a thread that's gone gets a worktree of its own.
+  const gone = await chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+    undefined,
+    "team/login",
+    undefined,
+    { thread: "00000000-0000-4000-8000-000000000000" },
+  );
+  expect((await chats.get(gone.id)).worktree).toEqual({ named: "team/login" });
+
+  // A folder removed by hand isn't joined; the first message makes it again.
+  execFileSync("git", [
+    "-C",
+    repo,
+    "worktree",
+    "remove",
+    "--force",
+    made.path!,
+  ]);
+  const late = await chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+    undefined,
+    undefined,
+    undefined,
+    { on: made.branch! },
+  );
+  expect((await chats.get(late.id)).worktree).toEqual({
+    startFrom: { on: made.branch },
+  });
+});
+
+it("starts a thread on the project folder's own branch off it, and refuses only a branch that's nowhere", async () => {
+  const repo = join(root, "repo");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", repo, ...args], {
+      encoding: "utf8",
+      stdio: "pipe",
+    }).trim();
+  git(
+    "-c",
+    "user.name=T",
+    "-c",
+    "user.email=t@t",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "First",
+  );
+  const current = git("branch", "--show-current");
+  const on = (branch: string) =>
     chats.create(
       projectId,
       { kind: "project" },
@@ -1015,11 +1069,23 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
       undefined,
       undefined,
       undefined,
-      {
-        thread: "00000000-0000-4000-8000-000000000000",
-      },
-    ),
-  ).rejects.toThrow("That thread's worktree is gone");
+      { on: branch },
+    );
+  await expect(on("gone")).rejects.toThrow("There's no branch gone.");
+
+  const chat = await on(current);
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const worktree = (await chats.get(chat.id)).worktree!;
+  expect(worktree).toMatchObject({
+    from: current,
+    startedOff: current,
+    wanted: { branch: current },
+  });
+  expect(worktree.branch).toMatch(/^relay\//);
+  expect(git("branch", "--show-current")).toBe(current);
 });
 
 it("starts a thread whose named branch got taken before its first message on relay/…, and keeps why", async () => {

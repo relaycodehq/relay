@@ -90,22 +90,26 @@ it("doesn't wait when the user named the branch", async () => {
   expect(git(path, "branch", "--show-current")).toBe("team/login");
 });
 
-it("waits for a carried-on branch that's checked out elsewhere rather than swapping it", async () => {
+it("carries a branch on wherever it's checked out by the time the thread comes back", async () => {
   git(root, "branch", "old-work");
   const chat = thread({ startFrom: { on: "old-work" } });
   const path = await worktrees.root(chat, "carry on");
   expect(chat.worktree).toMatchObject({ branch: "old-work", existing: true });
   git(root, "worktree", "remove", "--force", path);
+  const theirs = join(temp, "their-checkout");
+  git(root, "worktree", "add", "-q", theirs, "old-work");
+
+  expect(await worktrees.root(chat, "again")).toBe(theirs);
+  expect(chat.worktree).toMatchObject({ branch: "old-work", adopted: true });
+  expect(chat.workspaceMoves?.at(-1)?.fresh).toBeUndefined();
+
+  // In the project folder, where Git won't check it out twice: a branch off it.
+  git(root, "worktree", "remove", "--force", theirs);
   git(root, "switch", "-q", "old-work");
-
-  await expect(worktrees.root(chat, "again")).rejects.toThrow(
-    /Couldn't open old-work in a worktree again: old-work is checked out in /,
-  );
-  expect(chat.worktree?.branch).toBe("old-work");
-
-  git(root, "switch", "-q", "main");
-  expect(await worktrees.root(chat, "again")).toBe(path);
-  expect(git(path, "branch", "--show-current")).toBe("old-work");
+  const fresh = await worktrees.root(chat, "and again");
+  expect(git(fresh, "branch", "--show-current")).toMatch(/^relay\//);
+  expect(chat.worktree).toMatchObject({ startedOff: "old-work" });
+  expect(chat.workspaceMoves?.at(-1)?.fresh).toBe(true);
 });
 
 it("gives a carried-on branch deleted meanwhile a branch of its own", async () => {
@@ -195,4 +199,205 @@ it("deletes an archived thread's worktree with work in it when asked, keeping it
   expect(existsSync(path)).toBe(false);
   expect(chat.worktree).toMatchObject({ cleanedUp: true });
   expect(git(root, "branch", "--list", chat.worktree!.branch!)).not.toBe("");
+});
+
+it("works in a folder it didn't make without ever removing it, and makes its own once that's gone", async () => {
+  git(root, "branch", "feature");
+  const theirs = join(temp, "their-checkout");
+  git(root, "worktree", "add", "-q", theirs, "feature");
+  const chat = thread({ startFrom: { on: "feature" } });
+  const other: ProjectChat = {
+    ...thread({ startFrom: { on: "feature" } }),
+    id: "other",
+    title: "write the tests",
+  };
+  chats = [chat, other];
+
+  expect(await worktrees.root(chat, "carry on")).toBe(theirs);
+  expect(chat.worktree).toMatchObject({ adopted: true, existing: true });
+  // Two threads finding the same folder share it.
+  expect(await worktrees.root(other, "carry on too")).toBe(theirs);
+  chats = [chat];
+
+  await expect(worktrees.remove("chat")).rejects.toThrow(
+    "Relay didn't make this worktree",
+  );
+  expect(await worktrees.cleanUp("chat", async () => undefined)).toBe(
+    "not a worktree Relay made",
+  );
+  chat.archivedAt = 5;
+  await worktrees.dropLanded(chat, 5);
+  await worktrees.dropArchived(chat);
+  expect(existsSync(theirs)).toBe(true);
+  expect(git(theirs, "branch", "--show-current")).toBe("feature");
+  expect(chat.worktree?.removedAt).toBeUndefined();
+
+  delete chat.archivedAt;
+  git(root, "worktree", "remove", "--force", theirs);
+  const own = await worktrees.root(chat, "again");
+  expect(own.startsWith(join(temp, "worktrees"))).toBe(true);
+  expect(git(own, "branch", "--show-current")).toBe("feature");
+  expect(chat.worktree).toMatchObject({ existing: true });
+  expect(chat.worktree?.adopted).toBeUndefined();
+});
+
+it("makes a branch kept for another thread's next message again, one folder for both", async () => {
+  const away: ProjectChat = { ...thread({}), id: "away", title: "fix login" };
+  chats = [away];
+  const path = await worktrees.root(away, "fix the login thing");
+  const branch = away.worktree!.branch!;
+  expect(
+    await worktrees.cleanUp("away", async () => undefined),
+  ).toBeUndefined();
+  expect(existsSync(path)).toBe(false);
+
+  const chat = thread({ startFrom: { on: branch } });
+  chats = [away, chat];
+  const made = await worktrees.root(chat, "carry on");
+  expect(git(made, "branch", "--show-current")).toBe(branch);
+  expect(chat.worktree).toMatchObject({ branch, existing: true });
+  expect(away.worktree).toMatchObject({ path: made, branch, setup: "done" });
+  expect(away.worktree?.cleanedUp).toBeUndefined();
+  expect(away.worktree?.removedAt).toBeUndefined();
+
+  // Back, it works in the same folder, and neither can take it from the other.
+  expect(await worktrees.root(away, "next")).toBe(made);
+  await expect(worktrees.remove("chat")).rejects.toThrow(
+    "“fix login” works in this worktree too",
+  );
+});
+
+it("makes a shared folder removed by hand again for both threads rather than joining what's left of it", async () => {
+  git(root, "branch", "feature");
+  const theirs = join(temp, "their-checkout");
+  git(root, "worktree", "add", "-q", theirs, "feature");
+  const chat = thread({ startFrom: { on: "feature" } });
+  const other: ProjectChat = {
+    ...thread({ startFrom: { on: "feature" } }),
+    id: "other",
+    title: "write the tests",
+  };
+  chats = [chat, other];
+  await worktrees.root(chat, "carry on");
+  expect(await worktrees.root(other, "carry on too")).toBe(theirs);
+  git(root, "worktree", "remove", "--force", theirs);
+
+  const own = await worktrees.root(chat, "again");
+  expect(existsSync(own)).toBe(true);
+  expect(git(own, "branch", "--show-current")).toBe("feature");
+  expect(other.worktree?.path).toBe(own);
+  expect(await worktrees.root(other, "next")).toBe(own);
+});
+
+it("puts two threads starting on one branch at once in one folder", async () => {
+  git(root, "branch", "feature");
+  const chat = thread({ startFrom: { on: "feature" } });
+  const other: ProjectChat = {
+    ...thread({ startFrom: { on: "feature" } }),
+    id: "other",
+    title: "write the tests",
+  };
+  chats = [chat, other];
+
+  const settled = await Promise.allSettled([
+    worktrees.root(chat, "carry on"),
+    worktrees.root(other, "carry on too"),
+  ]);
+  expect(settled.map((s) => s.status)).toEqual(["fulfilled", "fulfilled"]);
+  const path = chat.worktree!.path!;
+  expect(other.worktree?.path).toBe(path);
+  expect(existsSync(path)).toBe(true);
+  expect(git(path, "branch", "--show-current")).toBe("feature");
+});
+
+it("lends a kept branch's folder without racing its own thread's next message", async () => {
+  const kept: ProjectChat = { ...thread({}), id: "kept", title: "fix login" };
+  chats = [kept];
+  await worktrees.root(kept, "fix the login thing");
+  const branch = kept.worktree!.branch!;
+  await worktrees.cleanUp("kept", async () => undefined);
+  const chat = thread({ startFrom: { on: branch } });
+  chats = [kept, chat];
+
+  const settled = await Promise.allSettled([
+    worktrees.root(kept, "next"),
+    worktrees.root(chat, "carry on"),
+  ]);
+  expect(settled.map((s) => s.status)).toEqual(["fulfilled", "fulfilled"]);
+  const path = chat.worktree!.path!;
+  expect(kept.worktree).toMatchObject({ path, branch });
+  expect(existsSync(path)).toBe(true);
+  expect(git(path, "branch", "--show-current")).toBe(branch);
+});
+
+it("moves the threads sharing a folder onto the branch it's made again on, counting from where it does", async () => {
+  git(root, "branch", "feature");
+  const chat = thread({ startFrom: { on: "feature" } });
+  const path = await worktrees.root(chat, "carry on");
+  const other: ProjectChat = {
+    ...thread(joinedWorktree(chat.worktree!)),
+    id: "other",
+    title: "write the tests",
+  };
+  chats = [chat, other];
+  git(root, "worktree", "remove", "--force", path);
+  // Only a branch off it now: the project folder has it checked out.
+  git(root, "switch", "-q", "feature");
+
+  const fresh = await worktrees.root(chat, "again");
+  expect(chat.worktree).toMatchObject({ startedOff: "feature" });
+  const {
+    setup: _setup,
+    portOffset: _offset,
+    wanted: _wanted,
+    ...made
+  } = chat.worktree!;
+  expect(other.worktree).toEqual({ ...made, setup: "done" });
+  expect(other.worktree?.path).toBe(fresh);
+  expect(other.worktree?.existing).toBeUndefined();
+  expect(other.worktree?.named).toBeUndefined();
+});
+
+it("joins no away thread's folder, nor lends a returned copy's", async () => {
+  const away: ProjectChat = { ...thread({}), id: "away", title: "fix login" };
+  chats = [away];
+  const theirs = await worktrees.root(away, "fix the login thing");
+  away.sentTo = {
+    id: "h",
+    computerId: "c",
+    computer: "thinkcenter",
+    at: 1,
+    state: "away",
+  };
+  const chat = thread({ startFrom: { on: away.worktree!.branch! } });
+  chats = [away, chat];
+  const path = await worktrees.root(chat, "carry on");
+  expect(path).not.toBe(theirs);
+  expect(chat.worktree).toMatchObject({
+    startedOff: away.worktree!.branch,
+    wanted: { branch: away.worktree!.branch },
+  });
+  expect(away.worktree?.path).toBe(theirs);
+
+  const copy: ProjectChat = { ...thread({}), id: "copy", title: "old trip" };
+  chats = [copy];
+  const old = await worktrees.root(copy, "an earlier trip");
+  await worktrees.cleanUp("copy", async () => undefined);
+  copy.worktree!.removedAt = 5;
+  copy.cameFrom = {
+    id: "h",
+    computer: "thinkcenter",
+    deviceId: "d",
+    at: 1,
+    carried: 0,
+    tip: copy.worktree!.head!,
+    returnedAt: 5,
+  };
+  const next: ProjectChat = {
+    ...thread({ startFrom: { on: copy.worktree!.branch! } }),
+    id: "next",
+  };
+  chats = [copy, next];
+  await worktrees.root(next, "carry on");
+  expect(copy.worktree).toMatchObject({ path: old, removedAt: 5 });
 });

@@ -21,8 +21,9 @@ const refNameSchema = z
 /**
  * Where a new thread's worktree starts, when not on a new branch off the
  * checkout's commit: a new branch `off` another branch, a remote one
- * fetched first, `on` an existing branch, carried on in the worktree, or in
- * the worktree another `thread` works in, the two of them sharing its folder.
+ * fetched first, `on` an existing branch, carried on in the folder it's
+ * checked out in or in a new worktree, or in the worktree another `thread`
+ * works in, the two of them sharing its folder.
  */
 export const worktreeStartSchema = z.union([
   z.object({ off: refNameSchema }).strict(),
@@ -33,9 +34,10 @@ export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 
 /**
  * The thread whose worktree is on `branch`, open or removed with the branch
- * kept for its next message, which another thread carrying it on would take.
- * An archived one lets it go: unarchived, it gets a `relay/…` branch of its
- * own, or waits for the branch if it was carrying it on too.
+ * kept for its next message. Another thread carrying the branch on joins its
+ * folder, or makes it again for both of them. An archived one lets it go:
+ * unarchived, it gets a `relay/…` branch of its own, or works wherever the
+ * branch is checked out by then if it was carrying it on too.
  */
 export const threadOnBranch = <
   T extends { worktree?: ChatWorktree; archivedAt?: number },
@@ -51,6 +53,8 @@ type WithWorktree = {
   id: string;
   worktree?: ChatWorktree;
   archivedAt?: number;
+  /** Away on another computer; see `ChatSentTo`. */
+  sentTo?: unknown;
 };
 /** A worktree whose folder is there to work in, not removed or cleaned up. */
 const liveWorktree = (worktree: ChatWorktree | undefined) =>
@@ -82,13 +86,16 @@ export function sharedWith(others: readonly { title: string }[]) {
     : `${first} and ${others.length - 1} other${others.length === 2 ? "" : "s"}`;
 }
 
-/** Open threads with a worktree another thread can join, one per folder. */
+/**
+ * Open threads with a worktree another thread can join, one per folder. Not
+ * one away on another computer: its work lands in the folder once it's back.
+ */
 export const joinableWorktrees = <T extends WithWorktree>(
   chats: readonly T[],
 ) => {
   const seen = new Set<string>();
   return chats.filter((c) => {
-    if (c.archivedAt || !liveWorktree(c.worktree)) return false;
+    if (c.archivedAt || c.sentTo || !liveWorktree(c.worktree)) return false;
     if (seen.has(c.worktree!.path!)) return false;
     seen.add(c.worktree!.path!);
     return true;
@@ -127,7 +134,8 @@ export interface ChatWorktree {
   /**
    * The branch the user named, or picked to carry on or (`off`) start off,
    * that couldn't be used by the time the first message sent, and why; the
-   * worktree went on a `relay/…` branch off the checkout's commit instead.
+   * worktree went on a `relay/…` branch off the checkout's commit instead,
+   * or off the branch itself when only checking it out was in the way.
    */
   wanted?: { branch: string; problem: string; off?: true };
   /** Where the first message makes it, picked for the new thread; gone once it's made. */
@@ -142,6 +150,13 @@ export interface ChatWorktree {
    * renames, resets or deletes it, and it keeps its name in `named`.
    */
   existing?: true;
+  /**
+   * A folder Relay didn't make: one the branch was already checked out in,
+   * by the user, another tool or a thread long gone. The thread works in it
+   * as it is; Relay runs no setup there and never removes, renames or cleans
+   * it up, nor deletes its branch, which is `existing` too.
+   */
+  adopted?: true;
   /** The checkout's branch it was made from; its changes are what that branch lacks. */
   from?: string;
   /** The commit the worktree was made at: the checkout's, or the branch's it started off or carried on. */
@@ -211,8 +226,14 @@ export interface WorkspaceMove {
   /** The agent that did it, when one did. */
   by?: AgentProvider;
 }
-/** Where a deep review reads and fixes the reviewed code when the project's checkout doesn't have it. */
-export type ReviewFolder = Pick<ReviewCheckout, "path" | "branch">;
+/**
+ * Where a deep review reads and fixes the reviewed code when the project's
+ * checkout doesn't have it; `prNumber` is the pull request it holds,
+ * detached until a fix gives it a branch.
+ */
+export type ReviewFolder = Pick<ReviewCheckout, "path" | "branch"> & {
+  prNumber?: number;
+};
 type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
@@ -225,14 +246,21 @@ type ThreadWorkspace = {
 export const reviewFolder = (
   chat: ThreadWorkspace | undefined,
 ): ReviewFolder | undefined => {
-  const checkout = chat?.reviewFolder ?? chat?.deepReview?.scope.checkout;
+  if (chat?.reviewFolder) return chat.reviewFolder;
+  const checkout = chat?.deepReview?.scope.checkout;
   return (
     checkout && {
       path: checkout.path,
       ...(checkout.branch ? { branch: checkout.branch } : {}),
+      ...(checkout.pr ? { prNumber: checkout.pr.number } : {}),
     }
   );
 };
+
+/** What a review's folder has checked out, for a branch label: its branch, or the pull request it holds detached. */
+export const reviewFolderLabel = (folder: ReviewFolder | undefined) =>
+  folder?.branch ??
+  (folder?.prNumber ? `PR #${folder.prNumber}` : undefined);
 
 export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
   worktree.gitdir ?? worktree.path;
@@ -283,6 +311,8 @@ export interface WorktreeStatus {
   cleanedUp?: true;
   /** It carries on a branch that was there before it, which removing it keeps. */
   existing?: true;
+  /** A folder Relay didn't make, which it never removes; see `ChatWorktree.adopted`. */
+  adopted?: true;
 }
 /** The branch a new thread's worktree would be made on, and why it can't, if it can't. */
 export interface WorktreeBranch {

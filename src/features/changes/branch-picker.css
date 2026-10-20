@@ -79,9 +79,6 @@ button.composer-branch-error:hover {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.branch-picker-popup {
-  width: min(430px, calc(100vw - 32px));
-}
 .branch-picker-row {
   display: flex;
   align-items: center;

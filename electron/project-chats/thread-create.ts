@@ -8,12 +8,9 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
-import {
-  joinableWorktrees,
-  joinedWorktree,
-  threadOnBranch,
-} from "../../shared/projects";
+import { joinedWorktree } from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
+import { joinableOn } from "./worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
@@ -46,26 +43,30 @@ export class ThreadCreate {
       throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")
       throw new Error("Only repository threads can work in a worktree.");
-    // A carried-on branch keeps its own name.
-    const named =
-      workspace === "worktree" && !(start && "on" in start)
-        ? branch
-        : undefined;
-    const startFrom = workspace === "worktree" ? start : undefined;
-    // In another thread's worktree, or on a branch one is on: the same
-    // folder, both threads working in it, as T3 shares one.
     const projectChats = (this.core.store.get().chats ?? []).filter(
       (c) => c.projectId === projectId,
     );
+    // Joining a thread by itself is no longer offered, but a draft from
+    // before can still ask: it carries on that thread's branch, and with
+    // the thread gone it's a plain new worktree.
     const asked =
-      startFrom && "thread" in startFrom
-        ? projectChats.find((c) => c.id === startFrom.thread)
-        : startFrom && "on" in startFrom
-          ? threadOnBranch(projectChats, startFrom.on)
-          : undefined;
-    const joining = asked && joinableWorktrees([asked])[0];
-    if (startFrom && "thread" in startFrom && !joining)
-      throw new Error("That thread's worktree is gone; pick another.");
+      start && "thread" in start
+        ? projectChats.find((c) => c.id === start.thread)?.worktree?.branch
+        : undefined;
+    const picked: WorktreeStart | undefined =
+      start && "thread" in start ? (asked ? { on: asked } : undefined) : start;
+    // A carried-on branch keeps its own name.
+    const named =
+      workspace === "worktree" && !(picked && "on" in picked)
+        ? branch
+        : undefined;
+    const startFrom = workspace === "worktree" ? picked : undefined;
+    // On a branch another thread's worktree is on: the same folder, both
+    // threads working in it, as T3 shares one.
+    const joining =
+      startFrom && "on" in startFrom
+        ? await joinableOn(projectChats, startFrom.on)
+        : undefined;
     const joined =
       joining &&
       joinedWorktree((await this.core.storage.load(joining.id)).worktree!);
@@ -73,25 +74,15 @@ export class ThreadCreate {
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
-    // So is a branch to start from that isn't there or is held elsewhere;
-    // one that goes by the first message falls back the same way.
+    // So is a branch to start from that isn't there; anywhere else it is,
+    // the first message finds it a folder. One that goes by then falls
+    // back the same way.
     const startProblem =
       startFrom &&
       !joined &&
       (await worktreeStartProblem(
         await this.core.projects.root(projectId),
         startFrom,
-        (branch) => {
-          const other = threadOnBranch(
-            (this.core.store.get().chats ?? []).filter(
-              (c) => c.projectId === projectId,
-            ),
-            branch,
-          );
-          return other
-            ? `${branch} is kept for the thread “${other.title}”; carry it on there.`
-            : undefined;
-        },
       ));
     if (startProblem) throw new Error(startProblem);
     const chat: ProjectChat = {

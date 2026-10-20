@@ -10,6 +10,8 @@ import type {
 import {
   agentWorktreeKey,
   agentWorktreeUnavailable,
+  reviewFolder,
+  reviewFolderLabel,
   threadWorktree,
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
@@ -60,6 +62,9 @@ export function useThreadWorktree({
   }, [workspace, !chat]);
   // A paired computer the new thread starts on instead, in a worktree there.
   const [startOn, setStartOn] = useState<{ id: string; name: string }>();
+  // A branch picked to switch the checkout to, which got a worktree instead
+  // because the checkout couldn't switch; `reason` says why.
+  const [detour, setDetour] = useState<{ branch: string; reason: string }>();
   // The new worktree's branch as typed; empty leaves it to Relay.
   const [newBranch, setNewBranch] = useState(() =>
     chat ? "" : threadStorage(id).branch.load(),
@@ -79,6 +84,20 @@ export function useThreadWorktree({
   const setStart = (next: WorktreeStart | undefined) => {
     if (!chat) saveDraftStart(id, next);
   };
+  // A draft from when threads were joined by thread carries on that one's
+  // branch instead, as the picker shows; with the thread gone, it's none.
+  const joining =
+    !chat && start && "thread" in start ? start.thread : undefined;
+  const threads = useQuery({
+    queryKey: ["project-chats", project.id],
+    queryFn: () => api.projectChats(project.id),
+    enabled: !!joining,
+  });
+  useEffect(() => {
+    if (!joining || !threads.data) return;
+    const branch = threads.data.find((c) => c.id === joining)?.worktree?.branch;
+    setStart(branch ? { on: branch } : undefined);
+  }, [joining, threads.data]);
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree));
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
@@ -161,6 +180,8 @@ export function useThreadWorktree({
     setWorkspace,
     startOn: chat ? undefined : startOn,
     setStartOn,
+    detour: chat ? undefined : detour,
+    setDetour,
     newBranch,
     setNewBranch,
     start: chat ? undefined : start,
@@ -173,8 +194,8 @@ export function useThreadWorktree({
     branch:
       live?.branch ??
       (agentTree.data
-        ? (agentTree.data.branch ?? undefined)
-        : agentWorktree?.branch),
+        ? (agentTree.data.branch ?? reviewFolderLabel(reviewFolder(chat)))
+        : (agentWorktree?.branch ?? reviewFolderLabel(reviewFolder(chat)))),
     inWorktree: !!live || !!agentWorktree,
     /** Its worktree waits on the thread's title for a name. */
     naming: !!live?.naming,

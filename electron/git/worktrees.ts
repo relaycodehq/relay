@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   stat,
   symlink,
@@ -42,7 +43,13 @@ export type MadeWorktree = Required<
 > &
   Pick<
     ChatWorktree,
-    "from" | "named" | "wanted" | "included" | "existing" | "startedOff"
+    | "from"
+    | "named"
+    | "wanted"
+    | "included"
+    | "existing"
+    | "adopted"
+    | "startedOff"
   >;
 
 /** What a worktree held when it was removed, in case it's wanted back. */
@@ -204,7 +211,9 @@ async function placeFor(
  * project runs without installing. A thread making its worktree again takes
  * its old folder back when it's free, so the agent's session finds the same
  * working directory. A `startFrom` picked for the thread makes the branch off
- * another one instead, or carries on an existing branch.
+ * another one instead, or carries on an existing branch: in the folder it's
+ * checked out in already, else in a worktree of its own, else, when only
+ * checking it out is in the way, on a new branch off it.
  */
 export async function createWorktree(
   root: string,
@@ -226,17 +235,40 @@ export async function createWorktree(
     fell = { branch, problem, ...(off ? { off } : {}) };
     return undefined;
   };
+  let offFrom = start && "off" in start ? start.off : undefined;
+  let fetched = false;
   if (start && "on" in start) {
-    const carried = await carryOn(root, folder, start.on, signal).catch(
+    let place = await carryOnPlace(root, start.on, { signal }).catch(
       startFailed(start.on),
     );
-    if (carried) return carried;
+    if (place && "carry" in place) {
+      const carried = await carryOn(root, folder, start.on, place.carry).catch(
+        startFailed(start.on),
+      );
+      if (carried) return carried;
+      // Checked out elsewhere meanwhile, say: where it is now decides.
+      place = await carryOnPlace(root, start.on).catch(() => undefined);
+      if (place && "carry" in place) place = undefined;
+    }
+    if (place && "at" in place)
+      return foundWorktree(root, place.at, place.branch);
+    if (place && "off" in place) {
+      offFrom = place.off;
+      fetched = true;
+      fell = { branch: start.on, problem: place.problem };
+    }
+    if (place && "missing" in place)
+      fell = {
+        branch: start.on,
+        problem: `There's no branch ${start.on} anymore.`,
+      };
   }
   const off =
-    start &&
-    "off" in start &&
-    (await branchOff(root, start.off, signal).catch(
-      startFailed(start.off, true),
+    offFrom !== undefined &&
+    (await branchOff(root, offFrom, fetched ? undefined : { signal }).catch(
+      start && "off" in start
+        ? startFailed(start.off, true)
+        : startFailed(offFrom),
     ));
   const head = off ? off.sha : await checkoutHead(root);
   const from = off ? off.from : await currentBranch(root);
@@ -273,7 +305,7 @@ export async function createWorktree(
     start: head,
     base: head,
     ...(from ? { from } : {}),
-    ...(off && start && "off" in start ? { startedOff: start.off } : {}),
+    ...(off ? { startedOff: offFrom } : {}),
     ...(branch === previous?.named ? { named: branch } : {}),
     ...(wanted ? { wanted } : {}),
     ...(await bootstrap(root, root, path)),
@@ -322,7 +354,7 @@ const checkedOutAt = async (root: string, branch: string) =>
   (await worktreeList(root)).find((w) => w.branch === branch && !w.prunable)
     ?.path;
 
-/** Why the local branch a thread would carry on can't be opened in a worktree. */
+/** Why the local branch a thread's worktree is on can't be opened in it again. */
 export async function carryOnProblem(root: string, branch: string) {
   if (!(await hasBranch(root, branch))) return `There's no branch ${branch}.`;
   const at = await checkedOutAt(root, branch);
@@ -342,9 +374,8 @@ const caughtUp = async (root: string, sha: string, branch: string) =>
     () => false,
   ));
 
-/** Why carrying on remote branch `name` through its local twin would miss some of it. */
-const behindProblem = (name: string, local: string) =>
-  `${local} here is behind ${name}; carry on ${local} or bring it up to date first.`;
+/** Where `path` really is, so two spellings of one folder compare equal. */
+const real = (path: string) => realpath(path).catch(() => resolve(path));
 
 /**
  * What a picked start `name` is: its commit, a remote one fetched first when
@@ -369,41 +400,121 @@ async function resolveStart(
   return { sha, branch, remote, local, caught };
 }
 
+type Resolved = Awaited<ReturnType<typeof resolveStart>>;
+/**
+ * Where carrying on `name` takes a thread: the folder its branch is checked
+ * out in already, a worktree of its own on it (a remote one's on a local
+ * branch tracking it), or a new branch off it, and why, when the project
+ * folder has it checked out, its local twin is behind, or a local branch of
+ * its name can't be made. Only a branch that's nowhere is `missing`. A
+ * remote one is fetched first when `fetch` asks.
+ */
+async function carryOnPlace(
+  root: string,
+  name: string,
+  fetch?: { signal?: AbortSignal },
+): Promise<
+  | { carry: Resolved }
+  | { at: string; branch: string }
+  | { off: string; problem: string }
+  | { missing: true }
+> {
+  const resolved = await resolveStart(root, name, fetch);
+  const { sha, branch, remote, local, caught } = resolved;
+  if (!local && !sha) return { missing: true };
+  const instead = `so the thread is on a new branch off ${name}.`;
+  // The remote one was picked; a local twin missing some of it isn't that.
+  if (remote && local && sha && !caught)
+    return { off: name, problem: `${branch} here is behind it, ${instead}` };
+  if (!local) {
+    const clash = await newBranchProblem(root, branch);
+    return clash
+      ? { off: name, problem: `${clash.replace(/\.$/, "")}, ${instead}` }
+      : { carry: resolved };
+  }
+  const at = await checkedOutAt(root, branch);
+  if (!at) return { carry: resolved };
+  const checkout = (await git(root, ["rev-parse", "--show-toplevel"])).trim();
+  // Git checks a branch out in one folder only, and the project's is taken.
+  if ((await real(at)) === (await real(checkout)))
+    return {
+      off: branch,
+      problem: `The project folder has it checked out, ${instead}`,
+    };
+  return { at, branch };
+}
+
 /**
  * Why a new thread's worktree can't start where it was picked to, if it
- * can't; `held` says why a local branch to carry on is another thread's.
+ * can't: only a branch that's neither here nor on a remote. One that's
+ * checked out already, or kept for another thread, is still carried on.
  */
-export async function worktreeStartProblem(
-  root: string,
-  start: WorktreeStart,
-  held: (branch: string) => string | undefined = () => undefined,
-) {
+export async function worktreeStartProblem(root: string, start: WorktreeStart) {
   // Joining another thread's worktree makes nothing new; the thread checks it.
   if ("thread" in start) return undefined;
-  const name = "on" in start ? start.on : start.off;
-  const { sha, branch, remote, local, caught } = await resolveStart(root, name);
-  if ("off" in start) return sha ? undefined : `There's no branch ${name}.`;
-  if (local) {
-    if (remote && sha && !caught) return behindProblem(name, branch);
-    return (await carryOnProblem(root, branch)) ?? held(branch);
-  }
-  if (!sha) return `There's no branch ${name}.`;
-  // A remote one gets a local branch of its name, which a clash keeps out.
-  return newBranchProblem(root, branch);
+  if ("off" in start)
+    return (await resolveStart(root, start.off)).sha
+      ? undefined
+      : `There's no branch ${start.off}.`;
+  return "missing" in (await carryOnPlace(root, start.on))
+    ? `There's no branch ${start.on}.`
+    : undefined;
 }
 
 /**
  * The commit a new branch off `name` starts at, a remote branch fetched
- * first, and the local branch its changes count against when there is one.
+ * first when `fetch` asks, and the local branch its changes count against
+ * when there is one.
  */
-async function branchOff(root: string, name: string, signal?: AbortSignal) {
-  const { sha, branch, remote, caught } = await resolveStart(root, name, {
-    signal,
-  });
+async function branchOff(
+  root: string,
+  name: string,
+  fetch?: { signal?: AbortSignal },
+) {
+  const { sha, branch, remote, caught } = await resolveStart(root, name, fetch);
   if (!sha) throw new Error(`There's no branch ${name} to start from anymore.`);
   if (!remote) return { sha, from: name };
   // A local branch behind the remote one would count its new commits as the thread's.
   return { sha, from: caught ? branch : undefined };
+}
+
+/** Branch `branch`'s commit, and where it forks off the checkout's branch, which its changes count from. */
+async function forkOff(root: string, branch: string) {
+  const tip = (await commitOf(root, `refs/heads/${branch}`))!;
+  const from = await currentBranch(root);
+  const fork =
+    (from &&
+      (await git(root, ["merge-base", `refs/heads/${from}`, tip]).then(
+        (s) => s.trim(),
+        () => undefined,
+      ))) ||
+    tip;
+  return { tip, fork, from };
+}
+
+/**
+ * The folder `branch` is checked out in already, which Relay didn't make,
+ * for a thread to carry the branch on in as it is.
+ */
+async function foundWorktree(
+  root: string,
+  path: string,
+  branch: string,
+): Promise<MadeWorktree> {
+  const { tip, fork, from } = await forkOff(root, branch);
+  return {
+    path,
+    branch,
+    head: tip,
+    start: fork,
+    base: fork,
+    ...(from ? { from } : {}),
+    named: branch,
+    existing: true,
+    adopted: true,
+    // Whoever made the folder set it up; Relay leaves it as it is.
+    setup: "done",
+  };
 }
 
 /**
@@ -415,17 +526,8 @@ async function carryOn(
   root: string,
   folder: string,
   name: string,
-  signal?: AbortSignal,
+  { sha, branch, local }: Resolved,
 ): Promise<MadeWorktree> {
-  const { sha, branch, remote, local, caught } = await resolveStart(
-    root,
-    name,
-    { signal },
-  );
-  // The remote one was picked; a local twin missing some of it isn't that.
-  if (remote && local && sha && !caught)
-    throw new Error(behindProblem(name, branch));
-  if (!local && !sha) throw new Error(`There's no branch ${name} anymore.`);
   const leaf = await freeName(
     root,
     folder,
@@ -434,8 +536,12 @@ async function carryOn(
   );
   const path = join(folder, leaf);
   // A branch made here goes again with a worktree that didn't come of it.
+  // The folder goes only when this call made it: one there before the add
+  // is another thread's that got to the name first.
+  const before = await exists(path);
   const unmake = async () => {
-    await git(root, ["worktree", "remove", "--force", path]).catch(() => {});
+    if (!before)
+      await git(root, ["worktree", "remove", "--force", path]).catch(() => {});
     if (local) return;
     await git(root, ["worktree", "prune"]).catch(() => {});
     // At the remote's commit it holds nothing of anyone's, made here or not.
@@ -460,15 +566,7 @@ async function carryOn(
     await unmake();
     throw error;
   });
-  const tip = (await commitOf(root, `refs/heads/${branch}`))!;
-  const from = await currentBranch(root);
-  const fork =
-    (from &&
-      (await git(root, ["merge-base", `refs/heads/${from}`, tip]).then(
-        (s) => s.trim(),
-        () => undefined,
-      ))) ||
-    tip;
+  const { tip, fork, from } = await forkOff(root, branch);
   return {
     path,
     branch,
@@ -1028,7 +1126,8 @@ const checkoutHead = (root: string) =>
 
 /**
  * Removes the worktree, keeping a snapshot of what it held, and its branch
- * too unless `keepBranch` or the branch was there before the thread.
+ * too unless `keepBranch` or the branch was there before the thread. A
+ * folder Relay didn't make stays.
  */
 export async function removeWorktree(
   root: string,
@@ -1036,6 +1135,8 @@ export async function removeWorktree(
   worktree: ChatWorktree,
   { keepBranch = false } = {},
 ) {
+  // Never Relay's to take, whoever asks.
+  if (worktree.adopted) return;
   if (worktree.path && (await exists(worktree.path))) {
     const tree = await snapshotTree(worktree.path).catch(() => null);
     if (tree) {

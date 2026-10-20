@@ -500,14 +500,19 @@ export function WorktreeMenu({
             >
               Open in {fileManager}
             </Menu.Item>
-            <Menu.Separator className="composer-menu-separator" />
-            <Menu.Item
-              className="composer-select-item worktree-item"
-              disabled={!idle}
-              onClick={onRemove}
-            >
-              Remove worktree
-            </Menu.Item>
+            {/* A folder Relay didn't make is the user's to remove. */}
+            {!status.adopted && (
+              <>
+                <Menu.Separator className="composer-menu-separator" />
+                <Menu.Item
+                  className="composer-select-item worktree-item"
+                  disabled={!idle}
+                  onClick={onRemove}
+                >
+                  Remove worktree
+                </Menu.Item>
+              </>
+            )}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

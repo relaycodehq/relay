@@ -154,7 +154,8 @@ export function useThreadActions({
    */
   const worktreeWork = async (c: ChatSummary) => {
     const w = c.worktree;
-    if (!w?.path || w.removedAt || w.cleanedUp) return 0;
+    // A folder Relay didn't make is never deleted, so there's nothing to ask.
+    if (!w?.path || w.removedAt || w.cleanedUp || w.adopted) return 0;
     const listed = qc
       .getQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] })
       .flatMap(([, list]) => list ?? []);

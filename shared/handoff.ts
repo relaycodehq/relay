@@ -31,6 +31,8 @@ export function handoffBlocked(chat: ChatSummary) {
   if (chat.cameFrom)
     return `This thread came from ${chat.cameFrom.computer}; bring it back there.`;
   if (!chat.worktree) return worktreeFirst;
+  if (chat.worktree.adopted)
+    return "Relay didn't make this thread's worktree, so it stays on this computer.";
   if (chat.empty) return "Send a first message, then hand it off.";
 }
 

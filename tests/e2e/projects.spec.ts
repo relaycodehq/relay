@@ -783,7 +783,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/54-switch-branch.png",
       animations: "disabled",
     });
-    await page.getByRole("option", { name: "feature", exact: true }).click();
+    // A row reads its age and counts after the name.
+    await page.getByRole("option", { name: /^feature(?!\/)/ }).click();
     await expect(branchPicker).toHaveText("feature");
     expect(git("branch", "--show-current")).toBe("feature");
 

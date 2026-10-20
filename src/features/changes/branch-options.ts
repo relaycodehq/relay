@@ -1,6 +1,6 @@
 import { shortAge } from "../../../shared/chat-activity";
 import {
-  localTwin,
+  localTwinName,
   type BranchCounts,
   type BranchList,
 } from "../../../shared/branches";
@@ -41,12 +41,13 @@ export function branchOptions(
   );
   const isBase = (name: string) =>
     !!list?.bases.some((b) => name === b || name === `origin/${b}`);
+  // Looked up, not searched: a repository can have thousands of branches.
+  const listed = new Set(names);
   const twinOf = (name: string) => {
     if (keepRemotes) return undefined;
     const b = byName.get(name);
-    const twin =
-      b && list && byName.get(localTwin(list.branches, b)?.name ?? "");
-    return twin && twin.sha === b.sha && names.includes(twin.name)
+    const twin = b?.remote ? byName.get(localTwinName(b)) : undefined;
+    return twin && !twin.remote && twin.sha === b!.sha && listed.has(twin.name)
       ? twin
       : undefined;
   };
@@ -125,4 +126,24 @@ export function branchOptions(
           : b.date - a.date),
     )
     .map((o) => o.option);
+}
+
+/**
+ * Says in muted text where a branch is checked out when its group doesn't:
+ * the checkout's own branch, or one another worktree has.
+ */
+export function markCheckedOut(
+  options: SearchOption[],
+  list: BranchList | undefined,
+): SearchOption[] {
+  const byName = new Map(list?.branches.map((b) => [b.name, b]));
+  return options.map((o) => {
+    const b = byName.get(o.value);
+    const detail = b?.current
+      ? "checkout"
+      : b?.worktree && o.group !== "Worktrees"
+        ? "worktree"
+        : undefined;
+    return detail ? { ...o, detail } : o;
+  });
 }
