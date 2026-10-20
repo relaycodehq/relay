@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.relay.android.remote.model.RemoteChatSummary
+import dev.relay.android.features.home.computerLine
 import dev.relay.android.remote.model.RemoteProject
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListGroup
@@ -107,6 +108,11 @@ fun WhereLine(project: RemoteProject?, picked: Where?, workspace: String, onOpen
     }
 }
 
+/** Its sidebar folder and, for one on another computer, which: "Work · On thinkcenter". */
+private fun projectPlace(project: RemoteProject?): String? =
+    listOfNotNull(project?.folder?.takeIf(String::isNotEmpty), computerLine(project?.computer))
+        .joinToString(" · ").ifEmpty { null }
+
 /** What the picks mean, in the room the keyboard leaves; tapping it changes the project, or asks again for a Scratchpad that failed. */
 @Composable
 fun ColumnScope.WhereIntro(
@@ -136,9 +142,8 @@ fun ColumnScope.WhereIntro(
         if (scratch) Icon(TablerIcons.Outline.Notebook, null, size = 28.dp, tint = c.mutedForeground)
         else if (project != null) LocalProjectBadge.current(project, 28.dp)
         Text(if (scratch) "Scratchpad" else project?.name.orEmpty(), style = RelayTheme.type.lg.copy(fontWeight = FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (!scratch && !project?.folder.isNullOrEmpty()) {
-            Text(project.folder, style = RelayTheme.type.xs, color = c.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        val place = if (scratch) null else projectPlace(project)
+        if (place != null) Text(place, style = RelayTheme.type.xs, color = c.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (hint != null) Text(
             if (failed) "$hint Tap to try again." else hint,
             style = RelayTheme.type.sm, color = if (failed) c.destructive else c.mutedForeground, textAlign = TextAlign.Center,
@@ -201,7 +206,7 @@ fun WhereSheets(
                 )
                 projects.forEach { p ->
                     ListRow(
-                        p.name, subtitle = p.folder, selected = p.id == picked,
+                        p.name, subtitle = projectPlace(p), selected = p.id == picked,
                         leading = { LocalProjectBadge.current(p, 17.dp) },
                         trailing = check(p.id == picked),
                         onClick = { onClose(); onPick(p.id) },

@@ -39,11 +39,15 @@ struct ProjectView: View {
                 }
                 EntryRow(
                     icon: "terminal", title: "Tasks",
-                    subtitle: glance?.tasks.map { $0 > 0 ? "\($0) running" : "Nothing running" }
+                    subtitle: tasksLine(glance?.tasks, computer: project?.computer)
                 ) {
                     navigate(.tasks(projectId: projectId))
                 }
-                if connection.canTunnel {
+                if connection.canTunnel, let away = project?.computer {
+                    EntryRow(icon: "globe", title: "Sites", subtitle: remoteSitesLine(glance?.ports ?? [], computer: away), chevron: false) {}
+                        .disabled(true)
+                        .opacity(0.5)
+                } else if connection.canTunnel {
                     let ports = glance?.ports ?? []
                     EntryRow(
                         icon: "globe", title: "Sites",
@@ -78,6 +82,7 @@ struct ProjectView: View {
         }
         .relayBackground()
         .navigationTitle(project?.name ?? "Project")
+        .navigationSubtitle(computerLine(project?.computer) ?? "")
         .navigationBarTitleDisplayMode(.inline)
         // Fresh each time the screen shows again, e.g. after a commit on the screen above it.
         .task(id: online) { await load() }

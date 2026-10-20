@@ -30,7 +30,13 @@ data class RemoteProject(
     val plain: Boolean? = null,
     /** "checkout" | "worktree" */
     val workspace: String? = null,
+    /** Its folder is on another paired computer; missing before bridge 28. */
+    val computer: RemoteProjectComputer? = null,
 )
+
+/** The computer a project lives on, by its name now. */
+@Serializable
+data class RemoteProjectComputer(val name: String, val gone: Boolean? = null)
 
 /** `{hash, dataUrl}`, or `{hash: null}` for a project without one. */
 @Serializable

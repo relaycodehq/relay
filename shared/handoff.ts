@@ -214,7 +214,7 @@ export const handoffFolderMethods = [
 /**
  * Calls about a project that lives on another computer (`Project.computer`),
  * its id first, that run on that computer (`projectCall`): its checkout's
- * folder calls, and its branches, commands, agents' defaults and icon.
+ * folder calls, and its branches, commands, agents' defaults, icon and tasks.
  */
 export const remoteProjectMethods = [
   ...handoffFolderMethods,
@@ -224,6 +224,9 @@ export const remoteProjectMethods = [
   "projectCommands",
   "agentDefaults",
   "projectIcon",
+  "projectTasks",
+  "stopProjectTask",
+  "restartProjectTask",
 ] as const satisfies readonly ApiMethod[];
 export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];
 /**
@@ -471,6 +474,10 @@ export const computerRouteSchema = z.discriminatedUnion("kind", [
       .regex(/^[A-Za-z0-9_.-]{1,64}$/, "That isn't a WSL distribution."),
   }),
 ]);
+
+/** The useful part of a tailnet name: `box.tail0a1b2c.ts.net` is box. */
+export const shortHost = (name: string) =>
+  name.replace(/\.[a-z0-9-]+\.ts\.net$/i, "");
 
 export interface PairedComputer {
   id: string;

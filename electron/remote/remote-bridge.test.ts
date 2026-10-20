@@ -749,3 +749,34 @@ it("carries async attention and blocking state separately to the phone", async (
   ).toBeUndefined();
   b.dispose();
 });
+
+it("names the computer a project lives on as it's called now, and says when it isn't paired anymore", async () => {
+  // Each saved with the computer's name when it was added.
+  const on = (id: string, name: string) => ({
+    id,
+    name: "App",
+    path: "/srv/app",
+    repository: null,
+    added: 1,
+    computer: { id, name, projectId: "there" },
+  });
+  const b = new RemoteBridge(
+    {
+      projects: async () => [
+        { id: projectId, name: "Here", path: "/r", repository: null, added: 1 },
+        on("box", "box"),
+        on("old", "old.tail0a1b2c.ts.net"),
+      ],
+      pairedComputers: () => [{ id: "box", name: "thinkcenter.tail0a1b2c.ts.net" }],
+      chats: () => [],
+      name: () => "Studio",
+    } as unknown as RemoteHost,
+    () => {},
+  );
+  const { projects } = (await b.handle("overview", [])) as RemoteOverview;
+  expect(projects.map((p) => p.computer)).toEqual([
+    undefined,
+    { name: "thinkcenter" },
+    { name: "old", gone: true },
+  ]);
+});

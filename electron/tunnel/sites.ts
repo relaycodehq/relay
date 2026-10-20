@@ -3,7 +3,7 @@ import type { ProjectTask } from "../../shared/tasks";
 
 /** What listing sites needs of the desktop: its projects, and their tasks through its own dispatch. */
 export interface SiteSource {
-  projects(): Promise<{ id: string; name: string }[]>;
+  projects(): Promise<{ id: string; name: string; computer?: unknown }[]>;
   dispatch(method: "projectTasks", args: [string]): Promise<unknown>;
 }
 
@@ -16,7 +16,8 @@ export async function listSites(
   source: SiteSource,
   refused: number[],
 ): Promise<RemoteSite[]> {
-  const projects = await source.projects();
+  // A project on another computer runs its tasks there, where a tunnel to here can't reach.
+  const projects = (await source.projects()).filter((p) => !p.computer);
   // All at once: projects' lists asked for together share one `ps` and one `lsof`.
   const found = await Promise.all(
     projects.map(async (project) => {

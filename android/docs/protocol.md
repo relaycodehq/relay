@@ -243,7 +243,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
 
 - **`overview()`** → `RemoteOverview` (`:284-303`):
   - `{name, bridge?, version?, appearance?:PhoneAppearance, dictation?: "…status", readAloud?:boolean, present?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
-  - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?}`.
+  - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?, computer?:{name, gone?}}`; `computer` (bridge 28) names the paired computer a project's folder is on.
   - `RemoteChatSummary` (`:108-147`):
     - required: `id, projectId, title, scope, updated, created`;
     - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, limitResume, notesMark`.

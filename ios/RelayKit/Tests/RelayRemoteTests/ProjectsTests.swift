@@ -36,6 +36,24 @@ struct ProjectsTests {
         #expect(projectLine([], now: now) == "No threads yet")
     }
 
+    @Test func projectLineSaysWhichComputerAProjectIsOn() {
+        let now: Int64 = 10 * 60_000
+        let box = RemoteProjectComputer(name: "thinkcenter")
+        #expect(projectLine([chat("a", updated: now - 5 * 60_000)], now: now, computer: box) == "On thinkcenter · 1 thread · 5m ago")
+        #expect(projectLine([], now: now, computer: box) == "On thinkcenter · No threads yet")
+        #expect(computerLine(RemoteProjectComputer(name: "thinkcenter", gone: true)) == "thinkcenter isn't paired anymore")
+        #expect(computerLine(nil) == nil)
+    }
+
+    @Test func tasksAndSitesOfAProjectOnAnotherComputerSayWhere() {
+        let box = RemoteProjectComputer(name: "thinkcenter")
+        #expect(tasksLine(1, computer: box) == "1 running on thinkcenter")
+        #expect(tasksLine(0) == "Nothing running")
+        #expect(tasksLine(nil, computer: box) == nil)
+        #expect(remoteSitesLine([5173, 3000], computer: box) == "localhost:5173, localhost:3000 on thinkcenter · can't open from here")
+        #expect(remoteSitesLine([], computer: box) == "On thinkcenter · can't open from here")
+    }
+
     @Test func scratchChatsAreOneListNewestFirst() {
         let overview = RemoteOverview(
             name: "pc", projects: [project("s1", "s", scratch: true), project("s2", "s", scratch: true), project("p", "p")],

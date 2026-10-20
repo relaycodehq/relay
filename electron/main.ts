@@ -603,6 +603,7 @@ app
       unseal,
       {
         projects: () => projects.list(login.client),
+        pairedComputers: () => computers.list(),
         projectPath: (id) => projects.get(id).path,
         chats: api.listChats,
         chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),

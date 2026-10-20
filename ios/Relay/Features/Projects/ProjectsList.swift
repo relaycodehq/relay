@@ -76,7 +76,7 @@ private struct ProjectsList: View {
                     SectionLabel(title: folder.title, count: folder.projects.count).labelRow()
                     ForEach(folder.projects) { project in
                         Button { open(.project(project.id)) } label: {
-                            ProjectRow(title: project.name, line: projectLine(byProject[project.id] ?? [], now: now)) {
+                            ProjectRow(title: project.name, line: projectLine(byProject[project.id] ?? [], now: now, computer: project.computer)) {
                                 ProjectIcon(project: project, size: 16)
                             }
                         }

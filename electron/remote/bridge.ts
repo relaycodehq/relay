@@ -11,6 +11,7 @@ import {
   type KnownMessages,
   type Project,
   type ProjectChatPatch,
+  type ProjectComputer,
 } from "../../shared/projects";
 import {
   phoneDesktopMethods,
@@ -27,8 +28,10 @@ import {
   type RemoteDiffLine,
   type RemoteEvent,
   type RemoteMethod,
+  type RemoteProjectComputer,
   type RemoteProjectIcon,
 } from "../../shared/remote";
+import { shortHost, type PairedComputer } from "../../shared/handoff";
 import { RENDER_MAX_PAGES } from "../../shared/html-render";
 import { sentAgent } from "../../shared/recipient";
 import { isStartThreads } from "../../shared/started-threads";
@@ -58,6 +61,8 @@ import type {
 /** What the bridge needs from the desktop; main.ts wires it to the real services. */
 export interface RemoteHost {
   projects(): Promise<Project[]>;
+  /** The computers this one is paired with, which projects on another computer name. */
+  pairedComputers?(): readonly Pick<PairedComputer, "id" | "name">[];
   projectPath(projectId: string): string;
   chats(projectId: string): ChatSummary[];
   chat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
@@ -234,6 +239,7 @@ export class RemoteBridge {
           ...(p.scratch ? { scratch: true } : {}),
           ...(p.plain ? { plain: true } : {}),
           ...(p.settings?.workspace ? { workspace: p.settings.workspace } : {}),
+          ...(p.computer ? { computer: this.computerOf(p.computer) } : {}),
         })),
         chats: this.summaries(),
       };
@@ -614,6 +620,16 @@ export class RemoteBridge {
     for (const held of this.streams.values()) clearTimeout(held.timer);
     this.streams.clear();
   }
+  /** Where a project on another computer lives, by that computer's name now. */
+  private computerOf(computer: ProjectComputer): RemoteProjectComputer {
+    const paired = this.host.pairedComputers?.();
+    const now = paired?.find((c) => c.id === computer.id);
+    return {
+      name: shortHost(now?.name ?? computer.name),
+      ...(paired && !now ? { gone: true as const } : {}),
+    };
+  }
+
   private summaries() {
     return (
       (this.projectIds ?? [])

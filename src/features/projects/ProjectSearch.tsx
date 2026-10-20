@@ -2,7 +2,7 @@ import { useRef, useState, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Combobox } from "@base-ui/react/combobox";
 import { Check, Monitor, Search, Server, ServerOff } from "lucide-react";
-import type { PairedComputer } from "../../../shared/handoff";
+import { shortHost, type PairedComputer } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { ProjectBadge } from "./ProjectBadge";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
@@ -182,9 +182,6 @@ function hostState(
   if (c.status === "online" || c.asleep) return "on";
   return c.status === "connecting" ? "connecting" : "offline";
 }
-
-/** The useful part of a tailnet name: `box.tail0a1b2c.ts.net` is box. */
-const shortHost = (name: string) => name.replace(/\.[a-z0-9-]+\.ts\.net$/i, "");
 
 const hostWord: Record<HostState, string> = {
   on: "connected",

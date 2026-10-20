@@ -164,6 +164,16 @@ export interface RemoteProject {
   plain?: boolean;
   /** Where its new threads start, when not the checkout. */
   workspace?: import("./projects").ChatWorkspace;
+  /** Its folder is on another computer this one is paired with; from `remoteProjectsBridge`. */
+  computer?: RemoteProjectComputer;
+}
+
+/** The computer a project lives on, as the desktop's project picker names it. */
+export interface RemoteProjectComputer {
+  /** Its name now, a tailnet name shortened to its first part. */
+  name: string;
+  /** That computer isn't paired anymore, so the project can't be reached. */
+  gone?: true;
 }
 
 /**

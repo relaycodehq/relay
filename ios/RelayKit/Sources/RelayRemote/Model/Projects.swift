@@ -23,12 +23,31 @@ public func projectFolders(_ projects: [RemoteProject]) -> [(title: String, proj
         .map { ($0, groups[$0]!) }
 }
 
-/// "2 working · 5 threads · 3h ago", or "No threads yet".
-public func projectLine(_ chats: [RemoteChatSummary], now: Int64) -> String {
-    guard let latest = chats.map(\.updated).max() else { return "No threads yet" }
+/// Where a project on another computer lives: "On thinkcenter", or that it can't be reached.
+public func computerLine(_ computer: RemoteProjectComputer?) -> String? {
+    guard let computer else { return nil }
+    return computer.gone == true ? "\(computer.name) isn't paired anymore" : "On \(computer.name)"
+}
+
+/// "1 running", or "1 running on thinkcenter" for a project on another computer.
+public func tasksLine(_ running: Int?, computer: RemoteProjectComputer? = nil) -> String? {
+    guard let running else { return nil }
+    return (running > 0 ? "\(running) running" : "Nothing running") + (computer.map { " on \($0.name)" } ?? "")
+}
+
+/// A project on another computer's sites: the ports its tasks opened there, which a phone's tunnel to this one can't reach.
+public func remoteSitesLine(_ ports: [Int], computer: RemoteProjectComputer) -> String {
+    (ports.isEmpty ? "On \(computer.name)" : "\(ports.map { "localhost:\($0)" }.joined(separator: ", ")) on \(computer.name)")
+        + " · can't open from here"
+}
+
+/// "2 working · 5 threads · 3h ago", or "No threads yet"; "On thinkcenter · …" for one on another computer.
+public func projectLine(_ chats: [RemoteChatSummary], now: Int64, computer: RemoteProjectComputer? = nil) -> String {
+    let place = computerLine(computer).map { "\($0) · " } ?? ""
+    guard let latest = chats.map(\.updated).max() else { return place + "No threads yet" }
     let busy = chats.count { $0.running == true || $0.waiting == true }
     let count = "\(chats.count) \(chats.count == 1 ? "thread" : "threads")"
-    return (busy > 0 ? "\(busy) working · " : "") + "\(count) · \(ago(latest, now: now))"
+    return place + (busy > 0 ? "\(busy) working · " : "") + "\(count) · \(ago(latest, now: now))"
 }
 
 /// A row's "just now", "4m ago", "yesterday", then a date.
