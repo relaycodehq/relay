@@ -76,11 +76,6 @@ class AppContainer(context: Context) {
 
     val lock = AppLock(File(app.filesDir, "app-lock.bin"))
 
-    /** Forgot PIN: every computer goes, as the lock did. */
-    suspend fun forgetComputers() {
-        remote.computers.value.forEach { remote.forget(it.id) }
-    }
-
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))
     val home = HomeServices(app, remote, threadSeen, StoreDrafts(Sends.drafts(app.filesDir), remote))
 

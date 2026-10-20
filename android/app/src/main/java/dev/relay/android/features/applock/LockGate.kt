@@ -79,6 +79,14 @@ class LockGate(on: Boolean) {
         ownTripAt = now
     }
 
+    /**
+     * The trip's result came back. Too short for Relay to stop, no [back] clears the trip, so this
+     * does; away, the result can come before [back], which still needs it.
+     */
+    fun ownTripOver() {
+        if (awaySince == null) ownTripAt = null
+    }
+
     fun left(settings: LockSettings, now: Long) {
         if (!settings.on) return
         awaySince = now

@@ -1,5 +1,6 @@
 package dev.relay.android.app
 
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.Color
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
@@ -56,8 +57,10 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
         container.threadSeen.markSeen(id, updated)
         container.notifications.clearThread(id)
     }
-    entry<Route.Thread> { ThreadScreen(it.id, container.remote, onSeen = seen) }
-    entry<Route.Reply> { ThreadScreen(it.id, container.remote, rootId = it.rootId, onSeen = seen) }
+    entry<Route.Thread> { ThreadScreen(it.id, container.remote, locked = container.lock.locked.collectAsState().value, onSeen = seen) }
+    entry<Route.Reply> {
+        ThreadScreen(it.id, container.remote, rootId = it.rootId, locked = container.lock.locked.collectAsState().value, onSeen = seen)
+    }
     entry<Route.SubagentRun> { SubagentRunScreen(it.chatId, it.agentId, it.rootId, container.remote) }
     entry<Route.Project> { ProjectScreen(it.id, container.remote, container.home) }
     entry<Route.Turn> { route ->

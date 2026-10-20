@@ -47,19 +47,35 @@ import UIKit
                 MainActor.assumeIsolated { self?.active() }
             },
         ]
-        if lock.locked { show() }
+        if lock.locked {
+            locking()
+            show()
+        }
         if UIApplication.shared.applicationState == .active { active() }
     }
 
     private func left() {
+        let was = lock.locked
         lock.left()
+        if lock.locked, !was { locking() }
         // Now rather than on the next SwiftUI pass: the snapshot is taken as this returns.
         if lock.locked || lock.covered { show() }
     }
 
     private func back() {
+        // A timed lock comes on here, under the cover that's already up.
+        let was = lock.locked
         lock.back()
+        if lock.locked, !was { locking() }
         if lock.locked { show() } else { hide() }
+    }
+
+    /// A new locking: Face ID may be offered for it again.
+    private func locking() {
+        asked = false
+        lock.wantsBiometrics = false
+        // The keyboard's window sits above every other; it would type into the thread below.
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     private func active() {
@@ -70,12 +86,6 @@ import UIKit
 
     private func show() {
         guard let window, window.isHidden else { return }
-        if lock.locked {
-            asked = false
-            lock.wantsBiometrics = false
-            // The keyboard's window sits above every other; it would type into the thread below.
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
         // Key, so VoiceOver and the keyboard are on the lock rather than the app under it.
         below = window.windowScene?.keyWindow
         window.makeKeyAndVisible()

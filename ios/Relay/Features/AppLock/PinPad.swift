@@ -26,17 +26,47 @@ struct PinPad<Top: View, Footer: View>: View {
     @ViewBuilder var top: Top
     @ViewBuilder var footer: Footer
     @Environment(\.colors) private var colors
+    @Environment(\.verticalSizeClass) private var vertical
 
     var body: some View {
+        Group {
+            // A phone on its side is shorter than the keypad and the rest: the keypad goes beside.
+            if vertical == .compact {
+                HStack(spacing: 0) {
+                    VStack(spacing: 0) {
+                        top.frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
+                        Spacer(minLength: 0)
+                        heading(mark: 44)
+                        Spacer(minLength: 0)
+                        footer.frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .frame(maxWidth: .infinity)
+                    keypad(key: 60).frame(maxWidth: .infinity)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    top.frame(maxWidth: .infinity, minHeight: 56, maxHeight: 56)
+                    Spacer(minLength: 0)
+                    heading(mark: 64)
+                    Spacer(minLength: 0)
+                    keypad(key: 76)
+                    footer.frame(maxWidth: .infinity, minHeight: 56)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background { colors.background.ignoresSafeArea() }
+        .foregroundStyle(colors.foreground)
+    }
+
+    private func heading(mark: CGFloat) -> some View {
         VStack(spacing: 0) {
-            top.frame(maxWidth: .infinity, minHeight: 56, maxHeight: 56)
-            Spacer(minLength: 0)
             Image("RelayMark")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 64, height: 64)
+                .frame(width: mark, height: mark)
                 .shadow(color: colors.accent.opacity(0.5), radius: 12)
-                .padding(.bottom, 20)
+                .padding(.bottom, mark * 0.3)
                 .accessibilityHidden(true)
             Text(title)
                 .font(.title3.weight(.semibold))
@@ -50,13 +80,11 @@ struct PinPad<Top: View, Footer: View>: View {
                 .padding(.top, 6)
                 .padding(.horizontal, 32)
             Dots(typed: typed, error: error, shakes: shakes)
-            Spacer(minLength: 0)
-            Keypad(enabled: enabled, canDelete: typed > 0, extra: extra, onDigit: onDigit, onDelete: onDelete)
-            footer.frame(maxWidth: .infinity, minHeight: 56)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background { colors.background.ignoresSafeArea() }
-        .foregroundStyle(colors.foreground)
+    }
+
+    private func keypad(key: CGFloat) -> some View {
+        Keypad(enabled: enabled, canDelete: typed > 0, extra: extra, size: key, onDigit: onDigit, onDelete: onDelete)
     }
 }
 
@@ -110,23 +138,25 @@ private struct Keypad: View {
     let enabled: Bool
     let canDelete: Bool
     let extra: PadKey?
+    /// A key's width and height.
+    let size: CGFloat
     let onDigit: (Character) -> Void
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: size * 0.18) {
             ForEach(["123", "456", "789"], id: \.self) { row in
-                HStack(spacing: 26) {
+                HStack(spacing: size * 0.34) {
                     ForEach(Array(row), id: \.self) { digit($0) }
                 }
             }
-            HStack(spacing: 26) {
+            HStack(spacing: size * 0.34) {
                 if let extra {
                     key(extra.label, filled: false, action: extra.action) {
                         Image(systemName: extra.symbol).font(.system(size: 26))
                     }
                 } else {
-                    Color.clear.frame(width: 76, height: 76)
+                    Color.clear.frame(width: size, height: size)
                 }
                 digit("0")
                 if canDelete {
@@ -137,7 +167,7 @@ private struct Keypad: View {
                         Image(systemName: "delete.left").font(.system(size: 24))
                     }
                 } else {
-                    Color.clear.frame(width: 76, height: 76)
+                    Color.clear.frame(width: size, height: size)
                 }
             }
         }
@@ -153,7 +183,7 @@ private struct Keypad: View {
     }
 
     private func key(_ label: String, filled: Bool, action: @escaping () -> Void, @ViewBuilder label content: () -> some View) -> some View {
-        Button(action: action) { content().frame(width: 76, height: 76) }
+        Button(action: action) { content().frame(width: size, height: size) }
             .buttonStyle(KeyStyle(filled: filled))
             .disabled(!enabled)
             .accessibilityLabel(label)

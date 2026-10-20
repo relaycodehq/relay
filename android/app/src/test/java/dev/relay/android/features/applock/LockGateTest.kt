@@ -57,6 +57,23 @@ class LockGateTest {
         assertTrue(long.locked)
     }
 
+    @Test fun aTripTooShortToLeaveDoesntExcuseTheNextLeave() {
+        val gate = LockGate(on = false)
+        gate.ownTrip(now = 0)
+        // Back before the app stopped: no left/back, only the result.
+        gate.ownTripOver()
+        gate.left(on(), now = 5_000)
+        assertTrue(gate.locked)
+
+        // Away long enough to stop, the result can come before the app starts again.
+        val away = LockGate(on = false)
+        away.ownTrip(now = 0)
+        away.left(on(), now = 10)
+        away.ownTripOver()
+        away.back(on(), now = 30_000)
+        assertFalse(away.locked)
+    }
+
     @Test fun noLockNoLocking() {
         val gate = LockGate(on = false)
         gate.left(LockSettings(), now = 0)

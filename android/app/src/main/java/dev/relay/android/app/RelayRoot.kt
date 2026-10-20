@@ -86,13 +86,20 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
     val appearance = overview?.appearance
     val colors = remember(prefs.themeMode, systemDark, appearance) { resolveColors(prefs.themeMode, appearance?.toDesktop(), systemDark) }
     RelayTheme(colors) {
+        val backStack = rememberNavBackStack(Route.Home)
         // A window over the rest, so it's here whatever else is: a crash's page, open sheets.
-        LockOverlay(container.lock, container::forgetComputers)
+        LockOverlay(container.lock) {
+            // Forgot PIN: every computer goes, as the lock did.
+            remote.forgetAll()
+            // The screens open under the lock go too, and their models with them: a file or a diff
+            // they had read would show again past a PIN nobody typed.
+            backStack.clear()
+            backStack.add(Route.Home)
+        }
         if (crash != null) {
             SystemBars(dark = colors.isDark)
             return@RelayTheme CrashScreen(crash, onCrashSeen)
         }
-        val backStack = rememberNavBackStack(Route.Home)
         val top = backStack.lastOrNull() as? Route
         // Pairing is always dark, whatever the theme.
         SystemBars(dark = colors.isDark || top is Route.Pair)

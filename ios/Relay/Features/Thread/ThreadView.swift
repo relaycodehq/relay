@@ -8,6 +8,7 @@ struct ThreadView: View {
     var rootId: String?
     @Environment(Connection.self) private var connection
     @Environment(\.scenePhase) private var phase
+    @Environment(AppLock.self) private var lock
     @Environment(\.navigate) private var navigate
 
     private var thread: RemoteChat? { connection.threads[chatId] }
@@ -190,16 +191,16 @@ struct ThreadView: View {
         .navigationSubtitle(headerLine)
         .ciStatus(projectId: projectId, chatId: chatId, running: summary?.running == true, shown: rootId == nil)
         .navigationBarTitleDisplayMode(.inline)
-        // Open on the phone counts as read, but only while the app is in front:
+        // Open on the phone counts as read, but only while the app is in front and unlocked:
         // answers that land in the background are marked when it comes back.
         .threadMenu(chatId: chatId, shown: rootId == nil, notes: $notes, leavingUnread: $leavingUnread)
         .threadNotes(chatId: chatId, shown: rootId == nil, entry: $notes, present: Set(shown.map(\.id))) { [composer] in
             composer.compose($0, nil)
         } show: { jump = MessageJump(id: $0) }
         .turnHaptics(rootId == nil ? summary : nil, answer: thread.flatMap { mainMessages($0.messages).last(where: isAnswer) })
-        .task(id: SeenMark(updated: summary?.updated, snoozedUntil: summary?.snoozedUntil, front: phase == .active,
+        .task(id: SeenMark(updated: summary?.updated, snoozedUntil: summary?.snoozedUntil, front: phase == .active && !lock.locked,
                 online: connection.status.state == .online)) {
-            guard let updated = summary?.updated, phase == .active, !leavingUnread else { return }
+            guard let updated = summary?.updated, phase == .active, !lock.locked, !leavingUnread else { return }
             let until = summary?.snoozedUntil
             connection.markSeen(chatId, updated: updated, snoozedUntil: until)
             // Read on past the wake time when it comes while you're looking.

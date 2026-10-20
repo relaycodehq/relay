@@ -34,6 +34,7 @@ class AppLock(
 
     /** Relay is sending the reader somewhere and expects them back: a picker, the camera. */
     fun ownTrip() = gate.ownTrip(clock())
+    fun ownTripOver() = gate.ownTripOver()
 
     /** Checks [pin], counting wrong ones; right, it unlocks. Settings ask this too before a change. */
     suspend fun tryPin(pin: String): Attempt = withContext(Dispatchers.Default) {
