@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
+  AlertCircle,
   ChevronRight,
   FolderGit2,
   FolderPlus,
@@ -308,18 +309,29 @@ export function PullRequestsPage({
           </button>
         </div>
       </header>
-      {failures.map(({ server, error }) => (
-        <ErrorBox
-          key={server}
-          error={`Couldn’t load pull requests from ${pullHostName(server)}: ${errorMessage(error)}`}
-          retry={() => {
-            // A refused sign-in may come back as another account.
-            onRecheckHosts();
-            retry(server);
-          }}
-        />
-      ))}
-      {!!hostError && <ErrorBox error={hostError} retry={onRecheckHosts} />}
+      {(!!failures.length || !!hostError) && (
+        <div className="pulls-notices">
+          {failures.map(({ server, error }) => (
+            <PullLoadNotice
+              key={server}
+              title={`${pullHostName(server)} unavailable`}
+              error={error}
+              onReload={() => {
+                // A refused sign-in may come back as another account.
+                onRecheckHosts();
+                retry(server);
+              }}
+            />
+          ))}
+          {!!hostError && (
+            <PullLoadNotice
+              title="Provider unavailable"
+              error={hostError}
+              onReload={onRecheckHosts}
+            />
+          )}
+        </div>
+      )}
       {!!pending.length && !loading && !query && (
         <p className="pulls-note" role="status">
           {waiting}
@@ -358,6 +370,45 @@ export function PullRequestsPage({
         />
       )}
     </div>
+  );
+}
+
+/** A connection hiccup stays beside the results, with the full error on demand. */
+function PullLoadNotice({
+  title,
+  error,
+  onReload,
+}: {
+  title: string;
+  error: unknown;
+  onReload: () => void;
+}) {
+  return (
+    <section className="pulls-notice" role="alert" aria-label={title}>
+      <div className="pulls-notice-main">
+        <AlertCircle size={16} aria-hidden="true" />
+        <div className="pulls-notice-copy">
+          <strong>{title}</strong>
+          <span>Some pull requests may be missing.</span>
+        </div>
+        <button
+          type="button"
+          className="pulls-notice-reload"
+          aria-label={`Reload: ${title}`}
+          onClick={onReload}
+        >
+          <RefreshCw size={13} aria-hidden="true" />
+          Reload
+        </button>
+      </div>
+      <details className="pulls-notice-details">
+        <summary>
+          Details
+          <ChevronRight size={12} aria-hidden="true" />
+        </summary>
+        <p>{errorMessage(error)}</p>
+      </details>
+    </section>
   );
 }
 

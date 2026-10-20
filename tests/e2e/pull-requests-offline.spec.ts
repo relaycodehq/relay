@@ -88,18 +88,36 @@ test("shows available PRs while a search is stalled and recovers its connection 
     phase = "offline";
     for (const response of held) response.destroy();
     const warning = board.getByRole("alert");
-    await expect(warning).toContainText(
-      "Couldn’t load pull requests from Gitea",
-    );
-    await expect(warning).toContainText("Could not connect");
+    await expect(warning).toContainText("Gitea unavailable");
+    const details = warning.locator(".pulls-notice-details p");
+    await expect(details).toBeHidden();
     await expect(
       board.getByRole("button", { name: /Available PR/ }).first(),
     ).toBeVisible();
     await expect(board.getByRole("status")).toHaveCount(0);
     await page.screenshot({ path: join(tmpdir(), "relay-pr-offline.png") });
+    await warning.screenshot({ path: join(tmpdir(), "relay-pr-notice.png") });
+    expect((await warning.boundingBox())!.width).toBeLessThanOrEqual(390);
+    await page.setViewportSize({ width: 900, height: 850 });
+    await warning.getByText("Details", { exact: true }).click();
+    await expect(details).toBeVisible();
+    await expect(details).toContainText("Could not connect");
+    expect(
+      await warning.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    expect(
+      await board.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: join(tmpdir(), "relay-pr-notice-expanded.png"),
+    });
 
     phase = "online";
-    await warning.getByRole("button", { name: "Try again" }).click();
+    await warning.getByRole("button", { name: /Reload/ }).click();
     await expect(
       board.getByRole("button", { name: /Recovered PR/ }).first(),
     ).toBeVisible();
@@ -112,9 +130,7 @@ test("shows available PRs while a search is stalled and recovers its connection 
     available = false;
     phase = "offline";
     await board.getByRole("radio", { name: "Closed", exact: true }).click();
-    await expect(warning).toContainText(
-      "Couldn’t load pull requests from Gitea",
-    );
+    await expect(warning).toContainText("Gitea unavailable");
     await expect(
       board.getByRole("heading", {
         name: "No pull requests loaded",

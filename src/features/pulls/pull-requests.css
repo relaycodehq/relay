@@ -49,7 +49,88 @@
   margin-left: auto;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  max-width: 100%;
   gap: 10px;
+}
+
+.pulls-notices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  margin-bottom: 24px;
+}
+.pulls-notice {
+  width: min(100%, 390px);
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.pulls-notice-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pulls-notice-main > svg {
+  flex: none;
+  color: var(--danger);
+}
+.pulls-notice-copy {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  overflow-wrap: anywhere;
+}
+.pulls-notice-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+.pulls-notice-copy span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.pulls-notice-reload {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.pulls-notice-details {
+  min-width: 0;
+  margin: 9px 0 0 26px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.pulls-notice-details summary {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  width: fit-content;
+  list-style: none;
+  cursor: pointer;
+}
+.pulls-notice-details summary::-webkit-details-marker {
+  display: none;
+}
+.pulls-notice-details[open] summary svg {
+  transform: rotate(90deg);
+}
+.pulls-notice-details summary:hover {
+  color: var(--text);
+}
+.pulls-notice-details p {
+  margin: 7px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 /* Beats the global label, which stacks its children. */
 .pulls-search {
