@@ -1,8 +1,9 @@
 import { persistedStore } from "./persisted-store";
+import { fileSetting, storedBefore } from "./settings-file";
 
 /**
  * Fonts and sizes per surface: the interface, the prompt box, code and the
- * terminal. A per-device preference like the theme. A chosen family goes in
+ * terminal, kept in settings.json. A chosen family goes in
  * front of the default stack, so glyphs it lacks still come from somewhere.
  *
  * The interface size zooms the whole window, spacing included, the way
@@ -53,42 +54,96 @@ export const defaultTypography: Typography = {
 
 const range = (from: number, to: number) =>
   Array.from({ length: to - from + 1 }, (_, i) => from + i);
+/** What Settings offers; settings.json may hold any size within `limits`. */
 export const sizes = {
   interfaceSize: range(11, 16),
   promptSize: [FOLLOW_INTERFACE, ...range(11, 18)],
   codeSize: range(10, 18),
   terminalSize: range(9, 20),
 };
+const limits = {
+  interfaceSize: [9, 22],
+  promptSize: [8, 32],
+  codeSize: [8, 32],
+  terminalSize: [8, 32],
+} satisfies Record<keyof typeof sizes, [number, number]>;
 
-const STORAGE_KEY = "relay-typography";
-const store = persistedStore(STORAGE_KEY, parseTypography, JSON.stringify);
+type Saved = Omit<Typography, "advanced">;
 
-function parseTypography(raw: string | null): Typography {
-  try {
-    const saved = JSON.parse(raw ?? "{}");
-    const family = (v: unknown) =>
-      typeof v === "string" ? v.trim().slice(0, 100) : "";
-    const size = (key: keyof typeof sizes) =>
-      sizes[key].includes(saved[key]) ? saved[key] : defaultTypography[key];
-    const flag = (key: "smoothing" | "wrap" | "advanced") =>
-      typeof saved[key] === "boolean" ? saved[key] : defaultTypography[key];
-    return {
-      sans: family(saved.sans),
-      interfaceSize: size("interfaceSize"),
-      prompt: family(saved.prompt),
-      promptSize: size("promptSize"),
-      mono: family(saved.mono),
-      codeSize: size("codeSize"),
-      terminal: family(saved.terminal),
-      terminalSize: size("terminalSize"),
-      smoothing: flag("smoothing"),
-      wrap: flag("wrap"),
-      advanced: flag("advanced"),
-    };
-  } catch {
-    return defaultTypography;
-  }
+/** Each setting's name in settings.json, where people read and type it. */
+const fileKeys = {
+  sans: "interfaceFont",
+  interfaceSize: "interfaceSize",
+  prompt: "promptFont",
+  promptSize: "promptSize",
+  mono: "codeFont",
+  codeSize: "codeSize",
+  terminal: "terminalFont",
+  terminalSize: "terminalSize",
+  smoothing: "fontSmoothing",
+  wrap: "wrapCode",
+} as const satisfies Record<keyof Saved, string>;
+
+const families = ["sans", "prompt", "mono", "terminal"] as const;
+const flags = ["smoothing", "wrap"] as const;
+
+/** `saved`'s value for `key` if it reads as one; undefined otherwise. */
+function read(key: keyof Saved, value: unknown) {
+  if ((families as readonly string[]).includes(key))
+    return typeof value === "string" ? value.trim().slice(0, 100) : undefined;
+  if ((flags as readonly string[]).includes(key))
+    return typeof value === "boolean" ? value : undefined;
+  const [min, max] = limits[key as keyof typeof limits];
+  return typeof value === "number" &&
+    ((key === "promptSize" && value === FOLLOW_INTERFACE) ||
+      (value >= min && value <= max))
+    ? value
+    : undefined;
 }
+
+/** Each setting under `name`, or its default where it's missing or doesn't read. */
+function fill(saved: unknown, name: (key: keyof Saved) => string): Saved {
+  const section =
+    saved && typeof saved === "object"
+      ? (saved as Record<string, unknown>)
+      : {};
+  const value = {} as Record<keyof Saved, unknown>;
+  for (const key of Object.keys(fileKeys) as (keyof Saved)[])
+    value[key] = read(key, section[name(key)]) ?? defaultTypography[key];
+  return value as Saved;
+}
+
+function serialize(value: Saved) {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(fileKeys) as (keyof Saved)[])
+    if (value[key] !== defaultTypography[key]) out[fileKeys[key]] = value[key];
+  return out;
+}
+
+/** What earlier builds kept in localStorage, the advanced switch with it. */
+function parseLegacy(raw: string): Typography {
+  const saved = JSON.parse(raw) as Record<string, unknown>;
+  return { ...fill(saved, (key) => key), advanced: saved.advanced === true };
+}
+
+const ADVANCED_KEY = "relay-typography-advanced";
+const LEGACY_KEY = "relay-typography";
+const legacy = storedBefore(LEGACY_KEY, parseLegacy);
+// The switch only shows rows; it stays with this window's state, not the file.
+const advanced = persistedStore(
+  ADVANCED_KEY,
+  (saved) => saved === "1",
+  (on) => (on ? "1" : null),
+);
+const before = legacy.read();
+if (before?.advanced) advanced.set(true);
+
+const store = fileSetting<Saved>({
+  path: ["typography"],
+  parse: (saved) => fill(saved, (key) => fileKeys[key]),
+  serialize,
+  legacy,
+});
 
 /** `family` quoted for CSS, ahead of `fallback`. */
 export function fontStack(family: string, fallback: string) {
@@ -96,14 +151,14 @@ export function fontStack(family: string, fallback: string) {
   return `"${family.replace(/["\\]/g, "")}", ${fallback}`;
 }
 
-const interfaceScale = (t: Typography) => t.interfaceSize / BASE_SIZE;
+const interfaceScale = (t: Saved) => t.interfaceSize / BASE_SIZE;
 
 /** `size` pixels as they have to be written inside the zoomed window. */
-const unzoomed = (t: Typography, size: number) =>
+const unzoomed = (t: Saved, size: number) =>
   +(size / interfaceScale(t)).toFixed(3);
 
 /** The terminal's family and size, which xterm takes as options. */
-export function terminalFont(t: Typography) {
+export function terminalFont(t: Saved) {
   return {
     family: fontStack(t.terminal, fontStack(t.mono, DEFAULT_MONO)),
     size: unzoomed(t, t.terminalSize),
@@ -147,8 +202,14 @@ export function initTypography() {
   apply();
 }
 
-export function setTypography(patch: Partial<Typography>) {
-  store.set({ ...store.get(), ...patch });
+export function setTypography({
+  advanced: showAdvanced,
+  ...patch
+}: Partial<Typography>) {
+  if (showAdvanced !== undefined) advanced.set(showAdvanced);
+  if (Object.keys(patch).length) store.set({ ...store.get(), ...patch });
 }
 
-export const useTypography = store.use;
+export function useTypography(): Typography {
+  return { ...store.use(), advanced: advanced.use() };
+}

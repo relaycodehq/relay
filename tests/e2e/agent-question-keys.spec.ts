@@ -113,15 +113,13 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
     };
     await openAnswered();
     for (const theme of ["dark", "light"]) {
-      await page.evaluate((theme) => {
-        const appearance = JSON.parse(
-          localStorage.getItem("relay-appearance") ?? "{}",
-        );
-        localStorage.setItem(
-          "relay-appearance",
-          JSON.stringify({ ...appearance, mode: theme }),
-        );
-      }, theme);
+      await page.evaluate(
+        (theme) =>
+          window.relay.updateSettingsFile([
+            { path: ["appearance", "mode"], value: theme },
+          ]),
+        theme,
+      );
       await page.reload();
       await openAnswered();
       await page.screenshot({

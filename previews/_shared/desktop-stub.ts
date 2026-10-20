@@ -36,22 +36,44 @@ const claudeModels: ClaudeModel[] = [
   },
 ];
 
-// Previews open in the dark Dracula theme the desktop app usually runs;
-// the colour toggle keeps whatever you pick after that.
-if (!localStorage.getItem("relay-appearance"))
-  localStorage.setItem(
-    "relay-appearance",
-    JSON.stringify({
-      mode: "dark",
-      light: { theme: "relay" },
-      dark: { theme: "dracula" },
-    }),
-  );
+// settings.json, kept in the tab's localStorage. Previews open in the dark
+// Dracula theme the desktop app usually runs; the colour toggle keeps
+// whatever you pick after that.
+const SETTINGS_KEY = "preview-settings-file";
+const readSettings = (): Record<string, unknown> => {
+  try {
+    return (
+      JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? "null") ?? {
+        appearance: { mode: "dark", dark: { theme: "dracula" } },
+      }
+    );
+  } catch {
+    return {};
+  }
+};
+const settingsState = () => ({
+  path: "~/.config/relay/settings.json",
+  values: readSettings(),
+});
 
 const hour = 60 * 60 * 1000;
 let smartProjectNames =
   localStorage.getItem("preview-smart-project-names") !== "false";
 const stub: Partial<Api> = {
+  settingsFileAtStart: settingsState,
+  updateSettingsFile: async (edits) => {
+    const values = readSettings();
+    for (const { path, value } of edits) {
+      let here = values;
+      for (const key of path.slice(0, -1))
+        here = (here[key] ??= {}) as Record<string, unknown>;
+      if (value === undefined) delete here[path.at(-1)!];
+      else here[path.at(-1)!] = value;
+    }
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(values));
+    return settingsState();
+  },
+  onSettingsFile: () => () => {},
   smartProjectNames: async () => smartProjectNames,
   saveSmartProjectNames: async (enabled) => {
     localStorage.setItem("preview-smart-project-names", String(enabled));

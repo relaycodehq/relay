@@ -2,6 +2,7 @@ import type { SettingEntry } from "../settings-search";
 import { useUpdates } from "../../updates/updates";
 import { Changelog } from "../../updates/Changelog";
 import { UpdateCheck, updateLine } from "../../updates/UpdateCheck";
+import { SettingsFileSetting } from "../SettingsFileSetting";
 
 export function useAboutEntries(): SettingEntry[] {
   // Releases stamp their own version at build time; the updater knows it.
@@ -14,6 +15,17 @@ export function useAboutEntries(): SettingEntry[] {
       description: updateLine(updates),
       keywords: "version about check for updates upgrade",
       render: () => <UpdateCheck />,
+    },
+    {
+      id: "settings-file",
+      category: "about",
+      title: "Settings file",
+      description:
+        "Fonts, theme, chat width, the send key, keeping awake and when threads settle live in settings.json. Change it in any editor, from a script or with relay settings, and Relay follows at once.",
+      keywords:
+        "settings.json config configuration file dotfiles json edit script jq hot reload xdg typography font size theme keep awake settle",
+      block: true,
+      render: () => <SettingsFileSetting />,
     },
     {
       id: "changelog",

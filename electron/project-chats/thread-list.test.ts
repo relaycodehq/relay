@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { defaultPrefs } from "../settings";
 import { ThreadList } from "./thread-list";
 import type { ChatCore } from "./core";
 import { ActiveTurns } from "./active";
@@ -27,7 +28,8 @@ it("counts blocking requests from helpers even when the parent keeps running", (
   const input = { provider: "claude", body: "" } as ProjectChatSend;
   const held = [running.claim("parent", input), running.claim("helper", input)];
   const core = {
-    store: { get: () => ({ chats: [parent, helper], autoSettleDays: null }) },
+    store: { get: () => ({ chats: [parent, helper] }) },
+    prefs: () => ({ ...defaultPrefs, autoSettleDays: null }),
     projects: { get: () => ({ settings: {} }) },
     active: running,
     sessions: { pending: () => [] },

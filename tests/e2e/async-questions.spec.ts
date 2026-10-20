@@ -241,15 +241,13 @@ test("async Codex questions allow explicit choices and free text during and afte
       ),
     ).toBe(true);
     for (const theme of ["dark", "light"]) {
-      await page.evaluate((theme) => {
-        const appearance = JSON.parse(
-          localStorage.getItem("relay-appearance") ?? "{}",
-        );
-        localStorage.setItem(
-          "relay-appearance",
-          JSON.stringify({ ...appearance, mode: theme }),
-        );
-      }, theme);
+      await page.evaluate(
+        (theme) =>
+          window.relay.updateSettingsFile([
+            { path: ["appearance", "mode"], value: theme },
+          ]),
+        theme,
+      );
       await page.reload();
       await expect(answered).toHaveCount(2);
       await expect(answered.last()).toHaveAttribute("open", "");

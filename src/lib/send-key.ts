@@ -1,29 +1,35 @@
 import type { KeyboardEvent } from "react";
 import { mac } from "./mod-key";
-import { persistedStore } from "./persisted-store";
+import { fileSetting, storedBefore } from "./settings-file";
 
 /**
  * Which key sends a chat message: Enter (Shift+Enter for a new line),
- * Shift+Enter or ⌘/Ctrl+Enter (Enter for a new line). A per-device
- * preference like the theme, so it lives in localStorage rather than settings.
+ * Shift+Enter or ⌘/Ctrl+Enter (Enter for a new line). Kept in settings.json.
  */
 export type SendKey = "enter" | "shift-enter" | "mod-enter";
-const sendKey = persistedStore<SendKey>(
-  "relay-send-key",
-  (saved) =>
-    saved === "mod-enter" || saved === "shift-enter" ? saved : "enter",
-  (key) => key,
-);
+const sendKeys: SendKey[] = ["enter", "shift-enter", "mod-enter"];
+const sendKey = fileSetting<SendKey>({
+  path: ["chat", "sendKey"],
+  parse: (saved) =>
+    sendKeys.includes(saved as SendKey) ? (saved as SendKey) : "enter",
+  serialize: (key) => (key === "enter" ? undefined : key),
+  legacy: storedBefore("relay-send-key", (raw) =>
+    sendKeys.includes(raw as SendKey) ? (raw as SendKey) : undefined,
+  ),
+});
 export const setSendKey = sendKey.set;
 export const useSendKey = sendKey.use;
 
 /** What the send key and button do while an answer is running. */
 export type RunningSendAction = "queue" | "steer";
-const runningSendAction = persistedStore<RunningSendAction>(
-  "relay-running-send-action",
-  (saved) => (saved === "steer" ? "steer" : "queue"),
-  (action) => action,
-);
+const runningSendAction = fileSetting<RunningSendAction>({
+  path: ["chat", "sendWhileRunning"],
+  parse: (saved) => (saved === "steer" ? "steer" : "queue"),
+  serialize: (action) => (action === "queue" ? undefined : action),
+  legacy: storedBefore("relay-running-send-action", (raw) =>
+    raw === "steer" ? "steer" : undefined,
+  ),
+});
 export const setRunningSendAction = runningSendAction.set;
 export const useRunningSendAction = runningSendAction.use;
 

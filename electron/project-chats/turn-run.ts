@@ -202,8 +202,8 @@ export class TurnRunner {
     // The thread's own turns, including the ones Claude starts when a
     // background subagent ends. Claude asks beside its live session, Codex
     // and OpenCode in a throwaway fork of the thread, as Codex's /side does.
-    const { watchThreads: scope = "off", watchKnown: known = [] } =
-      this.core.store.get();
+    const scope = this.core.prefs().watchThreads;
+    const known = this.core.store.get().watchKnown ?? [];
     const threadNotes = chat.messages.flatMap((m) => m.notes ?? []);
     const watch: AgentWatch | undefined =
       scope !== "off" &&

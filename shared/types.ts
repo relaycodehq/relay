@@ -663,6 +663,19 @@ export interface Api
   autoCompact(): Promise<AutoCompact>;
   saveAutoCompact(value: AutoCompact): Promise<AutoCompact>;
   onAutoCompact(callback: (value: AutoCompact) => void): () => void;
+  /** settings.json as Relay last read it, answered at once so a window starts with it. */
+  settingsFileAtStart(): import("./settings-file").SettingsFileState;
+  /** Puts each value in settings.json, or removes its key; what the file holds then. */
+  updateSettingsFile(
+    edits: import("./settings-file").SettingsEdit[],
+  ): Promise<import("./settings-file").SettingsFileState>;
+  /** Opens settings.json in the app that edits it, making it first if need be. */
+  openSettingsFile(): Promise<void>;
+  revealSettingsFile(): Promise<void>;
+  /** settings.json changed outside this window: a script, an editor or another window. */
+  onSettingsFile(
+    callback: (state: import("./settings-file").SettingsFileState) => void,
+  ): () => void;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
   /**
@@ -811,7 +824,10 @@ export interface Api
 }
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */
-export type ApiMethod = Exclude<keyof Api, `on${string}` | "pathForFile">;
+export type ApiMethod = Exclude<
+  keyof Api,
+  `on${string}` | "pathForFile" | "settingsFileAtStart"
+>;
 export const emptyProgress = (): Progress => ({
   read: {},
   drafts: [],

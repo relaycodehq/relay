@@ -618,7 +618,9 @@ test("the focus note keeps the send key set for messages", async () => {
   const { page, close } = await openProject();
   try {
     await page.evaluate(() =>
-      localStorage.setItem("relay-send-key", "mod-enter"),
+      window.relay.updateSettingsFile([
+        { path: ["chat", "sendKey"], value: "mod-enter" },
+      ]),
     );
     await page.reload();
     await page

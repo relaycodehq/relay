@@ -26,8 +26,6 @@ interface State {
   projectGroups?: string[];
   /** Prettify automatic project names; unset keeps the original default (on). */
   smartProjectNames?: boolean;
-  /** Keep the computer from idling to sleep while Relay runs; unset is on. */
-  keepAwake?: boolean;
   /** Look for newer agent releases every few hours and offer them under the sidebar; unset is on. */
   agentUpdateChecks?: boolean;
   /** When big conversations compact unasked; unset is both off. */
@@ -36,8 +34,6 @@ interface State {
   sounds?: import("../../shared/sounds").SoundSettings;
   /** Sound files added in Settings → Sounds, kept in `sounds/` under app data. */
   customSounds?: import("../sounds").StoredCustomSound[];
-  /** Flag what I'd miss in Claude threads; unset is off. */
-  watchThreads?: import("../../shared/watch").WatchScope;
   /** When agents show pages in answers; unset is auto. */
   renderMode?: import("../../shared/html-render").RenderMode;
   /** Topics the watcher was told are already known, newest last. */
@@ -53,10 +49,6 @@ interface State {
   mainWindow?: import("../../shared/thread-windows").SavedMainWindow;
   /** Frosted glass, on unless the page last said off; windows then start clear. */
   glass?: boolean;
-  /** Days without activity before a thread settles; null never, unset the default. */
-  autoSettleDays?: number | null;
-  /** Days after settling before a thread's worktree is removed; null never, unset the default. */
-  worktreeCleanupDays?: number | null;
   chats?: import("../../shared/projects").ChatSummary[];
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */

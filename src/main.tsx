@@ -26,6 +26,7 @@ import { threadWindowOf } from "../shared/thread-windows";
 import { startDraftSync } from "./features/composer/draft-sync";
 import { followHeldSends } from "./features/composer/held-sends";
 import { DragTray } from "./features/bug-report/DragTray";
+import { followMainSettings } from "./features/settings/follow-main-settings";
 const search = new URLSearchParams(location.search);
 // The menubar's hidden sound player loads this page too, for its sounds
 // alone, and so does the hidden one that sends a phone's draft.
@@ -69,6 +70,7 @@ function startApp() {
   });
   if (window.relay) {
     followChatEvents(client);
+    followMainSettings(client);
     followThreadWindows();
     // The main window plays every thread's sounds, its own windows' too.
     if (!thread) followSounds(client);

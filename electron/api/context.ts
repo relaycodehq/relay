@@ -37,6 +37,7 @@ import type { DragTray } from "../bug-report/drag-tray";
 import type { BugReports } from "../bug-report/service";
 import type { TreeWatch } from "../git/tree-watch";
 import type { ElsewhereWatch } from "../git/elsewhere-watch";
+import type { SettingsFile } from "../settings";
 
 export interface Services {
   store: Store;
@@ -80,6 +81,8 @@ export interface Services {
   treeWatch?: TreeWatch;
   /** Tells windows when other repositories a thread changed files in may have; absent headless. */
   elsewhereWatch?: ElsewhereWatch;
+  /** settings.json, which windows follow and the main process reads. */
+  settingsFile: SettingsFile;
 }
 
 /** What a method's promise resolves to in the page. */

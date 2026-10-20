@@ -4,11 +4,14 @@ import "./imported-themes";
 import "./readable-syntax";
 import {
   applyToDocument,
+  forgetStoredAppearance,
+  hasStoredAppearance,
   loadAppearance,
+  parseAppearance,
   resolveAppearance,
   resolveChoice,
+  serializeAppearance,
   tokens,
-  saveAppearance,
   type Appearance,
   type AppearanceMode,
   type ResolvedAppearance,
@@ -18,9 +21,23 @@ import {
 import { relayIconPng } from "./relay-icon";
 import { setTitleBarBase } from "./titlebar-tint";
 import { mac } from "./mod-key";
+import { fileSetting } from "./settings-file";
 import type { PhonePalette } from "../../shared/remote";
 
-let value: Appearance = loadAppearance();
+const store = fileSetting<Appearance>({
+  path: ["appearance"],
+  parse: parseAppearance,
+  serialize: serializeAppearance,
+  legacy: {
+    read: () => (hasStoredAppearance() ? loadAppearance() : undefined),
+    forget: forgetStoredAppearance,
+  },
+});
+let value: Appearance = store.get();
+store.subscribe(() => {
+  value = store.get();
+  apply();
+});
 let resolved: ResolvedAppearance;
 const listeners = new Set<() => void>();
 const media = matchMedia("(prefers-color-scheme: dark)");
@@ -113,9 +130,7 @@ export function initAppearance() {
 }
 
 function update(next: Appearance) {
-  value = next;
-  saveAppearance(value);
-  apply();
+  store.set(next);
 }
 
 export function setGlass(glass: boolean) {

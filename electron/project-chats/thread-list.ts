@@ -1,14 +1,9 @@
-import {
-  autoSettledAt,
-  DEFAULT_AUTO_SETTLE_DAYS,
-  settledSince,
-} from "../../shared/chat-activity";
+import { autoSettledAt, settledSince } from "../../shared/chat-activity";
 import type {
   ChatPending,
   ChatSummary,
   ProjectSettings,
 } from "../../shared/projects";
-import { DEFAULT_WORKTREE_CLEANUP_DAYS } from "../../shared/projects";
 import { inSetup } from "../../shared/handoff";
 import { working, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
@@ -36,7 +31,9 @@ function awaySummary(
   const { asking: _a, stopped: _s, limitResume: _l, goal: _g, ...rest } = c;
   return {
     ...rest,
-    ...(running ? { running, runningSince, runningAgents, waiting: !!waiting } : {}),
+    ...(running
+      ? { running, runningSince, runningAgents, waiting: !!waiting }
+      : {}),
     ...(waiting && !running ? { waiting } : {}),
     ...(blocked ? { blocked } : {}),
     ...(asking ? { asking } : {}),
@@ -51,12 +48,10 @@ function awaySummary(
 export class ThreadList {
   constructor(private core: ChatCore) {}
   autoSettleDays(): number | null {
-    const days = this.core.store.get().autoSettleDays;
-    return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
+    return this.core.prefs().autoSettleDays;
   }
   worktreeCleanupDays(): number | null {
-    const days = this.core.store.get().worktreeCleanupDays;
-    return days === undefined ? DEFAULT_WORKTREE_CLEANUP_DAYS : days;
+    return this.core.prefs().worktreeCleanupDays;
   }
   /** How the project's threads settle by themselves, its own settings first. */
   private settling(settings: ProjectSettings | undefined) {
@@ -135,7 +130,9 @@ export class ThreadList {
         // started beside it, then its reviewers' as they started.
         const turns = [
           ...ledger.inThread(c.id).filter(holdsThread),
-          ...(helpers.get(c.id) ?? []).sort((a, b) => a.startedAt - b.startedAt),
+          ...(helpers.get(c.id) ?? []).sort(
+            (a, b) => a.startedAt - b.startedAt,
+          ),
         ];
         const crew = turns.filter((t) => working(t.phase));
         const active = crew.find((t) => t.threadId === c.id) ?? crew[0];

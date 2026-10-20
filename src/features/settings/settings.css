@@ -1276,3 +1276,37 @@
   margin: 0;
   font-size: 12px;
 }
+
+.settings-file {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.settings-file code {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font: 12px var(--font-mono);
+}
+.settings-file .text-button {
+  flex: none;
+}
+.settings-file-note {
+  margin: 10px 0 6px;
+}
+.settings-file-example {
+  display: block;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: var(--code-background);
+  color: var(--code-foreground);
+  font: 12px var(--font-mono);
+  white-space: pre-wrap;
+}
+.settings-file-example + .error-box {
+  margin-top: 10px;
+}

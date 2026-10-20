@@ -53,4 +53,6 @@ export interface RelayEvents {
   "relay:elsewhere": string;
   /** When Relay compacts unasked, saved in any window. */
   "relay:auto-compact": import("./context-usage").AutoCompact;
+  /** settings.json changed outside the window it goes to. */
+  "relay:settings-file": import("./settings-file").SettingsFileState;
 }

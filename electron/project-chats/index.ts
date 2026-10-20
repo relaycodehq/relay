@@ -84,6 +84,7 @@ import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
+import { defaultPrefs, type AppPrefs } from "../settings";
 
 /** How often the ledger looks for turns that ended without saying. */
 const LEAK_CHECK_MS = 30_000;
@@ -138,6 +139,7 @@ export class ProjectChats {
       title?: string;
     }) => void,
     evidence?: (chat: ProjectChat, selection: LineQuestion) => Promise<unknown>,
+    prefs: () => AppPrefs = () => defaultPrefs,
   ) {
     this.storage = new ChatStorage(store, dir, (chatId, branch) =>
       this.sessions.isResuming(chatId, branch),
@@ -158,6 +160,7 @@ export class ProjectChats {
     this.leakCheck.unref();
     const core: ChatCore = {
       store,
+      prefs,
       projects,
       storage: this.storage,
       sessions: this.sessions,

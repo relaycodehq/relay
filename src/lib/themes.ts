@@ -405,6 +405,7 @@ function parseChoice(kind: ThemeKind, saved: unknown): ThemeChoice {
   };
 }
 
+/** What earlier builds kept in localStorage, in any of its formats. */
 export function loadAppearance(): Appearance {
   let saved: Record<string, unknown> = {};
   try {
@@ -430,23 +431,74 @@ export function loadAppearance(): Appearance {
     if (theme && !(theme.light && theme.dark))
       mode = theme.light ? "light" : "dark";
   }
+  return parseAppearance({ ...saved, mode });
+}
+
+export const defaultAppearance: Appearance = {
+  mode: "system",
+  light: { theme: "relay" },
+  dark: { theme: "relay" },
+  glass: true,
+  glassChat: true,
+  glassFrost: GLASS_FROST.default,
+  glassChatFrost: GLASS_CHAT_FROST.default,
+};
+
+/** settings.json's `appearance`; a key that's missing or doesn't read is its default. */
+export function parseAppearance(saved: unknown): Appearance {
+  const s = (saved && typeof saved === "object" ? saved : {}) as Record<
+    string,
+    unknown
+  >;
   return {
-    mode,
-    light: parseChoice("light", saved.light),
-    dark: parseChoice("dark", saved.dark),
-    glass: saved.glass !== false,
-    glassChat: saved.glassChat !== false,
-    glassFrost: parseFrost(saved.glassFrost, GLASS_FROST),
-    glassChatFrost: parseFrost(saved.glassChatFrost, GLASS_CHAT_FROST),
+    mode: ["system", "light", "dark"].includes(String(s.mode))
+      ? (s.mode as AppearanceMode)
+      : "system",
+    light: parseChoice("light", s.light),
+    dark: parseChoice("dark", s.dark),
+    glass: s.glass !== false,
+    glassChat: s.glassChat !== false,
+    glassFrost: parseFrost(s.glassFrost, GLASS_FROST),
+    glassChatFrost: parseFrost(s.glassChatFrost, GLASS_CHAT_FROST),
   };
 }
 
-export function saveAppearance(value: Appearance) {
+/** What settings.json keeps: only what differs from the defaults. */
+export function serializeAppearance(value: Appearance) {
+  const out: Record<string, unknown> = {};
+  for (const key of Object.keys(defaultAppearance) as (keyof Appearance)[]) {
+    if (key === "light" || key === "dark") {
+      const { theme, ...rest } = value[key];
+      const choice = {
+        ...(theme !== "relay" && { theme }),
+        ...Object.fromEntries(
+          Object.entries(rest).filter(([, v]) => v !== undefined),
+        ),
+      };
+      if (Object.keys(choice).length) out[key] = choice;
+    } else if (value[key] !== defaultAppearance[key]) out[key] = value[key];
+  }
+  return out;
+}
+
+/** Whether an earlier build kept an appearance in localStorage. */
+export function hasStoredAppearance() {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    localStorage.setItem("theme", value.mode);
+    return (
+      localStorage.getItem(STORAGE_KEY) !== null ||
+      localStorage.getItem("theme") !== null
+    );
   } catch {
-    // The choice still applies for this session.
+    return false;
+  }
+}
+
+export function forgetStoredAppearance() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("theme");
+  } catch {
+    // Nothing to move then.
   }
 }
 

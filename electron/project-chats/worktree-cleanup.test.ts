@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defaultPrefs } from "../settings";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
@@ -279,7 +280,15 @@ describe("cleaning up a real thread's worktree", () => {
     await store.load();
     const projects = new Projects(store);
     const projectId = (await projects.add(repo, null)).id;
-    chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
+    let prefs = defaultPrefs;
+    chats = new ProjectChats(
+      store,
+      projects,
+      join(root, "chats"),
+      () => {},
+      undefined,
+      () => prefs,
+    );
     const thread = await chats.create(
       projectId,
       { kind: "project" },
@@ -294,9 +303,7 @@ describe("cleaning up a real thread's worktree", () => {
     git(worktree.path!, "add", "CHANGELOG.md");
     git(worktree.path!, "commit", "-qm", "Changelog");
     await chats.triage(thread.id, { kind: "settle" });
-    await store.update((s) => {
-      s.worktreeCleanupDays = 0;
-    });
+    prefs = { ...defaultPrefs, worktreeCleanupDays: 0 };
     return { chats, store, repo, id: thread.id, worktree };
   }
 

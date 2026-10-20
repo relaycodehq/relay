@@ -20,6 +20,13 @@ import {
 } from "./agents/acp";
 import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
+import { serveSettingsFile } from "./api/settings-file";
+import {
+  movePrefsToFile,
+  readPrefs,
+  SettingsFile,
+  settingsDir,
+} from "./settings";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
 import { GithubLogin } from "./pull-requests/github-login";
@@ -136,6 +143,7 @@ if (process.platform === "darwin")
 // CLI lookup waits for it.
 void pathReady();
 let store: Store | undefined;
+let settingsFile: SettingsFile | undefined;
 let projectChats: ProjectChats | undefined;
 /** The threads' browsers; unset until Relay has started. */
 let previews: ThreadPreviews | undefined;
@@ -184,7 +192,8 @@ const menubar = new Menubar(
   () => projectChats?.working() ?? 0,
 );
 const keepAwake = new KeepAwake({
-  enabled: () => store?.get().keepAwake ?? true,
+  enabled: () =>
+    settingsFile ? readPrefs(settingsFile.state().values).keepAwake : true,
   busy: () =>
     (projectChats?.working() ?? 0) > 0 || !!phoneRemote?.expectsCalls(),
 });
@@ -337,6 +346,29 @@ app
     const loaded = new Store(app.getPath("userData"));
     store = loaded;
     await loaded.load();
+    // Before any window: each page asks for it as it starts.
+    const file = new SettingsFile(
+      process.env.RELAY_TEST_DATA
+        ? join(app.getPath("userData"), "config")
+        : settingsDir({
+            platform: process.platform,
+            env: process.env,
+            home: app.getPath("home"),
+            appData: app.getPath("appData"),
+          }),
+      (state) => {
+        window.send("relay:settings-file", state);
+        // A script's change reaches what the main process does with it too.
+        void keepAwake.refresh();
+        projectChats?.summariesChanged();
+      },
+    );
+    settingsFile = file;
+    await file
+      .load()
+      .then(() => movePrefsToFile(loaded, file))
+      .catch((e) => console.warn("Could not read settings.json:", e));
+    serveSettingsFile(window, file);
     dictation.announce();
     const bugReports = setUpBugReports({
       github,
@@ -446,6 +478,7 @@ app
         phoneRemote?.chatEvent(event);
       },
       pullHosts.evidence,
+      () => readPrefs(file.state().values),
     );
     projectChats = chats;
     // Apart, so one that fails doesn't keep the news from the others.
@@ -555,6 +588,7 @@ app
       dragTray: dragTray(),
       treeWatch,
       elsewhereWatch,
+      settingsFile: file,
     });
     const dispatch: Dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {

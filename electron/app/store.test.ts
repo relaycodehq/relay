@@ -28,7 +28,7 @@ it("loads a save from before pull request rooms were removed and drops what they
   await store.load();
   expect(store.get().folders).toEqual({ a: "/code/a" });
   await store.update((s) => {
-    s.keepAwake = false;
+    s.smartProjectNames = false;
   });
   const saved = JSON.parse(await readFile(join(dir, "state.json"), "utf8"));
   expect(Object.keys(saved).filter((k) => k.startsWith("room"))).toEqual([]);

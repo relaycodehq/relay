@@ -23,6 +23,7 @@ import { reviewCheckoutHandlers } from "./review-checkout";
 import { reviewHandlers } from "./reviews";
 import { pluginHandlers } from "./plugins";
 import { settingsHandlers } from "./settings";
+import { settingsFileHandlers } from "./settings-file";
 import { soundHandlers } from "./sounds";
 import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
@@ -51,6 +52,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     previewHandlers(ctx),
     deviceHandlers(ctx),
     settingsHandlers(ctx),
+    settingsFileHandlers(ctx),
     readAloudHandlers(ctx),
     renderHandlers(ctx),
     soundHandlers(ctx),

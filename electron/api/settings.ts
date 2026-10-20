@@ -16,7 +16,6 @@ import {
 import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
 import { accountIdSchema } from "../../shared/agent-accounts";
-import { DEFAULT_AUTO_SETTLE_DAYS } from "../../shared/chat-activity";
 import { defaultAutoCompact } from "../../shared/context-usage";
 import { watchScopes } from "../../shared/watch";
 import { renderModes } from "../../shared/html-render";
@@ -43,6 +42,7 @@ import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../app/release-notes";
 import { devSwitchState, devSwitchTo } from "../app/dev-switch";
 import { releaseGitea } from "./account";
+import { readPrefs, savePref } from "../settings";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
@@ -53,6 +53,7 @@ const registryIdSchema = z.string().max(100).regex(registryIdPattern);
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
   const sourceControl = () => sourceControlStatus(store, ctx.login);
+  const prefs = () => readPrefs(ctx.settingsFile.state().values);
   /** A program picked in a file dialog; null when cancelled. */
   async function chooseProgram(
     program: string,
@@ -100,18 +101,14 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return enabled;
     }),
-    keepAwake: () => store.get().keepAwake ?? true,
+    keepAwake: () => prefs().keepAwake,
     saveKeepAwake: takes([z.boolean()], async (enabled) => {
-      await store.update((s) => {
-        s.keepAwake = enabled;
-      });
+      await savePref(ctx.settingsFile, "keepAwake", enabled);
       return enabled;
     }),
-    watchThreads: () => store.get().watchThreads ?? "off",
+    watchThreads: () => prefs().watchThreads,
     saveWatchThreads: takes([z.enum(watchScopes)], async (scope) => {
-      await store.update((s) => {
-        s.watchThreads = scope;
-      });
+      await savePref(ctx.settingsFile, "watchThreads", scope);
       return scope;
     }),
     renderMode: () => store.get().renderMode ?? "auto",
@@ -121,16 +118,11 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return mode;
     }),
-    autoSettleDays: () => {
-      const days = store.get().autoSettleDays;
-      return days === undefined ? DEFAULT_AUTO_SETTLE_DAYS : days;
-    },
+    autoSettleDays: () => prefs().autoSettleDays,
     saveAutoSettleDays: takes(
       [z.number().int().min(1).max(90).nullable()],
       async (days) => {
-        await store.update((s) => {
-          s.autoSettleDays = days;
-        });
+        await savePref(ctx.settingsFile, "autoSettleDays", days);
         ctx.projectChats.summariesChanged();
         return days;
       },
@@ -139,9 +131,7 @@ export function settingsHandlers(ctx: ApiContext) {
     saveWorktreeCleanupDays: takes(
       [z.number().int().min(0).max(90).nullable()],
       async (days) => {
-        await store.update((s) => {
-          s.worktreeCleanupDays = days;
-        });
+        await savePref(ctx.settingsFile, "worktreeCleanupDays", days);
         return days;
       },
     ),

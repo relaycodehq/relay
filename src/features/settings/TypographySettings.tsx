@@ -42,7 +42,11 @@ function SizeSelect({
       field="size-select"
       label={label}
       value={String(value)}
-      options={options.map((size) => ({
+      // settings.json may hold a size Settings doesn't offer; it still shows.
+      options={(options.includes(value)
+        ? options
+        : [...options, value].sort((a, b) => a - b)
+      ).map((size) => ({
         value: String(size),
         label: size === FOLLOW_INTERFACE ? "Match interface" : `${size} px`,
       }))}

@@ -1,6 +1,7 @@
 import type { ProjectChatEvent } from "../../shared/events";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
+import type { AppPrefs } from "../settings";
 import type { ActiveTurns } from "./active";
 import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";
@@ -16,6 +17,8 @@ export type AwayLive = Omit<HandoffLive, "runningFor"> & {
 /** What every part of a project's threads shares; one of each per `ProjectChats`. */
 export interface ChatCore {
   store: Store;
+  /** settings.json's preferences as they are now. */
+  prefs: () => AppPrefs;
   projects: Projects;
   storage: ChatStorage;
   sessions: ProviderSessions;

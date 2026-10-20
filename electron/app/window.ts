@@ -259,7 +259,7 @@ export class AppWindow {
   }
 
   /** Only Relay's own page, in a Relay window's main frame, may call the API. */
-  trusts(event: IpcMainInvokeEvent) {
+  trusts(event: Pick<IpcMainInvokeEvent, "sender" | "senderFrame">) {
     const win = [...this.all(), ...this.helpers].find(
       (w) => w.webContents === event.sender,
     );

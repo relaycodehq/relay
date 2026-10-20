@@ -406,6 +406,9 @@ const methods = [
   "dragTrayFiles",
   "dragTrayFile",
   "closeDragTray",
+  "updateSettingsFile",
+  "openSettingsFile",
+  "revealSettingsFile",
 ] as const satisfies readonly ApiMethod[];
 // Fails to compile, naming the method, when the Api gains one this list lacks.
 const complete: Exclude<ApiMethod, (typeof methods)[number]> extends never
@@ -464,6 +467,10 @@ contextBridge.exposeInMainWorld("relay", {
   onWorkingTree: on("relay:working-tree"),
   onElsewhere: on("relay:elsewhere"),
   onAutoCompact: on("relay:auto-compact"),
+  onSettingsFile: on("relay:settings-file"),
+  // Synchronous, once as the page starts: its first frame already uses the
+  // file's fonts and theme instead of switching to them a moment later.
+  settingsFileAtStart: () => ipcRenderer.sendSync("relay:settings-file-now"),
 });
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {

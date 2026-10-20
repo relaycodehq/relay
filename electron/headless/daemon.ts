@@ -2,6 +2,13 @@
 // electron/main.ts starts them, for a computer that's only ever reached from
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
+import { homedir } from "node:os";
+import {
+  movePrefsToFile,
+  readPrefs,
+  SettingsFile,
+  settingsDir,
+} from "../settings";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
@@ -130,6 +137,25 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   void pathReady();
   const store = new Store(home);
   await store.load();
+  // `relay settings` changes it through the API; a script or an editor may too.
+  const settingsFile = new SettingsFile(
+    process.env.RELAY_TEST_DATA
+      ? join(home, "config")
+      : settingsDir({
+          platform: process.platform,
+          env: process.env,
+          home: homedir(),
+          appData: process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
+        }),
+    () => {
+      void keepAwake.refresh();
+      chats.summariesChanged();
+    },
+  );
+  await settingsFile
+    .load()
+    .then(() => movePrefsToFile(store, settingsFile))
+    .catch((e) => console.warn("Could not read settings.json:", e));
   let phoneRemote: PhoneRemote | undefined;
   // Only phones write drafts here: with no page, nothing holds a part of one.
   const draftStore = new DraftStore(join(home, "drafts.json"));
@@ -199,11 +225,12 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     join(home, "project-chats"),
     (event) => phoneRemote?.chatEvent(event),
     pullHosts.evidence,
+    () => readPrefs(settingsFile.state().values),
   );
   chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
     {
-      enabled: () => store.get().keepAwake ?? true,
+      enabled: () => readPrefs(settingsFile.state().values).keepAwake,
       busy: () => chats.working() > 0 || !!phoneRemote?.expectsCalls(),
     },
     headlessPower(),
@@ -307,6 +334,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     agentAccounts,
     projectAdding,
     drafts,
+    settingsFile,
   });
   const dispatch: Dispatch = createDispatch(api);
   const summaries = new ChatSummaryFeed(api.listChats, (event) =>

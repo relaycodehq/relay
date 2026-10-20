@@ -1,26 +1,31 @@
 import { useEffect, type RefObject } from "react";
-import { persistedStore } from "./persisted-store";
+import { fileSetting, storedBefore } from "./settings-file";
 
 /**
  * How wide the reading column grows: the thread, its composer and the
- * new-thread page all follow --thread-width. A per-device preference like the
- * theme; a window narrower than the column still fits it.
+ * new-thread page all follow --thread-width. Kept in settings.json; a window
+ * narrower than the column still fits it.
  */
 export const chatWidths = { min: 800, max: 1600, step: 10, default: 1040 };
 
 /** The chat pane's side padding (.project-messages, .thread-bottom-composer). */
 export const THREAD_GUTTER = 100;
 
-const store = persistedStore(
-  "relay-chat-width",
-  (saved) => {
-    const width = Number(saved);
-    return saved === null || !Number.isFinite(width)
-      ? chatWidths.default
-      : Math.min(chatWidths.max, Math.max(chatWidths.min, Math.round(width)));
-  },
-  (width) => (width === chatWidths.default ? null : String(width)),
-);
+const clamp = (width: number) =>
+  Math.min(chatWidths.max, Math.max(chatWidths.min, Math.round(width)));
+
+const store = fileSetting<number>({
+  path: ["chat", "width"],
+  parse: (saved) =>
+    typeof saved === "number" && Number.isFinite(saved)
+      ? clamp(saved)
+      : chatWidths.default,
+  serialize: (width) => (width === chatWidths.default ? undefined : width),
+  legacy: storedBefore("relay-chat-width", (raw) => {
+    const width = Number(raw);
+    return Number.isFinite(width) ? clamp(width) : undefined;
+  }),
+});
 
 function apply(width: number) {
   document.documentElement.style.setProperty("--thread-width", `${width}px`);
