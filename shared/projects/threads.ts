@@ -217,7 +217,13 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("wake") }).strict(),
-  z.object({ kind: z.literal("archive") }).strict(),
+  z
+    .object({
+      kind: z.literal("archive"),
+      /** Its worktree's folder goes too, its branch kept for an unarchive. */
+      dropWorktree: z.literal(true).optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal("unread") }).strict(),
   z.object({ kind: z.literal("auto-settle"), enabled: z.boolean() }).strict(),
   z.object({ kind: z.literal("pin"), pinned: z.boolean() }).strict(),

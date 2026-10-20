@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   lastComposerSettings,
+  threadsSharing,
   type ChatSummary,
   type ChatTriage,
   type ChatTriageState,
@@ -72,6 +73,11 @@ export function useThreadActions({
   const [renaming, setRenaming] = useState<string>();
   /** The thread the Move into its own worktree dialog is for. */
   const [moving, setMoving] = useState<string>();
+  /** The thread whose archive asks about its worktree, with the files only it has. */
+  const [archiving, setArchiving] = useState<{
+    chat: ChatSummary;
+    files: number;
+  }>();
   /** The thread whose snooze time is being picked. */
   const [pickingSnooze, setPickingSnooze] = useState<ChatSummary>();
   /** Threads whose title is being generated again. */
@@ -141,7 +147,28 @@ export function useThreadActions({
       refresh(c);
     }
   };
-  const triage = (c: ChatSummary, action: ChatTriage) => apply(c, action);
+  /**
+   * How many files the thread's worktree has that the checkout lacks: what
+   * archiving would leave behind. None when others work in it, as it stays
+   * theirs, or when it's all landed, as it goes by itself then.
+   */
+  const worktreeWork = async (c: ChatSummary) => {
+    const w = c.worktree;
+    if (!w?.path || w.removedAt || w.cleanedUp) return 0;
+    const listed = qc
+      .getQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] })
+      .flatMap(([, list]) => list ?? []);
+    if (threadsSharing(listed, c).length) return 0;
+    const status = await api.projectWorktree(c.id).catch(() => null);
+    return status && !status.removed ? status.files.length : 0;
+  };
+  const triage = async (c: ChatSummary, action: ChatTriage) => {
+    if (action.kind === "archive" && !action.dropWorktree) {
+      const files = await worktreeWork(c);
+      if (files) return setArchiving({ chat: c, files });
+    }
+    return apply(c, action);
+  };
   /**
    * Settling the open thread moves on to its neighbour in activity, or a new
    * thread; undoing it comes back unless you went elsewhere meanwhile. A
@@ -263,6 +290,17 @@ export function useThreadActions({
     setMoving,
     pickingSnooze,
     setPickingSnooze,
+    archiving,
+    /** Archives the thread the question was for, its worktree's folder going too or not. */
+    archive(dropWorktree: boolean) {
+      if (!archiving) return;
+      setArchiving(undefined);
+      void apply(archiving.chat, {
+        kind: "archive",
+        ...(dropWorktree ? { dropWorktree: true as const } : {}),
+      });
+    },
+    cancelArchive: () => setArchiving(undefined),
     regenerating,
     reloading,
     /** Does what the thread's right-click menu picked. */

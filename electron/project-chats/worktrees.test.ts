@@ -56,6 +56,7 @@ beforeEach(async () => {
     },
     active: { has: () => true, assertIdle: async () => {} },
     store: { get: () => ({ chats }) },
+    sessions: { close: vi.fn() },
     control: (_id: string, run: () => unknown) => run(),
   } as unknown as ChatCore;
   worktrees = new ThreadWorktrees(core, join(temp, "worktrees"), {
@@ -176,4 +177,22 @@ it("won't remove or clean up a worktree another thread works in, and archiving o
   other.archivedAt = 6;
   await worktrees.dropLanded(chat, 7);
   expect(chat.worktree!.removedAt).toBe(7);
+});
+
+it("deletes an archived thread's worktree with work in it when asked, keeping its branch, but not one others share", async () => {
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  chats = [chat];
+  execFileSync("sh", ["-c", "echo draft > notes.txt"], { cwd: path });
+  const other = joining(chat);
+  chats = [chat, other];
+
+  await worktrees.dropArchived(chat);
+  expect(existsSync(path)).toBe(true);
+
+  other.archivedAt = 6;
+  await worktrees.dropArchived(chat);
+  expect(existsSync(path)).toBe(false);
+  expect(chat.worktree).toMatchObject({ cleanedUp: true });
+  expect(git(root, "branch", "--list", chat.worktree!.branch!)).not.toBe("");
 });

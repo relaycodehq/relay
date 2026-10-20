@@ -377,6 +377,18 @@ export class ThreadWorktrees {
     }
   }
 
+  /**
+   * An archived thread's worktree its user chose to delete, work in it or
+   * not: the folder goes, a snapshot kept, and its branch stays, so undoing
+   * the archive or a next message checks it out again.
+   */
+  async dropArchived(chat: ProjectChat) {
+    if (!chat.worktree || !(await worktreeExists(chat.worktree))) return;
+    if (awaitsReturn(chat) || this.sharers(chat).length) return;
+    this.core.sessions.close(chat.id);
+    await this.drop(chat, chat.worktree, { keepBranch: true });
+  }
+
   async diff(id: string, path: string) {
     const { worktree } = await this.of(id);
     if (!(await worktreeExists(worktree)))
