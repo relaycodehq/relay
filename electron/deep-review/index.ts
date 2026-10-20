@@ -347,11 +347,14 @@ export class DeepReviews {
    * now, or into a worktree of its own on it, so the lead's fixes land on
    * the branch. A fix request in a pull request's review gives it a local
    * branch first. The thread notes the move, and the lead hears of it.
+   * Nothing it can't do holds up a question, which reads on where the
+   * review is; only a fix that can't get onto the branch is refused.
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
     const state = chat.deepReview;
     const checkout = state?.scope.checkout;
     if (!state?.scope.head || !checkout || this.reviewing(chat)) return;
+    const fixing = !!input.fixes?.length;
     const next = await followReviewedBranch(
       await this.host.root(chat.projectId),
       checkout,
@@ -359,9 +362,16 @@ export class DeepReviews {
         head: state.scope.head,
         dir: this.host.worktrees,
         chatId: chat.id,
-        fixing: !!input.fixes?.length,
+        fixing,
       },
-    );
+    ).catch((e: unknown) => {
+      console.warn("Could not follow the reviewed branch:", e);
+      if (!fixing) return checkout;
+      const branch = checkout.branch ?? checkout.pr?.head;
+      throw new Error(
+        `Relay couldn't check out ${branch ?? "the reviewed branch"} for the fix. Check it out in a folder of your own and ask again; the review follows it there.`,
+      );
+    });
     if (next === checkout) return;
     state.scope.checkout = next;
     if (next.path !== checkout.path) {
@@ -370,12 +380,16 @@ export class DeepReviews {
         to: next.path,
         ...(next.branch ? { branch: next.branch } : {}),
       });
-      // The lead's session hears it too: its first turn wasn't one that notes what it heard.
+      // The lead's session hears it too: its first turn wasn't one that
+      // notes what it heard. A session not told of an earlier move yet
+      // still works where that one started.
+      const pending = chat.movedIn;
       chat.movedIn = {
-        from: checkout.path,
+        from: pending?.from ?? checkout.path,
         to: next.path,
         owed: [
           ...new Set([
+            ...(pending?.owed ?? []),
             ...Object.keys(chat.scopeHeard ?? {}),
             `${state.lead.provider}:main`,
             ...(input.provider ? [`${input.provider}:main`] : []),

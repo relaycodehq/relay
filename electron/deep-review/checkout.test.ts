@@ -275,3 +275,56 @@ it("never makes again a worktree it didn't make", async () => {
     ),
   ).rejects.toThrow("is gone");
 });
+
+it("reads on where it is when edits in its worktree keep the branch out, and fixes in a worktree beside it", async () => {
+  const made = (await openReviewCheckout(repo, scope(), worktrees, "c14"))!;
+  git(made.path, "switch", "-q", "--detach");
+  // panel moves on in a folder that's gone since.
+  const elsewhere = join(dir, "elsewhere");
+  git(repo, "worktree", "add", "-q", elsewhere, "panel");
+  await writeFile(join(elsewhere, "panel.ts"), "export const v = 2;\n");
+  git(elsewhere, "commit", "-q", "-am", "Panel v2");
+  git(repo, "worktree", "remove", elsewhere);
+  // An edit the switch would overwrite.
+  await writeFile(join(made.path, "panel.ts"), "export const v = 1;\n");
+
+  expect(await follow(made, "c14")).toBe(made);
+  const beside = await follow(made, "c14", true);
+  expect(beside).toEqual({
+    path: `${made.path}-2`,
+    made: true,
+    branch: "panel",
+  });
+  expect(git(beside.path, "branch", "--show-current")).toBe("panel");
+  expect(git(made.path, "status", "--porcelain")).toBe("M panel.ts");
+  // Asked again, it's already there.
+  expect(await follow(beside, "c14", true)).toBe(beside);
+
+  // It goes with its review, which the edits keep the first one from.
+  await sweepReviewCheckouts(worktrees, (id) => id === "c14", [
+    { id: "c14", reviewFolder: { path: beside.path } },
+  ]);
+  expect(await exists(beside.path)).toBe(false);
+  expect(await exists(made.path)).toBe(true);
+});
+
+it("takes back a review's worktree a discard couldn't remove when the review starts again", async () => {
+  git(repo, "update-ref", "refs/relay/pulls/6/head", head);
+  const pr = scope({
+    target: { kind: "pr", ref: { owner: "o", name: "r", number: 6 } },
+  });
+  const made = (await openReviewCheckout(repo, pr, worktrees, "c15"))!;
+  // Held open on Windows, or locked: Git won't remove it.
+  git(repo, "worktree", "lock", made.path);
+  await discardReviewCheckout(made);
+  expect(await exists(join(made.path, ".git"))).toBe(true);
+  expect(await openReviewCheckout(repo, pr, worktrees, "c15")).toEqual(made);
+
+  // On a branch, it's still the review's own.
+  const branch = (await openReviewCheckout(repo, scope(), worktrees, "c16"))!;
+  git(repo, "worktree", "lock", branch.path);
+  await discardReviewCheckout(branch);
+  expect(await openReviewCheckout(repo, scope(), worktrees, "c16")).toEqual(
+    branch,
+  );
+});

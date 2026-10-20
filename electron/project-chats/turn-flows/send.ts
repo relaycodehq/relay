@@ -169,8 +169,9 @@ export class TurnSends {
       if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       // A review follows its branch to wherever it's checked out first, so
-      // the turn runs there.
-      if (!project.computer) await this.councils.fixing(chat, input);
+      // the turn runs there; a retried send that's in already moves nothing.
+      if (!project.computer && !chat.messages.some((m) => m.id === input.id))
+        await this.councils.fixing(chat, input);
       const root = project.computer
         ? ""
         : await this.worktrees.root(chat, input.body, active.abort.signal);

@@ -18,7 +18,11 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { ChatStorage } from "../project-chats/storage";
 import { WorktreeSetup } from "../project-chats/worktree-setup";
-import type { ChatMessage, ProjectChat } from "../../shared/projects";
+import type {
+  ChatMessage,
+  ProjectChat,
+  ProjectChatSend,
+} from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { fixRequest } from "../../shared/findings";
@@ -30,6 +34,7 @@ import {
   type ReviewScope,
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "./prompts";
+import { DeepReviews, type DeepReviewHost } from "./index";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { build } from "esbuild";
 import { configureCursor } from "../agents/cursor/sdk";
@@ -978,6 +983,126 @@ it("reviews a branch in the folder it's checked out in, edits and all, and follo
   await chats.cleanUpWorktrees();
   expect(git(there, "status", "--porcelain")).toBe("?? wip.ts");
   expect(git(other, "branch", "--show-current")).toBe("panel");
+});
+
+it("answers a question when edits in the review's worktree keep the branch out, and fixes in a worktree beside it", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  git(repo, "switch", "-q", "-c", "panel");
+  await writeFile(join(repo, "src", "panel.ts"), "export const panel = 1;\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "Add the panel");
+  git(repo, "switch", "-q", main);
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "panel", base: main } }),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+  );
+  const reviewed = await chats.get(chat.id);
+  const own = reviewed.deepReview!.scope.checkout!.path;
+  // The branch left the review's worktree and moved on; an edit there is
+  // in the way of switching back.
+  git(own, "switch", "-q", "--detach");
+  const elsewhere = join(root, "elsewhere");
+  git(repo, "worktree", "add", "-q", elsewhere, "panel");
+  await writeFile(
+    join(elsewhere, "src", "panel.ts"),
+    "export const panel = 2;\n",
+  );
+  git(elsewhere, "commit", "-q", "-am", "Panel 2");
+  git(repo, "worktree", "remove", elsewhere);
+  await writeFile(join(own, "src", "panel.ts"), "export const panel = 3;\n");
+  const idle = () =>
+    vi.waitFor(() =>
+      expect(
+        chats.list(projectId).find((c) => c.id === chat.id)?.running,
+      ).toBeFalsy(),
+    );
+
+  const question = {
+    id: randomUUID(),
+    body: "@claude Why is F1 a problem?",
+    provider: "claude" as const,
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access" as const,
+    interactionMode: "default" as const,
+  };
+  await chats.send(chat.id, question);
+  const asked = await chats.get(chat.id);
+  expect(asked.messages.some((m) => m.id === question.id)).toBe(true);
+  expect(asked.deepReview!.scope.checkout!.path).toBe(own);
+  await idle();
+
+  await chats.send(chat.id, {
+    ...question,
+    id: randomUUID(),
+    body: fixRequest("claude", reviewed.findings!.reports[0]!.findings),
+    fixes: ["F1"],
+  });
+  expect((await chats.get(chat.id)).deepReview!.scope.checkout).toEqual({
+    path: `${own}-2`,
+    made: true,
+    branch: "panel",
+  });
+  expect(git(own, "status", "--porcelain")).toBe("M src/panel.ts");
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
+  );
+  await idle();
+});
+
+it("keeps where a session not told of an earlier move yet started, when the review moves again", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const there = join(root, "panel-here");
+  git(repo, "worktree", "add", "-q", "-b", "panel", there);
+  const head = git(there, "rev-parse", "HEAD");
+  const reviews = new DeepReviews({
+    root: async () => repo,
+    worktrees: join(root, "worktrees"),
+    close: () => {},
+    touch: async () => {},
+  } as unknown as DeepReviewHost);
+  const chat = {
+    id: "review",
+    projectId,
+    messages: [],
+    scopeHeard: { "claude:main": "x" },
+    // Codex wasn't told it left the first folder yet.
+    movedIn: {
+      from: "/first",
+      to: "/second",
+      owed: ["codex:main"],
+      selected: true,
+    },
+    deepReview: {
+      status: "done",
+      lead: { provider: "claude" },
+      scope: {
+        head,
+        checkout: { path: "/second", made: false, branch: "panel" },
+      },
+    },
+  } as unknown as ProjectChat;
+  await reviews.fixing(chat, { provider: "claude" } as ProjectChatSend);
+  expect(chat.movedIn).toEqual({
+    from: "/first",
+    to: there,
+    owed: ["codex:main", "claude:main"],
+    selected: true,
+  });
 });
 
 it("leaves the thread and the disk as they were when a reviewer can't be created, so starting again works", async () => {

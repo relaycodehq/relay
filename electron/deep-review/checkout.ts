@@ -4,13 +4,16 @@
 // one. Reviewers open the reviewed code itself rather than the thread's
 // checkout, and the thread's Git and file panes follow it there.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { git, worktreeList } from "../git/git";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
 
-/** The folder under Relay's worktrees that holds the ones made for reviews, one per review thread. */
+/** The folder under Relay's worktrees that holds the ones made for reviews, named after their review thread. */
 export const reviewCheckoutsIn = (worktrees: string) =>
   join(worktrees, "deep-reviews");
+
+/** The review thread a folder there is for: its own, or one a fix made beside it, `<id>-2`. */
+const ownerOf = (name: string) => name.replace(/-\d{1,3}$/, "");
 
 const exists = (path: string) =>
   stat(path).then(
@@ -102,6 +105,17 @@ async function addWorktree(
   // A folder deleted by hand leaves Git's record of it behind.
   await git(root, ["worktree", "prune"]).catch(() => {});
   const onBranch = branch && !(await folderOf(root, branch));
+  const left = (await worktreeList(root)).find((w) => samePath(w.path, path));
+  if (left?.prunable) {
+    // Gone but locked, so the prune kept it; it was Relay's to make again.
+    await git(root, ["worktree", "unlock", path]).catch(() => {});
+    await git(root, ["worktree", "prune"]).catch(() => {});
+  } else if (left) {
+    // One a discard couldn't remove, a file held open or a lock on it, is
+    // still this repository's worktree: taken back as it is.
+    if (onBranch) await git(path, ["switch", "--quiet", branch], 60000);
+    return;
+  }
   await git(
     root,
     onBranch
@@ -142,11 +156,11 @@ export async function openReviewCheckout(
         : undefined
       : pr && (await pullBranch(root, pr, scope.head, false))?.branch;
   const about = { ...(branch ? { branch } : {}), ...(pr ? { pr } : {}) };
+  const path = join(reviewCheckoutsIn(dir), chatId);
   if (branch) {
     const at = await folderOf(root, branch);
-    if (at) return { path: at, made: false, ...about };
+    if (at) return { path: at, made: samePath(at, path), ...about };
   }
-  const path = join(reviewCheckoutsIn(dir), chatId);
   await addWorktree(root, path, scope.head, branch);
   return { path, made: true, ...about };
 }
@@ -196,11 +210,31 @@ export async function followReviewedBranch(
   const at = await folderOf(root, branch);
   if (at && samePath(at, checkout.path))
     return branch === checkout.branch ? checkout : { ...checkout, branch };
-  if (at) return { path: at, made: samePath(at, own), ...about };
+  if (at) {
+    const ours =
+      samePath(dirname(at), dirname(own)) && ownerOf(basename(at)) === chatId;
+    return { path: at, made: ours, ...about };
+  }
   // Checked out nowhere: the review's own worktree takes it, as it is or made again.
-  if (await exists(own)) await git(own, ["switch", "--quiet", branch], 60000);
-  else await addWorktree(root, own, head, branch);
-  return { path: own, made: true, ...about };
+  if (!(await exists(own))) {
+    await addWorktree(root, own, head, branch);
+    return { path: own, made: true, ...about };
+  }
+  const switched = await git(own, ["switch", "--quiet", branch], 60000).then(
+    () => true,
+    (e: unknown) => {
+      console.warn(`Could not switch the review worktree to ${branch}:`, e);
+      return false;
+    },
+  );
+  if (switched) return { path: own, made: true, ...about };
+  // Edits there are in the way. A question reads on where the review is; a
+  // fix gets a worktree on the branch beside it, the edits left alone.
+  if (!fixing) return checkout;
+  let beside = `${own}-2`;
+  for (let n = 3; await exists(beside); n++) beside = `${own}-${n}`;
+  await addWorktree(root, beside, head, branch);
+  return { path: beside, made: true, ...about };
 }
 
 /**
@@ -255,11 +289,12 @@ export async function sweepReviewCheckouts(
   const folder = reviewCheckoutsIn(dir);
   const names = await readdir(folder).catch(() => [] as string[]);
   for (const name of names) {
-    if (!done(name)) continue;
+    const owner = ownerOf(name);
+    if (!done(owner)) continue;
     const path = join(folder, name);
     const used = threads.some(
       (t) =>
-        t.id !== name &&
+        t.id !== owner &&
         !t.archivedAt &&
         [t.worktree?.path, t.reviewFolder?.path].some(
           (p) => p && samePath(p, path),
