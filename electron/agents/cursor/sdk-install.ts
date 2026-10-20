@@ -19,7 +19,8 @@ import { tarFiles } from "./tar";
  * Relay doesn't ship Cursor's SDK: it downloads it on first use, and again to
  * update it. The SDK itself and its platform package come straight from npm;
  * what they depend on is pinned in `packaging/cursor-sdk.lock.json`, so a
- * newer SDK only installs when it asks for the same dependencies.
+ * newer SDK only installs when the pin covers what it asks for. One it no
+ * longer needs still comes along, unused.
  */
 export interface SdkLock {
   sdk: string;
@@ -145,7 +146,7 @@ async function plan(
   if (version === lock.sdk) return [...downloads.values()];
 
   const manifest = await json<Manifest>(fetch, npmUrl(sdkName, version));
-  if (!sameDependencies(manifest.dependencies, lock.dependencies))
+  if (!pinnedCovers(lock.dependencies, manifest.dependencies))
     throw new NeedsRelayUpdate(
       `Cursor SDK ${version} needs dependencies this Relay doesn't have. Update Relay to use it.`,
     );
@@ -162,14 +163,12 @@ async function plan(
   return [...downloads.values()];
 }
 
-function sameDependencies(
-  a: Record<string, string> = {},
-  b: Record<string, string> = {},
+function pinnedCovers(
+  pinned: Record<string, string>,
+  wanted: Record<string, string> = {},
 ) {
-  const keys = Object.keys(a);
-  return (
-    keys.length === Object.keys(b).length &&
-    keys.every((key) => a[key] === b[key])
+  return Object.entries(wanted).every(
+    ([name, range]) => pinned[name] === range,
   );
 }
 
