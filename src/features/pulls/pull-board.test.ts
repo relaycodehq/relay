@@ -162,6 +162,26 @@ it("puts PRs from a project's list and the searches on one card per repository",
   expect(board.quiet.map((p) => p.id)).toEqual(["quiet"]);
 });
 
+it.each(["pending", "failed"])(
+  "keeps a linked project's known PRs visible when its repository list is %s",
+  (state) => {
+    const board = buildBoard(
+      input({
+        projects: [project("portal", "web", "portal")],
+        created: [issue("web/portal", 7, "me")],
+        lists:
+          state === "failed"
+            ? { portal: { error: new Error("Unavailable") } }
+            : {},
+      }),
+    );
+    expect(board.groups).toHaveLength(1);
+    expect(board.groups[0].project?.id).toBe("portal");
+    expect(board.groups[0].pulls.map((p) => p.ref.number)).toEqual([7]);
+    expect(board.quiet).toEqual([]);
+  },
+);
+
 it("orders cards by PRs waiting on you, then your own, then the latest activity", () => {
   const board = buildBoard(
     input({

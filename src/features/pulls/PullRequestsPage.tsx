@@ -48,7 +48,8 @@ import {
   type PullContext,
 } from "./PullRows";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { hostKindOf } from "../../../shared/source-control";
+import { hostKindOf, pullHostName } from "../../../shared/source-control";
+import { errorMessage } from "../../lib/error-message";
 import { accountOn } from "./usePullHosts";
 import "./pull-requests.css";
 
@@ -140,8 +141,18 @@ export function PullRequestsPage({
   onAddProject: (repo?: Repo) => void;
 }) {
   const qc = useQueryClient();
-  const { board, verdicts, started, loading, error, fetching, retry } =
-    usePullBoard(accounts, projects, state);
+  const {
+    board,
+    verdicts,
+    started,
+    loading,
+    pending,
+    failures,
+    fetching,
+    retry,
+  } = usePullBoard(accounts, projects, state);
+  const incomplete = !!pending.length || !!failures.length || !!hostError;
+  const waiting = `Waiting for ${pending.map(pullHostName).join(", ")}…`;
   const [typed, setTyped] = useState(query);
   useEffect(() => {
     const t = setTimeout(() => onQuery(typed.trim()), 250);
@@ -198,7 +209,12 @@ export function PullRequestsPage({
           summary: loading ? (
             <>Finding your pull requests…</>
           ) : (
-            <BoardSummary board={board} needs={needs.length} state={state} />
+            <BoardSummary
+              board={board}
+              needs={needs.length}
+              state={state}
+              incomplete={incomplete}
+            />
           ),
         };
 
@@ -292,17 +308,22 @@ export function PullRequestsPage({
           </button>
         </div>
       </header>
-      {error ? (
+      {failures.map(({ server, error }) => (
         <ErrorBox
-          error={error}
+          key={server}
+          error={`Couldn’t load pull requests from ${pullHostName(server)}: ${errorMessage(error)}`}
           retry={() => {
             // A refused sign-in may come back as another account.
             onRecheckHosts();
-            retry();
+            retry(server);
           }}
         />
-      ) : (
-        !!hostError && <ErrorBox error={hostError} retry={onRecheckHosts} />
+      ))}
+      {!!hostError && <ErrorBox error={hostError} retry={onRecheckHosts} />}
+      {!!pending.length && !loading && !query && (
+        <p className="pulls-note" role="status">
+          {waiting}
+        </p>
       )}
       {query ? (
         <SearchResults
@@ -323,7 +344,7 @@ export function PullRequestsPage({
           context={context}
         />
       ) : loading ? (
-        <Loading text="Finding your pull requests…" />
+        <Loading text={waiting} />
       ) : (
         <BoardView
           board={board}
@@ -333,6 +354,7 @@ export function PullRequestsPage({
           projectOf={projectOf}
           onRepo={onRepo}
           onAddProject={() => onAddProject()}
+          incomplete={incomplete}
         />
       )}
     </div>
@@ -368,20 +390,26 @@ function BoardSummary({
   board,
   needs,
   state,
+  incomplete,
 }: {
   board: Board;
   needs: number;
   state: PullState;
+  incomplete: boolean;
 }) {
   const total = board.groups.reduce((n, g) => n + g.total, 0);
   const repos = board.groups.length;
   return (
     <>
-      {state === "open" && (
-        <>
-          <strong>{needs ? `${needs} need you` : "Nothing needs you"}</strong>
-          {" · "}
-        </>
+      {incomplete ? (
+        <>Showing available pull requests · </>
+      ) : (
+        state === "open" && (
+          <>
+            <strong>{needs ? `${needs} need you` : "Nothing needs you"}</strong>
+            {" · "}
+          </>
+        )
       )}
       {total} {state === "all" ? "" : `${state} `}in {repos}{" "}
       {repos === 1 ? "repository" : "repositories"}
@@ -427,6 +455,7 @@ function BoardView({
   projectOf,
   onRepo,
   onAddProject,
+  incomplete,
 }: {
   board: Board;
   needs: BoardPull[];
@@ -435,6 +464,7 @@ function BoardView({
   projectOf: (r: Repo) => Project | undefined;
   onRepo: (repo: string) => void;
   onAddProject: () => void;
+  incomplete: boolean;
 }) {
   // Asked of you first, then your own: what you'd act on in that order.
   const order: Record<Relation, number> = {
@@ -451,18 +481,28 @@ function BoardView({
       <div className="pulls-empty">
         <GitPullRequest size={30} />
         <h2>
-          {board.quiet.length || state !== "open"
-            ? `No ${state === "all" ? "" : `${state} `}pull requests`
-            : "No pull requests yet"}
+          {incomplete
+            ? "No pull requests loaded"
+            : board.quiet.length || state !== "open"
+              ? `No ${state === "all" ? "" : `${state} `}pull requests`
+              : "No pull requests yet"}
         </h2>
         <p>
-          PRs you’re asked to review, assigned or opened show up here, and so
-          does every PR in your project folders.
+          {incomplete ? (
+            "Some providers haven’t answered. Their pull requests may be missing."
+          ) : (
+            <>
+              PRs you’re asked to review, assigned or opened show up here, and
+              so does every PR in your project folders.
+            </>
+          )}
         </p>
-        <button onClick={onAddProject}>
-          <FolderPlus size={15} />
-          Add project folder
-        </button>
+        {!incomplete && (
+          <button onClick={onAddProject}>
+            <FolderPlus size={15} />
+            Add project folder
+          </button>
+        )}
       </div>
     );
   return (

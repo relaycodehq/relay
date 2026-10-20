@@ -242,8 +242,11 @@ export function buildBoard(input: BoardInput): Board {
     covered.add(key);
     const list = input.lists[project.id];
     const repo = `${project.repository!.owner}/${project.repository!.name}`;
-    if (!list) continue;
-    if ("error" in list) {
+    const known = [...byKey]
+      .filter(([, pull]) => repoKey(pull.ref) === key)
+      .map(([key]) => key);
+    if (!list && !known.length) continue;
+    if (list && "error" in list && !known.length) {
       groups.push({
         key,
         repo,
@@ -256,11 +259,12 @@ export function buildBoard(input: BoardInput): Board {
       });
       continue;
     }
+    const listing = list && "items" in list ? list : undefined;
     const keys = new Set(
-      list.items.map((item) => add(item, project.repository!.server)),
+      listing?.items.map((item) => add(item, project.repository!.server)) ?? [],
     );
     // Involved PRs past the loaded page still belong on the card.
-    for (const [k, p] of byKey) if (repoKey(p.ref) === key) keys.add(k);
+    for (const k of known) keys.add(k);
     const pulls = [...keys].map((k) => byKey.get(k)!);
     if (!pulls.length) quiet.push(project);
     else
@@ -270,7 +274,7 @@ export function buildBoard(input: BoardInput): Board {
         ref: project.repository!,
         project,
         pulls: newestFirst(pulls),
-        total: Math.max(list.total, pulls.length),
+        total: Math.max(listing?.total ?? 0, pulls.length),
         forYou: 0,
       });
   }
