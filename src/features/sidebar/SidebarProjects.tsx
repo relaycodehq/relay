@@ -220,7 +220,7 @@ export function ProjectsSection({
       </div>
       {error && <p className="sb-note error">{error}</p>}
       {!folds.folded.projects && (
-        <GroupContents node={tree.shown} tree={tree} />
+        <GroupContents node={tree.shown} tree={tree} root />
       )}
       {!folds.folded.projects && empty && <AddWays onAdd={onAdd} />}
     </>

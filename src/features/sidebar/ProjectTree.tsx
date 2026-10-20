@@ -65,9 +65,12 @@ export interface ProjectTree {
 export function GroupContents({
   node,
   tree,
+  root = false,
 }: {
   node: ProjectFolderNode;
   tree: ProjectTree;
+  /** The top of the tree, whose projects are in no group. */
+  root?: boolean;
 }) {
   const { groups } = tree;
   return (
@@ -85,10 +88,64 @@ export function GroupContents({
       {node.folders.map((folder) => (
         <GroupSection key={folder.path} folder={folder} tree={tree} />
       ))}
-      {node.projects.map((p) => (
-        <ProjectSection key={p.id} project={p} tree={tree} />
-      ))}
+      {root && node.folders.length > 0 && node.projects.length > 0 ? (
+        <Ungrouped projects={node.projects} tree={tree} />
+      ) : (
+        node.projects.map((p) => (
+          <ProjectSection key={p.id} project={p} tree={tree} />
+        ))
+      )}
     </>
+  );
+}
+
+/** How many projects a group holds, its groups' included. */
+const projectCount = (node: ProjectFolderNode): number =>
+  node.projects.length +
+  node.folders.reduce((sum, f) => sum + projectCount(f), 0);
+
+/** Once there are groups, the projects in none get a label like theirs. */
+function Ungrouped({
+  projects,
+  tree,
+}: {
+  projects: Project[];
+  tree: ProjectTree;
+}) {
+  const { drag, folds } = tree;
+  const key = groupKey("");
+  const isOpen = folds.isOpen(key, true);
+  const into = drag.drop?.kind === "folder" && drag.drop.path === "";
+  return (
+    <section className="sb-folder" aria-label="Projects in no group">
+      <div
+        className={`sb-folder-row ${into ? "drop-into" : ""}`}
+        onDragOver={(e) => {
+          if (!drag.dragging) return;
+          drag.over(e, { kind: "folder", path: "" });
+          drag.openWhileDragging(key, isOpen);
+        }}
+        onDrop={(e) => drag.dropOn(e, { kind: "folder", path: "" })}
+      >
+        <button
+          className="sb-folder-toggle"
+          aria-label={`${isOpen ? "Collapse" : "Expand"} projects in no group`}
+          aria-expanded={isOpen}
+          onClick={() => folds.setOpen(key, !isOpen)}
+        >
+          <span>Other</span>
+          <ChevronRight size={11} />
+          <span className="sb-folder-count">{projects.length}</span>
+        </button>
+      </div>
+      {isOpen && (
+        <div className="sb-folder-body">
+          {projects.map((p) => (
+            <ProjectSection key={p.id} project={p} tree={tree} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -107,6 +164,7 @@ function GroupSection({
     !folder.folders.length &&
     !folder.projects.length &&
     groups.adding?.parent !== folder.path;
+  const count = projectCount(folder);
   return (
     <section
       className={[
@@ -168,6 +226,7 @@ function GroupSection({
             >
               <span>{folder.name}</span>
               <ChevronRight size={11} />
+              {count > 0 && <span className="sb-folder-count">{count}</span>}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>

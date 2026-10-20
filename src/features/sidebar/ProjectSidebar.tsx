@@ -43,6 +43,7 @@ import { SearchPalette } from "./SearchPalette";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
+import { HoverMark } from "./HoverMark";
 import type { AddProjectPage } from "../add-project/AddProjectPalette";
 import "./sidebar.css";
 
@@ -327,6 +328,7 @@ export function ProjectSidebar({
               empty={!realProjects.length}
               onAdd={onAdd}
             />
+            <HoverMark />
           </>
         )}
       </div>
