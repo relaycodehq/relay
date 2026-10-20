@@ -43,6 +43,12 @@ export interface BranchCounts {
   /** By branch name, as in `BranchRef.name`. */
   branches: Record<string, BranchCount>;
 }
+/** Uncommitted changes in the folder a local branch is checked out in. */
+export interface BranchChanges {
+  branch: string;
+  files: number;
+  lines: { additions: number; deletions: number };
+}
 export const branchActionSchema = z
   .object({
     kind: z.enum(["switch", "create"]),

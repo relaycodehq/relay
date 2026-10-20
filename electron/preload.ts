@@ -73,6 +73,7 @@ const methods = [
   "projectCreatePull",
   "projectBranches",
   "projectBranchCounts",
+  "projectBranchChanges",
   "projectChangeBranch",
   "projectFiles",
   "projectDirectory",

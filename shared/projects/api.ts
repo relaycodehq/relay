@@ -1,7 +1,12 @@
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
-import type { BranchAction, BranchCounts, BranchList } from "../branches";
+import type {
+  BranchAction,
+  BranchChanges,
+  BranchCounts,
+  BranchList,
+} from "../branches";
 import type {
   ProjectCheckInfo,
   ProjectCheckState,
@@ -515,6 +520,11 @@ export interface ProjectGitApi {
   projectBranches(id: string): Promise<BranchList>;
   /** Where each branch stands against the bases; slow on a big repository, so apart. */
   projectBranchCounts(id: string): Promise<BranchCounts>;
+  /** Uncommitted changes on this local branch; null when it isn't checked out here. */
+  projectBranchChanges(
+    id: string,
+    branch: string,
+  ): Promise<BranchChanges | null>;
   projectChangeBranch(id: string, action: BranchAction): Promise<BranchList>;
   projectBranchPulls(where: string): Promise<BranchPull[]>;
   /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */

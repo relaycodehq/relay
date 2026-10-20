@@ -469,8 +469,26 @@ test("reviews another branch into main from a checkout on main", async () => {
     const base = page.getByRole("button", { name: "Base branch" });
     await expect(head).toHaveText("device-panel");
     await expect(base).toHaveText("main");
+    const excluded = page.locator(".deep-review-excluded");
+    await expect(excluded).toContainText(
+      "Excluding uncommitted changes on main",
+    );
+    await expect(excluded.getByRole("group")).toHaveAttribute(
+      "aria-label",
+      "2 additions, 0 deletions",
+    );
+    await writeFile(join(repo, "README.md"), "# Queue\n");
+    await expect(excluded).toHaveCount(0);
+    await writeFile(join(repo, "README.md"), "# Queue\n\nDraft\n");
+    await expect(excluded).toBeVisible();
+    const branchesBox = await page
+      .locator(".deep-review-branches")
+      .boundingBox();
+    const excludedBox = await excluded.boundingBox();
+    expect(excludedBox!.x).toBeGreaterThan(branchesBox!.x + branchesBox!.width);
+    expect(Math.abs(excludedBox!.y - branchesBox!.y)).toBeLessThan(12);
     await screenshot(page, {
-      path: "test-results/deep-review-other-branch.png",
+      path: join(tmpdir(), "relay-deep-review-excluded.png"),
     });
     await page
       .getByRole("button", { name: "Start deep review", exact: true })
@@ -486,7 +504,7 @@ test("reviews another branch into main from a checkout on main", async () => {
     const panes = page.locator(".deep-review-pane");
     await expect(panes.first()).toContainText("/code-review high");
     await screenshot(page, {
-      path: "test-results/deep-review-other-branch-started.png",
+      path: join(tmpdir(), "relay-deep-review-other-branch-started.png"),
     });
     expect(git("branch", "--show-current").trim()).toBe("main");
     const folder = git("worktree", "list", "--porcelain")
@@ -506,9 +524,12 @@ test("reviews another branch into main from a checkout on main", async () => {
     const stat = page.locator(".pane-toggle-stat");
     await expect(stat).toHaveCount(0);
     await writeFile(join(folder, "fix.ts"), "export const a = 1;\n");
-    await expect(stat).toHaveAttribute("aria-label", "1 lines added, 0 removed");
+    await expect(stat).toHaveAttribute(
+      "aria-label",
+      "1 lines added, 0 removed",
+    );
     await screenshot(page, {
-      path: "test-results/deep-review-other-branch-folder.png",
+      path: join(tmpdir(), "relay-deep-review-other-branch-folder.png"),
     });
   } finally {
     await app.close();

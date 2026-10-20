@@ -223,6 +223,7 @@ export const remoteProjectMethods = [
   ...handoffFolderMethods,
   "projectBranches",
   "projectBranchCounts",
+  "projectBranchChanges",
   "projectChangeBranch",
   "projectCommands",
   "agentDefaults",

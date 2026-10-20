@@ -150,6 +150,12 @@ function useTargetPick(
     branches.data?.bases ?? [],
     branch,
   );
+  const baseChanges = useQuery({
+    queryKey: ["project-branch-changes", projectId, base],
+    queryFn: () => api.projectBranchChanges(projectId, base!),
+    enabled: setup.kind === "branch" && !!base,
+    refetchInterval: 3000,
+  });
   // A kept commit that is no longer among the recent ones gives way to the newest.
   const chosenCommit = commits.data?.some((c) => c.sha === commit)
     ? commit
@@ -175,6 +181,7 @@ function useTargetPick(
       setBase(name);
       keep({ base: name || undefined });
     },
+    baseChanges: baseChanges.isError ? undefined : baseChanges.data,
     branchList: branches.data,
     branchCounts: counts.data,
     branchesPending: branches.isPending,
