@@ -4,7 +4,7 @@ package dev.relay.android.features.pairing
 // swelling floor, rings going out from the phone and the computer. Scanning, the whole of it folds
 // into the viewfinder and takes the camera's light, the picture develops out across the screen in
 // dots, the dots lock onto the code, and the code bursts back out into the whole field.
-// Kept line for line with Ripples.metal, so a change there carries over.
+// Geometry follows Ripples.metal; the GL shaders skip work once its contribution is invisible.
 
 private const val COMMON = """#version 300 es
 precision highp float;
@@ -151,6 +151,22 @@ void main() {
     float c = float(ci);
     float r = ri < AWAY ? float(ri) : float(AWAY - 1 - ri);
     vec2 site = vec2((c - float(COLS - 1) * 0.5 + mod(abs(r), 2.0) * 0.5) * STEP, 5.5 - r * STEP * 0.866);
+    // Keep the original vertex IDs and landing curve, including when the scan closes again.
+    vec2 span = SCAN_HI - SCAN_LO;
+    vec2 b = (facing(site, turn) - SCAN_LO) / span;
+    ivec2 place = clamp(ivec2(floor(vec2(b.x, 1.0 - b.y) * float(GRID))), ivec2(0), ivec2(GRID - 1));
+    vec2 g = (vec2(place) + 0.5) / float(GRID);
+    bool keeps = k == 0 && all(equal(nearestDot(unfacing(SCAN_LO + vec2(g.x, 1.0 - g.y) * span, turn)), ivec2(ci, ri)));
+    float p = landing(gather, iid, g.y);
+    // These specks have faded to exactly zero; avoid their waves and their rasterization.
+    if (burst < 0.0 && !keeps && p >= 1.0) {
+        gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+        gl_PointSize = 1.0;
+        vColor = vec4(0.0);
+        vFade = 0.0;
+        vSoft = 0.0;
+        return;
+    }
     bool loose = rand(iid, 20u) < 0.25;
     vec2 spread = loose ? vec2(STEP * 1.2, STEP * 1.1) : vec2(STEP * 0.55, 0.06);
     vec2 xz = site + (vec2(rand(iid, 21u), rand(iid, 22u)) * 2.0 - 1.0) * spread;
@@ -180,11 +196,6 @@ void main() {
 
     // Every dot folds into the viewfinder, onto the place of the grid it was over as the field faced
     // you when the scan began. One dot a place stays; the rest melt into it.
-    vec2 span = SCAN_HI - SCAN_LO;
-    vec2 b = (facing(site, turn) - SCAN_LO) / span;
-    ivec2 place = clamp(ivec2(floor(vec2(b.x, 1.0 - b.y) * float(GRID))), ivec2(0), ivec2(GRID - 1));
-    vec2 g = (vec2(place) + 0.5) / float(GRID);
-    bool keeps = k == 0 && all(equal(nearestDot(unfacing(SCAN_LO + vec2(g.x, 1.0 - g.y) * span, turn)), ivec2(ci, ri)));
     vec2 m = vec2(g.x, 1.0 - g.y);
     int n = max(modules, 1);
     ivec2 cell = clamp(ivec2(m * float(n)), ivec2(0), ivec2(n - 1));
@@ -193,7 +204,6 @@ void main() {
     float modulePx = length((onCode(code, vec2(1.0, 0.0)) - onCode(code, vec2(0.0))) * screen * 0.5) / float(n);
     float fade = 1.0;
     vec4 at = clip;
-    float p = landing(gather, iid, g.y);
     int ex = min(place.x, GRID - 1 - place.x), ey = min(place.y, GRID - 1 - place.y);
     bool bracket = min(ex, ey) == 0 && max(ex, ey) < BRACKET;
     float cleared = clamp(clear * 1.6 - length(g - 0.5) * 0.85, 0.0, 1.0);
@@ -254,7 +264,7 @@ void main() {
     }
 
     // Smaller than a speck can be drawn, it dims instead of shrinking.
-    gl_Position = at;
+    gl_Position = all(equal(col, vec4(0.0))) ? vec4(2.0, 2.0, 2.0, 1.0) : at;
     gl_PointSize = max(size, 1.2);
     vColor = col * min(1.0, size / 1.2);
     vFade = fade;
@@ -405,6 +415,17 @@ vec3 picture(vec2 ndc) {
     return texture(camera, (picturing * vec3(uv, 1.0)).xy).rgb;
 }
 
+vec3 shaded(vec3 c, vec2 ndc) {
+    c *= 1.0 - shade;
+    // Once the code has burst out of the screen, a dark square is left where it was.
+    if (lifted > 0.5) {
+        vec3 m = uncode * vec3(ndc, 1.0);
+        vec2 onCode = m.xy / m.z;
+        if (m.z > 0.0 && all(greaterThanEqual(onCode, vec2(0.0))) && all(lessThanEqual(onCode, vec2(1.0)))) c = vec3(0.04);
+    }
+    return c;
+}
+
 void main() {
     vec2 ndc = gl_FragCoord.xy / screen * 2.0 - 1.0;
     vec2 points = screen / (2.0 * unit);
@@ -415,6 +436,15 @@ void main() {
     float born = all(lessThan(abs(cell), vec2(125.0))) ? developed(develop, cell) : clamp((front - dist) / 34.0, 0.0, 1.0);
     float closed = ease(clamp((front - dist - 120.0) / 150.0, 0.0, 1.0));
     float zoom = 1.0 + 0.05 * (1.0 - entrance) * (1.0 - entrance);
+    // Ahead of the reveal nothing is visible; behind it only the full camera picture remains.
+    if (born <= 0.0 && closed <= 0.0) {
+        outColor = vec4(0.0);
+        return;
+    }
+    if (closed >= 1.0) {
+        outColor = vec4(shaded(picture(window.xy + (ndc - window.xy) / zoom), ndc), 1.0) * alpha;
+        return;
+    }
     vec2 at = window.xy + cell / points / zoom, d = 1.5 / points;
     vec3 seen = (picture(at) + picture(at + vec2(d.x, d.y)) + picture(at - vec2(d.x, d.y))
         + picture(at + vec2(d.x, -d.y)) + picture(at - vec2(d.x, -d.y))) / 5.0;
@@ -428,11 +458,6 @@ void main() {
     float a = max(disc, smoothstep(0.8, 1.0, closed));
     vec3 dots = mix(accent * 1.4, seen * mix(2.1, 1.0, closed), smoothstep(0.0, 0.55, born)) * mix(pop, 1.0, closed);
     vec3 c = mix(dots, picture(window.xy + (ndc - window.xy) / zoom), closed);
-    c *= 1.0 - shade;
-    // Once the code has burst out of the screen, a dark square is left where it was.
-    vec3 m = uncode * vec3(ndc, 1.0);
-    vec2 onCode = m.xy / m.z;
-    if (lifted > 0.5 && m.z > 0.0 && all(greaterThanEqual(onCode, vec2(0.0))) && all(lessThanEqual(onCode, vec2(1.0)))) c = vec3(0.04);
-    outColor = vec4(c, 1.0) * a * alpha;
+    outColor = vec4(shaded(c, ndc), 1.0) * a * alpha;
 }
 """
