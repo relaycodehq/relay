@@ -1,5 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import type {
   Account,
   ChangedFile,
@@ -17,7 +15,7 @@ import type {
 import { readBounded } from "../../shared/http";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import { parseGithubPullUrl } from "../../shared/validation";
-import { findExecutable } from "../platform/executables";
+import type { GithubCredential } from "../github/credentials";
 import { networkError } from "../util/network-errors";
 import {
   ApiError,
@@ -31,25 +29,9 @@ import {
 import { filePair } from "./file-pair";
 import { mergedPulls } from "./merged";
 
-const exec = promisify(execFile);
 const API = "https://api.github.com";
 const MAX_JSON = 8 * 1024 * 1024,
   MAX_FILE = 2 * 1024 * 1024;
-
-/** Borrows the `gh` CLI's login; null when it has none. */
-export async function ghToken() {
-  try {
-    const gh = await findExecutable("gh");
-    const { stdout } = await exec(
-      gh,
-      ["auth", "token", "--hostname", "github.com"],
-      { timeout: 5000, encoding: "utf8" },
-    );
-    return stdout.trim() || null;
-  } catch {
-    return null;
-  }
-}
 
 interface GithubIssue extends Omit<
   Issue,
@@ -189,8 +171,10 @@ export class GitHub implements PullHost {
     private fetchRequest: FetchRequest,
     private rejected: () => void,
   ) {}
-  static async connect(fetchRequest: FetchRequest, rejected: () => void) {
-    const token = await ghToken();
+  static async connect(
+    fetchRequest: FetchRequest,
+    { token, rejected }: GithubCredential,
+  ) {
     if (!token) throw new GithubSignedOut();
     const client = new GitHub(
       {

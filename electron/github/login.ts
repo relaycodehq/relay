@@ -1,22 +1,27 @@
-import { GitHub, GithubSignedOut } from "./github";
-import type { FetchRequest } from "./host";
-
-/** How long a `gh` login is trusted before Relay asks `gh` again. */
-const RECHECK = 5 * 60_000;
+import { GitHub, GithubSignedOut } from "../pull-requests/github";
+import { GithubCredentials, type GithubCredential } from "./credentials";
+import type { FetchRequest } from "../pull-requests/host";
 
 /** GitHub as the `gh` CLI is signed in to it; Relay keeps no GitHub token of its own. */
 export class GithubLogin {
   private client: Promise<GitHub> | null = null;
-  private at = 0;
-  constructor(private fetchRequest: FetchRequest) {}
+  private credential?: Promise<GithubCredential>;
+  constructor(
+    private fetchRequest: FetchRequest,
+    readonly credentials = new GithubCredentials(),
+  ) {}
+  refresh() {
+    this.credentials.forget();
+    this.client = null;
+  }
   /** Picks up a new `gh auth login`, or a sign-out, within a few minutes. */
   require() {
-    if (!this.client || Date.now() - this.at > RECHECK) {
-      this.at = Date.now();
-      const next = GitHub.connect(this.fetchRequest, () => {
-        // A late 401 from an old client mustn't discard its replacement.
-        if (this.client === next) this.client = null;
-      });
+    const credential = this.credentials.read();
+    if (!this.client || this.credential !== credential) {
+      this.credential = credential;
+      const next = credential.then((value) =>
+        GitHub.connect(this.fetchRequest, value),
+      );
       this.client = next;
       next.catch(() => {
         if (this.client === next) this.client = null;

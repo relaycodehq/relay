@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { GitHub, GithubSignedOut } from "./github";
-import { GithubLogin } from "./github-login";
+import { GitHub, GithubSignedOut } from "../pull-requests/github";
+import { GithubLogin } from "./login";
 
 const gh = vi.hoisted(() => ({ token: "old-login", asked: 0 }));
 vi.mock("../platform/executables", () => ({

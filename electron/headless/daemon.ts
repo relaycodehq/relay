@@ -66,7 +66,7 @@ import { ChatSummaryFeed } from "../project-chats/chat-summaries";
 import { PullMerges } from "../project-chats/pull-merges";
 import { Projects } from "../projects/projects";
 import { ProjectAdding } from "../project-add";
-import { GithubLogin } from "../pull-requests/github-login";
+import { GithubLogin } from "../github";
 import { pullRequestHosts } from "../pull-requests/setup";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { ReadAloud } from "../read-aloud";
@@ -314,7 +314,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     links: new AppLinks(window, () => !!login.client),
     projectChecks: new ProjectChecks(join(__dirname, "checks-worker.mjs")),
     blame: new BlameService(),
-    ci: new Ci(fetcher),
+    ci: new Ci(fetcher, github.credentials),
     pullRequestCreation: new PullRequestCreation(),
     updater: new Updater(() => {}),
     devBuild: new DevBuild(() => {}, {

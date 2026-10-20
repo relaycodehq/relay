@@ -21,7 +21,7 @@ import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
-import { GithubLogin } from "./pull-requests/github-login";
+import { GithubLogin } from "./github";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
@@ -317,7 +317,7 @@ const projectChecks = new ProjectChecks(
   ),
 );
 const blame = new BlameService();
-const ci = new Ci((url, init) => net.fetch(url, init));
+const ci = new Ci((url, init) => net.fetch(url, init), github.credentials);
 if (!app.requestSingleInstanceLock()) {
   // Opening Relay again only brings the running copy forward.
   console.info("Relay was opened again while already running");

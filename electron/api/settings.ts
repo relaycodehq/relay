@@ -59,7 +59,10 @@ const registryIdSchema = z.string().max(100).regex(registryIdPattern);
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
-  const sourceControl = () => sourceControlStatus(store, ctx.login);
+  const sourceControl = () => {
+    ctx.hosts.github.refresh();
+    return sourceControlStatus(store, ctx.login);
+  };
   /** A program picked in a file dialog; null when cancelled. */
   async function chooseProgram(
     program: string,

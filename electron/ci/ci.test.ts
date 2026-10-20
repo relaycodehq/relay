@@ -1,3 +1,4 @@
+import { GithubCredentials } from "../github/credentials";
 import { it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
@@ -82,7 +83,7 @@ it("shows commit statuses from CI outside Actions next to Actions runs", async (
           ? new Response("{}", { status: 404 })
           : Response.json(body);
       },
-      async () => null,
+      new GithubCredentials(async () => null),
     );
   const actions = "/repos/o/r/actions/runs";
   const tip = "/repos/o/r/commits/heads/feature/x/status";
@@ -204,7 +205,7 @@ it("walks back past commits CI never saw to the last one it reported on", async 
         },
       });
     },
-    async () => "token",
+    new GithubCredentials(async () => "token"),
   );
   const reading = await github.read({ owner: "o", name: "r" }, "main");
   expect(asked).toEqual([null, "cursor"]);

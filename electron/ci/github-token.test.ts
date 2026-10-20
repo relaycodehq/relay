@@ -1,3 +1,4 @@
+import { GithubCredentials } from "../github/credentials";
 import { beforeEach, expect, it, vi } from "vitest";
 
 const login = vi.hoisted(() => ({ token: null as string | null, asked: 0 }));
@@ -57,6 +58,7 @@ it("doesn't spawn gh again while tokenless requests keep working", async () => {
 
 it("never serves an answer cached under one token to a different token", async () => {
   const ifNoneMatch: (string | undefined)[] = [];
+  const credentials = new GithubCredentials();
   const github = new GitHub(async (_url, init) => {
     const headers = init?.headers as Record<string, string>;
     ifNoneMatch.push(headers["If-None-Match"]);
@@ -65,15 +67,15 @@ it("never serves an answer cached under one token to a different token", async (
       { default_branch: "public" },
       { headers: { etag: '"v1"' } },
     );
-  });
+  }, credentials);
 
   // An anonymous read caches the answer under its etag.
   await github.defaultBranch(repo);
   expect(await github.defaultBranch(repo)).toBe("public");
 
   // After a login the conditional request must not reuse the anonymous etag.
-  (github as unknown as { token?: Promise<string | null> }).token =
-    Promise.resolve("abc");
+  login.token = "abc";
+  credentials.forget();
   ifNoneMatch.length = 0;
   await github.defaultBranch(repo);
   expect(ifNoneMatch).toEqual([undefined]);
