@@ -107,6 +107,7 @@ const answered = (id: string, count: number) =>
     expect(messages).toHaveLength(count);
     expect(messages.at(-1)?.status).toBe("complete");
     expect(messages.at(-1)?.worktreeCommand).toBeUndefined();
+    expect(chats.list(projectId).find((c) => c.id === id)?.running).toBeFalsy();
   });
 const turns = async () =>
   (await readFile(join(root, "capture.jsonl"), "utf8"))
