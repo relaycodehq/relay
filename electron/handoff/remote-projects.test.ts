@@ -32,3 +32,36 @@ it("says WSL stopped a distribution rather than that it's offline", async () => 
     "Ubuntu is offline.",
   );
 });
+
+it("doesn't wake a sleeping WSL distribution for the sidebar's icon, and shows the last one it gave", async () => {
+  let asleep = true;
+  const client = { call: vi.fn(async () => "data:image/png;base64,AAAA") };
+  const computers = {
+    onEvent: () => {},
+    onOnline: () => {},
+    get: () => ({ id: "wsl", name: "Ubuntu" }),
+    status: () => "online",
+    list: () => [{ id: "wsl", name: "Ubuntu", status: "offline", asleep }],
+    asleep: () => asleep,
+    connected: vi.fn(async () => {
+      asleep = false;
+      return client;
+    }),
+  } as unknown as Computers;
+  const projects = {
+    get: () => ({
+      id: "p",
+      computer: { id: "wsl", name: "Ubuntu", projectId: "there" },
+    }),
+  } as unknown as Projects;
+  const remote = new RemoteProjects(computers, projects);
+  const icon = () => remote.forward("projectIcon", ["p"], () => {});
+  expect(await icon()).toBeNull();
+  expect(computers.connected).not.toHaveBeenCalled();
+  // Anything else the project needs wakes it, and the icon is asked then.
+  await remote.forward("projectBranches", ["p"], () => {});
+  expect(await icon()).toBe("data:image/png;base64,AAAA");
+  asleep = true;
+  expect(await icon()).toBe("data:image/png;base64,AAAA");
+  expect(client.call).toHaveBeenCalledTimes(2);
+});

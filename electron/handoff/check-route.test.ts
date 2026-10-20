@@ -5,9 +5,11 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { connect } from "node:net";
 import {
   checkRoute,
   pairingLink,
+  PipeShim,
   routeCommand,
   routeShell,
 } from "./pipe-route";
@@ -74,6 +76,34 @@ it("fails in words when the route itself does", async () => {
   );
   const gone = (): [string, string[]] => ["relay-no-such-ssh", []];
   await expect(checkRoute(box, gone)).rejects.toThrow("There's no ssh");
+});
+
+it("says what wsl.exe printed on stdout when it couldn't start the distribution", async () => {
+  const wsl = { kind: "wsl", distro: "nope" } as const;
+  const notFound = (): [string, string[]] => [
+    "/bin/sh",
+    [
+      "-c",
+      "printf 'There is no distribution with the supplied name.\\r\\nError code: Wsl/Service/WSL_E_DISTRO_NOT_FOUND\\r\\n'; exit 255",
+    ],
+  ];
+  const said =
+    "WSL couldn't start nope: There is no distribution with the supplied name.";
+  await expect(checkRoute(wsl, notFound)).rejects.toThrow(said);
+  const shim = new PipeShim(wsl, notFound);
+  const port = await shim.listen();
+  try {
+    // What it printed comes through to the client too, which reads it to see the pipe end.
+    await new Promise<void>((resolve) =>
+      connect(port, "127.0.0.1")
+        .on("close", () => resolve())
+        .on("error", () => {})
+        .resume(),
+    );
+    expect(shim.failure).toBe(said);
+  } finally {
+    shim.close();
+  }
 });
 
 // fish isn't here to try, but takes the same quoting: '…', \' and \\ outside them.

@@ -65,6 +65,17 @@ describe("a thread's line on the computer card", () => {
     );
   });
 
+  it("says why a thread on a sleeping or stopped WSL computer can't be checked", () => {
+    const unknown = thread({ state: "unknown" });
+    expect(threadLine(unknown, now)).toBe("can't check while it's offline");
+    expect(threadLine(unknown, now, { asleep: true })).toBe(
+      "checks once it's woken",
+    );
+    expect(threadLine(unknown, now, { stopped: true })).toBe(
+      "can't check while WSL has it stopped",
+    );
+  });
+
   it("shows a failed hand-off's own error", () => {
     expect(threadLine(thread({ state: "failed", error: "No room" }), now)).toBe(
       "No room",

@@ -87,7 +87,7 @@ export function ComputerCard({
                 <small>
                   {t.project}
                   <span className="cm-sep">·</span>
-                  <em className={t.state}>{threadLine(t, now)}</em>
+                  <em className={t.state}>{threadLine(t, now, c)}</em>
                 </small>
               </div>
               {onOpenChat && (

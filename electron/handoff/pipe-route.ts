@@ -73,8 +73,29 @@ export const routeName = (route: ComputerRoute) =>
 const lastLine = (out: string) =>
   text(out).trim().split(/\r?\n/).filter(Boolean).at(-1)?.trim();
 
+/**
+ * wsl.exe's own error, which it prints on stdout: its first line says it in
+ * words, above an `Error code: Wsl/…` line.
+ */
+function wslError(stdout: string) {
+  const lines = text(stdout)
+    .split(/\r?\n/)
+    .map((line) => line.trim());
+  const at = lines.findIndex((line) => /^Error code: Wsl\//.test(line));
+  if (at === -1) return undefined;
+  return lines.slice(0, at).filter(Boolean)[0] ?? lines[at];
+}
+
 /** What went wrong in words, from what the command printed. */
-function failure(route: ComputerRoute, said: string, code: number | null) {
+function failure(
+  route: ComputerRoute,
+  said: string,
+  code: number | null,
+  stdout = "",
+) {
+  const wsl = route.kind === "wsl" && wslError(stdout);
+  if (route.kind === "wsl" && wsl)
+    return `WSL couldn't start ${route.distro}: ${wsl}`;
   const stderr = text(said);
   if (/relay: (not found|No such file)|No such file or directory/.test(stderr))
     return `Relay isn't installed ${route.kind === "ssh" ? `on ${route.host}` : `in ${route.distro}`}. Install it there with curl -fsSL https://relaycode.io/install.sh | sh, then try again.`;
@@ -117,9 +138,14 @@ export class PipeShim {
         windowsHide: true,
       });
       let stderr = "";
+      // Its start only: wsl.exe says why it couldn't start the distribution there.
+      let started = "";
       let spawned = true;
       child.stderr.on("data", (d: Buffer) => {
         stderr = (stderr + d.toString()).slice(-4000);
+      });
+      child.stdout.on("data", (d: Buffer) => {
+        if (started.length < 4000) started += d.toString();
       });
       child.stdout.once("data", () => (this.failure = undefined));
       socket.pipe(child.stdin);
@@ -135,7 +161,8 @@ export class PipeShim {
       });
       // On close, not exit: what it printed last, its error included, is through by then.
       child.on("close", (code) => {
-        if (code && spawned) this.failure = failure(this.route, stderr, code);
+        if (code && spawned)
+          this.failure = failure(this.route, stderr, code, started);
         socket.destroy();
       });
     });
@@ -163,16 +190,19 @@ export async function pairingLink(
       timeout: 90_000,
       windowsHide: true,
     });
-    const url = (lastJson(text(stdout)) as { url?: unknown } | undefined)
-      ?.url;
+    const url = (lastJson(text(stdout)) as { url?: unknown } | undefined)?.url;
     if (typeof url !== "string")
       throw new Error(`Relay over ${routeName(route)} gave no pairing code.`);
     return url;
   } catch (e) {
-    const { stderr, code } = e as { stderr?: string; code?: number | string };
+    const { stdout, stderr, code } = e as {
+      stdout?: string;
+      stderr?: string;
+      code?: number | string;
+    };
     if (code === "ENOENT") throw new Error(missing(route));
     if (stderr !== undefined && typeof code !== "string")
-      throw new Error(failure(route, stderr, code ?? null));
+      throw new Error(failure(route, stderr, code ?? null, stdout));
     throw e;
   }
 }
@@ -221,7 +251,8 @@ export async function checkRoute(
       return { ms, relay: "", broken: broken[1] || "It doesn't start." };
     return { ms, relay: said.replace(/^relay v?/, "") };
   } catch (e) {
-    const { stderr, code, killed } = e as {
+    const { stdout, stderr, code, killed } = e as {
+      stdout?: string;
       stderr?: string;
       code?: number | string;
       killed?: boolean;
@@ -230,7 +261,12 @@ export async function checkRoute(
     if (killed)
       throw new Error(`${routeName(route)} didn't answer within 30s.`);
     throw new Error(
-      failure(route, stderr ?? "", typeof code === "number" ? code : null),
+      failure(
+        route,
+        stderr ?? "",
+        typeof code === "number" ? code : null,
+        stdout,
+      ),
     );
   }
 }

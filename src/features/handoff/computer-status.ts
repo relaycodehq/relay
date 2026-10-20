@@ -32,7 +32,15 @@ const firstLine = (error: string) => {
   return line.length > 120 ? line.slice(0, 119) + "…" : line;
 };
 
-export function threadLine(t: AwayThread, now: number) {
+/** `on`: the computer it's on, whose being asleep or stopped says why its state isn't known. */
+export function threadLine(
+  t: AwayThread,
+  now: number,
+  on?: Pick<PairedComputer, "asleep" | "stopped">,
+) {
+  if (t.state === "unknown" && on?.asleep) return "checks once it's woken";
+  if (t.state === "unknown" && on?.stopped)
+    return "can't check while WSL has it stopped";
   if (t.state === "failed")
     return t.error ? firstLine(t.error) : stateWord.failed;
   if (t.state === "stopped")

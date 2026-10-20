@@ -31,6 +31,11 @@ const shellOps = new Map<string, TerminalOp>([
   ["prefillTerminal", "prefill"],
   ["prefillSignIn", "prefillSignIn"],
 ]);
+/**
+ * What the sidebar asks of every project at launch: a WSL distribution asleep
+ * isn't woken for it, and gets the last answer, or this.
+ */
+const whileAsleep = new Map<string, unknown>([["projectIcon", null]]);
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before `remoteProjectsBridge` answers a call it doesn't know. */
 const unknownCall = (e: unknown) =>
@@ -39,6 +44,8 @@ const unknownCall = (e: unknown) =>
 
 export class RemoteProjects {
   private shells: RemoteShells;
+  /** The last answers to `whileAsleep` calls, by method and project. */
+  private answered = new Map<string, unknown>();
   constructor(
     private computers: Computers,
     private projects: Projects,
@@ -118,7 +125,12 @@ export class RemoteProjects {
     if (hereOnlyMethods.has(method))
       throw new Error(onComputerMessage(project));
     const { id, projectId } = project.computer;
-    return this.call(id, (client) =>
+    const kept = whileAsleep.has(method) && `${method}:${project.id}`;
+    if (kept && this.computers.asleep(id))
+      return this.answered.has(kept)
+        ? this.answered.get(kept)
+        : whileAsleep.get(method);
+    const answer = await this.call(id, (client) =>
       client.call(
         "projectCall",
         projectId,
@@ -126,6 +138,8 @@ export class RemoteProjects {
         args,
       ),
     );
+    if (kept) this.answered.set(kept, answer);
+    return answer;
   }
   /** Opens the thread's shell in the project's folder there, as `openTerminal` would here. */
   private openShell(project: Project, args: unknown[]) {
