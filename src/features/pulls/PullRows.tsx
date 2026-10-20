@@ -16,7 +16,7 @@ import {
   type BoardPull,
   type Verdict,
 } from "./pull-board";
-import { DiffStatLabel } from "../changes/DiffStatLabel";
+import { PullStatBreakdown } from "../changes/DiffStatBreakdown";
 import { ProjectBadge } from "../projects/ProjectBadge";
 import { relativeDate } from "../../lib/relative-date";
 
@@ -166,8 +166,10 @@ export function PullRow({
                 {pull.files} {pull.files === 1 ? "file" : "files"}
               </span>
             )}
-            <DiffStatLabel
+            <PullStatBreakdown
+              pull={pull.ref}
               stat={{ additions: pull.additions, deletions: pull.deletions }}
+              align="end"
             />
           </span>
         )}

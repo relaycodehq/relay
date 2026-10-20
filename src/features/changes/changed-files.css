@@ -296,3 +296,7 @@
   color: var(--muted);
   opacity: 0.75;
 }
+.diff-breakdown-note {
+  margin: 2px 0;
+  color: var(--muted);
+}
