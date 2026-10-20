@@ -85,6 +85,16 @@ import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 
+/** What a first message needs to start its thread on another computer. */
+function startableThere(input: ProjectChatSend, orHere: boolean) {
+  if (input.images?.length)
+    throw new Error(
+      `Screenshots don't go along to another computer yet. Send it without them${orHere ? ", or start it here" : ""}.`,
+    );
+  if (!agentAsked(input))
+    throw new Error("Pick the agent that starts it there.");
+}
+
 /** How often the ledger looks for turns that ended without saying. */
 const LEAK_CHECK_MS = 30_000;
 
@@ -237,7 +247,7 @@ export class ProjectChats {
     });
     this.storage.onSaved((chat) => this.news.saved(chat));
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
-    this.creating = new ThreadCreate(core);
+    this.creating = new ThreadCreate(core, this.worktrees);
     this.notes = new ThreadNotes(core);
     this.terminal = new TerminalContinue(
       core,
@@ -828,7 +838,49 @@ export class ProjectChats {
   }
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
+    // A thread of a project on another computer starts there with its first
+    // message, from whichever caller sends it. Send later holds it here first.
+    const home = this.homeOf(id);
+    if (home && this.starter && !input.sendAt)
+      return this.startThere(id, input, home);
     return this.control(id, () => this.sendHeld(id, input, fromRelay));
+  }
+  /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
+  private starter?: (id: string, computerId: string) => Promise<void>;
+  startsThereWith(start: (id: string, computerId: string) => Promise<void>) {
+    this.starter = start;
+  }
+  /** The computer the thread's project lives on, while the thread hasn't gone there yet. */
+  private homeOf(id: string) {
+    const chat = this.store.get().chats?.find((c) => c.id === id);
+    if (!chat || chat.sentTo) return undefined;
+    try {
+      return this.core.projects.get(chat.projectId).computer?.id;
+    } catch {
+      return undefined;
+    }
+  }
+  private async startThere(
+    id: string,
+    input: ProjectChatSend,
+    computerId: string,
+  ) {
+    await this.firstMessageOnly(id, input);
+    // Sent again once it went there: nothing's left to start.
+    if (!this.homeOf(id)) return;
+    try {
+      await this.starter!(id, computerId);
+    } catch (e) {
+      // Refused before it set off: the thread is new again, to send once more.
+      await this.control(id, async () => {
+        const chat = await this.storage.load(id);
+        if (chat.sentTo || chat.messages.some((m) => m.id !== input.id)) return;
+        chat.messages = [];
+        delete chat.lastInput;
+        await this.storage.save(chat);
+      });
+      throw e;
+    }
   }
   /**
    * A new thread's first message, kept with its worktree made but not
@@ -837,17 +889,27 @@ export class ProjectChats {
   firstMessageOnly(id: string, input: ProjectChatSend) {
     return this.control(id, async () => {
       const chat = await this.storage.load(id);
-      const remote = !!this.core.projects.get(chat.projectId).computer;
+      // Sent again after the reply got lost.
+      if (chat.messages.some((m) => m.id === input.id)) return;
+      const project = this.core.projects.get(chat.projectId);
+      if (project.computer && chat.messages.length)
+        throw new Error(
+          `This thread hasn't started on ${project.computer.name} yet. Send that once it has.`,
+        );
       if (
         chat.messages.length ||
-        (!chat.worktree && !remote) ||
+        (!chat.worktree && !project.computer) ||
         chat.scope.kind !== "project"
       )
         throw new Error(
           "Only a new thread in a worktree starts on another computer.",
         );
-      if (!agentAsked(input))
-        throw new Error("Pick the agent that starts it there.");
+      // A project's own computer holds a scheduled one here instead (send).
+      if (input.sendAt)
+        throw new Error(
+          "Send later doesn't start a thread on another computer yet. Send it now, or start it here.",
+        );
+      startableThere(input, !project.computer);
       await this.turns.sendNow(id, input, false, false);
       // Named after the message: the title's rename waits for a turn here.
       this.worktrees.unnamed.delete(id);
@@ -886,7 +948,18 @@ export class ProjectChats {
       held.scheduled?.some((s) => s.input.id === input.id)
     )
       return;
-    if (input.sendAt) return this.schedule.add(id, input);
+    if (input.sendAt) {
+      // Held for later, it starts the thread on its project's computer then;
+      // the handoff takes only a thread with nothing else waiting.
+      if (this.homeOf(id)) {
+        if (held.messages.length || held.scheduled?.length)
+          throw new Error(
+            "This thread starts on its project's computer with its first message. Schedule more once it has.",
+          );
+        startableThere(input, false);
+      }
+      return this.schedule.add(id, input);
+    }
     if (input.side || input.parentId) {
       const chat = await this.storage.load(id);
       if (input.side || replyRoot(chat.messages, input.parentId!).side)

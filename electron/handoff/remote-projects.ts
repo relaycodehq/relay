@@ -161,7 +161,11 @@ export class RemoteProjects {
     const { name } = this.computers.get(computerId);
     // Connecting, as when Relay just started, it waits a little for it.
     const status = this.computers.status(computerId);
-    if (status === "offline" || status === "denied")
+    // A WSL distribution WSL stopped: connected() says so, and how to start it.
+    const stopped = this.computers
+      .list()
+      .some((c) => c.id === computerId && c.stopped);
+    if (!stopped && (status === "offline" || status === "denied"))
       throw new Error(`${name} is offline.`);
     const client = await this.computers.connected(computerId);
     try {

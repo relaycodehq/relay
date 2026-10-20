@@ -172,6 +172,10 @@ export class Handoffs {
         this.chats.setHandoffLive(c.id, undefined);
     });
     computers.onEvent((id, event) => this.event(id, event));
+    // A thread of a project on another computer goes there with its first send.
+    chats.startsThereWith((chatId, computerId) =>
+      this.handOff(chatId, computerId),
+    );
   }
   /** The thread live on another computer a call is about, by its id or its own worktree's workspace id. */
   private liveAwayIn(first: unknown) {

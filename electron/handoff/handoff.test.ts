@@ -178,7 +178,11 @@ async function pairedComputers() {
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
           if (method === "createScratch")
             return mini.projects.scratch(join(mini.dir, "scratch"), () => false);
-          if (method === "projectWorkingTree" || method === "threadElsewhere")
+          if (
+            method === "projectWorkingTree" ||
+            method === "projectRebase" ||
+            method === "threadElsewhere"
+          )
             return { ran: method, on: id };
           throw new Error(`Not in this test: ${method}`);
         },
@@ -1024,6 +1028,11 @@ it("runs a live handoff's folder calls on the other computer's worktree, and won
     ran: "projectWorkingTree",
     on: workspaceId(mini.projectId, there),
   });
+  // Its branch catches up there too, as the composer's Rebase offers.
+  expect(sender.forwards("projectRebase", [where, "a".repeat(40)])).toBe(true);
+  expect(
+    await sender.forward("projectRebase", [where, "a".repeat(40)], here),
+  ).toEqual({ ran: "projectRebase", on: workspaceId(mini.projectId, there) });
   // An agent's own worktree beside the thread's never went across.
   expect(
     sender.forwards("projectWorkingTree", [
@@ -1969,6 +1978,13 @@ it("adds a folder on the other computer as a project that lives there, and start
     await remote.forward("projectWorkingTree", [project.id], unwatch),
   ).toEqual({ ran: "projectWorkingTree", on: added!.id });
   expect(remote.forwards("projectWorkingTree", [laptop.projectId])).toBe(false);
+  expect(
+    await remote.forward(
+      "projectRebase",
+      [project.id, "a".repeat(40)],
+      unwatch,
+    ),
+  ).toEqual({ ran: "projectRebase", on: added!.id });
   // A thread's own folder calls go with the thread.
   expect(
     remote.forwards("projectWorkingTree", [workspaceId(project.id, thread.id)]),
@@ -1980,6 +1996,80 @@ it("adds a folder on the other computer as a project that lives there, and start
   await expect(
     remote.forward("revealProjectPath", [project.id, ""], unwatch),
   ).rejects.toThrow("isn't on this one");
+});
+
+it("starts a remote project's thread there from a plain send, as a phone's, and holds a Send later one here until it's due", async () => {
+  const { laptop, mini, computers, computerId } = await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const notes = join(mini.dir, "notes");
+  await mkdir(notes);
+  const project = await remote.add(computerId, notes);
+  const [added] = (await mini.projects.list(null)).filter(
+    (p) => p.path === notes,
+  );
+  const startedThere = async (id: string, body: string) => {
+    await vi.waitFor(async () =>
+      expect((await laptop.chats.get(id)).sentTo).toMatchObject({
+        state: "away",
+        live: true,
+        home: true,
+      }),
+    );
+    let there: string | undefined;
+    await vi.waitFor(() => {
+      there = mini.chats
+        .list(added!.id)
+        .find((c) => c.title.includes(body))?.id;
+      expect(there).toBeDefined();
+    });
+    await finished(mini.chats, there!, 2);
+  };
+
+  const thread = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await laptop.chats.sendYours(thread.id, input("@codex Tidy the notes"));
+  await startedThere(thread.id, "Tidy the notes");
+
+  // Send later keeps it here, shown as scheduled, and starts it there when due.
+  const later = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await laptop.chats.sendYours(later.id, {
+    ...input("@codex Sort the notes"),
+    sendAt: Date.now() + 1500,
+  });
+  const held = await laptop.chats.get(later.id);
+  expect(held.messages).toEqual([]);
+  expect(held.scheduled).toHaveLength(1);
+  expect(held.sentTo).toBeUndefined();
+  // The handoff takes nothing else waiting along.
+  await expect(
+    laptop.chats.sendYours(later.id, {
+      ...input("@codex And file them"),
+      sendAt: Date.now() + 60_000,
+    }),
+  ).rejects.toThrow("Schedule more once it has.");
+  await startedThere(later.id, "Sort the notes");
+  expect((await laptop.chats.get(later.id)).scheduled).toBeUndefined();
+
+  // Refused before it sets off, the thread is new again.
+  await computers.forget(computerId);
+  const orphan = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await expect(
+    laptop.chats.sendYours(orphan.id, input("@codex Count the notes")),
+  ).rejects.toThrow("isn't paired anymore");
+  const after = await laptop.chats.get(orphan.id);
+  expect(after.messages).toEqual([]);
+  expect(after.lastInput).toBeUndefined();
 });
 
 it("opens a remote project's shells on its computer, in its folder, and shows their output on the computer that opened them alone", async () => {

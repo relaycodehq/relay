@@ -168,13 +168,7 @@ export class TurnSends {
       await this.worktrees.refreshAgentWorktrees(chat);
       if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
-      // A review follows its branch to wherever it's checked out first, so
-      // the turn runs there; a retried send that's in already moves nothing.
-      if (!project.computer && !chat.messages.some((m) => m.id === input.id))
-        await this.councils.fixing(chat, input);
-      const root = project.computer
-        ? ""
-        : await this.worktrees.root(chat, input.body, active.abort.signal);
+      // Sent again after it went in: nothing to check, move or start.
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;
@@ -212,6 +206,12 @@ export class TurnSends {
           );
         evidence = await this.evidence(chat, input.selection);
       }
+      // Once the message is sure to go in, a review follows its branch to
+      // wherever it's checked out, so the turn runs there.
+      if (!project.computer) await this.councils.fixing(chat, input);
+      const root = project.computer
+        ? ""
+        : await this.worktrees.root(chat, input.body, active.abort.signal);
       const user: ChatMessage = {
         id: input.id,
         role: "user",

@@ -29,6 +29,16 @@ export function freePortOffset(used: Iterable<number>) {
   return offset;
 }
 
+/** Waits for `run` unless `signal` stops the wait first; the run goes on. */
+async function waitUnlessStopped(run: Promise<void>, signal?: AbortSignal) {
+  if (signal?.aborted) return;
+  let stop!: () => void;
+  const stopped = new Promise<void>((resolve) => (stop = resolve));
+  signal?.addEventListener("abort", stop, { once: true });
+  await Promise.race([run, stopped]);
+  signal?.removeEventListener("abort", stop);
+}
+
 /** What the agent hears of the output; the row holds the rest. */
 const noteChars = 2000;
 
@@ -58,6 +68,11 @@ export class WorktreeSetup {
     string,
     { done: Promise<void>; abort: AbortController }
   >();
+  /**
+   * Setups running or about to, by folder: threads sharing one wait for
+   * its one run rather than start their agents in a folder half set up.
+   */
+  private folders = new Map<string, Promise<void>>();
   /** Offsets given out but maybe not yet in the store's summaries. */
   private given = new Map<string, number>();
 
@@ -209,8 +224,10 @@ export class WorktreeSetup {
   /**
    * Readies a worktree made since setup last ran in it, before the turn
    * `provider` answers: runs the project's setup command, shown in the
-   * thread, or waits for a run already going. Stopping the turn stops it. A
-   * failure doesn't hold the turn up; its agent hears about it instead.
+   * thread, or waits for a run already going, this thread's or one in the
+   * folder it shares. Stopping the turn stops its own run, and only the
+   * wait for another's. A failure doesn't hold the turn up; its agent hears
+   * about it instead.
    */
   async prepare(
     chat: ProjectChat,
@@ -226,10 +243,56 @@ export class WorktreeSetup {
       return;
     }
     const worktree = chat.worktree;
-    if (worktree?.setup !== "pending" || !worktree.path) return;
-    const command = this.settings(chat)?.worktreeSetup;
-    const copied = worktree.included;
+    if (!worktree?.path || worktree.removedAt) return;
+    const path = worktree.path;
+    const folder = this.folders.get(path);
+    if (folder) return waitUnlessStopped(folder, signal);
+    // A thread that joined the folder before the one that made it sent its
+    // first message runs the folder's setup for both.
+    const owed = (this.core.store.get().chats ?? []).flatMap((c) =>
+      c.id !== chat.id &&
+      c.worktree?.path === path &&
+      !c.worktree.removedAt &&
+      c.worktree.setup === "pending"
+        ? [c.id]
+        : [],
+    );
+    if (worktree.setup !== "pending" && !owed.length) return;
+    // Claimed before anything waits, so a sharer sending now waits for it.
+    const job = this.setUp(chat, worktree, owed, provider, signal);
+    const held = job.catch(() => {});
+    this.folders.set(path, held);
+    try {
+      await job;
+    } finally {
+      if (this.folders.get(path) === held) this.folders.delete(path);
+    }
+  }
+
+  private async setUp(
+    chat: ProjectChat,
+    worktree: ChatWorktree,
+    owed: string[],
+    provider: AgentProvider,
+    signal?: AbortSignal,
+  ) {
+    let copied = worktree.included;
     delete worktree.included;
+    for (const id of owed) {
+      const them = await this.core.storage.load(id);
+      const theirs = them.worktree;
+      if (
+        !theirs ||
+        theirs.path !== worktree.path ||
+        theirs.setup !== "pending"
+      )
+        continue;
+      copied ??= theirs.included;
+      delete theirs.included;
+      theirs.setup = "done";
+      await this.core.storage.save(them);
+    }
+    const command = this.settings(chat)?.worktreeSetup;
     // Done once it started: a failed run is run again from its row, not by every turn.
     worktree.setup = "done";
     if (!command) return this.core.storage.save(chat);
@@ -248,7 +311,7 @@ export class WorktreeSetup {
   /**
    * Runs the project's setup again in the thread's worktree, in the row of
    * a run that failed or was stopped. Resolves once it started; a turn sent
-   * meanwhile waits for it.
+   * meanwhile waits for it, in this thread or one sharing the folder.
    */
   rerun(id: string, messageId: string) {
     return this.core.control(id, async () => {
@@ -256,7 +319,11 @@ export class WorktreeSetup {
       const message = latestSetup(chat.messages);
       if (message?.id !== messageId)
         throw new Error("Only the thread's latest setup can run again.");
-      if (message.status === "streaming" || this.running.has(id))
+      if (
+        message.status === "streaming" ||
+        this.running.has(id) ||
+        (chat.worktree?.path && this.folders.has(chat.worktree.path))
+      )
         throw new Error("Setup is running already.");
       if (!setupCanRerun(message))
         throw new Error("This worktree's setup already went through.");
@@ -283,9 +350,14 @@ export class WorktreeSetup {
       message.version++;
       await this.core.storage.save(chat);
       this.emit(chat, message);
-      void this.run(chat, worktree, message, command, { rerun: true }).catch(
-        (e) => console.warn("Worktree setup couldn't run again:", e),
-      );
+      const path = worktree.path!;
+      const held = this.run(chat, worktree, message, command, {
+        rerun: true,
+      }).catch((e) => console.warn("Worktree setup couldn't run again:", e));
+      this.folders.set(path, held);
+      void held.finally(() => {
+        if (this.folders.get(path) === held) this.folders.delete(path);
+      });
     });
   }
 

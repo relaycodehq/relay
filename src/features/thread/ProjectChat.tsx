@@ -342,9 +342,10 @@ export function ProjectChat({
     },
     onSent: followAnswer,
   });
-  // A project on another computer starts every thread there, in its folder.
+  // A project on another computer starts every thread there, in its folder;
+  // its first send takes it there, as a phone's does.
   const home = project.computer;
-  const startOn = home ? { id: home.id } : worktree.startOn;
+  const startOn = home ? undefined : worktree.startOn;
   const newThread = useNewThread(
     () =>
       home

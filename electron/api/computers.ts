@@ -60,11 +60,13 @@ export function computerHandlers(ctx: ApiContext) {
     startProjectChatOn: takes(
       [idSchema, projectChatSendSchema, idSchema],
       async (chatId, input, computerId) => {
-        if (input.images?.length)
-          throw new Error(
-            "Screenshots don't go along to another computer yet. Send it without them, or start it here.",
-          );
         const { sender } = handoffs();
+        // Its project's own computer: a send starts it there, or holds it for later.
+        const { projectId } = await ctx.projectChats.get(chatId);
+        if (ctx.projects.get(projectId).computer?.id === computerId) {
+          await ctx.projectChats.send(chatId, input);
+          return;
+        }
         await ctx.projectChats.firstMessageOnly(chatId, input);
         await sender.handOff(chatId, computerId);
       },

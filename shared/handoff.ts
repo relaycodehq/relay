@@ -195,6 +195,7 @@ export const handoffFolderMethods = [
   "projectMergeBranch",
   "projectDeleteBranch",
   "projectCatchUp",
+  "projectRebase",
   "projectPreparePull",
   "projectCreatePull",
   "projectHistory",

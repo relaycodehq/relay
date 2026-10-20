@@ -6,7 +6,7 @@ import { basename, join } from "node:path";
 import { existsSync } from "node:fs";
 import { joinedWorktree, type ProjectChat } from "../../shared/projects";
 import type { ChatCore } from "./core";
-import { ThreadWorktrees } from "./worktrees";
+import { ThreadWorktrees, joinableOn } from "./worktrees";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
@@ -17,6 +17,8 @@ let root: string;
 let worktrees: ThreadWorktrees;
 /** The threads the store has, which sharing a worktree is checked against. */
 let chats: ProjectChat[];
+/** Asked for the repository right before a removal waits for its queue. */
+let projectRoot: ReturnType<typeof vi.fn>;
 const git = (cwd: string, ...args: string[]) =>
   execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
 
@@ -48,8 +50,9 @@ beforeEach(async () => {
     "Initial",
   );
   chats = [];
+  projectRoot = vi.fn(async () => root);
   const core = {
-    projects: { root: vi.fn(async () => root) },
+    projects: { root: projectRoot },
     storage: {
       save: vi.fn(),
       load: vi.fn(async (id: string) => chats.find((c) => c.id === id)!),
@@ -449,4 +452,98 @@ it("fetches a remote start outside the repository's queue, so a slow remote hold
   } finally {
     vi.unstubAllEnvs();
   }
+});
+
+/** A deep review that followed the branch it reviews into `path`, as the store lists it. */
+const reviewIn = (path: string) =>
+  ({
+    ...thread(undefined),
+    id: "review",
+    title: "Deep review",
+    reviewFolder: { path, branch: "feature" },
+  }) as ProjectChat;
+
+it("keeps a worktree a review followed its branch into, however its thread lets go of it", async () => {
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  const review = reviewIn(path);
+  chats = [chat, review];
+
+  await expect(worktrees.remove("chat")).rejects.toThrow(
+    "“Deep review” works in this worktree too",
+  );
+  expect(await worktrees.cleanUp("chat", async () => undefined)).toBe(
+    "another thread works in it",
+  );
+  execFileSync("sh", ["-c", "echo fix > fix.txt"], { cwd: path });
+  chat.archivedAt = 5;
+  await worktrees.dropArchived(chat);
+  expect(existsSync(join(path, "fix.txt"))).toBe(true);
+  expect(chat.worktree!.removedAt).toBeUndefined();
+
+  review.archivedAt = 6;
+  await worktrees.dropArchived(chat);
+  expect(existsSync(path)).toBe(false);
+});
+
+it("keeps a folder another thread joined while its removal waited for the repository", async () => {
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  chat.archivedAt = 5;
+  chats = [chat];
+  let open!: () => void;
+  const held = worktrees.inRepo(root, () => new Promise<void>((r) => (open = r)));
+  projectRoot.mockClear();
+  const dropping = worktrees.dropArchived(chat);
+  // Torn down and waiting for the queue, where a new thread joins first.
+  await vi.waitFor(() => expect(projectRoot).toHaveBeenCalled());
+  chats.push(joining(chat));
+  open();
+  await held;
+  await dropping;
+  expect(existsSync(path)).toBe(true);
+  expect(chat.worktree!.removedAt).toBeUndefined();
+});
+
+it("joins no folder its agent switched to another branch", async () => {
+  git(root, "branch", "other");
+  const chat = thread({});
+  const path = await worktrees.root(chat, "fix the login thing");
+  chats = [chat];
+  const branch = chat.worktree!.branch!;
+  expect(await joinableOn(root, chats, branch)).toBe(chat);
+
+  git(path, "switch", "-q", "other");
+  expect(await joinableOn(root, chats, branch)).toBeUndefined();
+});
+
+it("reads a remote branch picked to carry on as its local twin, so an away thread's folder stays its own", async () => {
+  const remote = join(temp, "remote.git");
+  execFileSync("git", ["init", "-q", "--bare", remote]);
+  git(root, "remote", "add", "origin", remote);
+  git(root, "push", "-q", "origin", "main:feature");
+  git(root, "fetch", "-q", "origin");
+  git(root, "branch", "feature", "origin/feature");
+  const away: ProjectChat = {
+    ...thread({ startFrom: { on: "feature" } }),
+    id: "away",
+    title: "fix login",
+  };
+  chats = [away];
+  const theirs = await worktrees.root(away, "carry on");
+  expect(await joinableOn(root, chats, "origin/feature")).toBe(away);
+  away.sentTo = {
+    id: "h",
+    computerId: "c",
+    computer: "thinkcenter",
+    at: 1,
+    state: "away",
+  };
+
+  const chat = thread({ startFrom: { on: "origin/feature" } });
+  chats = [away, chat];
+  const path = await worktrees.root(chat, "carry on");
+  expect(path).not.toBe(theirs);
+  expect(chat.worktree?.adopted).toBeUndefined();
+  expect(chat.worktree).toMatchObject({ wanted: { branch: "origin/feature" } });
 });

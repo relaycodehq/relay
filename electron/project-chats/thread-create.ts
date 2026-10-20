@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ChatScope,
+  ChatWorktree,
   ChatWorkspace,
   LinkedFolder,
   ProjectChat,
@@ -10,14 +11,17 @@ import type {
 import { branchNameProblem } from "../../shared/branch-names";
 import { joinedWorktree } from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
-import { joinableOn } from "./worktrees";
+import { joinableOn, type ThreadWorktrees } from "./worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
 
 /** New threads: empty ones, and forks of an existing one up to an answer. */
 export class ThreadCreate {
-  constructor(private core: ChatCore) {}
+  constructor(
+    private core: ChatCore,
+    private worktrees: Pick<ThreadWorktrees, "inRepo">,
+  ) {}
   async create(
     projectId: string,
     scope: ChatScope,
@@ -61,38 +65,72 @@ export class ThreadCreate {
         ? branch
         : undefined;
     const startFrom = workspace === "worktree" ? picked : undefined;
-    // On a branch another thread's worktree is on: the same folder, both
-    // threads working in it, as T3 shares one.
-    const joining =
-      startFrom && "on" in startFrom
-        ? await joinableOn(projectChats, startFrom.on)
-        : undefined;
-    const joined =
-      joining &&
-      joinedWorktree((await this.core.storage.load(joining.id)).worktree!);
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
-    // So is a branch to start from that isn't there; anywhere else it is,
-    // the first message finds it a folder. One that goes by then falls
-    // back the same way.
-    const startProblem =
-      startFrom &&
-      !joined &&
-      (await worktreeStartProblem(
-        await this.core.projects.root(projectId),
-        startFrom,
-      ));
-    if (startProblem) throw new Error(startProblem);
+    if (!startFrom)
+      return this.add(projectId, scope, workspace, { startedBy, named, links });
+    const root = await this.core.projects.root(projectId);
+    // In the repository's queue, where a worktree's removal asks again
+    // whether anyone works in it: whichever comes second sees the other.
+    return this.worktrees.inRepo(root, async () => {
+      // On a branch another thread's worktree is on: the same folder, both
+      // threads working in it, as T3 shares one.
+      const joining =
+        "on" in startFrom
+          ? await joinableOn(
+              root,
+              (this.core.store.get().chats ?? []).filter(
+                (c) => c.projectId === projectId,
+              ),
+              startFrom.on,
+            )
+          : undefined;
+      const joined =
+        joining &&
+        joinedWorktree((await this.core.storage.load(joining.id)).worktree!);
+      // So is a branch to start from that isn't there; anywhere else it
+      // is, the first message finds it a folder. One that goes by then
+      // falls back the same way.
+      const startProblem =
+        !joined && (await worktreeStartProblem(root, startFrom));
+      if (startProblem) throw new Error(startProblem);
+      return this.add(projectId, scope, workspace, {
+        startedBy,
+        named,
+        links,
+        ...(joined ? { worktree: joined } : { startFrom }),
+      });
+    });
+  }
+
+  private async add(
+    projectId: string,
+    scope: ChatScope,
+    workspace: ChatWorkspace,
+    {
+      startedBy,
+      named,
+      links,
+      startFrom,
+      worktree,
+    }: {
+      startedBy?: StartedBy;
+      named?: string;
+      links?: LinkedFolder[];
+      startFrom?: WorktreeStart;
+      worktree?: ChatWorktree;
+    },
+  ) {
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
       scope,
       // The worktree itself is made with the first message, named after it
       // unless the user named its branch.
-      ...(joined
-        ? { worktree: joined }
+      ...(worktree
+        ? { worktree }
         : workspace === "worktree"
           ? {
               worktree: {

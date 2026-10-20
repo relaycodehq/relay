@@ -943,6 +943,21 @@ it("reviews a branch in the folder it's checked out in, edits and all, and follo
   git(there, "switch", "-q", "--detach");
   const other = join(root, "panel-other");
   git(repo, "worktree", "add", "-q", other, "panel");
+  // A message that's refused moves nothing.
+  await expect(
+    chats.send(chat.id, {
+      id: randomUUID(),
+      body: "@claude",
+      provider: "claude",
+      choice: { ...choice, model: "" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      fixes: ["F1"],
+    }),
+  ).rejects.toThrow("Add a question after the agent mention.");
+  const refused = await chats.get(chat.id);
+  expect(refused.deepReview!.scope.checkout!.path).toBe(there);
+  expect(refused.movedIn).toBeUndefined();
   const body = fixRequest("claude", reviewed.findings!.reports[0]!.findings);
   await chats.send(chat.id, {
     id: randomUUID(),

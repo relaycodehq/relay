@@ -368,9 +368,20 @@ export async function fetchStart(
 }
 
 /** The folder `branch` is checked out in, if any; Git allows it in one only. */
-const checkedOutAt = async (root: string, branch: string) =>
+export const checkedOutAt = async (root: string, branch: string) =>
   (await worktreeList(root)).find((w) => w.branch === branch && !w.prunable)
     ?.path;
+
+/**
+ * The local branch `name` means: itself, or for a remote one listed as
+ * `origin/…` its local twin when there is one, as `git switch` has it.
+ */
+export async function localBranchName(root: string, name: string) {
+  const remote = await remoteOf(root, name);
+  return remote && (await hasBranch(root, remote.branch))
+    ? remote.branch
+    : name;
+}
 
 /** Why the local branch a thread's worktree is on can't be opened in it again. */
 async function carryOnProblem(root: string, branch: string) {
@@ -394,6 +405,10 @@ const caughtUp = async (root: string, sha: string, branch: string) =>
 
 /** Where `path` really is, so two spellings of one folder compare equal. */
 const real = (path: string) => realpath(path).catch(() => resolve(path));
+
+/** Whether two paths are one folder, Git's spelling of it or Relay's. */
+export const sameFolder = async (a: string, b: string) =>
+  resolve(a) === resolve(b) || (await real(a)) === (await real(b));
 
 /**
  * What a picked start `name` is: its commit, a remote one fetched first when
