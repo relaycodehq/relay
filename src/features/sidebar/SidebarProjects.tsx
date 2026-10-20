@@ -154,6 +154,30 @@ function AddMenu({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
   );
 }
 
+/** With no projects yet, the + menu's ways in, spelled out under the heading. */
+function AddWays({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
+  return (
+    <div className="sb-thread-list flat sb-add-ways">
+      <button className="sb-thread" onClick={() => onAdd("new")}>
+        <FolderPlus size={14} />
+        <span className="sb-thread-title">New project</span>
+      </button>
+      <button className="sb-thread" onClick={() => onAdd("folder")}>
+        <FolderOpen size={14} />
+        <span className="sb-thread-title">Open a folder</span>
+      </button>
+      <button className="sb-thread" onClick={() => onAdd("github")}>
+        <GitHubMark size={14} />
+        <span className="sb-thread-title">Clone a repository</span>
+      </button>
+      <button className="sb-thread" onClick={() => onAdd("import")}>
+        <ImportIcon size={14} />
+        <span className="sb-thread-title">Import from another app…</span>
+      </button>
+    </div>
+  );
+}
+
 /** The Projects heading, a note for what failed, and the tree. */
 export function ProjectsSection({
   tree,
@@ -198,9 +222,7 @@ export function ProjectsSection({
       {!folds.folded.projects && (
         <GroupContents node={tree.shown} tree={tree} />
       )}
-      {!folds.folded.projects && empty && (
-        <p className="sb-note">Add a project folder to get started.</p>
-      )}
+      {!folds.folded.projects && empty && <AddWays onAdd={onAdd} />}
     </>
   );
 }

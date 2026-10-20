@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { ProjectSidebar } from "../../src/features/sidebar/ProjectSidebar";
 import type { Api } from "../../shared/types";
+import type { AddProjectPage } from "../../src/features/add-project/AddProjectPalette";
 import type { ChatSummary, Project } from "../../shared/projects";
 
 /** Answers the sidebar's own questions from `chats`. */
@@ -36,7 +37,7 @@ export function AppFrame({
   showing?: { projectId?: string; chatId?: string };
   /** Settings hides the sidebar, as in the app. */
   sidebar?: boolean;
-  onAdd?: () => void;
+  onAdd?: (page: AddProjectPage) => void;
   /** A thread picked in the sidebar, for previews that show more than one. */
   onOpen?: (chat?: ChatSummary) => void;
   children: ReactNode;

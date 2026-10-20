@@ -1389,6 +1389,17 @@
 .sb-note.error {
   color: var(--danger);
 }
+/* No projects yet: the ways to add one, quiet until pointed at. */
+.sb .sb-add-ways .sb-thread {
+  color: var(--muted);
+}
+.sb .sb-add-ways .sb-thread:hover {
+  color: var(--text);
+}
+.sb-add-ways .sb-thread > svg {
+  flex: none;
+  opacity: 0.8;
+}
 
 /* Snooze menu. */
 .sb-menu-positioner {

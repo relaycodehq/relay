@@ -694,7 +694,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add project", exact: true })
       .click();
-    await page.getByRole("option", { name: "Choose in Finder…" }).click();
+    await page.getByRole("menuitem", { name: "Open a folder" }).click();
+    await page.getByRole("button", { name: "Choose in Finder…" }).click();
     await expect(
       page.getByRole("heading", {
         name: /What should we work on in Another Project/,

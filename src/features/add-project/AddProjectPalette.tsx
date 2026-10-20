@@ -189,6 +189,12 @@ export function AddProjectPalette({
     else setSpec((s) => ({ ...s, location: path }));
   }
 
+  function chooseInFileManager() {
+    void api.chooseFolder("Add a project folder").then((path) => {
+      if (path) return adding.pick(path).then(finish);
+    });
+  }
+
   const remote = parseRemote(query);
   const items: Item[] = [];
   if (page === "root") {
@@ -270,10 +276,7 @@ export function AddProjectPalette({
         icon: <Folder size={15} />,
         label: `Choose in ${fileManager}…`,
         section: q ? undefined : " ",
-        run: () =>
-          void api.chooseFolder("Add a project folder").then((path) => {
-            if (path) return adding.pick(path).then(finish);
-          }),
+        run: chooseInFileManager,
       });
     }
   } else if (page === "folder") {
@@ -584,7 +587,17 @@ export function AddProjectPalette({
                 </button>
               </span>
             ) : page === "folder" ? (
-              <span>Tab goes into a folder · ↵ adds it</span>
+              <span>
+                Tab goes into a folder · ↵ adds it
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={adding.busy}
+                  onClick={chooseInFileManager}
+                >
+                  Choose in {fileManager}…
+                </button>
+              </span>
             ) : page === "new" ? (
               <span>↵ creates it</span>
             ) : (
