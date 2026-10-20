@@ -341,6 +341,7 @@ export function ThreadPanel({
           ) : (
             <ProjectFiles
               key={where}
+              active={front?.surface === "files"}
               project={project}
               where={where}
               watched={watched}

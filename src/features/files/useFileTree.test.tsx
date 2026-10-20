@@ -55,7 +55,7 @@ it("stops polling hidden descendants and restores their expansion when reopened"
   let directories!: ReturnType<typeof useDirectories>;
   function Probe() {
     expansion = useExpanded("checkout");
-    directories = useDirectories("checkout", expansion.expanded, false);
+    directories = useDirectories("checkout", expansion.expanded, false, true);
     return null;
   }
   const advance = async (ms: number) => {
@@ -118,6 +118,54 @@ it("stops polling hidden descendants and restores their expansion when reopened"
     expect(
       treeRows(directories.listings, expansion.expanded).at(-1)?.path,
     ).toBe("app/lib/deep/a.ts");
+  } finally {
+    act(() => root.unmount());
+    client.clear();
+  }
+});
+
+it("keeps expansion and cached listings while the Files tab is hidden", async () => {
+  vi.useFakeTimers();
+  focusManager.setFocused(true);
+  vi.mocked(api.projectDirectory).mockResolvedValue({
+    entries: [],
+    truncated: false,
+  });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const root = createRoot(document.createElement("div"));
+  const open = new Set(["src"]);
+  let directories!: ReturnType<typeof useDirectories>;
+  function Probe({ active }: { active: boolean }) {
+    directories = useDirectories("checkout", open, false, active);
+    return null;
+  }
+  const render = async (active: boolean) => {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe active={active} />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => vi.advanceTimersByTimeAsync(1));
+  };
+  try {
+    await render(true);
+    expect(api.projectDirectory).toHaveBeenCalledTimes(2);
+    const cached = directories.listings;
+    await render(false);
+    vi.mocked(api.projectDirectory).mockClear();
+    await act(async () => {
+      await client.invalidateQueries({ queryKey: ["project-dir", "checkout"] });
+      await vi.advanceTimersByTimeAsync(15_000);
+    });
+    expect(api.projectDirectory).not.toHaveBeenCalled();
+    expect(directories.listings).toBe(cached);
+    await render(true);
+    expect(api.projectDirectory).toHaveBeenCalledTimes(2);
+    expect(open.has("src")).toBe(true);
   } finally {
     act(() => root.unmount());
     client.clear();

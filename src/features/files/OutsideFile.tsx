@@ -22,6 +22,7 @@ const noBuffer = async () => {};
  * none of the project's checks.
  */
 export function OutsideFile({
+  active,
   path,
   line,
   checks,
@@ -29,6 +30,7 @@ export function OutsideFile({
   onOpen,
   onClose,
 }: {
+  active: boolean;
   /** Absolute, or from `~`. */
   path: string;
   line?: number;
@@ -42,6 +44,8 @@ export function OutsideFile({
   const info = useQuery({
     queryKey: ["project-file-info", folder, name],
     queryFn: () => api.projectFileInfo(folder, name),
+    enabled: active,
+    staleTime: 0,
     retry: false,
     refetchInterval: (q) => (q.state.data?.kind === "text" ? false : 3000),
   });
@@ -65,11 +69,23 @@ export function OutsideFile({
   if (!info.data) return <Loading text="Opening…" />;
   if (info.data.kind === "image")
     return (
-      <ImageFile where={folder} info={info.data} lead={lead} shownPath={path} />
+      <ImageFile
+        active={active}
+        where={folder}
+        info={info.data}
+        lead={lead}
+        shownPath={path}
+      />
     );
   if (info.data.kind === "video")
     return (
-      <VideoFile where={folder} info={info.data} lead={lead} shownPath={path} />
+      <VideoFile
+        active={active}
+        where={folder}
+        info={info.data}
+        lead={lead}
+        shownPath={path}
+      />
     );
   if (info.data.kind === "other")
     return (

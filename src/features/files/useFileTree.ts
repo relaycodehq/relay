@@ -72,6 +72,7 @@ export function useDirectories(
   where: string,
   open: ReadonlySet<string>,
   watched: boolean,
+  active: boolean,
 ) {
   const dirs = useMemo(() => visibleDirectories(open), [open]);
   const combine = useCallback(
@@ -87,6 +88,8 @@ export function useDirectories(
     queries: dirs.map((dir) => ({
       queryKey: directoryKey(where, dir),
       queryFn: () => api.projectDirectory(where, dir),
+      enabled: active,
+      staleTime: 0,
       refetchInterval: listingPoll(watched),
       retry: false,
     })),

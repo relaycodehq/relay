@@ -67,11 +67,13 @@ export function RevealButtons({
 
 /** A picture in the file's own place, on a checkerboard so transparency shows. */
 export function ImageFile({
+  active,
   where,
   info,
   lead,
   shownPath = info.path,
 }: {
+  active: boolean;
   where: string;
   info: FileInfo;
   lead?: ReactNode;
@@ -84,6 +86,7 @@ export function ImageFile({
   const image = useQuery({
     queryKey: ["project-image", where, info.path, info.mtime],
     queryFn: () => api.projectImage(where, info.path),
+    enabled: active,
     staleTime: Infinity,
     retry: false,
   });
@@ -141,11 +144,13 @@ export function ImageFile({
 
 /** A video in the file's own place, played as it streams from disk. */
 export function VideoFile({
+  active,
   where,
   info,
   lead,
   shownPath = info.path,
 }: {
+  active: boolean;
   where: string;
   info: FileInfo;
   lead?: ReactNode;
@@ -157,6 +162,7 @@ export function VideoFile({
   const video = useQuery({
     queryKey: ["project-video", where, info.path, info.mtime],
     queryFn: () => api.projectVideo(where, info.path),
+    enabled: active,
     staleTime: Infinity,
     retry: false,
   });

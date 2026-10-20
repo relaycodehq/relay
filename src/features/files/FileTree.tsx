@@ -41,6 +41,7 @@ type Editing =
   | { mode: "create"; dir: string; kind: "file" | "dir" };
 
 export function FileTree({
+  active,
   where,
   title,
   selected,
@@ -52,6 +53,7 @@ export function FileTree({
   onTrashed,
   onCreated,
 }: {
+  active: boolean;
   where: string;
   title: string;
   selected: string | null;
@@ -66,7 +68,12 @@ export function FileTree({
   onCreated: (path: string, kind: "file" | "dir") => void;
 }) {
   const queryClient = useQueryClient();
-  const directories = useDirectories(where, expansion.expanded, watched);
+  const directories = useDirectories(
+    where,
+    expansion.expanded,
+    watched,
+    active,
+  );
   const rows = useMemo(
     () => treeRows(directories.listings, expansion.expanded),
     [directories.listings, expansion.expanded],

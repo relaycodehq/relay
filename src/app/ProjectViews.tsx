@@ -138,6 +138,7 @@ type Selection =
  * files included), folder and picture views, and an inline editor for text.
  */
 export function ProjectFiles({
+  active,
   project,
   where,
   watched,
@@ -145,6 +146,8 @@ export function ProjectFiles({
   onViewing,
   opens,
 }: {
+  /** The Files tab is in front; hidden editors stay mounted without polling. */
+  active: boolean;
   project: Project;
   /** Workspace id: the checkout, or the thread's worktree. */
   where: string;
@@ -204,7 +207,8 @@ export function ProjectFiles({
   const info = useQuery({
     queryKey: ["project-file-info", where, file?.path],
     queryFn: () => api.projectFileInfo(where, file!.path),
-    enabled: !!file,
+    enabled: active && !!file,
+    staleTime: 0,
     retry: false,
     refetchInterval: (q) => (q.state.data?.kind === "text" ? false : 3000),
   });
@@ -212,7 +216,8 @@ export function ProjectFiles({
     queryKey: ["project-files", where],
     queryFn: () => api.projectFiles(where),
     refetchInterval: 5000,
-    enabled: !!filter,
+    enabled: active && !listHidden && !!filter,
+    staleTime: 0,
   });
   const list = (files.data ?? []).filter((p) =>
       p.toLowerCase().includes(filter.toLowerCase()),
@@ -298,6 +303,7 @@ export function ProjectFiles({
           </div>
         ) : (
           <FileTree
+            active={active && !listHidden}
             where={where}
             watched={watched}
             title={project.name}
@@ -336,6 +342,7 @@ export function ProjectFiles({
       </aside>
       {selection?.kind === "outside" ? (
         <OutsideFile
+          active={active}
           path={selection.path}
           line={selection.line}
           checks={checks}
@@ -358,9 +365,19 @@ export function ProjectFiles({
         ) : !info.data ? (
           <Loading text="Opening…" />
         ) : info.data.kind === "image" ? (
-          <ImageFile where={where} info={info.data} lead={listToggle} />
+          <ImageFile
+            active={active}
+            where={where}
+            info={info.data}
+            lead={listToggle}
+          />
         ) : info.data.kind === "video" ? (
-          <VideoFile where={where} info={info.data} lead={listToggle} />
+          <VideoFile
+            active={active}
+            where={where}
+            info={info.data}
+            lead={listToggle}
+          />
         ) : info.data.kind === "other" ? (
           <OtherFile where={where} info={info.data} lead={listToggle} />
         ) : editorReady ? (
