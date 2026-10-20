@@ -5,6 +5,7 @@ import {
   chromium,
   _electron as electron,
 } from "../fixtures/electron";
+import { providerEnv } from "../fixtures/provider-env";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -121,11 +122,11 @@ test("dev IPC keeps unsaved edits on cancellation, then quits cleanly on retry",
   );
   const child = spawn(electronPath, ["--remote-debugging-port=0", launch], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
-    env: {
+    env: providerEnv({
       ...env,
       RELAY_TEST_DATA: data,
       RELAY_DEV_STALE: join(data, "stale.json"),
-    },
+    }),
   });
   const messages: string[] = [];
   let debugUrl = "";

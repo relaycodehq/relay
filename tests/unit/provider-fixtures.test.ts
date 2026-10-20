@@ -8,10 +8,11 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+import { promisify } from "node:util";
 import { delimiter, join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { providerEnv } from "../fixtures/provider-env";
 import {
   findExecutable,
@@ -25,6 +26,16 @@ const isolateProviderExecutables: (
 ) => () => void = createRequire(import.meta.url)(
   "../fixtures/provider-isolation.cjs",
 );
+const {
+  isolateProviderHome,
+  isolateProviderKeychain,
+}: {
+  isolateProviderHome(data: string, roots: string[]): () => void;
+  isolateProviderKeychain(
+    native: boolean,
+    target: { execFile: ReturnType<typeof vi.fn> },
+  ): () => void;
+} = createRequire(import.meta.url)("../fixtures/provider-isolation.cjs");
 let root: string;
 let restore: (() => void) | undefined;
 beforeEach(async () => {
@@ -43,6 +54,7 @@ it("isolates inherited provider homes and credentials while preserving explicit 
     CODEX_HOME: join(root, "personal-codex"),
     CLAUDE_CONFIG_DIR: join(root, "personal-claude"),
     ANTHROPIC_API_KEY: "host-credential",
+    CLAUDE_CODE_OAUTH_TOKEN: "host-oauth",
   };
   const data = join(root, "data");
   const bin = join(root, "fixture-bin");
@@ -59,6 +71,7 @@ it("isolates inherited provider homes and credentials while preserving explicit 
   expect(env.CODEX_HOME).toBe(join(data, "provider-homes", "codex"));
   expect(env.CLAUDE_CONFIG_DIR).toBe(explicit);
   expect(env.ANTHROPIC_API_KEY).toBeUndefined();
+  expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
   expect(JSON.parse(env.RELAY_TEST_PROVIDER_ROOTS)).toEqual([data, bin]);
   expect(JSON.parse(env.RELAY_TEST_PROVIDER_COMMANDS)).toContain("amp-acp");
 });
@@ -120,4 +133,73 @@ it("preserves an explicitly linked sample executable without searching the host"
   restore = isolateProviderExecutables([], ["codex"]);
   setLinkedAgents({ codex: command });
   expect(await findExecutable("codex")).toBe(command);
+});
+
+it("redirects fixed personal config paths and rejects linked executables outside the sample", async () => {
+  const data = join(root, "data");
+  await mkdir(data);
+  await writeFile(
+    join(data, "state.json"),
+    JSON.stringify({ agentPaths: { codex: join(root, "outside", "codex") } }),
+  );
+  expect(() => isolateProviderHome(data, [data])).toThrow(
+    "must live in fixture folders",
+  );
+  await writeFile(
+    join(data, "state.json"),
+    JSON.stringify({ agentPaths: { codex: join(data, "bin", "codex") } }),
+  );
+  const original = homedir();
+  restore = isolateProviderHome(data, [data]);
+  expect(homedir()).toBe(join(data, "home"));
+  restore();
+  restore = undefined;
+  expect(homedir()).toBe(original);
+});
+
+it("blocks provider Keychain reads/writes while preserving ordinary security commands", async () => {
+  const normal = vi.fn(async (_file: string, _args: string[]) => ({
+    stdout: "ordinary",
+    stderr: "",
+  }));
+  const execFile = Object.assign(vi.fn(), { [promisify.custom]: normal });
+  const target = { execFile };
+  restore = isolateProviderKeychain(false, target);
+  const exec = promisify(target.execFile);
+  for (const service of ["Codex Auth", "Claude Code-credentials-abcd1234"])
+    for (const operation of [
+      "find-generic-password",
+      "add-generic-password",
+      "delete-generic-password",
+    ])
+      await expect(
+        exec("/usr/bin/security", [operation, "-s", service, "-w", "sample"]),
+      ).rejects.toMatchObject({ code: 44 });
+  const error = await new Promise<Error>((resolve) =>
+    target.execFile(
+      "/usr/bin/security",
+      ["find-generic-password", "-s", "Codex Auth", "-w"],
+      (error: Error) => resolve(error),
+    ),
+  );
+  expect(error.message).toContain("No provider Keychain credentials");
+  expect(execFile).not.toHaveBeenCalled();
+  expect(normal).not.toHaveBeenCalled();
+  await expect(exec("/usr/bin/security", ["find-identity"])).resolves.toEqual({
+    stdout: "ordinary",
+    stderr: "",
+  });
+  await exec("/usr/bin/security", [
+    "find-generic-password",
+    "-s",
+    "Unrelated sample",
+  ]);
+  expect(normal).toHaveBeenCalledTimes(2);
+});
+
+it("keeps native storage opt-in using the original security implementation", () => {
+  const original = vi.fn();
+  const target = { execFile: original };
+  restore = isolateProviderKeychain(true, target);
+  expect(target.execFile).toBe(original);
 });

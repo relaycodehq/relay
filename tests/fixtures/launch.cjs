@@ -1,10 +1,14 @@
 const { app, BrowserWindow, safeStorage } = require("electron");
 // Desktop UI launches supply this; the separate phone tooling owns its fixture.
-if (process.env.RELAY_TEST_PROVIDER_ROOTS)
-  require("./provider-isolation.cjs")(
-    JSON.parse(process.env.RELAY_TEST_PROVIDER_ROOTS),
-    JSON.parse(process.env.RELAY_TEST_PROVIDER_COMMANDS),
+if (process.env.RELAY_TEST_PROVIDER_ROOTS) {
+  const isolate = require("./provider-isolation.cjs");
+  const roots = JSON.parse(process.env.RELAY_TEST_PROVIDER_ROOTS);
+  isolate(roots, JSON.parse(process.env.RELAY_TEST_PROVIDER_COMMANDS));
+  isolate.isolateProviderHome(process.env.RELAY_TEST_DATA, roots);
+  isolate.isolateProviderKeychain(
+    process.env.RELAY_TEST_NATIVE_STORAGE === "1",
   );
+}
 /** Windows a hidden run showed where nobody sees them. */
 const shownOutOfSight = new Set();
 // All normal E2E runs stay off the user's desktop. Keep this in the fixture,
