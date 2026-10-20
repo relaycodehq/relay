@@ -80,7 +80,8 @@ export function AddProjectPalette({
   const computer =
     paired.data?.find((c) => c.id === selectedComputer) ??
     (justConnected?.id === selectedComputer ? justConnected : undefined);
-  const adding = useAdding(projects, selectedComputer);
+  const available = !selectedComputer || (!!computer && reachable(computer));
+  const adding = useAdding(projects, selectedComputer, available);
   const [page, setPage] = useState<AddProjectPage>(initialPage);
   const [query, setQuery] = useState("");
   const [locations, setLocations] = useState<Record<string, string>>({});
@@ -96,7 +97,6 @@ export function AddProjectPalette({
     query: "",
   });
   const locked = adding.busy || importBusy || connectionBusy || !!linking;
-  const available = !selectedComputer || (!!computer && reachable(computer));
   const close = () => {
     if (!locked) onClose();
   };
@@ -109,9 +109,14 @@ export function AddProjectPalette({
     if (page === "root") locationChoice.current?.focus();
     else input.current?.focus();
   }, [page, selectedComputer]);
-  const cloneInto =
-    locations[selectedComputer ?? "here"] ?? adding.start?.cloneFolder ?? "~";
-  const location = folderLabel(cloneInto, adding.start?.home);
+  // What was typed stays as typed; only the computer's default is shown from ~.
+  const typedLocation = locations[selectedComputer ?? "here"];
+  const cloneInto = typedLocation ?? adding.start?.cloneFolder ?? "";
+  const location =
+    typedLocation ??
+    (adding.start
+      ? folderLabel(adding.start.cloneFolder, adding.start.home)
+      : "");
   function setLocation(path: string) {
     setLocations((l) => ({ ...l, [selectedComputer ?? "here"]: path }));
   }
@@ -179,13 +184,13 @@ export function AddProjectPalette({
     github.data && "problem" in github.data ? github.data.problem : undefined;
   const remote = parseRemote(query);
   const name = slug(query);
+  // Until that computer has answered, its usual folder isn't known.
+  const ready = available && !locked && !!adding.start && !!cloneInto.trim();
   const create = () => {
-    if (name && cloneInto.trim() && available && !locked)
-      void adding.create({ ...fullSpec, name }).then(finish);
+    if (name && ready) void adding.create({ ...fullSpec, name }).then(finish);
   };
   const clone = () => {
-    if (remote && cloneInto.trim() && available && !locked)
-      void adding.clone(remote.url, cloneInto).then(finish);
+    if (remote && ready) void adding.clone(remote.url, cloneInto).then(finish);
   };
   const errors = (
     <>
@@ -196,7 +201,6 @@ export function AddProjectPalette({
   const picked = adding.picked && (
     <PickedNote
       picked={adding.picked}
-      onOpen={onDone}
       onAdd={(path, git) => void adding.add(path, git).then(finish)}
     />
   );
@@ -504,6 +508,11 @@ export function AddProjectPalette({
                       <input
                         aria-label="Destination folder"
                         value={location}
+                        placeholder={
+                          adding.start || adding.startError
+                            ? undefined
+                            : "Loading…"
+                        }
                         onChange={(e) => setLocation(e.target.value)}
                         disabled={locked}
                         spellCheck={false}
@@ -521,7 +530,16 @@ export function AddProjectPalette({
                       </details>
                     )}
                     {!!adding.startError && (
-                      <ErrorBox error={adding.startError} />
+                      <>
+                        <ErrorBox error={adding.startError} />
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={adding.retryStart}
+                        >
+                          Try again
+                        </button>
+                      </>
                     )}
                     {errors}
                     <button
@@ -539,13 +557,7 @@ export function AddProjectPalette({
                     <button
                       type="button"
                       className="primary"
-                      disabled={
-                        locked ||
-                        !available ||
-                        !cloneInto.trim() ||
-                        !!adding.startError ||
-                        !(page === "url" ? remote : name)
-                      }
+                      disabled={!ready || !(page === "url" ? remote : name)}
                       onClick={page === "url" ? clone : create}
                     >
                       {page === "url" ? "Clone repository" : "Create project"}

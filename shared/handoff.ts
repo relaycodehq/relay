@@ -567,7 +567,10 @@ export interface HandoffView {
 export interface ComputersApi {
   pairedComputers(): Promise<PairedComputer[]>;
   computersOverview(): Promise<ComputersOverview>;
-  /** Pairs with the link another computer shows under Settings → Computers. */
+  /**
+   * Pairs with the link another computer shows under Settings → Computers.
+   * The list ends with the computer just paired, also when it was paired before.
+   */
   pairComputer(link: string): Promise<PairedComputer[]>;
   /** Reaches the computer a route goes to and says which Relay is there. */
   checkComputer(route: ComputerRoute): Promise<RouteCheck>;

@@ -1,9 +1,6 @@
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  ComputersOverview,
-  PairedComputer,
-} from "../../../shared/handoff";
+import type { PairedComputer } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { errorMessage } from "../../lib/error-message";
 import { routeKey, type Target } from "./add-targets";
@@ -61,11 +58,6 @@ export function useCheckup() {
     update: (next: Partial<Checkup>) => void,
   ) {
     update({ phase: "pairing", error: undefined, tooOld: false });
-    const before = new Set(
-      qc
-        .getQueryData<ComputersOverview>(["computers-overview"])
-        ?.computers.map((c) => c.id),
-    );
     try {
       const list =
         target.kind === "link"
@@ -76,7 +68,7 @@ export function useCheckup() {
           ? list.find(
               (c) => c.route && routeKey(c.route) === routeKey(target.route),
             )
-          : (list.find((c) => !before.has(c.id)) ?? list.at(-1));
+          : list.at(-1);
       update({ phase: "done", paired });
       void qc.invalidateQueries({ queryKey: ["computers-overview"] });
       void qc.invalidateQueries({ queryKey: ["paired-computers"] });

@@ -1,6 +1,6 @@
 // The palette's smaller pieces: progress, what a picked folder turned out to
 // be, and a new project's fields.
-import type { AddingJob, NewProject, Project } from "../../../shared/projects";
+import type { AddingJob, NewProject } from "../../../shared/projects";
 import { linkName, tildePath } from "../../../shared/projects";
 import {
   Segmented,
@@ -39,28 +39,11 @@ export function JobProgress({
 /** Said under a picked folder that can't simply be added. */
 export function PickedNote({
   picked,
-  onOpen,
   onAdd,
 }: {
   picked: Picked;
-  onOpen: (project: Project) => void;
   onAdd: (path: string, setUpGit?: boolean) => void;
 }) {
-  if (picked.kind === "added")
-    return (
-      <p className="add-note">
-        <span>
-          Already in Relay as <strong>{picked.project.name}</strong>.
-        </span>
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => onOpen(picked.project)}
-        >
-          Open it
-        </button>
-      </p>
-    );
   if (picked.kind === "inside")
     return (
       <p className="add-note">

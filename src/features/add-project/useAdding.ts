@@ -6,7 +6,6 @@ import { localProjectAt } from "./related";
 
 /** What a picked folder turned out to be, when it can't simply be added. */
 export type Picked =
-  | { kind: "added"; project: Project }
   | { kind: "plain"; path: string }
   | { kind: "inside"; path: string; root: string }
   | { kind: "missing"; path: string };
@@ -16,10 +15,16 @@ export type Picked =
  * adding what was picked. Each action resolves to the project, or to nothing
  * when it failed (the error is kept) or needs an answer first (`picked`).
  */
-export function useAdding(projects: readonly Project[], computerId?: string) {
+export function useAdding(
+  projects: readonly Project[],
+  computerId: string | undefined,
+  /** The computer answers; asking before then only fails. */
+  reachable: boolean,
+) {
   const start = useQuery({
     queryKey: ["adding-start", computerId],
     queryFn: () => api.addingStart(computerId),
+    enabled: reachable,
     retry: false,
     staleTime: 0,
   });
@@ -50,6 +55,7 @@ export function useAdding(projects: readonly Project[], computerId?: string) {
   return {
     start: start.data,
     startError: start.error,
+    retryStart: () => void start.refetch(),
     job,
     busy: busy || !!job,
     error,

@@ -16,7 +16,7 @@ import { fileManager } from "../../lib/mod-key";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { ErrorBox } from "../../ui/ui";
 import { localProjectAt } from "./related";
-import { folderLabel, parentFolder } from "./folder-path";
+import { folderLabel, fromHomeFolder, parentFolder } from "./folder-path";
 
 export function ProjectFolders({
   projects,
@@ -80,7 +80,11 @@ export function ProjectFolders({
   const filtered = folders.filter((f) =>
     f.name.toLowerCase().includes(filter.toLowerCase()),
   );
-  const parent = parentFolder(path);
+  const here = fromHomeFolder(
+    listing.data?.dir ?? path,
+    listing.data?.home ?? home,
+  );
+  const parent = parentFolder(here);
   function browse(next: string) {
     seeded.current = true;
     setPath(next);
@@ -95,7 +99,7 @@ export function ProjectFolders({
           type="button"
           className="icon-button"
           aria-label="Parent folder"
-          disabled={busy || parent === path}
+          disabled={busy || parent === here}
           onClick={() => browse(parent)}
         >
           <ArrowUp size={15} />
@@ -110,7 +114,10 @@ export function ProjectFolders({
           <input
             aria-label="Folder path"
             value={typed}
-            onChange={(e) => setTyped(e.target.value)}
+            onChange={(e) => {
+              seeded.current = true;
+              setTyped(e.target.value);
+            }}
             disabled={busy}
             spellCheck={false}
             autoComplete="off"
@@ -141,7 +148,10 @@ export function ProjectFolders({
                   className="headline-project-row palette-row"
                   aria-pressed={selected === f.path}
                   disabled={busy}
-                  onClick={() => setSelected(f.path)}
+                  onClick={() => {
+                    seeded.current = true;
+                    setSelected(f.path);
+                  }}
                   onDoubleClick={() => browse(f.path)}
                   onKeyDown={(e) => {
                     if (e.key === "ArrowRight") {

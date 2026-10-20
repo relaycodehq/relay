@@ -1,6 +1,6 @@
 import { test, expect, _electron as electron } from "@playwright/test";
 import { mkdtemp, mkdir, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
@@ -61,9 +61,14 @@ test("project setup keeps computer choice in the flow and opens a selected folde
     await dialog
       .getByRole("textbox", { name: "Repository", exact: true })
       .fill("acme/web");
-    await dialog
-      .getByRole("textbox", { name: "Destination folder" })
-      .fill(root);
+    const destination = dialog.getByRole("textbox", {
+      name: "Destination folder",
+    });
+    // Typing through the home folder keeps what was typed, not a ~ for it.
+    await destination.fill("");
+    await destination.pressSequentially(`${homedir()}x`);
+    await expect(destination).toHaveValue(`${homedir()}x`);
+    await destination.fill(root);
     await dialog
       .getByRole("button", { name: "This computer", exact: true })
       .click();
@@ -78,7 +83,12 @@ test("project setup keeps computer choice in the flow and opens a selected folde
     await dialog
       .getByRole("button", { name: "Open a folder", exact: true })
       .click();
-    await dialog.getByRole("textbox", { name: "Folder path" }).fill(root);
+    const folderPath = dialog.getByRole("textbox", { name: "Folder path" });
+    await folderPath.fill("~");
+    await dialog.getByRole("button", { name: "Go", exact: true }).click();
+    await dialog.getByRole("button", { name: "Parent folder" }).click();
+    await expect(folderPath).not.toHaveValue("~");
+    await folderPath.fill(root);
     await dialog.getByRole("button", { name: "Go", exact: true }).click();
     await dialog.getByRole("button", { name: "web", exact: true }).click();
     const contents = dialog.getByLabel("Contents of web", { exact: true });
