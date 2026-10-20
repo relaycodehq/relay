@@ -47,6 +47,7 @@ import { LinkStep } from "./LinkStep";
 import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
 import { usePairedComputers } from "../handoff/usePairedComputers";
+import { computerLine, reachable } from "../handoff/computer-status";
 import type { PairedComputer } from "../../../shared/handoff";
 import "../../ui/palette.css";
 import "./add-project.css";
@@ -286,10 +287,14 @@ export function AddProjectPalette({
             detail:
               c.status === "online"
                 ? "Open a folder there; its threads run there"
-                : "Offline",
+                : c.asleep
+                  ? "Asleep: opening a folder there wakes it"
+                  : c.stopped
+                    ? computerLine(c)
+                    : "Offline",
             right: "›",
             section: "On another computer",
-            run: () => c.status === "online" && openComputer(c),
+            run: () => reachable(c) && openComputer(c),
           })),
         ...(adding.start?.recent ?? [])
           .filter((f) => !q || f.path.toLowerCase().includes(q))

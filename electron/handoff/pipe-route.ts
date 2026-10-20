@@ -12,10 +12,26 @@ import type { ComputerRoute, RouteCheck } from "../../shared/handoff";
 
 const run = promisify(execFile);
 
-/** Where the installer links `relay`; a login shell's PATH may not have it. */
-const remoteRelay = '"$HOME/.local/bin/relay"';
+/**
+ * Sets `r` to the `relay` there: where the installer linked it (`RELAY_BIN`
+ * moves that), as a login shell's PATH may not have it, else on the PATH;
+ * empty when there's none.
+ */
+const findRelay = [
+  'r="${RELAY_BIN:+$RELAY_BIN/relay}"',
+  '[ -x "$r" ] || r="$HOME/.local/bin/relay"',
+  '[ -x "$r" ] || r=$(command -v relay) || r=',
+].join("; ");
 
-/** The command that runs the shell line `line` on the computer the route reaches. */
+/**
+ * One word for whichever login shell ssh hands it to, fish and csh included:
+ * single quotes there keep everything but quotes and, in fish, backslashes,
+ * so those two go outside them.
+ */
+const quoted = (line: string) =>
+  `'${line.replace(/['\\]/g, (c) => `'\\${c}'`)}'`;
+
+/** The command that runs the shell line `line` under sh on the computer the route reaches. */
 export function routeShell(
   route: ComputerRoute,
   line: string,
@@ -31,28 +47,35 @@ export function routeShell(
         "-o",
         "ServerAliveInterval=15",
         route.host,
-        line,
+        `sh -c ${quoted(line)}`,
       ],
     ];
   return ["wsl.exe", ["-d", route.distro, "--exec", "sh", "-c", line]];
 }
+
+/** wsl.exe's own errors (no such distribution, the service down) in UTF-8, not UTF-16. */
+export const routeEnv = () => ({ ...process.env, WSL_UTF8: "1" });
+
+/** What a command printed, without the NULs a UTF-16 wsl.exe message leaves. */
+const text = (out: string) => out.replace(/\0/g, "");
 
 /** The command that runs `relay <args>` on the computer the route reaches. */
 export const routeCommand = (
   route: ComputerRoute,
   args: string[],
 ): [string, string[]] =>
-  routeShell(route, `exec ${remoteRelay} ${args.join(" ")}`);
+  routeShell(route, `${findRelay}; exec "\${r:-relay}" ${args.join(" ")}`);
 
 /** How the route reads in words: `ssh box`, `WSL Ubuntu`. */
 export const routeName = (route: ComputerRoute) =>
   route.kind === "ssh" ? `ssh ${route.host}` : `WSL ${route.distro}`;
 
-const lastLine = (text: string) =>
-  text.trim().split(/\r?\n/).filter(Boolean).at(-1)?.trim();
+const lastLine = (out: string) =>
+  text(out).trim().split(/\r?\n/).filter(Boolean).at(-1)?.trim();
 
 /** What went wrong in words, from what the command printed. */
-function failure(route: ComputerRoute, stderr: string, code: number | null) {
+function failure(route: ComputerRoute, said: string, code: number | null) {
+  const stderr = text(said);
   if (/relay: (not found|No such file)|No such file or directory/.test(stderr))
     return `Relay isn't installed ${route.kind === "ssh" ? `on ${route.host}` : `in ${route.distro}`}. Install it there with curl -fsSL https://relaycode.io/install.sh | sh, then try again.`;
   // A Relay from before `relay pipe`.
@@ -88,8 +111,13 @@ export class PipeShim {
   async listen() {
     const server = createServer((socket) => {
       const [file, args] = this.command(this.route, ["pipe"]);
-      const child = spawn(file, args, { stdio: "pipe", windowsHide: true });
+      const child = spawn(file, args, {
+        env: routeEnv(),
+        stdio: "pipe",
+        windowsHide: true,
+      });
       let stderr = "";
+      let spawned = true;
       child.stderr.on("data", (d: Buffer) => {
         stderr = (stderr + d.toString()).slice(-4000);
       });
@@ -101,11 +129,13 @@ export class PipeShim {
       socket.on("error", () => child.kill());
       socket.on("close", () => child.kill());
       child.on("error", (e: NodeJS.ErrnoException) => {
+        spawned = false;
         this.failure = e.code === "ENOENT" ? missing(this.route) : e.message;
         socket.destroy();
       });
-      child.on("exit", (code) => {
-        if (code) this.failure = failure(this.route, stderr, code);
+      // On close, not exit: what it printed last, its error included, is through by then.
+      child.on("close", (code) => {
+        if (code && spawned) this.failure = failure(this.route, stderr, code);
         socket.destroy();
       });
     });
@@ -129,11 +159,13 @@ export async function pairingLink(
   const [file, args] = command(route, ["pair", "--json", "--pipe"]);
   try {
     const { stdout } = await run(file, args, {
+      env: routeEnv(),
       timeout: 90_000,
       windowsHide: true,
     });
-    const url = (JSON.parse(stdout) as { url?: string }).url;
-    if (!url)
+    const url = (lastJson(text(stdout)) as { url?: unknown } | undefined)
+      ?.url;
+    if (typeof url !== "string")
       throw new Error(`Relay over ${routeName(route)} gave no pairing code.`);
     return url;
   } catch (e) {
@@ -145,11 +177,21 @@ export async function pairingLink(
   }
 }
 
-// The installer's link first, as a login shell's PATH may not have it. The
-// line itself says what it found, so a failing exit is always the route's.
+/** The JSON a command printed last, past whatever a shell startup file printed before it. */
+function lastJson(out: string): unknown {
+  for (const { index } of [...out.matchAll(/^\{/gm)].reverse())
+    try {
+      return JSON.parse(out.slice(index));
+    } catch {
+      // Not where it starts; an earlier line may be.
+    }
+  return undefined;
+}
+
+// The line itself says what it found, so a failing exit is always the route's.
 const versionLine = [
-  `r=${remoteRelay}`,
-  'if [ ! -x "$r" ]; then r=$(command -v relay) || { echo relay-missing; exit 0; }; fi',
+  findRelay,
+  'if [ -z "$r" ]; then echo relay-missing; exit 0; fi',
   'if out=$("$r" --version 2>&1); then echo "relay $out"',
   'else echo "relay-broken $(printf "%s\\n" "$out" | tail -n 1)"; fi',
 ].join("; ");
@@ -166,6 +208,7 @@ export async function checkRoute(
   const started = Date.now();
   try {
     const { stdout } = await run(file, args, {
+      env: routeEnv(),
       timeout: 30_000,
       windowsHide: true,
     });
@@ -198,12 +241,11 @@ export async function wslDistros(): Promise<string[]> {
   try {
     // wsl.exe answers in UTF-16 unless told otherwise.
     const { stdout } = await run("wsl.exe", ["--list", "--quiet"], {
-      env: { ...process.env, WSL_UTF8: "1" },
+      env: routeEnv(),
       timeout: 15_000,
       windowsHide: true,
     });
-    return stdout
-      .replace(/\0/g, "")
+    return text(stdout)
       .split(/\r?\n/)
       .map((name) => name.trim())
       .filter((name) => /^[A-Za-z0-9_.-]{1,64}$/.test(name));

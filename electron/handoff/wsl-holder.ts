@@ -19,6 +19,8 @@ const savedHold = z.object({
 export class WslHolders {
   private held = new Map<string, HostedChild | ChildProcess>();
   private reattached?: Promise<void>;
+  /** Keep-alives the agent host is still opening. */
+  private holding = new Map<string, { done: Promise<void> }>();
   private stopped = new Set<(distro: string) => void>();
 
   /** Called when a held distribution stops by itself (`wsl --shutdown`), not by `release`. */
@@ -30,12 +32,26 @@ export class WslHolders {
   async hold(distro: string) {
     await this.reattach();
     if (this.held.has(distro)) return;
+    // Several calls at once wait on one keep-alive instead of each starting one.
+    const pending = this.holding.get(distro);
+    if (pending) return pending.done;
+    const holding = { done: Promise.resolve() };
+    this.holding.set(distro, holding);
+    const wanted = () => this.holding.get(distro) === holding;
+    holding.done = this.start(distro, wanted).finally(() => {
+      if (wanted()) this.holding.delete(distro);
+    });
+    return holding.done;
+  }
+
+  /** `wanted`: no `release` came while the host was opening it. */
+  private async start(distro: string, wanted: () => boolean) {
     const spec = {
       command: "wsl.exe",
       args: ["-d", distro, "--exec", "sleep", "infinity"],
       cwd: homedir(),
       // The host spawns with this env alone; wsl.exe needs PATH and SystemRoot.
-      env: { ...process.env } as Record<string, string>,
+      env: { ...process.env, WSL_UTF8: "1" } as Record<string, string>,
       group: false,
     };
     const hosted = await inAgentHost("WSL's keep-alive", (hosts) =>
@@ -47,6 +63,10 @@ export class WslHolders {
         process: spec,
       }),
     );
+    if (!wanted()) {
+      hosted?.close();
+      return;
+    }
     // Without the host, held from here: until Relay restarts, at least.
     const child = hosted
       ? new HostedChild(hosted)
@@ -60,6 +80,7 @@ export class WslHolders {
 
   /** Lets the distribution go: WSL stops it once nothing else uses it. */
   release(distro: string) {
+    this.holding.delete(distro);
     const child = this.held.get(distro);
     this.held.delete(distro);
     if (child instanceof HostedChild) child.hosted.close();
@@ -74,7 +95,8 @@ export class WslHolders {
 
   /** Relay is quitting: every distribution goes. */
   releaseAll() {
-    for (const distro of [...this.held.keys()]) this.release(distro);
+    for (const distro of new Set([...this.held.keys(), ...this.holding.keys()]))
+      this.release(distro);
   }
 
   /** Takes back the holds the agent host kept while Relay restarted. */

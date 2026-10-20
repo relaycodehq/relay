@@ -10,7 +10,12 @@ import {
   rowH,
   selfW,
 } from "./computer-map-geometry";
-import { stateWord, summary, type Computer } from "./computer-status";
+import {
+  reachable,
+  stateWord,
+  summary,
+  type Computer,
+} from "./computer-status";
 
 /** Up to this many computers get a card each; more get a slim row each. */
 const roomy = 5;
@@ -164,6 +169,8 @@ export function MapDiagram({
             );
           const { c } = r;
           const on = isOn(c);
+          // Asleep: usable, but not connected yet.
+          const dot = c.status === "online" ? "on" : "";
           const props = {
             type: "button" as const,
             style,
@@ -181,7 +188,7 @@ export function MapDiagram({
               <DeviceIcon name={c.name} size={14} />
               <b>{c.name}</b>
               <small>{rowWord(c)}</small>
-              <i className={`cm-dot ${on ? "on" : ""}`} />
+              <i className={`cm-dot ${dot}`} />
             </button>
           ) : (
             <button
@@ -195,7 +202,7 @@ export function MapDiagram({
               <span className="cm-node-text">
                 <b>{c.name}</b>
                 <small>
-                  <i className={`cm-dot ${on ? "on" : ""}`} />
+                  <i className={`cm-dot ${dot}`} />
                   {summary(c)}
                 </small>
               </span>
@@ -207,14 +214,15 @@ export function MapDiagram({
   );
 }
 
-const isOn = (c: Computer) => c.status === "online";
+const isOn = reachable;
 
 const wireKind = (r: Row) =>
   r.kind === "add" ? "add" : r.kind === "offline" || !isOn(r.c) ? "off" : "on";
 
-/** What a slim row has room for: offline, or how many threads are there. */
+/** What a slim row has room for: offline, asleep, or how many threads are there. */
 function rowWord(c: Computer) {
   if (!isOn(c)) return "Offline";
+  if (c.asleep) return "Asleep";
   const n = c.threads.length;
   return n ? `${n} ${n === 1 ? "thread" : "threads"}` : "";
 }

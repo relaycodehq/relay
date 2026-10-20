@@ -583,11 +583,17 @@ export class Handoffs {
   ): Promise<HandoffTarget> {
     const repositories = project?.repositories ?? null;
     const base = { id: c.id, name: c.name };
-    if (c.status !== "online")
+    // A WSL distribution asleep wakes on `connected` below.
+    if (c.status !== "online" && !c.asleep)
       return {
         ...base,
         online: false,
-        problem: c.status === "denied" ? "Pair again" : "Offline",
+        problem:
+          c.status === "denied"
+            ? "Pair again"
+            : c.stopped
+              ? "WSL stopped it"
+              : "Offline",
       };
     if (repositories && !repositories.length)
       return { ...base, online: true, problem: "No Git remote to match" };

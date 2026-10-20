@@ -31,6 +31,7 @@ import "./titlebar.css";
 import {
   projectComputer,
   usePairedComputers,
+  useWakeComputer,
 } from "../features/handoff/usePairedComputers";
 
 /** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
@@ -155,28 +156,13 @@ function WakeComputer({
   id: string;
   onError: (error: unknown) => void;
 }) {
-  const qc = useQueryClient();
-  const [waking, setWaking] = useState(false);
-  async function wake() {
-    setWaking(true);
-    try {
-      qc.setQueryData(["paired-computers"], await api.wakeComputer(id));
-      // What failed while it was stopped asks again.
-      void qc.refetchQueries({
-        predicate: (query) => query.state.status === "error",
-      });
-    } catch (e) {
-      onError(e);
-    } finally {
-      setWaking(false);
-    }
-  }
+  const { waking, wake } = useWakeComputer(onError);
   return (
     <button
       type="button"
       className="breadcrumb-link"
       disabled={waking}
-      onClick={() => void wake()}
+      onClick={() => void wake(id)}
     >
       {waking ? "Starting…" : "Reconnect"}
     </button>

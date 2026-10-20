@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PairedComputer } from "../../../shared/handoff";
 import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import { reachable } from "./computer-status";
 
 /** The computers this one is paired with; `watch` keeps their online state fresh. */
 export function usePairedComputers(watch = false) {
@@ -24,8 +26,29 @@ export function projectComputer(
   return {
     id: home.id,
     name: paired?.name ?? home.name,
-    // Asleep isn't offline: the first thing that needs it wakes it.
-    online: paired?.status === "online" || !!paired?.asleep,
+    online: !!paired && reachable(paired),
     stopped: !!paired?.stopped,
   };
+}
+
+/** Starts a WSL distribution WSL stopped again; nothing else does. */
+export function useWakeComputer(onError: (error: unknown) => void) {
+  const qc = useQueryClient();
+  const [waking, setWaking] = useState(false);
+  async function wake(id: string) {
+    setWaking(true);
+    try {
+      qc.setQueryData(["paired-computers"], await api.wakeComputer(id));
+      void qc.invalidateQueries({ queryKey: ["computers-overview"] });
+      // What failed while it was stopped asks again.
+      void qc.refetchQueries({
+        predicate: (query) => query.state.status === "error",
+      });
+    } catch (e) {
+      onError(e);
+    } finally {
+      setWaking(false);
+    }
+  }
+  return { waking, wake };
 }

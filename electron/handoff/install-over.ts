@@ -6,7 +6,7 @@ import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ComputerRoute } from "../../shared/handoff";
-import { routeName, routeShell } from "./pipe-route";
+import { routeEnv, routeName, routeShell } from "./pipe-route";
 
 /** Downloads of Relay and maybe Node.js on a slow line, and no more. */
 const installTimeout = 10 * 60_000;
@@ -38,10 +38,14 @@ export function installRelayOver(
   // No terminal there to run `relay setup` in; pairing does what it would.
   const [file, args] = command(route, "env RELAY_NO_SETUP=1 sh -s");
   return new Promise<void>((done, fail) => {
-    const child = spawn(file, args, { stdio: "pipe", windowsHide: true });
+    const child = spawn(file, args, {
+      env: routeEnv(),
+      stdio: "pipe",
+      windowsHide: true,
+    });
     let output = "";
     const collect = (chunk: Buffer) => {
-      output = (output + chunk.toString()).slice(-20_000);
+      output = (output + chunk.toString().replace(/\0/g, "")).slice(-20_000);
       outputs.set(key, output);
     };
     child.stdout.on("data", collect);

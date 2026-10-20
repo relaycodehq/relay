@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AwayThread } from "../../../shared/handoff";
-import { summary, threadLine, type Computer } from "./computer-status";
+import {
+  reachable,
+  summary,
+  threadLine,
+  type Computer,
+} from "./computer-status";
 
 const min = 60_000;
 const now = 1_000 * 24 * 60 * min;
@@ -106,5 +111,18 @@ describe("a computer's line on the map", () => {
     expect(summary(computer({ status: "denied" }))).toBe(
       "It no longer accepts this computer. Pair again.",
     );
+  });
+
+  it("tells a WSL distribution asleep, which use wakes, from one WSL stopped", () => {
+    const asleep = computer({ status: "offline", asleep: true });
+    expect(summary(asleep)).toBe("Asleep · wakes when used");
+    expect(reachable(asleep)).toBe(true);
+    const stopped = computer({
+      status: "offline",
+      stopped: true,
+      detail: "WSL stopped it.",
+    });
+    expect(summary(stopped)).toBe("WSL stopped it");
+    expect(reachable(stopped)).toBe(false);
   });
 });

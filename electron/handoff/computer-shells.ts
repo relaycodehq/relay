@@ -1,6 +1,7 @@
 // On the computer a project lives on: the shells another computer opens in
 // it (`projectTerminal`), their output going back to that computer as
-// `terminal` events. They're its own, kept apart from this computer's.
+// `terminal` events. They're its own, kept apart from this computer's and
+// from other computers', so one removed here loses its shells alone.
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import type { TerminalOp } from "../../shared/remote";
@@ -18,27 +19,38 @@ import type { FeedLink } from "./live-feed";
 const own = (deviceId: string, key: string) => `${deviceId}@${key}`;
 
 export class ComputerShells {
-  private shells = new ThreadTerminals();
+  /** Each device's shells, by device id. */
+  private devices = new Map<string, ThreadTerminals>();
+  private link?: FeedLink;
   connect(link: FeedLink) {
-    this.shells.connect((event) => {
-      const at = event.key.indexOf("@");
-      link.send(event.key.slice(0, at), {
-        kind: "terminal",
-        event: { ...event, key: event.key.slice(at + 1) },
-      });
-    });
+    this.link = link;
+  }
+  private of(deviceId: string) {
+    let shells = this.devices.get(deviceId);
+    if (!shells) {
+      shells = new ThreadTerminals();
+      shells.connect((event) =>
+        this.link?.send(deviceId, {
+          kind: "terminal",
+          event: { ...event, key: event.key.slice(deviceId.length + 1) },
+        }),
+      );
+      this.devices.set(deviceId, shells);
+    }
+    return shells;
   }
   open(deviceId: string, cwd: string, args: unknown[]): TerminalOpened {
     const key = terminalKeySchema.parse(args[0]);
     const { cols, rows } = terminalSizeSchema.parse(args[1]);
     const fresh = z.boolean().optional().parse(args[2]);
-    return this.shells.open(own(deviceId, key), cwd, cols, rows, fresh);
+    return this.of(deviceId).open(own(deviceId, key), cwd, cols, rows, fresh);
   }
   async call(deviceId: string, op: TerminalOp, key: string, args: unknown[]) {
     const mine = own(deviceId, terminalKeySchema.parse(key));
+    const shells = this.of(deviceId);
     switch (op) {
       case "write":
-        return this.shells.write(
+        return shells.write(
           mine,
           z
             .string()
@@ -50,17 +62,17 @@ export class ComputerShells {
           cols: args[0],
           rows: args[1],
         });
-        return this.shells.resize(mine, cols, rows);
+        return shells.resize(mine, cols, rows);
       }
       case "ack":
-        return this.shells.ack(
+        return shells.ack(
           mine,
           z.number().int().nonnegative().parse(args[0]),
         );
       case "close":
-        return this.shells.close(mine);
+        return shells.close(mine);
       case "prefill":
-        return this.shells.prefill(
+        return shells.prefill(
           mine,
           z.string().min(1).max(16_384).parse(args[0]),
         );
@@ -71,13 +83,19 @@ export class ComputerShells {
           agentProviderSchema.parse(args[0]),
           { away: true },
         );
-        return !!command && this.shells.prefill(mine, command);
+        return !!command && shells.prefill(mine, command);
       }
       case "adopt":
-        return this.shells.adopt(mine, own(deviceId, idSchema.parse(args[0])));
+        return shells.adopt(mine, own(deviceId, idSchema.parse(args[0])));
     }
   }
+  /** The device was removed here: its shells go with it. */
+  closeDevice(deviceId: string) {
+    this.devices.get(deviceId)?.closeAll();
+    this.devices.delete(deviceId);
+  }
   closeAll() {
-    this.shells.closeAll();
+    for (const shells of this.devices.values()) shells.closeAll();
+    this.devices.clear();
   }
 }

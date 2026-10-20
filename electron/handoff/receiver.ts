@@ -194,9 +194,13 @@ export class HandoffReceiver {
     this.feed.connect(link);
     this.shells.connect(link);
   }
-  /** Ends the shells other computers opened here; this Relay is quitting. */
-  closeShells() {
-    this.shells.closeAll();
+  /**
+   * Ends the shells other computers opened here: the device's, once it's
+   * removed, or every one when this Relay is quitting.
+   */
+  closeShells(deviceId?: string) {
+    if (deviceId) this.shells.closeDevice(deviceId);
+    else this.shells.closeAll();
   }
   /** A message written in a thread here. */
   chatEvent(event: { chatId: string; message: ChatMessage }) {

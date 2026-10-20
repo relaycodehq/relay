@@ -336,6 +336,7 @@ export class PhoneRemote {
   async revoke(deviceId: string) {
     const computer = this.isComputer(deviceId);
     await this.devices.revoke(deviceId);
+    this.host.handoffs?.closeShells?.(deviceId);
     this.server.disconnect(
       deviceId,
       computer ? `${computerName()} removed this computer.` : undefined,

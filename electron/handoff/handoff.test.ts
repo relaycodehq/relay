@@ -2001,7 +2001,8 @@ it("opens a remote project's shells on its computer, in its folder, and shows th
   cleanup.push(() => {
     for (const spy of [...spies, passed]) spy.mockRestore();
   });
-  const { laptop, mini, computers, computerId } = await pairedComputers();
+  const { laptop, mini, computers, computerId, remote: miniRemote } =
+    await pairedComputers();
   const remote = new RemoteProjects(computers, laptop.projects);
   const folder = await mini.projects.root(mini.projectId);
   const project = await remote.add(computerId, folder);
@@ -2071,4 +2072,12 @@ it("opens a remote project's shells on its computer, in its folder, and shows th
     24,
     false,
   );
+
+  // Removed there, the computer's shells there end with it.
+  const closeAll = vi
+    .spyOn(ThreadTerminals.prototype, "closeAll")
+    .mockImplementation(() => {});
+  cleanup.push(() => closeAll.mockRestore());
+  await miniRemote.revoke(device);
+  expect(closeAll).toHaveBeenCalledTimes(1);
 }, 90000);

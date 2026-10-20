@@ -31,6 +31,15 @@ interface Entry {
  */
 export class Computers {
   private clients = new Map<string, Entry>();
+  /** Connects under way, one per computer, so callers at once share it. */
+  private connecting = new Map<string, Promise<void>>();
+  /**
+   * Which connect a computer is the latest's; `drop` takes it away, and a
+   * connect finding it gone or replaced gives up what it built.
+   */
+  private connects = new Map<string, symbol>();
+  /** Relay is restarting: WSL distributions stay held through it. */
+  private detached = false;
   /** WSL distributions WSL stopped, by computer id; see `stopped`. */
   private stoppedIds = new Set<string>();
   private online = new Set<(id: string) => void>();
@@ -67,18 +76,21 @@ export class Computers {
     for (const computer of this.saved) {
       if (computer.route?.kind === "wsl" && !held.has(computer.route.distro))
         continue;
-      await this.connect(computer).catch((e) =>
+      await this.connectOnce(computer).catch((e) =>
         console.warn(`Can't connect to ${computer.name}:`, e),
       );
     }
   }
   /** `detach`: Relay restarts, and WSL distributions stay held through it. */
   close({ detach = false }: { detach?: boolean } = {}) {
+    this.detached = detach;
     for (const { client, shim } of this.clients.values()) {
       client.close();
       shim?.close();
     }
     this.clients.clear();
+    this.connecting.clear();
+    this.connects.clear();
     if (!detach) this.options.holders?.releaseAll();
   }
   list(): PairedComputer[] {
@@ -213,7 +225,7 @@ export class Computers {
       ];
     });
     this.drop(computer.id);
-    await this.connect(computer);
+    await this.connectOnce(computer);
     return this.list();
   }
   async forget(id: string) {
@@ -247,7 +259,7 @@ export class Computers {
     const { name } = computer;
     if (this.stoppedIds.has(id))
       throw new Error(`WSL stopped ${name}. Reconnect to start it again.`);
-    if (this.asleep(id)) await this.connect(computer);
+    if (this.asleep(id)) await this.connectOnce(computer);
     const entry = this.clients.get(id);
     if (!entry) throw new Error(`${name} isn't connected.`);
     entry.client.wake();
@@ -287,7 +299,7 @@ export class Computers {
       if (
         computer.route?.kind === "wsl" &&
         computer.route.distro === distro &&
-        this.clients.has(computer.id)
+        (this.clients.has(computer.id) || this.connecting.has(computer.id))
       ) {
         this.stoppedIds.add(computer.id);
         this.drop(computer.id);
@@ -298,21 +310,56 @@ export class Computers {
     entry?.client.close();
     entry?.shim?.close();
     this.clients.delete(id);
+    this.connecting.delete(id);
+    this.connects.delete(id);
     const route = this.saved.find((c) => c.id === id)?.route;
     if (route?.kind === "wsl") this.options.holders?.release(route.distro);
   }
+  private connectOnce(computer: SavedComputer) {
+    const { id } = computer;
+    const pending = this.connecting.get(id);
+    if (pending) return pending;
+    const connecting = this.connect(computer).finally(() => {
+      if (this.connecting.get(id) === connecting) this.connecting.delete(id);
+    });
+    this.connecting.set(id, connecting);
+    return connecting;
+  }
   private async connect(computer: SavedComputer) {
-    const token = computer.token.startsWith("plain:")
-      ? computer.token.slice(6)
-      : await this.unseal(computer.token);
+    const { id, route } = computer;
+    const ticket = Symbol(id);
+    this.connects.set(id, ticket);
+    const current = () => this.connects.get(id) === ticket;
     let wasOnline = false;
-    this.stoppedIds.delete(computer.id);
-    if (computer.route?.kind === "wsl")
-      await this.options.holders?.hold(computer.route.distro);
+    this.stoppedIds.delete(id);
     // Over a pipe, the client connects to it on this computer's loopback.
-    const shim =
-      computer.route && new PipeShim(computer.route, this.options.routeCommand);
-    const port = shim ? await shim.listen() : computer.port;
+    let shim: PipeShim | undefined;
+    const giveUp = () => {
+      shim?.close();
+      if (current()) this.connects.delete(id);
+      // A newer connect holds the distribution now; a dropped or failed one, nothing.
+      if (route?.kind === "wsl" && !this.connects.has(id) && !this.detached)
+        this.options.holders?.release(route.distro);
+    };
+    let token: string;
+    let port: number;
+    try {
+      token = computer.token.startsWith("plain:")
+        ? computer.token.slice(6)
+        : await this.unseal(computer.token);
+      if (route?.kind === "wsl" && current())
+        await this.options.holders?.hold(route.distro);
+      if (route && current())
+        shim = new PipeShim(route, this.options.routeCommand);
+      port = shim ? await shim.listen() : computer.port;
+    } catch (e) {
+      const failed = current();
+      giveUp();
+      if (failed) throw e;
+      return;
+    }
+    // Dropped meanwhile: forgotten, re-paired or Relay closing.
+    if (!current()) return giveUp();
     const entry: Entry = {
       shim,
       client: new RemoteClient({
@@ -330,32 +377,28 @@ export class Computers {
         onStatus: (status, detail) => {
           entry.detail = status === "online" ? undefined : detail;
           if (status === "online")
-            for (const listener of this.online) listener(computer.id);
+            for (const listener of this.online) listener(id);
           else if (wasOnline)
-            for (const listener of this.offline) listener(computer.id);
+            for (const listener of this.offline) listener(id);
           wasOnline = status === "online";
         },
         onEvent: (event) => {
-          for (const listener of this.events) listener(computer.id, event);
+          for (const listener of this.events) listener(id, event);
         },
         // Where the other computer listens now, for the next connect; a
         // pipe's end stays where it is.
         onCredentials: ({ hosts, name }) =>
           void this.store
             .update((s) => {
-              const saved = s.computers?.find((c) => c.id === computer.id);
-              if (saved)
-                Object.assign(
-                  saved,
-                  computer.route ? { name } : { hosts, name },
-                );
+              const saved = s.computers?.find((c) => c.id === id);
+              if (saved) Object.assign(saved, route ? { name } : { hosts, name });
             })
             .catch((e) =>
               console.warn(`Couldn't keep ${computer.name}'s addresses:`, e),
             ),
       }),
     };
-    this.clients.set(computer.id, entry);
+    this.clients.set(id, entry);
     entry.client.start();
   }
 }

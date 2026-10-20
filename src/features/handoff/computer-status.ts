@@ -46,8 +46,17 @@ export function threadLine(t: AwayThread, now: number) {
   return stateWord[t.state];
 }
 
+/**
+ * Whether it can be picked or browsed: online, or a WSL distribution asleep,
+ * which the first thing that needs it wakes.
+ */
+export const reachable = (c: Pick<PairedComputer, "status" | "asleep">) =>
+  c.status === "online" || !!c.asleep;
+
 export function computerLine(c: PairedComputer) {
   if (c.status === "online") return "Connected";
+  if (c.asleep) return "Asleep · wakes when used";
+  if (c.stopped) return "WSL stopped it";
   if (c.status === "connecting") return "Connecting…";
   if (c.status === "denied")
     return "It no longer accepts this computer. Pair again.";
@@ -66,6 +75,7 @@ export function updating(c: Computer) {
 }
 
 export function summary(c: Computer) {
+  if (c.asleep || c.stopped) return computerLine(c);
   if (c.status === "offline") return "Offline";
   if (c.status !== "online") return computerLine(c);
   const busy = updating(c);

@@ -82,12 +82,17 @@ if (mode === "pipe") {
 }
 
 /** What holds WSL up, as the agent host would; `stop` is `wsl --shutdown`. */
-function fakeHolders(held: string[] = []) {
+function fakeHolders(held: string[] = [], { holdMs = 0 } = {}) {
   const holds = new Set(held);
   const stopped = new Set<(distro: string) => void>();
   return {
     holds,
-    hold: async (distro: string) => void holds.add(distro),
+    calls: 0,
+    async hold(distro: string) {
+      this.calls++;
+      await new Promise((r) => setTimeout(r, holdMs));
+      holds.add(distro);
+    },
     release: (distro: string) => void holds.delete(distro),
     heldDistros: async () => new Set(holds),
     releaseAll: () => holds.clear(),
@@ -150,6 +155,43 @@ it("pairs with a Relay in WSL through its pipe, and after a restart wakes it onl
   expect(later.holders.holds.size).toBe(0);
   await later.computers.connected(paired!.id);
   expect([...later.holders.holds]).toEqual(["Ubuntu"]);
+});
+
+it("wakes a sleeping distribution once when several calls need it at once", async () => {
+  const { command } = await relayInWsl();
+  const first = await laptop(command);
+  const [paired] = await first.computers.pairOver(ubuntu);
+  first.computers.close();
+
+  const holders = fakeHolders([], { holdMs: 50 });
+  const { computers } = await laptop(command, holders, first.store);
+  let online = 0;
+  computers.onOnline(() => online++);
+  const clients = await Promise.all(
+    [1, 2, 3].map(() => computers.connected(paired!.id)),
+  );
+  expect(new Set(clients).size).toBe(1);
+  expect(holders.calls).toBe(1);
+  await new Promise((r) => setTimeout(r, 300));
+  expect(online).toBe(1);
+});
+
+it("leaves nothing connected or held when forgotten while waking", async () => {
+  const { command } = await relayInWsl();
+  const first = await laptop(command);
+  const [paired] = await first.computers.pairOver(ubuntu);
+  first.computers.close();
+
+  const holders = fakeHolders([], { holdMs: 50 });
+  const { computers } = await laptop(command, holders, first.store);
+  let online = 0;
+  computers.onOnline(() => online++);
+  const waking = computers.connected(paired!.id).catch((e: Error) => e);
+  await computers.forget(paired!.id);
+  expect(await waking).toBeInstanceOf(Error);
+  await new Promise((r) => setTimeout(r, 300));
+  expect(online).toBe(0);
+  expect(holders.holds.size).toBe(0);
 });
 
 it("leaves a distribution WSL stopped stopped until the user wakes it", async () => {
