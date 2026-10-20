@@ -397,7 +397,7 @@ function Row({
           disabled={link || (blocked && !dir)}
           onClick={() => {
             if (!blocked) onSelect(row.path, dir ? "dir" : "file");
-            if (dir && !row.open) expansion.expand([row.path]);
+            if (dir && !frozen) expansion.toggle(row.path);
           }}
         >
           <FileEntryIcon path={row.path} directory={dir} />
