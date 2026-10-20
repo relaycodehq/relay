@@ -1,7 +1,7 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { ChatMessage } from "../../shared/projects";
 import type { RemoteEvent, ServerFrame } from "../../shared/remote";
-import { LinkSender } from "./link-sender";
+import { backgroundBatchMs, LinkSender } from "./link-sender";
 
 const answer = (
   body: string,
@@ -89,4 +89,54 @@ it("patches against what went out, even when the answer it sent keeps changing",
   expect(frames[1]).toMatchObject({
     event: { kind: "messagePatch", patch: { body: { from: 0, text: "Hello world" } } },
   });
+});
+
+const kinds = (frames: ServerFrame[]) =>
+  frames.map((f) => (f.t === "event" ? f.event.kind : f.t));
+const appearance: RemoteEvent = {
+  kind: "appearance",
+  appearance: { scheme: "dark" } as never,
+};
+
+afterEach(() => void vi.useRealTimers());
+
+it("sends a phone in the background its events in batches, and no streaming at all", () => {
+  vi.useFakeTimers();
+  const { link, frames } = slowLink(100);
+  link.setBackground(true);
+  link.event(answer("One"));
+  link.event(appearance);
+  link.event(answer("One two"));
+  vi.advanceTimersByTime(backgroundBatchMs - 1);
+  expect(frames).toHaveLength(0);
+  vi.advanceTimersByTime(1);
+  expect(kinds(frames)).toEqual(["appearance"]);
+
+  // The finished answer is what a notification shows, so it goes with the next batch.
+  link.event(answer("One two three.", "complete"));
+  vi.advanceTimersByTime(backgroundBatchMs);
+  expect(kinds(frames)).toEqual(["appearance", "message"]);
+  // Nothing new, no batch.
+  vi.advanceTimersByTime(backgroundBatchMs * 4);
+  expect(frames).toHaveLength(2);
+});
+
+it("back from the background, sends what waited and the newest streaming snapshot at once", () => {
+  vi.useFakeTimers();
+  const { link, frames } = slowLink(100);
+  link.event(answer("One"));
+  link.setBackground(true);
+  link.event(appearance);
+  link.event(answer("One two"));
+  link.event(answer("One two three"));
+  link.setBackground(false);
+  expect(kinds(frames)).toEqual(["message", "appearance", "messagePatch"]);
+  expect(frames[2]).toMatchObject({
+    event: { patch: { body: { from: 3, text: " two three" } } },
+  });
+  // The batch's timer went with it.
+  vi.advanceTimersByTime(backgroundBatchMs);
+  expect(frames).toHaveLength(3);
+  link.event(answer("One two three four"));
+  expect(frames).toHaveLength(4);
 });

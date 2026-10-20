@@ -28,6 +28,12 @@ data class RemoteClientOptions(
     val slowTimeoutMs: Long = 120_000,
     /** Silence after which a link counts as dead; the desktop ticks every 15s. */
     val staleMs: Long = 40_000,
+    /** The same in the background, where a desktop from Bridge.BACKGROUND ticks once a minute. */
+    val backgroundStaleMs: Long = 150_000,
+    /** Back from the background, how long the desktop gets to answer with a tick before the link counts as dead. */
+    val backProbeMs: Long = 5_000,
+    /** The longest wait between tries to reconnect in the background; in front it's 15s. */
+    val backgroundRetryMs: Long = 60_000,
     /** A route that lost to the current one isn't tried again for this long. */
     val worseCooldownMs: Long = 5 * 60_000,
 )

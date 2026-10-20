@@ -185,7 +185,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 28;
+export const remoteBridgeVersion = 29;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -297,6 +297,13 @@ export const setupBridge = 27;
  * (`projectTerminal`, `terminalCall`, `terminal` events).
  */
 export const remoteProjectsBridge = 28;
+/**
+ * From here a desktop takes `background` frames: while a phone says it's in
+ * the background, its events come in a batch every `backgroundBatchMs`
+ * (streaming answers only once it's back) and it's ticked a quarter as often,
+ * so its radio sleeps between. Older desktops ignore the frame.
+ */
+export const backgroundBridge = 29;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -984,7 +991,9 @@ export type ClientFrame =
   | { t: "auth"; deviceId: string; token: string; bridge?: number }
   | { t: "call"; id: number; method: RemoteMethod; args: unknown[] }
   /** The streaming frame numbered `s` arrived; from `compactBridge`. */
-  | { t: "got"; s: number };
+  | { t: "got"; s: number }
+  /** The phone went to the background or came back; from `backgroundBridge`. */
+  | { t: "background"; on: boolean };
 export type ServerFrame =
   /** `bridge` is the desktop's `remoteBridgeVersion`; desktops before `to` send none. */
   | {

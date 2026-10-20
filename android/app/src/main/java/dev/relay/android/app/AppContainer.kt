@@ -97,11 +97,13 @@ class AppContainer(context: Context) {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 lock.back()
+                remote.setBackground(false)
                 remote.wake()
             }
 
             override fun onStop(owner: LifecycleOwner) {
                 lock.left()
+                remote.setBackground(true)
             }
         })
     }

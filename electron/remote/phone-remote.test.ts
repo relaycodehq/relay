@@ -21,6 +21,7 @@ import {
 } from "../../shared/remote-crypto";
 import {
   parsePairingUrl,
+  type ClientFrame,
   type PhoneTailnet,
   type RemoteCredentials,
   type RemoteEvent,
@@ -636,6 +637,44 @@ it("streams thread changes to the phone and cuts it off when removed", async () 
   await remote.revoke(p.credentials()!.deviceId);
   await p.until("denied");
   expect(p.statuses.at(-1)?.detail).toMatch(/removed/);
+});
+
+it("holds a phone's events while it's in the background, and sends them the moment it's back", async () => {
+  const { remote, summary } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel" });
+  await p.until("online");
+  await p.client.call("overview");
+  // Only the phone apps send this; this client stands in for one.
+  const background = (on: boolean) =>
+    (p.client as unknown as { sendFrame(frame: ClientFrame): void }).sendFrame({
+      t: "background",
+      on,
+    });
+
+  background(true);
+  // Answered after the frame before it was handled.
+  await p.client.call("overview");
+  remote.chatEvent({
+    chatId,
+    message: {
+      id: randomUUID(),
+      role: "assistant",
+      body: "Looking",
+      status: "streaming",
+      created: 3,
+      provider: "claude",
+      version: 1,
+    },
+  });
+  remote.chatsEvent({ projectId, chats: [summary] });
+  // Sent while not batching, the events would have come before this answer.
+  await p.client.call("overview");
+  expect(p.events).toEqual([]);
+
+  background(false);
+  await p.untilEvents((events) => events.length === 2);
+  expect(p.events.map((e) => e.kind).sort()).toEqual(["chats", "message"]);
 });
 
 it("stays connected when the phone's own event listener throws", async () => {

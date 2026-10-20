@@ -15,6 +15,12 @@ import type {
 const window = 16 * 1024;
 /** Gives up on an acknowledgement after this, so a lost one can't stall a link for good. */
 const ackMs = 20_000;
+/**
+ * How long events wait for a phone in the background, so its radio wakes for
+ * a batch now and then instead of for every frame. A notification comes up
+ * to this late.
+ */
+export const backgroundBatchMs = 25_000;
 
 type MessageEvent = Extract<RemoteEvent, { kind: "message" }>;
 
@@ -32,12 +38,53 @@ export class LinkSender {
   private held = new Map<string, MessageEvent>();
   private unacked = new Map<number, { bytes: number; at: number }>();
   private seq = 0;
+  /** Events for a phone in the background, in order, until the next batch. */
+  private batch?: { events: RemoteEvent[]; timer?: ReturnType<typeof setTimeout> };
   constructor(
     /** Sends a frame and says how many bytes it took on the wire. */
     private send: (frame: ServerFrame) => number,
     private now = Date.now,
   ) {}
   event(event: RemoteEvent) {
+    const batch = this.batch;
+    if (!batch) return this.deliver(event);
+    if (event.kind === "message") {
+      const { id } = event.message;
+      this.held.delete(id);
+      // Nobody watches an answer stream in the background; the newest goes once the phone is back.
+      if (event.message.status === "streaming") {
+        this.held.set(id, event);
+        return;
+      }
+    }
+    batch.events.push(event);
+    batch.timer ??= setTimeout(() => this.flush(), backgroundBatchMs);
+  }
+  /** The phone went to the background or came back; back, it gets everything held at once. */
+  setBackground(on: boolean) {
+    if (on) {
+      this.batch ??= { events: [] };
+      return;
+    }
+    if (!this.batch) return;
+    this.flush();
+    this.batch = undefined;
+    this.pump();
+  }
+  /** The link closed. */
+  close() {
+    clearTimeout(this.batch?.timer);
+    this.batch = undefined;
+  }
+  private flush() {
+    const batch = this.batch;
+    if (!batch) return;
+    clearTimeout(batch.timer);
+    const events = batch.events;
+    this.batch = { events: [] };
+    for (const event of events) this.deliver(event);
+  }
+  private deliver(event: RemoteEvent) {
     if (event.kind === "chats") return this.sendChats(event.chats);
     if (event.kind !== "message") {
       this.send({ t: "event", event });
@@ -68,6 +115,7 @@ export class LinkSender {
       this.send({ t: "event", event: { kind: "chatsPatch", patch } });
   }
   private pump() {
+    if (this.batch) return;
     const at = this.now();
     let inFlight = 0;
     for (const [s, frame] of this.unacked)

@@ -136,6 +136,8 @@ class Remote(
     val paired: Boolean get() = _client.value != null
 
     private var live: RemoteClient? = null
+    /** Starts true: the app may be opened by a notification's worker with nothing on screen. */
+    private var background = true
     /** Where the latest switch goes, set before its offline copy is read; [_active] moves after. */
     private var wanted: String? = null
     private var switches = 0
@@ -219,6 +221,12 @@ class Remote(
     /** Back in the foreground: Android drops sockets in the background. */
     fun wake() {
         live?.wake()
+    }
+
+    /** Whether the app is in the background, for the link to the active computer and the next. */
+    fun setBackground(on: Boolean) {
+        background = on
+        live?.setBackground(on)
     }
 
     /** A fresh overview, when online. */
@@ -399,6 +407,7 @@ class Remote(
         _client.value = next
         _status.value = next.status.value
         if (start is RemoteStart.Pair) pairing?.client = next
+        next.setBackground(background)
         next.start()
         return next
     }
