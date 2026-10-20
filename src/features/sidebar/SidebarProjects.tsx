@@ -1,12 +1,11 @@
 // The sidebar's Projects view sections: Scratchpad's chats, and the projects
 // under their heading, which takes projects dragged out of their groups.
-import { Menu } from "@base-ui/react/menu";
 import {
   ChevronRight,
   FolderOpen,
   FolderPlus,
-  Link2,
   Plus,
+  Monitor,
   Import as ImportIcon,
 } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
@@ -22,7 +21,6 @@ import {
 import { IconButton } from "../../ui/ui";
 import { GitHubMark } from "../../ui/BrandIcons";
 import type { AddProjectPage } from "../add-project/AddProjectPalette";
-import { MenuAction, MenuPopup } from "./SidebarMenu";
 
 /** A section's heading; the label folds the list beneath it. */
 function SectionTitle({
@@ -110,47 +108,12 @@ export function Scratchpad({
   );
 }
 
-/** The ways to add a project, each opening the palette on its page. */
+/** Open the complete flow, including where the project will run. */
 function AddMenu({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
   return (
-    <Menu.Root>
-      <Menu.Trigger
-        className="icon-button"
-        title="Add project"
-        aria-label="Add project"
-      >
-        <Plus size={14} />
-      </Menu.Trigger>
-      <MenuPopup side="bottom" align="end">
-        <MenuAction
-          icon={<FolderPlus size={14} />}
-          onClick={() => onAdd("new")}
-        >
-          New project
-        </MenuAction>
-        <MenuAction
-          icon={<FolderOpen size={14} />}
-          onClick={() => onAdd("folder")}
-        >
-          Open a folder
-        </MenuAction>
-        <MenuAction
-          icon={<GitHubMark size={14} />}
-          onClick={() => onAdd("github")}
-        >
-          Clone from GitHub
-        </MenuAction>
-        <MenuAction icon={<Link2 size={14} />} onClick={() => onAdd("url")}>
-          Clone from a URL
-        </MenuAction>
-        <MenuAction
-          icon={<ImportIcon size={14} />}
-          onClick={() => onAdd("import")}
-        >
-          Import from another app…
-        </MenuAction>
-      </MenuPopup>
-    </Menu.Root>
+    <IconButton label="Add project" onClick={() => onAdd("root")}>
+      <Plus size={14} />
+    </IconButton>
   );
 }
 
@@ -169,6 +132,10 @@ function AddWays({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
       <button className="sb-thread" onClick={() => onAdd("github")}>
         <GitHubMark size={14} />
         <span className="sb-thread-title">Clone a repository</span>
+      </button>
+      <button className="sb-thread" onClick={() => onAdd("computers")}>
+        <Monitor size={14} />
+        <span className="sb-thread-title">Another computer</span>
       </button>
       <button className="sb-thread" onClick={() => onAdd("import")}>
         <ImportIcon size={14} />

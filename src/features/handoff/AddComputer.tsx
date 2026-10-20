@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronDown, X } from "lucide-react";
+import { ArrowRight, ChevronDown, CircleHelp, X } from "lucide-react";
+import type { PairedComputer } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { requestAddProject } from "../../lib/add-project-request";
 import { fromTyped, suggestions, type Target } from "./add-targets";
@@ -21,12 +22,17 @@ const hintCount = 6;
 export function AddComputer({
   focusRequest = 0,
   onStart,
+  onConnected,
+  onBusy,
 }: {
   focusRequest?: number;
   /** A checkup started: the map keeps Add picked, so its end stays in view. */
   onStart?: () => void;
+  onConnected?: (computer: PairedComputer) => void;
+  onBusy?: (busy: boolean) => void;
 }) {
   const field = useRef<HTMLInputElement>(null);
+  const fieldId = useId();
   useEffect(() => {
     if (focusRequest) field.current?.focus();
   }, [focusRequest]);
@@ -50,6 +56,7 @@ export function AddComputer({
   const [text, setText] = useState("");
   const [typedError, setTypedError] = useState<string>();
   const [listOpen, setListOpen] = useState(false);
+  const [pairingHelp, setPairingHelp] = useState(false);
   const [active, setActive] = useState(-1);
   const typed = text
     .trim()
@@ -61,6 +68,9 @@ export function AddComputer({
       )
     : offered;
   const working = busy(checkup?.phase);
+  useEffect(() => {
+    onBusy?.(working);
+  }, [working, onBusy]);
 
   function start(target: Target) {
     setText(target.kind === "route" ? target.name : target.link);
@@ -71,7 +81,7 @@ export function AddComputer({
     void check(target);
   }
   function submit() {
-    if (working) return;
+    if (working || checkup?.phase === "done") return;
     const picked = listOpen ? matching[active] : undefined;
     if (picked) return start(picked);
     const target = fromTyped(text, distros.data ?? []);
@@ -89,21 +99,22 @@ export function AddComputer({
     <div className="settings-card cm-card cm-add">
       <form
         className="cm-add-ask"
+        data-complete={checkup?.phase === "done" || undefined}
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <label htmlFor="cm-add-field">Add</label>
+        <label htmlFor={fieldId}>Computer</label>
         <input
-          id="cm-add-field"
+          id={fieldId}
           ref={field}
           spellCheck={false}
           autoComplete="off"
           placeholder={
             distros.data?.length
-              ? "An ssh host, a WSL distribution, or a pairing link"
-              : "A host you ssh into, user@host, or a pairing link"
+              ? "SSH host, WSL distribution, or pairing link"
+              : "user@host, SSH host, or pairing link"
           }
           value={text}
           aria-invalid={!!typedError}
@@ -131,19 +142,20 @@ export function AddComputer({
             }
           }}
         />
-        {stoppable(checkup) ? (
-          <button type="button" onClick={stop}>
-            <X size={13} aria-hidden /> Stop
-          </button>
-        ) : (
-          <button
-            type="submit"
-            className="primary"
-            disabled={!text.trim() || working}
-          >
-            Check <ArrowRight size={13} aria-hidden />
-          </button>
-        )}
+        {checkup?.phase !== "done" &&
+          (stoppable(checkup) ? (
+            <button type="button" onClick={stop}>
+              <X size={13} aria-hidden /> Stop
+            </button>
+          ) : (
+            <button
+              type="submit"
+              className="primary"
+              disabled={!text.trim() || working}
+            >
+              Check <ArrowRight size={13} aria-hidden />
+            </button>
+          ))}
       </form>
       {typedError && (
         <p className="cm-add-error" role="alert">
@@ -155,18 +167,24 @@ export function AddComputer({
           <CheckupLines checkup={checkup} onInstall={install} onAgain={again} />
           {checkup.phase === "done" && (
             <div className="cm-add-end">
+              <button type="button" onClick={another}>
+                Add another
+              </button>
               {checkup.paired && (
                 <button
                   type="button"
                   className="primary"
-                  onClick={() => requestAddProject(checkup.paired!.id)}
+                  onClick={() =>
+                    onConnected
+                      ? onConnected(checkup.paired!)
+                      : requestAddProject(checkup.paired!.id)
+                  }
                 >
-                  Add a project on {checkup.paired.name}
+                  {onConnected
+                    ? `Use ${checkup.paired.name}`
+                    : `Add a project on ${checkup.paired.name}`}
                 </button>
               )}
-              <button type="button" onClick={another}>
-                Add another
-              </button>
             </div>
           )}
         </>
@@ -201,11 +219,25 @@ export function AddComputer({
               )}
             </div>
           )}
-          <p className="cm-add-note">
-            Over Tailscale instead? On the other computer, turn on{" "}
-            <em>Accept threads from other computers</em> in Settings → Computers
-            and paste its link here.
-          </p>
+          <div className="cm-add-note">
+            <button
+              type="button"
+              className="cm-add-help-toggle"
+              aria-expanded={pairingHelp}
+              onClick={() => setPairingHelp((open) => !open)}
+            >
+              <CircleHelp size={13} aria-hidden />
+              What’s a pairing link?
+            </button>
+            {pairingHelp && (
+              <p>
+                A link that connects Relay on two computers using Tailscale. On
+                the other computer, enable{" "}
+                <em>Accept threads from other computers</em> in Settings →
+                Computers, then paste its link above.
+              </p>
+            )}
+          </div>
         </>
       )}
     </div>

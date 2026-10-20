@@ -418,29 +418,43 @@ em.waiting {
 
 /* Adding one: say where, then the checkup under it. */
 .cm-add {
-  padding: 14px 16px 16px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
 }
 .cm-add-ask {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
-.cm-add-ask label {
-  font-size: 13px;
+.cm-add-ask > label {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12px;
   font-weight: 500;
+  line-height: 1.5;
 }
-.cm-add-ask input {
-  flex: 1;
+.cm-add-ask > input {
   min-width: 0;
+  height: 34px;
+  padding: 7px 10px;
   font: 12px var(--font-mono);
 }
-.cm-add-ask button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.cm-add-ask[data-complete] > input {
+  grid-column: 1 / -1;
+}
+.cm-add-ask > button {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+/* The modal's generic submit-button margin must not shift this inline action. */
+.cm-add .cm-add-ask > button.primary {
+  margin: 0;
 }
 .cm-add-error {
-  margin: 8px 0 0 38px;
+  margin: 0;
   color: var(--danger);
   font-size: 12px;
 }
@@ -448,20 +462,19 @@ em.waiting {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 12px;
 }
 .cm-add-hints button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 9px;
-  border-color: transparent;
-  background: none;
+  padding: 4px 8px;
+  border: 0;
+  background: var(--toolbar);
   color: var(--muted);
   font: 11.5px var(--font-mono);
 }
 .cm-add-hints button:hover {
-  border-color: var(--border);
+  background: var(--hover);
   color: var(--text);
 }
 .cm-add-hints .cm-add-more {
@@ -469,9 +482,26 @@ em.waiting {
   font-family: inherit;
 }
 .cm-add-note {
-  margin: 12px 0 0;
   color: var(--muted);
   font-size: 11.5px;
+}
+.cm-add-help-toggle {
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: inherit;
+  line-height: 1.5;
+  border-radius: 3px;
+}
+.cm-add-help-toggle:hover {
+  background: transparent;
+  color: var(--text);
+}
+.cm-add-note p {
+  margin: 8px 0 0;
+  line-height: 1.5;
 }
 .cm-add-note em {
   font-style: normal;
@@ -479,8 +509,26 @@ em.waiting {
 }
 .cm-add-end {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  padding-left: 35px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.cm-add-end > button {
+  min-height: 32px;
+  max-width: 100%;
+  padding: 6px 12px;
+  font-size: 12px;
+  white-space: normal;
+}
+.cm-add .cm-check-lines,
+.cm-add .cm-host-list {
+  margin: 0;
+}
+.cm-add .cm-check-lines li:last-child {
+  padding-bottom: 0;
 }
 /* The checkup: a line a step, joined down the left. */
 .cm-check-lines {
@@ -748,4 +796,45 @@ em.unknown {
 .cm-version small.busy {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+}
+
+.computer-picker {
+  padding: 8px;
+  min-height: 100px;
+}
+.computer-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.computer-picker-row > .palette-row {
+  flex: 1;
+  min-width: 0;
+}
+.computer-picker-row > button:not(.palette-row) {
+  margin-right: 8px;
+  font-size: 11px;
+}
+.computer-picker .cm-add {
+  margin: 8px 0 0;
+  padding: 16px 8px 8px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+}
+.computer-picker > .cm-add:first-child {
+  margin: 0;
+  padding-top: 8px;
+  border-top: 0;
+}
+
+.computer-picker-dialog {
+  width: 600px;
+  padding: 0;
+}
+.computer-picker-dialog .modal-heading {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  margin: 0;
 }

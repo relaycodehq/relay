@@ -5,6 +5,7 @@ import type { ImportApp, ImportProject } from "../../../shared/project-import";
 import { tildePath } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
 export interface ImportChoice {
   folder?: string;
@@ -76,7 +77,12 @@ export function ImportProjectRow({
           />
           <span>
             <strong>{project.name}</strong>
-            <small>{tildePath(folder ?? project.path)}</small>
+            <small>
+              <MiddleTruncate
+                text={tildePath(folder ?? project.path)}
+                kind="path"
+              />
+            </small>
           </span>
         </label>
         <span className="import-project-state">
