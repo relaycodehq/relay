@@ -306,6 +306,50 @@ it("lists terminal sessions behind hundreds of newer Relay ones, reading only th
   expect(vi.mocked(claudeSummary)).toHaveBeenCalledTimes(30);
 });
 
+it("bounds full-history summary reads when importing every session", async () => {
+  const ids = Array.from(
+    { length: 80 },
+    (_, i) => `c-term-${String(i).padStart(4, "0")}`,
+  );
+  for (const [i, id] of ids.entries())
+    await writeClaudeSession(claude, repo, id, claudeTurns(turns), {
+      ago: HOUR + i * 1000,
+    });
+  const real = await vi.importActual<typeof import("./claude")>("./claude");
+  let active = 0;
+  let maximum = 0;
+  vi.mocked(claudeSummary).mockImplementation(async (path) => {
+    active++;
+    maximum = Math.max(maximum, active);
+    try {
+      await new Promise((resolve) => setImmediate(resolve));
+      return await real.claudeSummary(path);
+    } finally {
+      active--;
+    }
+  });
+  try {
+    const sessions = new TerminalSessions(
+      homes(),
+      undefined,
+      async () => new Set<string>(),
+    );
+    const rows = await sessions.list(repo, Infinity, "claude");
+    expect(maximum).toBeGreaterThan(1);
+    expect(maximum).toBeLessThanOrEqual(32);
+    expect(active).toBe(0);
+    expect(rows.map((row) => row.id)).toEqual(ids);
+    expect(
+      rows.every((row) => row.title === turns[0]!.prompt && row.turns === 1),
+    ).toBe(true);
+    expect(claudeSummary).toHaveBeenCalledTimes(ids.length);
+    expect(await sessions.list(repo, Infinity, "claude")).toEqual(rows);
+    expect(claudeSummary).toHaveBeenCalledTimes(ids.length);
+  } finally {
+    vi.mocked(claudeSummary).mockImplementation(real.claudeSummary);
+  }
+});
+
 it("finds a picked session again by id, only in the project's folder", async () => {
   await writeClaudeSession(claude, repo, "c-terminal-1", claudeTurns(turns));
   await writeClaudeSession(

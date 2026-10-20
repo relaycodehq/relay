@@ -35,7 +35,7 @@ export interface FoundSession extends TerminalSession {
 }
 
 const MOST_ROWS = 30;
-/** Session heads read at once while looking for the project's terminal sessions. */
+/** Session heads or summaries read at once while looking for terminal sessions. */
 const BATCH = 32;
 /** Codex files sessions by the day they started. */
 const CODEX_DAYS = 30;
@@ -104,22 +104,28 @@ export class TerminalSessions {
     ]);
     const live = await this.live(found);
     const named = await this.appNames(found);
-    const legacy = await Promise.all(
-      found.map(async ({ file, origin }) => {
-        const { title, turns } = await this.summary(file, origin.id);
-        return {
-          provider: file.provider,
-          id: origin.id,
-          title: named.get(origin.id) || title || "Untitled session",
-          updated: file.mtime,
-          turns,
-          account: file.account,
-          live: live(file, origin.id),
-          ...(origin.app ? { app: true as const } : {}),
-          path: file.path,
-        } satisfies FoundSession;
-      }),
-    );
+    const legacy: FoundSession[] = [];
+    // Imports can ask for every session: summaries stream the whole files,
+    // so give them the same concurrency bound as the head reads.
+    for (let at = 0; at < found.length; at += BATCH)
+      legacy.push(
+        ...(await Promise.all(
+          found.slice(at, at + BATCH).map(async ({ file, origin }) => {
+            const { title, turns } = await this.summary(file, origin.id);
+            return {
+              provider: file.provider,
+              id: origin.id,
+              title: named.get(origin.id) || title || "Untitled session",
+              updated: file.mtime,
+              turns,
+              account: file.account,
+              live: live(file, origin.id),
+              ...(origin.app ? { app: true as const } : {}),
+              path: file.path,
+            } satisfies FoundSession;
+          }),
+        )),
+      );
     // A chat may still have its old rollout after migrating to SQLite.
     // Prefer its current database history, and keep the usual account when
     // another account links to the same Codex home.
