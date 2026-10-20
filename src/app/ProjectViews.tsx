@@ -24,7 +24,6 @@ import { FileTree } from "../features/files/FileTree";
 import { OutsideFile } from "../features/files/OutsideFile";
 import {
   FileBar,
-  FolderView,
   ImageFile,
   OtherFile,
   VideoFile,
@@ -180,6 +179,7 @@ export function ProjectFiles({
     if (next) expansion.expand(ancestors(next.path));
     setSelection(next);
   };
+  const [listHidden, setListHidden] = useStoredFlag("relay-file-list-hidden");
   useRequests(opens, (target) => {
     if (target.outside)
       setSelection({ kind: "outside", path: target.path, line: target.line });
@@ -191,6 +191,7 @@ export function ProjectFiles({
       if (target.directory) {
         expansion.expand([...ancestors(target.path), target.path]);
         setSelection({ kind: "dir", path: target.path });
+        setListHidden(false);
       } else select({ kind: "file", path: target.path, line: target.line });
     }
   });
@@ -226,7 +227,6 @@ export function ProjectFiles({
   });
   const [actionError, setActionError] = useState<unknown>();
   const editorReady = !!file && (tree.data || project.plain);
-  const [listHidden, setListHidden] = useStoredFlag("relay-file-list-hidden");
   const listToggle = (
     <IconButton
       label={listHidden ? "Show file list" : "Hide file list"}
@@ -384,6 +384,7 @@ export function ProjectFiles({
                     return select({ kind: "file", path: target.path });
                   expansion.expand([...ancestors(target.path), target.path]);
                   setSelection({ kind: "dir", path: target.path });
+                  setListHidden(false);
                 }}
                 inline
                 lead={listToggle}
@@ -402,29 +403,24 @@ export function ProjectFiles({
         ) : (
           <Loading text="Opening editor…" />
         )
-      ) : !selection && !listHidden ? (
-        // The tree already lists the root; a second copy beside it says nothing new.
+      ) : (
+        // Folders are browsed in the tree; this side only shows files.
         <div className="files-main">
           <div className="editor-bar">{listToggle}</div>
           <div className="empty project-editor-empty">
             <FileCode2 size={28} />
             <h2>No file open</h2>
             <p>Pick one from the list, or find it by name.</p>
-            <button onClick={() => findInput.current?.focus()}>
+            <button
+              onClick={() => {
+                setListHidden(false);
+                requestAnimationFrame(() => findInput.current?.focus());
+              }}
+            >
               <Search size={14} /> Find a file
             </button>
           </div>
         </div>
-      ) : (
-        <FolderView
-          key={selection?.path ?? ""}
-          where={where}
-          dir={selection?.path ?? ""}
-          title={project.name}
-          lead={listToggle}
-          watched={watched}
-          onOpen={(path, kind) => select({ kind, path })}
-        />
       )}
     </div>
   );

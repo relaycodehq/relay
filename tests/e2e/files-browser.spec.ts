@@ -87,8 +87,9 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
     const output = tree.getByRole("treeitem", { name: "output", exact: true });
     await expect(output).toBeVisible();
     await expect(tree.locator(".file-tree-row.ignored")).toHaveCount(1);
+    // A folder only opens in the tree; the pane beside it is for files.
     await openInFileTree(page, "output/redesign");
-    await expect(page.locator(".folder-card img")).toBeVisible();
+    await expect(page.getByText("No file open")).toBeVisible();
     await openInFileTree(page, "output/redesign/shot.png");
     await expect(page.locator(".image-file-stage img")).toBeVisible();
     await expect(page.locator(".editor-bar-state")).toContainText("1 × 1");
@@ -163,8 +164,7 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
         ),
       )
       .toBe(false);
-    // With nothing open, the pane shows the root again.
-    await expect(page.locator(".folder-view")).toBeVisible();
+    await expect(page.getByText("No file open")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await app.close();

@@ -1,4 +1,4 @@
-/* The Files pane: a tree read from disk, and the folder and picture views beside the editor. */
+/* The Files pane: a tree read from disk, and the picture views beside the editor. */
 .file-tree {
   flex: 1;
   min-height: 0;
@@ -75,16 +75,13 @@
   cursor: default;
   opacity: 0.55;
 }
-.file-tree .file-entry-icon,
-.folder-view .file-entry-icon {
+.file-tree .file-entry-icon {
   flex: none;
   width: 14px;
   height: 14px;
 }
 /* Ignored files are there to browse, but they're not part of the project's story. */
-.file-tree-row.ignored .file-tree-name-button > span,
-.folder-list .ignored,
-.folder-card.ignored .folder-card-name {
+.file-tree-row.ignored .file-tree-name-button > span {
   opacity: 0.55;
 }
 .file-tree-row.editing {
@@ -118,7 +115,6 @@
   margin: 8px;
 }
 
-.folder-view,
 .image-file,
 .other-file {
   flex: 1;
@@ -128,116 +124,6 @@
   flex-direction: column;
   overflow: hidden;
 }
-.folder-list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 6px 0;
-}
-.folder-list button {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 14px 1fr 80px 150px;
-  align-items: center;
-  gap: 10px;
-  height: 30px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 400;
-}
-.folder-list button:hover {
-  background: var(--hover);
-}
-.folder-list button > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.folder-list small {
-  color: var(--muted);
-  font-size: 11px;
-  text-align: right;
-  white-space: nowrap;
-}
-/* Names come first: a narrow folder view drops the date, then the size. */
-.folder-view {
-  container-type: inline-size;
-}
-@container (max-width: 460px) {
-  .folder-list button {
-    grid-template-columns: 14px 1fr auto;
-    padding: 0 12px;
-  }
-  .folder-list button > small:last-child {
-    display: none;
-  }
-}
-@container (max-width: 240px) {
-  .folder-list button {
-    grid-template-columns: 14px 1fr;
-  }
-  .folder-list button > small {
-    display: none;
-  }
-}
-.folder-grid {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  grid-auto-rows: max-content;
-  gap: 12px;
-  padding: 16px;
-}
-.folder-card {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-  font-weight: 400;
-}
-.folder-card-preview {
-  aspect-ratio: 4 / 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--inbox);
-  color: var(--muted);
-}
-.folder-card:hover .folder-card-preview {
-  border-color: var(--accent);
-}
-.folder-card:focus-visible .folder-card-preview {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.folder-card-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.folder-card-preview .file-entry-icon {
-  width: 28px;
-  height: 28px;
-}
-.folder-card-name {
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .image-file-stage {
   flex: 1;
   min-height: 0;
