@@ -199,7 +199,7 @@ test("organizes project groups, preserves child expansion across restart, and ce
         (await page.evaluate(() => window.relay.projects())).map((p) => p.name),
       )
       .toContain("Services");
-    await row("Services").locator(".sb-project-chevron").click();
+    await row("Services").locator(".sb-project-chevron-button").click();
     await expect(
       page.getByRole("button", { name: "Expand Services", exact: true }),
     ).toBeVisible();

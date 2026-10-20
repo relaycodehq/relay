@@ -462,6 +462,19 @@
 .sb .sb-project-chevron:not([data-open]) {
   opacity: 1;
 }
+/* A project's chevron takes no room until hovered (its folder icon says open
+   or closed), so a working project's spinner ends on the row's right edge;
+   on hover the spinner gives way to the chevron, as a thread's age does to
+   its actions. */
+.sb .sb-project-row .sb-project-chevron {
+  display: none;
+}
+.sb .sb-project-row:hover .sb-project-chevron {
+  display: block;
+}
+.sb .sb-project-row:hover .sb-project-chevron-button .sb-status {
+  display: none;
+}
 .sb .sb-project-chevron[data-open] {
   transform: rotate(90deg);
 }
