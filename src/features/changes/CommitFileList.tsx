@@ -26,7 +26,7 @@ export function CommitFileList({
   lines: { additions: number; deletions: number };
 }) {
   const [flat, setFlat] = useStoredFlag("relay-commit-files-flat");
-  const selected = files.length - excluded.size;
+  const selected = files.filter((c) => !excluded.has(c.path)).length;
   const box = (paths: string[], label: string) => (
     <GroupBox
       paths={paths}
@@ -45,12 +45,13 @@ export function CommitFileList({
           )}
           {selected} of {files.length} {files.length === 1 ? "file" : "files"}
         </label>
-        {!excluded.size && (lines.additions > 0 || lines.deletions > 0) && (
-          <span className="commit-lines" aria-label="Lines changed">
-            <span className="added">+{lines.additions}</span>
-            <span className="deleted">−{lines.deletions}</span>
-          </span>
-        )}
+        {selected === files.length &&
+          (lines.additions > 0 || lines.deletions > 0) && (
+            <span className="commit-lines" aria-label="Lines changed">
+              <span className="added">+{lines.additions}</span>
+              <span className="deleted">−{lines.deletions}</span>
+            </span>
+          )}
         <ListViewToggle grouped={!flat} onGrouped={(g) => setFlat(!g)} />
       </div>
       <div className="commit-files-list">

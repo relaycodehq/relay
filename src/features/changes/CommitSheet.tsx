@@ -51,9 +51,7 @@ export function CommitSheet({
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => {
     if (!only) return new Set();
     const keep = new Set(only);
-    return new Set(
-      tree.changes.map((c) => c.path).filter((p) => !keep.has(p)),
-    );
+    return new Set(tree.changes.map((c) => c.path).filter((p) => !keep.has(p)));
   });
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
@@ -78,8 +76,10 @@ export function CommitSheet({
   const headSubject = tree.outgoing.find((c) => c.sha === tree.head)?.subject;
   const model = useCommitModel(project);
   const generation = useRef(0);
+  const draftPaths = useRef<readonly string[]>([]);
   async function write(paths: string[], pick = model.own) {
     if (!paths.length) return;
+    draftPaths.current = paths;
     const id = ++generation.current;
     setWriting(true);
     setError(undefined);
@@ -101,9 +101,15 @@ export function CommitSheet({
     drafted.current = true;
     if (drafts) void write(selected);
   }, [ai]);
-  // The drafted message still describes the files that left.
+  // Redraft only when files the message describes were committed elsewhere.
+  // Committing excluded files doesn't change what the message is about.
   useEffect(() => {
-    if (drafts && committed.length && selected.length && !typed.current)
+    if (
+      drafts &&
+      selected.length &&
+      !typed.current &&
+      draftPaths.current.some((p) => committed.includes(p))
+    )
       void write(selected);
   }, [committed.length]);
   async function submit() {
