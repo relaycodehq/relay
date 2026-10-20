@@ -507,11 +507,11 @@
 }
 .theme-code-line.added {
   --bar: light-dark(#1a7f37, #3fb950);
-  background: var(--diff-addition);
+  background: color-mix(in srgb, var(--diff-addition) 30%, var(--code-background));
 }
 .theme-code-line.removed {
   --bar: light-dark(#cf222e, #f85149);
-  background: var(--diff-deletion);
+  background: color-mix(in srgb, var(--diff-deletion) 30%, var(--code-background));
 }
 .theme-code-line.added .theme-code-number {
   color: var(--bar);
