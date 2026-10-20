@@ -136,7 +136,10 @@ test("keeps a long paste as a pill in the message and sends it to the agent", as
     if (keepScreenshots)
       for (const mode of ["dark", "light"]) {
         await page.evaluate(
-          (mode) => localStorage.setItem("theme", mode),
+          (mode) =>
+            window.relay.updateSettingsFile([
+              { path: ["appearance", "mode"], value: mode },
+            ]),
           mode,
         );
         await page.reload();

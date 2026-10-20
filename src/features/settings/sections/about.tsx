@@ -21,7 +21,7 @@ export function useAboutEntries(): SettingEntry[] {
       category: "about",
       title: "Settings file",
       description:
-        "Fonts, theme, chat width, the send key, keeping awake and when threads settle live in settings.json. Change it in any editor, from a script or with relay settings, and Relay follows at once.",
+        "Fonts, theme, chat width, the send key, keeping awake and when threads settle live in settings.json. Change it in any editor or from a script, and Relay follows at once.",
       keywords:
         "settings.json config configuration file dotfiles json edit script jq hot reload xdg typography font size theme keep awake settle",
       block: true,

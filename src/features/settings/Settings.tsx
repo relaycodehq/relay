@@ -15,6 +15,7 @@ import { SearchResults } from "./sections/SearchResults";
 import { SearchHighlight } from "./sections/SearchHighlight";
 import { Setting } from "./sections/Setting";
 import { SettingsNav } from "./sections/SettingsNav";
+import { SettingsFileProblem } from "./SettingsFileSetting";
 import { useAppearanceEntries } from "./sections/appearance";
 import { useComposerEntries } from "./sections/composer";
 import { useThreadEntries } from "./sections/threads";
@@ -205,6 +206,8 @@ export function Settings({
           )}
         </header>
         <div className="settings-content" ref={content}>
+          {/* About shows it in place, beside the file. */}
+          {(showResults || category !== "about") && <SettingsFileProblem />}
           {showResults ? (
             results.length ? (
               <SearchResults

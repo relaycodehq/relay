@@ -6,8 +6,8 @@ import type { Api } from "../../shared/types";
 
 /**
  * The main process's half of settings.json for a page under test: `file`
- * plays the file on disk, `change` an edit made outside the window, and
- * `hold` keeps saves waiting until `release`.
+ * plays the file on disk, `change` an edit made outside the window,
+ * `hold` keeps saves waiting until `release`, and `refuse` fails them.
  */
 export function settingsBridge(values: Record<string, unknown> = {}) {
   const file = { values: structuredClone(values) };
@@ -18,6 +18,7 @@ export function settingsBridge(values: Record<string, unknown> = {}) {
   let listener: ((state: SettingsFileState) => void) | undefined;
   const saves: SettingsEdit[][] = [];
   let held: (() => void)[] | undefined;
+  let refusal: string | undefined;
   const bridge: Partial<Api> = {
     settingsFileAtStart: state,
     onSettingsFile: (callback) => {
@@ -27,6 +28,7 @@ export function settingsBridge(values: Record<string, unknown> = {}) {
     async updateSettingsFile(edits) {
       saves.push(edits);
       if (held) await new Promise<void>((resume) => held!.push(resume));
+      if (refusal) throw new Error(refusal);
       for (const { path, value } of edits) {
         let here = file.values;
         for (const key of path.slice(0, -1))
@@ -47,6 +49,10 @@ export function settingsBridge(values: Record<string, unknown> = {}) {
     },
     hold() {
       held = [];
+    },
+    /** Saves fail with `message` from here on, as for a file that doesn't parse. */
+    refuse(message: string) {
+      refusal = message;
     },
     release() {
       const waiting = held ?? [];

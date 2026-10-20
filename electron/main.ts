@@ -21,12 +21,7 @@ import {
 import { apiContext } from "./api/context";
 import { createDispatch, serveApi, type Dispatch } from "./api";
 import { serveSettingsFile } from "./api/settings-file";
-import {
-  movePrefsToFile,
-  readPrefs,
-  SettingsFile,
-  settingsDir,
-} from "./settings";
+import { openSettingsFile, readPrefs, type SettingsFile } from "./settings";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
 import { GithubLogin } from "./pull-requests/github-login";
@@ -204,7 +199,11 @@ const quit = new Quit({
   prepare: async () => {
     await Promise.all([flushWorkingFiles(), flushGitOperations()]);
     await projectChats?.prepareToQuit({ detach: quit.detaching });
-    await Promise.all([store!.flush(), drafts?.store.flush()]);
+    await Promise.all([
+      store!.flush(),
+      drafts?.store.flush(),
+      settingsFile?.flush(),
+    ]);
   },
   cancelled: () => projectChats?.resumeAfterCancelledQuit(),
   stopping: () => triage?.cancel(),
@@ -347,27 +346,20 @@ app
     store = loaded;
     await loaded.load();
     // Before any window: each page asks for it as it starts.
-    const file = new SettingsFile(
-      process.env.RELAY_TEST_DATA
-        ? join(app.getPath("userData"), "config")
-        : settingsDir({
-            platform: process.platform,
-            env: process.env,
-            home: app.getPath("home"),
-            appData: app.getPath("appData"),
-          }),
-      (state) => {
+    const file = await openSettingsFile({
+      store: loaded,
+      data: app.getPath("userData"),
+      home: app.getPath("home"),
+      appData: app.getPath("appData"),
+      changed: (state) => {
         window.send("relay:settings-file", state);
-        // A script's change reaches what the main process does with it too.
+        // Settings', a script's or an editor's: what the main process does with it follows.
         void keepAwake.refresh();
         projectChats?.summariesChanged();
       },
-    );
+    });
     settingsFile = file;
-    await file
-      .load()
-      .then(() => movePrefsToFile(loaded, file))
-      .catch((e) => console.warn("Could not read settings.json:", e));
+    file.follow();
     serveSettingsFile(window, file);
     dictation.announce();
     const bugReports = setUpBugReports({

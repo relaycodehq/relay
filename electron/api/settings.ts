@@ -17,7 +17,6 @@ import { devopsSecretsSchema, devopsSettingsSchema } from "../../shared/devops";
 import { aiSettingsSchema } from "../../shared/settings";
 import { accountIdSchema } from "../../shared/agent-accounts";
 import { defaultAutoCompact } from "../../shared/context-usage";
-import { watchScopes } from "../../shared/watch";
 import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
@@ -42,7 +41,7 @@ import { phoneAppearanceSchema } from "../remote/phone-remote";
 import { fetchReleaseNotes } from "../app/release-notes";
 import { devSwitchState, devSwitchTo } from "../app/dev-switch";
 import { releaseGitea } from "./account";
-import { readPrefs, savePref } from "../settings";
+import { prefSchema, readPrefs, savePref } from "../settings";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
@@ -102,12 +101,12 @@ export function settingsHandlers(ctx: ApiContext) {
       return enabled;
     }),
     keepAwake: () => prefs().keepAwake,
-    saveKeepAwake: takes([z.boolean()], async (enabled) => {
+    saveKeepAwake: takes([prefSchema("keepAwake")], async (enabled) => {
       await savePref(ctx.settingsFile, "keepAwake", enabled);
       return enabled;
     }),
     watchThreads: () => prefs().watchThreads,
-    saveWatchThreads: takes([z.enum(watchScopes)], async (scope) => {
+    saveWatchThreads: takes([prefSchema("watchThreads")], async (scope) => {
       await savePref(ctx.settingsFile, "watchThreads", scope);
       return scope;
     }),
@@ -119,17 +118,14 @@ export function settingsHandlers(ctx: ApiContext) {
       return mode;
     }),
     autoSettleDays: () => prefs().autoSettleDays,
-    saveAutoSettleDays: takes(
-      [z.number().int().min(1).max(90).nullable()],
-      async (days) => {
-        await savePref(ctx.settingsFile, "autoSettleDays", days);
-        ctx.projectChats.summariesChanged();
-        return days;
-      },
-    ),
+    saveAutoSettleDays: takes([prefSchema("autoSettleDays")], async (days) => {
+      // Threads re-sort as the file says it changed.
+      await savePref(ctx.settingsFile, "autoSettleDays", days);
+      return days;
+    }),
     worktreeCleanupDays: () => ctx.projectChats.worktreeCleanupDays(),
     saveWorktreeCleanupDays: takes(
-      [z.number().int().min(0).max(90).nullable()],
+      [prefSchema("worktreeCleanupDays")],
       async (days) => {
         await savePref(ctx.settingsFile, "worktreeCleanupDays", days);
         return days;

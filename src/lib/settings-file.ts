@@ -34,6 +34,12 @@ const settings = new Set<(values: Record<string, unknown>) => void>();
 let saving = 0;
 /** The newest state the main process sent while saves were on their way. */
 let newest: SettingsFileState | undefined;
+/** A slider's drag saves where it stops, not at every step. */
+const SAVE_AFTER_MS = 150;
+/** Edits waiting for a moment's quiet, by path, and who waits on them. */
+const pending = new Map<string, SettingsEdit>();
+let waiting: ((saved: boolean) => void)[] = [];
+let timer: ReturnType<typeof setTimeout> | undefined;
 
 function receive(next: SettingsFileState) {
   state = next;
@@ -42,33 +48,64 @@ function receive(next: SettingsFileState) {
 }
 
 bridge?.onSettingsFile?.((next) => {
-  if (saving) newest = next;
+  // The file changed, so whatever stopped the last save may be fixed.
+  saveError = undefined;
+  if (saving || pending.size) newest = next;
   else receive(next);
 });
 
 /**
- * Puts edits in the file. The window shows them already; what the file holds
- * after the last save in a row (another window's or a script's edits merged
- * in, or the old values if it couldn't be saved) is what it shows next.
+ * Puts edits in the file once they stop coming. The window shows them
+ * already; what the file holds after the last save in a row (another window's
+ * or a script's edits merged in, or the old values if it couldn't be saved)
+ * is what it shows next. Says whether they made it.
  */
-async function save(edits: SettingsEdit[]) {
-  if (!bridge?.updateSettingsFile) return false;
+function save(edits: SettingsEdit[]): Promise<boolean> {
+  if (!bridge?.updateSettingsFile) return Promise.resolve(false);
+  for (const edit of edits) {
+    const key = JSON.stringify(edit.path);
+    pending.delete(key);
+    pending.set(key, edit);
+  }
+  clearTimeout(timer);
+  timer = setTimeout(flushSaves, SAVE_AFTER_MS);
+  return new Promise((resolve) => waiting.push(resolve));
+}
+
+/** Sends what's waiting, now. */
+function flushSaves() {
+  clearTimeout(timer);
+  if (!pending.size) return;
+  const edits = [...pending.values()];
+  const told = waiting;
+  pending.clear();
+  waiting = [];
+  void send(edits).then((saved) => {
+    for (const resolve of told) resolve(saved);
+  });
+}
+
+async function send(edits: SettingsEdit[]) {
   saving++;
   try {
-    newest = await bridge.updateSettingsFile(edits);
+    newest = await bridge!.updateSettingsFile(edits);
     saveError = undefined;
     return true;
   } catch (e) {
     saveError = e instanceof Error ? e.message : String(e);
     return false;
   } finally {
-    if (!--saving) {
+    if (!--saving && !pending.size) {
       const next = newest ?? state;
       newest = undefined;
       receive(next);
     }
   }
 }
+
+// A reload or a closing window doesn't wait out the quiet.
+if (typeof window !== "undefined")
+  window.addEventListener("pagehide", flushSaves);
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -125,21 +162,29 @@ export function fileSetting<T>(options: {
     for (const listener of own) listener();
   };
   let current = parse(at(state.values, path));
+  /** The legacy value until the file has it, shown where the file says nothing. */
+  let moving: T | undefined;
 
   if (legacy && bridge?.updateSettingsFile) {
     const old = legacy.read();
     if (old !== undefined && at(state.values, path) === undefined) {
-      current = old;
+      current = moving = old;
       // Kept where it was until the file has it.
       const edits = editsBetween(undefined, serialize(old), path);
       if (edits.length)
-        void save(edits).then((saved) => saved && legacy.forget());
+        void save(edits).then((saved) => {
+          if (!saved) return;
+          moving = undefined;
+          legacy.forget();
+        });
       else legacy.forget();
     } else if (old !== undefined) legacy.forget();
   }
 
   settings.add((values) => {
-    const next = parse(at(values, path));
+    const saved = at(values, path);
+    const next =
+      saved === undefined && moving !== undefined ? moving : parse(saved);
     if (same(next, current)) return;
     current = next;
     notify();
@@ -156,32 +201,23 @@ export function fileSetting<T>(options: {
     set(next: T) {
       const edits = editsBetween(serialize(current), serialize(next), path);
       current = next;
+      moving = undefined;
       notify();
       if (edits.length) void save(edits);
     },
   };
 }
 
-/** Where the file is and whether it reads, for Settings. */
-export function useSettingsFile() {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => state,
-  );
+/** Where the file is and whether it reads, as `useSyncExternalStore` takes it. */
+export function subscribeSettingsFile(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
-
-export function useSettingsFileSaveError() {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => saveError,
-  );
-}
+export const settingsFileState = () => state;
+/** Why the last save from this window didn't make it into the file. */
+export const settingsSaveError = () => saveError;
 
 /** localStorage's value under `key` and a way to drop it, for `legacy`. */
 export function storedBefore<T>(key: string, read: (raw: string) => T) {

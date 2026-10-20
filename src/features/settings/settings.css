@@ -1310,3 +1310,14 @@
 .settings-file-example + .error-box {
   margin-top: 10px;
 }
+.settings-file-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.settings-file-problem .error-box {
+  align-self: stretch;
+  margin: 0;
+}

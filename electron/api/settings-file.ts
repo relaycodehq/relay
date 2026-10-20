@@ -11,11 +11,8 @@ export function settingsFileHandlers(ctx: ApiContext) {
   return {
     updateSettingsFile: takes(
       [z.array(settingsEditSchema).min(1).max(50)],
-      async (edits) => {
-        const state = await ctx.settingsFile.update(edits);
-        ctx.window.send("relay:settings-file", state);
-        return state;
-      },
+      // Every window hears of it as the file changes.
+      (edits) => ctx.settingsFile.update(edits),
     ),
     openSettingsFile: takes([], () => openPath(ctx.settingsFile.ensure())),
     revealSettingsFile: takes([], async () => {

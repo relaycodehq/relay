@@ -3,12 +3,7 @@
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
 import { homedir } from "node:os";
-import {
-  movePrefsToFile,
-  readPrefs,
-  SettingsFile,
-  settingsDir,
-} from "../settings";
+import { openSettingsFile, readPrefs } from "../settings";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
@@ -138,24 +133,16 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const store = new Store(home);
   await store.load();
   // `relay settings` changes it through the API; a script or an editor may too.
-  const settingsFile = new SettingsFile(
-    process.env.RELAY_TEST_DATA
-      ? join(home, "config")
-      : settingsDir({
-          platform: process.platform,
-          env: process.env,
-          home: homedir(),
-          appData: process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
-        }),
-    () => {
+  const settingsFile = await openSettingsFile({
+    store,
+    data: home,
+    home: homedir(),
+    appData: process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"),
+    changed: () => {
       void keepAwake.refresh();
       chats.summariesChanged();
     },
-  );
-  await settingsFile
-    .load()
-    .then(() => movePrefsToFile(store, settingsFile))
-    .catch((e) => console.warn("Could not read settings.json:", e));
+  });
   let phoneRemote: PhoneRemote | undefined;
   // Only phones write drafts here: with no page, nothing holds a part of one.
   const draftStore = new DraftStore(join(home, "drafts.json"));
@@ -235,6 +222,8 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     },
     headlessPower(),
   );
+  // What its changes reach exists from here.
+  settingsFile.follow();
   const pullMerges = new PullMerges({
     chats: () => store.get().chats ?? [],
     ...pullHosts.merges,
@@ -474,6 +463,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         await Promise.all([
           store.flush(),
           draftStore.flush(),
+          settingsFile.flush(),
           flushWorkingFiles(),
           flushGitOperations(),
         ]);

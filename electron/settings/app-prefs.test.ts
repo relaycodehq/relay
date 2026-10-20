@@ -67,4 +67,8 @@ it("reads defaults for keys that are missing or don't read, and saves a default 
   await savePref(file, "autoSettleDays", 7);
   await savePref(file, "keepAwake", true);
   expect(file.state().values).toEqual({ threads: { autoSettleDays: 7 } });
+  await savePref(file, "autoSettleDays", 3);
+  // A default for a section the file doesn't have is nothing to do.
+  await savePref(file, "watchThreads", "off");
+  expect(file.state().values).toEqual({});
 });

@@ -35,6 +35,11 @@ export type AppPrefs = {
 type Key = keyof AppPrefs;
 const keys = Object.keys(prefs) as Key[];
 
+/** What a preference takes, for the API that saves it. */
+export function prefSchema<K extends Key>(key: K): (typeof prefs)[K]["schema"] {
+  return prefs[key].schema;
+}
+
 export const defaultPrefs = Object.fromEntries(
   keys.map((key) => [key, prefs[key].default]),
 ) as AppPrefs;
