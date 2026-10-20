@@ -83,15 +83,6 @@ export function subagentFanOuts(runs: SubagentRun[], now = Date.now()) {
 }
 
 /**
- * The phone's count: every agent that overlapped the ones still running. It
- * empties once they're all back, so the next fan-out starts at 0.
- */
-export function runningBatch(runs: SubagentRun[], now = Date.now()) {
-  const last = subagentBatches(runs, now).at(-1) ?? [];
-  return last.some((r) => r.status === "running") ? last : [];
-}
-
-/**
  * The thread's background work minus the agents the indicator already shows,
  * for the strip under the composer: they'd be listed twice otherwise.
  */
