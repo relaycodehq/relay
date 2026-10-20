@@ -58,6 +58,8 @@ interface State {
   /** Days after settling before a thread's worktree is removed; null never, unset the default. */
   worktreeCleanupDays?: number | null;
   chats?: import("../../shared/projects").ChatSummary[];
+  /** This computer's last page and known server command for each thread. */
+  previews?: Record<string, import("../preview/saved-previews").SavedPreview>;
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../../shared/agents").AgentProvider;

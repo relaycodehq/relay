@@ -108,6 +108,8 @@ export interface PreviewApi {
     projectId: string,
     chatId: string | null,
     url: string,
+    /** Save a launch command for this thread's local preview. */
+    command?: string,
   ): Promise<void>;
   previewAction(key: string, action: PreviewAction): Promise<void>;
   /** Waits for the user to click an element on the page; null when they don't. */

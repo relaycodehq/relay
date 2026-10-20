@@ -302,6 +302,15 @@ export const relayToolSchemas = {
         .boolean()
         .optional()
         .describe("Reload the page it shows, when no url is given."),
+      command: z
+        .string()
+        .trim()
+        .min(1)
+        .max(8192)
+        .optional()
+        .describe(
+          "Save the dev command for this thread's localhost preview, e.g. npm run dev -- --port 5173. Relay runs it in the preview's folder when its server is gone, including after quitting. Supply it when you start a preview server; use a command that stays in the foreground and listens on the URL's port (also passed as PORT).",
+        ),
     })
     .strict(),
   screenshot: z.object({}).strict(),
@@ -427,8 +436,7 @@ const descriptions: Record<RelayToolName, string> = {
     "The threads you started, with what each is doing: working, needs-input (waiting on the user), done, stopped or failed, and the end of its latest answer, and `on` the computer it runs on when that's another one. A working thread may have async questions in asks; those do not block its turn.",
   find_threads:
     "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, which thread started it, and `on` the computer it runs on when that's another one. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
-  read_thread:
-    `Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its latest messages in order, as many as fit. When older ones didn't, it says \`earlier\`: pass that as \`before\` to page back. Pass \`after\` to get only what's new, oldest first; a page that stops early says \`more\`, so read on from its \`next\`. A message longer than ${MESSAGE_CHARS} characters comes with its start and a \`nextOffset\`; read the rest with \`message\` (its id) and \`offset\` until there's no \`nextOffset\`.`,
+  read_thread: `Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its latest messages in order, as many as fit. When older ones didn't, it says \`earlier\`: pass that as \`before\` to page back. Pass \`after\` to get only what's new, oldest first; a page that stops early says \`more\`, so read on from its \`next\`. A message longer than ${MESSAGE_CHARS} characters comes with its start and a \`nextOffset\`; read the rest with \`message\` (its id) and \`offset\` until there's no \`nextOffset\`.`,
   send_to_thread: `Send a message to a thread, as its user would. It answers in its own turn.\n\n${DRIVE_NOTE}`,
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
@@ -453,7 +461,7 @@ const descriptions: Record<RelayToolName, string> = {
   list_projects:
     "The projects the user has in Relay: id, name, folder, and whether it's a Git repository; `current` marks the one you work in. Check here before add_project.",
   open_preview:
-    "Open this thread's preview in Relay's side panel, with its own cookies. Use this after starting a dev server to check the page. Without a url it discovers a single HTTP server already running in this folder, or starts the saved dev command if needed. Pass a full localhost URL when several servers run. Returns url (the page's address, also the link to give the user), title, server state and console error count.",
+    "Open this thread's preview in Relay's side panel, with its own cookies. Supply command when starting a localhost preview so Relay can restart it after quitting. Without a url it restores the last page, discovers a single HTTP server already running in this folder, or starts the saved dev command if needed. Pass a full localhost URL when several servers run. Returns url (the page's address, also the link to give the user), title, server state and console error count.",
   screenshot:
     "A picture of this thread's preview as the page looks now, also while the user isn't looking at it. Call open_preview first. Use it to check a change you made to a page. It also returns the file it saved the picture to, for showing it in your answer.",
   console_errors:

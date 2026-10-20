@@ -106,7 +106,7 @@ import { TerminalSessions } from "./terminal-sessions";
 import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
-import { ThreadPreviews, PreviewProjects } from "./preview";
+import { ThreadPreviews, PreviewProjects, SavedPreviews } from "./preview";
 import { Devices } from "./devices";
 import { Presence } from "./remote/presence";
 // The name is also the instance lock and the OS credential namespace; set it before
@@ -497,8 +497,12 @@ app
       join(app.getPath("userData"), "device-hub"),
       (url, init) => net.fetch(url, init),
     );
-    previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
-      previewProjects.target(projectId, chatId, url, folder),
+    previews = new ThreadPreviews(
+      window,
+      (projectId, chatId, url, folder, saved) =>
+        previewProjects.target(projectId, chatId, url, folder, saved),
+      Date.now,
+      new SavedPreviews(loaded),
     );
     void previews.servers.reattach();
     const draftStore = new DraftStore(
