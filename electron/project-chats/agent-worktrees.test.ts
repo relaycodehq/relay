@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, rm, rename } from "node:fs/promises";
+import { mkdtemp, realpath, rm, rename, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -233,6 +233,15 @@ it("credits a worktree an agent made in Relay's worktrees folder, but never a th
   await t.run(`WT="${mine}"; git worktree add -b relay/acp-agents "$WT" main`);
   await t.run(`git worktree add -b relay/other-thread ${relays}`);
   expect(t.paths()).toEqual([mine]);
+});
+
+it("never credits a thread's own worktree recorded through a symlink, as Git lists real paths", async () => {
+  await symlink(temp, join(temp, "link"));
+  const relays = join(temp, "relay-worktrees", "other-thread");
+  const t = thread([join(temp, "link", "relay-worktrees", "other-thread")]);
+  git("worktree", "add", "-q", "-b", "relay/other-thread", relays);
+  await t.run(`git worktree add -b relay/other-thread ${relays}`);
+  expect(t.paths()).toEqual([]);
 });
 
 it("drops worktrees older saves credited to the wrong thread", () => {

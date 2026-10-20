@@ -104,6 +104,8 @@ export class ThreadWorktrees {
   private refreshed = new Map<string, { at: number; pending: Promise<void> }>();
   /** Worktree changes per repository root; see `inRepo`. */
   private making = keyedQueue();
+  /** Worktree folders between their teardown and their removal, per repository root; see `drop`. */
+  private dropping = new Map<string, Set<Promise<void>>>();
   /** Threads whose first message just made their worktree; nothing runs in it until it's named. */
   readonly unnamed = new Set<string>();
   constructor(
@@ -180,7 +182,7 @@ export class ThreadWorktrees {
     // Outside the repository's queue: a slow remote mustn't hold up every
     // other thread's worktree there.
     await fetchStart(root, regrown(worktree).startFrom, signal);
-    return this.inRepo(root, () => this.remake(chat, root, prompt));
+    return this.inRepoSettled(root, () => this.remake(chat, root, prompt));
   }
 
   /**
@@ -263,6 +265,22 @@ export class ThreadWorktrees {
    */
   inRepo<T>(root: string, job: () => Promise<T>) {
     return this.making(root, job);
+  }
+
+  /**
+   * `inRepo`, once no worktree folder there is between its teardown and
+   * its removal: a thread joining or carrying on a branch would find it
+   * still there, set up no more.
+   */
+  async inRepoSettled<T>(root: string, job: () => Promise<T>): Promise<T> {
+    for (;;) {
+      const going = this.dropping.get(root);
+      if (going?.size) await Promise.all(going);
+      const ran = await this.inRepo(root, async () =>
+        this.dropping.get(root)?.size ? undefined : { value: await job() },
+      );
+      if (ran) return ran.value;
+    }
   }
 
   /** The other open threads working in this thread's worktree folder. */
@@ -668,20 +686,39 @@ export class ThreadWorktrees {
     { keepBranch = false, at }: { keepBranch?: boolean; at?: number } = {},
   ) {
     if (await this.stays(chat)) return false;
-    if (worktree.path) {
-      threadTerminals.closeWithin(worktree.path);
-      await projectTasks.stopWithin(worktree.path);
-    }
-    await this.setup.teardown(chat, worktree);
     const root = await this.core.projects.root(chat.projectId);
-    return this.inRepo(root, async () => {
+    // Claimed in the queue, so no thread joins the folder once its teardown
+    // runs; they wait for it to go (`inRepoSettled`).
+    let done = () => {};
+    const going = new Promise<void>((resolve) => (done = resolve));
+    const claimed = await this.inRepo(root, async () => {
       if (await this.stays(chat)) return false;
-      await removeWorktree(root, chat.id, worktree, { keepBranch });
-      worktree.removedAt = at ?? Date.now();
-      if (keepBranch) worktree.cleanedUp = true;
-      await this.core.storage.save(chat);
+      const all = this.dropping.get(root) ?? new Set();
+      this.dropping.set(root, all.add(going));
       return true;
     });
+    if (!claimed) return false;
+    try {
+      if (worktree.path) {
+        threadTerminals.closeWithin(worktree.path);
+        await projectTasks.stopWithin(worktree.path);
+      }
+      await this.setup.teardown(chat, worktree);
+      return await this.inRepo(root, async () => {
+        // A review following the branch can still have come in meanwhile.
+        if (await this.stays(chat)) return false;
+        await removeWorktree(root, chat.id, worktree, { keepBranch });
+        worktree.removedAt = at ?? Date.now();
+        if (keepBranch) worktree.cleanedUp = true;
+        await this.core.storage.save(chat);
+        return true;
+      });
+    } finally {
+      const all = this.dropping.get(root);
+      all?.delete(going);
+      if (!all?.size) this.dropping.delete(root);
+      done();
+    }
   }
 
   /** Why a checkout thread can't move into a worktree now, if it can't. */

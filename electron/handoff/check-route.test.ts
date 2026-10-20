@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { connect } from "node:net";
+import { pipeReady } from "../../shared/handoff";
 import {
   checkRoute,
   pairingLink,
@@ -93,7 +94,7 @@ it("says what wsl.exe printed on stdout when it couldn't start the distribution"
   const shim = new PipeShim(wsl, notFound);
   const port = await shim.listen();
   try {
-    // What it printed comes through to the client too, which reads it to see the pipe end.
+    // Nothing it printed is the bridge's; the client sees the pipe end.
     await new Promise<void>((resolve) =>
       connect(port, "127.0.0.1")
         .on("close", () => resolve())
@@ -101,6 +102,34 @@ it("says what wsl.exe printed on stdout when it couldn't start the distribution"
         .resume(),
     );
     expect(shim.failure).toBe(said);
+  } finally {
+    shim.close();
+  }
+});
+
+it("hands the bridge only what relay pipe sends past what the login shell printed", async () => {
+  // A noisy .bashrc, then the marker split across writes, then an echo.
+  const [head, tail] = [pipeReady.slice(0, 5), pipeReady.slice(5)];
+  const relay = `process.stdout.write("Last login: today\\n" + ${JSON.stringify(head)});
+setTimeout(() => {
+  process.stdout.write(${JSON.stringify(tail)} + "hi ");
+  process.stdin.pipe(process.stdout);
+}, 50);`;
+  const shim = new PipeShim(box, () => [process.execPath, ["-e", relay]]);
+  const port = await shim.listen();
+  try {
+    const got = await new Promise<string>((resolve) => {
+      let said = "";
+      const socket = connect(port, "127.0.0.1", () => socket.write("there"));
+      socket.on("data", (d) => {
+        said += d.toString();
+        if (said.length >= 8) {
+          socket.destroy();
+          resolve(said);
+        }
+      });
+    });
+    expect(got).toBe("hi there");
   } finally {
     shim.close();
   }

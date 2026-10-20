@@ -104,8 +104,10 @@ export const notLookedFor = (agent: AgentVersion) =>
     agent.missing
   );
 
-/** Why the agent can't run on this computer, once Relay has looked; else undefined. */
-/** Why the agent can't run; `where` names the computer it was looked for on. */
+/**
+ * Why the agent can't run, once Relay has looked; else undefined. `where`
+ * names the computer it was looked for on.
+ */
 export function cantRun(
   agent: AgentVersion,
   where = "this computer",

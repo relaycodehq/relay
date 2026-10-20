@@ -194,6 +194,21 @@ export class ComputerHandoff {
     await this.core.storage.save(chat);
   }
   /**
+   * A thread of a project on another computer that computer refused to
+   * start: it's new again, to send once more, rather than stuck on its way.
+   */
+  startRefused(id: string, handoffId: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      if (chat.sentTo?.id !== handoffId || !chat.sentTo.home) return;
+      delete chat.sentTo;
+      chat.messages = [];
+      delete chat.lastInput;
+      chat.updated = Date.now();
+      await this.core.storage.save(chat);
+    });
+  }
+  /**
    * Unlocks a thread that's away, as it was when it left plus anything
    * already handed back, and notes which handoff that was so it can't come
    * back later. False when it wasn't away on that handoff.

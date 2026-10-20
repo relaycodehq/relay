@@ -20,7 +20,7 @@ import { chatSummary } from "./storage";
 export class ThreadCreate {
   constructor(
     private core: ChatCore,
-    private worktrees: Pick<ThreadWorktrees, "inRepo">,
+    private worktrees: Pick<ThreadWorktrees, "inRepoSettled">,
   ) {}
   async create(
     projectId: string,
@@ -73,8 +73,9 @@ export class ThreadCreate {
       return this.add(projectId, scope, workspace, { startedBy, named, links });
     const root = await this.core.projects.root(projectId);
     // In the repository's queue, where a worktree's removal asks again
-    // whether anyone works in it: whichever comes second sees the other.
-    return this.worktrees.inRepo(root, async () => {
+    // whether anyone works in it: whichever comes second sees the other. One
+    // being torn down is waited out.
+    return this.worktrees.inRepoSettled(root, async () => {
       // On a branch another thread's worktree is on: the same folder, both
       // threads working in it, as T3 shares one.
       const joining =

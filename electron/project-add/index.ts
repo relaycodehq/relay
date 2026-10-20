@@ -34,6 +34,9 @@ const isRepository = (path: string) => exists(join(path, ".git"));
 const within = (path: string, dir: string) =>
   path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep);
 
+/** A project whose folder is on this computer: not a Scratchpad, nor one on another computer, whose path means nothing here. */
+const here = (p: Project) => !p.scratch && !p.computer;
+
 export class ProjectAdding {
   private running?: AbortController;
 
@@ -54,7 +57,7 @@ export class ProjectAdding {
 
   async start(): Promise<AddingStart> {
     const projects = await this.deps.projects.list(this.deps.client());
-    const real = projects.filter((p) => !p.scratch);
+    const real = projects.filter(here);
     const temporary = [
       tmpdir(),
       "/tmp",
@@ -91,7 +94,7 @@ export class ProjectAdding {
   /** Where a clone goes when nobody picks a folder: as the palette would open on it. */
   async defaultFolder() {
     const projects = await this.deps.projects.list(this.deps.client());
-    return this.cloneFolder(projects.filter((p) => !p.scratch));
+    return this.cloneFolder(projects.filter(here));
   }
 
   /** The folder the last clone or new project went into, else the newest project's parent. */

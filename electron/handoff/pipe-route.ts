@@ -8,7 +8,11 @@
 import { execFile, spawn } from "node:child_process";
 import { createServer, type AddressInfo, type Server } from "node:net";
 import { promisify } from "node:util";
-import type { ComputerRoute, RouteCheck } from "../../shared/handoff";
+import {
+  pipeReady,
+  type ComputerRoute,
+  type RouteCheck,
+} from "../../shared/handoff";
 
 const run = promisify(execFile);
 
@@ -147,9 +151,24 @@ export class PipeShim {
       child.stdout.on("data", (d: Buffer) => {
         if (started.length < 4000) started += d.toString();
       });
-      child.stdout.once("data", () => (this.failure = undefined));
+      // What a login shell's startup files print comes first; the bridge
+      // starts past `pipeReady`.
+      const ready = Buffer.from(pipeReady);
+      let ahead = Buffer.alloc(0);
+      const skip = (d: Buffer) => {
+        ahead = Buffer.concat([ahead, d]);
+        const at = ahead.indexOf(ready);
+        if (at === -1) {
+          ahead = ahead.subarray(-(ready.length - 1));
+          return;
+        }
+        child.stdout.off("data", skip);
+        this.failure = undefined;
+        socket.write(ahead.subarray(at + ready.length));
+        child.stdout.pipe(socket);
+      };
+      child.stdout.on("data", skip);
       socket.pipe(child.stdin);
-      child.stdout.pipe(socket);
       // Either end going away takes the other with it.
       child.stdin.on("error", () => {});
       socket.on("error", () => child.kill());
@@ -272,11 +291,17 @@ export async function checkRoute(
 }
 
 /** The WSL distributions on this computer, by name; none off Windows or without WSL. */
-export async function wslDistros(): Promise<string[]> {
+export const wslDistros = () => listDistros([]);
+
+/** The WSL distributions running now, which asking doesn't start. */
+export const runningWslDistros = async () =>
+  new Set(await listDistros(["--running"]));
+
+async function listDistros(only: string[]): Promise<string[]> {
   if (process.platform !== "win32") return [];
   try {
-    // wsl.exe answers in UTF-16 unless told otherwise.
-    const { stdout } = await run("wsl.exe", ["--list", "--quiet"], {
+    // wsl.exe answers in UTF-16 unless told otherwise; with none running it fails.
+    const { stdout } = await run("wsl.exe", ["--list", ...only, "--quiet"], {
       env: routeEnv(),
       timeout: 15_000,
       windowsHide: true,

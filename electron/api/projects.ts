@@ -265,8 +265,15 @@ export function projectHandlers(ctx: ApiContext) {
           : agentRuntime(provider).models(),
     ),
     reloadAgentModels: takes(
-      [agentProviderSchema, z.boolean()],
-      async (provider, stopRunning) => {
+      [agentProviderSchema, z.boolean(), computerIdSchema],
+      async (provider, stopRunning, computerId) => {
+        if (computerId)
+          return remoteProjects(ctx).ask(
+            computerId,
+            "reloadAgentModels",
+            provider,
+            stopRunning,
+          );
         const running = projectChats.runningOn(provider);
         if (running.length && !stopRunning) return { running };
         let stopped: string[] = [];

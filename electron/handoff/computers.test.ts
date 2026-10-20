@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Store } from "../app/store";
 import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
+import { pipeReady } from "../../shared/handoff";
 import type { routeCommand } from "./pipe-route";
 
 const cleanup: (() => Promise<unknown> | unknown)[] = [];
@@ -60,13 +61,16 @@ async function relayInWsl() {
   await remote.setEnabled(true);
   cleanup.push(() => remote.close());
   // Stands in for `wsl.exe ... relay <args>`: `pipe` carries stdin and stdout
-  // to its loopback, `pair --json --pipe` prints a pairing link.
+  // to its loopback, past what a noisy .bashrc prints first, and `pair --json
+  // --pipe` prints a pairing link.
   const script = join(dir, "relay.cjs");
   await writeFile(
     script,
     `const [port, url, mode] = process.argv.slice(2);
 if (mode === "pipe") {
+  process.stdout.write("Welcome to Ubuntu!\\n");
   const socket = require("node:net").connect(Number(port), "127.0.0.1");
+  socket.once("connect", () => process.stdout.write(${JSON.stringify(pipeReady)}));
   process.stdin.pipe(socket);
   socket.pipe(process.stdout);
   socket.on("close", () => process.exit(0));
@@ -109,6 +113,7 @@ async function laptop(
   command: typeof routeCommand,
   holders = fakeHolders(),
   store?: Store,
+  running = { distros: [] as string[], asked: 0 },
 ) {
   if (!store) {
     store = new Store(join(await tempDir(), "state"));
@@ -118,9 +123,13 @@ async function laptop(
     timeoutMs: 5000,
     holders,
     routeCommand: command,
+    runningDistros: async () => {
+      running.asked++;
+      return new Set(running.distros);
+    },
   });
   cleanup.push(() => computers.close());
-  return { computers, holders, store };
+  return { computers, holders, store, running };
 }
 
 it("pairs with a Relay in WSL through its pipe, and after a restart wakes it only when something needs it", async () => {
@@ -155,6 +164,46 @@ it("pairs with a Relay in WSL through its pipe, and after a restart wakes it onl
   expect(later.holders.holds.size).toBe(0);
   await later.computers.connected(paired!.id);
   expect([...later.holders.holds]).toEqual(["Ubuntu"]);
+});
+
+it("follows a distribution still running with threads on it after a Quit, and asks only then", async () => {
+  const { command } = await relayInWsl();
+  const first = await laptop(command);
+  const [paired] = await first.computers.pairOver(ubuntu);
+  first.computers.close();
+
+  const idle = await laptop(command, fakeHolders(), first.store, {
+    distros: ["Ubuntu"],
+    asked: 0,
+  });
+  await idle.computers.start();
+  expect(idle.computers.list()[0]).toMatchObject({ asleep: true });
+  expect(idle.running.asked).toBe(0);
+  idle.computers.close();
+
+  await first.store.update((s) => {
+    s.chats = [
+      {
+        id: "live",
+        sentTo: { computerId: paired!.id, live: true, state: "away" },
+      } as NonNullable<typeof s.chats>[number],
+    ];
+  });
+  const stopped = await laptop(command, fakeHolders(), first.store);
+  await stopped.computers.start();
+  expect(stopped.computers.list()[0]).toMatchObject({ asleep: true });
+  expect(stopped.running.asked).toBe(1);
+  stopped.computers.close();
+
+  const running = await laptop(command, fakeHolders(), first.store, {
+    distros: ["Ubuntu"],
+    asked: 0,
+  });
+  await running.computers.start();
+  await vi.waitFor(() =>
+    expect(running.computers.list()[0]).toMatchObject({ status: "online" }),
+  );
+  expect([...running.holders.holds]).toEqual(["Ubuntu"]);
 });
 
 it("wakes a sleeping distribution once when several calls need it at once", async () => {

@@ -203,3 +203,16 @@ it("refuses an existing clone from a different owner with the same name", async 
     }).trim(),
   ).toBe("https://github.com/alice/web.git");
 });
+
+it("doesn't offer a project on another computer's folder as where clones go", async () => {
+  const { service, projects } = await adding();
+  const local = join(dir, "code", "app");
+  await mkdir(local, { recursive: true });
+  await projects.add(local, null);
+  await projects.addRemote(
+    { id: "mini", name: "mini" },
+    { id: "there", name: "Notes", path: "/home/someone/code/notes" },
+  );
+  expect(await service.defaultFolder()).toBe(join(dir, "code"));
+  expect((await service.start()).cloneFolder).toBe(join(dir, "code"));
+});

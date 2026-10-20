@@ -556,6 +556,9 @@ export class ProjectChats {
   ) {
     return this.handoffs.updateSentTo(id, handoffId, change);
   }
+  homeStartRefused(id: string, handoffId: string) {
+    return this.handoffs.startRefused(id, handoffId);
+  }
   abandonHandoff(id: string, handoffId: string) {
     return this.handoffs.abandon(id, handoffId);
   }

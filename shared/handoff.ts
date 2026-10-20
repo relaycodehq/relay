@@ -135,11 +135,11 @@ export type HandoffLive = Pick<
     queuePaused?: true;
   };
 
-/** A live handoff's thread as written on the other computer since it arrived. */
 /** The thread runs on the computer it was handed to and is followed live from here. */
 export const liveAway = (chat: Pick<ChatSummary, "sentTo">) =>
   !!chat.sentTo?.live && chat.sentTo.state === "away";
 
+/** A live handoff's thread as written on the other computer since it arrived. */
 export interface HandoffChat {
   /** Those the caller holds at the same version come as their ids. */
   messages: (ChatMessage | string)[];
@@ -438,12 +438,6 @@ export const handoffChunk = 1536 * 1024;
 export const maxHandoffBundle = 1024 * 1024 * 1024;
 export const maxHandoffThread = 64 * 1024 * 1024;
 
-/** A computer this one hands work to. */
-/**
- * How a computer is reached that isn't over the network: a pipe its own
- * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
- * into a WSL distribution, running `relay pipe` there.
- */
 /** A `Host` in an SSH config, with where it goes when the config says. */
 export interface SshHost {
   host: string;
@@ -458,8 +452,18 @@ export interface RouteCheck {
   /** Why the Relay there doesn't start, as with a Node.js too old for it. */
   broken?: string;
 }
+/**
+ * How a computer is reached that isn't over the network: a pipe its own
+ * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
+ * into a WSL distribution, running `relay pipe` there.
+ */
 export type ComputerRoute =
   { kind: "ssh"; host: string } | { kind: "wsl"; distro: string };
+/**
+ * What `relay pipe` prints before the bridge's bytes, so whatever the login
+ * shell's startup files print ahead of it can be told apart and dropped.
+ */
+export const pipeReady = "\0relay-pipe-ready\n";
 export const computerRouteSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("ssh"),
@@ -482,6 +486,7 @@ export const computerRouteSchema = z.discriminatedUnion("kind", [
 export const shortHost = (name: string) =>
   name.replace(/\.[a-z0-9-]+\.ts\.net$/i, "");
 
+/** A computer this one hands work to. */
 export interface PairedComputer {
   id: string;
   name: string;

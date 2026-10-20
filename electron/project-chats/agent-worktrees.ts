@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { worktreeList } from "../git/git";
 import type { AgentProvider } from "../../shared/agents";
@@ -191,13 +191,17 @@ async function liveWorktrees(
 ): Promise<Live> {
   const live: Live = new Map();
   const list = await worktreeList(root);
+  // Git lists real paths; Relay's records may go through a symlink.
+  const real = (path: string) => realpath(path).catch(() => path);
+  const mine = new Set(await Promise.all([...relayMade].map(real)));
   for (const { path, branch, prunable } of list) {
-    if (relayMade.has(path) || prunable) continue;
+    if (relayMade.has(path) || mine.has(path) || prunable) continue;
     live.set(path, branch ? { branch } : {});
   }
   // The first entry is the main checkout; `root` may be it or a worktree.
   if (list[0]) live.delete(list[0].path);
   live.delete(root);
+  live.delete(await real(root));
   // `worktree repair` keeps this identity even when the folder was renamed.
   await Promise.all(
     [...live].map(async ([path, value]) => {

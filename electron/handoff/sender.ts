@@ -888,7 +888,9 @@ export class Handoffs {
       at: Date.now(),
       ...(home ? { home: true as const } : {}),
     });
-    this.run(chatId, () => this.send(chatId, id, computerId));
+    const done = this.run(chatId, () => this.send(chatId, id, computerId));
+    // A refused start reaches whoever sent its first message.
+    if (home) await done;
   }
   /** Once the handoff or bringing back under way for the thread is over, however it went. */
   async finished(chatId: string) {
@@ -901,7 +903,10 @@ export class Handoffs {
     await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
     // Back in its setup, it catches up on what the agent wrote meanwhile.
     if (sentTo.setup) return this.followSetups(sentTo.computerId, chatId);
-    this.run(chatId, () => this.send(chatId, sentTo.id, sentTo.computerId));
+    const done = this.run(chatId, () =>
+      this.send(chatId, sentTo.id, sentTo.computerId),
+    );
+    if (sentTo.home) await done;
   }
   /**
    * Brings the thread back, or tries again after the last attempt failed.
@@ -1024,11 +1029,14 @@ export class Handoffs {
       (await client.call("handoffStatus", [sentTo.id]))[sentTo.id] ?? null,
     );
   }
+  /** Runs the thread's handoff job; the promise it returns fails with the job. */
   private run(chatId: string, job: () => Promise<void>) {
-    const running = job()
+    const done = job();
+    const running = done
       .catch((e) => console.warn("Handoff:", e))
       .finally(() => this.jobs.delete(chatId));
     this.jobs.set(chatId, running);
+    return done;
   }
   /** Keeps the notice for the computer until it has heard, even across a restart. */
   private async saveAbandoned(computerId: string, id: string) {
@@ -1175,6 +1183,7 @@ export class Handoffs {
    */
   private async sendHome(chatId: string, id: string, computerId: string) {
     const started = Date.now();
+    let asked = false;
     try {
       if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
@@ -1208,6 +1217,7 @@ export class Handoffs {
           true,
         ),
       };
+      asked = true;
       await client.call("startInProject", id, project.projectId, thread);
       if (!this.onHandoff(chatId, id)) return;
       await this.chats.updateSentTo(chatId, id, {
@@ -1228,6 +1238,17 @@ export class Handoffs {
         `Thread ${named(id, this.nameOf(computerId))} didn't start there:`,
         message(e),
       );
+      // Refused there, or never asked: it isn't there, and trying again the
+      // same way would fail the same way, so the thread is new again. An
+      // answer lost on the way may have started it, so that one waits to retry.
+      if (
+        !asked ||
+        (!(e instanceof Unanswered) &&
+          this.computers.status(computerId) === "online")
+      ) {
+        await this.chats.homeStartRefused(chatId, id);
+        throw e;
+      }
       await this.chats.updateSentTo(chatId, id, { error: message(e) });
     }
   }

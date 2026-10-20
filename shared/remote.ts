@@ -737,6 +737,7 @@ export const computerCallMethods = [
   "checkAgentVersions",
   "agentSignedIn",
   "installAgent",
+  "reloadAgentModels",
 ] as const satisfies readonly ApiMethod[];
 export type ComputerCallMethod = (typeof computerCallMethods)[number];
 /** A folder here as `computerFolders` lists it; `project` when it's one already. */
@@ -871,6 +872,45 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
   "handoffUpload",
   "handoffDownload",
 ];
+
+/**
+ * Calls a computer forwards (`projectCall`, `handoffCall`, `computerCall`)
+ * that wait on the network, git, a model or an install. Given up on early,
+ * they'd still finish there, and trying again would push or open a pull
+ * request twice; they get `slowRemoteMethods`' time.
+ */
+const slowForwardedMethods = new Set<string>([
+  "projectGitAction",
+  "projectCommitMessage",
+  "projectPlanCommitSplit",
+  "projectApplyCommitSplit",
+  "projectBranchPulls",
+  "projectMergePlan",
+  "projectMergeBranch",
+  "projectDeleteBranch",
+  "projectCatchUp",
+  "projectRebase",
+  "projectPreparePull",
+  "projectCreatePull",
+  "projectChangeBranch",
+  "sendProjectChat",
+  "compactProjectChat",
+  "rerunWorktreeSetup",
+  "checkAgentVersions",
+  "installAgent",
+] satisfies ApiMethod[]);
+
+/** Whether the call gets the slow timeout, by its method and, when it forwards one, that one's. */
+export function slowRemoteCall(method: RemoteMethod, args: unknown[]) {
+  if (slowRemoteMethods.includes(method)) return true;
+  const forwarded =
+    method === "computerCall"
+      ? args[0]
+      : method === "projectCall" || method === "handoffCall"
+        ? args[1]
+        : undefined;
+  return typeof forwarded === "string" && slowForwardedMethods.has(forwarded);
+}
 
 /**
  * Calls that wait on the network, git or a model: pushes, pulls and merges,

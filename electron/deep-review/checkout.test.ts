@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ReviewScope } from "../../shared/deep-review";
@@ -143,6 +150,23 @@ it("follows the branch to the folder it's checked out in now, rather than refusi
     await follow({ path: there, made: false, branch: "panel" }, "c6"),
   ).toEqual(old);
   expect(git(own, "branch", "--show-current")).toBe("panel");
+});
+
+it("knows its own worktree through a symlinked path, as Git lists it by its real one", async () => {
+  const link = join(dir, "link");
+  await symlink(dir, link);
+  const through = join(link, "worktrees");
+  const made = (await openReviewCheckout(repo, scope(), through, "c9"))!;
+  expect(made.path).toBe(join(through, "deep-reviews", "c9"));
+  const again = await followReviewedBranch(repo, made, {
+    head,
+    dir: through,
+    chatId: "c9",
+    fixing: true,
+  });
+  expect(again).toBe(made);
+  // Opened again, it's the same folder, still the review's own.
+  expect(await openReviewCheckout(repo, scope(), through, "c9")).toEqual(made);
 });
 
 it("makes its worktree on the branch again, wherever the folder it reviewed in went", async () => {

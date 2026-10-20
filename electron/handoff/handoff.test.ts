@@ -2072,6 +2072,49 @@ it("starts a remote project's thread there from a plain send, as a phone's, and 
   expect(after.lastInput).toBeUndefined();
 });
 
+it("leaves a remote project's thread new again when its computer refuses to start it, rather than stuck on its way", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const remote = new RemoteProjects(computers, laptop.projects);
+  const notes = join(mini.dir, "notes");
+  await mkdir(notes);
+  const project = await remote.add(computerId, notes);
+  const [added] = (await mini.projects.list(null)).filter(
+    (p) => p.path === notes,
+  );
+  await mini.projects.remove(added!.id);
+
+  const thread = await laptop.chats.create(
+    project.id,
+    { kind: "project" },
+    "checkout",
+  );
+  await expect(
+    laptop.chats.sendYours(thread.id, input("@codex Tidy the notes")),
+  ).rejects.toThrow("no such project");
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo).toBeUndefined();
+  expect(after.messages).toEqual([]);
+  expect(after.lastInput).toBeUndefined();
+
+  // A retry refused the same way also lets go of it.
+  await laptop.chats.firstMessageOnly(thread.id, input("@codex Again"));
+  await laptop.chats.markHandoff(thread.id, {
+    id: "00000000-0000-4000-8000-000000000001",
+    computerId,
+    computer: "mini",
+    at: Date.now(),
+    home: true,
+  });
+  await laptop.chats.updateSentTo(
+    thread.id,
+    "00000000-0000-4000-8000-000000000001",
+    { error: "mini didn't answer in time." },
+  );
+  await expect(sender.retry(thread.id)).rejects.toThrow("no such project");
+  expect((await laptop.chats.get(thread.id)).sentTo).toBeUndefined();
+});
+
 it("opens a remote project's shells on its computer, in its folder, and shows their output on the computer that opened them alone", async () => {
   // No pty in tests: the shells themselves are ThreadTerminals', as here.
   const sinks: ((event: TerminalEvent) => void)[] = [];

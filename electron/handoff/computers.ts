@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import type { ComputerRoute, PairedComputer } from "../../shared/handoff";
+import {
+  inSetup,
+  liveAway,
+  type ComputerRoute,
+  type PairedComputer,
+} from "../../shared/handoff";
 import {
   parsePairingUrl,
   type RemoteCredentials,
@@ -9,13 +14,30 @@ import { RemoteClient, type RemoteStatus } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import type { SavedComputer } from "../app/store-types";
 import { computerName } from "../platform/computer-name";
-import { pairingLink, PipeShim, routeCommand, routeName } from "./pipe-route";
+import {
+  pairingLink,
+  PipeShim,
+  routeCommand,
+  routeName,
+  runningWslDistros,
+} from "./pipe-route";
 import type { WslHolders } from "./wsl-holder";
 
 export type { SavedComputer };
 export { computerName };
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/**
+ * How long a call waits for a computer to come online. A WSL distribution's
+ * first start after Windows boots can take far longer than waking it later.
+ */
+const onlineWait = (route?: ComputerRoute) =>
+  route?.kind === "wsl" ? 60_000 : 15_000;
+/**
+ * Over SSH a reconnect that keeps failing waits up to this between tries, so
+ * a host down for hours isn't knocked on every 15s (fail2ban bans for less).
+ */
+const sshRetryMs = 5 * 60_000;
 
 interface Entry {
   client: RemoteClient;
@@ -59,6 +81,8 @@ export class Computers {
       >;
       /** What runs `relay` where a route goes; tests stand in for ssh and wsl.exe. */
       routeCommand?: typeof routeCommand;
+      /** The WSL distributions running now; tests stand in for wsl.exe. */
+      runningDistros?: () => Promise<Set<string>>;
     } = {},
   ) {
     options.holders?.onStopped((distro) => this.stopped(distro));
@@ -69,17 +93,38 @@ export class Computers {
   /**
    * Connects to every computer, but a WSL distribution only once something
    * needs it, so it isn't woken for nothing; one still held from before a
-   * restart connects at once.
+   * restart connects at once, and so does one still running with threads
+   * of this computer's on it, as after a Quit.
    */
   async start() {
     const held = (await this.options.holders?.heldDistros()) ?? new Set();
+    const resting = this.saved.filter(
+      (c) =>
+        c.route?.kind === "wsl" &&
+        !held.has(c.route.distro) &&
+        this.workingOn(c.id),
+    );
+    const running = resting.length
+      ? await (this.options.runningDistros ?? runningWslDistros)()
+      : new Set<string>();
     for (const computer of this.saved) {
-      if (computer.route?.kind === "wsl" && !held.has(computer.route.distro))
+      const { route } = computer;
+      if (
+        route?.kind === "wsl" &&
+        !held.has(route.distro) &&
+        !(running.has(route.distro) && resting.includes(computer))
+      )
         continue;
       await this.connectOnce(computer).catch((e) =>
         console.warn(`Can't connect to ${computer.name}:`, e),
       );
     }
+  }
+  /** Whether threads from here run or wait on a setup on the computer. */
+  private workingOn(id: string) {
+    return (this.store.get().chats ?? []).some(
+      (c) => c.sentTo?.computerId === id && (liveAway(c) || inSetup(c)),
+    );
   }
   /** `detach`: Relay restarts, and WSL distributions stay held through it. */
   close({ detach = false }: { detach?: boolean } = {}) {
@@ -256,20 +301,26 @@ export class Computers {
   /** The computer's client once online, waiting a little for a reconnect. */
   async connected(id: string): Promise<RemoteClient> {
     const computer = this.get(id);
-    const { name } = computer;
+    const { name, route } = computer;
     if (this.stoppedIds.has(id))
       throw new Error(`WSL stopped ${name}. Reconnect to start it again.`);
     if (this.asleep(id)) await this.connectOnce(computer);
     const entry = this.clients.get(id);
     if (!entry) throw new Error(`${name} isn't connected.`);
     entry.client.wake();
-    for (const until = Date.now() + 15_000; Date.now() < until;) {
+    for (const until = Date.now() + onlineWait(route); Date.now() < until;) {
       if (entry.client.status === "online") return entry.client;
       if (entry.client.status === "denied")
         throw new Error(
           `${name} doesn't accept this computer anymore. Pair again.`,
         );
       await sleep(200);
+    }
+    if (route) {
+      const why = entry.shim?.failure ?? entry.detail;
+      throw new Error(
+        `Can't reach ${name} over ${routeName(route)}.${why ? ` ${why}` : ""}`,
+      );
     }
     throw new Error(
       `Can't reach ${name}. Is it on, and on this network or Tailscale?`,
@@ -374,6 +425,7 @@ export class Computers {
         WebSocket: this.options.WebSocket,
         timeoutMs: this.options.timeoutMs ?? 20_000,
         slowTimeoutMs: 6 * 60_000,
+        ...(route?.kind === "ssh" ? { maxRetryMs: sshRetryMs } : {}),
         onStatus: (status, detail) => {
           entry.detail = status === "online" ? undefined : detail;
           if (status === "online")

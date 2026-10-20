@@ -495,7 +495,7 @@ it("keeps a folder another thread joined while its removal waited for the reposi
   const held = worktrees.inRepo(root, () => new Promise<void>((r) => (open = r)));
   projectRoot.mockClear();
   const dropping = worktrees.dropArchived(chat);
-  // Torn down and waiting for the queue, where a new thread joins first.
+  // Waiting for the queue to claim the folder, where a new thread joins first.
   await vi.waitFor(() => expect(projectRoot).toHaveBeenCalled());
   chats.push(joining(chat));
   open();
@@ -503,6 +503,45 @@ it("keeps a folder another thread joined while its removal waited for the reposi
   await dropping;
   expect(existsSync(path)).toBe(true);
   expect(chat.worktree!.removedAt).toBeUndefined();
+});
+
+it("has a thread carrying the branch on wait out a teardown under way, rather than take the folder it tears down", async () => {
+  const chat = thread({});
+  await worktrees.root(chat, "fix the login thing");
+  chat.archivedAt = 5;
+  const other = {
+    ...thread({ startFrom: { on: chat.worktree!.branch! } }),
+    id: "other",
+  };
+  chats = [chat, other];
+  let started!: () => void;
+  const tearing = new Promise<void>((r) => (started = r));
+  let release!: () => void;
+  vi.spyOn(worktrees.setup, "teardown").mockImplementation(() => {
+    started();
+    return new Promise<void>((r) => (release = r));
+  });
+  const dropping = worktrees.dropArchived(chat);
+  await tearing;
+  const carrying = worktrees.root(other, "carry on");
+  // Given the time to take the folder, it doesn't: nothing marks when a
+  // thread starts waiting.
+  await vi
+    .waitFor(() => expect(other.worktree!.path).toBeDefined(), {
+      timeout: 300,
+    })
+    .catch(() => {});
+  expect(other.worktree!.path).toBeUndefined();
+  release();
+  await dropping;
+  await carrying;
+  expect(chat.worktree!.removedAt).toBeDefined();
+  expect(other.worktree).toMatchObject({ branch: chat.worktree!.branch });
+  expect(other.worktree!.adopted).toBeUndefined();
+  expect(existsSync(other.worktree!.path!)).toBe(true);
+  expect(git(other.worktree!.path!, "branch", "--show-current")).toBe(
+    chat.worktree!.branch,
+  );
 });
 
 it("joins no folder its agent switched to another branch", async () => {

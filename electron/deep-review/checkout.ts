@@ -4,8 +4,9 @@
 // one. Reviewers open the reviewed code itself rather than the thread's
 // checkout, and the thread's Git and file panes follow it there.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { git, worktreeList } from "../git/git";
+import { sameFolder } from "../git/worktrees";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
 
 /** The folder under Relay's worktrees that holds the ones made for reviews, named after their review thread. */
@@ -20,8 +21,6 @@ const exists = (path: string) =>
     () => true,
     () => false,
   );
-
-const samePath = (a: string, b: string) => resolve(a) === resolve(b);
 
 const isLocalBranch = (root: string, branch: string) =>
   git(root, ["rev-parse", "-q", "--verify", `refs/heads/${branch}`]).then(
@@ -105,7 +104,13 @@ async function addWorktree(
   // A folder deleted by hand leaves Git's record of it behind.
   await git(root, ["worktree", "prune"]).catch(() => {});
   const onBranch = branch && !(await folderOf(root, branch));
-  const left = (await worktreeList(root)).find((w) => samePath(w.path, path));
+  // Git lists folders by their real paths, which `path` needn't be.
+  let left: Awaited<ReturnType<typeof worktreeList>>[number] | undefined;
+  for (const w of await worktreeList(root))
+    if (await sameFolder(w.path, path)) {
+      left = w;
+      break;
+    }
   if (left?.prunable) {
     // Gone but locked, so the prune kept it; it was Relay's to make again.
     await git(root, ["worktree", "unlock", path]).catch(() => {});
@@ -159,7 +164,10 @@ export async function openReviewCheckout(
   const path = join(reviewCheckoutsIn(dir), chatId);
   if (branch) {
     const at = await folderOf(root, branch);
-    if (at) return { path: at, made: samePath(at, path), ...about };
+    if (at) {
+      const made = await sameFolder(at, path);
+      return { path: made ? path : at, made, ...about };
+    }
   }
   await addWorktree(root, path, scope.head, branch);
   return { path, made: true, ...about };
@@ -208,11 +216,12 @@ export async function followReviewedBranch(
   const own = join(reviewCheckoutsIn(dir), chatId);
   const about = { branch, ...(checkout.pr ? { pr: checkout.pr } : {}) };
   const at = await folderOf(root, branch);
-  if (at && samePath(at, checkout.path))
+  if (at && (await sameFolder(at, checkout.path)))
     return branch === checkout.branch ? checkout : { ...checkout, branch };
   if (at) {
     const ours =
-      samePath(dirname(at), dirname(own)) && ownerOf(basename(at)) === chatId;
+      ownerOf(basename(at)) === chatId &&
+      (await sameFolder(dirname(at), dirname(own)));
     return { path: at, made: ours, ...about };
   }
   // Checked out nowhere: the review's own worktree takes it, as it is or made again.
@@ -292,14 +301,12 @@ export async function sweepReviewCheckouts(
     const owner = ownerOf(name);
     if (!done(owner)) continue;
     const path = join(folder, name);
-    const used = threads.some(
-      (t) =>
-        t.id !== owner &&
-        !t.archivedAt &&
-        [t.worktree?.path, t.reviewFolder?.path].some(
-          (p) => p && samePath(p, path),
-        ),
-    );
+    let used = false;
+    for (const t of threads) {
+      if (t.id === owner || t.archivedAt) continue;
+      for (const p of [t.worktree?.path, t.reviewFolder?.path])
+        if (p && (await sameFolder(p, path))) used = true;
+    }
     if (used) continue;
     const why = await reviewCheckoutHoldsWork(path).catch((e: unknown) =>
       e instanceof Error ? e.message : String(e),

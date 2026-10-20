@@ -11,6 +11,7 @@ import { createInterface } from "node:readline/promises";
 import { relayCommands } from "../app/open-folder";
 import { tailnetProbe } from "../remote/tailscale";
 import { agentInfo, type AgentProvider } from "../../shared/agents";
+import { pipeReady } from "../../shared/handoff";
 import { callControl, type DaemonStatus, type ThreadRow } from "./control";
 import {
   ago,
@@ -429,7 +430,8 @@ async function ensureRunning(home: string, flags: Flags, quiet = false) {
 /**
  * Carries a paired computer's bridge over stdin and stdout, for a computer
  * that reaches this one over SSH or wsl.exe instead of the network; Relay
- * starts first if it isn't running. Nothing but its bytes goes to stdout.
+ * starts first if it isn't running. Nothing but `pipeReady` and then its
+ * bytes goes to stdout.
  */
 async function pipe(home: string, flags: Flags) {
   let status = await ensureRunning(home, { ...flags, json: true }, true);
@@ -453,6 +455,7 @@ async function pipe(home: string, flags: Flags) {
     socket.once("connect", resolve);
     socket.once("error", reject);
   });
+  process.stdout.write(pipeReady);
   process.stdin.pipe(socket);
   socket.pipe(process.stdout);
   process.stdin.once("end", () => socket.end());
