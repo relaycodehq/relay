@@ -67,6 +67,14 @@ export class ProjectImports {
     folder?: string,
   ): Promise<ImportChat[]> {
     const source = await this.source(app, key);
+    return this.sourceChats(app, source, folder);
+  }
+
+  private async sourceChats(
+    app: ImportApp,
+    source: ImportProject,
+    folder?: string,
+  ): Promise<ImportChat[]> {
     const path = await realpath(folder ?? source.path).catch(
       () => folder ?? source.path,
     );
@@ -117,7 +125,7 @@ export class ProjectImports {
         try {
           const available = new Set(
             selection.chats.length
-              ? (await this.chats(app, source.key, selection.folder)).map(
+              ? (await this.sourceChats(app, source, selection.folder)).map(
                   (c) => c.id,
                 )
               : [],

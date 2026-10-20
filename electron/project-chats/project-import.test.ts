@@ -15,6 +15,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 import { chatSettled } from "../../shared/chat-activity";
+import { TerminalSessions } from "../terminal-sessions";
 import {
   writeClaudeSession,
   claudeTurns,
@@ -229,6 +230,36 @@ it("rejects forged project keys and chats from other projects before adding anyt
   ]);
   expect(wrong.failures[0]?.message).toContain("no longer available");
   expect(await projects.list(null)).toHaveLength(0);
+});
+
+it("discovers sources once while validating each project's selected chats", async () => {
+  const other = join(dir, "other");
+  await mkdir(other);
+  await writeStoredCodexSession(home, repo, "first-chat-01", turns);
+  await writeStoredCodexSession(home, other, "other-chat-01", turns);
+  const sources = await chats.imports.list("codex");
+  const discovery = vi.spyOn(TerminalSessions.prototype, "projectFolders");
+  try {
+    const result = await chats.imports.run(
+      "codex",
+      sources.map((source) => ({
+        key: source.key,
+        chats: [source.path === repo ? "first-chat-01" : "other-chat-01"],
+      })),
+    );
+    expect(discovery).toHaveBeenCalledExactlyOnceWith("codex");
+    expect(result.failures).toEqual([]);
+    expect(result.projects).toHaveLength(2);
+    for (const imported of result.projects) {
+      expect(imported.chats).toHaveLength(1);
+      const chat = await chats.get(imported.chats[0]!.chat.id);
+      expect(chat.messages.map((m) => m.body)).toEqual(
+        turns.flatMap((turn) => [turn.prompt, turn.answer]),
+      );
+    }
+  } finally {
+    discovery.mockRestore();
+  }
 });
 
 it("imports a project's app name without reading chat history when chats are not selected", async () => {
