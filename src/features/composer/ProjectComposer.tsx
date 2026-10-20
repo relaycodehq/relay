@@ -298,11 +298,7 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
   });
   // One menu at a time; the files' wins where both could open.
-  const menu = memes.visible
-    ? memes
-    : mentions.visible
-      ? mentions
-      : commands;
+  const menu = memes.visible ? memes : mentions.visible ? mentions : commands;
   const composerSend = useComposerSend({
     draft,
     state: composer,
@@ -358,7 +354,7 @@ export function ProjectComposer({
           <button
             type="button"
             className="primary"
-            disabled={busy || running || !runs.codex}
+            disabled={busy || running || !runs.sendSettings(planner)}
             onClick={() => sending.implementPlan(planner)}
           >
             Implement plan
@@ -553,7 +549,6 @@ export function ProjectComposer({
               model: (
                 <ComposerModelPicker
                   provider={to}
-                  ready={!!runs.codex}
                   catalogs={runs.picker}
                   onOpen={catalogs.refresh}
                   openSignal={settingCommands.pickerSignal}

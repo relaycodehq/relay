@@ -147,8 +147,8 @@ export function agentChoice(
 }
 
 /**
- * What a message to `to` runs on, from Codex's `selected` choice, which a
- * message to people takes too. Every agent keeps its own model and effort.
+ * What a message to `to` runs on. Only Codex needs its resolved `selected`
+ * choice; notes have no agent model, and every other agent keeps its own.
  */
 export function messageChoice(
   to: string,
@@ -156,7 +156,8 @@ export function messageChoice(
   selected: ModelChoice | undefined,
   pick: Pick<ReturnType<typeof livePick>, "model" | "reasoningEffort">,
 ): ModelChoice | undefined {
-  if (!selected || !isAgentProvider(to)) return selected;
+  if (!isAgentProvider(to)) return blankChoice;
+  if (to === "codex") return selected;
   return agentChoice(to, models, pick, selected);
 }
 

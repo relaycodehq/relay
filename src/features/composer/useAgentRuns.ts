@@ -135,9 +135,12 @@ export function useAgentRuns(
         ),
       );
     }
-    if (next === "codex" && codex)
+    if (next === "codex")
       set("codex", {
-        choice: supportedChoice({ ...codex, model }, codexModels),
+        choice: supportedChoice(
+          { ...(codex ?? modelOf(models, "codex").choice), model },
+          codexModels,
+        ),
       });
     onPick();
   });

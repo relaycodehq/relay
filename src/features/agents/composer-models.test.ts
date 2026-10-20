@@ -236,11 +236,20 @@ describe("what a message runs on", () => {
       choice("kimi", "", false),
     );
     expect(messageChoice("codex", models, codex, pick)).toEqual(codex);
-    expect(messageChoice("message", models, codex, pick)).toBe(codex);
+    expect(messageChoice("message", models, codex, pick)).toEqual(choice(""));
   });
 
-  it("waits for Codex's choice", () => {
-    expect(messageChoice("claude", models, undefined, pick)).toBeUndefined();
+  it("waits for Codex's choice only when sending to Codex", () => {
+    expect(messageChoice("codex", models, undefined, pick)).toBeUndefined();
+    expect(messageChoice("claude", models, undefined, pick)).toEqual(
+      choice("opus", "max"),
+    );
+    expect(messageChoice("opencode", models, undefined, pick)?.model).toBe(
+      "kimi",
+    );
+    expect(messageChoice("message", models, undefined, pick)).toEqual(
+      choice(""),
+    );
   });
 
   it("asks for the 200k window only from Claude", () => {

@@ -102,11 +102,9 @@ test("restores per-project composer settings, answers native approvals, and impl
     await expect(page.getByRole("option")).toHaveCount(4);
     await screenshot(page, { path: "test-results/composer-runtime-menu.png" });
     await page.getByRole("option", { name: /Auto-accept edits/ }).click();
-    await page
-      .getByRole("button", { name: "Mode: Build", exact: true })
-      .click();
-    await expect(page.getByRole("menuitemradio")).toHaveCount(3);
-    await page.getByRole("menuitemradio", { name: /^Plan/ }).click();
+    // Build is implicit; planning is enabled through the composer command.
+    await page.getByLabel("Message project").fill("/plan");
+    await page.getByLabel("Message project").press("Enter");
     await page.getByRole("button", { name: "Fast mode", exact: true }).click();
     await page
       .getByRole("combobox", { name: "Reasoning effort", exact: true })
@@ -123,8 +121,8 @@ test("restores per-project composer settings, answers native approvals, and impl
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
     ).toHaveText("Full access");
     await expect(
-      page.getByRole("button", { name: "Mode: Build", exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toHaveCount(0);
     // A project's name only folds its row; its new thread opens it.
     await page
       .getByRole("button", { name: "New thread in Web Store", exact: true })
@@ -200,8 +198,8 @@ test("restores per-project composer settings, answers native approvals, and impl
       .getByRole("button", { name: "Implement plan", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Mode: Build", exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
@@ -261,8 +259,8 @@ test("restores per-project composer settings, answers native approvals, and impl
       .getByRole("button", { name: "New thread in Web Store", exact: true })
       .click();
     await expect(
-      page.getByRole("button", { name: "Mode: Build", exact: true }),
-    ).toBeVisible();
+      page.getByRole("button", { name: "Mode: Plan", exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByRole("combobox", { name: "Runtime mode", exact: true }),
     ).toHaveText("Auto-accept edits");

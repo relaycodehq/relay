@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 import { harnessReact, mount } from "../../../tests/unit/hook-harness";
 import type { SendSettings } from "../../../shared/compose-send";
+import type { Recipient } from "../../../shared/recipient";
 import { useComposerSend } from "./useComposerSend";
 
 vi.mock("react", () => harnessReact);
@@ -104,7 +105,7 @@ it.each(["Read this", "/btw Read this"])(
           take,
         } as never,
         state: {} as never,
-        runs: { codex: true } as never,
+        runs: { sendSettings: () => undefined } as never,
         to: "codex",
         conversation: { busy: false, running: false },
         complete: false,
@@ -115,5 +116,60 @@ it.each(["Read this", "/btw Read this"])(
     await sending().send();
     expect(take).not.toHaveBeenCalled();
     expect(onSend).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["claude", "message"] as const)(
+  "sends to %s without a Codex choice",
+  async (to) => {
+    const onSend = vi.fn(async (_value: unknown) => true);
+    const choice = { model: "", reasoningEffort: "" as const, fast: false };
+    const sending = mount(() =>
+      useComposerSend({
+        draft: {
+          text: "Continue",
+          attached: [],
+          images: [],
+          preparing: false,
+          isPreparing: () => false,
+          skills: () => [],
+          take: () => ({
+            dispatch: () => {},
+            restore: () => {},
+            forget: async () => {},
+          }),
+        } as never,
+        state: {
+          saveLastModel: vi.fn(),
+          setProvider: vi.fn(),
+          setInteractionMode: vi.fn(),
+        } as never,
+        runs: {
+          sendSettings: (recipient: Recipient) =>
+            recipient === "codex"
+              ? undefined
+              : {
+                  to: recipient,
+                  choice,
+                  runtimeMode: "full-access",
+                  interactionMode: "default",
+                },
+          choiceFor: () => choice,
+          contextFor: () => ({}),
+        } as never,
+        to,
+        conversation: { busy: false, running: false },
+        complete: false,
+        intercept: () => false,
+        onSend,
+      }),
+    );
+    expect(sending().disabled).toBe(false);
+    await sending().send();
+    expect(onSend.mock.calls[0][0]).toMatchObject({ to });
+    await sending().implementPlan("claude");
+    await sending().sendGoal("claude", "pause");
+    expect(await sending().sendLine("Another line")).toBe(true);
+    expect(onSend).toHaveBeenCalledTimes(4);
   },
 );

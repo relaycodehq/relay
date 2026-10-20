@@ -11,6 +11,7 @@ import type { DraftImage } from "../images/draft-images";
 import { threadStorage } from "../../lib/thread-storage";
 import { readDraft, writeDraft } from "./drafts";
 import { sendDraft, unsent } from "./draft-send";
+import { api } from "../../lib/api";
 import {
   loadComposerSettings,
   saveComposerSettings,
@@ -133,6 +134,23 @@ it("empties a draft nobody touched while it went out", async () => {
   await send.finish();
   expect(readDraft(key)).toBe("");
   expect(images.get(key)).toEqual([]);
+});
+
+it("does not load Codex models for a draft sent to Claude", async () => {
+  const models = vi.spyOn(api, "agentModels");
+  try {
+    saveComposerSettings(chat.id, {
+      ...loadComposerSettings(chat.id),
+      provider: "claude",
+    });
+    writeDraft(key, "Continue with Claude");
+    const send = await sendHeldBack();
+    expect(sends[0].to).toBe("claude");
+    expect(models).not.toHaveBeenCalledWith("codex");
+    await send.finish();
+  } finally {
+    models.mockRestore();
+  }
 });
 
 it("restores a background send from the thread and preserves picks changed while sending", async () => {

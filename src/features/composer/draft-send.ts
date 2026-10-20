@@ -103,10 +103,13 @@ export async function sendDraft(
   if (recipient === "message" && !text) return null;
   // A project on another computer runs that computer's agents.
   const home = project.computer;
-  const selected = supportedChoice(
-    settings.models.codex?.choice ?? codexQuestionChoice(ai),
-    await codexModels(qc, home?.id),
-  );
+  const selected =
+    recipient === "codex"
+      ? supportedChoice(
+          settings.models.codex?.choice ?? codexQuestionChoice(ai),
+          await codexModels(qc, home?.id),
+        )
+      : undefined;
   const pick = isPickAgent(recipient)
     ? livePick(
         settings.models[recipient],
