@@ -9,11 +9,7 @@ import {
   onThreadRecord,
   threadRecordIds,
 } from "../../lib/thread-storage";
-import {
-  DRAFT_PREFIX,
-  bodyOf,
-  type ThreadDraft,
-} from "../../lib/thread-draft";
+import { DRAFT_PREFIX, bodyOf, type ThreadDraft } from "../../lib/thread-draft";
 import { attachedImages } from "../../../shared/image-refs";
 import {
   draftBody,
@@ -29,11 +25,10 @@ import {
   type SharedDraft,
 } from "../../../shared/drafts";
 import {
-  draftImageKeys,
-  loadDraftImages,
-  onDraftImagesChanged,
+  readDraftImageMetadata,
+  onDraftImageMetadata,
   onDraftImagesSaved,
-  type DraftImage,
+  type DraftImageMetadata,
 } from "../images/draft-images";
 import {
   draftSentAt,
@@ -149,7 +144,8 @@ function localOf(thread: string): Map<string, LocalDraft> {
     });
   };
   entry(thread);
-  for (const root of Object.keys(record.replies)) entry(`${thread}:${root}`, root);
+  for (const root of Object.keys(record.replies))
+    entry(`${thread}:${root}`, root);
   return out;
 }
 
@@ -207,7 +203,11 @@ function changesOf(thread: string): DraftWrite[] {
       pushed.get(key) ??
       (theirs ? { body: draftBody(theirs), extras: theirs.extras } : undefined);
     const empty = !now.body.text.trim() && !hasExtras(now.extras);
-    if (before ? sameBody(before.body, now.body) && same(before.extras, now.extras) : empty)
+    if (
+      before
+        ? sameBody(before.body, now.body) && same(before.extras, now.extras)
+        : empty
+    )
       continue;
     const chat = draftThread(key);
     const sentAt = chat && !chat.root ? draftSentAt(chat.chatId) : undefined;
@@ -299,7 +299,8 @@ function take(
 ) {
   // This window's own, or older than what it has.
   if (draft && known?.rev !== undefined && known.rev >= draft.rev) return;
-  if (!draft && known === undefined && !pushed.get(key)?.body.text.trim()) return;
+  if (!draft && known === undefined && !pushed.get(key)?.body.text.trim())
+    return;
   // Edited here meanwhile: that push settles it, clash or not.
   if (known?.dirty !== undefined || waiting.has(recordOf(key))) return;
   apply(key, draft, sent);
@@ -338,9 +339,8 @@ function apply(key: string, draft: SharedDraft | null, sent: boolean) {
     schedule(recordOf(key));
 }
 
-async function readImages(key: string, saved?: DraftImage[]) {
-  const list = saved ?? (await loadDraftImages(key).catch(() => []));
-  if (list.length) images.set(key, list.map((i) => i.n));
+function readImages(key: string, saved: DraftImageMetadata | undefined) {
+  if (saved?.numbers.length) images.set(key, saved.numbers);
   else images.delete(key);
 }
 
@@ -354,12 +354,11 @@ export function startDraftSync({ takes }: { takes: boolean }) {
   if (started || !api.onSharedDraft) return;
   started = true;
   onThreadRecord(schedule);
-  onDraftImagesSaved((key, saved) => {
-    void readImages(key, saved);
+  // Another window pushes its own; this one only needs the numbers.
+  onDraftImageMetadata(readImages);
+  onDraftImagesSaved((key) => {
     if (key.startsWith(DRAFT_PREFIX)) schedule(recordOf(sharedKey(key)));
   });
-  // Another window pushes its own; this one only needs the numbers.
-  onDraftImagesChanged((key) => void readImages(key));
   api.onSharedDraft((change) => heard(change, takes));
   // Mid-pause on the way out: the next start pushes it.
   window.addEventListener("beforeunload", () => {
@@ -367,17 +366,24 @@ export function startDraftSync({ takes }: { takes: boolean }) {
       for (const write of changesOf(thread))
         setMeta(write.key, { rev: meta()[write.key]?.rev, dirty: Date.now() });
   });
-  void catchUp(takes).catch((e) =>
-    console.warn("Couldn't read the computer's drafts:", e),
-  );
+  const lineUp = (retry: boolean) => {
+    void catchUp(takes).catch((e) => {
+      console.warn("Couldn't read the computer's drafts:", e);
+      // A failed screenshot read must not masquerade as an empty draft.
+      // Try startup once more, including a fresh computer snapshot.
+      if (retry) setTimeout(() => lineUp(false), retryMs);
+    });
+  };
+  lineUp(true);
 }
 
 /** Lines this window's drafts up with the computer's, as Relay starts. */
 async function catchUp(takes: boolean) {
   const changed = (catchingUp = new Set<string>());
   try {
-    const keys = await draftImageKeys().catch(() => []);
-    await Promise.all(keys.map((key) => readImages(key)));
+    const metadata = await readDraftImageMetadata();
+    for (const [key, value] of metadata) readImages(key, value);
+    const keys = [...metadata.keys()];
     const list = await api.sharedDrafts();
     // The snapshot can predate a write or live event received while awaiting it.
     // Keep those changes, including removals, rather than restoring the old copy.
