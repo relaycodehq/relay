@@ -1,4 +1,4 @@
-import { memo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -16,7 +16,7 @@ import { RebaseConflictCard, resolvePrompt } from "./RebaseConflict";
 import { everythingButFetch, useBranchSync } from "./useBranchSync";
 import { BranchSelect } from "./BranchSelect";
 import {
-  localTwin,
+  localTwinName,
   type BranchAction,
   type BranchList,
 } from "../../../shared/branches";
@@ -85,6 +85,25 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   const branchError = branch === undefined ? tree.error : null;
   // What changes the checkout in place waits, even when a pick has somewhere else to go.
   const held = disabled || !!intercept?.locked;
+  // Another worktree holds them, so the checkout can't switch to them;
+  // picking a remote checks out its local twin when there is one.
+  const intercepting = !!intercept;
+  const taken = useMemo(() => {
+    const list = refs.data;
+    if (intercepting || !list) return undefined;
+    const local = new Map(
+      list.branches.filter((b) => !b.remote).map((b) => [b.name, b]),
+    );
+    return new Set(
+      list.branches
+        .filter((b) => {
+          const own = (b.remote && local.get(localTwinName(b))) || b;
+          return !!own.worktree && !own.current;
+        })
+        .map((b) => b.name),
+    );
+  }, [refs.data, intercepting]);
+  const unpickable = useCallback((name: string) => !!taken?.has(name), [taken]);
   const [creating, setCreating] = useState(false);
   async function choose(choice: BranchChoice, list: BranchList) {
     if (switching.current || disabled) return;
@@ -140,16 +159,13 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
           if (next) setError(undefined);
         }}
         onPick={(name, list) => void choose({ name, create: false }, list)}
-        // Picking a remote checks out its local twin when there is one.
-        unpickable={(name, list) => {
-          if (intercept) return false;
-          const b = list.branches.find((x) => x.name === name);
-          const own = b && (localTwin(list.branches, b) ?? b);
-          return !!own?.worktree && !own.current;
-        }}
+        unpickable={unpickable}
         create={{
+          // Only once the list is in: it says whether the name is taken, and
+          // creating needs it.
           label: (search) =>
-            refs.data?.branches.some((b) => !b.remote && b.name === search)
+            !refs.data ||
+            refs.data.branches.some((b) => !b.remote && b.name === search)
               ? undefined
               : `Create branch “${search}”`,
           onSelect: (search) =>

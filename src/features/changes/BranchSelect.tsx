@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type { BranchList } from "../../../shared/branches";
 import { api } from "../../lib/api";
 import { SearchSelect } from "../../ui/SearchSelect";
 import { branchOptions, branchSelect, markCheckedOut } from "./branch-options";
+
+const allNames = (list: BranchList) => list.branches.map((b) => b.name);
 
 /**
  * The composer's branch list, whatever picking one does: Base, Worktrees and
@@ -13,7 +15,7 @@ import { branchOptions, branchSelect, markCheckedOut } from "./branch-options";
 export function BranchSelect({
   projectId,
   branches,
-  names = (list) => list.branches.map((b) => b.name),
+  names = allNames,
   keepRemotes,
   value,
   onPick,
@@ -37,7 +39,7 @@ export function BranchSelect({
   /** The branch checked in the list. */
   value?: string | null;
   onPick: (name: string, list: BranchList) => void;
-  /** Listed but greyed out, like a branch another worktree holds. */
+  /** Listed but greyed out, like a branch another worktree holds; keep it stable, as `names`. */
   unpickable?: (name: string, list: BranchList) => boolean;
   create?: {
     label: (search: string) => string | undefined;
@@ -59,14 +61,22 @@ export function BranchSelect({
     enabled: open ?? shown,
   });
   const list = branches.data;
-  const options = list
-    ? markCheckedOut(
-        branchOptions(names(list), list, counts.data, Date.now(), {
-          keepRemotes,
-        }),
-        list,
-      ).map((o) => (unpickable?.(o.value, list) ? { ...o, disabled: true } : o))
-    : [];
+  // The owner re-renders with every poll of the tree; thousands of branches
+  // are only laid out again when the list or its counts change.
+  const options = useMemo(
+    () =>
+      list
+        ? markCheckedOut(
+            branchOptions(names(list), list, counts.data, Date.now(), {
+              keepRemotes,
+            }),
+            list,
+          ).map((o) =>
+            unpickable?.(o.value, list) ? { ...o, disabled: true } : o,
+          )
+        : [],
+    [list, counts.data, names, keepRemotes, unpickable],
+  );
   return (
     <SearchSelect
       label="Branches"

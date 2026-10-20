@@ -12,6 +12,7 @@ import {
   cantCarryOn,
   copyIntoWorktree,
   createWorktree,
+  fetchStart,
   moveIntoWorktree,
   newBranchProblem,
   reattachWorktree,
@@ -166,20 +167,19 @@ export class ThreadWorktrees {
       return selected.path;
     }
     if (await worktreeExists(worktree)) return worktree.path!;
-    return this.inRepo(root, () => this.remake(chat, root, prompt, signal));
+    // Outside the repository's queue: a slow remote mustn't hold up every
+    // other thread's worktree there.
+    await fetchStart(root, regrown(worktree).startFrom, signal);
+    return this.inRepo(root, () => this.remake(chat, root, prompt));
   }
 
   /**
    * Makes `chat`'s worktree, with its first message or again once it's gone,
    * in the repository's queue: another thread may have made or lent it
-   * meanwhile, so it reads the thread's record again first.
+   * meanwhile, so it reads the thread's record again first. A remote
+   * branch it starts from was fetched before.
    */
-  private async remake(
-    chat: ProjectChat,
-    root: string,
-    prompt?: string,
-    signal?: AbortSignal,
-  ) {
+  private async remake(chat: ProjectChat, root: string, prompt?: string) {
     const saved = await this.core.storage.load(chat.id).catch(() => undefined);
     if (saved && saved !== chat && saved.worktree)
       chat.worktree = saved.worktree;
@@ -207,13 +207,13 @@ export class ThreadWorktrees {
     chat.worktree =
       reattached ??
       (carry
-        ? await this.carriedOn(chat, root, carry, name, signal)
+        ? await this.carriedOn(chat, root, carry, name)
         : await createWorktree(
             root,
             this.folder,
             name,
             regrown(worktree),
-            signal,
+            false,
           ));
     // Only a branch Relay picked waits for the title; the user's keeps its name.
     if (first && !chat.worktree.named) this.unnamed.add(chat.id);
@@ -273,7 +273,6 @@ export class ThreadWorktrees {
     root: string,
     branch: string,
     name: string,
-    signal?: AbortSignal,
   ): Promise<ChatWorktree> {
     const others = (this.core.store.get().chats ?? []).filter(
       (c) => c.id !== chat.id && c.projectId === chat.projectId,
@@ -298,7 +297,7 @@ export class ThreadWorktrees {
         this.folder,
         name,
         { startFrom: { off: branch } },
-        signal,
+        false,
       );
       return off.wanted
         ? off
@@ -315,7 +314,7 @@ export class ThreadWorktrees {
       this.folder,
       name,
       { startFrom: { on: branch } },
-      signal,
+      false,
     );
     if (made.branch !== branch || made.adopted) return made;
     // Whoever kept the branch for its next message finds it here, the

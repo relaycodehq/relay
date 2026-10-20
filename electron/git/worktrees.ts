@@ -213,14 +213,15 @@ async function placeFor(
  * working directory. A `startFrom` picked for the thread makes the branch off
  * another one instead, or carries on an existing branch: in the folder it's
  * checked out in already, else in a worktree of its own, else, when only
- * checking it out is in the way, on a new branch off it.
+ * checking it out is in the way, on a new branch off it. A remote start is
+ * fetched first unless `fetch` is false, when `fetchStart` did already.
  */
 export async function createWorktree(
   root: string,
   dir: string,
   name: string,
   previous?: ChatWorktree,
-  signal?: AbortSignal,
+  fetch: { signal?: AbortSignal } | false = {},
 ): Promise<MadeWorktree> {
   const folder = join(dir, slug(basename(root)));
   await mkdir(folder, { recursive: true });
@@ -238,7 +239,7 @@ export async function createWorktree(
   let offFrom = start && "off" in start ? start.off : undefined;
   let fetched = false;
   if (start && "on" in start) {
-    let place = await carryOnPlace(root, start.on, { signal }).catch(
+    let place = await carryOnPlace(root, start.on, fetch || undefined).catch(
       startFailed(start.on),
     );
     if (place && "carry" in place) {
@@ -265,7 +266,7 @@ export async function createWorktree(
   }
   const off =
     offFrom !== undefined &&
-    (await branchOff(root, offFrom, fetched ? undefined : { signal }).catch(
+    (await branchOff(root, offFrom, (!fetched && fetch) || undefined).catch(
       start && "off" in start
         ? startFailed(start.off, true)
         : startFailed(offFrom),
@@ -349,13 +350,30 @@ async function fetchBranch(
   });
 }
 
+/**
+ * Brings the remote branch a worktree starts `on` or `off` up to date, if
+ * it's a remote one. Fetching can take a while and does no harm twice, so
+ * it runs before the repository's queue rather than holding it up.
+ */
+export async function fetchStart(
+  root: string,
+  start: WorktreeStart | undefined,
+  signal?: AbortSignal,
+) {
+  const name =
+    start &&
+    ("on" in start ? start.on : "off" in start ? start.off : undefined);
+  const remote = name && (await remoteOf(root, name));
+  if (remote) await fetchBranch(root, remote, signal);
+}
+
 /** The folder `branch` is checked out in, if any; Git allows it in one only. */
 const checkedOutAt = async (root: string, branch: string) =>
   (await worktreeList(root)).find((w) => w.branch === branch && !w.prunable)
     ?.path;
 
 /** Why the local branch a thread's worktree is on can't be opened in it again. */
-export async function carryOnProblem(root: string, branch: string) {
+async function carryOnProblem(root: string, branch: string) {
   if (!(await hasBranch(root, branch))) return `There's no branch ${branch}.`;
   const at = await checkedOutAt(root, branch);
   return at ? `${branch} is checked out in ${at} already.` : undefined;

@@ -237,8 +237,22 @@ it("works in a folder it didn't make without ever removing it, and makes its own
   const own = await worktrees.root(chat, "again");
   expect(own.startsWith(join(temp, "worktrees"))).toBe(true);
   expect(git(own, "branch", "--show-current")).toBe("feature");
-  expect(chat.worktree).toMatchObject({ existing: true });
+  expect(chat.worktree).toMatchObject({
+    existing: true,
+    named: "feature",
+    setup: "pending",
+  });
   expect(chat.worktree?.adopted).toBeUndefined();
+  // Still on its branch, so not a fresh start.
+  expect(chat.workspaceMoves).toEqual([
+    expect.objectContaining({
+      how: "recreated",
+      to: own,
+      branch: "feature",
+      unasked: true,
+    }),
+  ]);
+  expect(chat.workspaceMoves![0]!.fresh).toBeUndefined();
 });
 
 it("makes a branch kept for another thread's next message again, one folder for both", async () => {
@@ -400,4 +414,39 @@ it("joins no away thread's folder, nor lends a returned copy's", async () => {
   chats = [copy, next];
   await worktrees.root(next, "carry on");
   expect(copy.worktree).toMatchObject({ path: old, removedAt: 5 });
+});
+
+it("fetches a remote start outside the repository's queue, so a slow remote holds up no other thread", async () => {
+  const remote = join(temp, "remote.git");
+  execFileSync("git", ["init", "-q", "--bare", remote]);
+  git(root, "remote", "add", "origin", remote);
+  git(root, "push", "-q", "origin", "main:feature");
+  git(root, "fetch", "-q", "origin");
+  // The remote answers only once the gate opens, or gives up after 10s.
+  const gate = join(temp, "gate");
+  git(root, "remote", "set-url", "origin", "ssh://example.invalid/repo");
+  vi.stubEnv(
+    "GIT_SSH_COMMAND",
+    `i=0; while [ ! -e '${gate}' ] && [ $i -lt 200 ]; do sleep 0.05; i=$((i+1)); done; false`,
+  );
+  try {
+    const slow: ProjectChat = {
+      ...thread({ startFrom: { off: "origin/feature" } }),
+      id: "slow",
+      title: "off the remote",
+    };
+    const other = thread({});
+    chats = [slow, other];
+    let fetched = false;
+    const waiting = worktrees.root(slow, "off the remote").then((path) => {
+      fetched = true;
+      return path;
+    });
+    expect(existsSync(await worktrees.root(other, "meanwhile"))).toBe(true);
+    expect(fetched).toBe(false);
+    await mkdir(gate);
+    expect(existsSync(await waiting)).toBe(true);
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

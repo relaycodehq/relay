@@ -32,23 +32,6 @@ export const worktreeStartSchema = z.union([
 ]);
 export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 
-/**
- * The thread whose worktree is on `branch`, open or removed with the branch
- * kept for its next message. Another thread carrying the branch on joins its
- * folder, or makes it again for both of them. An archived one lets it go:
- * unarchived, it gets a `relay/…` branch of its own, or works wherever the
- * branch is checked out by then if it was carrying it on too.
- */
-export const threadOnBranch = <
-  T extends { worktree?: ChatWorktree; archivedAt?: number },
->(
-  chats: readonly T[],
-  branch: string,
-) =>
-  chats.find(
-    (c) => !c.archivedAt && !!c.worktree?.path && c.worktree.branch === branch,
-  );
-
 type WithWorktree = {
   id: string;
   worktree?: ChatWorktree;
