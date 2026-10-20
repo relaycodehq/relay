@@ -468,6 +468,7 @@ contextBridge.exposeInMainWorld("relay", {
   onPlaySound: on("relay:play-sound"),
   onDeviceHub: on("relay:device-hub"),
   onMaximized: subscribe<boolean>("relay:maximized"),
+  onFullScreen: subscribe<boolean>("relay:full-screen"),
   onOpenUrl: subscribe<string>("relay:open-url"),
   onOpenProject: subscribe<string>("relay:open-project"),
   onThreadWindows: on("relay:thread-windows"),

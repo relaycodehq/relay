@@ -6,6 +6,7 @@ import ProjectShell from "./app/ProjectShell";
 import ThreadWindowShell from "./app/ThreadWindowShell";
 import {
   drawsWindowControls,
+  followFullScreen,
   followWindowControlsOverlay,
   WindowControls,
 } from "./app/WindowControls";
@@ -56,6 +57,7 @@ function startApp() {
   initContextMenuKey();
   initShortcuts();
   followWindowControlsOverlay();
+  followFullScreen();
   const client = new QueryClient({
     defaultOptions: {
       queries: {

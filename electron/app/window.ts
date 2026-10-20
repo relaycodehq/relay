@@ -432,6 +432,12 @@ export class AppWindow {
       win.webContents.send("relay:maximized", win.isMaximized());
     win.on("maximize", sendMaximized);
     win.on("unmaximize", sendMaximized);
+    // macOS hides the traffic lights in full screen, so the titlebar drops their gap.
+    const sendFullScreen = () =>
+      win.webContents.send("relay:full-screen", win.isFullScreen());
+    win.on("enter-full-screen", sendFullScreen);
+    win.on("leave-full-screen", sendFullScreen);
+    win.webContents.on("did-finish-load", sendFullScreen);
     win.webContents.on("did-start-navigation", (details) => {
       if (!details.isMainFrame || details.isSameDocument) return;
       this.hooks.pageGone(win);

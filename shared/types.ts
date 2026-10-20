@@ -779,6 +779,7 @@ export interface Api
    */
   setSidebarShown(shown: boolean, toggled: boolean): Promise<void>;
   onMaximized(callback: (maximized: boolean) => void): () => void;
+  onFullScreen(callback: (fullScreen: boolean) => void): () => void;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
   /** A project to show: `relay <folder>` or a folder dropped on Relay. */

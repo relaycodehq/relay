@@ -22,6 +22,13 @@ export function followWindowControlsOverlay() {
   overlay.addEventListener("geometrychange", sync);
 }
 
+/** Marks the root `data-full-screen`, where macOS hides the traffic lights. */
+export function followFullScreen() {
+  window.relay.onFullScreen((fullScreen) =>
+    document.documentElement.toggleAttribute("data-full-screen", fullScreen),
+  );
+}
+
 /**
  * Minimize, maximize and close, drawn by Relay so they sit centred in the
  * header; Electron's own overlay can only hug the top of the window. Glyphs

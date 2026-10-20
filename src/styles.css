@@ -263,6 +263,10 @@ small {
 .platform-win32 .traffic-space {
   width: 14px;
 }
+/* Where the traffic lights would be, gone in full screen. */
+:root[data-full-screen] .traffic-space {
+  display: none;
+}
 /* What the titlebars keep clear on the right for the window's buttons: three
    on Windows, and on Linux whatever Electron's overlay measures, since GTK's
    button layout decides how many it draws. */
