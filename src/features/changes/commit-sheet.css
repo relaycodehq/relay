@@ -82,6 +82,10 @@
   margin-left: 6px;
   color: light-dark(#c4323f, #f0707a);
 }
+.commit-lines-aside {
+  margin-left: 8px;
+  color: var(--muted);
+}
 .commit-files-list {
   min-height: 0;
   max-height: 232px;

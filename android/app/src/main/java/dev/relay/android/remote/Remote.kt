@@ -23,6 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +94,12 @@ class Remote(
      * connection's word alone, never a saved copy's.
      */
     val overview: StateFlow<RemoteOverview?> = _overview.asStateFlow()
+    private val _overviews = MutableSharedFlow<RemoteOverview?>(replay = 1, extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /**
+     * Each [overview] in turn, where [overview] keeps only the newest: a background batch brings
+     * a thread's start and its end back to back, and news needs to see both.
+     */
+    val overviews: SharedFlow<RemoteOverview?> = _overviews.asSharedFlow()
     /** Presence events heard, so an overview asked for before one doesn't undo it. */
     private var presenceHeard = 0
     /** The newest presence event, which may come before there's an overview to keep it in. */
@@ -136,6 +143,10 @@ class Remote(
     val paired: Boolean get() = _client.value != null
 
     private var live: RemoteClient? = null
+    /** Starts true: the app may be opened by a notification's worker with nothing on screen. */
+    private var background = true
+    /** Held around [background] and the client it goes to, which change on different threads. */
+    private val backgroundLock = Any()
     /** Where the latest switch goes, set before its offline copy is read; [_active] moves after. */
     private var wanted: String? = null
     private var switches = 0
@@ -212,6 +223,12 @@ class Remote(
         store.clearCredentials(id)
     }
 
+    /** Forgets every computer, the saved ones too: forgotten before they're read, they'd come back. */
+    suspend fun forgetAll() {
+        _ready.first { it }
+        withContext(dispatcher) { _saved.value.map { it.key } }.forEach { forget(it) }
+    }
+
     fun setRoutes(routes: List<RouteKind>) {
         live?.setRoutes(routes)
     }
@@ -219,6 +236,12 @@ class Remote(
     /** Back in the foreground: Android drops sockets in the background. */
     fun wake() {
         live?.wake()
+    }
+
+    /** Whether the app is in the background, for the link to the active computer and the next. */
+    fun setBackground(on: Boolean) = synchronized(backgroundLock) {
+        background = on
+        live?.setBackground(on)
     }
 
     /** A fresh overview, when online. */
@@ -290,9 +313,14 @@ class Remote(
     }
 
     private fun setOverview(overview: RemoteOverview?) {
-        _overview.value = overview
+        show(overview)
         val id = _active.value
         if (overview != null && id != null) scope.launch { cache.save(id, overview) }
+    }
+
+    private fun show(overview: RemoteOverview?) {
+        _overview.value = overview
+        _overviews.tryEmit(overview)
     }
 
     /**
@@ -317,7 +345,7 @@ class Remote(
         // the same one again keeps what it said until the fresh overview.
         val same = id == _active.value
         _active.value = id
-        _overview.value = cached?.copy(present = if (same) _overview.value?.present else null)
+        show(cached?.copy(present = if (same) _overview.value?.present else null))
         connect(start)
         persist()
     }
@@ -326,7 +354,7 @@ class Remote(
         wanted = null
         switches++
         _active.value = null
-        _overview.value = null
+        show(null)
         live?.close()
         live = null
         _client.value = null
@@ -393,7 +421,11 @@ class Remote(
             }
         })
         val previous = live
-        live = next
+        // The client's first word on the link, before start(), and never after a newer one.
+        synchronized(backgroundLock) {
+            live = next
+            next.setBackground(background)
+        }
         livePresent = null
         previous?.close()
         _client.value = next

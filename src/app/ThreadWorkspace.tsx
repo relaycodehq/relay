@@ -258,9 +258,12 @@ export function ThreadWorkspace({
                   onOpenCode: opens.openCode,
                   onOpenFile: opens.openChatFile,
                   onOpenTurnDiff: opens.openTurnDiff,
-                  onCommitFiles: project.plain
-                    ? undefined
-                    : (paths) => gitActions.current?.commit(paths, chat?.id),
+                  // Where the header has no Git actions, there's nothing to commit with.
+                  onCommitFiles:
+                    project.plain || folder.gone || folder.deleted
+                      ? undefined
+                      : (paths) =>
+                          void gitActions.current?.commit(paths, chat?.id),
                   commitPaths: folder.tree?.changes.map((c) => c.path),
                 }}
                 onCommand={onCommand}

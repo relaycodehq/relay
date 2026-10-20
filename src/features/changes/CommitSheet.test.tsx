@@ -63,7 +63,7 @@ afterEach(async () => {
   client.clear();
 });
 
-const show = (current: WorkingTree, only = ["a.txt"]) =>
+const render = (current: WorkingTree, only?: string[]) =>
   act(async () => {
     root.render(
       <QueryClientProvider client={client}>
@@ -78,6 +78,7 @@ const show = (current: WorkingTree, only = ["a.txt"]) =>
       </QueryClientProvider>,
     );
   });
+const show = (current: WorkingTree, only = ["a.txt"]) => render(current, only);
 const committed = (...paths: string[]): WorkingTree => ({
   ...tree,
   head: paths.join(","),
@@ -153,4 +154,35 @@ it("still allows explicitly rewriting the message after an unrelated commit", as
       .click();
   });
   expect(calls()).toEqual([["a.txt"], ["a.txt"]]);
+});
+
+const changed = (...paths: string[]): WorkingTree => ({
+  ...tree,
+  revision: paths.join(),
+  changes: paths.map((path) => ({
+    path,
+    index: " ",
+    worktree: "M",
+    conflict: false,
+  })),
+});
+const box = (path: string) =>
+  [...document.querySelectorAll<HTMLLabelElement>(".commit-file")]
+    .find((l) => l.title.endsWith(path))!
+    .querySelector("input")!;
+const ticks = (...paths: string[]) => paths.map((p) => box(p).checked);
+
+it("keeps a file that changes while a turn's commit is open unticked", async () => {
+  await show(changed("a.txt", "b.txt"));
+  await show(changed("a.txt", "b.txt", "c.txt"));
+  expect(ticks("a.txt", "b.txt", "c.txt")).toEqual([true, false, false]);
+  await act(async () => box("c.txt").click());
+  expect(box("c.txt").checked).toBe(true);
+});
+
+it("ticks a file that changes while the sheet for everything is open", async () => {
+  await render(changed("a.txt", "b.txt"));
+  await act(async () => box("b.txt").click());
+  await render(changed("a.txt", "b.txt", "c.txt"));
+  expect(ticks("a.txt", "b.txt", "c.txt")).toEqual([true, false, true]);
 });

@@ -29,6 +29,8 @@ object Bridge {
     const val WORKSPACE_MOVES = 22
     /** Port tunnel frames (remote/tunnel) and `sites`. */
     const val TUNNEL = 23
+    /** Takes `background` frames: batched events and a tick a minute while the app is away. */
+    const val BACKGROUND = 29
 
     const val PHONE_DETAIL_PREVIEW = 600
     const val REMOTE_HISTORY = 100

@@ -160,6 +160,7 @@ it("leaves lockfiles out of the lines unless they are all that changed", async (
   expect((await workingTree(root)).lines).toEqual({
     additions: 1,
     deletions: 0,
+    generated: { additions: 4, deletions: 0 },
   });
 });
 it("works in a repository with no commits yet, first commit included", async () => {

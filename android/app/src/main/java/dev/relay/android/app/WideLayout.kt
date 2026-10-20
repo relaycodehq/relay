@@ -66,7 +66,7 @@ fun AppHome(container: AppContainer, pane: Boolean, selected: String?) {
         banners = { UpdateBanners(container.updates, container.remote, Modifier.padding(horizontal = 16.dp)) },
         computerRows = { close -> ComputerUpdateRow(container.updates, container.remote, close) },
         settings = { bottom ->
-            SettingsList(container.remote, container.updates, container.notifications, container.prefs.themeMode, container.prefs::setTheme, container.scope, bottom)
+            SettingsList(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope, bottom)
         },
     )
 }

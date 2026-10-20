@@ -3,10 +3,12 @@ import SwiftUI
 
 @main
 struct RelayApp: App {
-    @State private var connection = Connection()
+    @State private var connection: Connection
     @State private var readAloud = ReadAloud()
     @State private var icons = ProjectIconStore()
     @State private var updates = ComputerUpdates()
+    @State private var lock: AppLock
+    private let lockWindow: LockPresenter
     @State private var incoming: IncomingPair?
     /// A thread a relay-native://chat link asked for.
     @State private var linked: LinkedThread?
@@ -17,17 +19,27 @@ struct RelayApp: App {
     init() {
         CrashRecovery.install()
         _crash = State(initialValue: CrashRecovery.take())
+        let connection = Connection()
+        let lock = AppLock()
+        _connection = State(initialValue: connection)
+        _lock = State(initialValue: lock)
+        lockWindow = LockPresenter(lock: lock, connection: connection)
     }
 
     var body: some Scene {
         WindowGroup {
-            SplashHost { RootView(incoming: $incoming, linked: $linked) }
+            SplashHost {
+                // Hidden while locked: the lock's window is over it, but the first frame comes
+                // before that window, and VoiceOver mustn't read what's under it.
+                RootView(incoming: $incoming, linked: $linked).opacity(lock.locked ? 0 : 1)
+            }
                 // Inside the environment: the theme reads the desktop's appearance.
                 .relayTheme()
                 .environment(connection)
                 .environment(readAloud)
                 .environment(icons)
                 .environment(updates)
+                .environment(lock)
                 .onOpenURL { url in
                     switch parseDeepLink(url.absoluteString) {
                     case .pair(let link): incoming = IncomingPair(link: link)
@@ -35,7 +47,10 @@ struct RelayApp: App {
                     case nil: break
                     }
                 }
-                .task { connection.launch() }
+                .task {
+                    lockWindow.install()
+                    connection.launch()
+                }
                 .onChange(of: phase) { _, now in
                     if now == .active { connection.wake() }
                 }

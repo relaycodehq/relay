@@ -235,7 +235,12 @@ async function lineCounts(
       untracked.map((c) => c.path),
     ),
   ]);
-  return headlineStat(statsByKind([...numstatFiles(diff), ...untrackedFiles]));
+  const by = statsByKind([...numstatFiles(diff), ...untrackedFiles]);
+  const lines = headlineStat(by);
+  return lines === by.generated ||
+    !(by.generated.additions || by.generated.deletions)
+    ? lines
+    : { ...lines, generated: by.generated };
 }
 /** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
 function numstatFiles(output: string) {

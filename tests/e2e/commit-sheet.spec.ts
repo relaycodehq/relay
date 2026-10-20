@@ -99,11 +99,14 @@ for (const push of [false, true]) {
       await page.getByRole("button", { name: /^Turn to commit/ }).click();
       const card = page.getByRole("region", { name: "Changed files" });
       const commit = card.getByRole("button", { name: "Commit", exact: true });
-      const title = push ? "Commit & push" : "Commit";
-      const sheet = page.getByRole("dialog", { name: title, exact: true });
-      const checkbox = sheet.getByRole("checkbox", {
-        name: "Settle thread after commit",
+      // The card's Commit only commits; the header's pushes where there's an upstream.
+      const sheet = page.getByRole("dialog", { name: "Commit", exact: true });
+      const header = page.getByRole("dialog", {
+        name: push ? "Commit & push" : "Commit",
+        exact: true,
       });
+      const settleBox = { name: "Settle thread after commit" };
+      const checkbox = sheet.getByRole("checkbox", settleBox);
       const settled = () =>
         page.evaluate(
           async ({ projectId, chatId }) =>
@@ -115,9 +118,9 @@ for (const push of [false, true]) {
       await expect(commit).toBeVisible();
       // The ordinary project commit has no thread to settle.
       await page.locator(".git-actions-main").click();
-      await expect(sheet).toBeVisible();
-      await expect(checkbox).toHaveCount(0);
-      await sheet.getByRole("button", { name: "Close dialog" }).click();
+      await expect(header).toBeVisible();
+      await expect(header.getByRole("checkbox", settleBox)).toHaveCount(0);
+      await header.getByRole("button", { name: "Close dialog" }).click();
       await commit.click();
       await expect(checkbox).not.toBeChecked();
       await checkbox.check();
@@ -187,8 +190,9 @@ for (const push of [false, true]) {
       await expect(sheet).toBeHidden();
       await expect.poll(settled).toBeGreaterThanOrEqual(now);
       await expect(commit).toHaveCount(0);
+      // Both external commits and both of the card's wait for the header's Push.
       if (push)
-        expect(git("rev-list", "--count", "@{upstream}..HEAD")).toBe("0");
+        expect(git("rev-list", "--count", "@{upstream}..HEAD")).toBe("4");
     } finally {
       await app.close();
       await rm(root, { recursive: true, force: true });

@@ -108,6 +108,12 @@ The desktop accepts:
 - The phone's watchdog is **40 s** from the last frame received (`staleMs`, `remote-client.ts:604-612`). Any opened frame resets it.
 - When `tick.hosts` differs from the saved hosts, the phone updates its credentials and re-probes routes (`:541-555`).
 
+### In the background (bridge 29)
+- The phone sends `{t:"background", on}` when the app goes to the background or comes back, and on connecting while in the background. The notification worker keeps the link up with nothing on screen.
+- While `on`, the desktop pings and ticks that connection only every 4th interval (60 s) and sends events in batches every 25 s (`backgroundBatchMs`, `link-sender.ts`). Streaming `message` events are held, newest per id, and go out when the phone is back; a final `message` drops the held one.
+- Back (`on:false`), the desktop sends what waited and a `tick` at once.
+- The phone's watchdog is 150 s in the background (`backgroundStaleMs`), its retry delay caps at 60 s, and it probes no better routes. Back, it waits 5 s for that tick (`backProbeMs`) and reconnects without one.
+
 ---
 
 ## 3. Crypto framing (`shared/remote-crypto.ts`)
@@ -200,12 +206,14 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 20 | `folderHandoffBridge`, `startHandoffBridge` | Handoff folder methods and start |
 | 21 | `skillsBridge` | `skills` field in a send |
 | 22 | `previewBridge`, `notesBridge`, `workspaceMovesBridge` | `image` with `{kind:"preview"}`; `notesMark` on summaries and `threadNotes` / `tickThreadNote` / `removeThreadNote`; `workspaceMoves` on a thread |
+| 29 | `backgroundBridge` | `{t:"background", on}`: batched events and slower heartbeats while the app is in the background |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.
 - `{t:"auth", deviceId, token, bridge?}`.
 - `{t:"call", id:number /* safe int, starts at 1 */, method, args:unknown[] /* ≤4 */}`.
 - `{t:"got", s:number}`.
+- `{t:"background", on:boolean}` (bridge ≥ 29).
 
 ### ServerFrame (desktop → phone)
 - `{t:"paired", deviceId, token, name, bridge?, hosts?}` and `{t:"ready", name, bridge?, hosts?}`.

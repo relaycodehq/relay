@@ -18,7 +18,7 @@ import dev.relay.android.ui.ConfirmDialog
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.Switch
 
-/** Settings' "When a thread finishes or needs you" row: asks Android first, or points at its settings. */
+/** Settings' "Background notifications" row: asks Android first, or points at its settings. */
 @Composable
 fun NotificationSwitchRow(notifications: ThreadNotifications, computer: String) {
     val context = LocalContext.current
@@ -35,10 +35,11 @@ fun NotificationSwitchRow(notifications: ThreadNotifications, computer: String) 
         }
     }
     ListRow(
-        "When a thread finishes or needs you",
-        subtitle = "While Relay is in the background. It stays connected to $computer for that, " +
-            "with a quiet notice in the shade.",
-        subtitleLines = 4,
+        "Background notifications",
+        subtitle = "When a thread finishes or needs you while Relay is closed. A worker keeps Relay connected " +
+            "to $computer for that, with a quiet notice in the shade, and uses some battery. To spare it, " +
+            "they can come up to 30s late.",
+        subtitleLines = 5,
         trailing = { Switch(on, ::change) },
         onClick = { change(!on) },
     )

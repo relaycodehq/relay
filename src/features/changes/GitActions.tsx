@@ -24,8 +24,8 @@ type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
 export type GitActionsHandle = {
   /** Opens the branch's PR, as the PR button does. */
   openPr: () => void;
-  /** Opens the commit sheet with just `paths` ticked. */
-  commit: (paths: string[], chatId?: string) => void;
+  /** Opens the commit sheet with just `paths` ticked, or says why it can't. */
+  commit: (paths: string[], chatId?: string) => Promise<void>;
 };
 const MAX_COMMIT_FILES = 1000;
 
@@ -169,16 +169,32 @@ export function GitActions({
     openPr() {
       if (!disabled && hasPr) openPr();
     },
-    commit(paths, chatId) {
-      if (disabled || !t) return;
-      const changed = new Set(t.changes.map((c) => c.path));
-      const left = paths.filter((p) => changed.has(p));
-      if (!left.length) return;
-      const action = canPush ? "commit_push" : "commit";
-      if (!enabled[action]) return;
-      setOnly(left);
-      setCommitThread(chatId);
-      setCommitting(action);
+    async commit(paths, chatId) {
+      if (locked) return onError(new Error(locked));
+      try {
+        // The poll can be 3s behind a turn that just ended.
+        const fresh = await qc.query({
+          queryKey: key,
+          queryFn: () => api.projectWorkingTree(where),
+          staleTime: 0,
+        });
+        const changed = new Set(fresh.changes.map((c) => c.path));
+        const left = paths.filter((p) => changed.has(p));
+        if (!left.length)
+          throw new Error("These changes are already committed.");
+        const why =
+          gitBlockedReason(fresh, "commit") ??
+          (fresh.changes.length > MAX_COMMIT_FILES
+            ? `Over ${MAX_COMMIT_FILES} changed files. Commit them in a terminal.`
+            : undefined);
+        if (why) throw new Error(why);
+        setOnly(left);
+        setCommitThread(chatId);
+        // Just a commit, as the card's button says; Push is the header's next step.
+        setCommitting("commit");
+      } catch (e) {
+        onError(e);
+      }
     },
   }));
   if (!t) return null;
