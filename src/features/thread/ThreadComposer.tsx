@@ -299,9 +299,9 @@ export function ThreadComposer({
       ? `Ask ${agentName(root.provider)} a follow-up on the side…`
       : reviewing
         ? "Reviewers are at work. Messages wait for the lead…"
-        : pending?.some((p) => p.kind === "task")
+        : !running && pending?.some((p) => p.kind === "task")
           ? "Message Claude, its background work keeps going…"
-          : pending
+          : !running && pending
             ? "Message Claude now, or wait for it to check back…"
             : project.scratch
               ? "Ask anything…"

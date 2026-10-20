@@ -15,9 +15,14 @@ export function useBackgroundWork(
   chat: ChatSummary | undefined,
   running: boolean,
 ) {
-  // Once Claude picks its work back up, its turn shows that instead.
-  const pending = !running && chat?.pending?.length ? chat.pending : undefined;
-  const stopped = !running && !pending ? chat?.stopped?.items : undefined;
+  // A turn doesn't end background work, so it stays listed through one; a
+  // wake-up is relisted as the turn ends.
+  const live = running
+    ? chat?.pending?.filter((p) => p.kind === "task")
+    : chat?.pending;
+  const pending = live?.length ? live : undefined;
+  const stopped =
+    !running && !chat?.pending?.length ? chat?.stopped?.items : undefined;
   // Subagents run on after the turn that started them; ask while any might.
   const agents = useQuery({
     queryKey: ["project-chat-agents", chat?.id],
