@@ -2,6 +2,19 @@
 // new one, as the add-project palette asks for them.
 import { z } from "zod";
 
+/** A folder on the selected computer: absolute, or relative to its home. */
+export const folderInputSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4096)
+  .refine(
+    (value) =>
+      /^(~(?:[\\/]|$)|\/|[a-zA-Z]:[\\/]|\\\\)/.test(value) &&
+      !value.includes("\0"),
+    "Use an absolute folder path or ~/.",
+  );
+
 /** A repository the `gh` login can see, newest push first. */
 export interface GithubRepo {
   /** owner/name */

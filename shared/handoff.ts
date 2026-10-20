@@ -597,6 +597,15 @@ export interface ComputersApi {
     computerId: string,
     path: string,
   ): Promise<import("./projects").Project>;
+  /** Starts or polls a clone on a paired computer, then adds its project here. */
+  cloneRemoteProject(
+    computerId: string,
+    url: string,
+    into: string,
+  ): Promise<
+    | { done: false; step: string; progress: number | null }
+    | { done: true; project: import("./projects").Project }
+  >;
   /** The paired computers a new thread in the project can start on, or why each can't. */
   startTargets(projectId: string): Promise<HandoffTarget[]>;
   /**

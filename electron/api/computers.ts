@@ -4,7 +4,10 @@ import { computerRouteSchema, type ComputerRoute } from "../../shared/handoff";
 import { checkRoute, wslDistros } from "../handoff/pipe-route";
 import { sshHosts } from "../handoff/ssh-hosts";
 import { installOutput, installRelayOver } from "../handoff/install-over";
-import { projectChatSendSchema } from "../../shared/projects";
+import {
+  folderInputSchema,
+  projectChatSendSchema,
+} from "../../shared/projects";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Settings → Computers, and handing threads to them. */
@@ -71,11 +74,16 @@ export function computerHandlers(ctx: ApiContext) {
       [idSchema, z.string().trim().min(1).max(4096)],
       (computerId, path) => handoffs().remote.add(computerId, path),
     ),
+    cloneRemoteProject: takes(
+      [idSchema, z.string().trim().min(1).max(2000), folderInputSchema],
+      (computerId, url, into) => handoffs().remote.clone(computerId, url, into),
+    ),
     startTargets: takes([idSchema], (projectId) =>
       handoffs().sender.startTargets(projectId),
     ),
-    setupFolder: takes([idSchema, z.string().trim().min(1).max(4096)], (chatId, folder) =>
-      handoffs().sender.setupFolder(chatId, folder),
+    setupFolder: takes(
+      [idSchema, z.string().trim().min(1).max(4096)],
+      (chatId, folder) => handoffs().sender.setupFolder(chatId, folder),
     ),
     startThreadHere: takes([idSchema], (chatId) =>
       handoffs().sender.startHere(chatId),

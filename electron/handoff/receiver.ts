@@ -1,3 +1,4 @@
+import { folderInputSchema } from "../../shared/projects";
 import {
   mkdir,
   open,
@@ -182,8 +183,7 @@ export class HandoffReceiver {
         handedOver: (id) => host.chats.handedOver(id),
         adoptSetup: (projectId, title, cameFrom, input) =>
           host.chats.adoptSetup(projectId, title, cameFrom, input),
-        scratch: () =>
-          dispatch("createScratch", []) as Promise<{ id: string }>,
+        scratch: () => dispatch("createScratch", []) as Promise<{ id: string }>,
         defaultFolder: () => adding.defaultFolder(),
         addAt: (path) => adding.addAt(path),
         projects: () => this.projects(),
@@ -254,7 +254,11 @@ export class HandoffReceiver {
       case "cloneProject": {
         if (!this.clones) throw new Error("This Relay can't clone projects.");
         const url = z.string().trim().min(1).max(2000).parse(args[0]);
-        return this.clones.ask(url, device.name);
+        return this.clones.ask(
+          url,
+          device.name,
+          args[1] === undefined ? undefined : folderInputSchema.parse(args[1]),
+        );
       }
       case "setupProject": {
         if (!this.setups) throw new Error("This Relay can't set projects up.");

@@ -65,3 +65,121 @@ it("doesn't wake a sleeping WSL distribution for the sidebar's icon, and shows t
   expect(await icon()).toBe("data:image/png;base64,AAAA");
   expect(client.call).toHaveBeenCalledTimes(2);
 });
+
+it("registers a remote clone with that computer's project identity and path", async () => {
+  const call = vi.fn(async (method: string) =>
+    method === "computerInfo"
+      ? { bridge: 29 }
+      : {
+          done: true,
+          project: { id: "there", name: "Web", folder: "~/work/web" },
+        },
+  );
+  const computers = {
+    onEvent: () => {},
+    onOnline: () => {},
+    get: () => ({ id: "pc", name: "Studio" }),
+    status: () => "online",
+    list: () => [],
+    connected: async () => ({ call }),
+  } as unknown as Computers;
+  const addRemote = vi.fn(async () => ({ id: "here" }));
+  const remote = new RemoteProjects(computers, {
+    addRemote,
+  } as unknown as Projects);
+  expect(await remote.clone("pc", "acme/web", "~/work")).toEqual({
+    done: true,
+    project: { id: "here" },
+  });
+  expect(call).toHaveBeenCalledWith("cloneProject", "acme/web", "~/work");
+  expect(addRemote).toHaveBeenCalledWith(
+    { id: "pc", name: "Studio" },
+    { id: "there", name: "Web", path: "~/work/web", plain: undefined },
+  );
+});
+
+it("refuses an older remote before cloning into a destination it would ignore", async () => {
+  const call = vi.fn(async () => ({ bridge: 28 }));
+  const computers = {
+    onEvent: () => {},
+    onOnline: () => {},
+    get: () => ({ id: "pc", name: "Studio" }),
+    status: () => "online",
+    list: () => [],
+    connected: async () => ({ call }),
+  } as unknown as Computers;
+  const remote = new RemoteProjects(computers, {} as Projects);
+  await expect(remote.clone("pc", "acme/web", "~/work")).rejects.toThrow(
+    "Update Relay",
+  );
+  expect(call).toHaveBeenCalledTimes(1);
+});
+
+it("clones through the receiving service with the chosen folder and forwards setup calls there", async () => {
+  const { HandoffReceiver } = await import("./receiver");
+  const clone = vi.fn(async (_url: string, into: string) => ({
+    id: "there",
+    name: "Web",
+    path: `${into}/web`,
+    repository: null,
+    added: 0,
+  }));
+  const dispatch = vi.fn(async () => ({
+    cloneFolder: "/srv/projects",
+    home: "/home/remote",
+    recent: [],
+  }));
+  const receiver = new HandoffReceiver({
+    version: () => "0.18.2",
+    dispatch,
+    root: async () => {
+      throw new Error("No repository metadata in this fixture");
+    },
+    adding: {
+      defaultFolder: async () => "/default",
+      clone,
+      addAt: async () => {
+        throw new Error("Not adding a folder in this fixture");
+      },
+    },
+  } as unknown as import("./receiver").ReceiverHost);
+  const call = (
+    method: import("../../shared/remote").ComputerMethod,
+    ...args: unknown[]
+  ) => receiver.handle(method, args, { id: "sender", name: "Laptop" });
+  const computers = {
+    onEvent: () => {},
+    onOnline: () => {},
+    get: () => ({ id: "pc", name: "Studio" }),
+    status: () => "online",
+    list: () => [],
+    connected: async () => ({ call }),
+  } as unknown as Computers;
+  const addRemote = vi.fn(async () => ({ id: "local-record" }));
+  const remote = new RemoteProjects(computers, {
+    addRemote,
+  } as unknown as Projects);
+  expect(await remote.clone("pc", "acme/web", "/srv/projects")).toMatchObject({
+    done: true,
+    project: { id: "local-record" },
+  });
+  expect(clone).toHaveBeenCalledWith(
+    "acme/web",
+    "/srv/projects",
+    expect.any(Function),
+  );
+  expect(addRemote).toHaveBeenCalledWith(
+    { id: "pc", name: "Studio" },
+    expect.objectContaining({ id: "there", path: "/srv/projects/web" }),
+  );
+  expect(await remote.ask("pc", "addingStart")).toMatchObject({
+    home: "/home/remote",
+  });
+  expect(dispatch).toHaveBeenCalledWith("addingStart", []);
+  await remote.ask("pc", "folderPreview", "/srv/projects/web");
+  expect(dispatch).toHaveBeenCalledWith("folderPreview", ["/srv/projects/web"]);
+  await expect(remote.clone("pc", "acme/web", "relative")).rejects.toThrow(
+    "absolute folder",
+  );
+  expect(clone).toHaveBeenCalledTimes(1);
+});

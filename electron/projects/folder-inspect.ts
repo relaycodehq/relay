@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import type {
   FolderEntry,
   FolderInfo,
+  FolderPreview,
   LinkedFolder,
   LinkSuggestion,
   Project,
@@ -54,6 +55,24 @@ export async function listFolders(dir: string): Promise<FolderEntry[]> {
       repository: await isRepository(join(real, name)),
     })),
   );
+}
+
+/** Show both folders and files without walking the tree or reading file contents. */
+export async function folderPreview(dir: string): Promise<FolderPreview> {
+  const entries = (await readdir(expandHome(dir), { withFileTypes: true }))
+    .filter((e) => !e.name.startsWith(".") && e.name !== "node_modules")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const folders = entries.filter((e) => e.isDirectory());
+  const files = entries.filter((e) => !e.isDirectory());
+  const folderCount = Math.min(folders.length, Math.max(3, 6 - files.length));
+  const sample = [
+    ...folders.slice(0, folderCount),
+    ...files.slice(0, 6 - folderCount),
+  ];
+  return {
+    entries: sample.map((e) => ({ name: e.name, directory: e.isDirectory() })),
+    remaining: entries.length - sample.length,
+  };
 }
 
 /** Repositories beside `path` in its parent folder, like a backend next to its frontend. */

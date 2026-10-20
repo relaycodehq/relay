@@ -185,7 +185,7 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 28;
+export const remoteBridgeVersion = 29;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -297,6 +297,8 @@ export const setupBridge = 27;
  * (`projectTerminal`, `terminalCall`, `terminal` events).
  */
 export const remoteProjectsBridge = 28;
+/** Project setup on a paired computer, including a chosen clone destination. */
+export const remoteAddingBridge = 29;
 
 /** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
 export interface PhonePalette {
@@ -612,8 +614,9 @@ export interface RemoteApi {
    * Clones `url` into the folder clones go to here and adds it as a project,
    * or joins the clone of it under way; answers within seconds with how far
    * it is, so the caller asks again until it's done. From `cloneBridge`.
+   * `into` chooses the parent folder from `remoteAddingBridge`.
    */
-  cloneProject(url: string): Promise<CloneProgress>;
+  cloneProject(url: string, into?: string): Promise<CloneProgress>;
   /**
    * Starts an agent here, in a Scratchpad thread of its own, that gets the
    * repository cloned and added where the clone failed; the same id again
@@ -728,10 +731,15 @@ export type TerminalOp = (typeof terminalOps)[number];
 export type HandoffPart = "thread" | "bundle";
 /**
  * Calls about a paired computer itself, not one of its projects, that a
- * project living there needs from it (`computerCall`): its agents and their
- * models.
+ * project living there needs from it (`computerCall`): project setup, its
+ * agents and their models.
  */
 export const computerCallMethods = [
+  "folderPreview",
+  "addingStart",
+  "githubRepos",
+  "createProject",
+  "cancelProjectAdding",
   "agentModels",
   "agentVersions",
   "checkAgentVersions",
@@ -880,6 +888,9 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
  * request twice; they get `slowRemoteMethods`' time.
  */
 const slowForwardedMethods = new Set<string>([
+  "addingStart",
+  "githubRepos",
+  "createProject",
   "projectGitAction",
   "projectCommitMessage",
   "projectPlanCommitSplit",

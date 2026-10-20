@@ -14,6 +14,7 @@ import type {
   ComputerFolders,
   TerminalOp,
 } from "../../shared/remote";
+import { remoteAddingBridge } from "../../shared/remote";
 import { draftTerminalKey, terminalSlotKey } from "../../shared/terminals";
 import type { Api } from "../../shared/types";
 import type { Projects } from "../projects/projects";
@@ -74,6 +75,35 @@ export class RemoteProjects {
       },
     );
   }
+  /** Keep a newly created project here with the identity of its actual computer. */
+  adopt(computerId: string, project: Project) {
+    const { id, name } = this.computers.get(computerId);
+    return this.projects.addRemote({ id, name }, project);
+  }
+  async clone(computerId: string, url: string, into: string) {
+    const answer = await this.call(computerId, async (client) => {
+      const info = await client.call("computerInfo");
+      if (info.bridge < remoteAddingBridge)
+        throw new Error(
+          "Update Relay on the other computer in Settings → Computers, then try again.",
+        );
+      return client.call("cloneProject", url, into);
+    });
+    if (!answer.done) return answer;
+    const { id, name } = this.computers.get(computerId);
+    return {
+      done: true as const,
+      project: await this.projects.addRemote(
+        { id, name },
+        {
+          id: answer.project.id,
+          name: answer.project.name,
+          path: answer.project.folder!,
+          plain: answer.project.plain,
+        },
+      ),
+    };
+  }
   /** An agent's models as the computer's own copy of it lists them. */
   agentModels(computerId: string, provider: AgentProvider) {
     return this.ask(computerId, "agentModels", provider) as ReturnType<
@@ -86,9 +116,24 @@ export class RemoteProjects {
     method: M,
     ...args: Parameters<Api[M]>
   ) {
-    return this.call(computerId, (client) =>
-      client.call("computerCall", method, args),
-    ) as ReturnType<Api[M]>;
+    return this.call(computerId, async (client) => {
+      if (
+        [
+          "folderPreview",
+          "addingStart",
+          "githubRepos",
+          "createProject",
+          "cancelProjectAdding",
+        ].includes(method)
+      ) {
+        const info = await client.call("computerInfo");
+        if (info.bridge < remoteAddingBridge)
+          throw new Error(
+            "Update Relay on the other computer in Settings → Computers, then try again.",
+          );
+      }
+      return client.call("computerCall", method, args);
+    }) as ReturnType<Api[M]>;
   }
   /** Whether the call is about a project on another computer, by its id. */
   forwards(method: string, args: unknown[]) {

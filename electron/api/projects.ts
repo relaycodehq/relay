@@ -20,11 +20,12 @@ import {
 import {
   checkNewLinks,
   expandHome,
+  folderPreview,
   inspectFolder,
   linkSuggestions,
   listFolders,
 } from "../projects/folder-inspect";
-import { newProjectSchema } from "../../shared/projects";
+import { folderInputSchema, newProjectSchema } from "../../shared/projects";
 import { githubRepos } from "../project-add";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { isSourceControlOn } from "../../shared/source-control";
@@ -60,13 +61,6 @@ import {
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
-/** A folder on disk as typed: absolute, or from `~`. */
-const folderInputSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(4096)
-  .refine((v) => /^(~|\/|[a-zA-Z]:[\\/])/.test(v) && !v.includes("\0"));
 /** Where a file call works: a workspace, or the folder of a file outside every project. */
 const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
 
@@ -213,8 +207,13 @@ export function projectHandlers(ctx: ApiContext) {
         : projects.add(result.filePaths[0], ctx.login.client);
     },
     inspectFolder: takes([folderInputSchema], inspectFolder),
-    listFolders: takes([folderInputSchema], (dir) =>
-      listFolders(dir).catch(() => []),
+    listFolders: takes([folderInputSchema], (dir) => listFolders(dir)),
+    folderPreview: takes(
+      [folderInputSchema, computerIdSchema],
+      (dir, computerId) =>
+        computerId
+          ? remoteProjects(ctx).ask(computerId, "folderPreview", dir)
+          : folderPreview(dir),
     ),
     chooseFolder: takes([z.string().max(200)], async (title) => {
       const result = await dialog.showOpenDialog(ctx.window.caller()!, {
@@ -226,7 +225,11 @@ export function projectHandlers(ctx: ApiContext) {
     linkSuggestions: takes([idSchema], async (id) =>
       linkSuggestions(projects.get(id), await projects.list(ctx.login.client)),
     ),
-    addingStart: () => ctx.projectAdding.start(),
+    addingStart: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "addingStart")
+        : ctx.projectAdding.start(),
+    ),
     addProjectAt: takes(
       [folderInputSchema, z.boolean().optional()],
       (path, setUpGit) => ctx.projectAdding.addAt(path, setUpGit),
@@ -236,11 +239,28 @@ export function projectHandlers(ctx: ApiContext) {
       (remote, into) => ctx.projectAdding.clone(remote, into),
     ),
     createProject: takes(
-      [newProjectSchema.extend({ location: folderInputSchema })],
-      (spec) => ctx.projectAdding.create(spec),
+      [
+        newProjectSchema.extend({ location: folderInputSchema }),
+        computerIdSchema,
+      ],
+      async (spec, computerId) =>
+        computerId
+          ? remoteProjects(ctx).adopt(
+              computerId,
+              await remoteProjects(ctx).ask(computerId, "createProject", spec),
+            )
+          : ctx.projectAdding.create(spec),
     ),
-    cancelProjectAdding: () => ctx.projectAdding.cancel(),
-    githubRepos: () => githubRepos(),
+    cancelProjectAdding: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "cancelProjectAdding")
+        : ctx.projectAdding.cancel(),
+    ),
+    githubRepos: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "githubRepos")
+        : githubRepos(),
+    ),
     createScratch: () =>
       projects.scratch(join(app.getPath("userData"), "Scratchpad"), (id) =>
         projectChats.list(id).some((c) => !chatIsEmpty(c)),
