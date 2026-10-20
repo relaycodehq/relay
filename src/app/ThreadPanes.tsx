@@ -97,8 +97,11 @@ export function ThreadChanges({
   agentRunning?: boolean;
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
-  const editFile = (path: string, line?: number) =>
-    opens.openInEditor({ path, line, directory: false });
+  // Editing takes over from the diff, so Changes steps aside for Files.
+  const editFile = (path: string, line?: number) => {
+    if (opens.openInEditor({ path, line, directory: false }))
+      opens.togglePane("changes");
+  };
   const reviewFile = pull
     ? `relay-project-review-file:${project.id}:${pull.number}`
     : "";

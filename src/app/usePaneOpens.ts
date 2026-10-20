@@ -65,10 +65,12 @@ export function usePaneOpens(
     view.showTurn(target);
     panes.show("changes");
   }
+  /** Shows `target` in Files; false when an unsaved edit holds the view. */
   function openInEditor(target: FileTarget) {
-    if (lock.blocked()) return;
+    if (lock.blocked()) return false;
     fileOpens.send(target);
     openSurface("files");
+    return true;
   }
   function revealChange(target: ProjectFileLink) {
     changeReveals.send(target);
@@ -79,7 +81,7 @@ export function usePaneOpens(
   // thread), or opens in Files when it has none. A name that fits several
   // files lists them in Files. A file outside the project opens in Files too.
   async function openChatFile(target: ProjectFileLink) {
-    if (target.outside) return openInEditor(target);
+    if (target.outside) return void openInEditor(target);
     if (pull) return revealChange(target);
     const id = folder.where;
     try {
@@ -90,7 +92,7 @@ export function usePaneOpens(
           );
       const changed = changedTarget(target, changes);
       if (changed) return revealChange(changed);
-      if (target.directory) return openInEditor(target);
+      if (target.directory) return void openInEditor(target);
       const found = matchLink(
         target,
         await qc.query({

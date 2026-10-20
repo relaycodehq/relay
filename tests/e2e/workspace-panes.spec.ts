@@ -114,7 +114,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    // Changes open in the Files pane, next to the diff.
+    // A change opens in the Files pane, which takes the diff's place.
     await page.locator('.change-select[aria-label$=" src/a.ts"]').click();
     await page
       .getByRole("button", { name: "Open in editor", exact: true })
@@ -126,6 +126,8 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       }),
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await order()).toEqual(["chat", "panel"]);
+    await toggle("Changes").click();
     expect(await order()).toEqual(["chat", "changes", "panel"]);
 
     // Drag a header toggle to reorder the panes; the order and the open
