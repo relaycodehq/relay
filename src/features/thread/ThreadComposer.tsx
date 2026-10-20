@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, type ReactNode, type Ref } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { GitBranch, X } from "lucide-react";
+import { X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
@@ -35,7 +35,7 @@ import { StartedChip } from "../agent-turn/StartedThreads";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
-import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { WorktreeBranch } from "../changes/WorktreeBranch";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
@@ -147,17 +147,12 @@ function ThreadBranch({
   if (worktree.naming) return null;
   if (worktree.inWorktree)
     return (
-      <span
-        className="composer-branch-trigger workspace-trigger static worktree-branch"
-        title="This thread's worktree branch"
-      >
-        <GitBranch size={13} />
-        {worktree.branch ? (
-          <MiddleTruncate text={worktree.branch} kind="branch" />
-        ) : (
-          <span>Detached HEAD</span>
-        )}
-      </span>
+      <WorktreeBranch
+        key={worktree.where}
+        where={worktree.where}
+        branch={worktree.branch}
+        held={disabled || worktree.selectionDisabled}
+      />
     );
   return picker;
 }

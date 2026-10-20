@@ -222,7 +222,9 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     await page.getByRole("button", { name: "More Git actions" }).click();
     await page.getByRole("menuitem", { name: "Commit", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Commit", exact: true });
-    await sheet.getByLabel("Commit message").fill("Worktree change");
+    await sheet
+      .getByRole("textbox", { name: "Commit message", exact: true })
+      .fill("Worktree change");
     await sheet.getByRole("button", { name: "Commit", exact: true }).click();
     await expect(sheet).toBeHidden();
     expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Worktree change");

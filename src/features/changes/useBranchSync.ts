@@ -16,23 +16,24 @@ export const everythingButFetch = {
 };
 
 /**
- * What it takes to bring a project's branch level with its upstream: pull,
+ * What it takes to bring a workspace's branch level with its upstream: pull,
  * push or rebase, whichever it needs, and a rebase's conflict when it stopped.
+ * `where` is the checkout or thread worktree workspace id.
  */
-export function useBranchSync(projectId: string) {
+export function useBranchSync(where: string) {
   const qc = useQueryClient();
-  const treeKey = workingTreeKey(projectId);
+  const treeKey = workingTreeKey(where);
   const tree = useQuery({
     queryKey: treeKey,
-    queryFn: () => api.projectWorkingTree(projectId),
+    queryFn: () => api.projectWorkingTree(where),
   });
   // Keep "behind" honest: refresh the upstream on focus and every few minutes.
   const remote = useQuery({
-    queryKey: ["project-fetch", projectId],
+    queryKey: ["project-fetch", where],
     queryFn: async () => {
       qc.setQueryData<WorkingTree>(
         treeKey,
-        await api.projectGitAction(projectId, { kind: "fetch" }),
+        await api.projectGitAction(where, { kind: "fetch" }),
       );
       return Date.now();
     },
@@ -72,11 +73,11 @@ export function useBranchSync(projectId: string) {
     setSyncError(undefined);
     const run = async (current: WorkingTree) => {
       if (sync !== "rebase")
-        return api.projectGitAction(projectId, {
+        return api.projectGitAction(where, {
           kind: sync,
           revision: current.revision,
         });
-      const result = await api.projectRebase(projectId, current.head);
+      const result = await api.projectRebase(where, current.head);
       if (!result.rebased) {
         setConflict(result);
         setConflictOpen(true);

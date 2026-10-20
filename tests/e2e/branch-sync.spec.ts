@@ -71,11 +71,8 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
       await window.relay.connect(url, "test-token");
       await window.relay.addProject();
     }, fixture.serverUrl);
-    await page.keyboard.press(
-      process.platform === "darwin" ? "Meta+N" : "Control+N",
-    );
     await expect(
-      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+      page.getByRole("button", { name: "review", exact: true }),
     ).toHaveText("review");
 
     // The background fetch surfaces the remote commit without user action.
