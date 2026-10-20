@@ -19,9 +19,12 @@ export class GithubLogin {
     const credential = this.credentials.read();
     if (!this.client || this.credential !== credential) {
       this.credential = credential;
-      const next = credential.then((value) =>
-        GitHub.connect(this.fetchRequest, value),
-      );
+      const next = credential.then(async (value) => {
+        // An anonymous CI credential is useful, but a PR sign-in recheck must
+        // be able to discover an external login on its next operation.
+        if (!value.token) value.rejected();
+        return GitHub.connect(this.fetchRequest, value);
+      });
       this.client = next;
       next.catch(() => {
         if (this.client === next) this.client = null;

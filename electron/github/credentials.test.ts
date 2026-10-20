@@ -91,3 +91,13 @@ it.each([403, 429, 500])(
     expect(s.source).toHaveBeenCalledTimes(1);
   },
 );
+
+it("picks up an external login immediately after PRs found no CLI sign-in", async () => {
+  const s = services();
+  s.state.token = "";
+  expect(await s.login.account()).toBeNull();
+  s.state.token = "b";
+  expect((await s.login.account())?.user.login).toBe("b");
+  expect(await s.ci.defaultBranch(repo)).toBe("b");
+  expect(s.source).toHaveBeenCalledTimes(2);
+});
