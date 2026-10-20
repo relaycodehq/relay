@@ -1,43 +1,17 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, readFile, realpath, rm } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
-import { execFileSync } from "node:child_process";
+import {
+  chats,
+  projectId,
+  useProjectChats,
+} from "../../tests/fixtures/project-chats-harness";
+import { expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { Store } from "../app/store";
-import { Projects } from "../projects/projects";
-import { ProjectChats } from "./index";
-import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
-import { fakeCli } from "../../tests/fixtures/fake-cli";
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
   findExecutable: vi.fn(),
 }));
 
-let root: string, chats: ProjectChats, projectId: string;
-beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-goal-chat-")));
-  const repo = join(root, "repo");
-  await mkdir(repo);
-  execFileSync("git", ["init", "--quiet", repo]);
-  vi.mocked(findExecutable).mockResolvedValue(
-    await fakeCli(
-      join(root, "codex"),
-      await readFile(resolve("tests/fixtures/codex-goal.cjs"), "utf8"),
-    ),
-  );
-  const store = new Store(join(root, "state"));
-  await store.load();
-  const projects = new Projects(store);
-  projectId = (await projects.add(repo, null)).id;
-  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
-});
-afterEach(async () => {
-  await chats?.dispose();
-  vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true, maxRetries: 20 });
-});
+useProjectChats({ cli: "codex-goal.cjs" });
 
 const input = (body: string) => ({
   id: randomUUID(),

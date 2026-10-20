@@ -12,6 +12,7 @@ import { defaultAISettings } from "../../shared/settings";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import { fakeCli } from "./fake-cli";
 export let root: string,
+  repo: string,
   store: Store,
   projects: Projects,
   chats: ProjectChats,
@@ -73,17 +74,24 @@ export const waitForSummary = (
     waitCleanups.add(cleanup);
     check();
   });
-export function useProjectChats() {
+export function useProjectChats({
+  cli = "room-agent.cjs",
+  prepare,
+}: {
+  cli?: string;
+  prepare?: (repo: string) => Promise<void>;
+} = {}) {
   beforeEach(async () => {
     root = await realpath(await mkdtemp(join(tmpdir(), "relay-project-chat-")));
-    const repo = join(root, "repo");
+    repo = join(root, "repo");
     await mkdir(repo);
     execFileSync("git", ["init", "--quiet", repo]);
-    const cli = await fakeCli(
+    await prepare?.(repo);
+    const executable = await fakeCli(
       join(root, "codex"),
-      await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+      await readFile(resolve("tests/fixtures", cli), "utf8"),
     );
-    vi.mocked(findExecutable).mockResolvedValue(cli);
+    vi.mocked(findExecutable).mockResolvedValue(executable);
     vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
     // Quick turns; a test that watches one run sets its own length.
     vi.stubEnv("RELAY_AGENT_TURN_MS", "20");

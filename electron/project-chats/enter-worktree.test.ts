@@ -1,26 +1,20 @@
+import {
+  root,
+  repo,
+  chats,
+  projectId,
+  useProjectChats,
+} from "../../tests/fixtures/project-chats-harness";
 // An agent moves its thread into a worktree through Relay's tool, the way a
 // real one does: the fake Codex calls move_to_worktree over the MCP server
 // mid-answer, then edits in the folder it got back.
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  mkdtemp,
-  mkdir,
-  writeFile,
-  readFile,
-  rm,
-  realpath,
-} from "node:fs/promises";
+import { writeFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { Store } from "../app/store";
-import { Projects } from "../projects/projects";
-import { ProjectChats } from "./index";
-import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
-import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { StartedThreads } from "../started-threads";
 import { serveRelayTools, useRelayMcp, verifyRelayToken } from "../relay-mcp";
 vi.mock("../platform/executables", async (actual) => ({
@@ -29,41 +23,27 @@ vi.mock("../platform/executables", async (actual) => ({
 }));
 
 const secret = "c".repeat(64);
-let root: string,
-  repo: string,
-  chats: ProjectChats,
-  projectId: string,
-  closeTools: () => Promise<void>;
+let closeTools: () => Promise<void>;
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" });
 
+useProjectChats({
+  prepare: async () => {
+    git("branch", "-m", "main");
+    await writeFile(join(repo, "README.md"), "Hello\n");
+    git("add", ".");
+    git(
+      "-c",
+      "user.name=T",
+      "-c",
+      "user.email=t@example.invalid",
+      "commit",
+      "-qm",
+      "Initial",
+    );
+  },
+});
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-enter-wt-")));
-  repo = join(root, "repo");
-  await mkdir(repo);
-  execFileSync("git", ["init", "-q", "-b", "main", repo]);
-  await writeFile(join(repo, "README.md"), "Hello\n");
-  git("add", ".");
-  git(
-    "-c",
-    "user.name=T",
-    "-c",
-    "user.email=t@example.invalid",
-    "commit",
-    "-qm",
-    "Initial",
-  );
-  const cli = await fakeCli(
-    join(root, "codex"),
-    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
-  );
-  vi.mocked(findExecutable).mockResolvedValue(cli);
-  vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
-  const store = new Store(join(root, "state"));
-  await store.load();
-  const projects = new Projects(store);
-  projectId = (await projects.add(repo, null)).id;
-  chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   const serving = serveRelayTools(0, {
     verify: (token) => verifyRelayToken(secret, token),
     call: new StartedThreads(chats).handle,
@@ -76,9 +56,6 @@ beforeEach(async () => {
 afterEach(async () => {
   useRelayMcp(undefined);
   await closeTools?.();
-  await chats?.dispose();
-  vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
 
 const input = (body: string) => ({
