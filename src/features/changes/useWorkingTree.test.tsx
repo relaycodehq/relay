@@ -73,14 +73,16 @@ it("keeps same-named checkouts and their diffs separate across hosts and Git wri
     await render("https://github.com");
     await render("https://gitea.example.invalid");
     expect(working.tree?.branch).toBe("https://gitea.example.invalid");
-    await act(async () => working.act({ kind: "push" }));
+    await act(async () =>
+      working.act({ kind: "push", revision: "same-revision" }),
+    );
     expect(working.tree?.branch).toBe("https://gitea.example.invalid:changed");
     await render("https://github.com");
     expect(working.tree?.branch).toBe("https://github.com");
     expect(api.workingTree).toHaveBeenCalledTimes(2);
     expect(api.gitAction).toHaveBeenCalledWith(
       expect.objectContaining({ server: "https://gitea.example.invalid" }),
-      { kind: "push" },
+      { kind: "push", revision: "same-revision" },
     );
   } finally {
     await act(async () => root.unmount());
