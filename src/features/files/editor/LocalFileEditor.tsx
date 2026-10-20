@@ -131,6 +131,7 @@ export default function LocalFileEditor({
         aria-busy={file.loading}
         onKeyDownCapture={editorKeys(view.editor, symbols.at)}
         onPointerDownCapture={view.editable ? undefined : view.startEditing}
+        onPointerDown={view.editable ? view.onPointerDown : undefined}
       >
         {!view.ready ? (
           <Loading text="Comparing…" />
