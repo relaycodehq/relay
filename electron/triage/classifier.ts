@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import { findExecutable, spawnExecutable } from "../platform/executables";
+import { terminate } from "../platform/terminate";
 import { sdk as claudeSdk } from "../agents/claude/project";
 import { agentName } from "../../shared/agents";
 import { TRIAGE_MODEL, type TriageUsage } from "../../shared/triage";
@@ -455,22 +456,10 @@ export async function classifyChanges(
         outputTokens: 0,
         batches: 1,
       };
-      let hardTimer: ReturnType<typeof setTimeout> | undefined;
       const stop = (error: Error) => {
-        if (!hardTimer)
-          hardTimer = setTimeout(() => {
-            try {
-              if (child.pid && process.platform !== "win32")
-                process.kill(-child.pid, "SIGKILL");
-              else child.kill("SIGKILL");
-            } catch {}
-          }, 2000);
-        failed ??= error;
-        try {
-          if (child.pid && process.platform !== "win32")
-            process.kill(-child.pid, "SIGTERM");
-          else child.kill("SIGTERM");
-        } catch {}
+        if (failed) return;
+        failed = error;
+        terminate(child, { group: true });
       };
       const aborted = () => stop(new Error("Analysis cancelled."));
       signal.addEventListener("abort", aborted, { once: true });
@@ -565,7 +554,6 @@ export async function classifyChanges(
       );
       child.on("close", (code) => {
         clearTimeout(timer);
-        clearTimeout(hardTimer);
         signal.removeEventListener("abort", aborted);
         if (line) event(line);
         if (failed) {
