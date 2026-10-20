@@ -168,6 +168,9 @@ export class TurnSends {
       await this.worktrees.refreshAgentWorktrees(chat);
       if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
+      // A review follows its branch to wherever it's checked out first, so
+      // the turn runs there.
+      if (!project.computer) await this.councils.fixing(chat, input);
       const root = project.computer
         ? ""
         : await this.worktrees.root(chat, input.body, active.abort.signal);
@@ -208,7 +211,6 @@ export class TurnSends {
           );
         evidence = await this.evidence(chat, input.selection);
       }
-      await this.councils.fixing(chat, input);
       const user: ChatMessage = {
         id: input.id,
         role: "user",

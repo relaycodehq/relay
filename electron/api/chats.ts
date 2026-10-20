@@ -352,6 +352,11 @@ export function chatHandlers(ctx: ApiContext) {
               title: pull.title,
               base: pull.base.ref,
               headRef: host.headRef(pull),
+              ...(pull.head.ref &&
+              pull.head.repo &&
+              pull.head.repo.full_name === pull.base.repo?.full_name
+                ? { headBranch: pull.head.ref }
+                : {}),
             },
         );
       },

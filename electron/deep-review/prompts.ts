@@ -37,12 +37,22 @@ const fromGit = (scope: ReviewScope) =>
     scope.target.kind === "commit" ||
     branchElsewhere(scope));
 
+/**
+ * The review works in the folder the branch was already checked out in,
+ * where it's worked on as it is now: it may have moved on past the reviewed
+ * head or hold edits not committed yet, which the review doesn't cover.
+ */
+const sharedFolder = (scope: ReviewScope) =>
+  !!scope.checkout && !scope.checkout.made;
+
 /** Says what a review covers, then how to see those changes. */
 function describe(scope: ReviewScope) {
   const t = scope.target;
   const range = `\`git diff ${scope.base} ${scope.head}\``;
   const checkedOut = (what: string) =>
-    `${what} is checked out at ${scope.checkout!.path}, which is where you're working, so the files there are its own. See the changes with ${range}.`;
+    sharedFolder(scope)
+      ? `${what} is checked out at ${scope.checkout!.path}, which is where you're working. It's the branch as it is now, so it may have commits after ${scope.head} or edits not committed yet; those aren't part of this review. See the reviewed changes with ${range}, and where a file differs, read the reviewed version with \`git show ${scope.head}:<path>\`.`
+      : `${what} is checked out at ${scope.checkout!.path}, which is where you're working, so the files there are its own. See the changes with ${range}.`;
   switch (t.kind) {
     case "uncommitted":
       return {
@@ -94,8 +104,12 @@ export function reviewerTask(
     // base-branch review diffs its working directory against the base, so
     // code that isn't checked out there gets Relay's prompt, which reads it
     // from Git. A pull request's base is the branch Relay fetched for it.
+    // Nor does it in a folder the branch is worked on in, whose edits and
+    // later commits aren't the reviewed range.
     const codex: CodexReviewTarget =
-      (fromGit(scope) && t.kind !== "commit") || asked.note
+      (fromGit(scope) && t.kind !== "commit") ||
+      sharedFolder(scope) ||
+      asked.note
         ? { type: "custom", instructions: reviewPrompt(scope, note) }
         : t.kind === "uncommitted"
           ? { type: "uncommittedChanges" }
@@ -171,9 +185,11 @@ function customPrompt(text: string, scope: ReviewScope, focus?: string) {
 function fixesNote(scope: ReviewScope) {
   const c = scope.checkout;
   if (c && !c.made)
-    return ` They go in ${c.path}, where ${c.branch} is checked out; it's your working directory, not this thread's checkout.`;
+    return ` They go in ${c.path}, where ${c.branch} is checked out; it's your working directory, not this thread's checkout. Edits not committed there that aren't yours belong to whoever works on the branch: leave them be.`;
   if (c?.branch)
-    return ` Your working directory, ${c.path}, is a worktree Relay made for this review, detached at the reviewed head. Before a fix request reaches you, Relay checks ${c.branch} out there, so your fixes land on it.`;
+    return ` Your working directory, ${c.path}, is a worktree Relay made for this review on ${c.branch}, so your fixes land on it.`;
+  if (c?.pr)
+    return ` Your working directory, ${c.path}, is a worktree Relay made for this review, detached at the pull request's head. Fixes the user picks from your findings go on a local branch Relay checks out there first; before editing for anything else, check with the user where the fixes should go.`;
   if (c)
     return ` Your working directory, ${c.path}, is a worktree Relay made for this review, detached at the reviewed head, with no local branch. Before editing, check with the user where the fixes should go.`;
   if (branchElsewhere(scope))

@@ -30,10 +30,11 @@ import {
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import {
-  checkOutForFixes,
   discardReviewCheckout,
+  followReviewedBranch,
   openReviewCheckout,
 } from "./checkout";
+import { noteWorkspaceMove } from "../../shared/workspace-moves";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
@@ -106,6 +107,7 @@ export class DeepReviews {
       scope,
       this.host.worktrees,
       chat.id,
+      pull?.headBranch,
     ).catch((e: unknown) => {
       console.warn("Could not check out the reviewed code for review:", e);
       return undefined;
@@ -340,12 +342,51 @@ export class DeepReviews {
   }
 
   /**
-   * Before a fix request in a review whose worktree Relay made, checks the
-   * reviewed branch out there; throws when it can't, so nothing is sent.
+   * Before a message in a review thread, while no reviewer works: the
+   * review follows the reviewed branch to the folder it's checked out in
+   * now, or into a worktree of its own on it, so the lead's fixes land on
+   * the branch. A fix request in a pull request's review gives it a local
+   * branch first. The thread notes the move, and the lead hears of it.
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
-    const checkout = chat.deepReview?.scope.checkout;
-    if (input.fixes?.length && checkout) await checkOutForFixes(checkout);
+    const state = chat.deepReview;
+    const checkout = state?.scope.checkout;
+    if (!state?.scope.head || !checkout || this.reviewing(chat)) return;
+    const next = await followReviewedBranch(
+      await this.host.root(chat.projectId),
+      checkout,
+      {
+        head: state.scope.head,
+        dir: this.host.worktrees,
+        chatId: chat.id,
+        fixing: !!input.fixes?.length,
+      },
+    );
+    if (next === checkout) return;
+    state.scope.checkout = next;
+    if (next.path !== checkout.path) {
+      noteWorkspaceMove(chat, {
+        how: "switched",
+        to: next.path,
+        ...(next.branch ? { branch: next.branch } : {}),
+      });
+      // The lead's session hears it too: its first turn wasn't one that notes what it heard.
+      chat.movedIn = {
+        from: checkout.path,
+        to: next.path,
+        owed: [
+          ...new Set([
+            ...Object.keys(chat.scopeHeard ?? {}),
+            `${state.lead.provider}:main`,
+            ...(input.provider ? [`${input.provider}:main`] : []),
+          ]),
+        ],
+        selected: true,
+      };
+      // Its session started in the old folder.
+      this.host.close(chat.id);
+    }
+    await this.host.touch(chat, state.request);
   }
 
   /**
