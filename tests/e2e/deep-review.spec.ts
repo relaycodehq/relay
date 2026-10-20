@@ -21,11 +21,7 @@ import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 /** Relay with fake Codex and Claude on its PATH. */
-async function launch(
-  root: string,
-  withOpenRouter = false,
-  openCodeQuirk?: string,
-) {
+async function launch(root: string, withOpenRouter = false) {
   const bin = join(root, "bin");
   await mkdir(bin);
   const agent = await readFile(
@@ -33,13 +29,11 @@ async function launch(
     "utf8",
   );
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
-  if (withOpenRouter || openCodeQuirk)
+  if (withOpenRouter)
     await fakeCli(
       join(bin, "opencode"),
-      (await readFile(resolve("tests/fixtures/opencode-server.cjs"), "utf8"))
-        .replaceAll('"zen"', '"openrouter"')
-        .replaceAll('"Zen"', '"OpenRouter"')
-        .replaceAll("zen/", "openrouter/"),
+      await readFile(resolve("tests/fixtures/acp-agent.cjs"), "utf8"),
+      "opencode v2.0.28",
     );
   const env = relayEnv();
   return electron.launch({
@@ -49,13 +43,28 @@ async function launch(
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_AGENT_CAPTURE: join(root, "agent.jsonl"),
       RELAY_AGENT_NO_TITLE: "1",
-      ...(openCodeQuirk ? { RELAY_OPENCODE_QUIRK: openCodeQuirk } : {}),
+      ...(withOpenRouter && {
+        RELAY_ACP_SCENARIO: JSON.stringify({
+          configOptions: [
+            {
+              id: "model",
+              name: "Model",
+              category: "model",
+              type: "select",
+              currentValue: "openrouter/pickle",
+              options: [
+                { value: "openrouter/pickle", name: "openrouter/Pickle" },
+              ],
+            },
+          ],
+        }),
+      }),
     },
   });
 }
 
 /** Relay on a new project whose src/queue.ts has an uncommitted change. */
-async function openProject(withOpenRouter = false, openCodeQuirk?: string) {
+async function openProject(withOpenRouter = false) {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-deep-review-")),
   );
@@ -70,7 +79,7 @@ async function openProject(withOpenRouter = false, openCodeQuirk?: string) {
   git("add", ".");
   git("commit", "-qm", "Start");
   await writeFile(join(repo, "src", "queue.ts"), "export const queue = [1];\n");
-  const app = await launch(root, withOpenRouter, openCodeQuirk);
+  const app = await launch(root, withOpenRouter);
   const page = await app.firstWindow();
   await app.evaluate(({ dialog }, dir) => {
     dialog.showOpenDialog = async () => ({
@@ -87,69 +96,6 @@ async function openProject(withOpenRouter = false, openCodeQuirk?: string) {
     },
   };
 }
-
-test("empty OpenCode reviews show failure and retry instead of Done", async () => {
-  const { page, close } = await openProject(false, "empty-after-tool");
-  try {
-    await page.evaluate(async () => {
-      const [project] = await window.relay.projects();
-      const reviewer = {
-        provider: "opencode",
-        choice: {
-          model: "openrouter/pickle",
-          reasoningEffort: "",
-          fast: false,
-        },
-        prompt: "",
-      };
-      localStorage.setItem(
-        `deep-review-setup:${project!.id}`,
-        JSON.stringify({
-          kind: "uncommitted",
-          base: "",
-          reviewers: [reviewer, reviewer],
-          lead: {
-            provider: "codex",
-            choice: {
-              model: "gpt-5.6-sol",
-              reasoningEffort: "medium",
-              fast: false,
-            },
-          },
-          runChecks: false,
-        }),
-      );
-    });
-    await page.reload();
-    await page
-      .getByRole("button", { name: "Deep review", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Start deep review", exact: true })
-      .click();
-    const panes = page.locator(".deep-review-pane");
-    await expect(panes).toHaveCount(2);
-    // Each offers its own Retry beside the review's Try again.
-    await expect(panes.locator(".deep-review-pane-status")).toHaveText([
-      "Didn't finishRetry",
-      "Didn't finishRetry",
-    ]);
-    await expect(panes.locator(".agent-error-message")).toHaveCount(2);
-    await expect(panes.first()).toContainText(
-      "OpenCode stopped without a final answer",
-    );
-    await expect(panes.first()).toContainText("1 tool call failed");
-    await expect(panes.locator(".deep-review-pane-status.done")).toHaveCount(0);
-    await page.getByRole("button", { name: "Try again", exact: true }).click();
-    await expect(panes.locator(".agent-error-message")).toHaveCount(4);
-    await expect(
-      page.getByRole("button", { name: "Try again", exact: true }),
-    ).toBeEnabled();
-    await screenshot(page, { path: "test-results/opencode-empty-review.png" });
-  } finally {
-    await close();
-  }
-});
 
 test("shares OpenRouter favorites between deep review reviewers and the lead", async () => {
   const { page, close } = await openProject(true);
@@ -215,7 +161,7 @@ test("shares OpenRouter favorites between deep review reviewers and the lead", a
       }),
     ).toBeVisible();
     await screenshot(page, {
-      path: "test-results/deep-review-model-favorites.png",
+      path: join(tmpdir(), "relay-deep-review-model-favorites.png"),
     });
   } finally {
     await close();
@@ -275,7 +221,9 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       page.getByRole("group", { name: "Lead", exact: true }),
     ).toBeVisible();
     await page.getByLabel("What to focus on").fill("the queue");
-    await screenshot(page, { path: "test-results/deep-review-setup.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-setup.png"),
+    });
     await page
       .getByRole("button", { name: "Start deep review", exact: true })
       .click();
@@ -320,13 +268,17 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
     expect(await drawn!.evaluate((el) => el.isConnected)).toBe(true);
     // The reviewers fold away once the lead has reported, and open again.
     await expect(panes).toHaveCount(0);
-    await screenshot(page, { path: "test-results/deep-review-findings.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-findings.png"),
+    });
     await page.getByRole("button", { name: /Council/ }).click();
     await expect(panes).toHaveCount(2);
     await expect(panes.nth(1)).toContainText(
       "Queue reorder can drop a message",
     );
-    await screenshot(page, { path: "test-results/deep-review-council.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-council.png"),
+    });
     await page.getByRole("button", { name: /Council/ }).click();
 
     await report
@@ -336,7 +288,9 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       page.getByText("Fix this finding from the review", { exact: false }),
     ).toBeVisible();
     await expect(report.getByLabel("Fixed")).toBeVisible({ timeout: 20000 });
-    await screenshot(page, { path: "test-results/deep-review-fixed.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-fixed.png"),
+    });
     // The next review starts without this one's focus.
     await page
       .getByRole("button", { name: "New thread", exact: true })
@@ -612,7 +566,9 @@ test("follow-up findings get a fresh report and fix controls after the old batch
     ).toBeEnabled();
     await expect(page.locator(".project-message.assistant pre")).toHaveCount(0);
     await fresh.scrollIntoViewIfNeeded();
-    await screenshot(page, { path: "test-results/deep-review-followup.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-followup.png"),
+    });
     await page.reload();
     await expect(reports).toHaveCount(2);
     await fresh.getByRole("checkbox").nth(1).uncheck();
@@ -622,7 +578,7 @@ test("follow-up findings get a fresh report and fix controls after the old batch
     await expect(fresh.getByLabel("Fixed")).toHaveCount(2, { timeout: 20000 });
     await expect(old.getByLabel("Fixed")).toHaveCount(1);
     await screenshot(page, {
-      path: "test-results/deep-review-followup-fixed.png",
+      path: join(tmpdir(), "relay-deep-review-followup-fixed.png"),
     });
   } finally {
     await close();
@@ -674,10 +630,12 @@ test("a reviewer runs the prompt you typed, and the setup waits by Start next ti
       page.getByRole("listbox", { name: "Codex prompts" }),
     ).toBeVisible();
     await screenshot(page, {
-      path: "test-results/deep-review-prompt-menu.png",
+      path: join(tmpdir(), "relay-deep-review-prompt-menu.png"),
     });
     await second.fill("Only look for dropped messages in the queue");
-    await screenshot(page, { path: "test-results/deep-review-prompt.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-prompt.png"),
+    });
     await page
       .getByRole("button", { name: "Start deep review", exact: true })
       .click();
@@ -706,7 +664,9 @@ test("a reviewer runs the prompt you typed, and the setup waits by Start next ti
     await expect(shown).not.toHaveText("Naming…", { timeout: 20000 });
     await page.getByRole("button", { name: "All review setups" }).click();
     await expect(page.locator(".deep-review-setups-row")).toHaveCount(1);
-    await screenshot(page, { path: "test-results/deep-review-setups.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-setups.png"),
+    });
   } finally {
     await close();
   }
@@ -787,7 +747,9 @@ test("a deep review set up and left waits in Activity as a draft", async () => {
     await page.reload();
     await expect(head).toHaveText(other);
     await expect(page.getByLabel("Prompt for reviewer 2")).toHaveCount(0);
-    await screenshot(page, { path: "test-results/deep-review-draft.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-deep-review-draft.png"),
+    });
 
     // So does Deep review, rather than starting over.
     await page.keyboard.press(

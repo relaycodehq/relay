@@ -12,7 +12,6 @@ import { AgentHosts } from "../agent-host/client";
 import {
   hostAgents,
   loadRegistryAgents,
-  setOpenCodeEnvRoot,
   watchSavedSignIns,
 } from "../agents";
 import {
@@ -178,7 +177,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   setLinkedAgents(store.get().agentPaths ?? {});
   setOwnAgentsDir(join(home, "agent-clis"));
   setProfilesRoot(join(home, "agent-accounts"));
-  setOpenCodeEnvRoot(join(home, "opencode"));
   setPastesRoot(join(home, "pastes"));
   void sweepPastes([
     join(home, "project-chats"),

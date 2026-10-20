@@ -20,7 +20,6 @@ import {
   codexMetaSchema,
   reattachCodexSessions,
 } from "./codex/codex-connection";
-import { reattachOpenCodeServer } from "./opencode/server";
 import { cursorMetaSchema, reattachCursorSessions } from "./cursor/connection";
 import {
   hostedMetaSchema,
@@ -343,17 +342,12 @@ describe("saved sessions from another version of Relay", () => {
     const claude = found({
       meta: { signature: "s", skipsPermissions: false, options: { cwd: 5 } },
     });
-    const opencode = found({
-      kind: "process",
-      meta: { provider: "opencode", url: "http://127.0.0.1:1" },
-    });
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    reattachWith(codex, cursor, claude, opencode);
+    reattachWith(codex, cursor, claude);
     expect(await reattachCodexSessions(() => true)).toEqual([]);
     expect(await reattachCursorSessions(() => true)).toEqual([]);
     expect(await reattachClaudeSessions(() => true, vi.fn())).toEqual([]);
-    expect(await reattachOpenCodeServer(() => true)).toEqual([]);
-    for (const session of [codex, cursor, claude, opencode])
+    for (const session of [codex, cursor, claude])
       expect(session.close).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("can't read"));
   });

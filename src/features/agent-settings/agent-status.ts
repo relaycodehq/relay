@@ -91,8 +91,8 @@ export function agentNote(agent: AgentVersion) {
   return undefined;
 }
 
-/** OpenCode 1 runs through a server API that 2 dropped; Relay keeps it only until 2 is everywhere. */
-export const isDeprecated = (agent: AgentVersion) =>
+/** Relay requires OpenCode 2 or later. */
+export const needsUpgrade = (agent: AgentVersion) =>
   !notLookedFor(agent) &&
   agent.provider === "opencode" &&
   !!agent.current &&

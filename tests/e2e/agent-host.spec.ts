@@ -67,6 +67,7 @@ async function restartable(
     await fakeCli(
       join(bin, name),
       await readFile(resolve("tests/fixtures", fixture), "utf8"),
+      name === "opencode" ? "opencode v2.0.28" : "1.0.0",
     );
   let entry = "tests/fixtures/launch.cjs";
   if (extra.RELAY_DEV_STALE) {
@@ -411,17 +412,39 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
   const capture = join(root, "opencode.jsonl");
   const relay = await restartable(
     {
-      opencode: "opencode-server.cjs",
+      opencode: "acp-agent.cjs",
       codex: "room-agent.cjs",
       claude: "room-agent.cjs",
     },
-    { RELAY_OPENCODE_CAPTURE: capture },
+    {
+      RELAY_ACP_LOG: capture,
+      RELAY_ACP_SCENARIO: JSON.stringify({
+        turn: [
+          {
+            ask: {
+              toolCall: {
+                toolCallId: "edit",
+                kind: "edit",
+                title: "Write notes.md",
+              },
+              options: [{ optionId: "once", name: "Once", kind: "allow_once" }],
+            },
+          },
+          {
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: "Wrote notes.md." },
+            },
+          },
+        ],
+      }),
+    },
   );
   try {
     await relay.send({
       body: "@opencode Write notes.md",
       provider: "opencode",
-      choice: { model: "zen/pickle", fast: false, reasoningEffort: "" },
+      choice: { model: "", fast: false, reasoningEffort: "" },
       runtimeMode: "approval-required",
     });
     const asked = async () =>
@@ -450,12 +473,19 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    const thread = (await relay.state()).sessions?.opencode?.thread;
     expect(
-      calls.filter((c) => c.path === `/session/${thread}/prompt_async`),
+      calls.filter(
+        (c) =>
+          c.method === "session/prompt" &&
+          c.params.prompt.some((p: { text?: string }) =>
+            p.text?.startsWith("My request: Write notes.md"),
+          ),
+      ),
     ).toHaveLength(1);
-    expect(calls.find((c) => c.path.startsWith("/permission/"))?.body).toEqual({
-      reply: "once",
+    expect(
+      calls.find((c) => c.result?.outcome?.outcome === "selected")?.result,
+    ).toEqual({
+      outcome: { outcome: "selected", optionId: "once" },
     });
   } finally {
     await relay.dispose();

@@ -106,7 +106,7 @@ desktop UI in its feature folder.
 Read these with `git show <commit>`; historical paths may predate today's layout.
 
 Test with a fake peer like `tests/fixtures/acp-agent.cjs`,
-`tests/fixtures/opencode-server.cjs` or `tests/fixtures/cursor-sdk.mjs`. Cover
+or `tests/fixtures/cursor-sdk.mjs`. Cover
 streaming, session resume, cancellation, denied tools, malformed events and
 supported jobs. For hosted work, check restart/reattach without duplicate
 prompts. Add a composer flow like `tests/e2e/opencode.spec.ts` or

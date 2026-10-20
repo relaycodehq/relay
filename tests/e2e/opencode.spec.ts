@@ -1,5 +1,10 @@
 import { screenshot } from "../fixtures/screenshot";
-import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -16,10 +21,9 @@ import { openCodeAuthFixture } from "../fixtures/opencode-auth";
 
 /**
  * Relay with fake Codex, Claude and OpenCode on PATH, and a Git project added.
- * OpenCode 1 is a fake `opencode serve`; OpenCode 2 a fake ACP server playing
- * `acp`, the scenario tests/fixtures/acp-agent.cjs reads.
+ * OpenCode is an ACP server playing the supplied scenario.
  */
-async function launchWithOpenCode(acp?: Record<string, unknown>) {
+async function launchWithOpenCode(acp: Record<string, unknown>) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-opencode-")));
   const bin = join(root, "bin"),
     capture = join(root, "opencode.jsonl");
@@ -31,15 +35,8 @@ async function launchWithOpenCode(acp?: Record<string, unknown>) {
   for (const name of ["codex", "claude"]) await fakeCli(join(bin, name), agent);
   await fakeCli(
     join(bin, "opencode"),
-    await readFile(
-      resolve(
-        acp
-          ? "tests/fixtures/acp-agent.cjs"
-          : "tests/fixtures/opencode-server.cjs",
-      ),
-      "utf8",
-    ),
-    acp ? "opencode v2.0.28" : "1.19.0",
+    await readFile(resolve("tests/fixtures/acp-agent.cjs"), "utf8"),
+    "opencode v2.0.28",
   );
   const env = relayEnv();
   const app = await electron.launch({
@@ -47,11 +44,8 @@ async function launchWithOpenCode(acp?: Record<string, unknown>) {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_OPENCODE_CAPTURE: capture,
-      ...(acp && {
-        RELAY_ACP_SCENARIO: JSON.stringify(acp),
-        RELAY_ACP_LOG: capture,
-      }),
+      RELAY_ACP_SCENARIO: JSON.stringify(acp),
+      RELAY_ACP_LOG: capture,
     },
   });
   const page = await app.firstWindow();
@@ -82,160 +76,6 @@ async function launchWithOpenCode(acp?: Record<string, unknown>) {
   });
   return { app, page, root, capture };
 }
-
-test("talks to OpenCode from the composer: picks its model, answers its ask, keeps the thread", async () => {
-  test.setTimeout(90000);
-  const { app, page, root, capture } = await launchWithOpenCode();
-  try {
-    await page.reload();
-    await page
-      .getByRole("button", { name: "Choose model and provider" })
-      .click();
-    await page
-      .getByRole("toolbar", { name: "Model providers" })
-      .getByRole("button", { name: "OpenCode", exact: true })
-      .click();
-    const pickle = page.getByRole("option", { name: "Pickle" });
-    await expect(pickle).toBeVisible();
-    await screenshot(page, { path: "test-results/opencode-picker.png" });
-    await pickle.click();
-    await expect(
-      page.getByRole("button", { name: "Choose model and provider" }),
-    ).toHaveText(/Pickle/);
-    // OpenCode lists the model's variants as reasoning efforts.
-    await page
-      .getByRole("combobox", { name: "Reasoning effort", exact: true })
-      .click();
-    await page.getByRole("option", { name: "High", exact: true }).click();
-    await page
-      .getByRole("combobox", { name: "Runtime mode", exact: true })
-      .click();
-    await page.getByRole("option", { name: /Supervised/ }).click();
-
-    await page.getByLabel("Message project").fill("Write notes.md");
-    await page
-      .getByRole("button", { name: "Send message", exact: true })
-      .click();
-    const approval = page.getByRole("region", {
-      name: "Allow these file changes?",
-    });
-    await expect(approval).toBeVisible();
-    await expect(approval).toContainText("+hello");
-    await screenshot(page, { path: "test-results/opencode-approval.png" });
-    await approval.getByRole("button", { name: "Once", exact: true }).click();
-    await expect(page.getByText("Wrote notes.md.")).toBeVisible();
-    const answer = page.getByRole("article", { name: "opencode answer" });
-    await expect(answer.locator("header strong")).toHaveText("OpenCode");
-    // OpenCode names the thread itself, from the request alone.
-    await expect(
-      page.getByRole("button", { name: /^Notes file/ }).first(),
-    ).toBeVisible();
-    await screenshot(page, { path: "test-results/opencode-answer.png" });
-
-    const calls = (await readFile(capture, "utf8"))
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line));
-    const prompts = calls.filter((c) => c.path.endsWith("/prompt_async"));
-    const titling = prompts.filter((c) =>
-      c.body.parts[0].text.startsWith("Generate a short title"),
-    );
-    expect(titling).toHaveLength(1);
-    expect(titling[0].directory).toMatch(/relay-helper-/);
-    expect(titling[0].body.parts[0].text).toContain("Write notes.md");
-    expect(titling[0].body.parts[0].text).not.toContain('"answer"');
-    expect(prompts.find((c) => !titling.includes(c))?.body).toMatchObject({
-      model: { providerID: "zen", modelID: "pickle" },
-      variant: "high",
-    });
-    expect(calls.find((c) => c.path.startsWith("/permission/"))?.body).toEqual({
-      reply: "once",
-    });
-
-    // The thread remembers its agent and model after a reload.
-    await page.reload();
-    await expect(page.getByText("Wrote notes.md.")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Choose model and provider" }),
-    ).toHaveText(/Pickle/);
-  } finally {
-    await app.close();
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("refreshing OpenCode's models restarts it, once the user agrees to interrupt its running thread, which carries on after", async () => {
-  test.setTimeout(90000);
-  const { app, page, root, capture } = await launchWithOpenCode();
-  try {
-    await page.reload();
-    const picker = page.getByRole("button", {
-      name: "Choose model and provider",
-    });
-    const openOpenCode = async () => {
-      await picker.click();
-      await page
-        .getByRole("toolbar", { name: "Model providers" })
-        .getByRole("button", { name: "OpenCode", exact: true })
-        .click();
-    };
-    await openOpenCode();
-    await page.getByRole("option", { name: "Pickle" }).click();
-    await page
-      .getByRole("combobox", { name: "Runtime mode", exact: true })
-      .click();
-    await page.getByRole("option", { name: /Supervised/ }).click();
-    await page.getByLabel("Message project").fill("Write notes.md");
-    await page
-      .getByRole("button", { name: "Send message", exact: true })
-      .click();
-    // Waiting on its approval, the turn is still running.
-    const approval = page.getByRole("region", {
-      name: "Allow these file changes?",
-    });
-    await expect(approval).toBeVisible();
-
-    await openOpenCode();
-    await expect(page.getByRole("option", { name: "Wonder" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Refresh models" }).click();
-    // The thread waiting on its approval is the one a restart would stop.
-    await expect(
-      page.getByRole("alert").filter({ hasText: /^Interrupts / }),
-    ).toBeVisible();
-    await screenshot(page, {
-      path: "test-results/opencode-reload-confirm.png",
-    });
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(approval).toBeVisible();
-
-    await page.getByRole("button", { name: "Refresh models" }).click();
-    await page.getByRole("button", { name: "Stop and restart" }).click();
-    await expect(page.getByRole("option", { name: "Wonder" })).toBeVisible();
-    await expect(
-      page.getByRole("status").filter({ hasText: "1 new model" }),
-    ).toBeVisible();
-    await screenshot(page, { path: "test-results/opencode-reload-done.png" });
-    await page.keyboard.press("Escape");
-    // The restarted server hears the thread carry on, and asks again.
-    await expect
-      .poll(async () =>
-        (await readFile(capture, "utf8"))
-          .split("\n")
-          .some(
-            (line) =>
-              line.includes("/prompt_async") &&
-              line.includes(
-                "Continue from where the previous response was stopped",
-              ),
-          ),
-      )
-      .toBe(true);
-    await expect(approval).toBeVisible();
-  } finally {
-    await app.close();
-    await rm(root, { recursive: true, force: true });
-  }
-});
 
 test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Default, keeps the thread", async () => {
   test.setTimeout(90000);
@@ -344,7 +184,9 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
       .click();
     const approval = page.getByRole("region", { name: "Write notes.md" });
     await expect(approval).toBeVisible();
-    await screenshot(page, { path: "test-results/opencode2-approval.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode2-approval.png"),
+    });
     await approval.getByRole("button", { name: "Once", exact: true }).click();
     await expect(page.getByText("Wrote notes.md.")).toBeVisible();
     const answer = page.getByRole("article", { name: "opencode answer" });
@@ -354,15 +196,17 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    // Picked by Relay, not the HTTP server OpenCode 1 runs.
+    // The selected model and effort are sent over ACP.
     const set = sent
       .filter((m) => m.method === "session/set_config_option")
       .map((m) => [m.params.configId, m.params.value]);
     expect(set).toContainEqual(["model", "opencode/wonder"]);
     expect(set).toContainEqual(["effort", "high"]);
-    const effortSession = sent.find((m) =>
-      m.method === "session/set_config_option" &&
-      m.params.configId === "effort" && m.params.value === "high",
+    const effortSession = sent.find(
+      (m) =>
+        m.method === "session/set_config_option" &&
+        m.params.configId === "effort" &&
+        m.params.value === "high",
     )!.params.sessionId;
     expect(sent.some((m) => m.method === "session/prompt")).toBe(true);
     // The ask the user answered; a helper's own asks are always turned down.
@@ -379,9 +223,13 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
     await effort.click();
     await page.getByRole("option", { name: "Default", exact: true }).click();
     await page.getByLabel("Message project").fill("Write notes.md again");
-    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
     await approval.getByRole("button", { name: "Once", exact: true }).click();
-    await expect(page.getByText("Wrote notes.md.", { exact: true })).toHaveCount(2);
+    await expect(
+      page.getByText("Wrote notes.md.", { exact: true }),
+    ).toHaveCount(2);
     const afterReset = (await readFile(capture, "utf8"))
       .trim()
       .split("\n")
@@ -390,9 +238,11 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
       afterReset
         // Each fixture process starts numbering sessions at s1; ignore earlier helpers.
         .slice(sent.length)
-        .filter((m) =>
-          m.method === "session/set_config_option" &&
-          m.params.sessionId === effortSession && m.params.configId === "effort",
+        .filter(
+          (m) =>
+            m.method === "session/set_config_option" &&
+            m.params.sessionId === effortSession &&
+            m.params.configId === "effort",
         )
         .map((m) => m.params.value),
     ).toEqual(["default"]);

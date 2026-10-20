@@ -7,6 +7,7 @@ import { findExecutable, runExecutable } from "../../platform/executables";
 import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
 import { discoverAntigravitySkills } from "./antigravity-skills";
+import { openCodeCommand } from "../opencode/command";
 import { openCode2Models } from "../opencode/model-ids";
 import { discoverOpenCodeSkills, openCodeSkillContext } from "../opencode/skills";
 import type { AgentSkill } from "../skill-presentation";
@@ -185,16 +186,13 @@ const antigravity: AcpProfile = {
   install: "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
 };
 
-/**
- * OpenCode 2 dropped the HTTP API Relay drives OpenCode 1 through and ships an
- * ACP server instead; agents/opencode picks between the two by version.
- */
+/** OpenCode runs through its ACP server. */
 const opencode: AcpProfile = {
   provider: "opencode",
   name: "OpenCode",
-  // Apart from OpenCode 1's server, so neither closes the other's after a restart.
+  // Keep the hosted name so existing ACP sessions survive Relay updates.
   hostedAs: "opencode-acp",
-  command: async () => ({ command: await findExecutable("opencode"), args: ["acp"] }),
+  command: openCodeCommand,
   // Its approvals come to Relay; plan is its read-only agent.
   wishes: ({ interaction, readOnly }) => [
     { option: "mode", value: readOnly || interaction === "plan" ? "plan" : "build" },

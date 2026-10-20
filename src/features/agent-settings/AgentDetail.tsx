@@ -33,7 +33,7 @@ import {
 } from "../updates/agent-updates";
 import {
   agentNote,
-  isDeprecated,
+  needsUpgrade,
   isInstallable,
   isSdk,
   versionLine,
@@ -161,7 +161,7 @@ export function AgentDetail({
           )}
         </span>
       </div>
-      {(off || isDeprecated(agent) || note || output || !!error) && (
+      {(off || needsUpgrade(agent) || note || output || !!error) && (
         <div className="agent-detail-notes">
           {off && (
             <p>
@@ -169,10 +169,9 @@ export function AgentDetail({
               already on it carry on.
             </p>
           )}
-          {isDeprecated(agent) && (
+          {needsUpgrade(agent) && (
             <p data-attention>
-              OpenCode 1 is deprecated in Relay and stops working in a coming
-              release. Update to OpenCode 2:
+              OpenCode 1 is no longer supported in Relay. Update to OpenCode 2:
               <code>curl -fsSL https://opencode.ai/v2/install | bash</code>
             </p>
           )}
@@ -190,7 +189,7 @@ export function AgentDetail({
       )}
 
       {openCodeSignIn && <OpenCodeSignIn onClose={() => setOpenCodeSignIn(false)} />}
-      {agent.provider === "opencode" && !isDeprecated(agent) && (
+      {agent.provider === "opencode" && !needsUpgrade(agent) && (
         <>
           <h5 className="agent-detail-section">Provider connections</h5>
           <SettingsCard>

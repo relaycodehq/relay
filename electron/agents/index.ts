@@ -25,10 +25,6 @@ import {
 } from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { codexSkill, skillCommands } from "./skill-presentation";
-import { closeOpenCodeSession, runOpenCode } from "./opencode/run";
-import { openCodeSubagentBooks } from "./opencode/subagents";
-import { detachOpenCode, disposeOpenCode } from "./opencode/client";
-import { reattachOpenCodeServer } from "./opencode/server";
 import { runCursor } from "./cursor/run";
 import {
   closeCursorConnection,
@@ -38,14 +34,7 @@ import {
 } from "./cursor/connection";
 import { cursorCommands, cursorDefaults, cursorModels } from "./cursor/catalog";
 import { signInCursor, signOutCursor } from "./cursor/account";
-import {
-  openCodeCommands,
-  openCodeDefaults,
-  openCodeModels,
-  refreshOpenCodeModels,
-} from "./opencode/catalog";
 import { acpRegistry, acpRuntime, registryRuntime } from "./acp";
-import { byGeneration } from "./opencode/generation";
 import { museRuntime } from "./muse";
 import type { AgentRuntime } from "./types";
 import { counted } from "./usage-count";
@@ -95,25 +84,6 @@ const claude: AgentRuntime = {
 };
 
 /**
- * Deprecated: Settings asks its users to update to OpenCode 2, and this goes
- * once they have. OpenCode 1 works in one `opencode serve` Relay starts on
- * first use. Its sessions live in OpenCode's own storage; closing one only
- * lets go of what Relay keeps for the thread (its Always grants, its watcher).
- */
-const opencode1: AgentRuntime = {
-  run: runOpenCode,
-  closeSession: async (key) => closeOpenCodeSession(key),
-  subagents: (key) => openCodeSubagentBooks.get(key),
-  models: openCodeModels,
-  reloadModels: refreshOpenCodeModels,
-  defaults: openCodeDefaults,
-  commands: openCodeCommands,
-  dispose: async () => disposeOpenCode(),
-  detach: detachOpenCode,
-  reattach: (owns) => reattachOpenCodeServer(owns),
-};
-
-/**
  * Cursor runs its SDK in a worker Relay starts per thread; the SDK itself is
  * downloaded on first use. Its sessions are the SDK's own agents.
  */
@@ -133,11 +103,7 @@ const cursor: AgentRuntime = {
 const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   codex: counted("codex", codex),
   claude: counted("claude", claude),
-  // OpenCode 2 has no such server; it runs over ACP like Amp.
-  opencode: counted(
-    "opencode",
-    byGeneration(opencode1, acpRuntime("opencode")),
-  ),
+  opencode: counted("opencode", acpRuntime("opencode")),
   cursor: counted("cursor", cursor),
   muse: counted("muse", museRuntime),
   amp: counted("amp", acpRuntime("amp")),
@@ -186,5 +152,4 @@ export {
   inAgentHost,
   savedMeta,
 } from "./hosted-sessions";
-export { setOpenCodeEnvRoot } from "./opencode/worktree-env";
 export { watchSavedSignIns } from "./claude/auth-trace";

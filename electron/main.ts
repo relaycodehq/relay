@@ -6,7 +6,6 @@ import { AgentUpdates, machineIo } from "./agents/agent-updates";
 import {
   hostAgents,
   loadRegistryAgents,
-  setOpenCodeEnvRoot,
   watchSavedSignIns,
 } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
@@ -385,7 +384,6 @@ app
     setLinkedAgents(loaded.get().agentPaths ?? {});
     setOwnAgentsDir(join(app.getPath("userData"), "agent-clis"));
     setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
-    setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
     setPastesRoot(join(app.getPath("userData"), "pastes"));
     void sweepPastes([
       join(app.getPath("userData"), "project-chats"),
