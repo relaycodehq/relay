@@ -125,6 +125,31 @@ it("lists the folder's terminal sessions only, newest first", async () => {
   });
 });
 
+it("skips Claude summaries, live lookups and app titles when listing Codex", async () => {
+  await writeClaudeSession(claude, repo, "claude-chat-01", claudeTurns(turns), {
+    entrypoint: "claude-desktop",
+  });
+  await writeStoredCodexSession(codex, repo, "codex-chat-01", turns);
+  await writeCodexSession(codex, repo, "codex-chat-01", turns, {
+    source: "vscode",
+    originator: "Codex Desktop",
+  });
+  const open = vi.fn(async () => new Set<string>());
+  const appTitles = new ClaudeAppTitles(join(dir, "claude-app"));
+  const names = vi.spyOn(appTitles, "get").mockResolvedValue(new Map());
+  const sessions = new TerminalSessions(homes(), undefined, open, appTitles);
+  expect(
+    (await sessions.list(repo, Infinity, "codex")).map((s) => s.id),
+  ).toEqual(["codex-chat-01"]);
+  expect(claudeSummary).not.toHaveBeenCalled();
+  expect(open).not.toHaveBeenCalled();
+  expect(names).not.toHaveBeenCalled();
+  expect((await sessions.list(repo)).map((s) => s.provider).sort()).toEqual([
+    "claude",
+    "codex",
+  ]);
+});
+
 it("lists the Claude app's sessions under the app's titles, to continue as copies", async () => {
   await writeClaudeSession(claude, repo, "c-desktop-1", claudeTurns(turns), {
     entrypoint: "claude-desktop",

@@ -84,8 +84,8 @@ export class ProjectImports {
     const imported = (this.core.store.get().chats ?? []).filter(
       (c) => c.projectId === project?.id,
     );
-    return (await this.sessions.list(source.path, Infinity))
-      .filter((s) => s.provider === app && s.turns > 0)
+    return (await this.sessions.list(source.path, Infinity, app))
+      .filter((s) => s.turns > 0)
       .map((s) => {
         const chatId = imported.find(
           (c) =>

@@ -6,6 +6,7 @@ import {
   realpath,
   rename,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -142,6 +143,36 @@ it("imports an older JSONL session and a Claude session as copies through the sa
     expect(chat.sessions).toBeUndefined();
   }
   expect(await projects.list(null)).toHaveLength(1);
+});
+
+it("imports Claude without reading an unrelated corrupt Codex database", async () => {
+  await writeClaudeSession(
+    join(dir, "claude"),
+    repo,
+    "claude-chat-01",
+    claudeTurns(turns),
+  );
+  const { statePath } = await writeStoredCodexSession(
+    home,
+    repo,
+    "codex-chat-01",
+    turns,
+  );
+  await writeFile(statePath, "corrupt database");
+  const [source] = await chats.imports.list("claude");
+  expect(
+    (await chats.imports.chats("claude", source!.key)).map((c) => c.id),
+  ).toEqual(["claude-chat-01"]);
+  const result = await chats.imports.run("claude", [
+    { key: source!.key, chats: ["claude-chat-01"] },
+  ]);
+  expect(result.failures).toEqual([]);
+  expect(result.projects[0]?.chats).toHaveLength(1);
+  // A requested provider's error still reaches its own import and the combined /resume list.
+  await expect(chats.imports.list("codex")).rejects.toThrow();
+  await expect(
+    chats.terminalSessions(result.projects[0]!.project.id),
+  ).rejects.toThrow();
 });
 
 it("requires an explicit destination for missing folders and keeps an unfinished tail", async () => {

@@ -50,6 +50,7 @@ type File = {
 };
 type Origin =
   { id: string; cwd: string; terminal: boolean; app?: true } | undefined;
+type SessionFilter = { provider: TerminalAgent; session?: string };
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
@@ -90,11 +91,16 @@ export class TerminalSessions {
   ) {}
 
   /** The project's terminal sessions, newest first. */
-  async list(root: string, most = MOST_ROWS): Promise<FoundSession[]> {
+  async list(
+    root: string,
+    most = MOST_ROWS,
+    provider?: TerminalAgent,
+  ): Promise<FoundSession[]> {
     const roots = new Set([root, (await real(root)) ?? root]);
+    const only = provider ? { provider } : undefined;
     const [found, stored] = await Promise.all([
-      this.candidates(roots, most),
-      this.stored(roots, most),
+      this.candidates(roots, most, only),
+      this.stored(roots, most, only),
     ]);
     const live = await this.live(found);
     const named = await this.appNames(found);
@@ -158,7 +164,7 @@ export class TerminalSessions {
   private async stored(
     roots: Set<string>,
     most: number,
-    pick?: TerminalSessionPick,
+    pick?: SessionFilter,
   ): Promise<FoundSession[]> {
     if (pick && pick.provider !== "codex") return [];
     const seen = new Set<string>();
@@ -185,8 +191,10 @@ export class TerminalSessions {
   }
 
   /** The Claude app's titles, looked up only when one of its sessions is listed. */
-  private async appNames(found: { origin: NonNullable<Origin> }[]) {
-    return found.some(({ origin }) => origin.app)
+  private async appNames(found: { file: File; origin: NonNullable<Origin> }[]) {
+    return found.some(
+      ({ file, origin }) => file.provider === "claude" && origin.app,
+    )
       ? this.appTitles.get()
       : new Map<string, string>();
   }
@@ -228,7 +236,7 @@ export class TerminalSessions {
   private async candidates(
     roots: Set<string>,
     most: number,
-    only?: TerminalSessionPick,
+    only?: SessionFilter,
   ) {
     const all = (await this.files(roots, only, most === Infinity)).sort(
       (a, b) => b.mtime - a.mtime,
@@ -283,11 +291,7 @@ export class TerminalSessions {
    * each folder read once: an account's folder that links to the usual home
    * counts as the usual home, so its sessions are the default account's.
    */
-  private async files(
-    roots: Set<string>,
-    only?: TerminalSessionPick,
-    all = false,
-  ) {
+  private async files(roots: Set<string>, only?: SessionFilter, all = false) {
     const seen = new Set<string>();
     const out: File[] = [];
     for (const { provider, account, home } of await this.homes()) {
@@ -312,10 +316,10 @@ export class TerminalSessions {
             const name = basename(relative);
             return provider === "claude"
               ? name.endsWith(".jsonl") &&
-                  (!only || name === `${only.session}.jsonl`)
+                  (!only?.session || name === `${only.session}.jsonl`)
               : name.startsWith("rollout-") &&
                   name.endsWith(".jsonl") &&
-                  (!only || name.endsWith(`-${only.session}.jsonl`));
+                  (!only?.session || name.endsWith(`-${only.session}.jsonl`));
           },
           provider === "codex" && all,
         );
