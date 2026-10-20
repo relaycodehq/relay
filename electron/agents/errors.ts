@@ -46,7 +46,7 @@ export function exitedError(
   );
 }
 
-export type AgentErrorKind = "signedOut" | "usageLimit";
+export type AgentErrorKind = "signedOut" | "usageLimit" | "missingHistory";
 
 /**
  * A turn failed in a way the thread can do something about, whichever agent

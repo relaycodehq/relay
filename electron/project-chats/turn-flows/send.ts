@@ -400,7 +400,7 @@ export class TurnSends {
       chat.messages.push(answer);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: structuredClone(answer) });
-      const { prompt, request, caughtUp, briefed, carried } = turnPrompt({
+      const promptInput = {
         chat,
         input,
         provider: asked.provider,
@@ -415,10 +415,18 @@ export class TurnSends {
         command,
         note,
         evidence,
-      });
+        historyPath: this.core.storage.historyPath(chat.id),
+      };
+      const { prompt, request, caughtUp, briefed, carried } =
+        turnPrompt(promptInput);
+      const importedPrompt =
+        chat.fromTerminal && !parent && !command
+          ? turnPrompt({ ...promptInput, session: {}, fork: undefined }).prompt
+          : undefined;
       this.reply(chat, active, answer, root, prompt, input, {
         kind: "reply",
         request,
+        importedPrompt,
         caughtUp,
         briefed,
         carried,

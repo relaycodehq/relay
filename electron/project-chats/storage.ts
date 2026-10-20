@@ -486,6 +486,11 @@ export class ChatStorage {
     if (projectId) this.summariesChanged(projectId);
   }
 
+  /** The complete saved conversation, readable by a fresh agent in chunks. */
+  historyPath(chatId: string) {
+    return join(this.dir, chatId + ".json");
+  }
+
   imagePath(chatId: string, image: ChatImage) {
     if (
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(

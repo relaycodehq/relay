@@ -146,6 +146,7 @@ export class TerminalSessions {
       id: found.origin.id,
       account: found.file.account,
       path: found.file.path,
+      updated: found.file.mtime,
       live: live(found.file, found.origin.id),
       ...(found.origin.app ? { app: true as const } : {}),
       title:

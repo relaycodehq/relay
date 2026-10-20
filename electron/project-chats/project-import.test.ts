@@ -14,6 +14,7 @@ import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
+import { chatSettled } from "../../shared/chat-activity";
 import {
   writeClaudeSession,
   claudeTurns,
@@ -73,7 +74,14 @@ it("discovers without adding, lists every readable chat, imports a selection onc
   ]);
   expect(first.failures).toEqual([]);
   expect(first.projects[0]?.chats.map((c) => c.created)).toEqual([true, true]);
+  for (const { chat } of first.projects[0]!.chats) {
+    expect(chatSettled(chat)).toBe(true);
+    expect(chat.updated).toBeLessThan(Date.now() - 59 * 86_400_000);
+    expect(chat.seenAt).toBe(chat.updated);
+  }
   const project = first.projects[0]!.project;
+  const kept = first.projects[0]!.chats[0]!.chat;
+  await chats.triage(kept.id, { kind: "unsettle" });
   await projects.rename(project.id, "My Onboarding");
   const again = await chats.imports.run("codex", [
     { key: source!.key, chats: ids },
@@ -84,6 +92,9 @@ it("discovers without adding, lists every readable chat, imports a selection onc
     false,
   ]);
   expect(chats.list(project.id)).toHaveLength(2);
+  expect(
+    chatSettled(chats.list(project.id).find((c) => c.id === kept.id)!),
+  ).toBe(false);
   expect(
     (await chats.imports.chats("codex", source!.key)).filter((c) => c.chatId),
   ).toHaveLength(2);
@@ -123,7 +134,10 @@ it("imports an older JSONL session and a Claude session as copies through the sa
     expect(chat.messages.map((m) => m.body)).toEqual(
       turns.flatMap((t) => [t.prompt, t.answer]),
     );
-    expect(chat.fromTerminal).toMatchObject({ provider: app, how: "forked" });
+    expect(chat.fromTerminal).toMatchObject({ provider: app, how: "text" });
+    expect(chat.messages.some((m) => m.forkPoint)).toBe(false);
+    expect(chat.forkedAt).toBeUndefined();
+    expect(chatSettled(chat)).toBe(true);
     expect(chat.sessions).toBeUndefined();
   }
   expect(await projects.list(null)).toHaveLength(1);
@@ -239,4 +253,24 @@ it("imports a project's app name without reading chat history when chats are not
   expect(result.failures).toEqual([]);
   expect(result.projects[0]?.project.name).toBe("My app project");
   expect(result.projects[0]?.chats).toEqual([]);
+});
+
+it("preserves imported message bodies beyond the old display limits", async () => {
+  const history = [
+    {
+      prompt: "p".repeat(110_000) + "prompt end",
+      answer: "a".repeat(210_000) + "answer end",
+    },
+  ];
+  await writeStoredCodexSession(home, repo, "long-conversation-01", history);
+  const [source] = await chats.imports.list("codex");
+  const result = await chats.imports.run("codex", [
+    { key: source!.key, chats: ["long-conversation-01"] },
+  ]);
+  expect(result.failures).toEqual([]);
+  const chat = await chats.get(result.projects[0]!.chats[0]!.chat.id);
+  expect(chat.messages.map((m) => m.body)).toEqual([
+    history[0]!.prompt,
+    history[0]!.answer,
+  ]);
 });

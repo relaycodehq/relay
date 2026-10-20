@@ -117,12 +117,10 @@ export class TerminalContinue {
     if (!session)
       throw new Error("That session is no longer in this project's folder.");
     const { messages, cut: lastCut } = await this.sessions.history(session);
-    // Bulk imports preserve even an unfinished tail. If the native fork
-    // cannot carry all of it, the full conversation starts a fresh session.
-    const cut =
-      sourceRoot !== undefined && lastCut?.message !== messages.at(-1)?.id
-        ? undefined
-        : lastCut;
+    // An import belongs to Relay, including an unfinished tail. Native forks
+    // can retain a dependency on source rollouts that the other app removes.
+    const importing = sourceRoot !== undefined;
+    const cut = importing ? undefined : lastCut;
     // In a copy, the thread's history ends where the copy is cut, after an
     // answer whose turn finished. Without one, the conversation goes to the
     // agent as text instead.
@@ -134,14 +132,18 @@ export class TerminalContinue {
     const last = kept.at(-1);
     if (!last) throw new Error("That session has no conversation to continue.");
     const now = Date.now();
+    const updated = importing
+      ? Math.max(session.updated, last.created, last.ended ?? 0)
+      : now;
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
       scope: { kind: "project" },
       title: threadTitle(session.title),
-      created: now,
-      updated: now,
-      seenAt: now,
+      created: importing ? kept[0]!.created : now,
+      updated,
+      seenAt: updated,
+      ...(importing ? { settledAt: updated } : {}),
       messages: kept,
       ...(sourceRoot && sourceRoot !== root
         ? {

@@ -386,10 +386,32 @@ export class TurnRunner {
         };
       if (mine) this.core.active.running(chat.id, mine, answer.message.id);
       try {
-        const body = await agentRuntime(provider).run({
-          ...options,
-          contextWindow: input.contextWindow,
-        });
+        const runtime = agentRuntime(provider);
+        const run = () =>
+          runtime.run({ ...options, contextWindow: input.contextWindow });
+        let body: string;
+        try {
+          body = await run();
+        } catch (error) {
+          if (
+            !isAgentError(error, "missingHistory") ||
+            turn.kind !== "reply" ||
+            !turn.importedPrompt ||
+            abort.signal.aborted
+          )
+            throw error;
+          // A refused resume/fork never started a turn. Recover once from
+          // Relay's own record, without repeating any agent work.
+          dropSession(chat, provider, branch);
+          await runtime.closeSession(sessionKey);
+          if (fork?.from) delete fork.from.forkPoint;
+          if (chat.fromTerminal) chat.fromTerminal.how = "text";
+          options.session.id = undefined;
+          options.session.fork = undefined;
+          options.prompt = turn.importedPrompt;
+          await this.core.storage.save(chat);
+          body = await run();
+        }
         if (!answer.stopped) answer.message.body = body;
       } finally {
         // Before the status changes: a finished answer means a settled checkout.

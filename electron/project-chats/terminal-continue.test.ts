@@ -18,6 +18,7 @@ import { ThreadWorktrees } from "./worktrees";
 import { findExecutable } from "../platform/executables";
 import { runningSince } from "../terminal-sessions/claude-open";
 import { defaultAISettings } from "../../shared/settings";
+import { chatSettled } from "../../shared/chat-activity";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 import {
@@ -488,3 +489,120 @@ it("keeps draft links when creating a continued session without changing an exis
   expect(again.created).toBe(false);
   expect(again.chat.links).toEqual(links);
 });
+
+for (const provider of ["codex", "claude"] as const) {
+  it(`continues a settled bulk ${provider} import without its source and sends all history once`, async () => {
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      prompt: `Original requirement ${i}${i === 0 ? "x".repeat(13_000) + "EARLIEST_END" : ""}`,
+      answer: `Original answer ${i}`,
+    }));
+    const sourceHome = join(root, `${provider}-home`);
+    if (provider === "codex")
+      await writeStoredCodexSession(
+        sourceHome,
+        repo,
+        "independent-chat-01",
+        history,
+        { ago: HOUR },
+      );
+    else
+      await writeClaudeSession(
+        sourceHome,
+        repo,
+        "independent-chat-01",
+        claudeTurns(history),
+        { ago: HOUR },
+      );
+    const [source] = await chats.imports.list(provider);
+    const result = await chats.imports.run(provider, [
+      { key: source!.key, chats: ["independent-chat-01"] },
+    ]);
+    expect(result.failures).toEqual([]);
+    const imported = result.projects[0]!.chats[0]!.chat;
+    expect(imported.settledAt).toBe(imported.updated);
+    expect(imported.seenAt).toBe(imported.updated);
+    expect(imported.fromTerminal?.how).toBe("text");
+    // No source files or provider-native session survives the import.
+    await rm(sourceHome, { recursive: true });
+    await sendAndSettle(imported.id, provider);
+    const messages = (await chats.get(imported.id)).messages;
+    expect(messages.at(-1)?.status).toBe("complete");
+    expect(
+      chatSettled(chats.list(projectId).find((c) => c.id === imported.id)!),
+    ).toBe(false);
+    const firstCalls = await calls();
+    const prompt =
+      provider === "codex"
+        ? firstCalls
+            .find((c) => c.turn)
+            ?.turn.input.map((i: { text?: string }) => i.text ?? "")
+            .join("\n")
+        : claudeText(firstCalls.find((c) => c.prompt?.includes("RELAY next")));
+    expect(prompt).toContain(history[0]!.prompt);
+    expect(prompt).toContain("Original answer 19");
+    if (provider === "codex")
+      expect(firstCalls.filter((c) => c.thread).map((c) => c.method)).toEqual([
+        "thread/start",
+      ]);
+    await sendAndSettle(imported.id, provider);
+    const all = await calls();
+    const second =
+      provider === "codex"
+        ? all
+            .filter((c) => c.turn)
+            .at(-1)
+            .turn.input.map((i: { text?: string }) => i.text ?? "")
+            .join("\n")
+        : claudeText(
+            all.filter((c) => c.prompt?.includes("RELAY next")).at(-1),
+          );
+    expect(second).not.toContain("Original requirement 0");
+  });
+}
+
+it.each(["fork", "resume"])(
+  "recovers an older imported native %s once before starting its turn",
+  async (opening) => {
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      prompt: `Saved requirement ${i}`,
+      answer: `Saved answer ${i}`,
+    }));
+    await writeStoredCodexSession(
+      join(root, "codex-home"),
+      repo,
+      "missing-rollout-01",
+      history,
+    );
+    const { chat } = await chats.continueTerminalSession(projectId, {
+      provider: "codex",
+      session: "missing-rollout-01",
+    });
+    if (opening === "resume") {
+      await sendAndSettle(chat.id, "codex");
+      await chats.dispose();
+      chats = new ProjectChats(
+        store,
+        new Projects(store),
+        join(root, "chats"),
+        () => {},
+      );
+    }
+    vi.stubEnv("RELAY_FIXTURE_MISSING_ROLLOUT", "1");
+    await sendAndSettle(chat.id, "codex");
+    const all = await calls();
+    expect(all.filter((c) => c.thread).map((c) => c.method)).toEqual(
+      opening === "fork"
+        ? ["thread/fork", "thread/start"]
+        : ["thread/fork", "thread/resume", "thread/start"],
+    );
+    expect(all.filter((c) => c.turn)).toHaveLength(opening === "fork" ? 1 : 2);
+    const prompt = all
+      .filter((c) => c.turn)
+      .at(-1)
+      .turn.input.map((i: { text?: string }) => i.text ?? "")
+      .join("\n");
+    expect(prompt).toContain("Saved requirement 0");
+    expect(prompt).toContain("Saved answer 19");
+    expect((await chats.get(chat.id)).fromTerminal?.how).toBe("text");
+  },
+);

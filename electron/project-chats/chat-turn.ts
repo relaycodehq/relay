@@ -13,6 +13,8 @@ export type ChatTurn =
       kind: "reply";
       /** The user's own words within the prompt. */
       request?: string;
+      /** Complete Relay history if an imported native session cannot open. */
+      importedPrompt?: string;
       /** The prompt told the session everything it hadn't heard yet. */
       caughtUp?: boolean;
       /** Crosses off what the prompt told the agent, once the turn didn't fail. */
