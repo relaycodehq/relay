@@ -65,14 +65,6 @@ export const openedSchema = z
   })
   .loose();
 
-export const turnStartResultSchema = z
-  .object({
-    turnId: z.string(),
-    disposition: z.string().optional(),
-    startedNewTurn: z.boolean().optional(),
-  })
-  .loose();
-
 const tokenUsageSchema = z
   .object({
     inputTokens: z.number().default(0),
@@ -313,21 +305,3 @@ export const skillListSchema = z
     ),
   })
   .loose();
-
-export const accountSchema = z
-  .object({
-    state: z.string(),
-    credentialRequired: z.boolean().optional(),
-    label: z.string().optional(),
-  })
-  .loose();
-
-export const loginStartSchema = z
-  .object({ verificationUrl: z.string().optional(), userCode: z.string().optional() })
-  .loose();
-
-/** MSP's typed errors Relay acts on; see the error table `muse schema` exports. */
-export const errorKinds = {
-  authRequired: "authRequired",
-  commandRejected: "commandRejected",
-} as const;

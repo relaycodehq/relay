@@ -38,15 +38,9 @@ import {
 } from "../../shared/working-tree";
 import type { Repo, FilePair } from "../../shared/types";
 import { headlineStat, statsByKind } from "../../shared/diff-kinds";
-export async function ignoredPaths(
-  root: string,
-  paths: string[],
-): Promise<Set<string>> {
-  return new Set((await checkIgnore(root, paths)).split("\0").filter(Boolean));
-}
 /** The rule ignoring each of `paths`, as `.gitignore:4 .env*.local`; paths no rule ignores are left out. */
 export async function ignoreRules(root: string, paths: string[]) {
-  const fields = (await checkIgnore(root, paths, ["-v"])).split("\0");
+  const fields = (await checkIgnore(root, paths)).split("\0");
   const rules = new Map<string, string>();
   // Four fields a path: source, line, pattern, path. A negated rule (`!x`) un-ignores.
   for (let i = 0; i + 3 < fields.length; i += 4) {
@@ -56,17 +50,13 @@ export async function ignoreRules(root: string, paths: string[]) {
   }
   return rules;
 }
-async function checkIgnore(
-  root: string,
-  paths: string[],
-  flags: string[] = [],
-) {
+async function checkIgnore(root: string, paths: string[]) {
   if (!paths.length) return "";
   const file = await gitExecutable();
   return new Promise<string>((resolve, reject) => {
     const child = execFile(
       file,
-      ["-C", root, "check-ignore", ...flags, "--no-index", "--stdin", "-z"],
+      ["-C", root, "check-ignore", "-v", "--no-index", "--stdin", "-z"],
       {
         timeout: 15000,
         maxBuffer: 16 * 1024 * 1024,

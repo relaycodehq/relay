@@ -109,24 +109,6 @@ function paragraphs(text: string) {
     .filter((sentences) => sentences.length);
 }
 
-/** Packs whole sentences up to `maxLength` characters, never across paragraphs, like the reference. */
-export function chunkText(text: string, maxLength: number): string[] {
-  const chunks: string[] = [];
-  for (const sentences of paragraphs(text)) {
-    let current = "";
-    for (const sentence of sentences) {
-      if (current.length + sentence.length + 1 <= maxLength) {
-        current += (current ? " " : "") + sentence;
-      } else {
-        if (current) chunks.push(current.trim());
-        current = sentence;
-      }
-    }
-    if (current) chunks.push(current.trim());
-  }
-  return chunks;
-}
-
 /** Longest chunk the model reads well; Korean and Japanese pack more per character. */
 export const maxChunkLength = (lang: SupertonicLanguage) =>
   lang === "ko" || lang === "ja" ? 120 : 300;

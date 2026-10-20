@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  chunkText,
   endsSentence,
   preprocess,
   speechChunks,
@@ -9,7 +8,7 @@ import {
   type SupertonicLanguage,
 } from "./text";
 
-// Outputs of _preprocessText and chunkText in supertone-inc/supertonic
+// Outputs of _preprocessText in supertone-inc/supertonic
 // nodejs/helper.js (1e9799e), recorded by running it on these inputs.
 const preprocessed: [string, SupertonicLanguage, string][] = [
   ["Done. Typecheck passes.", "en", "<en>Done. Typecheck passes.</en>"],
@@ -62,63 +61,9 @@ const preprocessed: [string, SupertonicLanguage, string][] = [
   ["Привет, мир", "ru", "<ru>Привет, мир.</ru>"],
 ];
 
-const chunked: [string, number, string[]][] = [
-  [
-    "Mr. Smith met Dr. Jones at 5 p.m. on Baker St. yesterday. Then they left.",
-    1,
-    [
-      "Mr. Smith met Dr. Jones at 5 p.m.",
-      "on Baker St. yesterday.",
-      "Then they left.",
-    ],
-  ],
-  [
-    "Mr. Smith met Dr. Jones at 5 p.m. on Baker St. yesterday. Then they left.",
-    40,
-    [
-      "Mr. Smith met Dr. Jones at 5 p.m.",
-      "on Baker St. yesterday. Then they left.",
-    ],
-  ],
-  [
-    "A. B. Charles went home. It was late! Was it? Yes.",
-    1,
-    ["A. B. Charles went home.", "It was late!", "Was it?", "Yes."],
-  ],
-  [
-    "A. B. Charles went home. It was late! Was it? Yes.",
-    40,
-    ["A. B. Charles went home. It was late!", "Was it? Yes."],
-  ],
-  [
-    "Use e.g. this one, i.e. the first. Or etc. and so on.",
-    1,
-    ["Use e.g. this one, i.e. the first.", "Or etc. and so on."],
-  ],
-  [
-    "Para one line one.\nstill para one.\n\n\nPara two.",
-    1,
-    ["Para one line one.", "still para one.", "Para two."],
-  ],
-  [
-    "Para one line one.\nstill para one.\n\n\nPara two.",
-    40,
-    ["Para one line one. still para one.", "Para two."],
-  ],
-  [
-    "First sentence. Second one! Third? Fourth.",
-    40,
-    ["First sentence. Second one! Third?", "Fourth."],
-  ],
-];
-
 describe("matches the reference implementation", () => {
   it.each(preprocessed)("normalizes %j", (text, lang, expected) => {
     expect(preprocess(text, lang)).toBe(expected.normalize("NFKD"));
-  });
-
-  it.each(chunked)("chunks %j at %i characters", (text, max, expected) => {
-    expect(chunkText(text, max)).toEqual(expected);
   });
 });
 

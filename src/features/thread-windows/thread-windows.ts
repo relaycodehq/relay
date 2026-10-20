@@ -24,9 +24,6 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export const useThreadWindows = () =>
-  useSyncExternalStore(subscribe, () => state);
-
 /** Whether `chatId` is in a window of its own. */
 export const useHasOwnWindow = (chatId: string | undefined) =>
   useSyncExternalStore(
