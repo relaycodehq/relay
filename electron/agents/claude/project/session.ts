@@ -14,6 +14,7 @@ import {
 } from "../../../../shared/agent-modes";
 import { reasoningEffortSchema } from "../../../../shared/settings";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
+import { traceSessions } from "../auth-trace";
 import { linkedFoldersSchema } from "../../../../shared/projects";
 import { AsyncQueue } from "../../../util/async-queue";
 import { settingsEffort } from "../../../../shared/agent-defaults";
@@ -139,6 +140,9 @@ export const sessions = new HostedSessions<ClaudeSession>({
   kind: "claude",
   close: closeSession,
 });
+traceSessions(() =>
+  [...sessions.values()].map((s) => s.account ?? SYSTEM_ACCOUNT),
+);
 export function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();

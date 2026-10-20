@@ -41,8 +41,9 @@ test("smart project names update immediately and stay off across restart", async
       });
     }, folder);
     await page
-      .getByRole("button", { name: "Add project", exact: true })
+      .getByRole("button", { name: "Open a folder", exact: true })
       .click();
+    await page.getByRole("button", { name: "Choose in Finder…" }).click();
     await screenshot(page, {
       path: "test-results/screenshots/smart-project-names-initial.png",
       animations: "disabled",

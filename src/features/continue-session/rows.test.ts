@@ -42,12 +42,21 @@ it("says the agent, when, how long, and what picking it will do", () => {
   );
 });
 
-it("matches every typed word against the title and the agent", () => {
+it("matches typed words against the title, the agent and where it ran", () => {
   const rows = [
     session(),
     session({ id: "s2", provider: "codex", title: "Docs pass" }),
+    session({ id: "s3", provider: "codex", title: "Claude docs", app: true }),
   ];
-  expect(matchingSessions(rows, "codex docs").map((r) => r.id)).toEqual(["s2"]);
-  expect(matchingSessions(rows, "  CACHE  ").map((r) => r.id)).toEqual(["s1"]);
-  expect(matchingSessions(rows, "")).toHaveLength(2);
+  const ids = (search: string) =>
+    matchingSessions(rows, search).map((r) => r.id);
+  expect(ids("codex docs")).toEqual(["s2", "s3"]);
+  expect(ids("claude")).toEqual(["s1"]);
+  expect(ids("codex app")).toEqual(["s3"]);
+  expect(ids("chatgpt")).toEqual(["s3"]);
+  expect(ids("CHATGPT docs")).toEqual(["s3"]);
+  expect(ids("chatgpt terminal")).toEqual([]);
+  expect(ids("terminal docs")).toEqual(["s2"]);
+  expect(ids("  CACHE  ")).toEqual(["s1"]);
+  expect(ids("")).toHaveLength(3);
 });

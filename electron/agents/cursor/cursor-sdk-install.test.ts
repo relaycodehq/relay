@@ -263,12 +263,29 @@ describe("installing the Cursor SDK", () => {
       await access(join(root, "1.0.32"));
     });
 
+    it("installs a newer SDK that dropped one of the pinned dependencies", async () => {
+      await installSdk(root, fakeRegistry(files).fetch, { ...mac, lock });
+      const updated = await installSdk(root, fakeRegistry(update({})).fetch, {
+        ...mac,
+        lock,
+        version: "1.0.33",
+      });
+      expect(updated.version).toBe("1.0.33");
+    });
+
     it("leaves the working SDK alone when the newer one wants other dependencies", async () => {
       await installSdk(root, fakeRegistry(files).fetch, { ...mac, lock });
       await expect(
         installSdk(
           root,
           fakeRegistry(update({ "@bufbuild/protobuf": "2.0.0" })).fetch,
+          { ...mac, lock, version: "1.0.33" },
+        ),
+      ).rejects.toBeInstanceOf(NeedsRelayUpdate);
+      await expect(
+        installSdk(
+          root,
+          fakeRegistry(update({ ...lock.dependencies, zod: "^3.25.0" })).fetch,
           { ...mac, lock, version: "1.0.33" },
         ),
       ).rejects.toBeInstanceOf(NeedsRelayUpdate);

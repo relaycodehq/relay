@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Toast } from "@base-ui/react/toast";
-import { ArrowDownToLine, Check, TriangleAlert, X } from "lucide-react";
+import { Check, TriangleAlert, X } from "lucide-react";
 import { api } from "../../lib/api";
+import { useStoredState } from "../../lib/persisted-store";
 import { releasesPage } from "../../../shared/updates";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { useCrashOffer } from "../bug-report/useCrashOffer";
@@ -25,9 +26,9 @@ import "./update-toasts.css";
 
 /**
  * Relay's and the agents' updates as a stack of one-line toasts rising from
- * the sidebar footer: hover fans them out, × or a swipe left puts one off
- * until it has something new to say, and a dot brings them back. An offer to
- * report the last run's crash leads the stack; putting it off drops it.
+ * the sidebar footer: hover fans them out, and × or a swipe left puts one off
+ * until it has something new to say (Settings still shows every update). An
+ * offer to report the last run's crash leads the stack; putting it off drops it.
  */
 export function UpdateToasts({ onAgentDetails }: { onAgentDetails: () => void }) {
   return (
@@ -36,6 +37,11 @@ export function UpdateToasts({ onAgentDetails }: { onAgentDetails: () => void })
     </Toast.Provider>
   );
 }
+
+/** The keys of toasts put off, newest last; old ones fall away past this. */
+const keepPutOff = 50;
+const parsePutOff = (saved: unknown): string[] =>
+  Array.isArray(saved) ? saved.filter((k): k is string => typeof k === "string") : [];
 
 function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   const { state } = useUpdates();
@@ -55,10 +61,10 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   }, [crash.offer, state, agents, notices, justUpdated]);
 
   const manager = Toast.useToastManager();
-  const [putOff, setPutOff] = useState<ReadonlySet<string>>(new Set());
+  const [putOff, setPutOff] = useStoredState("relay.updateToasts.putOff", parsePutOff);
   /** Toasts this closes because their update went, not because you put them off. */
   const going = useRef(new Set<string>());
-  const shown = useMemo(() => items.filter((i) => !putOff.has(i.key)), [items, putOff]);
+  const shown = useMemo(() => items.filter((i) => !putOff.includes(i.key)), [items, putOff]);
 
   /** Bumped to bring the crash offer back in front as a new toast. */
   const crashTurn = useRef(0);
@@ -93,7 +99,7 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
         onClose: () => {
           if (going.current.has(id)) return;
           if (item.subject === "crash") return crash.dismiss();
-          setPutOff((keys) => new Set(keys).add(item.key));
+          setPutOff((keys) => [...keys.filter((k) => k !== item.key), item.key].slice(-keepPutOff));
         },
         onRemove: () => going.current.delete(id),
       });
@@ -118,59 +124,44 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
     }
   };
 
-  const waiting = items.filter((i) => putOff.has(i.key)).length;
   return (
-    <>
-      <Toast.Viewport className="update-toasts" aria-label="Updates">
-        {manager.toasts.map((toast) => {
-          const item = toast.data as UpdateItem;
-          return (
-            <Toast.Root
-              key={toast.id}
-              toast={toast}
-              swipeDirection={["left", "down"]}
-              className="update-toast"
-            >
-              <Toast.Content className="update-toast-content">
-                {item.subject === "relay" ? (
-                  <RelayMark size={15} />
-                ) : item.subject === "crash" ? (
-                  <TriangleAlert size={14} className="update-toast-warning" />
-                ) : (
-                  <ProviderIcon provider={item.subject} />
-                )}
-                <Toast.Title className="update-toast-title" title={item.title}>
-                  <span className="update-toast-name">{item.name}</span>
-                  <span className={item.failed ? "update-toast-version failed" : "update-toast-version"}>
-                    {item.failed ? "Failed" : item.version && shortVersion(item.version)}
-                  </span>
-                </Toast.Title>
-                <UpdateAction item={item} onRun={() => run(item)} />
-                <Toast.Close
-                  className="update-toast-close"
-                  aria-label={item.subject === "crash" ? "Not now" : "Later"}
-                  title={item.subject === "crash" ? "Not now" : "Later"}
-                >
-                  <X size={10} />
-                </Toast.Close>
-              </Toast.Content>
-            </Toast.Root>
-          );
-        })}
-      </Toast.Viewport>
-      {waiting > 0 && manager.toasts.length === 0 && (
-        <button
-          type="button"
-          className="update-toasts-later"
-          title={`${waiting} update${waiting > 1 ? "s" : ""} put off`}
-          aria-label="Show updates"
-          onClick={() => setPutOff(new Set())}
-        >
-          <ArrowDownToLine size={13} />
-          <i />
-        </button>
-      )}
-    </>
+    <Toast.Viewport className="update-toasts" aria-label="Updates">
+      {manager.toasts.map((toast) => {
+        const item = toast.data as UpdateItem;
+        return (
+          <Toast.Root
+            key={toast.id}
+            toast={toast}
+            swipeDirection={["left", "down"]}
+            className="update-toast"
+          >
+            <Toast.Content className="update-toast-content">
+              {item.subject === "relay" ? (
+                <RelayMark size={15} />
+              ) : item.subject === "crash" ? (
+                <TriangleAlert size={14} className="update-toast-warning" />
+              ) : (
+                <ProviderIcon provider={item.subject} />
+              )}
+              <Toast.Title className="update-toast-title" title={item.title}>
+                <span className="update-toast-name">{item.name}</span>
+                <span className={item.failed ? "update-toast-version failed" : "update-toast-version"}>
+                  {item.failed ? "Failed" : item.version && shortVersion(item.version)}
+                </span>
+              </Toast.Title>
+              <UpdateAction item={item} onRun={() => run(item)} />
+              <Toast.Close
+                className="update-toast-close"
+                aria-label={item.subject === "crash" ? "Not now" : "Dismiss"}
+                title={item.subject === "crash" ? "Not now" : "Dismiss"}
+              >
+                <X size={10} />
+              </Toast.Close>
+            </Toast.Content>
+          </Toast.Root>
+        );
+      })}
+    </Toast.Viewport>
   );
 }
 

@@ -172,7 +172,9 @@ export default function ProjectShell() {
     setError,
   );
   useOpenedFolders(boot.data, projects, lock, starts.open);
-  const addProjectOn = useStableCallback(starts.addProject);
+  const addProjectOn = useStableCallback((computerId?: string) =>
+    starts.addProject("root", computerId),
+  );
   useEffect(() => onAddProjectRequest(addProjectOn), [addProjectOn]);
   useShortcut("settings", true, () => settings.show());
   useShortcut("new-thread", !elsewhere && !error, starts.pick);
@@ -350,7 +352,7 @@ export default function ProjectShell() {
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
             onSendDraft={() => composer.current?.submit()}
-            onAdd={() => starts.addProject()}
+            onAdd={starts.addProject}
             onAttention={setAttention}
             onSettings={settings.show}
             onInbox={() => {
@@ -536,6 +538,7 @@ export default function ProjectShell() {
         <AddProjectPalette
           projects={realProjects}
           computerId={starts.addingOn}
+          initialPage={starts.adding}
           onClose={() => starts.setAdding(false)}
           onDone={(p) => void starts.added(p)}
         />

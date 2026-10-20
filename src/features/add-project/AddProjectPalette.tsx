@@ -18,6 +18,7 @@ import {
   Lock,
   Monitor,
   Search,
+  Import as ImportIcon,
 } from "lucide-react";
 import {
   linkName,
@@ -49,11 +50,14 @@ import { useAdding } from "./useAdding";
 import { usePairedComputers } from "../handoff/usePairedComputers";
 import { computerLine, reachable } from "../handoff/computer-status";
 import type { PairedComputer } from "../../../shared/handoff";
+import { ImportProjects } from "./ImportProjects";
 import "../../ui/palette.css";
 import "./add-project.css";
 import { fileManager, keys } from "../../lib/mod-key";
 
-type Page = "root" | "folder" | "github" | "url" | "new" | "computer";
+export type AddProjectPage =
+  "root" | "folder" | "github" | "url" | "new" | "import";
+type Page = AddProjectPage | "computer";
 
 interface Item {
   key: string;
@@ -78,6 +82,7 @@ const placeholder: Record<Page, string> = {
   url: "https://github.com/owner/repo, git@host:owner/repo, or owner/repo",
   new: "Name the project",
   computer: "~/",
+  import: "",
 };
 const title: Partial<Record<Page, string>> = {
   folder: "Open a folder",
@@ -89,12 +94,15 @@ const title: Partial<Record<Page, string>> = {
 export function AddProjectPalette({
   projects,
   computerId,
+  initialPage = "root",
   onClose,
   onDone,
 }: {
   projects: readonly Project[];
   /** Opens on the folders of this paired computer. */
   computerId?: string;
+  /** Opened from a menu that already named the way in. */
+  initialPage?: Page;
   onClose: () => void;
   /** Added, or picked from the ones there already: start a thread in it. */
   onDone: (project: Project) => void;
@@ -102,10 +110,11 @@ export function AddProjectPalette({
   const adding = useAdding(projects);
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const [importBusy, setImportBusy] = useState(false);
   const backdropClose = useBackdropClose(() => {
-    if (!adding.busy && !linking) onClose();
+    if (!adding.busy && !importBusy && !linking) onClose();
   });
-  const [page, setPage] = useState<Page>("root");
+  const [page, setPage] = useState<Page>(initialPage);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const [linking, setLinking] = useState<{
@@ -128,6 +137,14 @@ export function AddProjectPalette({
     private: true,
     ...spec,
   };
+  // Opened straight on the folder browser: start where "Open a folder" would,
+  // once Relay says where that is.
+  const seeded = useRef(initialPage !== "folder");
+  useEffect(() => {
+    if (seeded.current || !adding.start) return;
+    seeded.current = true;
+    if (!query) setQuery(`${tildePath(adding.start.cloneFolder)}/`);
+  }, [adding.start, query]);
   useReturnFocus();
   useEffect(() => {
     dialog.current?.showModal();
@@ -233,6 +250,12 @@ export function AddProjectPalette({
     else setSpec((s) => ({ ...s, location: path }));
   }
 
+  function chooseInFileManager() {
+    void api.chooseFolder("Add a project folder").then((path) => {
+      if (path) return adding.pick(path).then(finish);
+    });
+  }
+
   const remote = parseRemote(query);
   const items: Item[] = [];
   if (page === "root") {
@@ -241,6 +264,13 @@ export function AddProjectPalette({
       items.push(cloneItem(remote.full, remote.host, () => clone(remote.url)));
     else {
       const sources: Item[] = [
+        {
+          key: "import",
+          icon: <ImportIcon size={15} />,
+          label: "Import from another app…",
+          detail: "Bring projects and chats from Codex / ChatGPT or Claude",
+          run: () => go("import"),
+        },
         {
           key: "folder",
           icon: <FolderOpen size={15} />,
@@ -325,10 +355,7 @@ export function AddProjectPalette({
         icon: <Folder size={15} />,
         label: `Choose in ${fileManager}…`,
         section: q ? undefined : " ",
-        run: () =>
-          void api.chooseFolder("Add a project folder").then((path) => {
-            if (path) return adding.pick(path).then(finish);
-          }),
+        run: chooseInFileManager,
       });
     }
   } else if (page === "folder") {
@@ -548,11 +575,17 @@ export function AddProjectPalette({
       aria-label="Add a project"
       onCancel={(e) => {
         e.preventDefault();
-        if (!adding.busy && !linking) onClose();
+        if (!adding.busy && !importBusy && !linking) onClose();
       }}
       {...backdropClose}
     >
-      {linking ? (
+      {page === "import" ? (
+        <ImportProjects
+          onBack={() => go("root")}
+          onDone={onDone}
+          onBusy={setImportBusy}
+        />
+      ) : linking ? (
         <LinkStep
           project={linking.project}
           related={linking.related}
@@ -627,11 +660,7 @@ export function AddProjectPalette({
               </div>
             </div>
           ) : (
-            <div
-              className="palette-body"
-              role="listbox"
-              aria-label="Choices"
-            >
+            <div className="palette-body" role="listbox" aria-label="Choices">
               {adding.picked && (
                 <PickedNote
                   picked={adding.picked}
@@ -698,15 +727,15 @@ export function AddProjectPalette({
                           ? (there.error as Error).message
                           : "No folder by that name. ↵ adds the path as typed."
                       : page === "folder"
-                      ? listing.isLoading
-                        ? "Looking…"
-                        : "No folder by that name. ↵ adds the path as typed."
-                      : page === "github"
-                        ? (githubProblem ??
-                          (github.isLoading
-                            ? "Asking GitHub…"
-                            : "No repository by that name."))
-                        : "Nothing matches. Enter a URL or owner/repo to clone it."}
+                        ? listing.isLoading
+                          ? "Looking…"
+                          : "No folder by that name. ↵ adds the path as typed."
+                        : page === "github"
+                          ? (githubProblem ??
+                            (github.isLoading
+                              ? "Asking GitHub…"
+                              : "No repository by that name."))
+                          : "Nothing matches. Enter a URL or owner/repo to clone it."}
                 </p>
               )}
             </div>
@@ -724,11 +753,21 @@ export function AddProjectPalette({
                 </button>
               </span>
             ) : page === "folder" ? (
-              <span>↵ goes into a folder · {addKeys} adds it</span>
+              <span>
+                Tab goes into a folder · ↵ adds it
+                <button
+                  type="button"
+                  className="text-button"
+                  disabled={adding.busy}
+                  onClick={chooseInFileManager}
+                >
+                  Choose in {fileManager}…
+                </button>
+              </span>
             ) : page === "computer" ? (
               <span>
-                Folders on {computer?.name} · ↵ goes into a folder ·{" "}
-                {addKeys} adds it
+                Folders on {computer?.name} · ↵ goes into a folder · {addKeys}{" "}
+                adds it
               </span>
             ) : page === "new" ? (
               <span>↵ creates it</span>

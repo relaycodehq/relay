@@ -3,7 +3,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
-import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "./agents";
+import {
+  hostAgents,
+  loadRegistryAgents,
+  setOpenCodeEnvRoot,
+  watchSavedSignIns,
+} from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { configureCursor } from "./agents/cursor/sdk";
 import {
@@ -390,9 +395,11 @@ app
       join(app.getPath("userData"), "state.json"),
     ]).catch((e) => console.warn("Could not sweep old pastes:", e));
     // Before anything starts an agent: runs ask it which account they use.
-    const agentAccounts = new AgentAccounts(loaded, (state) =>
-      window.send("relay:agent-accounts", state),
-    );
+    const agentAccounts = new AgentAccounts(loaded, (state) => {
+      window.send("relay:agent-accounts", state);
+      watchSavedSignIns();
+    });
+    watchSavedSignIns();
     applyLinkedTools(loaded);
     // Found once up front, every Git call after starts right away.
     void gitExecutable().catch(() => {});

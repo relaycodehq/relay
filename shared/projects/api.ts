@@ -52,6 +52,13 @@ import type {
   WorkingTree,
 } from "../working-tree";
 import type { AddingJob, AddingStart, GithubRepos, NewProject } from "./adding";
+import type {
+  ImportApp,
+  ImportProject,
+  ImportChat,
+  ImportSelection,
+  ProjectImportResult,
+} from "../project-import";
 import type { FolderEntry, FolderInfo, LinkSuggestion } from "./folders";
 import type { LinkedFolder } from "./links";
 import type { WorktreeStart } from "./worktrees";
@@ -113,6 +120,16 @@ export interface ProjectListApi {
 
 /** Folders on disk, to add as projects or link to one. */
 export interface ProjectFoldersApi {
+  importProjects(app: ImportApp): Promise<ImportProject[]>;
+  importProjectChats(
+    app: ImportApp,
+    key: string,
+    folder?: string,
+  ): Promise<ImportChat[]>;
+  importSelectedProjects(
+    app: ImportApp,
+    selections: ImportSelection[],
+  ): Promise<ProjectImportResult>;
   inspectFolder(path: string): Promise<FolderInfo>;
   /** The folders inside `dir`, for typing a path; `~` stands for home. */
   listFolders(dir: string): Promise<FolderEntry[]>;

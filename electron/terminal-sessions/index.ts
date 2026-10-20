@@ -1,4 +1,4 @@
-// Claude Code and Codex sessions started in a terminal in a project's folder,
+// Claude Code and Codex sessions started in a terminal or their apps, in a project's folder,
 // for a thread to continue. Only listed when asked; nothing is imported until
 // one is picked.
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -15,9 +15,12 @@ import {
   claudeSlug,
   claudeSummary,
 } from "./claude";
+import { ClaudeAppTitles } from "./claude-app";
 import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
+import { storedCodexHistory, storedCodexSessions } from "./codex-store";
 import { FileCache, head } from "./scan";
+import { discoverSessionFolders } from "./discovery";
 
 /** An agent's config folder for one account: where its sessions are kept. */
 export interface SessionHome {
@@ -28,6 +31,7 @@ export interface SessionHome {
 
 export interface FoundSession extends TerminalSession {
   path: string;
+  storage?: "sqlite";
 }
 
 const MOST_ROWS = 30;
@@ -44,12 +48,17 @@ type File = {
   mtime: number;
   size: number;
 };
-type Origin = { id: string; cwd: string; terminal: boolean } | undefined;
+type Origin =
+  { id: string; cwd: string; terminal: boolean; app?: true } | undefined;
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
-async function files(dir: string, keep: (name: string) => boolean) {
-  const names = await readdir(dir).catch(() => [] as string[]);
+async function files(
+  dir: string,
+  keep: (name: string) => boolean,
+  recursive = false,
+) {
+  const names = await readdir(dir, { recursive }).catch(() => [] as string[]);
   return names.filter(keep).map((name) => join(dir, name));
 }
 
@@ -77,33 +86,56 @@ export class TerminalSessions {
     private homes: () => Promise<SessionHome[]>,
     private now = () => Date.now(),
     private open = claudeOpen,
+    private appTitles = new ClaudeAppTitles(),
   ) {}
 
   /** The project's terminal sessions, newest first. */
-  async list(root: string): Promise<FoundSession[]> {
+  async list(root: string, most = MOST_ROWS): Promise<FoundSession[]> {
     const roots = new Set([root, (await real(root)) ?? root]);
-    const found = await this.candidates(roots, MOST_ROWS);
+    const [found, stored] = await Promise.all([
+      this.candidates(roots, most),
+      this.stored(roots, most),
+    ]);
     const live = await this.live(found);
-    return Promise.all(
+    const named = await this.appNames(found);
+    const legacy = await Promise.all(
       found.map(async ({ file, origin }) => {
         const { title, turns } = await this.summary(file, origin.id);
         return {
           provider: file.provider,
           id: origin.id,
-          title: title || "Untitled session",
+          title: named.get(origin.id) || title || "Untitled session",
           updated: file.mtime,
           turns,
           account: file.account,
           live: live(file, origin.id),
+          ...(origin.app ? { app: true as const } : {}),
           path: file.path,
         } satisfies FoundSession;
       }),
     );
+    // A chat may still have its old rollout after migrating to SQLite.
+    // Prefer its current database history, and keep the usual account when
+    // another account links to the same Codex home.
+    const unique = new Map<string, FoundSession>();
+    for (const session of [...stored, ...legacy]) {
+      const key = `${session.provider}:${session.id}`;
+      if (!unique.has(key)) unique.set(key, session);
+    }
+    return [...unique.values()]
+      .sort((a, b) => b.updated - a.updated)
+      .slice(0, most);
+  }
+
+  async projectFolders(provider: TerminalAgent) {
+    return discoverSessionFolders(await this.homes(), provider);
   }
 
   /** A listed session found again by its id, as it stands now; never by a path from the page. */
   async find(root: string, pick: TerminalSessionPick) {
     const roots = new Set([root, (await real(root)) ?? root]);
+    const [stored] = await this.stored(roots, 1, pick);
+    if (stored) return stored;
     const found = (await this.candidates(roots, Infinity, pick)).find(
       ({ origin }) => origin.id === pick.session,
     );
@@ -115,8 +147,47 @@ export class TerminalSessions {
       account: found.file.account,
       path: found.file.path,
       live: live(found.file, found.origin.id),
-      title: (await this.summary(found.file, found.origin.id)).title,
+      ...(found.origin.app ? { app: true as const } : {}),
+      title:
+        (await this.appNames([found])).get(found.origin.id) ||
+        (await this.summary(found.file, found.origin.id)).title,
     };
+  }
+
+  private async stored(
+    roots: Set<string>,
+    most: number,
+    pick?: TerminalSessionPick,
+  ): Promise<FoundSession[]> {
+    if (pick && pick.provider !== "codex") return [];
+    const seen = new Set<string>();
+    const found: FoundSession[] = [];
+    for (const { provider, account, home } of await this.homes()) {
+      if (provider !== "codex") continue;
+      const at = await real(join(home, "state_5.sqlite"));
+      if (!at || seen.has(at)) continue;
+      seen.add(at);
+      for (const session of await storedCodexSessions(
+        home,
+        roots,
+        most,
+        pick?.session,
+      ))
+        found.push({
+          ...session,
+          provider,
+          account,
+          live: this.now() - session.updated < LIVE_WINDOW,
+        });
+    }
+    return found.sort((a, b) => b.updated - a.updated).slice(0, most);
+  }
+
+  /** The Claude app's titles, looked up only when one of its sessions is listed. */
+  private async appNames(found: { origin: NonNullable<Origin> }[]) {
+    return found.some(({ origin }) => origin.app)
+      ? this.appTitles.get()
+      : new Map<string, string>();
   }
 
   /**
@@ -219,9 +290,11 @@ export class TerminalSessions {
   }
 
   /** What the session holds, as thread messages. */
-  history(session: { provider: TerminalAgent; id: string; path: string }) {
-    return session.provider === "claude"
-      ? claudeHistory(session.path, session.id)
+  history(session: Pick<FoundSession, "provider" | "id" | "path" | "storage">) {
+    if (session.provider === "claude")
+      return claudeHistory(session.path, session.id);
+    return session.storage === "sqlite"
+      ? storedCodexHistory(session.path, session.id)
       : codexHistory(session.path, session.id);
   }
 
@@ -245,7 +318,8 @@ export class TerminalSessions {
   }
 
   /**
-   * Up to `most` terminal sessions started in one of `roots`, newest first.
+   * Up to `most` terminal and Claude app sessions started in one of `roots`,
+   * newest first.
    * Most files in these folders are Relay's own sessions or another folder's,
    * so heads are read newest first until enough of them are this project's.
    */
@@ -254,7 +328,7 @@ export class TerminalSessions {
     most: number,
     only?: TerminalSessionPick,
   ) {
-    const all = (await this.files(roots, only)).sort(
+    const all = (await this.files(roots, only, most === Infinity)).sort(
       (a, b) => b.mtime - a.mtime,
     );
     const out: { file: File; origin: NonNullable<Origin> }[] = [];
@@ -268,7 +342,7 @@ export class TerminalSessions {
         })),
       );
       for (const { file, origin } of checked)
-        if (origin?.terminal && roots.has(origin.cwd))
+        if ((origin?.terminal || origin?.app) && roots.has(origin.cwd))
           out.push({ file, origin });
     }
     return out.slice(0, most);
@@ -307,7 +381,11 @@ export class TerminalSessions {
    * each folder read once: an account's folder that links to the usual home
    * counts as the usual home, so its sessions are the default account's.
    */
-  private async files(roots: Set<string>, only?: TerminalSessionPick) {
+  private async files(
+    roots: Set<string>,
+    only?: TerminalSessionPick,
+    all = false,
+  ) {
     const seen = new Set<string>();
     const out: File[] = [];
     for (const { provider, account, home } of await this.homes()) {
@@ -319,18 +397,25 @@ export class TerminalSessions {
                 [...roots].map((r) => join(home, "projects", claudeSlug(r))),
               ),
             ]
-          : codexDays(join(home, "sessions"), this.now());
+          : all
+            ? [join(home, "sessions")]
+            : codexDays(join(home, "sessions"), this.now());
       for (const dir of dirs) {
         const at = await real(dir);
         if (!at || seen.has(at)) continue;
         seen.add(at);
-        const paths = await files(dir, (name) =>
-          provider === "claude"
-            ? name.endsWith(".jsonl") &&
-              (!only || name === `${only.session}.jsonl`)
-            : name.startsWith("rollout-") &&
-              name.endsWith(".jsonl") &&
-              (!only || name.endsWith(`-${only.session}.jsonl`)),
+        const paths = await files(
+          dir,
+          (relative) => {
+            const name = basename(relative);
+            return provider === "claude"
+              ? name.endsWith(".jsonl") &&
+                  (!only || name === `${only.session}.jsonl`)
+              : name.startsWith("rollout-") &&
+                  name.endsWith(".jsonl") &&
+                  (!only || name.endsWith(`-${only.session}.jsonl`));
+          },
+          provider === "codex" && all,
         );
         const stats = await Promise.all(
           paths.map((path) => stat(path).catch(() => undefined)),

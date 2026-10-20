@@ -130,6 +130,7 @@
 }
 
 .sb-scroll {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -148,14 +149,18 @@
   padding: 0 4px 0 10px;
   margin-bottom: 2px;
 }
+/* A rule between Scratchpad and Projects. */
 .sb-scratchpad {
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
+/* Sections read as headings, above the groups' small labels. */
 .sb h2 {
   margin: 0;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
 }
 /* Like a group label: the toggle fills the row, so hover lights the row. */
 .sb-section-heading:has(.sb-section-toggle) {
@@ -201,41 +206,62 @@
   opacity: 1;
 }
 
-/* Groups: a quiet label; their contents step in slightly, and an open group
-   carries a soft accent rail against the window edge (out through the list
-   padding) from the label to its last project, so where a group ends is
-   visible next to ungrouped projects. */
+/* Groups: a quiet label, and a line from under its first letter down the
+   group's rows, which sit clear of it. Drawn as a background, it leaves the
+   rows' ::before and ::after to the drop markers; HoverMark knows its x. */
 .sb-folder {
   position: relative;
-  margin-top: 8px;
-}
-.sb-folder:has(> .sb-folder-body)::before {
-  content: "";
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: -8px;
-  width: 2px;
-  border-radius: 0 1px 1px 0;
-  background: color-mix(in srgb, var(--accent) 45%, transparent);
-  pointer-events: none;
+  margin-top: 10px;
 }
 .sb-folder-body {
-  margin-left: 8px;
-  padding-bottom: 4px;
+  --guide: color-mix(in srgb, var(--muted) 28%, transparent);
+  padding: 0 0 6px 20px;
+  background: linear-gradient(var(--guide), var(--guide)) 10px 0 / 1px
+    calc(100% - 10px) no-repeat;
 }
 .sb-folder:has(> .sb-folder-body) + .sb-project {
   margin-top: 4px;
 }
+/* One for the whole list, sliding along the line to the hovered row. */
+.sb-hover-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 0.28s cubic-bezier(0.34, 1.3, 0.64, 1),
+    opacity 0.16s ease;
+}
+.sb-hover-mark[data-shown] {
+  opacity: 1;
+}
 .sb-folder-row {
+  position: relative;
   display: flex;
   align-items: center;
   border-radius: 7px;
   padding-right: 4px;
 }
+/* Over the count rather than beside it, so the counts keep the right edge
+   the + and the threads' ages end on. */
+.sb-folder-row .sb-row-actions {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+}
 .sb-folder-row:hover .sb-row-actions,
 .sb-folder-row[data-popup-open] .sb-row-actions {
   opacity: 1;
+}
+.sb-folder-row:is(:hover, [data-popup-open], :has([data-popup-open]))
+  .sb-folder-count {
+  visibility: hidden;
 }
 .sb-folder-row .icon-button {
   width: 22px;
@@ -247,7 +273,7 @@
   gap: 5px;
   flex: 1;
   min-width: 0;
-  padding: 5px 10px;
+  padding: 5px 5px 5px 10px;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -272,6 +298,13 @@
 }
 .sb .sb-folder-toggle[aria-expanded="true"] > svg {
   transform: rotate(90deg);
+}
+.sb .sb-folder-toggle > .sb-folder-count {
+  flex: none;
+  margin-left: auto;
+  font-weight: 450;
+  letter-spacing: 0;
+  opacity: 0.75;
 }
 
 /* Naming a group happens in place, styled like the label it becomes. */
@@ -348,6 +381,14 @@
 .sb-project-row[data-popup-open],
 .sb-project-row:has(.sb-row-actions [data-popup-open]) {
   background: var(--hover);
+}
+/* Beside a group's line the hover mark shows the row instead. */
+.sb-folder-body
+  .sb-project-row:hover:not(
+    [data-popup-open],
+    :has(.sb-row-actions [data-popup-open])
+  ) {
+  background: transparent;
 }
 /* The row carries the hover tint; the global button:hover would stack a second one. */
 .sb .sb-project-expand:hover,
@@ -431,6 +472,19 @@
 .sb .sb-section-toggle:hover > .sb-project-chevron,
 .sb .sb-project-chevron:not([data-open]) {
   opacity: 1;
+}
+/* A project's chevron takes no room until hovered (its folder icon says open
+   or closed), so a working project's spinner ends on the row's right edge;
+   on hover the spinner gives way to the chevron, as a thread's age does to
+   its actions. */
+.sb .sb-project-row .sb-project-chevron {
+  display: none;
+}
+.sb .sb-project-row:hover .sb-project-chevron {
+  display: block;
+}
+.sb .sb-project-row:hover .sb-project-chevron-button .sb-status {
+  display: none;
 }
 .sb .sb-project-chevron[data-open] {
   transform: rotate(90deg);
@@ -516,6 +570,13 @@
 .sb .sb-thread:hover:not(:disabled),
 .sb .sb-thread.highlighted {
   background: var(--hover);
+}
+.sb .sb-folder-body .sb-thread {
+  transition: color 0.12s;
+}
+.sb .sb-folder-body .sb-thread:hover:not(:disabled, .selected, .highlighted) {
+  background: transparent;
+  color: var(--text);
 }
 .sb .sb-thread.selected {
   background: var(--selected);
@@ -682,8 +743,7 @@
 .sb-project.drop-after::after {
   animation: sb-line 0.12s ease-out;
 }
-/* Group reordering: ::before is the group's guide line, so the insertion
-   line uses ::after on either edge. */
+/* Group reordering: the insertion line, on either edge. */
 .sb-folder-row[draggable="true"] {
   cursor: grab;
 }
@@ -1399,6 +1459,17 @@
 }
 .sb-note.error {
   color: var(--danger);
+}
+/* No projects yet: the ways to add one, quiet until pointed at. */
+.sb .sb-add-ways .sb-thread {
+  color: var(--muted);
+}
+.sb .sb-add-ways .sb-thread:hover {
+  color: var(--text);
+}
+.sb-add-ways .sb-thread > svg {
+  flex: none;
+  opacity: 0.8;
 }
 
 /* Snooze menu. */

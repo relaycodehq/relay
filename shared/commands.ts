@@ -62,8 +62,9 @@ export const relayCommands = [
   },
   {
     name: "resume",
-    description: "Continue a Claude Code or Codex session from a terminal",
-    args: "<session>",
+    description:
+      "Continue a Claude Code or Codex session from a terminal or their apps",
+    args: "[claude|codex|chatgpt] <session>",
   },
   {
     name: "meme",

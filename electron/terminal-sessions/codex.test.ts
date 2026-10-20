@@ -56,7 +56,10 @@ it("tells terminal sessions from Relay's and exec's by their first line", async 
     cwd: "/repo",
     terminal: true,
   });
-  expect((await codexOrigin(desktop))?.terminal).toBe(false);
+  expect(await codexOrigin(desktop)).toMatchObject({
+    terminal: false,
+    app: true,
+  });
   expect((await codexOrigin(subagent))?.terminal).toBe(false);
   expect((await codexOrigin(relay))?.terminal).toBe(false);
   expect((await codexOrigin(exec))?.terminal).toBe(false);

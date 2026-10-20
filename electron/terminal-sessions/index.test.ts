@@ -1,6 +1,7 @@
 import {
   appendFile,
   mkdir,
+  writeFile,
   mkdtemp,
   realpath,
   rm,
@@ -14,8 +15,11 @@ import {
   writeClaudeSession,
   writeCodexSession,
 } from "../../tests/fixtures/terminal-sessions";
+import { continuesAsCopy } from "../../shared/terminal-sessions";
 import { claudeSummary } from "./claude";
+import { ClaudeAppTitles } from "./claude-app";
 import { TerminalSessions, type SessionHome } from "./index";
+import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 
 vi.mock("./claude", async (actual) => {
   const real = await actual<typeof import("./claude")>();
@@ -42,6 +46,51 @@ const homes =
   ];
 const turns = [{ prompt: "Fix the cache guard", answer: "Fixed." }];
 const HOUR = 3_600_000;
+
+it("merges SQLite and file sessions, preferring current history, and rechecks a pick's folder", async () => {
+  const id = "desktop-chat-01";
+  await writeCodexSession(codex, repo, id, turns, {
+    source: "vscode",
+    originator: "Codex Desktop",
+    name: "Old name",
+  });
+  await writeStoredCodexSession(codex, repo, id, turns, {
+    name: "Current app name",
+  });
+  await writeStoredCodexSession(
+    codex,
+    join(dir, "other"),
+    "other-app-01",
+    turns,
+  );
+  const linked = join(dir, "linked-account");
+  await mkdir(linked);
+  for (const name of ["state_5.sqlite", "thread_history_1.sqlite"])
+    await symlink(join(codex, name), join(linked, name));
+  const sessions = new TerminalSessions(
+    homes([{ provider: "codex", account: "work", home: linked }]),
+  );
+  const rows = await sessions.list(repo);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    id,
+    title: "Current app name",
+    storage: "sqlite",
+    app: true,
+    account: "default",
+  });
+  const picked = await sessions.find(repo, { provider: "codex", session: id });
+  expect(picked).toMatchObject({
+    storage: "sqlite",
+    title: "Current app name",
+  });
+  expect((await sessions.history(picked!)).messages.map((m) => m.body)).toEqual(
+    [turns[0]!.prompt, turns[0]!.answer],
+  );
+  expect(
+    await sessions.find(repo, { provider: "codex", session: "other-app-01" }),
+  ).toBeUndefined();
+});
 
 it("lists the folder's terminal sessions only, newest first", async () => {
   await writeClaudeSession(claude, repo, "c-terminal-1", claudeTurns(turns), {
@@ -74,6 +123,34 @@ it("lists the folder's terminal sessions only, newest first", async () => {
     account: "default",
     live: false,
   });
+});
+
+it("lists the Claude app's sessions under the app's titles, to continue as copies", async () => {
+  await writeClaudeSession(claude, repo, "c-desktop-1", claudeTurns(turns), {
+    entrypoint: "claude-desktop",
+  });
+  const app = join(dir, "app");
+  await mkdir(join(app, "account", "org"), { recursive: true });
+  await writeFile(
+    join(app, "account", "org", "local_a6410523.json"),
+    JSON.stringify({ cliSessionId: "c-desktop-1", title: "Cache guard" }),
+  );
+  const sessions = new TerminalSessions(
+    homes(),
+    undefined,
+    undefined,
+    new ClaudeAppTitles(app),
+  );
+  const [row] = await sessions.list(repo);
+  expect(row).toMatchObject({
+    id: "c-desktop-1",
+    title: "Cache guard",
+    app: true,
+  });
+  expect(continuesAsCopy(row!)).toBe(true);
+  expect(
+    await sessions.find(repo, { provider: "claude", session: "c-desktop-1" }),
+  ).toMatchObject({ title: "Cache guard", app: true });
 });
 
 it("finds sessions from the folder's real path when it's opened through a link", async () => {

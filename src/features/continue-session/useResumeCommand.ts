@@ -8,6 +8,7 @@ import type {
   WorktreeStart,
 } from "../../../shared/projects";
 import type { TerminalSession } from "../../../shared/terminal-sessions";
+import { agentName } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { noteUsed } from "../../lib/used";
 import { forkThreadSettings } from "../agents/composer-settings";
@@ -19,11 +20,11 @@ const NONE = ":none";
 /** A listing older than this is looked up again when the menu asks. */
 const FRESH_MS = 15_000;
 const OFF_BRANCH =
-  "A terminal session goes on from the project folder, not another branch: pick New worktree or Current checkout first";
+  "A session from a terminal or an agent's app goes on from the project folder, not another branch: pick New worktree or Current checkout first";
 
 /**
- * `/resume`: carries on a Claude Code or Codex session run in a terminal in
- * the project's folder, in a thread of its own that opens at once.
+ * `/resume`: carries on a Claude Code or Codex session run in a terminal, or
+ * in the Claude or Codex app, in the project's folder, in a thread of its own that opens at once.
  */
 export function useResumeCommand({
   project,
@@ -93,7 +94,7 @@ export function useResumeCommand({
   return {
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "resume") return undefined;
-      if (project.scratch) return "Scratchpad has no terminal sessions.";
+      if (project.scratch) return "Scratchpad has no sessions to resume.";
       if (offBranch) return `${OFF_BRANCH}.`;
       const typed = args.trim();
       if (typed === LOOKING) return "Still looking for sessions.";
@@ -102,7 +103,7 @@ export function useResumeCommand({
       const session =
         list.find((s) => sessionKey(s) === typed) ??
         matchingSessions(list, typed)[0];
-      if (!session) return `No terminal session matches “${typed}”.`;
+      if (!session) return `No session matches “${typed}”.`;
       noteUsed("resume");
       void resume(session).catch(onError);
       return true;
@@ -121,7 +122,7 @@ export function useResumeCommand({
         value: sessionKey(s),
         label: s.title,
         description: where + sessionDetail(s),
-        source: "Terminal",
+        source: s.app ? `${agentName(s.provider)} app` : "Terminal",
         terminal: true,
       }));
       return found.length || query
@@ -129,8 +130,8 @@ export function useResumeCommand({
         : [
             {
               value: NONE,
-              label: "No terminal sessions",
-              description: `None in ${project.name} in the last 30 days`,
+              label: "No sessions to resume",
+              description: `No saved sessions found in ${project.name}`,
               source: "",
             },
           ];

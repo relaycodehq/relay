@@ -187,3 +187,4 @@ export {
   savedMeta,
 } from "./hosted-sessions";
 export { setOpenCodeEnvRoot } from "./opencode/worktree-env";
+export { watchSavedSignIns } from "./claude/auth-trace";

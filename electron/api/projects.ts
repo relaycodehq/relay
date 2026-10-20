@@ -1,4 +1,8 @@
 import { openPath } from "./open-path";
+import {
+  importAppSchema,
+  importSelectionSchema,
+} from "../../shared/project-import";
 import { app, dialog, nativeImage, shell } from "electron";
 import { lstat, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -98,6 +102,21 @@ export function projectHandlers(ctx: ApiContext) {
     return { root, chatId, ...(await projectRepo(projectId)) };
   }
   return {
+    importProjects: takes([importAppSchema], (app) =>
+      projectChats.imports.list(app),
+    ),
+    importProjectChats: takes(
+      [
+        importAppSchema,
+        z.string().min(1).max(100),
+        folderInputSchema.nullish().transform((value) => value ?? undefined),
+      ],
+      (app, key, folder) => projectChats.imports.chats(app, key, folder),
+    ),
+    importSelectedProjects: takes(
+      [importAppSchema, z.array(importSelectionSchema).min(1).max(1000)],
+      (app, selections) => projectChats.imports.run(app, selections),
+    ),
     projectIcon: takes([idSchema], async (id) =>
       projectIcon(await projects.root(id), (path) => {
         const image = nativeImage.createFromPath(path);

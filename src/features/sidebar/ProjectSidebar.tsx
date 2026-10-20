@@ -44,6 +44,8 @@ import { SearchPalette } from "./SearchPalette";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
+import { HoverMark } from "./HoverMark";
+import type { AddProjectPage } from "../add-project/AddProjectPalette";
 import "./sidebar.css";
 
 /** What the main pane shows, so the sidebar marks it. */
@@ -86,7 +88,8 @@ export function ProjectSidebar({
   onNewScratch: () => void;
   /** Sends the open unsent thread's draft from its composer. */
   onSendDraft: () => void;
-  onAdd: () => void;
+  /** Add a project, the menu having named how. */
+  onAdd: (page: AddProjectPage) => void;
   onInbox: () => void;
   onUsage?: () => void;
   onProcesses?: () => void;
@@ -326,6 +329,7 @@ export function ProjectSidebar({
               empty={!realProjects.length}
               onAdd={onAdd}
             />
+            <HoverMark />
           </>
         )}
       </div>
