@@ -51,7 +51,11 @@ import {
 import { ModelReload, reloadsModels } from "./ModelReload";
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
-import { useCustomModels, useFavoriteModels } from "./useStoredModels";
+import {
+  useCustomModels,
+  useFavoriteModels,
+  useModelPickerCategory,
+} from "./useStoredModels";
 import { useOfferedAgents } from "./registry-agents";
 import "./composer-model-picker.css";
 
@@ -122,6 +126,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   /** The section shown in a grouped agent's list; "" shows them all. */
   const [group, setGroup] = useState("");
   const [favorites, setFavorites] = useFavoriteModels();
+  const [savedCategory, saveCategory] = useModelPickerCategory();
   const { list, captureReorder } = useModelReorder(favorites, open);
   const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
@@ -130,6 +135,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     provider === "message" ? undefined : provider,
   );
   const offered = (providers ?? runnable).filter((p) => catalogs[p]);
+  const openingCategory =
+    !providers &&
+    savedCategory &&
+    (savedCategory === "favorites" ||
+      savedCategory === "message" ||
+      offered.includes(savedCategory))
+      ? savedCategory
+      : provider;
   const selectedKey = JSON.stringify([
     provider,
     provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
@@ -169,8 +182,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     if (!openSignal) return;
     setOpen(true);
     onOpen?.();
-    setCategory(provider);
-    openGroup(provider);
+    setCategory(openingCategory);
+    openGroup(openingCategory);
     setQuery("");
     setLegacy(false);
     // Only a new signal opens the picker, not a changed provider.
@@ -199,6 +212,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   }
   function changeCategory(next: Category) {
     setCategory(next);
+    if (!providers) saveCategory(next);
     openGroup(next);
     setQuery("");
     setLegacy(false);
@@ -227,8 +241,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         setOpen(next);
         if (next) {
           onOpen?.();
-          setCategory(provider);
-          openGroup(provider);
+          setCategory(openingCategory);
+          openGroup(openingCategory);
           setQuery("");
           setLegacy(false);
         }

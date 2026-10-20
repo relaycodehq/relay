@@ -1,7 +1,12 @@
 import { useEffect, useState, type SetStateAction } from "react";
 import { modelSchema } from "../../../shared/settings";
-import { runnableAgents, type AgentProvider } from "../../../shared/agents";
+import {
+  isAgentProvider,
+  runnableAgents,
+  type AgentProvider,
+} from "../../../shared/agents";
 import { persistedStore } from "../../lib/persisted-store";
+import type { Category } from "./model-picker-catalog";
 
 const favoritesKey = "relay-model-favorites";
 const customsKey = (provider: AgentProvider) =>
@@ -26,6 +31,14 @@ function readList(key: string): string[] {
   }
 }
 const favoriteModels = persistedStore(favoritesKey, parseList, JSON.stringify);
+const modelPickerCategory = persistedStore<Category | null>(
+  "relay-model-picker-category",
+  (saved) =>
+    saved === "favorites" || saved === "message" || isAgentProvider(saved)
+      ? saved
+      : null,
+  (category) => category,
+);
 function setFavoriteModels(next: SetStateAction<string[]>) {
   favoriteModels.set(
     typeof next === "function" ? next(favoriteModels.get()) : next,
@@ -38,6 +51,11 @@ export type CustomModels = Partial<Record<AgentProvider, string[]>>;
 /** The starred models, as `modelKey`s, kept in this browser. */
 export function useFavoriteModels() {
   return [favoriteModels.use(), setFavoriteModels] as const;
+}
+
+/** The last tab chosen in the full model picker, shared across threads. */
+export function useModelPickerCategory() {
+  return [modelPickerCategory.use(), modelPickerCategory.set] as const;
 }
 
 /** Model ids typed into the picker, per agent, kept in this browser. */
