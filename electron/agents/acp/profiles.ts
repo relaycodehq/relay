@@ -8,7 +8,9 @@ import { readOnlyEnv } from "./amp-review";
 import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
 import { discoverAntigravitySkills } from "./antigravity-skills";
 import { openCode2Models } from "../opencode/model-ids";
+import { discoverOpenCodeSkills, openCodeSkillContext } from "../opencode/skills";
 import type { AgentSkill } from "../skill-presentation";
+import type { AgentOptions } from "../types";
 
 /** The agents Relay runs over ACP: its own, and those installed from the ACP registry. */
 export type AcpProvider = "amp" | "antigravity" | "opencode" | RegistryProvider;
@@ -64,6 +66,8 @@ export interface AcpProfile {
   compact?: string;
   /** Skills it doesn't list over ACP, read from its folders for `cwd`. */
   skills?(cwd: string): Promise<AgentSkill[]>;
+  /** Selected skills that the agent doesn't expand from ACP prompt text. */
+  skillContext?(options: Pick<AgentOptions, "cwd" | "prompt" | "request" | "signal">): Promise<string[]>;
   /** Its models as Relay offers them, from the list a session sends. */
   models?(listed: AgentModel[]): AgentModel[];
   /** What to tell someone it can't find. */
@@ -197,6 +201,8 @@ const opencode: AcpProfile = {
   ],
   compact: "/compact",
   models: openCode2Models,
+  skills: discoverOpenCodeSkills,
+  skillContext: openCodeSkillContext,
   install: "Install OpenCode from opencode.ai, or in Settings → AI & agents → Agents.",
 };
 

@@ -63,14 +63,14 @@ export function acpCatalog(profile: AcpProfile) {
           fresh()
             .catch(() => undefined)
             .then(() => heardCommands(profile.provider) ?? []),
-        profile.skills?.(root).catch(() => []) ?? [],
+        profile.skills?.(root) ?? [],
       ]);
       return [...heard, ...skillCommands(skills)];
     },
     knownCommands: async (root: string) => {
       const heard = heardCommands(profile.provider);
       if (!heard) return undefined;
-      const skills = (await profile.skills?.(root).catch(() => [])) ?? [];
+      const skills = (await profile.skills?.(root)) ?? [];
       return [...heard, ...skillCommands(skills)];
     },
     forget: fresh.forget,
