@@ -12,6 +12,16 @@ export function ancestors(path: string) {
   return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
 }
 
+/** The root and expanded folders whose ancestors are still expanded. */
+export function visibleDirectories(expanded: ReadonlySet<string>) {
+  return [
+    "",
+    ...[...expanded].filter(
+      (dir) => dir && ancestors(dir).every((parent) => expanded.has(parent)),
+    ),
+  ];
+}
+
 export function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   const units = ["KB", "MB", "GB"];
@@ -34,12 +44,12 @@ export interface TreeRow {
 
 /** The visible rows: each open folder's entries right under it. */
 export function treeRows(
-  listing: (dir: string) => DirListing | undefined,
+  listings: Readonly<Record<string, DirListing | undefined>>,
   expanded: ReadonlySet<string>,
 ) {
   const rows: TreeRow[] = [];
   const walk = (dir: string, depth: number) => {
-    for (const entry of listing(dir)?.entries ?? []) {
+    for (const entry of listings[dir]?.entries ?? []) {
       const path = joinPath(dir, entry.name);
       const open = entry.kind === "dir" && expanded.has(path);
       rows.push({
@@ -49,7 +59,7 @@ export function treeRows(
         kind: entry.kind,
         ignored: entry.ignored,
         open,
-        loading: open && !listing(path),
+        loading: open && !listings[path],
       });
       if (open) walk(path, depth + 1);
     }

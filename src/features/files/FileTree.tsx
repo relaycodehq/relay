@@ -66,14 +66,10 @@ export function FileTree({
   onCreated: (path: string, kind: "file" | "dir") => void;
 }) {
   const queryClient = useQueryClient();
-  const directories = useDirectories(
-    where,
-    expansion.expanded,
-    watched,
-  );
+  const directories = useDirectories(where, expansion.expanded, watched);
   const rows = useMemo(
-    () => treeRows(directories.listing, expansion.expanded),
-    [directories.listing, expansion.expanded],
+    () => treeRows(directories.listings, expansion.expanded),
+    [directories.listings, expansion.expanded],
   );
   const [editing, setEditing] = useState<Editing | null>(null);
   const [error, setError] = useState<unknown>();
@@ -275,7 +271,7 @@ export function FileTree({
             )}
             {row.open &&
               !row.loading &&
-              directories.listing(row.path)?.entries.length === 0 &&
+              directories.listings[row.path]?.entries.length === 0 &&
               !(editing?.mode === "create" && editing.dir === row.path) && (
                 <div
                   className="file-tree-hint"
@@ -292,7 +288,7 @@ export function FileTree({
         {rows.length === 0 && !directories.error && !editing && (
           <div className="file-tree-hint">This folder is empty.</div>
         )}
-        {directories.listing("")?.truncated && (
+        {directories.listings[""]?.truncated && (
           <div className="file-tree-hint">Showing the first 5,000 entries.</div>
         )}
       </div>

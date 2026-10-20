@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { DirListing } from "../../shared/project-files";
-import { ancestors, formatSize, treeRows } from "./file-tree";
+import {
+  ancestors,
+  formatSize,
+  treeRows,
+  visibleDirectories,
+} from "./file-tree";
 
 const entry = (
   name: string,
@@ -24,7 +29,7 @@ const listings: Record<string, DirListing> = {
 
 describe("treeRows", () => {
   it("puts each open folder's entries under it, indented, and leaves closed ones shut", () => {
-    const rows = treeRows((d) => listings[d], new Set(["src", "src/lib"]));
+    const rows = treeRows(listings, new Set(["src", "src/lib"]));
     expect(rows.map((r) => [r.path, r.depth])).toEqual([
       ["src", 0],
       ["src/lib", 1],
@@ -40,7 +45,7 @@ describe("treeRows", () => {
   });
 
   it("marks an open folder whose listing hasn't arrived", () => {
-    const rows = treeRows((d) => listings[d], new Set(["out"]));
+    const rows = treeRows(listings, new Set(["out"]));
     expect(rows.find((r) => r.path === "out")).toMatchObject({
       open: true,
       loading: true,
@@ -48,12 +53,23 @@ describe("treeRows", () => {
   });
 
   it("only opens folders, not files that share a path with an open one", () => {
-    const rows = treeRows((d) => listings[d], new Set(["a.md"]));
+    const rows = treeRows(listings, new Set(["a.md"]));
     expect(rows.find((r) => r.path === "a.md")?.open).toBe(false);
   });
 });
 
 describe("helpers", () => {
+  it("lists only reachable folders without forgetting collapsed descendants", () => {
+    const expanded = new Set(["src", "src/lib", "src/lib/deep", "output"]);
+    expanded.delete("src");
+    expect(visibleDirectories(expanded)).toEqual(["", "output"]);
+    expect(expanded.has("src/lib/deep")).toBe(true);
+    expanded.add("src");
+    expect(new Set(visibleDirectories(expanded))).toEqual(
+      new Set(["", "src", "src/lib", "src/lib/deep", "output"]),
+    );
+  });
+
   it("lists the folders above a path, outermost first", () => {
     expect(ancestors("a/b/c.ts")).toEqual(["a", "a/b"]);
     expect(ancestors("c.ts")).toEqual([]);
