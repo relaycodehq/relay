@@ -19,6 +19,10 @@ export interface ProjectTask {
   started: number;
   ports: number[];
   pids: number;
+  /** Its processes' CPU as a share of the whole computer, 0–100 with every core counted; only when costs were asked for. */
+  cpu?: number;
+  /** Its processes' memory; only when costs were asked for. */
+  mb?: number;
 }
 export type TaskKind =
   | "server"
@@ -30,7 +34,8 @@ export type TaskKind =
   | "git"
   | "script";
 export interface TaskApi {
-  projectTasks(projectId: string): Promise<ProjectTask[]>;
+  /** `costed` also reads what each task costs, which takes more work on Windows. */
+  projectTasks(projectId: string, costed?: boolean): Promise<ProjectTask[]>;
   stopProjectTask(projectId: string, taskId: string): Promise<void>;
   restartProjectTask(projectId: string, taskId: string): Promise<void>;
 }

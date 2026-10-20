@@ -56,9 +56,18 @@ export interface ProcessOverview {
   platform: "darwin" | "linux" | "win32" | "other";
 }
 
+/** The whole computer now. */
+export interface MachineLoad {
+  /** 0–100 with every core counted; missing until a second look. */
+  cpu?: number;
+  usedMb: number;
+  totalMb: number;
+}
+
 export interface ProcessesApi {
   /** What Relay and its agents have running, across every project and worktree. */
   processOverview(): Promise<ProcessOverview>;
+  machineLoad(): Promise<MachineLoad>;
 }
 
 /** Adds up costs; CPU stays unknown only when every part's is. */

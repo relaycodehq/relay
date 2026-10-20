@@ -51,6 +51,24 @@ export async function processTable({ usage = false } = {}): Promise<
   return rows;
 }
 
+/** Fills in Linux's CPU rates from each process's CPU time since the previous look. */
+export class CpuRates {
+  private previous = new Map<string, { ms: number; at: number }>();
+
+  fill(rows: ProcessRow[], now = Date.now()) {
+    const next = new Map<string, { ms: number; at: number }>();
+    for (const row of rows) {
+      if (row.cpuMs === undefined) continue;
+      const key = `${row.pid}:${row.started}`;
+      next.set(key, { ms: row.cpuMs, at: now });
+      const last = this.previous.get(key);
+      if (last && now > last.at)
+        row.cpu = Math.max(0, (100 * (row.cpuMs - last.ms)) / (now - last.at));
+    }
+    this.previous = next;
+  }
+}
+
 /** `ps -o pid=,ppid=,pgid=,rss=,pcpu=,lstart=,command=` in the C locale. */
 export function parsePs(out: string): ProcessRow[] {
   const rows: ProcessRow[] = [];

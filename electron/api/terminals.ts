@@ -25,11 +25,14 @@ export function terminalHandlers(ctx: ApiContext) {
       ),
     );
   return {
-    projectTasks: takes([idSchema], async (id) =>
-      projectTasks.list(
-        await projects.taskFolder(id),
-        projectChats.worktreeFolders(id),
-      ),
+    projectTasks: takes(
+      [idSchema, z.boolean().optional()],
+      async (id, costed) =>
+        projectTasks.list(
+          await projects.taskFolder(id),
+          projectChats.worktreeFolders(id),
+          { costed },
+        ),
     ),
     stopProjectTask: changeTask("stop"),
     restartProjectTask: changeTask("restart"),

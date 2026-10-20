@@ -101,7 +101,7 @@ export async function fullSnapshot(
   return { ...(await quickSnapshot(machine, power)), ...defined({ others }) };
 }
 
-async function memoryNow(): Promise<SystemSnapshot["memory"]> {
+export async function memoryNow(): Promise<SystemSnapshot["memory"]> {
   const memory: SystemSnapshot["memory"] = {
     totalMb: mb(totalmem()),
     freeMb: mb(freemem()),

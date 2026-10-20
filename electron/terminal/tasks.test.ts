@@ -29,6 +29,13 @@ vi.mock("../platform/processes", () => ({
     fake.usage.push(usage);
     return fake.rows.map((r) => ({ ...r }));
   },
+  CpuRates: class {
+    fill() {}
+  },
+}));
+vi.mock("node:os", async (actual) => ({
+  ...(await actual<typeof import("node:os")>()),
+  cpus: () => Array.from({ length: 12 }, () => ({})),
 }));
 vi.mock("node:fs/promises", () => ({
   readlink: async () => fake.cwd,
@@ -326,6 +333,29 @@ it("looks for listening ports once for lists asked for together", async () => {
   expect(fake.listenLooks).toHaveLength(1);
   for (const tasks of lists)
     expect(tasks.map((t) => t.ports)).toEqual([[5173], [3000]]);
+});
+
+it("counts a task's CPU as a share of the whole computer, not of one core", async () => {
+  const root = "/projects/costly";
+  fake.cwd = root;
+  const started = Date.now() - 60000;
+  const host = 2_100_001;
+  const agent = 2_100_002;
+  const shell = 2_100_003;
+  fake.rows = [
+    { pid: process.pid, ppid: 2_100_000, pgid: 0, started: 1, line: "relay" },
+    { pid: host, ppid: process.pid, pgid: 0, started, line: "agent-host" },
+    { pid: agent, ppid: host, pgid: 0, started, line: "/usr/local/bin/claude" },
+    { pid: shell, ppid: agent, pgid: 0, started, line: "/bin/zsh -lc npm run dev", cpu: 0.5, mb: 3 },
+    // Six of the twelve cores busy, as `ps` counts it.
+    { pid: 2_100_004, ppid: shell, pgid: 0, started, line: "node vite", cpu: 599.5, mb: 400 },
+  ];
+  projectTasks.hosts = () => [host];
+  projectTasks.record(root, "thread-2", "npm run dev");
+  const [plain] = await projectTasks.list(root, [], { fresh: true });
+  expect(plain.cpu).toBeUndefined();
+  const [costed] = await projectTasks.list(root, [], { fresh: true, costed: true });
+  expect(costed).toMatchObject({ cpu: 50, mb: 403 });
 });
 
 it("reads costs again when a plain scan was under way or came since", async () => {

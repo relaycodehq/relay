@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { readlink } from "node:fs/promises";
+import { cpus } from "node:os";
 import { sep } from "node:path";
 import { agentProviders, type AgentProvider } from "../../shared/agents";
 import {
@@ -12,7 +13,11 @@ import {
   windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
-import { processTable, type ProcessRow } from "../platform/processes";
+import {
+  CpuRates,
+  processTable,
+  type ProcessRow,
+} from "../platform/processes";
 
 type Proc = ProcessRow;
 const windows = process.platform === "win32";
@@ -119,6 +124,7 @@ class ProjectTasks {
   private terminalFolders = new Map<number, string>();
   /** Whether the last scan read what each process costs. */
   private costed = false;
+  private rates = new CpuRates();
   /** `workingFolders`' answers by `pid:started`; "" where there was none. */
   private processCwds = new Map<string, string>();
   /** Shells Relay started to restart a task, adopted on the next scan. */
@@ -181,6 +187,7 @@ class ProjectTasks {
           options.includeNewServers),
     );
     const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
+    const cost = options.costed ? this.costs() : undefined;
     // An editor or pager open in a terminal isn't worth listing; servers are.
     return tasks
       .map((t) => {
@@ -204,6 +211,7 @@ class ProjectTasks {
           started: t.started,
           ports: listening,
           pids: t.pids.size,
+          ...cost?.(t),
         };
       })
       .filter(
@@ -214,6 +222,26 @@ class ProjectTasks {
             this.tracked.get(t.id)?.restarted),
       )
       .sort((a, b) => a.started - b.started);
+  }
+
+  /** What a task's live processes cost in the last scan, CPU as a share of the whole computer. */
+  private costs() {
+    const rows = new Map(this.last.map((p) => [p.pid, p]));
+    const cores = cpus().length || 1;
+    return (t: Tracked) => {
+      let cpu: number | undefined;
+      let mb = 0;
+      for (const [pid, started] of t.pids) {
+        const row = rows.get(pid);
+        if (row?.started !== started) continue;
+        mb += row.mb ?? 0;
+        if (row.cpu !== undefined) cpu = (cpu ?? 0) + row.cpu;
+      }
+      return {
+        ...(cpu === undefined ? {} : { cpu: Math.min(100, cpu / cores) }),
+        mb: Math.round(mb),
+      };
+    };
   }
 
   /** Stop every process in the task; force the ones still running after 3 seconds. */
@@ -448,6 +476,7 @@ class ProjectTasks {
 
   private async read(costed: boolean) {
     const procs = await processTable({ usage: costed });
+    if (costed) this.rates.fill(procs);
     this.costed = costed;
     this.last = procs;
     const byPid = new Map(procs.map((p) => [p.pid, p]));

@@ -227,7 +227,7 @@ button.running-task-title:hover > svg {
 .running-machine {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin: 4px 2px 0;
   padding: 8px 6px 2px;
   border-top: 1px solid var(--border);
@@ -235,6 +235,13 @@ button.running-task-title:hover > svg {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.running-machine > span {
+  flex: none;
+}
+.running-machine-name {
+  display: flex;
+  align-items: center;
 }
 .running-machine-battery {
   display: flex;
@@ -250,7 +257,7 @@ button.running-task-title:hover > svg {
   color: #d9534f;
 }
 .running-machine-spark {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 16px;
   height: 12px;
 }
