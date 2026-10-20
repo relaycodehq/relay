@@ -344,3 +344,7 @@
   display: block;
   margin-bottom: 8px;
 }
+/* A computer that can't be reached: listed, but saying why on a click. */
+.palette-row[aria-disabled] .headline-project-row-label strong {
+  color: var(--muted);
+}

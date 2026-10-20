@@ -21,7 +21,14 @@ type State =
  * The picker's footer for an agent whose list only changes when it restarts:
  * says so, and asks before stopping the threads running on it.
  */
-export function ModelReload({ provider }: { provider: AgentProvider }) {
+export function ModelReload({
+  provider,
+  computer,
+}: {
+  provider: AgentProvider;
+  /** A project on a paired computer: that computer's copy restarts. */
+  computer?: { id: string; name: string };
+}) {
   const qc = useQueryClient();
   const [state, setState] = useState<State>({ kind: "idle" });
   const name = agentName(provider);
@@ -29,15 +36,21 @@ export function ModelReload({ provider }: { provider: AgentProvider }) {
   async function reload(stopRunning: boolean) {
     const before = new Set(
       qc
-        .getQueryData<{ id: string }[]>(agentModelsQuery(provider).queryKey)
+        .getQueryData<{ id: string }[]>(
+          agentModelsQuery(provider, computer?.id).queryKey,
+        )
         ?.map((m) => m.id) ?? [],
     );
     setState({ kind: "busy" });
     try {
-      const { running } = await api.reloadAgentModels(provider, stopRunning);
+      const { running } = await api.reloadAgentModels(
+        provider,
+        stopRunning,
+        computer?.id,
+      );
       if (running.length) return setState({ kind: "confirm", running });
       const models = await qc.query({
-        ...agentModelsQuery(provider),
+        ...agentModelsQuery(provider, computer?.id),
         staleTime: 0,
       });
       setState({
@@ -93,7 +106,9 @@ export function ModelReload({ provider }: { provider: AgentProvider }) {
                 : "Up to date"
               : state.kind === "failed"
                 ? state.error
-                : `Restarts ${name}`}
+                : computer
+                  ? `Restarts ${name} on ${computer.name}`
+                  : `Restarts ${name}`}
           </span>
         </>
       )}

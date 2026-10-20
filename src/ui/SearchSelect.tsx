@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { listRows } from "./search-select-rows";
 import "./search-select.css";
 
 export interface SearchOption {
@@ -127,20 +128,11 @@ export function SearchSelect({
   const foldOpen = !!query || (unfolded ?? !!picked?.folded);
   const foldGroup = options.find((o) => o.folded)?.group;
   const folded = options.filter((o) => o.folded).length;
-  const groups = new Map<string | undefined, SearchOption[]>();
-  let listed = 0;
-  let over = 0;
-  for (const o of matches) {
-    if (!foldOpen && o.folded) continue;
-    if (limit !== undefined && listed >= limit && o.value !== value) {
-      over++;
-      continue;
-    }
-    listed++;
-    const group = groups.get(o.group);
-    if (group) group.push(o);
-    else groups.set(o.group, [o]);
-  }
+  const { groups, listed, over } = listRows(matches, {
+    foldOpen,
+    limit,
+    value,
+  });
   const creating = query ? create?.label(search.trim()) : undefined;
   // Keyboard order follows what's on screen, group by group.
   const ordered = [

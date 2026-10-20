@@ -65,14 +65,15 @@ export function ComputerCard({
           </small>
         </div>
         {online && <RelayVersion computer={c} onError={setError} />}
-        {c.stopped && (
+        {/* An ssh route waits longer and longer between tries; this tries now. */}
+        {(c.stopped || (c.route?.kind === "ssh" && c.status === "offline")) && (
           <div className="cm-version">
             <button
               className="cm-text-button accent"
               disabled={waking}
               onClick={() => void wake(c.id)}
             >
-              {waking ? "Starting…" : "Reconnect"}
+              {waking ? (c.stopped ? "Starting…" : "Connecting…") : "Reconnect"}
             </button>
           </div>
         )}

@@ -16,3 +16,10 @@ export function relatedFolders(
     return name.startsWith(prefix) && /^[-_.]/.test(name.slice(prefix.length));
   });
 }
+
+/**
+ * The project here at `path`. One on a paired computer can have the same path
+ * (same user name, same folders) and is a different project.
+ */
+export const localProjectAt = (projects: readonly Project[], path: string) =>
+  projects.find((p) => !p.computer && p.path === path);

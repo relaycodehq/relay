@@ -4,6 +4,7 @@ import type {
   ComputersOverview,
   PairedComputer,
 } from "../../../shared/handoff";
+import type { Project } from "../../../shared/projects";
 
 export type Computer = ComputersOverview["computers"][number];
 
@@ -82,6 +83,15 @@ export function updating(c: Computer) {
     return `Updating to ${u.version} once its background work ends`;
 }
 
+/** What a slim row of the map has room for: why it's off, asleep, or how many threads are there. */
+export function slimLine(c: Computer) {
+  if (c.stopped) return "WSL stopped";
+  if (!reachable(c)) return "Offline";
+  if (c.asleep) return "Asleep";
+  const n = c.threads.length;
+  return n ? `${n} ${n === 1 ? "thread" : "threads"}` : "";
+}
+
 export function summary(c: Computer) {
   if (c.asleep || c.stopped) return computerLine(c);
   if (c.status === "offline") return "Offline";
@@ -92,3 +102,49 @@ export function summary(c: Computer) {
   if (!c.threads.length) return "Connected";
   return `Connected · ${c.threads.length} ${c.threads.length === 1 ? "thread" : "threads"}`;
 }
+
+/**
+ * Where a project on another computer lives, as that computer is known now.
+ * Until the paired computers have loaded it counts as online, rather than
+ * flashing offline.
+ */
+export function projectComputer(
+  project: Pick<Project, "computer"> | undefined,
+  computers: readonly PairedComputer[] | undefined,
+) {
+  const home = project?.computer;
+  if (!home) return undefined;
+  const paired = computers?.find((c) => c.id === home.id);
+  return {
+    id: home.id,
+    name: paired?.name ?? home.name,
+    online: computers ? !!paired && reachable(paired) : true,
+    stopped: !!paired?.stopped,
+  };
+}
+
+/**
+ * The ids a query about computer `id` carries in its key: the computer's
+ * own, its projects', and their threads'.
+ */
+export function computerQueryIds(
+  id: string,
+  projects: readonly Pick<Project, "id" | "computer">[],
+  threadsOf: (projectId: string) => readonly { id: string }[] | undefined,
+) {
+  const ids = new Set([id]);
+  for (const p of projects) {
+    if (p.computer?.id !== id) continue;
+    ids.add(p.id);
+    for (const t of threadsOf(p.id) ?? []) ids.add(t.id);
+  }
+  return ids;
+}
+
+/** Whether a query key names one of `ids`, a workspace id by its project. */
+export const keyNames = (key: readonly unknown[], ids: ReadonlySet<string>) =>
+  key.some(
+    (part) =>
+      typeof part === "string" &&
+      (ids.has(part) || ids.has(part.split("/")[0])),
+  );

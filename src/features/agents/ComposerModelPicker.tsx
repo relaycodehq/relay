@@ -84,6 +84,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   openSignal,
   defaultNames,
   account,
+  computer,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -111,6 +112,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     of: (provider: UsageProvider) => string | undefined;
     footer: (provider: UsageProvider, now: number) => ReactNode;
   };
+  /** The paired computer the project lives on, whose agents list the models. */
+  computer?: { id: string; name: string };
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -502,7 +505,11 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
               {category !== "favorites" &&
                 category !== "message" &&
                 reloadsModels(category) && (
-                  <ModelReload key={category} provider={category} />
+                  <ModelReload
+                    key={category}
+                    provider={category}
+                    computer={computer}
+                  />
                 )}
               {reportsUsage(category) &&
                 (account?.footer(category, now) ?? (

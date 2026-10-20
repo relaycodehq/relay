@@ -12,6 +12,7 @@ import {
 } from "./computer-map-geometry";
 import {
   reachable,
+  slimLine,
   stateWord,
   summary,
   type Computer,
@@ -187,7 +188,7 @@ export function MapDiagram({
             >
               <DeviceIcon name={c.name} size={14} />
               <b>{c.name}</b>
-              <small>{rowWord(c)}</small>
+              <small>{slimLine(c)}</small>
               <i className={`cm-dot ${dot}`} />
             </button>
           ) : (
@@ -218,14 +219,6 @@ const isOn = reachable;
 
 const wireKind = (r: Row) =>
   r.kind === "add" ? "add" : r.kind === "offline" || !isOn(r.c) ? "off" : "on";
-
-/** What a slim row has room for: offline, asleep, or how many threads are there. */
-function rowWord(c: Computer) {
-  if (!isOn(c)) return "Offline";
-  if (c.asleep) return "Asleep";
-  const n = c.threads.length;
-  return n ? `${n} ${n === 1 ? "thread" : "threads"}` : "";
-}
 
 /** Busy ones first; two or more offline fold into one row until opened. */
 export function denseRows(computers: Computer[], showOffline: boolean): Row[] {

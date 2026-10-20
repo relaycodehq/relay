@@ -45,7 +45,7 @@ import {
   type Spec,
 } from "./AddingParts";
 import { LinkStep } from "./LinkStep";
-import { relatedFolders } from "./related";
+import { localProjectAt, relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
 import { usePairedComputers } from "../handoff/usePairedComputers";
 import { computerLine, reachable } from "../handoff/computer-status";
@@ -71,6 +71,8 @@ interface Item {
   run: () => void;
   /** A folder's own action, opening or adding it, where `run` goes into it. */
   add?: () => void;
+  /** Shown but can't be gone into now; `run` says why. */
+  unavailable?: boolean;
 }
 
 const addKeys = keys("⌘↵", "Ctrl+↵");
@@ -129,6 +131,7 @@ export function AddProjectPalette({
   const [computer, setComputer] = useState<PairedComputer>();
   const [addingThere, setAddingThere] = useState(false);
   const [thereError, setThereError] = useState<unknown>();
+  const [notice, setNotice] = useState<string>();
   const busy = adding.busy || addingThere;
   const fullSpec: Spec = {
     location: cloneInto,
@@ -204,6 +207,7 @@ export function AddProjectPalette({
     setActive(0);
     adding.clear();
     setThereError(undefined);
+    setNotice(undefined);
   }
   function openComputer(c: PairedComputer) {
     setComputer(c);
@@ -319,12 +323,12 @@ export function AddProjectPalette({
                 ? "Open a folder there; its threads run there"
                 : c.asleep
                   ? "Asleep: opening a folder there wakes it"
-                  : c.stopped
-                    ? computerLine(c)
-                    : "Offline",
-            right: "›",
+                  : computerLine(c),
+            right: reachable(c) ? "›" : undefined,
+            unavailable: !reachable(c),
             section: "On another computer",
-            run: () => reachable(c) && openComputer(c),
+            run: () =>
+              reachable(c) ? openComputer(c) : setNotice(unreachableNote(c)),
           })),
         ...(adding.start?.recent ?? [])
           .filter((f) => !q || f.path.toLowerCase().includes(q))
@@ -361,7 +365,7 @@ export function AddProjectPalette({
   } else if (page === "folder") {
     if (!leaf && dir.length > 1) {
       const self = seenHere.current.get(typedDir);
-      const project = self && projects.find((p) => p.path === self.path);
+      const project = self && localProjectAt(projects, self.path);
       items.push({
         key: `this:${dir}`,
         icon: <FolderOpen size={15} />,
@@ -376,7 +380,7 @@ export function AddProjectPalette({
     for (const f of listing.data ?? []) {
       seenHere.current.set(tildePath(f.path), f);
       if (!f.name.toLowerCase().startsWith(leaf)) continue;
-      const project = projects.find((p) => p.path === f.path);
+      const project = localProjectAt(projects, f.path);
       items.push({
         key: f.path,
         icon: f.repository ? <FolderGit2 size={15} /> : <Folder size={15} />,
@@ -468,7 +472,11 @@ export function AddProjectPalette({
   }
   function existingClone(full: string, host: string) {
     return projects.find((p) => {
-      if (p.path !== `${cloneInto}/${repoName(full)}` || !p.repository)
+      if (
+        p.computer ||
+        p.path !== `${cloneInto}/${repoName(full)}` ||
+        !p.repository
+      )
         return false;
       const remote = parseRemote(
         `${p.repository.server}/${p.repository.owner}/${p.repository.name}`,
@@ -543,9 +551,10 @@ export function AddProjectPalette({
       if (page === "new") create();
       else if (page === "folder" && /^[~/]/.test(query) && !items.length)
         void adding.pick(query).then(finish);
-      else if (page === "computer" && /^[~/]/.test(query) && !items.length)
-        addThere(query);
-      else {
+      else if (page === "computer" && /^[~/]/.test(query) && !items.length) {
+        // Nothing listed yet, or the listing failed: not a typed path to add.
+        if (there.isSuccess) addThere(query);
+      } else {
         const item = items[Math.min(active, items.length - 1)];
         if ((e.metaKey || e.ctrlKey) && item?.add) item.add();
         else item?.run();
@@ -630,6 +639,7 @@ export function AddProjectPalette({
                 setQuery(text);
                 setActive(0);
                 adding.clear();
+                setNotice(undefined);
               }}
               onKeyDown={onKeyDown}
             />
@@ -672,6 +682,11 @@ export function AddProjectPalette({
               )}
               {!!adding.error && <ErrorBox error={adding.error} />}
               {!!thereError && <ErrorBox error={thereError} />}
+              {notice && (
+                <p className="headline-project-empty" role="status">
+                  {notice}
+                </p>
+              )}
               {addingThere && (
                 <p className="headline-project-empty">
                   Adding it on {computer?.name}…
@@ -693,6 +708,7 @@ export function AddProjectPalette({
                       aria-selected={i === active}
                       className="headline-project-row palette-row"
                       data-highlighted={i === active ? "" : undefined}
+                      aria-disabled={item.unavailable || undefined}
                       disabled={busy}
                       onMouseMove={() => setActive(i)}
                       onClick={item.run}
@@ -782,4 +798,15 @@ export function AddProjectPalette({
       )}
     </dialog>
   );
+}
+
+/** Why a computer in the list can't be browsed now, and what brings it back. */
+function unreachableNote(c: PairedComputer) {
+  if (c.stopped)
+    return `WSL stopped ${c.name}. Reconnect it in Settings → Computers, then open a folder there.`;
+  if (c.status === "denied")
+    return `${c.name} no longer accepts this computer. Pair again in Settings → Computers.`;
+  if (c.status === "connecting")
+    return `Still connecting to ${c.name}. Try again in a moment.`;
+  return `${c.name} is offline. Once Relay runs there again, its folders show here.`;
 }

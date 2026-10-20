@@ -93,7 +93,7 @@ export function HomeComputerLine({ project }: { project: Project }) {
   const computers = usePairedComputers(true);
   const where = projectComputer(project, computers.data);
   if (!where) return null;
-  const online = !computers.data || where.online;
+  const { online } = where;
   const gone = !!computers.data?.every((c) => c.id !== where.id);
   const connecting =
     computers.data?.find((c) => c.id === where.id)?.status === "connecting";

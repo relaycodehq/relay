@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { AwayThread } from "../../../shared/handoff";
+import type { AwayThread, PairedComputer } from "../../../shared/handoff";
+import type { Project } from "../../../shared/projects";
 import {
+  computerQueryIds,
+  keyNames,
+  projectComputer,
   reachable,
+  slimLine,
   summary,
   threadLine,
   type Computer,
@@ -136,4 +141,57 @@ describe("a computer's line on the map", () => {
     expect(summary(stopped)).toBe("WSL stopped it");
     expect(reachable(stopped)).toBe(false);
   });
+});
+
+it("says WSL stopped it on a slim row of a crowded map, not just offline", () => {
+  expect(slimLine(computer({ status: "offline", stopped: true }))).toBe(
+    "WSL stopped",
+  );
+  expect(slimLine(computer({ status: "offline" }))).toBe("Offline");
+  expect(slimLine(computer({ status: "offline", asleep: true }))).toBe(
+    "Asleep",
+  );
+});
+
+describe("the computer a project lives on", () => {
+  const project = {
+    computer: { id: "wsl", name: "Ubuntu", projectId: "p" },
+  } as Project;
+  const wsl = (c: Partial<PairedComputer>) =>
+    ({ id: "wsl", name: "Ubuntu", status: "online", ...c }) as PairedComputer;
+
+  it("isn't offline before the paired computers have loaded", () => {
+    expect(projectComputer(project, undefined)?.online).toBe(true);
+  });
+
+  it("is offline once they have, when it's off or no longer paired", () => {
+    expect(projectComputer(project, [wsl({})])?.online).toBe(true);
+    expect(projectComputer(project, [wsl({ status: "offline" })])?.online).toBe(
+      false,
+    );
+    expect(projectComputer(project, [])?.online).toBe(false);
+  });
+});
+
+it("asks again only for the queries of the computer that was woken", () => {
+  const here = { id: "h" } as Project;
+  const there = {
+    id: "p1",
+    computer: { id: "wsl", name: "Ubuntu", projectId: "x" },
+  } as Project;
+  const other = {
+    id: "p2",
+    computer: { id: "mini", name: "mini", projectId: "y" },
+  } as Project;
+  const ids = computerQueryIds("wsl", [here, there, other], (id) =>
+    id === "p1" ? [{ id: "t1" }] : [{ id: "t2" }],
+  );
+  expect(keyNames(["computer-folders", "wsl", "~/"], ids)).toBe(true);
+  expect(keyNames(["project-branches", "p1"], ids)).toBe(true);
+  expect(keyNames(["project-files", "p1/t1?worktree=a"], ids)).toBe(true);
+  expect(keyNames(["project-chat", "t1"], ids)).toBe(true);
+  expect(keyNames(["project-chat", "t2"], ids)).toBe(false);
+  expect(keyNames(["project-branches", "p2"], ids)).toBe(false);
+  expect(keyNames(["project-branches", "h"], ids)).toBe(false);
+  expect(keyNames(["github-repos"], ids)).toBe(false);
 });

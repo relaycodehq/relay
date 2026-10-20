@@ -559,6 +559,7 @@ export function ProjectComposer({
                   openSignal={settingCommands.pickerSignal}
                   onSelect={runs.select}
                   defaultNames={catalogs.defaultNames}
+                  computer={computer}
                   account={{
                     of: accounts.of,
                     footer: (provider, now) =>

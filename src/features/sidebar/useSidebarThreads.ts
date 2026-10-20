@@ -4,6 +4,7 @@ import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { SCRATCH_CHATS } from "../../lib/chat-events";
 import { useAwayViews } from "./useAwayViews";
+import { withAway } from "./with-away";
 
 /** Every project's threads and Scratchpad's, as listed, in no order. */
 export const useEveryThread = (
@@ -47,6 +48,7 @@ export function useSidebarThreads(
   const away = useAwayViews(threads);
   const all = threads
     .filter((c) => !c.archivedAt && (c.id === chatId || !chatIsEmpty(c)))
+    .map((c) => withAway(c, away[c.id]))
     .sort((a, b) => b.updated - a.updated);
   return { all, away, loaded };
 }

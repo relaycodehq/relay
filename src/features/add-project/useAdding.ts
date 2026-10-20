@@ -7,6 +7,7 @@ import type {
   Project,
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import { localProjectAt } from "./related";
 
 /** What a picked folder turned out to be, when it can't simply be added. */
 export type Picked =
@@ -65,7 +66,7 @@ export function useAdding(projects: readonly Project[]) {
       } catch (e) {
         return void setError(e);
       }
-      const project = projects.find((p) => p.path === info.path);
+      const project = localProjectAt(projects, info.path);
       if (project) return void setPicked({ kind: "added", project });
       if (info.kind === "repository")
         return run(() => api.addProjectAt(info.path));
