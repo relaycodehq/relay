@@ -8,6 +8,7 @@ import { projectTasks } from "../terminal/tasks";
 import { localPort } from "./local-urls";
 import { runningServerPorts } from "./running-server";
 import type { PreviewTarget } from "./thread-previews";
+import type { SavedPreview } from "./saved-previews";
 
 /** The configured port in this worktree, validated before any socket is opened. */
 export function worktreeDevPort(port: number, env: Record<string, string>) {
@@ -80,6 +81,7 @@ export class PreviewProjects {
     chatId: string | null,
     url: string | undefined,
     preferredFolder?: string,
+    saved?: SavedPreview,
   ): Promise<PreviewTarget> {
     const chat = chatId
       ? await this.chats.get(chatId)
@@ -108,29 +110,61 @@ export class PreviewProjects {
         ),
       ),
     );
+    const settings = this.projects.get(projectId).settings;
+    const sameSettings =
+      settings?.devCommand === saved?.settings.devCommand &&
+      settings?.devPort === saved?.settings.devPort;
+    let folder = primary;
+    if (preferredFolder) {
+      if (!scope.allowed.includes(preferredFolder))
+        throw new Error(
+          "The saved preview's folder is no longer part of this thread. Open a new address to choose a preview here.",
+        );
+      folder = preferredFolder;
+    }
+    // Changing the configured port keeps the saved path on the new server.
+    if (
+      url &&
+      url === saved?.url &&
+      saved.settings.devPort &&
+      settings?.devPort &&
+      !sameSettings &&
+      folder === saved.folder
+    ) {
+      const env = await this.env(chat, folder);
+      if (localPort(url) === worktreeDevPort(saved.settings.devPort, env)) {
+        const next = new URL(url);
+        next.port = String(worktreeDevPort(settings.devPort, env));
+        url = next.href;
+      }
+    }
     const requested = localPort(url ?? "");
     const remote = !!url && /^https?:\/\//i.test(url) && !requested;
-    let folder = primary;
     if (requested) {
       const matches = [...live].filter(([, ports]) =>
         ports.includes(requested),
       );
-      if (matches.length === 1) folder = matches[0]![0];
-    } else if (!remote && primary === scope.root) {
+      if (
+        preferredFolder &&
+        matches.length &&
+        !matches.some(([path]) => path === preferredFolder)
+      )
+        throw new Error(
+          `The saved preview's port ${requested} is being used by another worktree. Open a new address or change the dev port.`,
+        );
+      if (!preferredFolder && matches.length === 1) folder = matches[0]![0];
+    } else if (!remote && primary === scope.root && !preferredFolder) {
       const worktrees = [...live].filter(
         ([path, ports]) => path !== scope.root && ports.length,
       );
       if (worktrees.length > 1) {
-        if (!worktrees.some(([path]) => path === preferredFolder))
-          throw new Error(
-            "Several of this thread's worktrees have HTTP servers. Open an explicit localhost URL to choose one.",
-          );
-        folder = preferredFolder!;
+        throw new Error(
+          "Several of this thread's worktrees have HTTP servers. Open an explicit localhost URL to choose one.",
+        );
       }
       if (worktrees.length === 1) folder = worktrees[0]![0];
     }
     const env = await this.env(chat, folder);
-    const settings = this.projects.get(projectId).settings;
     const configured =
       settings?.devPort && !remote
         ? worktreeDevPort(settings.devPort, env)
@@ -163,11 +197,23 @@ export class PreviewProjects {
       checkoutPartition,
       partition: chatId ? `persist:thread-${chatId}` : checkoutPartition,
       env,
+      ...(url ? { url } : {}),
+      settings: {
+        devCommand: settings?.devCommand,
+        devPort: settings?.devPort,
+      },
       ...(port
         ? {
             dev: {
               port,
-              ...(port === configured ? { command: settings?.devCommand } : {}),
+              ...(sameSettings &&
+              saved?.folder === folder &&
+              saved.dev?.port === port &&
+              saved.dev.command
+                ? { command: saved.dev.command }
+                : port === configured
+                  ? { command: settings?.devCommand }
+                  : {}),
             },
           }
         : {}),

@@ -104,7 +104,18 @@ export function BrowserSurface({
           <img className="browser-snapshot" src={state.snapshot} alt="" />
         )}
         {!showPage && (
-          <BrowserNotice state={state} failure={opening} onAct={act} />
+          <BrowserNotice
+            state={state}
+            failure={opening}
+            onAct={act}
+            onStart={(command) => {
+              if (!state?.url) return;
+              setOpening(null);
+              void api
+                .navigatePreview(projectId, chatId, state.url, command)
+                .catch((e: Error) => setOpening(e.message));
+            }}
+          />
         )}
       </div>
     </div>
@@ -226,10 +237,12 @@ function BrowserNotice({
   state,
   failure,
   onAct,
+  onStart,
 }: {
   state?: PreviewState;
   failure: string | null;
   onAct: (action: PreviewAction) => void;
+  onStart: (command: string) => void;
 }) {
   if (failure)
     return (
@@ -249,6 +262,9 @@ function BrowserNotice({
       </div>
     );
   const server = state.server;
+  const stopped =
+    state.error?.includes("ERR_CONNECTION_REFUSED") &&
+    /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(?=[:/])/.test(state.url);
   if (server.state === "starting")
     return (
       <div className="browser-notice">
@@ -272,7 +288,10 @@ function BrowserNotice({
   if (state.error)
     return (
       <div className="browser-notice" role="alert">
-        <p>{state.error}</p>
+        <p>{stopped ? "The preview server isn’t running." : state.error}</p>
+        {server.state === "none" && stopped && (
+          <PreviewStart onStart={onStart} />
+        )}
         <button type="button" onClick={() => onAct("reload")}>
           Try again
         </button>
@@ -287,6 +306,38 @@ function BrowserNotice({
         preview starts its own server.
       </small>
     </div>
+  );
+}
+
+/** A URL cannot tell us how to recreate its server. Ask once and remember it. */
+function PreviewStart({ onStart }: { onStart: (command: string) => void }) {
+  const [command, setCommand] = useState("");
+  return (
+    <form
+      className="browser-start"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (command.trim()) onStart(command.trim());
+      }}
+    >
+      <small>
+        Save the dev command to start this preview now and when you return. It
+        needs to listen on the address’s port.
+      </small>
+      <label htmlFor="preview-dev-command">Dev command</label>
+      <input
+        id="preview-dev-command"
+        value={command}
+        onChange={(event) => setCommand(event.target.value)}
+        placeholder="npm run dev"
+        spellCheck={false}
+        autoCapitalize="off"
+        autoComplete="off"
+      />
+      <button type="submit" disabled={!command.trim()}>
+        Start preview
+      </button>
+    </form>
   );
 }
 

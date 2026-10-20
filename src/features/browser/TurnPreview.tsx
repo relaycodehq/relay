@@ -49,7 +49,7 @@ export function TurnPreview({
     enabled: !!preview.shot,
     staleTime: Infinity,
   });
-  const here = !current?.url || current.url === preview.url;
+  const here = current?.url === preview.url;
   const showing = !!panel?.showing && here;
   const unseen =
     !!panel && panel.unseenSince !== null && preview.at >= panel.unseenSince;
