@@ -3,6 +3,7 @@ import {
   _electron as nativeElectron,
   type ElectronApplication,
 } from "@playwright/test";
+import { providerEnv } from "./provider-env";
 
 export * from "@playwright/test";
 
@@ -46,13 +47,14 @@ export function relayEnv(
 
 export const _electron: typeof nativeElectron = {
   launch: async (options = {}) => {
+    const env = relayEnv(options.env);
     const app = await nativeElectron.launch({
       args: ["tests/fixtures/launch.cjs"],
       ...options,
       env: {
         RELAY_TEST_HEADED: "0",
         RELAY_TEST_NATIVE_STORAGE: "0",
-        ...relayEnv(options.env),
+        ...(env.RELAY_TEST_DATA ? providerEnv(env) : env),
       },
     });
     const owner = activeApps;
