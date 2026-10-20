@@ -7,6 +7,7 @@ import {
   type ChatTriage,
   type ChatTriageState,
   type Project,
+  type WorktreeStatus,
 } from "../../../shared/projects";
 import { triageState } from "../../../shared/chat-activity";
 import { nextAfterSettle, triaged } from "./activity";
@@ -160,7 +161,14 @@ export function useThreadActions({
       .getQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] })
       .flatMap(([, list]) => list ?? []);
     if (threadsSharing(listed, c).length) return 0;
-    const status = await api.projectWorktree(c.id).catch(() => null);
+    // Git is asked only when the thread's Changes hasn't, and not for long:
+    // without an answer the thread archives and its worktree stays.
+    const status =
+      qc.getQueryData<WorktreeStatus>(["worktree", c.id]) ??
+      (await Promise.race([
+        api.projectWorktree(c.id).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(resolve, 1000, null)),
+      ]));
     return status && !status.removed ? status.files.length : 0;
   };
   const triage = async (c: ChatSummary, action: ChatTriage) => {

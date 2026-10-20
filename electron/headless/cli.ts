@@ -1117,7 +1117,8 @@ async function setup(home: string, flags: Flags) {
 
   ui.print(section("This computer"));
   ui.print(
-    process.getBuiltinModule("node:sqlite")
+    // Before 22.3 there's no getBuiltinModule to ask with either.
+    process.getBuiltinModule?.("node:sqlite")
       ? row("ok", "Node.js", dim(process.versions.node))
       : row(
           "warn",

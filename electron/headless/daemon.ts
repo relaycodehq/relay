@@ -2,10 +2,12 @@
 // electron/main.ts starts them, for a computer that's only ever reached from
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
 import { delimiter, dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { AgentHosts } from "../agent-host/client";
 import { hostAgents, loadRegistryAgents, setOpenCodeEnvRoot } from "../agents";
 import {
@@ -52,7 +54,7 @@ import { RemoteProjects } from "../handoff/remote-projects";
 import { Handoffs } from "../handoff/sender";
 import { setComputerName, computerName } from "../platform/computer-name";
 import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
-import { pathReady } from "../platform/shell-path";
+import { finishPath, pathReady } from "../platform/shell-path";
 import { ClockifyPlugin } from "../plugins/clockify/service";
 import { DevOps } from "../plugins/devops/service";
 import { PluginSecrets } from "../plugins/secrets";
@@ -114,14 +116,30 @@ export interface DaemonOptions {
 const fetcher = (url: string | URL | Request, init?: RequestInit) =>
   fetch(url, init);
 
-/** Starts everything and resolves once Relay is answering; exits the process when stopped. */
-export async function runDaemon({ home, port, name }: DaemonOptions) {
-  // The Node it runs on comes first on its PATH: the npm that installs agents
-  // into agent-clis, and the `#!/usr/bin/env node` CLIs that puts there, run
-  // on it too instead of an older one the system has (Ubuntu 22.04's is 12).
-  process.env.PATH = [dirname(process.execPath), process.env.PATH]
+/**
+ * The Node the daemon runs on goes first on its PATH when the one there is
+ * missing or older than the agent CLIs take (Ubuntu 22.04's is 12): the npm
+ * that installs agents into agent-clis, and the `#!/usr/bin/env node` CLIs it
+ * puts there, run on it then. A Node the user has that is new enough, nvm's
+ * say, stays first, so their projects' tasks and terminals keep it.
+ */
+async function preferOwnNode(env: NodeJS.ProcessEnv) {
+  const version = await promisify(execFile)("node", ["--version"], {
+    env,
+    timeout: 5000,
+  }).then(
+    ({ stdout }) => stdout,
+    () => "",
+  );
+  if (Number(/^v(\d+)\./.exec(version.trim())?.[1] ?? 0) >= 18) return;
+  env.PATH = [dirname(process.execPath), env.PATH]
     .filter(Boolean)
     .join(delimiter);
+}
+
+/** Starts everything and resolves once Relay is answering; exits the process when stopped. */
+export async function runDaemon({ home, port, name }: DaemonOptions) {
+  finishPath(preferOwnNode);
   const paths = headlessPaths(home);
   const startedAt = Date.now();
   const releaseHome = await claimHome(paths.pid);

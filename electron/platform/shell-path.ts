@@ -245,10 +245,19 @@ function accountShell() {
 }
 
 let hydration: Promise<void> | undefined;
+let afterHydration: ((env: NodeJS.ProcessEnv) => Promise<void>) | undefined;
+
+/** A last change to the filled PATH, made before any lookup goes on; set before the first `pathReady`. */
+export function finishPath(step: (env: NodeJS.ProcessEnv) => Promise<void>) {
+  afterHydration = step;
+}
 
 /** Fills the process PATH once; executable lookups wait for it. */
 export function pathReady(): Promise<void> {
-  return (hydration ??= hydratePath(process.env).catch(() => {}));
+  return (hydration ??= hydratePath(process.env)
+    .catch(() => {})
+    .then(() => afterHydration?.(process.env))
+    .catch(() => {}));
 }
 
 /**

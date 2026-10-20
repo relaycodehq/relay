@@ -44,7 +44,9 @@ export function NewThreadBranch({
 }) {
   const { start, startOn, setStart, setWorkspace, setStartOn, setDetour } =
     worktree;
+  // A later pick says nothing of why an earlier one went to a worktree.
   const go = (pick: BranchPick, reason: string) => {
+    setDetour(undefined);
     if (pick.kind === "checkout") {
       setStart(undefined);
       setWorkspace("checkout");

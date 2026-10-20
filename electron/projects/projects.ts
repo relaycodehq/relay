@@ -375,7 +375,8 @@ export class Projects {
   }
   /**
    * A project whose folder is on a paired computer, as that computer added
-   * it; the one already made for it comes back, unhidden.
+   * it; the one already made for it comes back, unhidden and with what that
+   * computer says of it now: a plain folder may have become a repository.
    */
   async addRemote(
     computer: { id: string; name: string },
@@ -385,11 +386,17 @@ export class Projects {
       p.computer?.id === computer.id && p.computer.projectId === remote.id;
     const existing = this.store.get().projects?.find(same);
     if (existing) {
-      if (existing.removed)
-        await this.store.update((s) => {
-          const p = s.projects?.find(same);
-          if (p) delete p.removed;
-        });
+      await this.store.update((s) => {
+        const p = s.projects?.find(same);
+        if (!p?.computer) return;
+        delete p.removed;
+        p.path = remote.path;
+        if (p.name === p.automaticName) p.name = remote.name;
+        p.automaticName = remote.name;
+        p.computer.name = computer.name;
+        if (remote.plain) p.computer.plain = true;
+        else delete p.computer.plain;
+      });
       return withKind(this.get(existing.id));
     }
     const project: Project = {

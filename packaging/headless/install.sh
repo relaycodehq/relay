@@ -35,7 +35,8 @@ find_node() {
   for candidate in "$(command -v node 2>/dev/null || true)" \
     /opt/homebrew/opt/node@26/bin/node /opt/homebrew/opt/node@24/bin/node \
     /opt/homebrew/opt/node@22/bin/node /usr/local/opt/node@24/bin/node \
-    /usr/local/opt/node@22/bin/node "$HOME/.volta/bin/node"; do
+    /usr/local/opt/node@22/bin/node "$HOME/.volta/bin/node" \
+    "$(cat "$home/node" 2>/dev/null || true)"; do
     if [ -n "$candidate" ] && works "$candidate"; then
       say "$candidate"
       return
@@ -84,6 +85,11 @@ fetch_node() {
   esac
   # Node's own builds need glibc; on Alpine and other musl systems it's theirs to install.
   if [ "$os" = linux ] && ldd --version 2>&1 | grep -qi musl; then return 1; fi
+  # Brought here before: the daemon may be running on it, so it stays as is.
+  if works "$home/node-$node_version-$os-$arch/bin/node"; then
+    node="$home/node-$node_version-$os-$arch/bin/node"
+    return 0
+  fi
   if command -v sha256sum >/dev/null 2>&1; then
     sum() { sha256sum "$1" | cut -d' ' -f1; }
   elif command -v shasum >/dev/null 2>&1; then

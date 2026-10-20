@@ -257,8 +257,9 @@ function ComputerSignedOut({
     if (signedIn.data !== true) return;
     void qc.invalidateQueries({
       predicate: (q) =>
-        q.queryKey[0] === "agent-models" &&
-        q.queryKey[2] === computer.id &&
+        ((q.queryKey[0] === "agent-models" && q.queryKey[2] === computer.id) ||
+          (q.queryKey[0] === "codex-models" &&
+            q.queryKey[1] === computer.id)) &&
         q.state.status === "error",
     });
   }, [signedIn.data, qc, computer.id]);
