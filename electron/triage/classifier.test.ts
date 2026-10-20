@@ -1,4 +1,4 @@
-import { EventEmitter } from "node:events";
+import { ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { classifyChanges } from "./classifier";
@@ -29,20 +29,18 @@ const candidate = prepareCandidate(
     binary: false,
   },
 ) as Candidate;
-let child: EventEmitter & {
+let child: ChildProcess & {
   stdout: PassThrough;
   stderr: PassThrough;
   stdin: PassThrough;
 };
 beforeEach(() => {
-  child = Object.assign(new EventEmitter(), {
+  child = Object.assign(new ChildProcess(), {
     stdout: new PassThrough(),
     stderr: new PassThrough(),
     stdin: new PassThrough(),
   });
-  vi.mocked(spawnExecutable).mockReturnValue(
-    child as ReturnType<typeof spawnExecutable>,
-  );
+  vi.mocked(spawnExecutable).mockReturnValue(child);
   vi.mocked(terminate).mockImplementation(() => {
     setImmediate(() => child.emit("close", null));
   });
