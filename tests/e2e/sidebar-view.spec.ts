@@ -84,7 +84,7 @@ test("sidebar choice survives reloads, browser storage loss and app restarts", a
     await expect(
       page
         .locator(".sb-top")
-        .getByRole("heading", { name: "Projects", exact: true }),
+        .getByRole("heading", { name: "Threads", exact: true }),
     ).toBeVisible();
     await screenshot(page, {
       path: "test-results/screenshots/sidebar-view-projects.png",

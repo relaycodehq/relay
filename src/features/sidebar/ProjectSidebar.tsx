@@ -245,7 +245,7 @@ export function ProjectSidebar({
               Activity <small>({families.top.length})</small>
             </>
           ) : (
-            "Projects"
+            "Threads"
           )}
         </h2>
         <button
