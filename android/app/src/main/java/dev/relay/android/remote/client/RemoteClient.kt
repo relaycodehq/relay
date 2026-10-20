@@ -94,7 +94,7 @@ class RemoteClient(
     private val racer = RouteRacer(owner, options.staggerMs)
 
     /** Raw TCP to the desktop's own loopback over this link, from Bridge.TUNNEL. */
-    val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name })
+    val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name }, warn = { warn(it, null) })
 
     /** The desktop's name, from the link or the saved credentials. */
     val name: String

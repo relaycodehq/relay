@@ -26,6 +26,8 @@ class TunnelStreams internal constructor(
     private val name: () -> String,
     private val window: Int = TunnelLimits.WINDOW,
     private val openMs: Long = 15_000,
+    /** Why a stream ended early; any thread. */
+    private val warn: (String) -> Unit = {},
 ) {
     private val streams = HashMap<Int, Stream>()
     private var next = 1
@@ -57,6 +59,7 @@ class TunnelStreams internal constructor(
             is TunnelFrame.End -> s.incoming.put(Out.End)
             is TunnelFrame.Close -> {
                 streams.remove(s.id)
+                if (frame.reason.isNotEmpty()) warn("Tunnel stream ${s.id} to :${s.port} closed by the computer: ${frame.reason}")
                 s.closed(frame.reason)
             }
             is TunnelFrame.Open -> fail(s, "Only the phone opens streams.")
@@ -72,6 +75,7 @@ class TunnelStreams internal constructor(
 
     private fun fail(s: Stream, reason: String) {
         if (streams.remove(s.id) !== s) return
+        warn("Tunnel stream ${s.id} to :${s.port} failed: $reason")
         send(TunnelFrame.Close(s.id, reason))
         s.abort()
     }
@@ -172,8 +176,8 @@ class TunnelStreams internal constructor(
                     post { if (current) send(TunnelFrame.Data(id, bytes)) }
                 }
             } catch (_: InterruptedException) {
-            } catch (_: IOException) {
-                post { if (current) fail(this, "The phone's connection broke.") }
+            } catch (e: IOException) {
+                post { if (current) fail(this, "The phone's connection broke while reading: ${e.message}") }
             }
         }
 
@@ -195,8 +199,8 @@ class TunnelStreams internal constructor(
                     }
                 }
             } catch (_: InterruptedException) {
-            } catch (_: IOException) {
-                post { if (current) fail(this, "The phone's connection broke.") }
+            } catch (e: IOException) {
+                post { if (current) fail(this, "The phone's connection broke while writing: ${e.message}") }
             }
         }
 
