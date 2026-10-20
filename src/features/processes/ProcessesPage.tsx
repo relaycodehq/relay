@@ -1,6 +1,6 @@
 // What Relay and its agents have running, across every project and worktree,
 // and what each costs. Read from this computer every few seconds while open.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AppWindow,
@@ -26,6 +26,7 @@ import {
 } from "../../../shared/processes";
 import type { TaskKind } from "../../../shared/tasks";
 import { api } from "../../lib/api";
+import { useWindowFocused } from "../../lib/window-focus";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import "./processes.css";
@@ -82,11 +83,16 @@ export function ProcessesPage({
   // started in the folder, so stopping them all asks first.
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
+  const focused = useWindowFocused();
   const query = useQuery({
     queryKey: ["process-overview"],
     queryFn: () => api.processOverview(),
-    refetchInterval: 3000,
+    refetchInterval: focused ? 3000 : 30_000,
   });
+  const { refetch } = query;
+  useEffect(() => {
+    if (focused) void refetch();
+  }, [focused, refetch]);
   const overview = query.data;
   const leftBehind = (overview?.projects ?? []).flatMap((p) =>
     p.folders.flatMap((f) =>
