@@ -49,7 +49,7 @@ export class TerminalContinue {
     const counts = new Map<string, number>();
     for (const { provider } of accountHomes())
       counts.set(provider, (counts.get(provider) ?? 0) + 1);
-    return found.map(({ path, ...session }) => {
+    return found.map(({ path, storage, ...session }) => {
       const chatId = this.continuedBy(projectId, session)?.id;
       return {
         ...session,

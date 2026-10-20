@@ -131,7 +131,7 @@ export function useResumeCommand({
             {
               value: NONE,
               label: "No sessions to resume",
-              description: `None in ${project.name} in the last 30 days`,
+              description: `No saved sessions found in ${project.name}`,
               source: "",
             },
           ];

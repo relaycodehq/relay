@@ -167,10 +167,14 @@ export function useComposerCommands({
             current: o.current,
             fill: o.fill,
           }))
-          .filter((c) =>
-            `${c.name} ${c.label} ${c.description}`
-              .toLowerCase()
-              .includes(query),
+          .filter(
+            (c) =>
+              // /resume already matches title words and source aliases. Those
+              // aliases needn't appear verbatim in a session's visible label.
+              argCommand.name === "resume" ||
+              `${c.name} ${c.label} ${c.description}`
+                .toLowerCase()
+                .includes(query),
           )
       : prefix === "$"
         ? searchSkills(skills, query).map((c) => skillItem(c, skillLabel(c)))

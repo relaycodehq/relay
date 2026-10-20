@@ -53,6 +53,9 @@ it("matches typed words against the title, the agent and where it ran", () => {
   expect(ids("codex docs")).toEqual(["s2", "s3"]);
   expect(ids("claude")).toEqual(["s1"]);
   expect(ids("codex app")).toEqual(["s3"]);
+  expect(ids("chatgpt")).toEqual(["s3"]);
+  expect(ids("CHATGPT docs")).toEqual(["s3"]);
+  expect(ids("chatgpt terminal")).toEqual([]);
   expect(ids("terminal docs")).toEqual(["s2"]);
   expect(ids("  CACHE  ")).toEqual(["s1"]);
   expect(ids("")).toHaveLength(3);

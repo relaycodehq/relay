@@ -1,4 +1,4 @@
-// Claude Code and Codex sessions started in a terminal, or the Claude app, in a project's folder,
+// Claude Code and Codex sessions started in a terminal or their apps, in a project's folder,
 // for a thread to continue. Only listed when asked; nothing is imported until
 // one is picked.
 import { readdir, realpath, stat } from "node:fs/promises";
@@ -18,6 +18,7 @@ import {
 import { ClaudeAppTitles } from "./claude-app";
 import { claudeOpen } from "./claude-open";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
+import { storedCodexHistory, storedCodexSessions } from "./codex-store";
 import { FileCache, head } from "./scan";
 
 /** An agent's config folder for one account: where its sessions are kept. */
@@ -29,6 +30,7 @@ export interface SessionHome {
 
 export interface FoundSession extends TerminalSession {
   path: string;
+  storage?: "sqlite";
 }
 
 const MOST_ROWS = 30;
@@ -85,10 +87,13 @@ export class TerminalSessions {
   /** The project's terminal sessions, newest first. */
   async list(root: string): Promise<FoundSession[]> {
     const roots = new Set([root, (await real(root)) ?? root]);
-    const found = await this.candidates(roots, MOST_ROWS);
+    const [found, stored] = await Promise.all([
+      this.candidates(roots, MOST_ROWS),
+      this.stored(roots, MOST_ROWS),
+    ]);
     const live = await this.live(found);
     const named = await this.appNames(found);
-    return Promise.all(
+    const legacy = await Promise.all(
       found.map(async ({ file, origin }) => {
         const { title, turns } = await this.summary(file, origin.id);
         return {
@@ -104,11 +109,24 @@ export class TerminalSessions {
         } satisfies FoundSession;
       }),
     );
+    // A chat may still have its old rollout after migrating to SQLite.
+    // Prefer its current database history, and keep the usual account when
+    // another account links to the same Codex home.
+    const unique = new Map<string, FoundSession>();
+    for (const session of [...stored, ...legacy]) {
+      const key = `${session.provider}:${session.id}`;
+      if (!unique.has(key)) unique.set(key, session);
+    }
+    return [...unique.values()]
+      .sort((a, b) => b.updated - a.updated)
+      .slice(0, MOST_ROWS);
   }
 
   /** A listed session found again by its id, as it stands now; never by a path from the page. */
   async find(root: string, pick: TerminalSessionPick) {
     const roots = new Set([root, (await real(root)) ?? root]);
+    const [stored] = await this.stored(roots, 1, pick);
+    if (stored) return stored;
     const found = (await this.candidates(roots, Infinity, pick)).find(
       ({ origin }) => origin.id === pick.session,
     );
@@ -125,6 +143,35 @@ export class TerminalSessions {
         (await this.appNames([found])).get(found.origin.id) ||
         (await this.summary(found.file, found.origin.id)).title,
     };
+  }
+
+  private async stored(
+    roots: Set<string>,
+    most: number,
+    pick?: TerminalSessionPick,
+  ): Promise<FoundSession[]> {
+    if (pick && pick.provider !== "codex") return [];
+    const seen = new Set<string>();
+    const found: FoundSession[] = [];
+    for (const { provider, account, home } of await this.homes()) {
+      if (provider !== "codex") continue;
+      const at = await real(join(home, "state_5.sqlite"));
+      if (!at || seen.has(at)) continue;
+      seen.add(at);
+      for (const session of await storedCodexSessions(
+        home,
+        roots,
+        most,
+        pick?.session,
+      ))
+        found.push({
+          ...session,
+          provider,
+          account,
+          live: this.now() - session.updated < LIVE_WINDOW,
+        });
+    }
+    return found.sort((a, b) => b.updated - a.updated).slice(0, most);
   }
 
   /** The Claude app's titles, looked up only when one of its sessions is listed. */
@@ -234,9 +281,11 @@ export class TerminalSessions {
   }
 
   /** What the session holds, as thread messages. */
-  history(session: { provider: TerminalAgent; id: string; path: string }) {
-    return session.provider === "claude"
-      ? claudeHistory(session.path, session.id)
+  history(session: Pick<FoundSession, "provider" | "id" | "path" | "storage">) {
+    if (session.provider === "claude")
+      return claudeHistory(session.path, session.id);
+    return session.storage === "sqlite"
+      ? storedCodexHistory(session.path, session.id)
       : codexHistory(session.path, session.id);
   }
 

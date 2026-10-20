@@ -38,7 +38,8 @@ const AGENT_WORDS = new Set(
 
 /**
  * Sessions matching every word typed. An agent's name, "app" or "terminal"
- * picks where the session ran (`/resume codex app …`); other words search
+ * picks where the session ran (`/resume codex app …`). "chatgpt" aliases
+ * the Codex desktop app (`/resume chatgpt …`); other words search
  * the title.
  */
 export function matchingSessions(sessions: TerminalSession[], search: string) {
@@ -46,11 +47,13 @@ export function matchingSessions(sessions: TerminalSession[], search: string) {
   return sessions.filter((session) => {
     const title = session.title.toLocaleLowerCase();
     return words.every((word) =>
-      AGENT_WORDS.has(word)
-        ? agentName(session.provider).toLocaleLowerCase() === word
-        : word === "app" || word === "terminal"
-          ? (word === "app") === !!session.app
-          : title.includes(word),
+      word === "chatgpt"
+        ? session.provider === "codex" && !!session.app
+        : AGENT_WORDS.has(word)
+          ? agentName(session.provider).toLocaleLowerCase() === word
+          : word === "app" || word === "terminal"
+            ? (word === "app") === !!session.app
+            : title.includes(word),
     );
   });
 }

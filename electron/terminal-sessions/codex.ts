@@ -20,26 +20,39 @@ export async function codexOrigin(path: string) {
   return {
     id: payload.id as string,
     cwd: payload.cwd as string,
+    ...codexSessionOrigin(payload),
+  };
+}
+
+/** Older app chats have no originator; their vscode source predates codex-tui. */
+export function codexSessionOrigin(payload: {
+  originator?: unknown;
+  source?: unknown;
+}) {
+  const session = payload.source === "cli" || payload.source === "vscode";
+  return {
     // The TUI says "vscode" as its source since 0.160 and older ones said "cli",
     // so the originator decides; a subagent's source is an object.
     terminal:
-      (payload.originator === "codex-tui" &&
-        typeof payload.source === "string") ||
+      (payload.originator === "codex-tui" && session) ||
       (payload.source === "cli" && payload.originator !== "relay"),
-    ...(payload.originator === "Codex Desktop" &&
-    typeof payload.source === "string"
+    ...((payload.originator === "Codex Desktop" ||
+      (payload.originator == null && payload.source === "vscode")) &&
+    session
       ? { app: true as const }
       : {}),
   };
 }
 
-const textOf = (content: unknown) =>
+export const codexText = (content: unknown) =>
   Array.isArray(content)
     ? content
         .flatMap((part) =>
           part && typeof part.text === "string"
             ? [part.text as string]
-            : part?.type === "image" || part?.type === "local_image"
+            : part?.type === "image" ||
+                part?.type === "local_image" ||
+                part?.type === "localImage"
               ? ["(image)"]
               : [],
         )
@@ -55,7 +68,7 @@ export async function codexSummary(path: string) {
     const item = parsed(line)?.payload?.item;
     if (item?.type !== "UserMessage") return;
     turns++;
-    first ||= textOf(item.content);
+    first ||= codexText(item.content);
   });
   return { first, turns };
 }
@@ -183,13 +196,13 @@ export function codexTranscript(
     if (payload.type !== "item_completed") continue;
     const item = payload.item ?? {};
     if (item.type === "UserMessage") {
-      transcript.prompt(textOf(item.content) || "(empty message)", at);
+      transcript.prompt(codexText(item.content) || "(empty message)", at);
       turn = payload.turn_id;
       continue;
     }
     if (payload.turn_id !== turn) continue;
     if (item.type === "AgentMessage") {
-      const text = textOf(item.content);
+      const text = codexText(item.content);
       if (item.phase === "commentary") transcript.commentary(item.id, text, at);
       else transcript.text(item.id, text, at);
     } else {

@@ -19,6 +19,7 @@ import { findExecutable } from "../platform/executables";
 import { runningSince } from "../terminal-sessions/claude-open";
 import { defaultAISettings } from "../../shared/settings";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
+import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 import {
   claudeTurns,
   writeClaudeSession,
@@ -231,6 +232,49 @@ it("forks a quiet Claude session a running claude still lists, unless that pid n
     thread: "claude-held-1",
     at: "assistant-14",
   });
+});
+
+it("imports a SQLite desktop chat once and continues using a native Codex fork", async () => {
+  const id = "desktop-chat-01";
+  await writeStoredCodexSession(join(root, "codex-home"), repo, id, turns, {
+    name: "Inspect release script",
+    ago: 60 * 86_400_000,
+  });
+  const [row] = await chats.terminalSessions(projectId);
+  expect(row).toMatchObject({
+    id,
+    title: "Inspect release script",
+    app: true,
+    turns: 2,
+  });
+  expect(row).not.toHaveProperty("storage");
+  expect(row).not.toHaveProperty("path");
+  const pick = { provider: "codex" as const, session: id };
+  const first = await chats.continueTerminalSession(projectId, pick);
+  const second = await chats.continueTerminalSession(projectId, pick);
+  expect(first.created).toBe(true);
+  expect(second).toMatchObject({ created: false, chat: { id: first.chat.id } });
+  const chat = await chats.get(first.chat.id);
+  expect(chat.messages.map((m) => m.body)).toEqual(
+    turns.flatMap((t) => [t.prompt, t.answer]),
+  );
+  expect(chat.fromTerminal).toMatchObject({
+    how: "forked",
+    app: true,
+    open: false,
+  });
+  expect(chat.messages.at(-1)?.forkPoint).toEqual({ thread: id, at: "turn-1" });
+  await sendAndSettle(chat.id, "codex");
+  const callsMade = await calls();
+  expect(
+    callsMade.find((c) => c.method === "thread/fork")?.thread,
+  ).toMatchObject({ threadId: id, lastTurnId: "turn-1" });
+  const prompt = callsMade
+    .find((c) => c.turn)
+    ?.turn.input.map((i: { text?: string }) => i.text ?? "")
+    .join("\n");
+  expect(prompt).toContain("RELAY next");
+  expect(prompt).not.toContain("TERMINAL first");
 });
 
 it("forks Codex sessions at their last finished turn, whether or not one looks open", async () => {
