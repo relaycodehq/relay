@@ -121,9 +121,9 @@ export class CursorConnection {
     params: CursorMethods[M]["params"],
     id = this.reserve(),
   ): Promise<CursorMethods[M]["result"]> {
-    const reply = this.wait(id) as Promise<CursorMethods[M]["result"]>;
     if (this.closed)
       return Promise.reject(new Error("Cursor's worker stopped."));
+    const reply = this.wait(id) as Promise<CursorMethods[M]["result"]>;
     this.child.stdin.write(JSON.stringify({ id, method, params }) + "\n");
     return reply;
   }
