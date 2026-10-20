@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { spawn } from "node:child_process";
 import type { ProcessRow } from "../platform/processes";
 import { agentName, liveCwd, netstatListening, projectTasks } from "./tasks";
 import {
@@ -60,7 +61,7 @@ vi.mock("node:child_process", () => ({
     if (!args.includes("cwd")) return done(null, "");
     done(null, pids.map((pid) => `p${pid}\nn${fake.cwd}`).join("\n"));
   },
-  spawn: () => ({ pid: fake.spawned, on: () => {}, unref: () => {} }),
+  spawn: vi.fn(() => ({ pid: fake.spawned, on: () => {}, unref: () => {} })),
 }));
 
 describe("shellCommand", () => {
@@ -387,3 +388,50 @@ it.skipIf(process.platform === "win32")(
     expect(agentName("/opt/homebrew/bin/claude --resume x")).toBe("claude");
   },
 );
+
+it("delegates managed restarts only after validating the project and live process identity", async () => {
+  const root = "/projects/managed-restart";
+  fake.cwd = root;
+  const pid = 9_000_001;
+  const started = Date.now() - 60000;
+  fake.rows = [
+    { pid, ppid: process.pid, pgid: pid, started, line: "node server.js" },
+  ];
+  const restart = vi.fn(async (stop: () => Promise<void>) => {
+    await stop();
+  });
+  projectTasks.trackServer(pid, "node server.js", root, restart);
+  const [task] = await projectTasks.list(root, [], { fresh: true });
+  const kill = vi.spyOn(process, "kill").mockImplementation((target) => {
+    fake.rows = fake.rows.filter((p) => p.pid !== Math.abs(target));
+    return true;
+  });
+  vi.mocked(spawn).mockClear();
+  try {
+    await expect(
+      projectTasks.restart("/another-project", task!.id),
+    ).rejects.toThrow("no longer running");
+    expect(restart).not.toHaveBeenCalled();
+    expect(kill).not.toHaveBeenCalled();
+    await projectTasks.restart(root, task!.id);
+    expect(restart).toHaveBeenCalledOnce();
+    expect(kill).toHaveBeenCalledWith(-pid, "SIGTERM");
+    expect(spawn).not.toHaveBeenCalled();
+
+    fake.rows = [
+      {
+        pid,
+        ppid: process.pid,
+        pgid: pid,
+        started: started + 1,
+        line: "another process",
+      },
+    ];
+    await expect(projectTasks.restart(root, task!.id)).rejects.toThrow(
+      "no longer running",
+    );
+    expect(restart).toHaveBeenCalledOnce();
+  } finally {
+    kill.mockRestore();
+  }
+});

@@ -44,6 +44,8 @@ interface Tracked {
   shell?: number;
   /** Where it runs when the OS can't say (Windows): the folder of the thread or terminal that started it. */
   hint?: string;
+  /** A managed process keeps its own launch and lifecycle state when restarted. */
+  restart?: (stop: () => Promise<void>) => Promise<void>;
   pids: Map<number, number>;
 }
 
@@ -152,8 +154,19 @@ class ProjectTasks {
   }
 
   /** Dev commands Relay starts directly, outside an agent or terminal shell. */
-  trackServer(pid: number, command: string, cwd: string) {
-    this.adopting.set(pid, { command, cwd, origin: "relay", restarted: true });
+  trackServer(
+    pid: number,
+    command: string,
+    cwd: string,
+    restart: NonNullable<Tracked["restart"]>,
+  ) {
+    this.adopting.set(pid, {
+      command,
+      cwd,
+      origin: "relay",
+      restarted: true,
+      restart,
+    });
     this.scanned = 0;
   }
 
@@ -261,8 +274,18 @@ class ProjectTasks {
 
   /** Stop the task, wait for it to exit so its ports are free, then run its command again in the same folder. */
   async restart(root: string, id: string, worktrees: Worktree[] = []) {
-    if (this.tracked.get(id)?.origin === "terminal")
+    const current = await this.findTask(root, id, worktrees);
+    if (current.origin === "terminal")
       throw new Error("Restart it from its terminal.");
+    if (current.restart)
+      return current.restart(async () => {
+        const { exited } = await this.terminate(root, id, worktrees);
+        await exited;
+        if (this.tracked.has(id))
+          throw new Error(
+            "The dev server is still stopping. Try again shortly.",
+          );
+      });
     const { task, exited } = await this.terminate(root, id, worktrees);
     await exited;
     const options = {
@@ -298,15 +321,20 @@ class ProjectTasks {
     this.scanned = 0;
   }
 
+  private async findTask(root: string, id: string, worktrees: Worktree[]) {
+    const tasks = await this.list(root, worktrees, { fresh: true });
+    const task = this.tracked.get(id);
+    if (!task || !tasks.some((t) => t.id === id))
+      throw new Error("This process is no longer running.");
+    return task;
+  }
+
   private async terminate(
     root: string,
     id: string,
     worktrees: Worktree[] = [],
   ) {
-    const tasks = await this.list(root, worktrees);
-    const task = this.tracked.get(id);
-    if (!task || !tasks.some((t) => t.id === id))
-      throw new Error("This process is no longer running.");
+    const task = await this.findTask(root, id, worktrees);
     const alive = new Map(this.last.map((p) => [p.pid, p]));
     const members = [...task.pids].filter(
       ([pid, started]) => alive.get(pid)?.started === started,
