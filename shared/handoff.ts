@@ -573,6 +573,8 @@ export interface ComputersApi {
   checkComputer(route: ComputerRoute): Promise<RouteCheck>;
   /** Pairs with the Relay a route reaches, over SSH or into WSL. */
   connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
+  /** Ends the check or pairing under way over that route. */
+  stopComputerCheck(route: ComputerRoute): Promise<void>;
   /** The WSL distributions on this computer; none off Windows. */
   wslDistros(): Promise<string[]>;
   /** Installs Relay where the route goes, over it; resolves once it's in. */

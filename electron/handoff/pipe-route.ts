@@ -201,6 +201,7 @@ export class PipeShim {
 export async function pairingLink(
   route: ComputerRoute,
   command = routeCommand,
+  signal?: AbortSignal,
 ) {
   const [file, args] = command(route, ["pair", "--json", "--pipe"]);
   try {
@@ -208,12 +209,14 @@ export async function pairingLink(
       env: routeEnv(),
       timeout: 90_000,
       windowsHide: true,
+      signal,
     });
     const url = (lastJson(text(stdout)) as { url?: unknown } | undefined)?.url;
     if (typeof url !== "string")
       throw new Error(`Relay over ${routeName(route)} gave no pairing code.`);
     return url;
   } catch (e) {
+    if (signal?.aborted) throw new Error("Stopped.");
     const { stdout, stderr, code } = e as {
       stdout?: string;
       stderr?: string;
@@ -252,6 +255,7 @@ const versionLine = [
 export async function checkRoute(
   route: ComputerRoute,
   shell = routeShell,
+  signal?: AbortSignal,
 ): Promise<RouteCheck> {
   const [file, args] = shell(route, versionLine);
   const started = Date.now();
@@ -260,6 +264,7 @@ export async function checkRoute(
       env: routeEnv(),
       timeout: 30_000,
       windowsHide: true,
+      signal,
     });
     const ms = Date.now() - started;
     // A shell startup file may print before it; the answer is the last line.
@@ -270,6 +275,7 @@ export async function checkRoute(
       return { ms, relay: "", broken: broken[1] || "It doesn't start." };
     return { ms, relay: said.replace(/^relay v?/, "") };
   } catch (e) {
+    if (signal?.aborted) throw new Error("Stopped.");
     const { stdout, stderr, code, killed } = e as {
       stdout?: string;
       stderr?: string;

@@ -140,8 +140,25 @@ export function useCheckup() {
       run.current++;
       setCheckup(undefined);
     },
+    /** Ends reaching or pairing over ssh or WSL, the command there included. */
+    stop: () => {
+      if (!stoppable(checkup)) return;
+      run.current++;
+      setCheckup(undefined);
+      if (checkup.target.kind === "route")
+        void api.stopComputerCheck(checkup.target.route);
+    },
   };
 }
+
+/**
+ * Reaching or pairing over a route, which Stop can end. An install isn't:
+ * cut short, it leaves Relay half there; nor is pairing from a link, which
+ * might still pair after the screen let go of it.
+ */
+export const stoppable = (c: Checkup | undefined): c is Checkup =>
+  c?.target.kind === "route" &&
+  (c.phase === "reaching" || c.phase === "pairing");
 
 /** Waiting on something, not on the user. */
 export const busy = (phase: Phase | undefined) =>

@@ -367,6 +367,7 @@ const methods = [
   "addRemoteProject",
   "checkComputer",
   "connectComputer",
+  "stopComputerCheck",
   "wslDistros",
   "sshHosts",
   "installRelayOver",

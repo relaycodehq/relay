@@ -199,12 +199,13 @@ export class Computers {
    * Pairs with the Relay a route reaches, over SSH or into WSL: it asks
    * there for a pairing code, and pairs through a pipe.
    */
-  async pairOver(route: ComputerRoute) {
+  async pairOver(route: ComputerRoute, signal?: AbortSignal) {
     const link = parsePairingUrl(
-      await pairingLink(route, this.options.routeCommand),
+      await pairingLink(route, this.options.routeCommand, signal),
     );
     if (!link)
       throw new Error(`Relay over ${routeName(route)} gave no pairing code.`);
+    if (signal?.aborted) throw new Error("Stopped.");
     const shim = new PipeShim(route, this.options.routeCommand);
     try {
       const port = await shim.listen();

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ChevronDown } from "lucide-react";
+import { ArrowRight, ChevronDown, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { requestAddProject } from "../../lib/add-project-request";
 import { fromTyped, suggestions, type Target } from "./add-targets";
 import { CheckupLines } from "./CheckupLines";
 import { HostList, RouteIcon } from "./HostList";
-import { busy, useCheckup } from "./useCheckup";
+import { busy, stoppable, useCheckup } from "./useCheckup";
 import { usePairedComputers } from "./usePairedComputers";
 
 /** How many fit on the hint row before the rest go behind "more". */
@@ -46,7 +46,7 @@ export function AddComputer({
     hosts.data ?? [],
     paired.data ?? [],
   );
-  const { checkup, check, install, again, reset } = useCheckup();
+  const { checkup, check, install, again, reset, stop } = useCheckup();
   const [text, setText] = useState("");
   const [typedError, setTypedError] = useState<string>();
   const [listOpen, setListOpen] = useState(false);
@@ -115,7 +115,10 @@ export function AddComputer({
             if (checkup && !working) reset();
           }}
           onKeyDown={(e) => {
-            if (e.key === "Escape" && listOpen) {
+            if (e.key === "Escape" && stoppable(checkup)) {
+              e.preventDefault();
+              stop();
+            } else if (e.key === "Escape" && listOpen) {
               e.preventDefault();
               setListOpen(false);
             } else if (e.key === "ArrowDown" && !checkup) {
@@ -128,13 +131,19 @@ export function AddComputer({
             }
           }}
         />
-        <button
-          type="submit"
-          className="primary"
-          disabled={!text.trim() || working}
-        >
-          Check <ArrowRight size={13} aria-hidden />
-        </button>
+        {stoppable(checkup) ? (
+          <button type="button" onClick={stop}>
+            <X size={13} aria-hidden /> Stop
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="primary"
+            disabled={!text.trim() || working}
+          >
+            Check <ArrowRight size={13} aria-hidden />
+          </button>
+        )}
       </form>
       {typedError && (
         <p className="cm-add-error" role="alert">
