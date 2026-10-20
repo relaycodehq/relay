@@ -166,6 +166,22 @@ it("pairs with a Relay in WSL through its pipe, and after a restart wakes it onl
   expect([...later.holders.holds]).toEqual(["Ubuntu"]);
 });
 
+it("saves nothing when Stop comes while pairing through the pipe", async () => {
+  const { command } = await relayInWsl();
+  const stop = new AbortController();
+  // The pipe starts once pairing connects, past the pairing code: Stop lands there.
+  const stopping: typeof routeCommand = (route, args) => {
+    if (args[0] === "pipe") stop.abort();
+    return command(route, args);
+  };
+  const { computers, store } = await laptop(stopping);
+  await expect(computers.pairOver(ubuntu, stop.signal)).rejects.toThrow(
+    "Stopped.",
+  );
+  expect(computers.list()).toEqual([]);
+  expect(store.get().computers ?? []).toEqual([]);
+});
+
 it("follows a distribution still running with threads on it after a Quit, and asks only then", async () => {
   const { command } = await relayInWsl();
   const first = await laptop(command);

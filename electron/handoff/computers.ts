@@ -212,6 +212,7 @@ export class Computers {
       return await this.pairWith(
         { ...link, hosts: ["127.0.0.1"], port },
         route,
+        signal,
       );
     } finally {
       shim.close();
@@ -220,27 +221,37 @@ export class Computers {
   private async pairWith(
     link: NonNullable<ReturnType<typeof parsePairingUrl>>,
     route?: ComputerRoute,
+    signal?: AbortSignal,
   ) {
     const credentials = await new Promise<RemoteCredentials>(
       (resolve, reject) => {
+        if (signal?.aborted) return reject(new Error("Stopped."));
+        const stop = () => {
+          clearTimeout(timer);
+          client.close();
+          reject(new Error("Stopped."));
+        };
+        const settle = () => {
+          clearTimeout(timer);
+          signal?.removeEventListener("abort", stop);
+          client.close();
+        };
         const client = new RemoteClient({
           start: { link, device: computerName(), kind: "computer" },
           WebSocket: this.options.WebSocket,
           timeoutMs: this.options.timeoutMs ?? 20_000,
           onPaired: (paired) => {
-            clearTimeout(timer);
-            client.close();
+            settle();
             resolve(paired);
           },
           onStatus: (status, detail) => {
             if (status !== "denied") return;
-            clearTimeout(timer);
-            client.close();
+            settle();
             reject(new Error(detail ?? "The other computer refused."));
           },
         });
         const timer = setTimeout(() => {
-          client.close();
+          settle();
           reject(
             new Error(
               route
@@ -249,9 +260,15 @@ export class Computers {
             ),
           );
         }, 30_000);
+        signal?.addEventListener("abort", stop, { once: true });
         client.start();
       },
     );
+    // Sealing the token below waits too; a Stop by then still saves nothing.
+    const stopped = () => {
+      if (signal?.aborted) throw new Error("Stopped.");
+    };
+    stopped();
     const existing = this.saved.find((c) => c.key === credentials.key);
     const computer: SavedComputer = {
       id: existing?.id ?? randomUUID(),
@@ -264,6 +281,7 @@ export class Computers {
         (await this.seal(credentials.token)) ?? `plain:${credentials.token}`,
       ...(route ? { route } : {}),
     };
+    stopped();
     await this.store.update((s) => {
       s.computers = [
         ...(s.computers ?? []).filter((c) => c.key !== computer.key),
