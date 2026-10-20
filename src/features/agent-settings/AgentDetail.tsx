@@ -22,6 +22,7 @@ import {
 import { api } from "../../lib/api";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
 import { ErrorBox, IconButton, Spinner } from "../../ui/ui";
+import { OpenCodeSignIn } from "./OpenCodeSignIn";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import {
   linkAgent,
@@ -63,6 +64,7 @@ export function AgentDetail({
   const { cli } = agentInfo(agent.provider);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [openCodeSignIn, setOpenCodeSignIn] = useState(false);
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
     setError(undefined);
@@ -187,6 +189,17 @@ export function AgentDetail({
         </div>
       )}
 
+      {openCodeSignIn && <OpenCodeSignIn onClose={() => setOpenCodeSignIn(false)} />}
+      {agent.provider === "opencode" && !isDeprecated(agent) && (
+        <>
+          <h5 className="agent-detail-section">Provider connections</h5>
+          <SettingsCard>
+            <SettingsRow label="OpenCode providers" hint="Sign in through your browser or connect an API key.">
+              <button type="button" onClick={() => setOpenCodeSignIn(true)}><LogIn size={14} />Connect provider…</button>
+            </SettingsRow>
+          </SettingsCard>
+        </>
+      )}
       {!unknown && (accounts || sdk || agent.account) && (
         <>
           <h5 className="agent-detail-section">Accounts</h5>

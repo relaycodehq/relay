@@ -1,6 +1,22 @@
 import { expect, it } from "vitest";
 import { agentError, withDetails } from "./agent-error";
 
+it("recognizes the stored ACP authentication refusal without classifying other failures as sign-outs", () => {
+  expect(
+    agentError("Authentication required: provider authentication required"),
+  ).toEqual({
+    message: "The model provider needs you to sign in again.",
+    authenticationRequired: true,
+  });
+  for (const error of [
+    "Internal error: provider failed",
+    "HTTP 403 Forbidden",
+    "HTTP 429 Too Many Requests",
+    "Connection failed.",
+  ])
+    expect(agentError(error).authenticationRequired).toBeUndefined();
+});
+
 it("explains an unsupported account model while keeping the exact diagnostic", () => {
   const error = JSON.stringify({
     type: "error",

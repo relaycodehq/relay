@@ -14,6 +14,7 @@ import {
   permissionRequestSchema,
   picked,
   promptResultSchema,
+  AUTH_REQUIRED,
   type AcpPermissionRequest,
   type AcpPromptResult,
   type AcpToolCall,
@@ -93,7 +94,9 @@ async function promptBlocks(options: AgentOptions, agent: AcpAgent, name: string
   const helper = job.kind === "helper" ? job : undefined;
   const note = helper ? undefined : await options.context?.().catch(() => undefined);
   const text = job.kind === "compact" ? agent.profile.compact! : options.prompt;
+  const skills = job.kind === "prompt" ? await agent.profile.skillContext?.(options) ?? [] : [];
   const blocks: object[] = [
+    ...skills.map((text) => ({ type: "text", text, annotations: { audience: ["assistant"] } })),
     { type: "text", text: [helper?.instructions, note, text].filter(Boolean).join("\n\n") },
   ];
   if (options.images?.length) {
@@ -309,6 +312,12 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     }
     if (options.interactionMode === "plan" && answer.trim()) options.onPlan?.(answer);
     return answer;
+  } catch (error) {
+    if (error instanceof AcpRequestError && error.code === AUTH_REQUIRED)
+      throw signedOutError(profile.provider, profile.provider === "opencode"
+        ? "OpenCode's model provider needs you to sign in again. Reconnect the provider, then resume the answer."
+        : undefined);
+    throw error;
   } finally {
     clearTimeout(cancelTimer);
     signal.removeEventListener("abort", stop);

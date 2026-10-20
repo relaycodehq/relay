@@ -15,13 +15,40 @@
 //   spend: dollars each turn adds; the turn ends with one usage_update
 //     carrying the session's total, as OpenCode 2 reports it
 //   spent: what resumed sessions had cost before, by id
+//   skills: OpenCode 2's catalog returned by `opencode api GET /api/skill?...`
+//   RELAY_ACP_SCENARIO_FILE can supply a scenario too large for an environment variable.
 const fs = require("node:fs");
-const scenario = JSON.parse(process.env.RELAY_ACP_SCENARIO || "{}");
+const scenario = JSON.parse(
+  process.env.RELAY_ACP_SCENARIO_FILE
+    ? fs.readFileSync(process.env.RELAY_ACP_SCENARIO_FILE, "utf8")
+    : process.env.RELAY_ACP_SCENARIO || "{}",
+);
 const log = (v) =>
   process.env.RELAY_ACP_LOG &&
   fs.appendFileSync(process.env.RELAY_ACP_LOG, JSON.stringify(v) + "\n");
 const send = (v) =>
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...v }) + "\n");
+
+if (process.argv[2] === "service") {
+  log({ cli: process.argv.slice(2) });
+  if (process.argv[3] === "status") console.log(scenario.serviceUrl ?? "stopped");
+  else if (process.argv[3] === "get" && process.argv[4] === "password") console.log(scenario.servicePassword ?? "fixture-local-password");
+  else process.exit(1);
+  process.exit(0);
+}
+
+if (process.argv[2] === "api") {
+  log({ api: process.argv.slice(2) });
+  if (scenario.skillError) {
+    process.stderr.write(scenario.skillError);
+    process.exit(1);
+  }
+  fs.writeFileSync(
+    1,
+    JSON.stringify(scenario.skillResponse ?? { data: scenario.skills ?? [] }),
+  );
+  process.exit(0);
+}
 
 let signedIn = !scenario.signIn;
 let nextId = 1000;
@@ -39,6 +66,8 @@ const ask = (method, params) =>
   });
 
 async function prompt(m) {
+  if (scenario.promptError || (scenario.authFile && !fs.existsSync(scenario.authFile)))
+    return send({ id: m.id, error: scenario.promptError ?? { code: -32000, message: "Authentication required: provider authentication required" } });
   const sessionId = m.params.sessionId;
   for (const step of scenario.turn ?? []) {
     if (step.update)

@@ -62,6 +62,15 @@ const options = (cwd: string, more: Partial<AgentOptions> = {}): AgentOptions =>
 const say = (text: string) => ({
   update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text } },
 });
+
+it("classifies prompt-time authentication refusals so the thread offers sign-in; leaves other failures alone", async () => {
+  const auth = await agent({ promptError: { code: -32000, message: "Authentication required: provider authentication required" } }, { provider: "opencode", name: "OpenCode" });
+  await expect(runAcp(auth.acp, options(auth.root))).rejects.toMatchObject({ kind: "signedOut", provider: "opencode" });
+  for (const code of [-32603, -32001]) {
+    const failed = await agent({ promptError: { code, message: "Provider request failed" } });
+    await expect(runAcp(failed.acp, options(failed.root))).rejects.toMatchObject({ name: "AcpRequestError", code });
+  }
+});
 const editing = {
   toolCallId: "t1",
   title: "Edit a.ts",

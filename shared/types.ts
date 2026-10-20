@@ -728,6 +728,9 @@ export interface Api
    * downloading its SDK first if needed, or Antigravity.
    */
   signInAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /** OpenCode 2's provider connections. Returned metadata contains no credentials. */
+  openCodeAuthProviders(directory?: string): Promise<import("./opencode-auth").OpenCodeAuthProvider[]>;
+  openCodeAuth(input: import("./opencode-auth").OpenCodeAuthRequest): Promise<import("./opencode-auth").OpenCodeAuthResult>;
   signOutAgent(provider: AgentProvider): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
   /** Every agent the ACP registry lists, as this machine would get it; `fresh` asks again. */

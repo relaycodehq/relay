@@ -11,9 +11,12 @@ it("signs CLI agents in at their own login in the terminal", () => {
     via: "terminal",
     command: "codex login",
   });
-  expect(signInOffer("opencode")).toMatchObject({
-    via: "terminal",
-    command: "opencode auth login",
+});
+
+it("connects OpenCode's providers inside Relay", () => {
+  expect(signInOffer("opencode")).toEqual({
+    via: "relay",
+    label: "Sign in to OpenCode",
   });
 });
 

@@ -24,6 +24,8 @@ export function agentError(error: string): {
   details?: string;
   /** The agent's program isn't on this computer; going again won't help. */
   notInstalled?: boolean;
+  /** ACP's documented authentication error, including answers saved before it was classified. */
+  authenticationRequired?: boolean;
 } {
   const at = error.indexOf(DETAILS);
   if (at >= 0)
@@ -32,6 +34,11 @@ export function agentError(error: string): {
       details: error.slice(at + DETAILS.length),
     };
   const raw = error.trim();
+  if (/^Authentication required(?:: provider authentication required)?\.?$/i.test(raw))
+    return {
+      message: "The model provider needs you to sign in again.",
+      authenticationRequired: true,
+    };
   // electron/platform/executables.ts, when no copy of the CLI turns up.
   const missing = raw.match(
     // Older desktops said "AI models"; their stored errors still reach new readers.

@@ -1,0 +1,40 @@
+.opencode-sign-in {
+  width: min(480px, calc(100vw - 40px));
+}
+.opencode-sign-in-body {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+.opencode-sign-in-body form,
+.opencode-sign-in-body label {
+  display: grid;
+  gap: 8px;
+}
+.opencode-sign-in-body form {
+  gap: 16px;
+}
+.opencode-sign-in-body label {
+  font-size: 13px;
+  margin: 0;
+}
+.opencode-sign-in-body input,
+.opencode-sign-in-body select {
+  width: 100%;
+  min-width: 0;
+}
+.opencode-sign-in-body select {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 400;
+}
+.opencode-sign-in-body p {
+  margin: 0;
+}
+.opencode-sign-in-instructions {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

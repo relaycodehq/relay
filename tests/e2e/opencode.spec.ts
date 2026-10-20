@@ -12,6 +12,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openCodeAuthFixture } from "../fixtures/opencode-auth";
 
 /**
  * Relay with fake Codex, Claude and OpenCode on PATH, and a Git project added.
@@ -357,5 +358,277 @@ test("talks to OpenCode 2 over ACP: picks its model, answers its ask, keeps the 
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode 2 offers REA in the skill picker and sends its instructions over ACP", async () => {
+  test.setTimeout(90000);
+  const body =
+    "REA sample instructions: inspect references/native.md before analysis.";
+  const { app, page, root, capture } = await launchWithOpenCode({
+    skills: [
+      {
+        id: "reverse-engineer-anything",
+        name: "REA",
+        description: "Reverse engineer applications (sample skill)",
+        path: "/sample-skills/rea/SKILL.md",
+        content: body,
+        autoinvoke: false,
+      },
+    ],
+    configOptions: [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "opencode/big-pickle",
+        options: [
+          { value: "opencode/big-pickle", name: "opencode/Big Pickle" },
+        ],
+      },
+    ],
+    turn: [
+      {
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "REA skill received." },
+        },
+      },
+    ],
+  });
+  try {
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Choose model and provider" })
+      .click();
+    await page
+      .getByRole("toolbar", { name: "Model providers" })
+      .getByRole("button", { name: "OpenCode", exact: true })
+      .click();
+    await page.getByRole("option", { name: "Big Pickle", exact: true }).click();
+    const input = page.getByLabel("Message project");
+    await input.fill("$REA");
+    const skill = page.getByRole("option", {
+      name: /REA.*Reverse engineer applications/,
+    });
+    await expect(skill).toBeVisible();
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode2-skills-picker.png"),
+    });
+    await skill.click();
+    await expect(input).toContainText("REA");
+    await input.press("End");
+    await page.keyboard.type(" Inspect this application.");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(page.getByText("REA skill received.")).toBeVisible();
+    const calls = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const blocks = calls
+      .filter((m) => m.method === "session/prompt")
+      .flatMap((m) => m.params.prompt);
+    expect(blocks).toContainEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining(body),
+        annotations: { audience: ["assistant"] },
+      }),
+    );
+    expect(
+      blocks.some((block) =>
+        block.text?.includes(
+          "Base directory for this skill: /sample-skills/rea",
+        ),
+      ),
+    ).toBe(true);
+    const catalog = calls.find((m) => m.api);
+    expect(
+      new URL(catalog.api[2], "http://localhost").searchParams.get(
+        "location[directory]",
+      ),
+    ).toBe(join(root, "notes"));
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode reconnects from the failed answer in Relay, recovers a paused browser check and resumes", async () => {
+  test.setTimeout(120000);
+  const authRoot = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-opencode-login-")),
+  );
+  const authFile = join(authRoot, "connected");
+  const service = await openCodeAuthFixture(authFile);
+  const { app, page, root, capture } = await launchWithOpenCode({
+    serviceUrl: service.url,
+    authFile,
+    configOptions: [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "opencode/deepseek-free",
+        options: [
+          { value: "opencode/deepseek-free", name: "opencode/DeepSeek Free" },
+        ],
+      },
+    ],
+    turn: [
+      {
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "DeepSeek resumed after sign-in." },
+        },
+      },
+    ],
+  });
+  try {
+    await app.evaluate(({ shell }) => {
+      shell.openExternal = async (url) => {
+        (globalThis as any).openedOpenCodeUrl = url;
+      };
+    });
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Choose model and provider" })
+      .click();
+    await page
+      .getByRole("toolbar", { name: "Model providers" })
+      .getByRole("button", { name: "OpenCode", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: "DeepSeek Free", exact: true })
+      .click();
+    await page.getByLabel("Message project").fill("Explain this project.");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    await expect(
+      page.getByText("OpenCode's model provider needs you to sign in again.", {
+        exact: false,
+      }),
+    ).toBeVisible({ timeout: 30000 });
+    await page
+      .getByRole("button", { name: "Sign in to OpenCode", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Connect an OpenCode provider",
+    });
+    await expect(
+      dialog.getByRole("combobox", { name: "Provider", exact: true }),
+    ).toHaveValue("opencode");
+    await expect(
+      dialog.getByRole("combobox", { name: "Sign-in method", exact: true }),
+    ).toHaveValue("device");
+    await screenshot(dialog, {
+      path: join(tmpdir(), "relay-opencode-sign-in-dialog.png"),
+    });
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.dataset.theme))
+      .toBe("dark");
+    await screenshot(dialog, {
+      path: join(tmpdir(), "relay-opencode-sign-in-dialog-dark.png"),
+    });
+    await dialog.getByRole("button", { name: "Continue in browser" }).click();
+    await expect(
+      dialog.getByText("Sample sign-in: enter SAMPLE-123 in your browser."),
+    ).toBeVisible();
+    await expect
+      .poll(() => app.evaluate(() => (globalThis as any).openedOpenCodeUrl))
+      .toContain("https://example.invalid/authorize");
+    service.controls.failure = 503;
+    await expect(
+      dialog.getByRole("button", { name: "Check again" }),
+    ).toBeVisible();
+    await expect(dialog).toContainText("HTTP 503");
+    service.controls.failure = 0;
+    await service.complete();
+    await dialog.getByRole("button", { name: "Check again" }).click();
+    await expect(
+      dialog.getByText(
+        "Connected to OpenCode Console. Resume the answer when you’re ready.",
+      ),
+    ).toBeVisible();
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+    await expect(
+      page.getByRole("region", { name: "Terminal", exact: true }),
+    ).toBeHidden();
+    await page
+      .getByRole("button", { name: "Resume answer", exact: true })
+      .click();
+    await expect(
+      page.getByText("DeepSeek resumed after sign-in."),
+    ).toBeVisible();
+    expect(
+      service.calls.some(
+        (c) => c.body?.answer?.server === "https://example.invalid/console",
+      ),
+    ).toBe(true);
+    expect(
+      service.calls.filter(
+        (c) => c.method === "POST" && c.path.endsWith("/connect/oauth"),
+      ),
+    ).toHaveLength(1);
+    const sent = (await readFile(capture, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(
+      sent.filter((m) => m.method === "session/prompt").length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(JSON.stringify(sent)).not.toContain("auth login");
+
+    // The same connection form is available before a turn fails, in Settings.
+    await page
+      .getByRole("button", { name: "Open settings", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Agents", exact: true }).click();
+    await page.getByRole("option", { name: /^OpenCode/ }).click();
+    await page.getByRole("button", { name: "Connect provider…" }).click();
+    await dialog
+      .getByRole("combobox", { name: "Provider", exact: true })
+      .selectOption("openrouter");
+    await dialog
+      .getByLabel("API key", { exact: true })
+      .fill("sample-openrouter-key");
+    await dialog.getByRole("button", { name: "Save connection" }).click();
+    await expect(dialog).toContainText("Connected to OpenRouter.");
+    expect(
+      service.calls.some(
+        (c) =>
+          c.path.endsWith("/openrouter/connect/key") &&
+          c.body.key === "sample-openrouter-key",
+      ),
+    ).toBe(true);
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+
+    // Closing a pending browser flow cancels that attempt without deleting accounts.
+    await page.getByRole("button", { name: "Connect provider…" }).click();
+    await dialog.getByRole("button", { name: "Continue in browser" }).click();
+    await expect(dialog).toContainText("SAMPLE-123");
+    await dialog.getByRole("button", { name: "Close dialog" }).click();
+    await expect
+      .poll(
+        () =>
+          [...service.attempts.values()].filter((s) => s === "pending").length,
+      )
+      .toBe(0);
+    expect(
+      service.calls
+        .filter((c) => c.method === "DELETE")
+        .every((c) => c.path.includes("/connect/oauth/")),
+    ).toBe(true);
+  } finally {
+    await app.close();
+    await service.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(authRoot, { recursive: true, force: true });
   }
 });

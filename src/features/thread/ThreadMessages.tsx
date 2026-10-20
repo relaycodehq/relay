@@ -355,7 +355,7 @@ export function ThreadMessages({
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
                 onSignIn={
-                  m.signIn && m.id === listed.at(-1)?.id ? signIn : undefined
+                  m.id === listed.at(-1)?.id ? signIn : undefined
                 }
                 onSteer={root?.side ? undefined : onSteer}
                 onCompose={onCompose}
