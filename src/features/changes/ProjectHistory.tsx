@@ -35,11 +35,10 @@ export function ProjectHistory({
   const [limit, setLimit] = useState(PAGE);
   const [selected, setSelected] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  // New commits and branch switches move HEAD; the log follows it.
+  // The shell watches and refreshes the tree; follow its HEAD without another poll.
   const tree = useQuery({
     queryKey: workingTreeKey(projectId),
     queryFn: () => api.projectWorkingTree(projectId),
-    refetchInterval: 5000,
   });
   const head = tree.data?.head;
   const log = useQuery({
