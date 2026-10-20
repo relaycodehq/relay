@@ -9,6 +9,7 @@ import {
   FileDiff,
   Folder,
   FolderOpen,
+  GitCommitHorizontal,
   Redo2,
   Undo2,
 } from "lucide-react";
@@ -53,6 +54,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   onOpen,
   onReveal,
   onRewind,
+  onCommit,
 }: {
   files: TurnFileChange[];
   /** The turn's thread and message, so the card stays folded when shown again. */
@@ -63,6 +65,8 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   onReveal?: (path: string) => Promise<void>;
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
+  /** Opens the commit sheet with what this turn still has in place. */
+  onCommit?: () => void;
 }) {
   const tree = useMemo(() => buildTurnTree(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
@@ -260,6 +264,17 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           <FileDiff size={14} />
           <span className="changed-files-label">Open diff</span>
         </button>
+        {onCommit && reverted < files.length && (
+          <button
+            type="button"
+            className="changed-files-open"
+            title="Commit this turn's files"
+            onClick={onCommit}
+          >
+            <GitCommitHorizontal size={14} />
+            <span className="changed-files-label">Commit</span>
+          </button>
+        )}
         {onRewind && (
           <button
             type="button"

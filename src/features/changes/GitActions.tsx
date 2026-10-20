@@ -24,6 +24,8 @@ type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
 export type GitActionsHandle = {
   /** Opens the branch's PR, as the PR button does. */
   openPr: () => void;
+  /** Opens the commit sheet with just `paths` ticked. */
+  commit: (paths: string[]) => void;
 };
 const MAX_COMMIT_FILES = 1000;
 
@@ -78,6 +80,7 @@ export function GitActions({
     retry: false,
   });
   const [committing, setCommitting] = useState<"commit" | "commit_push">();
+  const [only, setOnly] = useState<string[]>();
   const [merging, setMerging] = useState(false);
   const [creatingPr, setCreatingPr] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -155,11 +158,25 @@ export function GitActions({
     if (action === "pr") openPr();
     else if (action === "push") void push();
     else if (action === "merge") setMerging(true);
-    else setCommitting(action);
+    else {
+      setOnly(undefined);
+      setCommitting(action);
+    }
   }
   useImperativeHandle(ref, () => ({
     openPr() {
       if (!disabled && hasPr) openPr();
+    },
+    commit(paths) {
+      if (disabled || !t) return;
+      const changed = new Set(t.changes.map((c) => c.path));
+      const left = paths.filter((p) => changed.has(p));
+      if (!left.length)
+        return onError(new Error("These changes are already committed."));
+      const action = canPush ? "commit_push" : "commit";
+      if (!enabled[action]) return;
+      setOnly(left);
+      setCommitting(action);
     },
   }));
   if (!t) return null;
@@ -259,6 +276,7 @@ export function GitActions({
           where={where}
           tree={t}
           push={committing === "commit_push"}
+          only={only}
           onClose={() => setCommitting(undefined)}
         />
       )}

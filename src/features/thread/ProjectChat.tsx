@@ -80,6 +80,8 @@ export interface ThreadOpens {
   onOpenCode: (mode: "changes" | "files") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
+  /** Absent where the thread has no Git to commit to. */
+  onCommitFiles?: (paths: string[]) => void;
 }
 
 export function ProjectChat({

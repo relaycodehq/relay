@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactNode, Ref } from "react";
+import type { ComponentProps, ReactNode, Ref, RefObject } from "react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { threadWorktree } from "../../shared/projects";
@@ -162,6 +162,7 @@ export function ThreadWorkspace({
   allProjects,
   everyThread,
   composer,
+  gitActions,
   hidden,
   onChoosePR,
   onCommand,
@@ -180,6 +181,7 @@ export function ThreadWorkspace({
   allProjects: Project[];
   everyThread: ChatSummary[];
   composer: Ref<ComposerControls>;
+  gitActions: RefObject<GitActionsHandle | null>;
   hidden?: boolean;
   onChoosePR?: () => void;
   onCommand: (command: RelayCommand) => boolean;
@@ -256,6 +258,9 @@ export function ThreadWorkspace({
                   onOpenCode: opens.openCode,
                   onOpenFile: opens.openChatFile,
                   onOpenTurnDiff: opens.openTurnDiff,
+                  onCommitFiles: project.plain
+                    ? undefined
+                    : (paths) => gitActions.current?.commit(paths),
                 }}
                 onCommand={onCommand}
                 onDraftWorkspace={nav.setDraftWorkspace}

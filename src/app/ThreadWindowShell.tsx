@@ -124,6 +124,7 @@ export default function ThreadWindowShell({
           allProjects={projects.data ?? NO_PROJECTS}
           everyThread={everyThread}
           composer={composer}
+          gitActions={gitActions}
           onCommand={runCommand}
           onStartThread={async () => toMain()}
           onCreated={async () => {}}

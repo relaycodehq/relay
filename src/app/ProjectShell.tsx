@@ -441,6 +441,7 @@ export default function ProjectShell() {
             allProjects={projects.data ?? NO_PROJECTS}
             everyThread={everyThread}
             composer={composer}
+            gitActions={gitActions}
             hidden={settings.open}
             onChoosePR={
               project.repository || account

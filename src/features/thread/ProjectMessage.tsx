@@ -151,6 +151,7 @@ export const Message = memo(function Message({
   onChanges,
   onTurnDiff,
   onRewind,
+  onCommit,
   projectRoot,
   onOpenFile,
   replyCount = 0,
@@ -179,6 +180,8 @@ export const Message = memo(function Message({
     mode: "revert" | "redo",
     force: boolean,
   ) => Promise<{ conflicts: string[] }>;
+  /** Commits what the turn changed; absent where there's no Git to commit to. */
+  onCommit?: (m: ChatMessage) => void;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
@@ -517,6 +520,7 @@ export const Message = memo(function Message({
               ? (paths, mode, force) => onRewind(m, paths, mode, force)
               : undefined
           }
+          onCommit={chatId && onCommit ? () => onCommit(m) : undefined}
         />
       )}
       {m.role === "assistant" && strip}

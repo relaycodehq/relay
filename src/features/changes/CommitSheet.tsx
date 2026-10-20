@@ -27,6 +27,7 @@ export function CommitSheet({
   where,
   tree,
   push,
+  only,
   onClose,
 }: {
   project: Project;
@@ -34,11 +35,19 @@ export function CommitSheet({
   /** Kept current by the poll, so the commit checks the latest revision. */
   tree: WorkingTree;
   push: boolean;
+  /** Ticks just these files at first, like the files of one agent turn. */
+  only?: readonly string[];
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const key = workingTreeKey(where);
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => {
+    if (!only) return new Set();
+    const keep = new Set(only);
+    return new Set(
+      tree.changes.map((c) => c.path).filter((p) => !keep.has(p)),
+    );
+  });
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
