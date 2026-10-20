@@ -12,13 +12,19 @@ import type {
 import { linkedFoldersSchema, linkName } from "../../shared/projects";
 import { repositoryRoot } from "./projects";
 
-/** `~/work` → `/Users/you/work`. */
-export const expandHome = (path: string) =>
-  path === "~" ||
-  path.startsWith("~/") ||
-  (process.platform === "win32" && path.startsWith("~\\"))
+/**
+ * `~/work` → `/Users/you/work`. Another computer may send a Windows path
+ * (`~\work`, `\\server\share`), which means nothing off Windows.
+ */
+export function expandHome(path: string) {
+  if (process.platform !== "win32" && /^(~\\|\\\\)/.test(path))
+    throw new Error(`${path} is a Windows path; use / on this computer.`);
+  return path === "~" ||
+    path.startsWith("~/") ||
+    (process.platform === "win32" && path.startsWith("~\\"))
     ? homedir() + path.slice(1)
     : path;
+}
 
 const isRepository = (dir: string) =>
   lstat(join(dir, ".git")).then(

@@ -9,7 +9,7 @@ import {
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { checkNewLinks, folderPreview } from "./folder-inspect";
+import { checkNewLinks, expandHome, folderPreview } from "./folder-inspect";
 
 let dir: string;
 beforeEach(async () => {
@@ -50,6 +50,15 @@ it("previews empty folders and surfaces unreadable paths", async () => {
   });
   await expect(folderPreview(join(dir, "missing"))).rejects.toThrow();
 });
+
+it.skipIf(process.platform === "win32")(
+  "refuses a Windows path another computer sent instead of making a folder named after it",
+  () => {
+    expect(() => expandHome("~\\work")).toThrow("Windows path");
+    expect(() => expandHome("\\\\server\\share")).toThrow("Windows path");
+    expect(expandHome("/srv/work")).toBe("/srv/work");
+  },
+);
 
 it("persists a canonical path and rejects duplicate symlink and dot-segment identities", async () => {
   const target = join(dir, "backend");

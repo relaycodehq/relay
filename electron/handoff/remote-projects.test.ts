@@ -67,31 +67,40 @@ it("doesn't wake a sleeping WSL distribution for the sidebar's icon, and shows t
 });
 
 it("registers a remote clone with that computer's project identity and path", async () => {
+  let polls = 0;
   const call = vi.fn(async (method: string) =>
     method === "computerInfo"
       ? { bridge: 29 }
-      : {
-          done: true,
-          project: { id: "there", name: "Web", folder: "~/work/web" },
-        },
+      : ++polls === 1
+        ? { done: false, step: "Receiving objects", progress: 0.5 }
+        : {
+            done: true,
+            project: { id: "there", name: "Web", folder: "~/work/web" },
+          },
   );
+  const client = { call };
   const computers = {
     onEvent: () => {},
     onOnline: () => {},
     get: () => ({ id: "pc", name: "Studio" }),
     status: () => "online",
     list: () => [],
-    connected: async () => ({ call }),
+    connected: async () => client,
   } as unknown as Computers;
   const addRemote = vi.fn(async () => ({ id: "here" }));
   const remote = new RemoteProjects(computers, {
     addRemote,
   } as unknown as Projects);
+  expect(await remote.clone("pc", "acme/web", "~/work")).toMatchObject({
+    done: false,
+  });
   expect(await remote.clone("pc", "acme/web", "~/work")).toEqual({
     done: true,
     project: { id: "here" },
   });
   expect(call).toHaveBeenCalledWith("cloneProject", "acme/web", "~/work");
+  // The bridge is asked once per connection, not on every poll.
+  expect(call.mock.calls.filter(([m]) => m === "computerInfo")).toHaveLength(1);
   expect(addRemote).toHaveBeenCalledWith(
     { id: "pc", name: "Studio" },
     { id: "there", name: "Web", path: "~/work/web", plain: undefined },
@@ -127,7 +136,6 @@ it("clones through the receiving service with the chosen folder and forwards set
   const dispatch = vi.fn(async () => ({
     cloneFolder: "/srv/projects",
     home: "/home/remote",
-    recent: [],
   }));
   const receiver = new HandoffReceiver({
     version: () => "0.18.2",

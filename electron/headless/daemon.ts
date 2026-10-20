@@ -17,7 +17,6 @@ import {
 } from "../agents";
 import {
   AgentAccounts,
-  accountHomes,
   setProfilesRoot,
 } from "../agents/accounts";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
@@ -68,7 +67,6 @@ import { ChatSummaryFeed } from "../project-chats/chat-summaries";
 import { PullMerges } from "../project-chats/pull-merges";
 import { Projects } from "../projects/projects";
 import { ProjectAdding } from "../project-add";
-import { TerminalSessions } from "../terminal-sessions";
 import { GithubLogin } from "../pull-requests/github-login";
 import { pullRequestHosts } from "../pull-requests/setup";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
@@ -296,8 +294,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     store,
     projects,
     client: () => login.client,
-    sessions: new TerminalSessions(async () => accountHomes()),
-    appData: home,
     send: () => {},
   });
   const api = apiContext({

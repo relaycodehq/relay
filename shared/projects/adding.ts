@@ -30,19 +30,10 @@ export interface GithubRepo {
 export type GithubRepos =
   { login: string; repos: GithubRepo[] } | { problem: string };
 
-/** A folder an agent in a terminal worked in lately that isn't a project. */
-export interface RecentFolder {
-  path: string;
-  repository: boolean;
-  /** Epoch ms of the newest session there. */
-  when: number;
-}
-
-/** Where the palette opens: the folder clones go to, and recent folders. */
+/** Where the palette opens: the folder clones go to, and that computer's home. */
 export interface AddingStart {
   cloneFolder: string;
   home: string;
-  recent: RecentFolder[];
 }
 
 /** A clone or a new project under way, or null once it is over. */

@@ -729,17 +729,21 @@ export const terminalOps = [
 ] as const;
 export type TerminalOp = (typeof terminalOps)[number];
 export type HandoffPart = "thread" | "bundle";
+/** The `computerCall`s that set a project up there, from `remoteAddingBridge`. */
+export const computerAddingMethods = [
+  "folderPreview",
+  "addingStart",
+  "githubRepos",
+  "createProject",
+  "cancelProjectAdding",
+] as const satisfies readonly ApiMethod[];
 /**
  * Calls about a paired computer itself, not one of its projects, that a
  * project living there needs from it (`computerCall`): project setup, its
  * agents and their models.
  */
 export const computerCallMethods = [
-  "folderPreview",
-  "addingStart",
-  "githubRepos",
-  "createProject",
-  "cancelProjectAdding",
+  ...computerAddingMethods,
   "agentModels",
   "agentVersions",
   "checkAgentVersions",
