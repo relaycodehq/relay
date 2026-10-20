@@ -207,6 +207,20 @@
   font-size: 12px;
 }
 
+.create-pull-sheet .commit-settle-thread {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 400;
+}
+.commit-settle-thread input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 .commit-sheet-note {
   margin: -4px 0 0;
   font-size: 12px;

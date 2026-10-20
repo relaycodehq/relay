@@ -25,7 +25,7 @@ export type GitActionsHandle = {
   /** Opens the branch's PR, as the PR button does. */
   openPr: () => void;
   /** Opens the commit sheet with just `paths` ticked. */
-  commit: (paths: string[]) => void;
+  commit: (paths: string[], chatId?: string) => void;
 };
 const MAX_COMMIT_FILES = 1000;
 
@@ -81,6 +81,7 @@ export function GitActions({
   });
   const [committing, setCommitting] = useState<"commit" | "commit_push">();
   const [only, setOnly] = useState<string[]>();
+  const [commitThread, setCommitThread] = useState<string>();
   const [merging, setMerging] = useState(false);
   const [creatingPr, setCreatingPr] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -160,6 +161,7 @@ export function GitActions({
     else if (action === "merge") setMerging(true);
     else {
       setOnly(undefined);
+      setCommitThread(undefined);
       setCommitting(action);
     }
   }
@@ -167,15 +169,15 @@ export function GitActions({
     openPr() {
       if (!disabled && hasPr) openPr();
     },
-    commit(paths) {
+    commit(paths, chatId) {
       if (disabled || !t) return;
       const changed = new Set(t.changes.map((c) => c.path));
       const left = paths.filter((p) => changed.has(p));
-      if (!left.length)
-        return onError(new Error("These changes are already committed."));
+      if (!left.length) return;
       const action = canPush ? "commit_push" : "commit";
       if (!enabled[action]) return;
       setOnly(left);
+      setCommitThread(chatId);
       setCommitting(action);
     },
   }));
@@ -277,6 +279,22 @@ export function GitActions({
           tree={t}
           push={committing === "commit_push"}
           only={only}
+          onSettleThread={
+            commitThread
+              ? () => {
+                  void api
+                    .triageProjectChat(commitThread, { kind: "settle" })
+                    .catch((e) =>
+                      onError(
+                        new Error(
+                          "Committed successfully, but the thread couldn’t be settled.",
+                          { cause: e },
+                        ),
+                      ),
+                    );
+                }
+              : undefined
+          }
           onClose={() => setCommitting(undefined)}
         />
       )}

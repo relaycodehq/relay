@@ -10,6 +10,7 @@ import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { keys } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
+import { useStoredFlag } from "../../lib/useStoredFlag";
 import { CommitFileList } from "./CommitFileList";
 import { CommitModel, useCommitModel } from "./CommitModel";
 import { useAISettings } from "../agents/useAISettings";
@@ -28,6 +29,7 @@ export function CommitSheet({
   tree,
   push,
   only,
+  onSettleThread,
   onClose,
 }: {
   project: Project;
@@ -37,10 +39,15 @@ export function CommitSheet({
   push: boolean;
   /** Ticks just these files at first, like the files of one agent turn. */
   only?: readonly string[];
+  /** Present when committing from a turn's changes, bound to its thread. */
+  onSettleThread?: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const key = workingTreeKey(where);
+  const [settleThread, setSettleThread] = useStoredFlag(
+    "relay-settle-thread-after-commit",
+  );
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => {
     if (!only) return new Set();
     const keep = new Set(only);
@@ -145,6 +152,7 @@ export function CommitSheet({
         });
         qc.setQueryData(key, next);
       }
+      if (settleThread) onSettleThread?.();
       onClose();
     } catch (e) {
       setError(e);
@@ -165,6 +173,7 @@ export function CommitSheet({
           revision: tree.revision,
         }),
       );
+      if (settleThread) onSettleThread?.();
       onClose();
     } catch (e) {
       setError(e);
@@ -186,6 +195,17 @@ export function CommitSheet({
       return next;
     });
   const subject = message.split("\n", 1)[0].trim().length;
+  const settleOption = onSettleThread && (
+    <label className="commit-settle-thread">
+      <input
+        type="checkbox"
+        checked={settleThread}
+        onChange={(e) => setSettleThread(e.target.checked)}
+        disabled={busy}
+      />
+      Settle thread after commit
+    </label>
+  );
   return (
     <Modal
       title={push ? "Commit & push" : "Commit"}
@@ -216,6 +236,7 @@ export function CommitSheet({
         {allCommitted ? (
           <>
             {!!error && <ErrorBox error={error} />}
+            {settleOption}
             <button
               type="button"
               className="primary commit-submit"
@@ -295,6 +316,7 @@ export function CommitSheet({
             {!!(error ?? model.error) && (
               <ErrorBox error={error ?? model.error} />
             )}
+            {settleOption}
             <button
               className="primary commit-submit"
               aria-keyshortcuts={keys("Meta+Enter", "Control+Enter")}

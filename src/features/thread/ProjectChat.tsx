@@ -82,6 +82,8 @@ export interface ThreadOpens {
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   /** Absent where the thread has no Git to commit to. */
   onCommitFiles?: (paths: string[]) => void;
+  /** Files still changed in the workspace the commit sheet uses. */
+  commitPaths?: readonly string[];
 }
 
 export function ProjectChat({

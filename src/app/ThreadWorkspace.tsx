@@ -260,7 +260,8 @@ export function ThreadWorkspace({
                   onOpenTurnDiff: opens.openTurnDiff,
                   onCommitFiles: project.plain
                     ? undefined
-                    : (paths) => gitActions.current?.commit(paths),
+                    : (paths) => gitActions.current?.commit(paths, chat?.id),
+                  commitPaths: folder.tree?.changes.map((c) => c.path),
                 }}
                 onCommand={onCommand}
                 onDraftWorkspace={nav.setDraftWorkspace}

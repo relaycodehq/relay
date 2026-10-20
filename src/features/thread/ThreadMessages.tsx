@@ -116,6 +116,7 @@ export function ThreadMessages({
     openTurnDiff,
     rewindTurn,
     commitTurn,
+    canCommitTurn,
   },
   queue: { steer, move, returnToComposer, remove },
   worktree,
@@ -349,7 +350,7 @@ export function ThreadMessages({
                 onChanges={openChanges}
                 onTurnDiff={openTurnDiff}
                 onRewind={rewindTurn}
-                onCommit={commitTurn}
+                onCommit={canCommitTurn(m) ? commitTurn : undefined}
                 projectRoot={worktree.folder}
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}

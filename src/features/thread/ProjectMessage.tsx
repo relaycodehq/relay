@@ -12,6 +12,8 @@ import {
   localVideoPath,
 } from "../../../shared/answer-images";
 import { stoppedNote } from "../../../shared/agent-trace";
+import { agentError } from "../../../shared/agent-error";
+import { OpenCodeSignIn } from "../agent-settings/OpenCodeSignIn";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { parseContextReport } from "../../../shared/context-report";
 import { WatchNotes } from "../watch/WatchNotes";
@@ -547,8 +549,8 @@ export const Message = memo(function Message({
         </p>
       )}
       {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
-      {onSignIn && m.signIn && (
-        <SignIn provider={m.signIn} onSignIn={onSignIn} />
+      {onSignIn && (m.signIn || (m.provider === "opencode" && m.error && agentError(m.error).authenticationRequired)) && (
+        <SignIn provider={m.signIn ?? m.provider} directory={projectRoot} onSignIn={onSignIn} />
       )}
       {m.role === "assistant" && !continues && (
         <MessageActions
@@ -568,16 +570,20 @@ export const Message = memo(function Message({
 });
 function SignIn({
   provider,
+  directory,
   onSignIn,
 }: {
   provider: AgentProvider;
+  directory?: string;
   onSignIn: (provider: AgentProvider) => Promise<boolean>;
 }) {
   const offer = signInOffer(provider);
+  const [openCode, setOpenCode] = useState(false);
   const [state, setState] = useState<"idle" | "waiting" | "busy" | "failed">(
     "idle",
   );
   const start = () => {
+    if (provider === "opencode") { setOpenCode(true); return; }
     setState("waiting");
     onSignIn(provider).then(
       (typed) => setState(typed ? "idle" : "busy"),
@@ -586,6 +592,7 @@ function SignIn({
   };
   return (
     <div className="agent-sign-in">
+      {openCode && <OpenCodeSignIn directory={directory} onClose={() => setOpenCode(false)} />}
       <button
         className="text-button"
         disabled={state === "waiting" && offer.via === "relay"}
