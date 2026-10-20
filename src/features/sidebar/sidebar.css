@@ -594,6 +594,28 @@
   white-space: nowrap;
   text-align: left;
 }
+.sb-thread-content {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+.sb .sb-thread:has(.sb-thread-ref) {
+  height: 46px;
+  align-items: flex-start;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.sb-thread:has(.sb-thread-ref) > .sb-status,
+.sb-thread:has(.sb-thread-ref) > .sb-age,
+.sb-thread:has(.sb-thread-ref) > .sb-thread-pr,
+.sb-thread:has(.sb-thread-ref) > .sb-thread-project {
+  margin-top: 3px;
+}
+.sb-thread-row:has(.sb-thread-ref) .sb-thread-actions {
+  top: 15px;
+}
 .sb-thread-row {
   position: relative;
 }
@@ -643,12 +665,16 @@
 }
 /* A running thread keeps its spinner where it was; Pin takes the room before it. */
 .sb-thread-row:hover:not(:has(.sb-thread-archive)) .sb-thread,
-.sb-thread-row:has(.sb-thread-action:focus-visible):not(:has(.sb-thread-archive))
+.sb-thread-row:has(.sb-thread-action:focus-visible):not(
+    :has(.sb-thread-archive)
+  )
   .sb-thread {
   padding-right: 10px;
 }
 .sb-thread-row:hover:not(:has(.sb-thread-archive)) .sb-thread > .sb-status,
-.sb-thread-row:has(.sb-thread-action:focus-visible):not(:has(.sb-thread-archive))
+.sb-thread-row:has(.sb-thread-action:focus-visible):not(
+    :has(.sb-thread-archive)
+  )
   .sb-thread
   > .sb-status {
   margin-left: 26px;
@@ -656,8 +682,12 @@
 /* Only where Archive takes its place; a running thread keeps its spinner. */
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-age,
 .sb-thread-row:hover:has(.sb-thread-archive) .sb-thread > .sb-status,
-.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child)) .sb-thread > .sb-age,
-.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child)) .sb-thread > .sb-status {
+.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child))
+  .sb-thread
+  > .sb-age,
+.sb-thread-row:has(.sb-thread-action:focus-visible:not(:only-child))
+  .sb-thread
+  > .sb-status {
   visibility: hidden;
 }
 .sb .sb-thread.sb-ghost {
@@ -683,7 +713,7 @@
   color: var(--muted);
 }
 /* Among search results the project name gives way before the title does. */
-.sb-thread:has(.sb-thread-project) .sb-thread-title {
+.sb-thread:has(.sb-thread-project) .sb-thread-content {
   flex: 0 1 auto;
 }
 .sb .sb-thread-project {
@@ -1036,22 +1066,37 @@
   gap: 3px;
   flex: none;
 }
-.sb-card-ref {
+.sb-thread-ref {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
   min-width: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 400;
+  line-height: 1.5;
 }
-.sb-card-ref > svg {
+.sb-card-meta > .sb-thread-ref {
+  flex: 1;
+}
+.sb-thread-ref > svg {
   flex: none;
   opacity: 0.8;
 }
-.sb-card-commit {
+.sb-thread-ref > .sb-ref-merged {
+  flex: none;
+  color: var(--accent);
+  opacity: 1;
+}
+.sb-ref-separator {
+  flex: none;
+  opacity: 0.7;
+}
+.sb-ref-commit {
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
-.sb-card-branch,
+.sb-ref-branch,
 .sb-card-goal {
   flex: 1;
   min-width: 0;
@@ -1402,6 +1447,9 @@
 .sb-compact.selected {
   background: var(--hover);
   color: var(--text);
+}
+.sb-compact:has(.sb-thread-ref) {
+  height: 46px;
 }
 .sb-compact .sb-project-badge {
   opacity: 0.65;

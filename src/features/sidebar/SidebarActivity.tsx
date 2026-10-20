@@ -6,8 +6,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  FolderGit2,
-  GitCommitHorizontal,
   GitPullRequest,
   RotateCcw,
   Sunrise,
@@ -18,11 +16,7 @@ import {
   type ChatActivitySection,
 } from "../../../shared/chat-activity";
 import type { HandoffView } from "../../../shared/handoff";
-import {
-  threadWorktree,
-  type ChatSummary,
-  type Project,
-} from "../../../shared/projects";
+import type { ChatSummary, Project } from "../../../shared/projects";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import type { ActivityDraft } from "../composer/drafts";
 import { mac } from "../../lib/mod-key";
@@ -56,7 +50,7 @@ import { CardAgents, CardState, isLive, StatusMark } from "./ThreadStatus";
 import { rowKeys } from "../../ui/ui";
 import { useStoredState } from "../../lib/persisted-store";
 import { parseFamilyFolds, withFamilyFold } from "../../../shared/family-folds";
-import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { ThreadRef } from "./ThreadRef";
 
 export function ActivityView({
   rows,
@@ -370,7 +364,7 @@ function ThreadCard({
                 {c.goal.objective}
               </span>
             ) : (
-              <CardRef chat={c} />
+              <ThreadRef chat={c} />
             )}
             <AwayWhere chatId={c.id} view={away} />
             {compact && state}
@@ -404,33 +398,6 @@ function ThreadCard({
         </ContextMenu.Trigger>
       <ThreadRowMenu chat={c} rows={rows} />
     </ContextMenu.Root>
-  );
-}
-
-/** Where the thread works: its branch, its worktree's branch, or the commit a detached checkout is on. */
-function CardRef({ chat }: { chat: ChatSummary }) {
-  const worktree = !!chat.worktree || !!threadWorktree(chat);
-  if (!chat.branch && !chat.commit) return <span className="sb-card-ref" />;
-  if (!chat.branch)
-    return (
-      <span className="sb-card-ref" title={`Detached at ${chat.commit}`}>
-        <GitCommitHorizontal size={11} aria-hidden />
-        <span className="sb-card-commit">{chat.commit}</span>
-      </span>
-    );
-  return (
-    <span
-      className="sb-card-ref"
-      title={worktree ? `Worktree on ${chat.branch}` : chat.branch}
-    >
-      {worktree && <FolderGit2 size={11} aria-hidden />}
-      <MiddleTruncate
-        className="sb-card-branch"
-        text={chat.branch}
-        kind="branch"
-        title={null}
-      />
-    </span>
   );
 }
 
@@ -611,11 +578,16 @@ function CompactRow({
             className="sb-group-input sb-compact-title-input"
           />
         ) : (
-          <ThreadTitle
-            className="sb-compact-title"
-            title={c.title}
-            regenerating={actions.regenerating.has(c.id)}
-          />
+          <span className="sb-thread-content">
+            <ThreadTitle
+              className="sb-compact-title"
+              title={c.title}
+              regenerating={actions.regenerating.has(c.id)}
+            />
+            {(c.branch || c.commit) && !p?.scratch && (
+              <ThreadRef chat={c} branchIcon />
+            )}
+          </span>
         )}
         {isLive(c) && <StatusMark chat={c} unread={false} now={now} />}
         <small
