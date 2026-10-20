@@ -14,6 +14,10 @@ import type {
   ComputerFolders,
   TerminalOp,
 } from "../../shared/remote";
+import {
+  computerAddingMethods,
+  remoteAddingBridge,
+} from "../../shared/remote";
 import { draftTerminalKey, terminalSlotKey } from "../../shared/terminals";
 import type { Api } from "../../shared/types";
 import type { Projects } from "../projects/projects";
@@ -36,6 +40,8 @@ const shellOps = new Map<string, TerminalOp>([
  * isn't woken for it, and gets the last answer, or this.
  */
 const whileAsleep = new Map<string, unknown>([["projectIcon", null]]);
+const addingMethods = new Set<string>(computerAddingMethods);
+type Client = Awaited<ReturnType<Computers["connected"]>>;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before `remoteProjectsBridge` answers a call it doesn't know. */
 const unknownCall = (e: unknown) =>
@@ -46,6 +52,8 @@ export class RemoteProjects {
   private shells: RemoteShells;
   /** The last answers to `whileAsleep` calls, by method and project. */
   private answered = new Map<string, unknown>();
+  /** Connections to a Relay new enough for setup calls; an older one may update, so it's asked again. */
+  private canAdd = new WeakSet<Client>();
   constructor(
     private computers: Computers,
     private projects: Projects,
@@ -74,6 +82,31 @@ export class RemoteProjects {
       },
     );
   }
+  /** Keep a newly created project here with the identity of its actual computer. */
+  adopt(computerId: string, project: Project) {
+    const { id, name } = this.computers.get(computerId);
+    return this.projects.addRemote({ id, name }, project);
+  }
+  async clone(computerId: string, url: string, into: string) {
+    const answer = await this.call(computerId, async (client) => {
+      await this.requireAdding(client);
+      return client.call("cloneProject", url, into);
+    });
+    if (!answer.done) return answer;
+    const { id, name } = this.computers.get(computerId);
+    return {
+      done: true as const,
+      project: await this.projects.addRemote(
+        { id, name },
+        {
+          id: answer.project.id,
+          name: answer.project.name,
+          path: answer.project.folder!,
+          plain: answer.project.plain,
+        },
+      ),
+    };
+  }
   /** An agent's models as the computer's own copy of it lists them. */
   agentModels(computerId: string, provider: AgentProvider) {
     return this.ask(computerId, "agentModels", provider) as ReturnType<
@@ -86,9 +119,19 @@ export class RemoteProjects {
     method: M,
     ...args: Parameters<Api[M]>
   ) {
-    return this.call(computerId, (client) =>
-      client.call("computerCall", method, args),
-    ) as ReturnType<Api[M]>;
+    return this.call(computerId, async (client) => {
+      if (addingMethods.has(method)) await this.requireAdding(client);
+      return client.call("computerCall", method, args);
+    }) as ReturnType<Api[M]>;
+  }
+  private async requireAdding(client: Client) {
+    if (this.canAdd.has(client)) return;
+    const info = await client.call("computerInfo");
+    if (info.bridge < remoteAddingBridge)
+      throw new Error(
+        "Update Relay on the other computer in Settings → Computers, then try again.",
+      );
+    this.canAdd.add(client);
   }
   /** Whether the call is about a project on another computer, by its id. */
   forwards(method: string, args: unknown[]) {
@@ -170,7 +213,7 @@ export class RemoteProjects {
   }
   private async call<T>(
     computerId: string,
-    run: (client: Awaited<ReturnType<Computers["connected"]>>) => Promise<T>,
+    run: (client: Client) => Promise<T>,
   ): Promise<T> {
     const { name } = this.computers.get(computerId);
     // Connecting, as when Relay just started, it waits a little for it.

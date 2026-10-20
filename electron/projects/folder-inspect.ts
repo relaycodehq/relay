@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import type {
   FolderEntry,
   FolderInfo,
+  FolderPreview,
   LinkedFolder,
   LinkSuggestion,
   Project,
@@ -11,13 +12,19 @@ import type {
 import { linkedFoldersSchema, linkName } from "../../shared/projects";
 import { repositoryRoot } from "./projects";
 
-/** `~/work` → `/Users/you/work`. */
-export const expandHome = (path: string) =>
-  path === "~" ||
-  path.startsWith("~/") ||
-  (process.platform === "win32" && path.startsWith("~\\"))
+/**
+ * `~/work` → `/Users/you/work`. Another computer may send a Windows path
+ * (`~\work`, `\\server\share`), which means nothing off Windows.
+ */
+export function expandHome(path: string) {
+  if (process.platform !== "win32" && /^(~\\|\\\\)/.test(path))
+    throw new Error(`${path} is a Windows path; use / on this computer.`);
+  return path === "~" ||
+    path.startsWith("~/") ||
+    (process.platform === "win32" && path.startsWith("~\\"))
     ? homedir() + path.slice(1)
     : path;
+}
 
 const isRepository = (dir: string) =>
   lstat(join(dir, ".git")).then(
@@ -54,6 +61,24 @@ export async function listFolders(dir: string): Promise<FolderEntry[]> {
       repository: await isRepository(join(real, name)),
     })),
   );
+}
+
+/** Show both folders and files without walking the tree or reading file contents. */
+export async function folderPreview(dir: string): Promise<FolderPreview> {
+  const entries = (await readdir(expandHome(dir), { withFileTypes: true }))
+    .filter((e) => !e.name.startsWith(".") && e.name !== "node_modules")
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const folders = entries.filter((e) => e.isDirectory());
+  const files = entries.filter((e) => !e.isDirectory());
+  const folderCount = Math.min(folders.length, Math.max(3, 6 - files.length));
+  const sample = [
+    ...folders.slice(0, folderCount),
+    ...files.slice(0, 6 - folderCount),
+  ];
+  return {
+    entries: sample.map((e) => ({ name: e.name, directory: e.isDirectory() })),
+    remaining: entries.length - sample.length,
+  };
 }
 
 /** Repositories beside `path` in its parent folder, like a backend next to its frontend. */

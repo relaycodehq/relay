@@ -44,8 +44,11 @@ test("smart project names update immediately and stay off across restart", async
       .getByRole("button", { name: "Open a folder", exact: true })
       .click();
     await page.getByRole("button", { name: "Choose in Finder…" }).click();
+    await page
+      .getByRole("button", { name: "Add it as it is", exact: true })
+      .click();
     await screenshot(page, {
-      path: "test-results/screenshots/smart-project-names-initial.png",
+      path: join(tmpdir(), "relay-smart-project-names-initial.png"),
       animations: "disabled",
     });
     await expect(page.locator(".sb-project-row")).toContainText(
@@ -57,6 +60,12 @@ test("smart project names update immediately and stay off across restart", async
       .click();
     const dialog = page.getByRole("region", { name: "Settings", exact: true });
     await dialog.getByRole("textbox").first().fill("smart project names");
+    await dialog
+      .getByRole("button", {
+        name: "Open Smart project names in Appearance",
+        exact: true,
+      })
+      .click();
     const toggle = dialog.getByRole("switch", {
       name: "Smart project names",
       exact: true,
@@ -65,11 +74,14 @@ test("smart project names update immediately and stay off across restart", async
     await toggle.click();
     await expect(toggle).not.toBeChecked();
     await expect(dialog.getByRole("alert")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Back to app", exact: true })
+      .click();
     await expect(page.locator(".sb-project-row")).toContainText(
       "my-project_name.v2",
     );
     await screenshot(page, {
-      path: "test-results/screenshots/smart-project-names-off.png",
+      path: join(tmpdir(), "relay-smart-project-names-off.png"),
       animations: "disabled",
     });
     await app.close();
@@ -90,6 +102,12 @@ test("smart project names update immediately and stay off across restart", async
       .getByRole("textbox")
       .first()
       .fill("smart project names");
+    await restoredDialog
+      .getByRole("button", {
+        name: "Open Smart project names in Appearance",
+        exact: true,
+      })
+      .click();
     const restoredToggle = restoredDialog.getByRole("switch", {
       name: "Smart project names",
       exact: true,
@@ -98,11 +116,14 @@ test("smart project names update immediately and stay off across restart", async
     await restoredToggle.click();
     await expect(restoredToggle).toBeChecked();
     await expect(restoredDialog.getByRole("alert")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Back to app", exact: true })
+      .click();
     await expect(page.locator(".sb-project-row")).toContainText(
       "My Project Name.v2",
     );
     await screenshot(page, {
-      path: "test-results/screenshots/smart-project-names-on.png",
+      path: join(tmpdir(), "relay-smart-project-names-on.png"),
       animations: "disabled",
     });
   } finally {

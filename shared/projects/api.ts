@@ -64,7 +64,12 @@ import type {
   ImportSelection,
   ProjectImportResult,
 } from "../project-import";
-import type { FolderEntry, FolderInfo, LinkSuggestion } from "./folders";
+import type {
+  FolderEntry,
+  FolderInfo,
+  FolderPreview,
+  LinkSuggestion,
+} from "./folders";
 import type { LinkedFolder } from "./links";
 import type { WorktreeStart } from "./worktrees";
 import type { Project, ProjectSettings } from "./project";
@@ -138,22 +143,23 @@ export interface ProjectFoldersApi {
   inspectFolder(path: string): Promise<FolderInfo>;
   /** The folders inside `dir`, for typing a path; `~` stands for home. */
   listFolders(dir: string): Promise<FolderEntry[]>;
+  folderPreview(dir: string, computerId?: string): Promise<FolderPreview>;
   /** Finder's folder picker; null when cancelled. Adds nothing. */
   chooseFolder(title: string): Promise<string | null>;
   /** Folders worth linking to the project: the repositories beside it, then the other projects. */
   linkSuggestions(projectId: string): Promise<LinkSuggestion[]>;
   /** What the add-project palette opens on. */
-  addingStart(): Promise<AddingStart>;
+  addingStart(computerId?: string): Promise<AddingStart>;
   /** Adds the folder at `path`; `setUpGit` runs `git init` in a plain one first. */
   addProjectAt(path: string, setUpGit?: boolean): Promise<Project>;
   /** Clones `remote` into a folder of its name inside `into`, then adds it. */
   cloneProject(remote: string, into: string): Promise<Project>;
   /** Makes the folder, with git and a GitHub repository when asked, then adds it. */
-  createProject(spec: NewProject): Promise<Project>;
+  createProject(spec: NewProject, computerId?: string): Promise<Project>;
   /** Stops the clone or creation under way; it rejects. */
-  cancelProjectAdding(): Promise<void>;
+  cancelProjectAdding(computerId?: string): Promise<void>;
   /** The repositories the `gh` login can see. */
-  githubRepos(): Promise<GithubRepos>;
+  githubRepos(computerId?: string): Promise<GithubRepos>;
   onProjectAdding(callback: (job: AddingJob | null) => void): () => void;
 }
 

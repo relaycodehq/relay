@@ -9,6 +9,7 @@ import {
 import { api } from "../../lib/api";
 import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
+import { AddProjectHeading } from "./AddProjectHeading";
 
 /** After adding: offer the repos beside it as linked folders, read only. Done saves them. */
 export function LinkStep({
@@ -40,56 +41,57 @@ export function LinkStep({
     }
   }
   return (
-    <div className="add-link-step">
-      <div className="add-link-head">
-        <strong>{project.name} is in Relay.</strong>
-        <p>
-          Link the repos beside it? Its agents read linked folders without
-          asking, and you can change them in Project settings from the project's
-          menu.
-        </p>
+    <>
+      <AddProjectHeading title="Link related folders" />
+      <div className="palette-body add-link-step">
+        <div className="add-link-head">
+          <strong>{project.name} is in Relay.</strong>
+          <p>Let agents read these folders. Access is read only.</p>
+        </div>
+        <ul className="add-link-list">
+          {shown.map((s) => {
+            const on = chosen.includes(s.path);
+            return (
+              <li key={s.path}>
+                <label>
+                  {s.project ? (
+                    <FolderGit2 size={15} />
+                  ) : (
+                    <FolderSymlink size={15} />
+                  )}
+                  <span>
+                    <strong>{s.project ?? linkName(s.path)}</strong>
+                    <small>{tildePath(s.path)}</small>
+                  </span>
+                  <em>{on ? "Read only" : ""}</em>
+                  <Switch
+                    label={`Link ${linkName(s.path)}`}
+                    checked={on}
+                    disabled={saving}
+                    onChange={(next) =>
+                      setChosen((list) =>
+                        next
+                          ? [...list, s.path]
+                          : list.filter((p) => p !== s.path),
+                      )
+                    }
+                  />
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+        {!!error && <ErrorBox error={error} />}
       </div>
-      <ul className="add-link-list">
-        {shown.map((s) => {
-          const on = chosen.includes(s.path);
-          return (
-            <li key={s.path}>
-              <label>
-                {s.project ? (
-                  <FolderGit2 size={15} />
-                ) : (
-                  <FolderSymlink size={15} />
-                )}
-                <span>
-                  <strong>{s.project ?? linkName(s.path)}</strong>
-                  <small>{tildePath(s.path)}</small>
-                </span>
-                <em>{on ? "Read only" : ""}</em>
-                <Switch
-                  label={`Link ${linkName(s.path)}`}
-                  checked={on}
-                  onChange={(next) =>
-                    setChosen((list) =>
-                      next
-                        ? [...list, s.path]
-                        : list.filter((p) => p !== s.path),
-                    )
-                  }
-                />
-              </label>
-            </li>
-          );
-        })}
-      </ul>
-      {!!error && <ErrorBox error={error} />}
-      <div className="add-actions">
+      <div className="add-project-footer">
         {shown.length < related.length && (
           <button
             type="button"
             className="text-button add-more"
+            disabled={saving}
             onClick={() => setAll(true)}
           >
-            {related.length - shown.length} more beside it
+            Show {related.length - shown.length} more
           </button>
         )}
         <button
@@ -102,6 +104,6 @@ export function LinkStep({
           Done
         </button>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useImperativeHandle, useState, type Ref } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ChevronRight, SquareTerminal } from "lucide-react";
+import { ChevronRight, SquareTerminal } from "lucide-react";
 import {
   importAppNames,
   type ImportApp,
@@ -11,13 +11,18 @@ import { api } from "../../lib/api";
 import { ErrorBox } from "../../ui/ui";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { ImportProjectRow, type ImportChoice } from "./ImportProjectRow";
+import { AddProjectHeading } from "./AddProjectHeading";
 
 export function ImportProjects({
+  ref,
   onBack,
+  onClose,
   onDone,
   onBusy,
 }: {
+  ref?: Ref<{ back: () => void }>;
   onBack: () => void;
+  onClose: () => void;
   onDone: (project: Project) => void;
   onBusy: (busy: boolean) => void;
 }) {
@@ -109,74 +114,45 @@ export function ImportProjects({
   const importedChats =
     result?.projects.flatMap((p) => p.chats).filter((c) => c.created).length ??
     0;
+  function back() {
+    if (app) {
+      setApp(undefined);
+      setChoices({});
+      setResult(undefined);
+      setError(undefined);
+    } else onBack();
+  }
+  useImperativeHandle(ref, () => ({ back }));
   return (
     <>
-      <div className="add-palette-crumb">
-        <button
-          type="button"
-          className="text-button"
-          disabled={busy}
-          onClick={() => {
-            if (app) {
-              setApp(undefined);
-              setChoices({});
-              setResult(undefined);
-              setError(undefined);
-            } else onBack();
-          }}
-        >
-          <ArrowLeft size={13} />
-          {app ? "Choose another app" : "Add a project"}
-        </button>
-        <span>/ Import</span>
-      </div>
+      <AddProjectHeading
+        title={
+          app ? `Import from ${importAppNames[app]}` : "Import from another app"
+        }
+        disabled={busy}
+        onClose={onClose}
+        onBack={back}
+      />
       {!app ? (
         <div className="palette-body import-body">
-          <h2>Import from another app</h2>
-          <p>Bring your projects and chats from your favorite app.</p>
           {(["codex", "claude"] as const).map((source) => (
             <button
               type="button"
-              className="import-app"
+              className="headline-project-row palette-row import-app"
               key={source}
               onClick={() => setApp(source)}
             >
-              <SquareTerminal size={19} />
-              <span>
-                <strong>{importAppNames[source]}</strong>
-                <small>
-                  {source === "claude"
-                    ? "Desktop code sessions and Claude Code chats"
-                    : "Desktop projects and Codex chats"}
-                </small>
-              </span>
+              <SquareTerminal size={17} />
+              <span>{importAppNames[source]}</span>
               <ChevronRight size={15} />
             </button>
           ))}
         </div>
       ) : (
         <>
-          <div className="import-intro">
-            <h2>Import from {importAppNames[app]}</h2>
-            <p>
-              Choose projects and chats to bring into Relay. The originals stay
-              in the app.
-            </p>
-          </div>
           <div className="palette-body import-body">
             {projects.isPending && <p role="status">Looking for projects…</p>}
-            {projects.isError && (
-              <>
-                <ErrorBox error={projects.error} />
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => void projects.refetch()}
-                >
-                  Try again
-                </button>
-              </>
-            )}
+            {projects.isError && <ErrorBox error={projects.error} />}
             {complete ? (
               <div className="import-success" role="status">
                 <strong>Import complete</strong>
@@ -217,8 +193,8 @@ export function ImportProjects({
             )}
             {!!error && <ErrorBox error={error} />}
           </div>
-          <div className="import-footer">
-            {!complete && (
+          <div className="add-project-footer import-footer">
+            {!complete && !!projects.data?.length && (
               <label>
                 <input
                   type="checkbox"
@@ -230,7 +206,7 @@ export function ImportProjects({
               </label>
             )}
             <span role="status">
-              {busy
+              {busy && !complete
                 ? "Importing projects and chats…"
                 : loadingChats
                   ? "Loading selected chats…"
@@ -240,6 +216,7 @@ export function ImportProjects({
               <button
                 type="button"
                 className="primary"
+                disabled={busy}
                 onClick={() => onDone(result.projects[0]!.project)}
               >
                 Done
@@ -271,7 +248,9 @@ export function ImportProjects({
                 >
                   {busy
                     ? "Importing…"
-                    : `Import ${selected.length} ${selected.length === 1 ? "project" : "projects"}${count ? ` and ${count} ${count === 1 ? "chat" : "chats"}` : ""}`}
+                    : !selected.length
+                      ? "Import projects"
+                      : `Import ${selected.length} ${selected.length === 1 ? "project" : "projects"}${count ? ` and ${count} ${count === 1 ? "chat" : "chats"}` : ""}`}
                 </button>
               </>
             )}

@@ -53,16 +53,6 @@
   color: var(--text);
   font-weight: 550;
 }
-.add-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 14px;
-  margin-top: 16px;
-}
-.add-actions button {
-  font-size: 12px;
-}
 .add-new-card .settings-row {
   min-height: 48px;
   padding: 9px 14px;
@@ -82,17 +72,14 @@
   width: 150px;
 }
 
-.add-link-step {
-  padding: 4px 2px;
-}
 .add-link-head strong {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
 }
 .add-link-head p {
   margin: 6px 0 14px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
   line-height: 1.55;
 }
 .add-link-list {
@@ -140,28 +127,7 @@
 }
 
 .add-palette .add-link-step {
-  padding: 18px 18px 16px;
-}
-.add-palette-crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px 0;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.add-palette-crumb .text-button {
-  line-height: inherit;
-  gap: 4px;
-  padding: 0;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.add-palette-crumb .text-button:hover {
-  color: var(--text);
-}
-.add-palette-form {
-  padding: 12px 14px 14px;
+  padding: 16px;
 }
 .add-palette .add-note {
   margin: 8px 4px 4px;
@@ -170,54 +136,34 @@
   font-family: var(--font-mono);
   font-size: 11px;
 }
+.add-plain-note {
+  display: grid;
+  gap: 10px;
+}
+.add-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
 
 .import-body {
-  padding: 14px 18px;
+  padding: 8px 16px;
 }
-.import-body h2,
-.import-intro h2 {
-  font-size: 15px;
-  font-weight: 550;
-  margin: 0 0 6px;
-}
-.import-body p,
-.import-intro p {
+.import-body p {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.5;
-  margin: 0 0 14px;
-}
-.import-intro {
-  padding: 16px 18px 0;
+  margin: 8px 0;
 }
 .import-app {
-  display: flex;
-  align-items: center;
   gap: 12px;
-  width: 100%;
-  padding: 14px;
-  margin: 9px 0;
-  text-align: left;
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.import-app:hover {
-  background: var(--hover);
+  padding: 12px 9px;
+  margin: 4px 0;
+  font-size: 13px;
 }
 .import-app > span {
   flex: 1;
-}
-.import-app strong {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-}
-.import-app small {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  margin-top: 3px;
 }
 .import-app > svg {
   color: var(--muted);
@@ -245,7 +191,7 @@
   font-weight: 400;
   gap: 10px;
   flex: 1;
-  min-width: 180px;
+  min-width: min(180px, 100%);
   align-items: center;
 }
 .import-project-head label > span {
@@ -258,9 +204,9 @@
   font-weight: 500;
 }
 .import-project-head small {
+  display: block;
   color: var(--muted);
   font-size: 11px;
-  overflow-wrap: anywhere;
 }
 .import-project-state {
   color: var(--muted);
@@ -309,13 +255,8 @@
   margin-top: 2px;
 }
 .import-footer {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
-  padding: 12px 18px;
-  border-top: 1px solid var(--border);
   font-size: 12px;
 }
 .import-footer > label {
@@ -347,4 +288,345 @@
 /* A computer that can't be reached: listed, but saying why on a click. */
 .palette-row[aria-disabled] .headline-project-row-label strong {
   color: var(--muted);
+}
+
+/* Project setup uses the same compact modal, rows and fields as the app. */
+.modal.palette.add-palette {
+  width: 640px;
+}
+.add-project-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.add-project-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.add-project-heading h2 {
+  font-size: 15px;
+  font-weight: 550;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.add-project-heading .icon-button {
+  flex: none;
+}
+.add-location-trigger {
+  background: transparent;
+  border-color: transparent;
+  padding: 5px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  min-width: 0;
+}
+.add-location-trigger > span {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.add-project-home {
+  padding: 16px;
+}
+.add-location-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.add-location-cards > button {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 16px 12px;
+  min-width: 0;
+  background: transparent;
+}
+.add-location-cards > button > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-size: 12px;
+}
+.add-location-cards > button > svg {
+  flex: none;
+  color: var(--muted);
+}
+.add-location-cards > button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.add-location-cards > button[aria-pressed="true"] > svg {
+  color: var(--accent);
+}
+.add-project-ways {
+  display: grid;
+  gap: 4px;
+}
+.add-project-ways .palette-row {
+  padding: 12px 9px;
+  font-size: 13px;
+}
+.add-project-ways .palette-row > span {
+  flex: 1;
+}
+.add-project-footer {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.add-project-footer > button {
+  max-width: 100%;
+  white-space: normal;
+}
+.add-repository-footer > button:last-child {
+  margin-left: auto;
+}
+.add-project-footer > .primary {
+  margin-left: auto;
+  font-size: 12px;
+  flex: none;
+}
+.add-project-footer > .middle-truncate {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.add-project-footer > .text-button {
+  font-size: 11px;
+}
+.add-project-form {
+  padding: 0 16px 16px;
+}
+.add-project-form label {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 16px 0 0;
+}
+.add-project-form input {
+  font-weight: 400;
+  font-size: 12px;
+}
+.add-project-submit {
+  display: none;
+}
+.add-project-options {
+  margin-top: 16px;
+  font-size: 12px;
+}
+.add-project-options summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.add-project-options .settings-card {
+  margin: 12px 0 0;
+}
+.add-repositories {
+  min-height: 120px;
+}
+.add-project-error {
+  padding: 0 16px 12px;
+}
+.add-project-progress {
+  padding: 0;
+}
+.add-folder-path {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 16px;
+}
+.add-folder-path form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.add-folder-path form > svg {
+  color: var(--muted);
+  flex: none;
+}
+.add-folder-path input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+.add-folder-path button {
+  font-size: 11px;
+}
+.add-folder-browser {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  min-height: 220px;
+  margin: 0 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 1;
+}
+.add-folder-list {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.add-folder-list .headline-project-search {
+  margin: 0 8px;
+  padding: 5px 3px;
+  flex: none;
+}
+.add-folder-list .headline-project-search input {
+  font-size: 12px;
+}
+.add-folder-rows {
+  padding: 5px;
+  overflow-y: auto;
+  min-height: 0;
+  max-height: 280px;
+}
+.add-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 5px;
+}
+.add-folder-row.selected {
+  background: var(--accent-soft);
+}
+.add-folder-row:hover:not(.selected) {
+  background: var(--hover);
+}
+.add-folder-row > .palette-row:hover {
+  background: transparent;
+}
+.add-folder-row > .palette-row {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 8px;
+}
+.add-folder-row > .palette-row strong {
+  font-size: 12px;
+  font-weight: 400;
+}
+.add-folder-row > .icon-button {
+  flex: none;
+  margin-right: 3px;
+  color: var(--muted);
+}
+.add-folder-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 14px;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+  background: var(--toolbar);
+}
+.add-folder-preview-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 7px;
+  min-width: 0;
+}
+.add-folder-preview-heading > svg {
+  color: var(--muted);
+}
+.add-folder-preview-heading > strong {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.add-folder-preview-heading > .middle-truncate {
+  max-width: 100%;
+  font-size: 10px;
+  color: var(--muted);
+}
+.add-folder-preview-heading > small {
+  font-size: 11px;
+  color: var(--muted);
+}
+.add-folder-contents {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  min-width: 0;
+}
+.add-folder-contents ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.add-folder-contents li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 23px;
+  font-size: 11px;
+}
+.add-folder-contents li > svg {
+  flex: none;
+  color: var(--muted);
+}
+.add-folder-contents li > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.add-folder-contents small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.add-folder-messages {
+  overflow-y: auto;
+  max-height: 150px;
+  margin: 0 16px;
+  flex: none;
+}
+.add-folder-messages:empty {
+  display: none;
+}
+@media (max-width: 540px) {
+  .add-folder-browser {
+    grid-template-columns: minmax(0, 1fr) 140px;
+  }
+  .add-location-trigger > span {
+    max-width: 100px;
+  }
+  .add-location-cards > button {
+    gap: 8px;
+    padding: 14px 10px;
+  }
+  .add-location-cards > button > svg:last-child {
+    display: none;
+  }
+}
+@media (max-width: 400px) {
+  .add-location-trigger > span {
+    display: none;
+  }
+  .add-folder-browser {
+    grid-template-columns: minmax(0, 1fr) 120px;
+  }
+  .add-folder-preview {
+    padding: 16px 8px;
+  }
 }

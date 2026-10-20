@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { newProjectSchema, parseRemote, repoName, slug } from "./adding";
+import {
+  folderInputSchema,
+  newProjectSchema,
+  parseRemote,
+  repoName,
+  slug,
+} from "./adding";
 
 it("reads clone URLs from any host and owner/repo as GitHub", () => {
   expect(parseRemote("https://github.com/acme/web.git")).toMatchObject({
@@ -59,4 +65,28 @@ it("refuses project names that would be command-line options", () => {
   expect(
     newProjectSchema.safeParse({ ...spec, name: "my-project" }).success,
   ).toBe(true);
+});
+
+it("accepts absolute and home-relative folders across computers", () => {
+  for (const path of [
+    "~",
+    "~/work",
+    "~\\work",
+    "/srv/projects",
+    "C:\\work",
+    "C:/work",
+    "\\\\server\\share",
+  ]) {
+    expect(folderInputSchema.safeParse(path).success).toBe(true);
+  }
+  for (const path of [
+    "",
+    "relative",
+    "~someone/work",
+    "-option",
+    "C:relative",
+    "/work\0wrong",
+  ]) {
+    expect(folderInputSchema.safeParse(path).success).toBe(false);
+  }
 });

@@ -164,8 +164,6 @@ async function pairedComputers() {
           store: mini.store,
           projects: mini.projects,
           client: () => null,
-          sessions: undefined as never,
-          appData: join(mini.dir, "app-data"),
           send: () => {},
         }),
         // What a live handoff's computer has run here, as the app's dispatch would.

@@ -39,7 +39,7 @@ export function CheckupLines({
     phase === "done"
       ? {
           mark: "ok",
-          text: `Paired${target.kind === "link" && c.paired ? ` with ${c.paired.name}` : ""}. Its key is pinned, so this computer only ever talks to it.`,
+          text: `Connected${target.kind === "link" && c.paired ? ` to ${c.paired.name}` : ""}.`,
         }
       : phase === "pairing"
         ? {

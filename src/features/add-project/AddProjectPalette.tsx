@@ -1,43 +1,33 @@
-// Adding a project: one search field that opens a folder, clones from GitHub
-// or a URL, or starts a new one, then offers the repos beside it as links.
-import {
-  useEffect,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+// Add a project where it will run; computer setup stays inside this flow.
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  Folder,
-  FolderGit2,
+  Check,
+  ChevronRight,
   FolderOpen,
   FolderPlus,
-  Link2,
-  Lock,
+  Import as ImportIcon,
+  Laptop,
   Monitor,
   Search,
-  Import as ImportIcon,
 } from "lucide-react";
 import {
-  linkName,
   parseRemote,
   repoName,
   slug,
-  tildePath,
-  type FolderEntry,
-  type GithubRepo,
   type LinkSuggestion,
   type Project,
 } from "../../../shared/projects";
+import type { PairedComputer } from "../../../shared/handoff";
 import { api } from "../../lib/api";
-import { timeAgo } from "../../lib/relative-date";
 import { useReturnFocus } from "../../lib/focus-return";
 import { useBackdropClose } from "../../lib/backdrop-close";
 import { ErrorBox } from "../../ui/ui";
-import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { GitHubMark } from "../../ui/BrandIcons";
+import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { usePairedComputers } from "../handoff/usePairedComputers";
+import { DeviceIcon } from "../handoff/DeviceIcon";
+import { computerLine, reachable } from "../handoff/computer-status";
 import {
   JobProgress,
   NewProjectFields,
@@ -45,52 +35,26 @@ import {
   type Spec,
 } from "./AddingParts";
 import { LinkStep } from "./LinkStep";
-import { localProjectAt, relatedFolders } from "./related";
+import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
-import { usePairedComputers } from "../handoff/usePairedComputers";
-import { computerLine, reachable } from "../handoff/computer-status";
-import type { PairedComputer } from "../../../shared/handoff";
 import { ImportProjects } from "./ImportProjects";
+import { AddProjectHeading } from "./AddProjectHeading";
+import { ComputerPicker } from "../handoff/ComputerPicker";
+import { ProjectFolders } from "./ProjectFolders";
+import { folderLabel } from "./folder-path";
 import "../../ui/palette.css";
 import "./add-project.css";
-import { fileManager, keys } from "../../lib/mod-key";
 
 export type AddProjectPage =
-  "root" | "folder" | "github" | "url" | "new" | "import";
-type Page = AddProjectPage | "computer";
-
-interface Item {
-  key: string;
-  icon: ReactNode;
-  label: ReactNode;
-  detail?: string;
-  /** The detail is a path, which loses its middle rather than its end. */
-  detailIsPath?: boolean;
-  right?: ReactNode;
-  section?: string;
-  run: () => void;
-  /** A folder's own action, opening or adding it, where `run` goes into it. */
-  add?: () => void;
-  /** Shown but can't be gone into now; `run` says why. */
-  unavailable?: boolean;
-}
-
-const addKeys = keys("⌘↵", "Ctrl+↵");
-
-const placeholder: Record<Page, string> = {
-  root: "Open a folder, clone a repository, or start a new one…",
-  folder: "~/",
-  github: "Search your repositories…",
-  url: "https://github.com/owner/repo, git@host:owner/repo, or owner/repo",
-  new: "Name the project",
-  computer: "~/",
-  import: "",
-};
-const title: Partial<Record<Page, string>> = {
+  "root" | "folder" | "github" | "url" | "new" | "import" | "computers";
+const titles: Record<AddProjectPage, string> = {
+  root: "Add a project",
   folder: "Open a folder",
   github: "Clone from GitHub",
-  url: "Clone from a URL",
+  url: "Clone a repository",
   new: "New project",
+  import: "Import projects",
+  computers: "Choose a computer",
 };
 
 export function AddProjectPalette({
@@ -101,140 +65,91 @@ export function AddProjectPalette({
   onDone,
 }: {
   projects: readonly Project[];
-  /** Opens on the folders of this paired computer. */
   computerId?: string;
-  /** Opened from a menu that already named the way in. */
-  initialPage?: Page;
+  initialPage?: AddProjectPage;
   onClose: () => void;
-  /** Added, or picked from the ones there already: start a thread in it. */
   onDone: (project: Project) => void;
 }) {
-  const adding = useAdding(projects);
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
-  const [importBusy, setImportBusy] = useState(false);
-  const backdropClose = useBackdropClose(() => {
-    if (!adding.busy && !importBusy && !linking) onClose();
-  });
-  const [page, setPage] = useState<Page>(initialPage);
+  const importStep = useRef<{ back: () => void }>(null);
+  const locationChoice = useRef<HTMLButtonElement>(null);
+  const paired = usePairedComputers(true);
+  const [selectedComputer, setSelectedComputer] = useState(computerId);
+  const [justConnected, setJustConnected] = useState<PairedComputer>();
+  const computer =
+    paired.data?.find((c) => c.id === selectedComputer) ??
+    (justConnected?.id === selectedComputer ? justConnected : undefined);
+  const available = !selectedComputer || (!!computer && reachable(computer));
+  const adding = useAdding(projects, selectedComputer, available);
+  const [page, setPage] = useState<AddProjectPage>(initialPage);
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
+  const [locations, setLocations] = useState<Record<string, string>>({});
+  const [spec, setSpec] = useState<Partial<Spec>>({});
+  const [importBusy, setImportBusy] = useState(false);
+  const [connectionBusy, setConnectionBusy] = useState(false);
   const [linking, setLinking] = useState<{
     project: Project;
     related: LinkSuggestion[];
   }>();
-  const [chosenInto, setCloneInto] = useState<string>();
-  const [spec, setSpec] = useState<Partial<Spec>>({});
-  const cloneInto = chosenInto ?? adding.start?.cloneFolder ?? "~";
-  // A folder on a paired computer, added there as a project that lives there.
-  const paired = usePairedComputers();
-  const [computer, setComputer] = useState<PairedComputer>();
-  const [addingThere, setAddingThere] = useState(false);
-  const [thereError, setThereError] = useState<unknown>();
-  const [notice, setNotice] = useState<string>();
-  const busy = adding.busy || addingThere;
-  const fullSpec: Spec = {
-    location: cloneInto,
-    git: true,
-    github: false,
-    private: true,
-    ...spec,
+  const returnTo = useRef<{ page: AddProjectPage; query: string }>({
+    page: "root",
+    query: "",
+  });
+  const locked = adding.busy || importBusy || connectionBusy || !!linking;
+  const close = () => {
+    if (!locked) onClose();
   };
-  // Opened straight on the folder browser: start where "Open a folder" would,
-  // once Relay says where that is.
-  const seeded = useRef(initialPage !== "folder");
-  useEffect(() => {
-    if (seeded.current || !adding.start) return;
-    seeded.current = true;
-    if (!query) setQuery(`${tildePath(adding.start.cloneFolder)}/`);
-  }, [adding.start, query]);
+  const backdropClose = useBackdropClose(close);
   useReturnFocus();
   useEffect(() => {
     dialog.current?.showModal();
   }, []);
   useEffect(() => {
-    input.current?.focus();
-  }, [page]);
-
-  const github = useQuery({
-    queryKey: ["github-repos"],
-    queryFn: () => api.githubRepos(),
-    enabled:
-      page === "github" ||
-      (page === "root" && query.trim().length > 1) ||
-      (page === "new" && !!spec.github),
-    staleTime: 60_000,
-  });
-  const repos = github.data && "repos" in github.data ? github.data.repos : [];
-  const login =
-    github.data && "login" in github.data ? github.data.login : undefined;
-
-  const browsing = page === "folder" || page === "computer";
-  const cut = query.lastIndexOf("/");
-  const dir = browsing ? (cut < 0 ? "~/" : query.slice(0, cut + 1)) : "";
-  const leaf = browsing ? query.slice(cut + 1).toLowerCase() : "";
-  const listing = useQuery({
-    queryKey: ["folder-listing", dir],
-    queryFn: () => api.listFolders(dir).catch(() => [] as FolderEntry[]),
-    enabled: page === "folder",
-    staleTime: 10_000,
-  });
-  const there = useQuery({
-    queryKey: ["computer-folders", computer?.id, dir],
-    queryFn: () => api.computerFolders(computer!.id, dir),
-    enabled: page === "computer" && !!computer,
-    staleTime: 10_000,
-    retry: false,
-  });
-  // The folders listed so far by the path typed to go into one, so the one
-  // gone into knows what it is: a repository, a project there.
-  const seenHere = useRef(new Map<string, FolderEntry>());
-  const seenThere = useRef(
-    new Map<string, NonNullable<typeof there.data>["folders"][number]>(),
-  );
-  const typedDir = dir.replace(/\/$/, "");
-  /** A path there as it's typed, from that computer's home folder. */
-  const fromHomeThere = (path: string) => {
-    const home = there.data?.home;
-    if (!home) return path;
-    if (path === home) return "~";
-    return path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path;
+    if (page === "root") locationChoice.current?.focus();
+    else input.current?.focus();
+  }, [page, selectedComputer]);
+  // What was typed stays as typed; only the computer's default is shown from ~.
+  const typedLocation = locations[selectedComputer ?? "here"];
+  const cloneInto = typedLocation ?? adding.start?.cloneFolder ?? "";
+  const location =
+    typedLocation ??
+    (adding.start
+      ? folderLabel(adding.start.cloneFolder, adding.start.home)
+      : "");
+  function setLocation(path: string) {
+    setLocations((l) => ({ ...l, [selectedComputer ?? "here"]: path }));
+  }
+  const fullSpec: Spec = {
+    git: true,
+    github: false,
+    private: true,
+    ...spec,
+    location: cloneInto,
   };
-
-  function go(next: Page, text = "") {
+  function go(next: AddProjectPage, text = "") {
+    if (locked) return;
     setPage(next);
     setQuery(text);
-    setActive(0);
     adding.clear();
-    setThereError(undefined);
-    setNotice(undefined);
+    setNativeError(undefined);
   }
-  function openComputer(c: PairedComputer) {
-    setComputer(c);
-    go("computer", "~/");
+  function computers() {
+    returnTo.current = { page, query };
+    go("computers");
   }
-  // Asked for a computer, as when it was just paired: its folders once it's known.
-  const askedFor = useRef(computerId);
-  useEffect(() => {
-    const c = paired.data?.find((p) => p.id === askedFor.current);
-    if (!c) return;
-    askedFor.current = undefined;
-    openComputer(c);
-  });
-  function addThere(path: string) {
-    if (!computer) return;
-    setAddingThere(true);
-    setThereError(undefined);
-    api
-      .addRemoteProject(computer.id, path)
-      .then(onDone, setThereError)
-      .finally(() => setAddingThere(false));
+  function chooseComputer(next?: PairedComputer) {
+    if (locked) return;
+    setSelectedComputer(next?.id);
+    setJustConnected(next);
+    setPage(returnTo.current.page);
+    setQuery(returnTo.current.query);
+    adding.clear();
   }
-  const known = (p: Project) => projects.some((x) => x.id === p.id);
-  /** Brand new: offer the repos beside it first, when there are any. */
   async function finish(project: Project | undefined) {
     if (!project) return;
-    if (known(project)) return onDone(project);
+    if (project.computer || projects.some((p) => p.id === project.id))
+      return onDone(project);
     const related = relatedFolders(
       project,
       await api.linkSuggestions(project.id).catch(() => []),
@@ -242,341 +157,86 @@ export function AddProjectPalette({
     if (related.length) setLinking({ project, related });
     else onDone(project);
   }
-  function clone(remote: string) {
-    void adding.clone(remote, cloneInto).then(finish);
-  }
-  async function choose(what: "clone" | "new") {
-    const path = await api.chooseFolder(
-      what === "clone" ? "Clone into" : "Where the project goes",
-    );
-    if (!path) return;
-    if (what === "clone") setCloneInto(path);
-    else setSpec((s) => ({ ...s, location: path }));
-  }
-
-  function chooseInFileManager() {
-    void api.chooseFolder("Add a project folder").then((path) => {
-      if (path) return adding.pick(path).then(finish);
-    });
-  }
-
-  const remote = parseRemote(query);
-  const items: Item[] = [];
-  if (page === "root") {
-    const q = query.trim().toLowerCase();
-    if (remote)
-      items.push(cloneItem(remote.full, remote.host, () => clone(remote.url)));
-    else {
-      const sources: Item[] = [
-        {
-          key: "import",
-          icon: <ImportIcon size={15} />,
-          label: "Import from another app…",
-          detail: "Bring projects and chats from Codex / ChatGPT or Claude",
-          run: () => go("import"),
-        },
-        {
-          key: "folder",
-          icon: <FolderOpen size={15} />,
-          label: "Open a folder",
-          detail: `Browse from ${tildePath(cloneInto)}`,
-          run: () => go("folder", `${tildePath(cloneInto)}/`),
-        },
-        {
-          key: "github",
-          icon: <GitHubMark size={15} />,
-          label: "Clone from GitHub",
-          detail: login
-            ? `Your repositories, signed in as ${login}`
-            : "Your repositories, through gh",
-          run: () => go("github"),
-        },
-        {
-          key: "url",
-          icon: <Link2 size={15} />,
-          label: "Clone from a URL",
-          detail: "Any Git host, or owner/repo",
-          run: () => go("url"),
-        },
-        {
-          key: "new",
-          icon: <FolderPlus size={15} />,
-          label: "New project",
-          detail: "An empty folder, with git and a GitHub repo if you like",
-          run: () => go("new", query),
-        },
-      ];
-      items.push(
-        ...sources
-          .filter(
-            (s) => !q || `${s.label} ${s.detail}`.toLowerCase().includes(q),
-          )
-          .map((s) => ({ ...s, section: "Add a project" })),
-        ...(paired.data ?? [])
-          .filter((c) => !q || c.name.toLowerCase().includes(q))
-          .map((c) => ({
-            key: `computer:${c.id}`,
-            icon: <Monitor size={15} />,
-            label: c.name,
-            detail:
-              c.status === "online"
-                ? "Open a folder there; its threads run there"
-                : c.asleep
-                  ? "Asleep: opening a folder there wakes it"
-                  : computerLine(c),
-            right: reachable(c) ? "›" : undefined,
-            unavailable: !reachable(c),
-            section: "On another computer",
-            run: () =>
-              reachable(c) ? openComputer(c) : setNotice(unreachableNote(c)),
-          })),
-        ...(adding.start?.recent ?? [])
-          .filter((f) => !q || f.path.toLowerCase().includes(q))
-          .map((f) => ({
-            key: f.path,
-            icon: f.repository ? (
-              <FolderGit2 size={15} />
-            ) : (
-              <Folder size={15} />
-            ),
-            label: linkName(f.path),
-            detail: tildePath(f.path),
-            detailIsPath: true,
-            right: timeAgo(new Date(f.when).toISOString()),
-            section: "Folders your agents worked in",
-            run: () => void adding.pick(f.path).then(finish),
-          })),
-      );
-      if (q)
-        items.push(
-          ...repos
-            .filter((r) => r.full.toLowerCase().includes(q))
-            .slice(0, 8)
-            .map((r) => ({ ...repoItem(r), section: "On GitHub" })),
-        );
-      items.push({
-        key: "finder",
-        icon: <Folder size={15} />,
-        label: `Choose in ${fileManager}…`,
-        section: q ? undefined : " ",
-        run: chooseInFileManager,
-      });
-    }
-  } else if (page === "folder") {
-    if (!leaf && dir.length > 1) {
-      const self = seenHere.current.get(typedDir);
-      const project = self && localProjectAt(projects, self.path);
-      items.push({
-        key: `this:${dir}`,
-        icon: <FolderOpen size={15} />,
-        label: project ? `Open ${project.name}` : "Add this folder",
-        detail: dir,
-        detailIsPath: true,
-        right: project ? "In Relay" : self?.repository ? "git" : undefined,
-        run: () =>
-          project ? onDone(project) : void adding.pick(dir).then(finish),
-      });
-    }
-    for (const f of listing.data ?? []) {
-      seenHere.current.set(tildePath(f.path), f);
-      if (!f.name.toLowerCase().startsWith(leaf)) continue;
-      const project = localProjectAt(projects, f.path);
-      items.push({
-        key: f.path,
-        icon: f.repository ? <FolderGit2 size={15} /> : <Folder size={15} />,
-        label: f.name,
-        right: project
-          ? `In Relay as ${project.name}`
-          : f.repository
-            ? "git"
-            : "›",
-        // A click goes in; adding is the folder's own row there, or ⌘↵.
-        run: () => enter(f),
-        add: () =>
-          project ? onDone(project) : void adding.pick(f.path).then(finish),
-      });
-      if (items.length > 80) break;
-    }
-  } else if (page === "computer" && computer) {
-    if (!leaf && dir !== "~/") {
-      const self = seenThere.current.get(typedDir);
-      const known =
-        self?.project &&
-        projects.find(
-          (p) =>
-            p.computer?.id === computer.id &&
-            p.computer.projectId === self.project?.id,
-        );
-      items.push({
-        key: `this:${dir}`,
-        icon: <FolderOpen size={15} />,
-        label: known
-          ? `Open ${known.name}`
-          : self?.project
-            ? `Add ${self.name}`
-            : "Add this folder",
-        detail: dir,
-        detailIsPath: true,
-        right: known
-          ? "In Relay"
-          : self?.project
-            ? "A project there"
-            : self?.repository
-              ? "git"
-              : undefined,
-        run: () => (known ? onDone(known) : addThere(self?.path ?? dir)),
-      });
-    }
-    for (const f of there.data?.folders ?? []) {
-      seenThere.current.set(fromHomeThere(f.path), f);
-      if (!f.name.toLowerCase().startsWith(leaf)) continue;
-      const known = projects.find(
-        (p) =>
-          p.computer?.id === computer.id &&
-          p.computer.projectId === f.project?.id,
-      );
-      items.push({
-        key: f.path,
-        icon: f.repository ? <FolderGit2 size={15} /> : <Folder size={15} />,
-        label: f.name,
-        right: known
-          ? `In Relay as ${known.name}`
-          : f.project
-            ? `A project there`
-            : f.repository
-              ? "git"
-              : "›",
-        run: () => {
-          setQuery(`${fromHomeThere(f.path)}/`);
-          setActive(0);
-        },
-        add: () => (known ? onDone(known) : addThere(f.path)),
-      });
-      if (items.length > 80) break;
-    }
-  } else if (page === "github") {
-    const q = query.trim().toLowerCase();
-    items.push(
-      ...repos
-        .filter((r) => `${r.full} ${r.description}`.toLowerCase().includes(q))
-        .map(repoItem),
-    );
-  } else if (page === "url" && remote) {
-    items.push(cloneItem(remote.full, remote.host, () => clone(remote.url)));
-  }
-
-  function enter(f: FolderEntry) {
-    setQuery(`${tildePath(f.path)}/`);
-    setActive(0);
-    adding.clear();
-  }
-  function existingClone(full: string, host: string) {
-    return projects.find((p) => {
-      if (
-        p.computer ||
-        p.path !== `${cloneInto}/${repoName(full)}` ||
-        !p.repository
-      )
-        return false;
-      const remote = parseRemote(
-        `${p.repository.server}/${p.repository.owner}/${p.repository.name}`,
-      );
-      return (
-        remote?.host.toLowerCase() === host.toLowerCase() &&
-        remote.full.toLowerCase() === full.toLowerCase()
-      );
-    });
-  }
-  function cloneItem(full: string, host: string, run: () => void): Item {
-    const there = existingClone(full, host);
-    return {
-      key: `clone:${full}`,
-      icon: <GitHubMark size={15} />,
-      label: there ? `Open ${there.name}` : `Clone ${full}`,
-      detail: there
-        ? `In Relay already, at ${tildePath(there.path)}`
-        : `From ${host} into ${tildePath(cloneInto)}/${repoName(full)}`,
-      run,
-    };
-  }
-  function repoItem(r: GithubRepo): Item {
-    const there = existingClone(
-      r.full,
-      parseRemote(r.url)?.host ?? "github.com",
-    );
-    return {
-      key: r.full,
-      icon: <GitHubMark size={15} />,
-      label: r.full,
-      detail: r.description || undefined,
-      right: there ? (
-        `In Relay as ${there.name}`
-      ) : (
-        <>
-          {r.private && <Lock size={11} aria-label="Private" />}
-          {r.pushed ? timeAgo(new Date(r.pushed).toISOString()) : ""}
-        </>
-      ),
-      run: () => clone(r.url),
-    };
-  }
-
-  const name = slug(query);
-  const create = () => {
-    if (name) void adding.create({ ...fullSpec, name }).then(finish);
-  };
-  function onKeyDown(e: KeyboardEvent) {
-    if (busy) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      if (page === "root") onClose();
-      else go("root");
-    } else if (
-      e.key === "Backspace" &&
-      page !== "root" &&
-      (!query || query === "~/")
-    ) {
-      e.preventDefault();
-      go("root");
-    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      if (items.length)
-        setActive(
-          (i) =>
-            (i + (e.key === "ArrowDown" ? 1 : -1) + items.length) %
-            items.length,
-        );
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (page === "new") create();
-      else if (page === "folder" && /^[~/]/.test(query) && !items.length)
-        void adding.pick(query).then(finish);
-      else if (page === "computer" && /^[~/]/.test(query) && !items.length) {
-        // Nothing listed yet, or the listing failed: not a typed path to add.
-        if (there.isSuccess) addThere(query);
-      } else {
-        const item = items[Math.min(active, items.length - 1)];
-        if ((e.metaKey || e.ctrlKey) && item?.add) item.add();
-        else item?.run();
-      }
-    } else if (e.key === "Tab" && page === "folder") {
-      e.preventDefault();
-      const f = listing.data?.find((x) => x.path === items[active]?.key);
-      if (f) enter(f);
-    } else if (e.key === "Tab" && page === "computer") {
-      e.preventDefault();
-      const f = there.data?.folders.find((x) => x.path === items[active]?.key);
-      if (f) {
-        setQuery(`${fromHomeThere(f.path)}/`);
-        setActive(0);
-      }
+  async function chooseNative() {
+    try {
+      const path = await api.chooseFolder("Add a project folder");
+      if (path) await finish(await adding.pick(path));
+    } catch (error) {
+      setNativeError(error);
     }
   }
-
+  const [nativeError, setNativeError] = useState<unknown>();
+  const github = useQuery({
+    queryKey: ["github-repos", selectedComputer],
+    queryFn: () => api.githubRepos(selectedComputer),
+    enabled:
+      available && (page === "github" || (page === "new" && !!spec.github)),
+    staleTime: 60_000,
+    retry: false,
+  });
+  const repos = github.data && "repos" in github.data ? github.data.repos : [];
+  const matchingRepos = repos.filter((r) =>
+    `${r.full} ${r.description}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  const login =
+    github.data && "login" in github.data ? github.data.login : undefined;
   const githubProblem =
     github.data && "problem" in github.data ? github.data.problem : undefined;
-  const heading = page === "computer" ? computer?.name : title[page];
-  let section: string | undefined;
+  const remote = parseRemote(query);
+  const name = slug(query);
+  // Until that computer has answered, its usual folder isn't known.
+  const ready = available && !locked && !!adding.start && !!cloneInto.trim();
+  const create = () => {
+    if (name && ready) void adding.create({ ...fullSpec, name }).then(finish);
+  };
+  const clone = () => {
+    if (remote && ready) void adding.clone(remote.url, cloneInto).then(finish);
+  };
+  const errors = (
+    <>
+      {!!adding.error && <ErrorBox error={adding.error} />}
+      {!!nativeError && <ErrorBox error={nativeError} />}
+    </>
+  );
+  const picked = adding.picked && (
+    <PickedNote
+      picked={adding.picked}
+      onAdd={(path, git) => void adding.add(path, git).then(finish)}
+    />
+  );
+  const heading = (
+    <AddProjectHeading
+      title={titles[page]}
+      disabled={locked}
+      onClose={close}
+      onBack={
+        page === "root"
+          ? undefined
+          : () =>
+              page === "computers"
+                ? (setPage(returnTo.current.page),
+                  setQuery(returnTo.current.query))
+                : go("root")
+      }
+    >
+      {page !== "root" && page !== "computers" && (
+        <button
+          type="button"
+          className="add-location-trigger"
+          disabled={locked}
+          onClick={computers}
+        >
+          {computer ? (
+            <DeviceIcon name={computer.name} size={14} />
+          ) : (
+            <Laptop size={14} />
+          )}
+          <span>{computer?.name ?? "This computer"}</span>
+          <ChevronRight size={12} />
+        </button>
+      )}
+    </AddProjectHeading>
+  );
   return (
     <dialog
       ref={dialog}
@@ -584,13 +244,23 @@ export function AddProjectPalette({
       aria-label="Add a project"
       onCancel={(e) => {
         e.preventDefault();
-        if (!adding.busy && !importBusy && !linking) onClose();
+        if (!locked)
+          page === "import"
+            ? importStep.current?.back()
+            : page === "root"
+              ? onClose()
+              : page === "computers"
+                ? (setPage(returnTo.current.page),
+                  setQuery(returnTo.current.query))
+                : go("root");
       }}
       {...backdropClose}
     >
       {page === "import" ? (
         <ImportProjects
+          ref={importStep}
           onBack={() => go("root")}
+          onClose={close}
           onDone={onDone}
           onBusy={setImportBusy}
         />
@@ -602,211 +272,303 @@ export function AddProjectPalette({
         />
       ) : (
         <>
-          {heading && (
-            <div className="add-palette-crumb">
-              <button
-                type="button"
-                className="text-button"
-                onClick={() => go("root")}
-              >
-                <ArrowLeft size={13} />
-                Add a project
-              </button>
-              <span>/ {heading}</span>
-            </div>
-          )}
-          <div className="headline-project-search palette-search">
-            {browsing ? (
-              <FolderOpen size={15} />
-            ) : page === "new" ? (
-              <FolderPlus size={15} />
-            ) : (
-              <Search size={15} />
-            )}
-            <input
-              ref={input}
-              aria-label={heading ?? "Add a project"}
-              placeholder={placeholder[page]}
-              value={query}
-              disabled={busy}
-              spellCheck={false}
-              autoComplete="off"
-              onChange={(e) => {
-                const text = e.target.value;
-                // A path typed from the top opens the folder browser on it.
-                if (page === "root" && /^[~/]/.test(text))
-                  return go("folder", text);
-                setQuery(text);
-                setActive(0);
-                adding.clear();
-                setNotice(undefined);
-              }}
-              onKeyDown={onKeyDown}
+          {heading}
+          {page === "computers" ? (
+            <ComputerPicker
+              onPick={chooseComputer}
+              onBusy={setConnectionBusy}
             />
-          </div>
-          {adding.job ? (
-            <div className="palette-body">
-              <JobProgress job={adding.job} onCancel={adding.cancel} />
-            </div>
-          ) : page === "new" ? (
-            <div className="palette-body add-palette-form">
-              <NewProjectFields
-                name={name}
-                spec={fullSpec}
-                login={login}
-                onSpec={(next) => setSpec(next)}
-                onLocation={() => void choose("new")}
-              />
-              {!!adding.error && <ErrorBox error={adding.error} />}
-              <div className="add-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={!name || adding.busy}
-                  onClick={create}
-                >
-                  Create {name || "project"}
-                </button>
-              </div>
-            </div>
           ) : (
-            <div className="palette-body" role="listbox" aria-label="Choices">
-              {adding.picked && (
-                <PickedNote
-                  picked={adding.picked}
-                  onOpen={onDone}
-                  onAdd={(path, setUpGit) =>
-                    void adding.add(path, setUpGit).then(finish)
-                  }
-                />
+            <>
+              {!available && (
+                <div className="add-project-error">
+                  {paired.isPending || computer?.status === "connecting" ? (
+                    <p className="headline-project-empty">Connecting…</p>
+                  ) : (
+                    <ErrorBox
+                      error={
+                        computer
+                          ? computerLine(computer)
+                          : "This computer is no longer paired."
+                      }
+                    />
+                  )}
+                  <button className="text-button" onClick={computers}>
+                    Choose a computer
+                  </button>
+                </div>
               )}
-              {!!adding.error && <ErrorBox error={adding.error} />}
-              {!!thereError && <ErrorBox error={thereError} />}
-              {notice && (
-                <p className="headline-project-empty" role="status">
-                  {notice}
-                </p>
-              )}
-              {addingThere && (
-                <p className="headline-project-empty">
-                  Adding it on {computer?.name}…
-                </p>
-              )}
-              {items.map((item, i) => {
-                const head =
-                  item.section !== section ? item.section : undefined;
-                section = item.section;
-                return (
-                  <div key={item.key}>
-                    {head?.trim() && (
-                      <div className="composer-menu-label">{head}</div>
-                    )}
-                    {head === " " && <hr />}
+              {page === "root" ? (
+                <div className="palette-body add-project-home">
+                  <div className="add-location-cards">
                     <button
                       type="button"
-                      role="option"
-                      aria-selected={i === active}
-                      className="headline-project-row palette-row"
-                      data-highlighted={i === active ? "" : undefined}
-                      aria-disabled={item.unavailable || undefined}
-                      disabled={busy}
-                      onMouseMove={() => setActive(i)}
-                      onClick={item.run}
+                      ref={!selectedComputer ? locationChoice : undefined}
+                      aria-pressed={!selectedComputer}
+                      onClick={() => {
+                        setSelectedComputer(undefined);
+                        setJustConnected(undefined);
+                        adding.clear();
+                      }}
                     >
-                      {item.icon}
-                      <span className="headline-project-row-label">
-                        <strong>{item.label}</strong>
-                        {item.detail &&
-                          (item.detailIsPath ? (
-                            <MiddleTruncate
-                              className="headline-project-path"
-                              text={item.detail}
-                              kind="path"
-                            />
-                          ) : (
-                            <small>{item.detail}</small>
-                          ))}
-                      </span>
-                      {item.right && <em>{item.right}</em>}
+                      <Laptop size={22} />
+                      <span>This computer</span>
+                      {!selectedComputer && <Check size={14} />}
+                    </button>
+                    <button
+                      type="button"
+                      ref={selectedComputer ? locationChoice : undefined}
+                      aria-pressed={!!selectedComputer}
+                      onClick={computers}
+                    >
+                      {computer ? (
+                        <DeviceIcon name={computer.name} size={22} />
+                      ) : (
+                        <Monitor size={22} />
+                      )}
+                      <span>{computer?.name ?? "Another computer"}</span>
+                      {selectedComputer ? (
+                        <Check size={14} />
+                      ) : (
+                        <ChevronRight size={14} />
+                      )}
                     </button>
                   </div>
-                );
-              })}
-              {!items.length && (
-                <p className="headline-project-empty">
-                  {page === "url"
-                    ? "Paste a clone URL from any host, or owner/repo for GitHub."
-                    : page === "computer"
-                      ? there.isLoading
-                        ? `Looking on ${computer?.name}…`
-                        : there.error
-                          ? (there.error as Error).message
-                          : "No folder by that name. ↵ adds the path as typed."
-                      : page === "folder"
-                        ? listing.isLoading
-                          ? "Looking…"
-                          : "No folder by that name. ↵ adds the path as typed."
-                        : page === "github"
-                          ? (githubProblem ??
-                            (github.isLoading
-                              ? "Asking GitHub…"
-                              : "No repository by that name."))
-                          : "Nothing matches. Enter a URL or owner/repo to clone it."}
-                </p>
+                  <div className="add-project-ways">
+                    <button
+                      type="button"
+                      className="headline-project-row palette-row"
+                      disabled={!available}
+                      onClick={() => go("folder")}
+                    >
+                      <FolderOpen size={17} />
+                      <span>Open a folder</span>
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="headline-project-row palette-row"
+                      disabled={!available}
+                      onClick={() => go("github")}
+                    >
+                      <GitHubMark size={17} />
+                      <span>Clone a repository</span>
+                      <ChevronRight size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="headline-project-row palette-row"
+                      disabled={!available}
+                      onClick={() => go("new")}
+                    >
+                      <FolderPlus size={17} />
+                      <span>New project</span>
+                      <ChevronRight size={14} />
+                    </button>
+                    {!selectedComputer && (
+                      <button
+                        type="button"
+                        className="headline-project-row palette-row"
+                        onClick={() => go("import")}
+                      >
+                        <ImportIcon size={17} />
+                        <span>Import from another app…</span>
+                        <ChevronRight size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : adding.job ? (
+                <div className="palette-body add-project-progress">
+                  <JobProgress job={adding.job} onCancel={adding.cancel} />
+                </div>
+              ) : page === "folder" ? (
+                <ProjectFolders
+                  key={selectedComputer ?? "here"}
+                  projects={projects}
+                  computer={computer}
+                  initialFolder={adding.start?.cloneFolder}
+                  home={adding.start?.home}
+                  busy={locked || !available}
+                  onPick={(path) => void adding.pick(path).then(finish)}
+                  onNative={() => void chooseNative()}
+                >
+                  {picked}
+                  {errors}
+                </ProjectFolders>
+              ) : page === "github" ? (
+                <>
+                  <div className="headline-project-search palette-search">
+                    <Search size={15} />
+                    <input
+                      ref={input}
+                      aria-label="Search repositories"
+                      placeholder="Search or paste a repository URL…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      disabled={locked}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && remote) go("url", remote.url);
+                      }}
+                    />
+                  </div>
+                  <div className="palette-body add-repositories">
+                    {remote && (
+                      <button
+                        className="headline-project-row palette-row"
+                        onClick={() => go("url", remote.url)}
+                      >
+                        <GitHubMark size={17} />
+                        <span className="headline-project-row-label">
+                          <strong>{remote.full}</strong>
+                        </span>
+                        <ChevronRight size={14} />
+                      </button>
+                    )}
+                    {matchingRepos.map((r) => (
+                      <button
+                        type="button"
+                        className="headline-project-row palette-row"
+                        key={r.full}
+                        onClick={() => go("url", r.url)}
+                      >
+                        <GitHubMark size={17} />
+                        <span className="headline-project-row-label">
+                          <strong>{r.full}</strong>
+                        </span>
+                        <ChevronRight size={14} />
+                      </button>
+                    ))}
+                    {github.isPending && (
+                      <p className="headline-project-empty">
+                        Loading repositories…
+                      </p>
+                    )}
+                    {!!github.error && <ErrorBox error={github.error} />}
+                    {githubProblem && (
+                      <p className="headline-project-empty">{githubProblem}</p>
+                    )}
+                    {github.isSuccess && !githubProblem && !repos.length && (
+                      <p className="headline-project-empty">No repositories.</p>
+                    )}
+                    {repos.length > 0 && !matchingRepos.length && !remote && (
+                      <p className="headline-project-empty">
+                        No matching repositories.
+                      </p>
+                    )}
+                  </div>
+                  <div className="add-project-footer add-repository-footer">
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() => go("url", remote?.url ?? "")}
+                    >
+                      Clone from a URL…
+                    </button>
+                    <button
+                      className="text-button"
+                      disabled={github.isFetching}
+                      onClick={() => void github.refetch()}
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <form
+                    className="palette-body add-project-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      page === "url" ? clone() : create();
+                    }}
+                  >
+                    <label>
+                      {page === "url" ? "Repository" : "Name"}
+                      <input
+                        ref={input}
+                        aria-label={
+                          page === "url" ? "Repository" : "Project name"
+                        }
+                        value={query}
+                        onChange={(e) => {
+                          setQuery(e.target.value);
+                          adding.clear();
+                        }}
+                        placeholder={
+                          page === "url" ? "URL or owner/repo" : "my-project"
+                        }
+                        disabled={locked}
+                        spellCheck={false}
+                        autoComplete="off"
+                      />
+                    </label>
+                    <label>
+                      {page === "url" ? "Clone into" : "Create in"}
+                      <input
+                        aria-label="Destination folder"
+                        value={location}
+                        placeholder={
+                          adding.start || adding.startError
+                            ? undefined
+                            : "Loading…"
+                        }
+                        onChange={(e) => setLocation(e.target.value)}
+                        disabled={locked}
+                        spellCheck={false}
+                      />
+                    </label>
+                    {page === "new" && (
+                      <details className="add-project-options">
+                        <summary>Git options</summary>
+                        <NewProjectFields
+                          name={name}
+                          spec={fullSpec}
+                          login={login}
+                          onSpec={setSpec}
+                        />
+                      </details>
+                    )}
+                    {!!adding.startError && (
+                      <>
+                        <ErrorBox error={adding.startError} />
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={adding.retryStart}
+                        >
+                          Try again
+                        </button>
+                      </>
+                    )}
+                    {errors}
+                    <button
+                      className="add-project-submit"
+                      type="submit"
+                      tabIndex={-1}
+                      aria-hidden="true"
+                    />
+                  </form>
+                  <div className="add-project-footer">
+                    <MiddleTruncate
+                      text={`${location.replace(/[\\/]$/, "")}/${page === "url" ? (remote ? repoName(remote.full) : "…") : name || "…"}`}
+                      kind="path"
+                    />
+                    <button
+                      type="button"
+                      className="primary"
+                      disabled={!ready || !(page === "url" ? remote : name)}
+                      onClick={page === "url" ? clone : create}
+                    >
+                      {page === "url" ? "Clone repository" : "Create project"}
+                    </button>
+                  </div>
+                </>
               )}
-            </div>
+            </>
           )}
-          <div className="palette-foot">
-            {page === "github" || page === "url" || remote ? (
-              <span>
-                Clones into <code>{tildePath(cloneInto)}</code>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={() => void choose("clone")}
-                >
-                  Change
-                </button>
-              </span>
-            ) : page === "folder" ? (
-              <span>
-                Tab goes into a folder · ↵ adds it
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={adding.busy}
-                  onClick={chooseInFileManager}
-                >
-                  Choose in {fileManager}…
-                </button>
-              </span>
-            ) : page === "computer" ? (
-              <span>
-                Folders on {computer?.name} · ↵ goes into a folder · {addKeys}{" "}
-                adds it
-              </span>
-            ) : page === "new" ? (
-              <span>↵ creates it</span>
-            ) : (
-              <span>Paste a URL, owner/repo or a path</span>
-            )}
-            {!busy && (
-              <span>{page === "root" ? "esc to close" : "esc to go back"}</span>
-            )}
-          </div>
         </>
       )}
     </dialog>
   );
-}
-
-/** Why a computer in the list can't be browsed now, and what brings it back. */
-function unreachableNote(c: PairedComputer) {
-  if (c.stopped)
-    return `WSL stopped ${c.name}. Reconnect it in Settings → Computers, then open a folder there.`;
-  if (c.status === "denied")
-    return `${c.name} no longer accepts this computer. Pair again in Settings → Computers.`;
-  if (c.status === "connecting")
-    return `Still connecting to ${c.name}. Try again in a moment.`;
-  return `${c.name} is offline. Once Relay runs there again, its folders show here.`;
 }

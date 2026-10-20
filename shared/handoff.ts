@@ -568,7 +568,10 @@ export interface HandoffView {
 export interface ComputersApi {
   pairedComputers(): Promise<PairedComputer[]>;
   computersOverview(): Promise<ComputersOverview>;
-  /** Pairs with the link another computer shows under Settings → Computers. */
+  /**
+   * Pairs with the link another computer shows under Settings → Computers.
+   * The list ends with the computer just paired, also when it was paired before.
+   */
   pairComputer(link: string): Promise<PairedComputer[]>;
   /** Reaches the computer a route goes to and says which Relay is there. */
   checkComputer(route: ComputerRoute): Promise<RouteCheck>;
@@ -598,6 +601,15 @@ export interface ComputersApi {
     computerId: string,
     path: string,
   ): Promise<import("./projects").Project>;
+  /** Starts or polls a clone on a paired computer, then adds its project here. */
+  cloneRemoteProject(
+    computerId: string,
+    url: string,
+    into: string,
+  ): Promise<
+    | { done: false; step: string; progress: number | null }
+    | { done: true; project: import("./projects").Project }
+  >;
   /** The paired computers a new thread in the project can start on, or why each can't. */
   startTargets(projectId: string): Promise<HandoffTarget[]>;
   /**

@@ -98,11 +98,9 @@ import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
 import {
   AgentAccounts,
-  accountHomes,
   setProfilesRoot,
 } from "./agents/accounts";
 import { ProjectAdding } from "./project-add";
-import { TerminalSessions } from "./terminal-sessions";
 import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
@@ -528,8 +526,6 @@ app
       store: loaded,
       projects,
       client: () => login.client,
-      sessions: new TerminalSessions(async () => accountHomes()),
-      appData: app.getPath("appData"),
       send: (job) => window.send("relay:project-adding", job),
     });
     const api = apiContext({

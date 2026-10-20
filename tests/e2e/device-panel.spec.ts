@@ -67,9 +67,15 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page
-      .getByRole("dialog", { name: "Add a project", exact: true })
-      .getByRole("option", { name: "Choose in Finder…", exact: true })
+    const adding = page.getByRole("dialog", {
+      name: "Add a project",
+      exact: true,
+    });
+    await adding
+      .getByRole("button", { name: "Open a folder", exact: true })
+      .click();
+    await adding
+      .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
 
     await openSurface(page, "Device");

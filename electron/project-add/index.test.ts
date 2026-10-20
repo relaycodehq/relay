@@ -15,7 +15,6 @@ import { join } from "node:path";
 import type { AddingJob } from "../../shared/projects";
 import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
-import type { TerminalSessions } from "../terminal-sessions";
 import { cloneRepository } from "./clone";
 import { ProjectAdding } from "./index";
 
@@ -31,8 +30,6 @@ async function adding(onJob?: (job: AddingJob | null) => void) {
     store,
     projects,
     client: () => null,
-    sessions: { recentFolders: async () => [] } as unknown as TerminalSessions,
-    appData: join(dir, "app-data"),
     send: (job) => {
       jobs.push(job);
       onJob?.(job);
@@ -88,6 +85,12 @@ it("refuses a new project whose folder is there, and leaves the folder be", asyn
     /there already/,
   );
   expect(await readdir(there)).toEqual(["notes.txt"]);
+});
+
+it("answers a repeated ask with the project it already made", async () => {
+  const { service } = await adding();
+  const made = await service.create(spec(join(dir, "work")));
+  expect((await service.create(spec(join(dir, "work")))).id).toBe(made.id);
 });
 
 it("asks for a Git identity before making anything", async () => {
