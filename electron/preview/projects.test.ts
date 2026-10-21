@@ -22,6 +22,7 @@ function setup(
   );
   const scan = vi.spyOn(projectTasks, "list").mockResolvedValue(tasks);
   const settings = { devPort, devCommand: "npm run dev" };
+  const terminalFolder = vi.fn(async () => own.worktree?.path ?? "/repo");
   vi.spyOn(runningServers, "runningServerPorts").mockImplementation(
     async (tasks) => tasks.flatMap((t) => t.ports),
   );
@@ -36,13 +37,13 @@ function setup(
     },
     {
       get: async (id) => ({ ...own, id }),
-      terminalFolder: async () => own.worktree?.path ?? "/repo",
+      terminalFolder,
       worktreeEnv: async () => ({ RELAY_PORT_OFFSET: "10" }),
       worktreeFolders: () => [{ path: "/repo/neighbour", chatId: "other" }],
     },
     () => [],
   );
-  return { resolver, scan, settings };
+  return { resolver, scan, settings, terminalFolder };
 }
 
 it("gives checkout threads their own storage while retaining the checkout as the cookie seed", async () => {
@@ -142,7 +143,7 @@ it("validates worktree offsets before returning a configured dev target", async 
 });
 
 it("opens an explicit remote page even when local worktree selection is ambiguous", async () => {
-  const { resolver } = setup(
+  const { resolver, scan, terminalFolder } = setup(
     {
       agentWorktrees: [
         { path: "/repo/a", branch: "a", at: 1 },
@@ -151,6 +152,7 @@ it("opens an explicit remote page even when local worktree selection is ambiguou
     },
     { "/repo/a": [5173], "/repo/b": [8080] },
   );
+  scan.mockRejectedValue(new Error("Process discovery is unavailable"));
   const target = await resolver.target(
     "project",
     "one",
@@ -158,6 +160,20 @@ it("opens an explicit remote page even when local worktree selection is ambiguou
   );
   expect(target.folder).toBe("/repo");
   expect(target.dev).toBeUndefined();
+  expect(terminalFolder).toHaveBeenCalledWith("project", "one");
+  expect(scan).not.toHaveBeenCalled();
+  expect(runningServers.runningServerPorts).not.toHaveBeenCalled();
+
+  await expect(
+    resolver.target("project", "one", "https://example.com/", "/removed"),
+  ).rejects.toThrow("no longer part of this thread");
+  terminalFolder.mockRejectedValueOnce(
+    new Error("Selected workspace is unavailable"),
+  );
+  await expect(
+    resolver.target("project", "one", "https://example.com/"),
+  ).rejects.toThrow("Selected workspace is unavailable");
+  expect(scan).not.toHaveBeenCalled();
 });
 
 it("rejects an overflowing configured port during target resolution", async () => {

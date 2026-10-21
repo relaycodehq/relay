@@ -93,23 +93,6 @@ export class PreviewProjects {
     const primary = chatId
       ? await this.chats.terminalFolder(projectId, chatId)
       : scope.root;
-    const tasks = await projectTasks.list(scope.root, scope.worktrees, {
-      fresh: true,
-      includeNewServers: true,
-    });
-    const live = new Map(
-      await Promise.all(
-        scope.allowed.map(
-          async (folder) =>
-            [
-              folder,
-              await runningServerPorts(
-                tasks.filter((t) => t.folder === folder),
-              ),
-            ] as const,
-        ),
-      ),
-    );
     const settings = this.projects.get(projectId).settings;
     const sameSettings =
       settings?.devCommand === saved?.settings.devCommand &&
@@ -140,6 +123,23 @@ export class PreviewProjects {
     }
     const requested = localPort(url ?? "");
     const remote = !!url && /^https?:\/\//i.test(url) && !requested;
+    // External pages need workspace validation, but no process inventory or
+    // socket probes. Local preview ownership still comes from fresh discovery.
+    const live = new Map<string, number[]>();
+    if (!remote) {
+      const tasks = await projectTasks.list(scope.root, scope.worktrees, {
+        fresh: true,
+        includeNewServers: true,
+      });
+      await Promise.all(
+        scope.allowed.map(async (folder) => {
+          live.set(
+            folder,
+            await runningServerPorts(tasks.filter((t) => t.folder === folder)),
+          );
+        }),
+      );
+    }
     if (requested) {
       const matches = [...live].filter(([, ports]) =>
         ports.includes(requested),
