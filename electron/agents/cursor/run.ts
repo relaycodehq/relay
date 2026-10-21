@@ -2,12 +2,6 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { withTimeout } from "../../util/timeout";
 import type { AgentOptions } from "../types";
-import {
-  cursorActivity,
-  cursorEdits,
-  cursorPlan,
-  type CursorCall,
-} from "./activity";
 import { cursorPrompt } from "./commands";
 import { cursorErrorName } from "./error-codes";
 import {
@@ -15,16 +9,11 @@ import {
   CursorError,
   type CursorConnection,
 } from "./connection";
-import type { CursorRun, CursorRunResult, CursorUpdate } from "./protocol";
+import type { CursorRun, CursorRunResult } from "./protocol";
+import { CursorTurnEvents } from "./turn-events";
 import { currentSdk, ensureSdk } from "./sdk";
 import { signedOutError, usageLimitError } from "../errors";
-import {
-  answerLimitError,
-  CANCEL_GRACE_MS,
-  cancelledByYou,
-  guardSteer,
-  TurnText,
-} from "../turn-kit";
+import { CANCEL_GRACE_MS, cancelledByYou, guardSteer } from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
@@ -149,83 +138,15 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     throw new Error("There is no Cursor turn to pick up.");
   }
   const run = adopted?.run ?? randomUUID();
-  const turn = new TurnText(options.onText, options.onCommentary);
-  /** Steering messages sent, until Cursor says it read one. */
-  const steers: (string | undefined)[] = [];
-  let agentId = options.session?.id;
-
   let overflow!: (error: Error) => void;
-  let capped = false;
-  const handle = (update: CursorUpdate) => {
-    switch (update.type) {
-      case "agent": {
-        const id = String(update.agentId ?? "");
-        if (id && id !== agentId) {
-          agentId = id;
-          void options.session?.onId(id);
-        }
-        return;
-      }
-      case "text-delta": {
-        turn.add(String(update.text ?? ""));
-        const over = answerLimitError(turn.size);
-        if (over && !capped) {
-          capped = true;
-          overflow(over);
-          abort();
-        }
-        return;
-      }
-      case "tool-call-started":
-      case "tool-call-completed": {
-        const done = update.type === "tool-call-completed";
-        const call = update.toolCall as CursorCall | undefined;
-        if (!call) return;
-        if (!done) turn.toCommentary();
-        const activity = cursorActivity(
-          String(update.callId ?? ""),
-          call,
-          done,
-        );
-        if (activity) options.onActivity?.(activity);
-        const edits = cursorEdits(call);
-        if (edits.length) options.onEdit?.(edits);
-        const plan = done ? cursorPlan(call) : undefined;
-        if (plan) options.onPlan?.(plan);
-        return;
-      }
-      case "token-delta": {
-        // Cursor counts tokens as they stream, without a split or a model.
-        const tokens = Number(update.tokens);
-        if (tokens > 0)
-          options.onUsage?.({
-            model: options.choice.model || "cursor",
-            fast: options.choice.fast,
-            tokens: { input: 0, cacheWrite: 0, cacheRead: 0, output: tokens },
-          });
-        return;
-      }
-      case "summary-started":
-        options.onCommentary?.(
-          "cursor-summary",
-          "Summarizing the conversation…",
-        );
-        return;
-      case "summary-completed":
-        options.onCommentary?.("cursor-summary", null);
-        return;
-      case "user-message-appended": {
-        // Cursor read the oldest steering message; the rest of the turn answers it.
-        if (!steers.length) return;
-        const id = steers.shift();
-        turn.reset();
-        if (id) options.onSteered?.(id);
-      }
-    }
-  };
   const overflowed = new Promise<never>((_, reject) => (overflow = reject));
   void overflowed.catch(() => {});
-  connection.listen(run, handle);
+  const events = new CursorTurnEvents(options, (error) => {
+    overflow(error);
+    abort();
+  });
+  const { turn, steers } = events;
+  connection.listen(run, events.handle);
 
   let cancelTimer: NodeJS.Timeout | undefined;
   const abort = () => {
@@ -274,56 +195,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
     } else {
-      // A helper job (a thread title) is one bare question: no notes, no history, no tools.
-      const helper = job.kind === "helper" ? job : undefined;
-      const note = helper
-        ? undefined
-        : await options.context?.().catch(() => undefined);
-      const images = await Promise.all(
-        (options.images ?? []).map(async (image) => ({
-          data: (await readFile(image.path)).toString("base64"),
-          mimeType: image.mimeType,
-        })),
-      );
-      signal.throwIfAborted();
-      const prompt = await cursorPrompt(
-        options.prompt,
-        options.cwd,
-        options.request,
-      );
-      const writableLinks = (options.links ?? [])
-        .filter((l) => l.access === "write")
-        .map((l) => l.path);
-      params = {
-        run,
-        agentId: helper ? undefined : options.session?.id,
-        cwd: options.cwd,
-        // Cursor's extra roots are writable; a read-only link can't be one.
-        ...(!helper && writableLinks.length ? { dirs: writableLinks } : {}),
-        prompt: [note, prompt].filter(Boolean).join("\n\n"),
-        images,
-        model: options.choice.model || undefined,
-        effort: options.choice.reasoningEffort || undefined,
-        fast: options.choice.fast,
-        mode: options.interactionMode === "plan" ? "plan" : "agent",
-        ...(helper
-          ? {
-              sandbox: true,
-              autoReview: false,
-              tools: [],
-              systemPrompt: helper.instructions,
-              ambient: false,
-            }
-          : { ...cursorPolicy(options), ambient: true }),
-        ...(!helper && !options.readOnly && options.relayTools
-          ? {
-              relayTools: {
-                url: options.relayTools.url,
-                token: options.relayTools.token,
-              },
-            }
-          : {}),
-      };
+      params = await runParams(options, run);
       if (params.sandbox && cannotSandbox && mayGoUnsandboxed)
         params = unsandboxed(params);
       reply = send(params);
@@ -394,7 +266,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         ),
         connection,
       );
-    if (result.agentId !== agentId) await options.session?.onId(result.agentId);
+    if (result.agentId !== events.agentId)
+      await options.session?.onId(result.agentId);
     const answer = turn.answer() || result.text;
     if (answer !== turn.answer()) options.onText(answer);
     if (options.interactionMode === "plan" && answer.trim())
@@ -409,8 +282,68 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     // Given up on before the worker said the turn ended (a cancel it never
     // confirmed, an answer cut off at its limit), the turn may still run
     // there. Ending the worker ends it; the next turn resumes the agent.
-    settle(connection, agentId, !!key && answered);
+    settle(connection, events.agentId, !!key && answered);
   }
+}
+
+/**
+ * What the worker runs: the prompt after the thread's note, its images, and
+ * what the turn may do. A helper job (a thread title) is one bare question.
+ */
+async function runParams(
+  options: AgentOptions,
+  run: string,
+): Promise<CursorRun> {
+  const { signal, job } = options;
+  const helper = job.kind === "helper" ? job : undefined;
+  const note = helper
+    ? undefined
+    : await options.context?.().catch(() => undefined);
+  const images = await Promise.all(
+    (options.images ?? []).map(async (image) => ({
+      data: (await readFile(image.path)).toString("base64"),
+      mimeType: image.mimeType,
+    })),
+  );
+  signal.throwIfAborted();
+  const prompt = await cursorPrompt(
+    options.prompt,
+    options.cwd,
+    options.request,
+  );
+  const writableLinks = (options.links ?? [])
+    .filter((l) => l.access === "write")
+    .map((l) => l.path);
+  return {
+    run,
+    agentId: helper ? undefined : options.session?.id,
+    cwd: options.cwd,
+    // Cursor's extra roots are writable; a read-only link can't be one.
+    ...(!helper && writableLinks.length ? { dirs: writableLinks } : {}),
+    prompt: [note, prompt].filter(Boolean).join("\n\n"),
+    images,
+    model: options.choice.model || undefined,
+    effort: options.choice.reasoningEffort || undefined,
+    fast: options.choice.fast,
+    mode: options.interactionMode === "plan" ? "plan" : "agent",
+    ...(helper
+      ? {
+          sandbox: true,
+          autoReview: false,
+          tools: [],
+          systemPrompt: helper.instructions,
+          ambient: false,
+        }
+      : { ...cursorPolicy(options), ambient: true }),
+    ...(!helper && !options.readOnly && options.relayTools
+      ? {
+          relayTools: {
+            url: options.relayTools.url,
+            token: options.relayTools.token,
+          },
+        }
+      : {}),
+  };
 }
 
 /** The turn is over: the worker keeps its agent for the next, unless it was a private one or still busy. */
