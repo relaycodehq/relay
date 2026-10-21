@@ -5,6 +5,7 @@
 import { request } from "node:http";
 import type { SDKCustomTool, SDKCustomToolResult } from "@cursor/sdk";
 import type { CursorRun } from "./protocol";
+import { errorMessage } from "../../../shared/error-message";
 
 type RelayTools = NonNullable<CursorRun["relayTools"]>;
 
@@ -68,7 +69,7 @@ const failed = (error: unknown): SDKCustomToolResult => ({
   content: [
     {
       type: "text",
-      text: error instanceof Error ? error.message : String(error),
+      text: errorMessage(error),
     },
   ],
   isError: true,

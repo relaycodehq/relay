@@ -13,6 +13,7 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import "./changed-files.css";
 import "./working-tree.css";
+import { errorMessage } from "../../../shared/error-message";
 
 const turnSides = { deletions: "Before turn", additions: "After turn" };
 const worktreeSides = { deletions: "Branched from", additions: "Worktree" };
@@ -63,7 +64,7 @@ export function TurnChanges({
         target.worktree ? null : target.messageId,
         file,
       )
-      .catch((e) => setRevealError(e instanceof Error ? e.message : String(e)));
+      .catch((e) => setRevealError(errorMessage(e)));
   return (
     <section className="local-changes" aria-label="Turn changes">
       {slots.title &&

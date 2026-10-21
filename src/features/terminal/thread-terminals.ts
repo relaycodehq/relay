@@ -12,6 +12,7 @@ import type { AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { matches } from "../../lib/shortcuts";
 import { frontInDock, moveDock, setTerminalOpen } from "./terminal-dock";
+import { errorMessage } from "../../../shared/error-message";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
 
@@ -163,7 +164,7 @@ export class ThreadTerminal {
       this.status = "idle";
       this.early = [];
       this.typed = "";
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = errorMessage(e);
     }
     this.emit();
   }

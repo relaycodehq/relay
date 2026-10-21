@@ -33,6 +33,7 @@ import type { TurnEndings } from "./end";
 import type { TurnHandoffs } from "./handoff-notes";
 import { forkFor, type TurnRunner } from "../turn-run";
 import type { ThreadWorktrees } from "../worktrees";
+import { errorMessage } from "../../../shared/error-message";
 
 /** How long a new worktree's first turn waits for the title it's named after. */
 const TITLE_WAIT_MS = 8000;
@@ -435,7 +436,7 @@ export class TurnSends {
     } catch (e) {
       // The send already went through, so the thread shows the failure, in
       // the answer it began if it got that far.
-      const error = e instanceof Error ? e.message : String(e);
+      const error = errorMessage(e);
       let failed: ChatMessage;
       if (begun?.status === "streaming") {
         failed = begun;
@@ -514,7 +515,7 @@ export class TurnSends {
       // Pushed but never run: it mustn't read as streaming.
       if (chat.messages.includes(message)) {
         message.status = "failed";
-        message.error = e instanceof Error ? e.message : String(e);
+        message.error = errorMessage(e);
         message.version++;
         this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       }

@@ -56,6 +56,7 @@ import {
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
 import { keepDistributionsUp, wslDistro } from "./wsl";
+import { errorMessage } from "../../shared/error-message";
 
 const agentName = (provider: string) =>
   agentInfo(provider as AgentProvider)?.cli ?? provider;
@@ -1106,7 +1107,7 @@ async function setUpWsl(ui: Screen, distro: string) {
       row(
         "warn",
         "WSL",
-        `couldn't reach Windows (${e instanceof Error ? e.message : String(e)}); set instanceIdleTimeout=-1 under [general] in %USERPROFILE%\\.wslconfig yourself`,
+        `couldn't reach Windows (${errorMessage(e)}); set instanceIdleTimeout=-1 under [general] in %USERPROFILE%\\.wslconfig yourself`,
       ),
     );
   }
@@ -1363,7 +1364,7 @@ main(process.argv.slice(2)).catch((e) => {
     console.error(
       e instanceof Usage
         ? `${e.message}`
-        : fail(e instanceof Error ? e.message : String(e)),
+        : fail(errorMessage(e)),
     );
   process.exit(
     e instanceof Usage

@@ -40,6 +40,7 @@ import {
   type HostSession,
   type SessionHost,
 } from "./sessions";
+import { errorMessage } from "../../shared/error-message";
 
 // Started as Node by Electron's own binary; the agents' commands must not inherit that.
 delete process.env.ELECTRON_RUN_AS_NODE;
@@ -285,7 +286,7 @@ function receive(socket: Socket, message: ClientMessage) {
           entry: {
             seq: 0,
             kind: "end",
-            failure: error instanceof Error ? error.message : String(error),
+            failure: errorMessage(error),
           },
         });
       }
@@ -337,7 +338,7 @@ function receive(socket: Socket, message: ClientMessage) {
           reply({
             t: "return",
             id: message.id,
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(error),
           }),
       );
       return;

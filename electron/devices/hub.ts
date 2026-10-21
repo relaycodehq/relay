@@ -8,6 +8,7 @@ import type { DeviceHubState, DeviceHubStatus } from "../../shared/devices";
 import { findExecutable, runExecutable } from "../platform/executables";
 import { stopProcessTree } from "../platform/terminate";
 import { AVD_LIST_CACHE } from "./avd-list-cache";
+import { errorMessage } from "../../shared/error-message";
 
 /**
  * Pinned: the hub is 0.x and ships canaries daily. Old enough to pass an npm
@@ -173,7 +174,7 @@ export class DeviceHub {
       this.set("running");
       return hub;
     } catch (e) {
-      this.set("failed", e instanceof Error ? e.message : String(e));
+      this.set("failed", errorMessage(e));
       throw e;
     }
   }

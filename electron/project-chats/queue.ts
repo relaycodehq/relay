@@ -12,6 +12,7 @@ import { mayMentionSkill } from "../../shared/skill-mentions";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
+import { errorMessage } from "../../shared/error-message";
 
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
@@ -149,7 +150,7 @@ export class ChatQueue {
       await this.core.storage.save(chat);
       if (!this.core.active.has(id)) await this.drain(id);
     } catch (e) {
-      next.error = e instanceof Error ? e.message : String(e);
+      next.error = errorMessage(e);
       chat.queuePaused = true;
       await this.core.storage.save(chat);
     }

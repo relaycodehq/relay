@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { RefreshCw, RotateCcw } from "lucide-react";
 import { api } from "../../../lib/api";
-import { errorMessage } from "../../../lib/error-message";
+import { errorMessage } from "../../../../shared/error-message";
 import { HarnessMark } from "../usage-charts";
 import { dayLabel } from "../format";
 import {
@@ -80,7 +80,9 @@ function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
             aria-label={`${a.name}, ${windowTitle(t.window.periodMs)}: ${t.meter.leftPercent}% left`}
             onMouseEnter={() => setHover(t)}
           >
-            <span style={{ transform: `scaleY(${t.meter.leftPercent / 100})` }} />
+            <span
+              style={{ transform: `scaleY(${t.meter.leftPercent / 100})` }}
+            />
           </span>
         ))}
       </div>

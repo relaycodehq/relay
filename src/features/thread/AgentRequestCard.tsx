@@ -14,6 +14,7 @@ import type {
   AgentDecision,
 } from "../../../shared/agent-modes";
 import "./agent-request.css";
+import { errorMessage } from "../../../shared/error-message";
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
   acceptForSession: "Always",
@@ -47,7 +48,7 @@ export function AgentRequestCard({
     try {
       await onRespond(response);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
       setBusy(false);
     }
   }
@@ -58,7 +59,7 @@ export function AgentRequestCard({
     try {
       await onDismiss();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

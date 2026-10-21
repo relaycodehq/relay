@@ -10,6 +10,7 @@ import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";
 import { connectedPorts } from "./connected-ports";
+import { errorMessage } from "../../shared/error-message";
 
 const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
@@ -374,7 +375,7 @@ export class DevServers {
           this.set(server, {
             state: "failed",
             port: server.port,
-            output: error instanceof Error ? error.message : String(error),
+            output: errorMessage(error),
           });
         throw error;
       }

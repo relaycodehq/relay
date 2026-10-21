@@ -14,6 +14,7 @@ import {
 import { isGitMissing } from "../../../shared/working-tree";
 import "../projects/projects.css";
 import "./branch-picker.css";
+import { errorMessage } from "../../../shared/error-message";
 
 /** A pick in the picker: an existing branch by name, or one to create. */
 export interface BranchChoice {
@@ -113,7 +114,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
       // slow query shouldn't hold the picker open and disabled meanwhile.
       void qc.invalidateQueries(everythingButFetch);
     } catch (e) {
-      const reason = e instanceof Error ? e.message : String(e);
+      const reason = errorMessage(e);
       if (intercept) {
         setOpen(false);
         intercept.refused(choice, reason, list);

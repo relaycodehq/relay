@@ -28,6 +28,7 @@ import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
 import { listSites, Tunnel, TunnelPorts } from "../tunnel";
+import { errorMessage } from "../../shared/error-message";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/);
 const appReportSchema = z
@@ -140,7 +141,9 @@ export class PhoneRemote {
     private lan: () => string[] = () => lanAddresses(networkInterfaces()),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
-    this.tunnelPorts = new TunnelPorts(() => listSites(host, [this.server.port]));
+    this.tunnelPorts = new TunnelPorts(() =>
+      listSites(host, [this.server.port]),
+    );
     const name = computerName;
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
@@ -245,7 +248,9 @@ export class PhoneRemote {
       (id, bridge) => !this.isComputer(id) && bridge >= draftsBridge,
     );
   }
-  chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true }) {
+  chatEvent(
+    event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true },
+  ) {
     // Phones don't show a thread's setup on another computer yet.
     if (!this.server.listening || event.setup) return;
     this.bridge.chatEvent(event);
@@ -390,7 +395,7 @@ export class PhoneRemote {
       try {
         await this.server.listen(host, !!lan);
       } catch (e) {
-        this.error = e instanceof Error ? e.message : String(e);
+        this.error = errorMessage(e);
       }
     });
     return this.syncing;

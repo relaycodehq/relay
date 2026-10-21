@@ -7,6 +7,7 @@ import {
   checkoutChanged,
   type WorkingTree,
 } from "../../../shared/working-tree";
+import { errorMessage } from "../../../shared/error-message";
 
 // A branch change can touch anything shown, but it just talked to the
 // upstream (or didn't need to), so the periodic fetch can wait its turn.
@@ -105,7 +106,7 @@ export function useBranchSync(where: string) {
       qc.setQueryData<WorkingTree>(treeKey, next);
       void qc.invalidateQueries(everythingButFetch);
     } catch (e) {
-      setSyncError(e instanceof Error ? e.message : String(e));
+      setSyncError(errorMessage(e));
       await tree.refetch();
     } finally {
       setSyncing(false);

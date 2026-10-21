@@ -22,6 +22,7 @@ import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import { CardShortcut } from "./CardShortcut";
+import { errorMessage } from "../../../shared/error-message";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
@@ -141,7 +142,9 @@ function ReviewLine({ id }: { id: string }) {
     <>
       <span className="sb-card-draft">
         <ScanSearch size={11} aria-label="Deep review" />
-        <span>{focus || (reviewers.length ? count : "Set up, not started")}</span>
+        <span>
+          {focus || (reviewers.length ? count : "Set up, not started")}
+        </span>
       </span>
       {!!agents.length && (
         <span
@@ -204,7 +207,7 @@ export function useDraftSend(
     try {
       if (!(await sendDraft(qc, draft))) onOpen();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setSending(false);
     }

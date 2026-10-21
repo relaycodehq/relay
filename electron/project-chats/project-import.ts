@@ -10,11 +10,10 @@ import type {
 import type { TerminalSessions } from "../terminal-sessions";
 import type { ChatCore } from "./core";
 import type { TerminalContinue } from "./terminal-continue";
+import { errorMessage } from "../../shared/error-message";
 
 const keyOf = (app: ImportApp, path: string) =>
   createHash("sha256").update(`${app}:${path}`).digest("hex");
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
 
 /** One-time project imports. Discovery only reads; selections are revalidated before writes. */
 export class ProjectImports {
@@ -178,12 +177,15 @@ export class ProjectImports {
               result.failures.push({
                 key: source.key,
                 chatId: id,
-                message: message(error),
+                message: errorMessage(error),
               });
             }
           }
         } catch (error) {
-          result.failures.push({ key: source.key, message: message(error) });
+          result.failures.push({
+            key: source.key,
+            message: errorMessage(error),
+          });
         }
       }
       return result;

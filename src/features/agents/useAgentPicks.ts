@@ -3,7 +3,7 @@ import type { AgentModel, AgentProvider } from "../../../shared/agents";
 import { pickAgents } from "./composer-models";
 import { useRunnableAgents } from "./registry-agents";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 
 interface AgentPickCatalog {
   /** Undefined while loading; empty when the agent couldn't list any. */

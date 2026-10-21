@@ -20,6 +20,7 @@ import { engineById, engineList } from "./catalog";
 import type { ReadAloudEngine } from "./engine";
 import { speakableChunks } from "./speakable";
 import type { WorkerCommand, WorkerNotice } from "./worker";
+import { errorMessage } from "../../shared/error-message";
 
 /** The model's memory goes back to the system this long after the last reading. */
 const idleUnload =
@@ -161,7 +162,7 @@ export class ReadAloud {
           ? { status: "missing", received }
           : {
               status: "failed",
-              error: error instanceof Error ? error.message : String(error),
+              error: errorMessage(error),
               received,
               total,
             },

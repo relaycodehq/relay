@@ -21,6 +21,7 @@ import { AgentTurn } from "./AgentTurn";
 import { RichText } from "../../ui/RichText";
 import { SubagentStatus } from "./Subagents";
 import { POPUPS } from "../../lib/shortcuts";
+import { errorMessage } from "../../../shared/error-message";
 
 export function SubagentThread({
   chatId,
@@ -84,7 +85,7 @@ export function SubagentThread({
       ]);
     } catch (e) {
       setStopping(undefined);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   };
   return (

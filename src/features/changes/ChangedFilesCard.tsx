@@ -23,6 +23,7 @@ import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { useFoldedTurn } from "./folded-turns";
 import "../../ui/tree.css";
 import "./changed-files.css";
+import { errorMessage } from "../../../shared/error-message";
 
 // Short lists read best open; longer ones start as folders, unless that
 // would fold everything into a single row.
@@ -92,7 +93,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
     } catch (e) {
       setPrompt({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     } finally {
       setWorking(false);
@@ -195,7 +196,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
                   void onReveal(node.path).catch((e) =>
                     setPrompt({
                       kind: "error",
-                      message: e instanceof Error ? e.message : String(e),
+                      message: errorMessage(e),
                     }),
                   )
                 }

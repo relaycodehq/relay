@@ -13,7 +13,7 @@ import { triageState } from "../../../shared/chat-activity";
 import { nextAfterSettle, triaged } from "./activity";
 import { api } from "../../lib/api";
 import { undos } from "../../lib/undo";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { fetchChat } from "../../lib/chat-events";
 

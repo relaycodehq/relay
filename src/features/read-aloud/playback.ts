@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { ReadAloudEvent } from "../../../shared/read-aloud";
 import { api } from "../../lib/api";
+import { errorMessage } from "../../../shared/error-message";
 
 /** The one reading going on, by the key of what is read (an answer's id). */
 export type Reading =
@@ -137,6 +138,6 @@ function fail(error: unknown) {
   set({
     key,
     status: "failed",
-    error: error instanceof Error ? error.message : String(error),
+    error: errorMessage(error),
   });
 }

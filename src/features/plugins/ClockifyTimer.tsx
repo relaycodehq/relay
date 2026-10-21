@@ -33,6 +33,7 @@ import { ClockifyStart } from "./ClockifyStart";
 import { clock, elapsed } from "./clockify-format";
 import "../agents/composer-model-picker.css";
 import "./clockify.css";
+import { errorMessage } from "../../../shared/error-message";
 
 const TOUCH_EVERY = 60_000;
 // Solid shapes read at badge size; Check, X and Minus are only strokes.
@@ -123,7 +124,7 @@ export function ClockifyTimer({
       qc.setQueryData(clockifyKey, await api.clockifyTimer(action));
       if (action === "stop") setReviewing(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -136,7 +137,7 @@ export function ClockifyTimer({
     try {
       qc.setQueryData(clockifyKey, await api.clockifySetStart(at));
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setMovedStart(undefined);
     }

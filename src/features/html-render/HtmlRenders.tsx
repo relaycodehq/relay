@@ -25,6 +25,7 @@ import { fitZoom, stepZoom } from "./render-zoom";
 import { RenderActions, type RenderAction } from "./RenderActions";
 import "../../ui/workspace-panes.css";
 import "./html-render.css";
+import { errorMessage } from "../../../shared/error-message";
 
 /** How far outside the thread's view a page stays loaded. */
 const KEEP_MARGIN = "800px 0px";
@@ -71,8 +72,6 @@ function scrollParent(el: HTMLElement) {
     if (/auto|scroll/.test(getComputedStyle(p).overflowY)) return p;
   return null;
 }
-
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const RenderCard = memo(function RenderCard({
   chatId,
@@ -197,8 +196,7 @@ const RenderCard = memo(function RenderCard({
         const from = `${chatId}:${render.id}`;
         onCompose(text, composed.get(from));
         composed.set(from, text);
-      }
-      else if (data.relayRender === "key" && typeof data.key === "string")
+      } else if (data.relayRender === "key" && typeof data.key === "string")
         stageKeyNow.current(data.key)?.();
     };
     window.addEventListener("message", listen);
@@ -275,7 +273,7 @@ const RenderCard = memo(function RenderCard({
     } catch (e) {
       console.error(e);
       setFailure(
-        `Couldn't ${action === "copy" ? "copy" : "save"} it: ${errorText(e)}`,
+        `Couldn't ${action === "copy" ? "copy" : "save"} it: ${errorMessage(e)}`,
       );
     }
   };

@@ -1,6 +1,7 @@
 // Bundled separately for the shell and PowerShell installers. It shares the
 // updater's validation, cross-process lock and rollback on a failed swap.
 import { replaceInstallation } from "./install";
+import { errorMessage } from "../../shared/error-message";
 
 const [root, staged, version] = process.argv.slice(2);
 if (!root || !staged || !version) {
@@ -10,7 +11,7 @@ if (!root || !staged || !version) {
   process.exitCode = 1;
 } else {
   replaceInstallation(root, staged, version).catch((e) => {
-    console.error(e instanceof Error ? e.message : String(e));
+    console.error(errorMessage(e));
     process.exitCode = 1;
   });
 }

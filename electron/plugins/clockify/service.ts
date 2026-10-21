@@ -20,6 +20,7 @@ import type { PluginSecrets } from "../secrets";
 import { ClockifyClient, seconds, type Fetch } from "./client";
 import { blockEvidence, describeBlocks } from "./describe";
 import { chatEvidence, dayChats, type ChatSource } from "./evidence";
+import { errorMessage } from "../../../shared/error-message";
 
 const MIN = 60_000;
 /** A turn longer than this is more likely a restart than work. */
@@ -356,7 +357,7 @@ export class ClockifyPlugin {
       if (!abort.signal.aborted)
         await this.setReview({
           describing: false,
-          describeError: e instanceof Error ? e.message : String(e),
+          describeError: errorMessage(e),
         });
     } finally {
       if (this.describing === abort) this.describing = undefined;
@@ -408,7 +409,7 @@ export class ClockifyPlugin {
       }
       await this.setReview({ submitError: undefined });
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = errorMessage(e);
       await this.setReview({ submitError: message });
       throw e;
     }

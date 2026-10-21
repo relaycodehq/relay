@@ -11,6 +11,7 @@ import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
 import type { ThreadWorktrees } from "./worktrees";
+import { errorMessage } from "../../shared/error-message";
 
 const DAY_MS = 86_400_000;
 /** A thread shown in a window asks for its worktree every few seconds; this long after the last ask it counts as closed. */
@@ -155,7 +156,7 @@ export class WorktreeCleanup {
         if (this.core.closing()) return;
         const why = await this.worktrees
           .cleanUp(chat.id, (loaded) => this.kept(loaded))
-          .catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+          .catch((e: unknown) => errorMessage(e));
         if (why) this.recheck.set(chat.id, this.now() + RECHECK_MS);
         else this.recheck.delete(chat.id);
       }

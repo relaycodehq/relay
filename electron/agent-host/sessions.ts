@@ -23,6 +23,7 @@ import {
 import { AsyncQueue } from "../util/async-queue";
 import { readOnlyBashHook } from "./read-only-bash";
 import { terminate } from "../platform/terminate";
+import { errorMessage } from "../../shared/error-message";
 
 /** Log sizes: past this, what a restart can't need goes first. */
 const limits = { entries: 30_000, line: 8 << 20 };
@@ -225,7 +226,7 @@ export class ClaudeSession extends HostSession {
         for await (const frame of this.query)
           this.append({ kind: "frame", message: frame });
       } catch (error) {
-        failure = error instanceof Error ? error.message : String(error);
+        failure = errorMessage(error);
       }
       this.append({ kind: "end", ...(failure ? { failure } : {}) });
     })();

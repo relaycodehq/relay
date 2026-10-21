@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { agentModelsQuery } from "./useAgentPicks";
 
 /**

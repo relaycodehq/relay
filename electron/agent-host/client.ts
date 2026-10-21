@@ -25,6 +25,7 @@ import {
 } from "./protocol";
 import { AsyncQueue } from "../util/async-queue";
 import { toolText, type ToolResult } from "../relay-mcp/tools";
+import { errorMessage } from "../../shared/error-message";
 
 /**
  * How long a session's control call may take. Claude Code answers them at
@@ -468,10 +469,7 @@ class HostConnection {
           )
         : toolText("Relay is still starting. Try again in a moment.", true);
     } catch (error) {
-      result = toolText(
-        error instanceof Error ? error.message : String(error),
-        true,
-      );
+      result = toolText(errorMessage(error), true);
     } finally {
       this.toolCalls.delete(message.id);
     }
@@ -577,7 +575,7 @@ export class HostedQuery {
       (value) => this.answer(message.id, { value }),
       (error) =>
         this.answer(message.id, {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         }),
     );
   }

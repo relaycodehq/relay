@@ -30,6 +30,7 @@ import {
 } from "../platform/executables";
 import { acpAccount } from "./acp";
 import { releasedBy, releaseTimes, type ReleaseTimes } from "./npm-release-age";
+import { errorMessage } from "../../shared/error-message";
 
 export const checkEvery = 4 * 60 * 60 * 1000;
 /** How long after starting, or turning checks back on, the first one waits. */
@@ -95,7 +96,8 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     install: "curl -fsSL https://dev.meta.ai/install.sh | bash",
     native: {
       args: [],
-      owns: (path) => /\/\.local\/bin\/muse(-bin-[^/]*)?(\.exe)?$/.test(foldPath(path)),
+      owns: (path) =>
+        /\/\.local\/bin\/muse(-bin-[^/]*)?(\.exe)?$/.test(foldPath(path)),
     },
   },
 };
@@ -567,7 +569,7 @@ export class AgentUpdates {
       this.io.exec(path, ["--version"], probeTimeout).catch((error): Exec => ({
         code: null,
         stdout: "",
-        output: error instanceof Error ? error.message : String(error),
+        output: errorMessage(error),
         timedOut: false,
       })),
       this.installAt(provider, path, tag),

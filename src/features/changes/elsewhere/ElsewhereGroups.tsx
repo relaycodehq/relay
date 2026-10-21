@@ -7,7 +7,7 @@ import type {
   ElsewhereGroup,
 } from "../../../../shared/elsewhere";
 import { api } from "../../../lib/api";
-import { errorMessage } from "../../../lib/error-message";
+import { errorMessage } from "../../../../shared/error-message";
 import { FileEntryIcon } from "../../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { elsewhereKey, type ElsewherePick } from "./useElsewhere";

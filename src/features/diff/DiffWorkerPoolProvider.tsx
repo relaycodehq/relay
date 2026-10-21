@@ -4,6 +4,7 @@ import { WorkerPoolManager } from "@pierre/diffs/worker";
 import DiffWorker from "@pierre/diffs/worker/worker.js?worker";
 import { useSyntaxThemes } from "../../lib/appearance";
 import { sharedResource } from "./shared-pool";
+import { errorMessage } from "../../../shared/error-message";
 
 type SyntaxThemes = ReturnType<typeof useSyntaxThemes>;
 
@@ -61,7 +62,7 @@ export function DiffWorkerPoolProvider({ children }: { children?: ReactNode }) {
         if (live)
           setState({
             status: "failed",
-            message: error instanceof Error ? error.message : String(error),
+            message: errorMessage(error),
           });
       },
     );

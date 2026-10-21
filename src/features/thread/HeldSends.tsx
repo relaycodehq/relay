@@ -7,6 +7,7 @@ import { clock } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import { Message } from "./ProjectMessage";
+import { errorMessage } from "../../../shared/error-message";
 
 const noop = () => {};
 
@@ -42,9 +43,7 @@ export function HeldSends({
     setBusy(true);
     setFailed(undefined);
     job()
-      .catch((e: unknown) =>
-        setFailed(e instanceof Error ? e.message : String(e)),
-      )
+      .catch((e: unknown) => setFailed(errorMessage(e)))
       .finally(() => {
         setBusy(false);
         void qc.invalidateQueries({ queryKey: chatKey(chat.id) });

@@ -12,6 +12,7 @@ import {
 import { signedByAny } from "../../shared/update-signature";
 import { replaceInstallation } from "./install";
 import { download, extract } from "./archive";
+import { errorMessage } from "../../shared/error-message";
 
 /**
  * latest.json as a headless Relay reads it: its own download sits beside
@@ -129,7 +130,7 @@ export class HeadlessUpdater {
         install: "auto",
       };
     } catch (e) {
-      this.state = { status: "error", current, message: message(e) };
+      this.state = { status: "error", current, message: errorMessage(e) };
     }
     return this.state;
   }
@@ -196,7 +197,12 @@ export class HeadlessUpdater {
       this.state = { status: "ready", current, version };
     } catch (e) {
       if (staging) await rm(staging, { recursive: true, force: true });
-      this.state = { status: "error", current, version, message: message(e) };
+      this.state = {
+        status: "error",
+        current,
+        version,
+        message: errorMessage(e),
+      };
     }
     return this.state;
   }
@@ -234,7 +240,7 @@ export class HeadlessUpdater {
         status: "error",
         current: this.current,
         version,
-        message: message(e),
+        message: errorMessage(e),
       };
       return this.state;
     }
@@ -249,5 +255,3 @@ export class HeadlessUpdater {
     return this.state;
   }
 }
-
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));

@@ -8,15 +8,14 @@ import { pendingChanged } from "./pending";
 import { ForkTails } from "./fork-tail";
 import { accountHome } from "../../accounts";
 import { SYSTEM_ACCOUNT } from "../../../../shared/agent-accounts";
+import { errorMessage } from "../../../../shared/error-message";
 
 /** Frames read off the stream, waiting for the turn they belong to. */
 export class ClaudeFrames extends AsyncQueue<SDKMessage> {
   /** Why the stream ended early, when it failed rather than closed. */
   failure?: string;
   end(failure?: unknown) {
-    if (failure)
-      this.failure =
-        failure instanceof Error ? failure.message : String(failure);
+    if (failure) this.failure = errorMessage(failure);
     super.end();
   }
 }

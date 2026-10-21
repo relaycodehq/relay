@@ -9,15 +9,8 @@ import type { Server } from "node:net";
 import { delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { AgentHosts } from "../agent-host/client";
-import {
-  hostAgents,
-  loadRegistryAgents,
-  watchSavedSignIns,
-} from "../agents";
-import {
-  AgentAccounts,
-  setProfilesRoot,
-} from "../agents/accounts";
+import { hostAgents, loadRegistryAgents, watchSavedSignIns } from "../agents";
+import { AgentAccounts, setProfilesRoot } from "../agents/accounts";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
 import {
   cursorSdkIo,
@@ -104,6 +97,7 @@ import { HeadlessSpeech, SpeechRuntime } from "./speech";
 import { keepUpdated } from "./auto-update";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
+import { errorMessage } from "../../shared/error-message";
 
 export { logTo } from "./log";
 
@@ -584,7 +578,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
           },
           (e) => {
             login.status = "failed";
-            login.error = e instanceof Error ? e.message : String(e);
+            login.error = errorMessage(e);
             reject(e);
           },
         );

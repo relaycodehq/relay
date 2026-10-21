@@ -31,6 +31,7 @@ import { useWindowFocused } from "../../lib/window-focus";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import "./processes.css";
+import { errorMessage } from "../../../shared/error-message";
 
 export function ProcessesTitle({ onBack }: { onBack: () => void }) {
   return (
@@ -119,7 +120,7 @@ export function ProcessesPage({
     ).filter((f) => !!f);
     if (failed.length) {
       const first = failed[0]!.e;
-      setError(first instanceof Error ? first.message : String(first));
+      setError(errorMessage(first));
       setStopping((s) => {
         const next = new Set(s);
         for (const f of failed) next.delete(f!.id);
@@ -385,9 +386,7 @@ function Row({
             />
           )}
           {detail.length > 0 && (
-            <span
-              className={`pr-detail${e.leftBehind ? " left-behind" : ""}`}
-            >
+            <span className={`pr-detail${e.leftBehind ? " left-behind" : ""}`}>
               {detail.join(" · ")}
             </span>
           )}

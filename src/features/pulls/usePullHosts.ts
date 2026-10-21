@@ -8,7 +8,7 @@ import {
 } from "../../../shared/source-control";
 import type { Account } from "../../../shared/types";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { hostAccountQuery } from "./useHostAccount";
 
 /**

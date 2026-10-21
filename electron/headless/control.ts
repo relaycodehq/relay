@@ -12,6 +12,7 @@ import type { Project } from "../../shared/projects";
 import type { UpdateState } from "../../shared/updates";
 import type { SpeechEngine, SpeechState } from "./speech";
 import type { PhonePairing, PhoneRemoteState } from "../../shared/remote";
+import { errorMessage } from "../../shared/error-message";
 
 /**
  * What the `relay` command asks the Relay running in the background. It
@@ -170,7 +171,7 @@ export async function serveControl(
             reply({
               id: request.id,
               ok: false,
-              error: e instanceof Error ? e.message : String(e),
+              error: errorMessage(e),
             }),
         );
     });

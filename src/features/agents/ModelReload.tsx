@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { RotateCw, Square, TriangleAlert } from "lucide-react";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { agentModelsQuery } from "./useAgentPicks";
 
 /** Agents that read their model list once, as they start. */

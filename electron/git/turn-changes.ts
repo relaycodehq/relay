@@ -22,6 +22,7 @@ import { videoSides } from "./video-pair";
 import { git, gitBytes } from "./git";
 import type { FilePair } from "../../shared/types";
 import type { TurnFileChange } from "../../shared/projects";
+import { errorMessage } from "../../shared/error-message";
 
 // Each agent turn snapshots the whole worktree before and after; its card
 // lists the changes the agent made itself.
@@ -590,7 +591,7 @@ export async function apply(
       await applySteps(root, before, recovery.steps, permissions);
     } catch (recoveryError) {
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)}. Recovery also failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}. The original files are kept at Git ref ${recoveryRef}.`,
+        `${errorMessage(error)}. Recovery also failed: ${errorMessage(recoveryError)}. The original files are kept at Git ref ${recoveryRef}.`,
         { cause: error },
       );
     }

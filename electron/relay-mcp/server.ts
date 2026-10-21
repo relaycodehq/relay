@@ -15,6 +15,7 @@ import {
   withoutPages,
   type ToolResult,
 } from "./tools";
+import { errorMessage } from "../../shared/error-message";
 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 type ToolList = typeof relayToolList;
@@ -137,12 +138,7 @@ async function answer(
           ),
         );
       } catch (error) {
-        return reply(
-          toolText(
-            error instanceof Error ? error.message : String(error),
-            true,
-          ),
-        );
+        return reply(toolText(errorMessage(error), true));
       }
     }
     default:

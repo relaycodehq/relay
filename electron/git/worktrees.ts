@@ -28,6 +28,7 @@ import type {
   TurnFileChange,
   WorktreeStart,
 } from "../../shared/projects";
+import { errorMessage } from "../../shared/error-message";
 
 // A thread's worktree lives outside the project, under Relay's data folder, on
 // a branch of its own made from the checkout's commit: `relay/…` after the
@@ -232,7 +233,7 @@ export async function createWorktree(
   // the checkout's commit instead, and says so, like a name taken meanwhile.
   let fell: ChatWorktree["wanted"];
   const startFailed = (branch: string, off?: true) => (error: unknown) => {
-    const problem = error instanceof Error ? error.message : String(error);
+    const problem = errorMessage(error);
     fell = { branch, problem, ...(off ? { off } : {}) };
     return undefined;
   };
@@ -591,7 +592,7 @@ async function carryOn(
     );
   } catch (error) {
     await unmake();
-    const why = error instanceof Error ? error.message : String(error);
+    const why = errorMessage(error);
     throw new Error(`Couldn't open ${branch} in a worktree: ${why}`);
   }
   // A half-made worktree would hold the branch and fail every retry.
@@ -1091,9 +1092,7 @@ export async function reattachWorktree(
       );
   } catch (error) {
     if (!existing) return undefined;
-    const why =
-      (await carryOnProblem(root, branch)) ??
-      (error instanceof Error ? error.message : String(error));
+    const why = (await carryOnProblem(root, branch)) ?? errorMessage(error);
     throw new Error(`Couldn't open ${branch} in a worktree again: ${why}`);
   }
   // A fresh folder: its ignored files and setup are gone with the old one.

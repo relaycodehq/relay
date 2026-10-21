@@ -1,4 +1,5 @@
 import { JsonRpcConnection, isRecord, type RpcId } from "../json-rpc";
+import { errorMessage } from "../../../shared/error-message";
 
 /** A request the agent answered with a JSON-RPC error. */
 export class AcpRequestError extends Error {
@@ -67,7 +68,7 @@ export class AcpConnection extends JsonRpcConnection {
         id,
         error: {
           code: error instanceof AcpRequestError ? error.code : -32603,
-          message: error instanceof Error ? error.message : String(error),
+          message: errorMessage(error),
         },
       };
     }

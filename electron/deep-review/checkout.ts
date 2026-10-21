@@ -8,6 +8,7 @@ import { basename, dirname, join } from "node:path";
 import { git, worktreeList } from "../git/git";
 import { sameFolder } from "../git/worktrees";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
+import { errorMessage } from "../../shared/error-message";
 
 /** The folder under Relay's worktrees that holds the ones made for reviews, named after their review thread. */
 export const reviewCheckoutsIn = (worktrees: string) =>
@@ -309,7 +310,7 @@ export async function sweepReviewCheckouts(
     }
     if (used) continue;
     const why = await reviewCheckoutHoldsWork(path).catch((e: unknown) =>
-      e instanceof Error ? e.message : String(e),
+      errorMessage(e),
     );
     if (why) continue;
     await removeReviewCheckout(path).catch((e: unknown) =>

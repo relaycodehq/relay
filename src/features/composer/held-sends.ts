@@ -27,6 +27,7 @@ import {
   loadDraftWorkspace,
 } from "./drafts";
 import { quietly } from "./draft-sync";
+import { errorMessage } from "../../../shared/error-message";
 
 /** Answers the phones' sends the main process hands this page, and those it held while none was open. */
 export function followHeldSends() {
@@ -37,7 +38,7 @@ export function followHeldSends() {
     taken.add(request.id);
     void sendHeld(request)
       .catch((e): HeldSendResult => ({
-        error: e instanceof Error ? e.message : String(e),
+        error: errorMessage(e),
       }))
       .then((result) => api.finishDraftSend(request.id, result))
       .catch((e) => console.warn("Couldn't report a phone's draft send:", e));

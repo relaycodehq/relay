@@ -14,6 +14,7 @@ import type { ChatCore } from "./core";
 import { agentSession } from "./sessions";
 import { turnModel, type TurnRunner } from "./turn-run";
 import type { ThreadWorktrees } from "./worktrees";
+import { errorMessage } from "../../shared/error-message";
 
 /** `/btw` questions and their follow-ups, answered beside the thread's own turn. */
 export class SideQuestions {
@@ -147,8 +148,7 @@ export class SideQuestions {
       answer.status = "complete";
     } catch (e) {
       answer.status = abort.signal.aborted ? "cancelled" : "failed";
-      if (!abort.signal.aborted)
-        answer.error = e instanceof Error ? e.message : String(e);
+      if (!abort.signal.aborted) answer.error = errorMessage(e);
     } finally {
       answer.ended = Date.now();
       chat.updated = answer.ended;

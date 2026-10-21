@@ -43,6 +43,7 @@ import {
   type Exec,
   type IssueHost,
 } from "./submit";
+import { errorMessage } from "../../shared/error-message";
 
 /** GitHub takes images up to 10 MB. */
 export const screenshotLimit = 10_000_000;
@@ -571,7 +572,7 @@ export class BugReports {
       }),
       (error: unknown) => ({
         account: null,
-        accountError: message(error),
+        accountError: errorMessage(error),
         visibility: "unknown" as const,
       }),
     );
@@ -619,7 +620,7 @@ export class BugReports {
         );
       } catch (error) {
         throw new Error(
-          `Relay couldn't check whether the last send reached GitHub, so it didn't send again. ${message(error)}`,
+          `Relay couldn't check whether the last send reached GitHub, so it didn't send again. ${errorMessage(error)}`,
         );
       }
       if (found) {
@@ -690,15 +691,15 @@ export class BugReports {
       const current = (await this.load()).submission;
       if (current?.status === "sending") {
         if (surelyNotPosted(error)) {
-          await this.setSubmission(undefined, message(error));
+          await this.setSubmission(undefined, errorMessage(error));
           throw error;
         }
         await this.setSubmission({
           status: "unknown",
           at,
-          error: message(error),
+          error: errorMessage(error),
         });
-        throw new Error(unknownOutcome(message(error)));
+        throw new Error(unknownOutcome(errorMessage(error)));
       }
       throw error;
     }
@@ -828,9 +829,6 @@ const isEmpty = (d: BugReportDraft) =>
   !d.description.trim() &&
   !d.screenshots.length &&
   !d.recording;
-
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
 
 const unknownOutcome = (detail: string) =>
   `GitHub didn't confirm the issue (${detail}). It may have been created anyway; sending again checks first, so it won't post twice.`;

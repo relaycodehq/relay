@@ -35,6 +35,7 @@ import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
 import type { ThreadTitles } from "./titles";
 import type { AgentQuestion } from "../../shared/agent-modes";
+import { errorMessage } from "../../shared/error-message";
 
 /**
  * The first turn of a side conversation or a forked thread with the agent
@@ -478,7 +479,7 @@ export class TurnRunner {
       failed.status = abort.signal.aborted ? "cancelled" : "failed";
       if (abort.signal.aborted) delete failed.error;
       else {
-        failed.error = e instanceof Error ? e.message : String(e);
+        failed.error = errorMessage(e);
         if (
           isAgentError(e, "signedOut") &&
           account &&

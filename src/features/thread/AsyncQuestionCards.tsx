@@ -10,6 +10,7 @@ import { questionAnswers } from "../../../shared/asked-questions";
 import { api } from "../../lib/api";
 import { AnsweredQuestions } from "../agent-turn/AnsweredQuestions";
 import { AgentRequestCard } from "./AgentRequestCard";
+import { errorMessage } from "../../../shared/error-message";
 
 /** Saved questions stay usable even after the turn's live trace folds away. */
 export function AsyncQuestionCards({
@@ -121,7 +122,7 @@ function AsyncQuestionCard({
         false,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

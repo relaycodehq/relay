@@ -30,6 +30,7 @@ import {
   useCostHistory,
 } from "./TaskLoad";
 import "./running-tasks.css";
+import { errorMessage } from "../../../shared/error-message";
 
 const icons: Record<TaskKind, typeof Globe> = {
   server: Globe,
@@ -211,7 +212,7 @@ export function RunningTasks({
         800,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
       setBusy((b) => {
         const next = new Map(b);
         next.delete(task.id);

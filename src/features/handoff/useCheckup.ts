@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PairedComputer } from "../../../shared/handoff";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { routeKey, type Target } from "./add-targets";
 
 export type Phase =

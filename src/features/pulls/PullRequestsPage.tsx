@@ -50,7 +50,7 @@ import {
 } from "./PullRows";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { hostKindOf, pullHostName } from "../../../shared/source-control";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { accountOn } from "./usePullHosts";
 import { useProjectPulls } from "./project-pulls";
 import "./pull-requests.css";

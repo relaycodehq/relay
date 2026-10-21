@@ -3,7 +3,7 @@ import type { Project } from "../../../shared/projects";
 import { hostKindOf, hostOffMessage } from "../../../shared/source-control";
 import type { Account } from "../../../shared/types";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 
 /** Who a CLI is signed in as on `server`, asked of `gh` or `az`. */
 export const hostAccountQuery = (server: string) => ({

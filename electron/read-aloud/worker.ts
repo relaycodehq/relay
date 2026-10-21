@@ -4,6 +4,7 @@ import type * as Ort from "onnxruntime-node";
 import { engineById } from "./catalog";
 import type { ReadAloudModel } from "./engine";
 import { Stretch } from "./stretch";
+import { errorMessage } from "../../shared/error-message";
 
 export type WorkerCommand =
   | { type: "init"; ort: string; threads: number }
@@ -58,8 +59,7 @@ parent.on("message", ({ data }) => {
       try {
         if (!controller.signal.aborted) await speak(command, controller.signal);
       } catch (e) {
-        if (!controller.signal.aborted)
-          error = e instanceof Error ? e.message : String(e);
+        if (!controller.signal.aborted) error = errorMessage(e);
       }
       notify({ type: "end", id: command.id, ...(error ? { error } : {}) });
       if (current === session) {
