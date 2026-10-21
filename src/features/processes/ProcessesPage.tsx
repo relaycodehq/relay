@@ -26,6 +26,7 @@ import {
 } from "../../../shared/processes";
 import type { TaskKind } from "../../../shared/tasks";
 import { api } from "../../lib/api";
+import { useStoredChoice } from "../../lib/persisted-store";
 import { useWindowFocused } from "../../lib/window-focus";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
@@ -75,8 +76,10 @@ export function ProcessesPage({
   onOpenChat: (projectId: string, chatId: string) => void;
 }) {
   const qc = useQueryClient();
-  const [order, setOrder] = useState<Order>(
-    () => (localStorage.getItem("relay-processes-order") as Order) ?? "mb",
+  const [order, changeOrder] = useStoredChoice<Order>(
+    "relay-processes-order",
+    ["mb", "cpu"],
+    "mb",
   );
   const [stopping, setStopping] = useState<Set<string>>(new Set());
   // "Nothing that started it" can be a tmux server or a tunnel the user
@@ -127,10 +130,6 @@ export function ProcessesPage({
       () => void qc.invalidateQueries({ queryKey: ["process-overview"] }),
       800,
     );
-  };
-  const changeOrder = (next: Order) => {
-    localStorage.setItem("relay-processes-order", next);
-    setOrder(next);
   };
   return (
     <div className="pr-page">

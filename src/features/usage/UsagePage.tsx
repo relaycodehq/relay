@@ -9,7 +9,9 @@ import type {
   UsageRange,
   UsageSummary,
 } from "../../../shared/usage";
+import { usageRanges } from "../../../shared/usage";
 import { api } from "../../lib/api";
+import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { columnsOf, dayLabel, hours, measured } from "./format";
 import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
@@ -75,25 +77,19 @@ function Segmented<T extends string>({
   );
 }
 
-function useStored<T extends string>(key: string, fallback: T) {
-  const [value, setValue] = useState<T>(
-    () => (localStorage.getItem(key) as T | null) ?? fallback,
-  );
-  const set = (v: T) => {
-    localStorage.setItem(key, v);
-    setValue(v);
-  };
-  return [value, set] as const;
-}
-
 export function UsagePage({
   onOpenChat,
 }: {
   onOpenChat: (projectId: string, chatId: string) => void;
 }) {
-  const [range, setRange] = useStored<UsageRange>("relay-usage-range", "30d");
-  const [measure, setMeasure] = useStored<UsageMeasure>(
+  const [range, setRange] = useStoredChoice(
+    "relay-usage-range",
+    usageRanges,
+    "30d",
+  );
+  const [measure, setMeasure] = useStoredChoice<UsageMeasure>(
     "relay-usage-measure",
+    ["usd", "fresh"],
     "usd",
   );
   const [sharing, setSharing] = useState(false);

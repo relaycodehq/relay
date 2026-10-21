@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useStoredChoice } from "../../lib/persisted-store";
 import type {
   BugReportPreview,
   BugReportScreenshot,
@@ -21,8 +21,10 @@ export function ReportPreview({
   preview: BugReportPreview;
   updating: boolean;
 }) {
-  const [view, setView] = useState<View>(() =>
-    localStorage.getItem(VIEW_KEY) === "markdown" ? "markdown" : "rendered",
+  const [view, setView] = useStoredChoice<View>(
+    VIEW_KEY,
+    ["rendered", "markdown"],
+    "rendered",
   );
   const shots = preview.draft.screenshots;
   // `gh` uploads them and rewrites these references; the API can't, so they
@@ -38,10 +40,7 @@ export function ReportPreview({
             ["rendered", "Preview"],
             ["markdown", "Markdown"],
           ]}
-          onChange={(next) => {
-            setView(next);
-            localStorage.setItem(VIEW_KEY, next);
-          }}
+          onChange={setView}
         />
         {updating && <span className="muted">Updating…</span>}
       </div>
