@@ -238,19 +238,35 @@ it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one
     {
       job: reviewJob,
       signal: stop.signal,
-      onActivity: (a) => a.kind === "command" && stop.abort(),
+      onActivity: (a) => {
+        if (a.kind !== "command") return;
+        // Held, Codex's 3s to acknowledge can't run out on a busy machine
+        // before the fake has taken the interrupt.
+        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+        stop.abort();
+      },
     },
   );
   await expect(answer).rejects.toThrow();
   // The answer ends at Stop, before the fake has written the interrupt down.
-  await vi.waitFor(
-    async () =>
-      expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
-        threadId: "thread",
-        turnId: "inner",
-      }),
-    { timeout: 10_000 },
-  );
+  const interrupted = async () => {
+    const text = await readFile(log, "utf8");
+    try {
+      return JSON.parse(text).turnId === "inner";
+    } catch {
+      return false; // Read mid-write.
+    }
+  };
+  try {
+    while (!(await interrupted()))
+      await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    vi.useRealTimers();
+  }
+  expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
+    threadId: "thread",
+    turnId: "inner",
+  });
 });
 
 it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {
