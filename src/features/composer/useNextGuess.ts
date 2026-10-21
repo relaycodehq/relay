@@ -14,11 +14,12 @@ const noted = (e: unknown) => console.warn("Could not note the guess:", e);
 export function useNextGuess(
   chatId: string | undefined,
   guess: NextGuess | undefined,
-  empty: boolean,
+  /** The draft is empty and goes to an agent. */
+  wanted: boolean,
 ) {
   // Hidden at once, before the answer comes back marked.
   const [dismissed, setDismissed] = useState<string>();
-  const shown = guess && guess.id !== dismissed && empty ? guess : undefined;
+  const shown = guess && guess.id !== dismissed && wanted ? guess : undefined;
   const id = shown?.id;
   const seen = shown?.seen;
   const onScreen = useCallback(() => {

@@ -202,11 +202,14 @@ export function ProjectComposer({
   const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
-  // Typing only hides it until the draft is empty again.
+  // Typing only hides it until the draft is empty again. A note isn't
+  // what the agent guessed: it was guessing what it would be asked.
   const guess = useNextGuess(
     conversation.chatId,
     conversation.prediction,
-    !draft.text.trim() && !draft.attached.length,
+    composer.provider !== "message" &&
+      !draft.text.trim() &&
+      !draft.attached.length,
   );
   const ghost = guess.text;
   const takeGhost = () => {
