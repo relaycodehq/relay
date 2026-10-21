@@ -27,6 +27,8 @@ export function PredictionSpendLine() {
       is
       {measured > 0 && ` · ${usd(data.usd)} at API prices`}
       {measured > 0 && part && ` · ${part} of what those threads used`}
+      {data.backingOff &&
+        " · Guessing less: the last 20 weren't used. Send one to bring them back."}
     </p>
   );
 }

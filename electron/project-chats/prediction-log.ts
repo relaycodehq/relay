@@ -9,6 +9,10 @@ type Entry = { at: number; chatId: string } & (
 );
 
 const DAY = 24 * 60 * 60_000;
+/** Messages in a row sent past a guess before guessing backs off… */
+const UNUSED_STREAK = 20;
+/** …to one turn in this many, until a guess is sent again. */
+const BACKED_OFF_EVERY = 10;
 /** Older entries go at the next start; Settings looks back a week. */
 const KEEP_DAYS = 30;
 
@@ -21,9 +25,22 @@ export class PredictionLog {
   private initialized?: Promise<void>;
   private records: JsonLines<Entry>;
   private writing = Promise.resolve();
+  /** Messages sent since one was a guess; unknown until the log is read. */
+  private unused?: number;
+  private passes = 0;
 
   constructor(path: string) {
     this.records = new JsonLines(path);
+  }
+
+  /**
+   * Whether a turn that earns a guess gets one. After a long run of guesses
+   * nobody sent, only one turn in ten does, until one of them is sent.
+   */
+  allows() {
+    if (this.unused === undefined) void this.streak().catch(() => {});
+    if ((this.unused ?? 0) < UNUSED_STREAK) return true;
+    return ++this.passes % BACKED_OFF_EVERY === 0;
   }
 
   asked(chatId: string, asked: PredictionAsked) {
@@ -33,6 +50,8 @@ export class PredictionLog {
   /** A message went out while `guess` was on offer. */
   sent(chatId: string, guess: string, body: string) {
     const taken = body.trim() === guess.trim();
+    if (this.unused !== undefined) this.unused = taken ? 0 : this.unused + 1;
+    if (taken) this.passes = 0;
     this.add({ kind: "sent", taken, at: Date.now(), chatId });
   }
 
@@ -68,7 +87,19 @@ export class PredictionLog {
       else summary.usd += e.cost.usd;
     }
     if (chats.size) summary.threadUsd = await threadUsd(chats, since);
+    summary.backingOff = (await this.streak()) >= UNUSED_STREAK;
     return summary;
+  }
+
+  /** Read once from the log, then kept as messages are sent. */
+  private async streak() {
+    await this.writing;
+    if (this.unused !== undefined) return this.unused;
+    let unused = 0;
+    for (const e of await this.load())
+      if (e.kind === "sent") unused = e.taken ? 0 : unused + 1;
+    this.unused ??= unused;
+    return this.unused;
   }
 
   private add(entry: Entry) {

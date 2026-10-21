@@ -50,3 +50,18 @@ it("weighs the week's guesses against what was sent and what the threads spent",
     expect.any(Number),
   );
 });
+
+it("backs off after 20 guesses nobody sent, until one is", async () => {
+  const path = join(dir, "predictions.jsonl");
+  const lines = [{ kind: "sent", taken: true, at: Date.now(), chatId: "a" }];
+  for (let i = 0; i < 20; i++)
+    lines.push({ kind: "sent", taken: false, at: Date.now(), chatId: "a" });
+  await writeFile(path, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  const log = new PredictionLog(path);
+  expect((await log.summary(7, async () => 0)).backingOff).toBe(true);
+  const turns = Array.from({ length: 20 }, () => log.allows());
+  expect(turns.filter(Boolean)).toHaveLength(2);
+  log.sent("a", "go with B", "go with B");
+  expect(log.allows()).toBe(true);
+  expect((await log.summary(7, async () => 0)).backingOff).toBe(false);
+});

@@ -72,6 +72,8 @@ export type AgentPredict = {
   /** What the person asked this turn, in their own words. */
   request: string;
   onPrediction: (text: string) => void;
+  /** Asked once the turn has earned a guess: false skips it after all. */
+  allows?: () => boolean;
   /** A guess was asked for, whether or not it came back as one. */
   onAsked?: (asked: PredictionAsked) => void;
 };

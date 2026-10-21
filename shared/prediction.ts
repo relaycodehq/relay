@@ -22,4 +22,6 @@ export type PredictionSummary = {
   unmeasured: number;
   /** What the threads that had guesses spent on their own turns, for the share. */
   threadUsd: number;
+  /** Guesses went unsent long enough that only one turn in ten gets one. */
+  backingOff?: boolean;
 };

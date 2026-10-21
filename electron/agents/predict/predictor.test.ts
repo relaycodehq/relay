@@ -28,6 +28,18 @@ describe("parsePrediction", () => {
     );
     expect(parsePrediction('Sure: {"next":"ship it"}')).toBe("ship it");
   });
+  it("drops what the person wouldn't type next", () => {
+    expect(parsePrediction('{"next":"I\'ll run the tests now"}')).toBeNull();
+    expect(parsePrediction('{"next":"Looks good!"}')).toBeNull();
+    expect(parsePrediction('{"next":"do A\nthen B"}')).toBeNull();
+    expect(
+      parsePrediction(JSON.stringify({ next: "x ".repeat(80) })),
+    ).toBeNull();
+    expect(parsePrediction('{"next":"sure, go ahead"}')).toBe("sure, go ahead");
+    expect(parsePrediction('{"next":"looks good, now the phone"}')).toBe(
+      "looks good, now the phone",
+    );
+  });
   it("is null when it abstains or answers otherwise", () => {
     expect(parsePrediction('{"next":null}')).toBeNull();
     expect(parsePrediction('{"next":"  "}')).toBeNull();
@@ -61,6 +73,19 @@ describe("TurnPredictor", () => {
     );
     expect(ask).toHaveBeenCalledTimes(1);
     expect(onAsked).toHaveBeenCalledWith({ offered: true, cost });
+  });
+
+  it("skips a turn its gate holds back", async () => {
+    const ask = vi.fn(async () => ({ reply: '{"next":"go"}' }));
+    const predictor = new TurnPredictor(
+      { request: "plan it", onPrediction: vi.fn(), allows: () => false },
+      ask,
+      new AbortController().signal,
+    );
+    predictor.called(["a", "b", "c"]);
+    predictor.ended();
+    await Promise.resolve();
+    expect(ask).not.toHaveBeenCalled();
   });
 
   it("still reports what an abstention cost", async () => {

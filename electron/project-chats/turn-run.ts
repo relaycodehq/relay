@@ -249,6 +249,13 @@ export class TurnRunner {
       !chat.reviewer
         ? {
             request: turn.request ?? "",
+            // Not while a plan or a question waits on them: that's their next move.
+            allows: () =>
+              !answer.message.proposedPlan &&
+              !answer.message.questions?.some(
+                (q) => !q.answers && !q.answerMessageId && !q.dismissed,
+              ) &&
+              (this.core.predictions?.allows() ?? true),
             onPrediction: (text) => answer.predict(text),
             onAsked: (asked) => this.core.predictions?.asked(chat.id, asked),
           }
