@@ -117,7 +117,7 @@ export async function videoSides(
           "spec" in s
             ? await fromGit(root, s.spec, extname(s.name).toLowerCase())
             : await fromDisk(root, s.name);
-        return full && mediaUrl(full);
+        return full && mediaUrl(full, "spec" in s ? blobs() : root);
       }),
     );
     return { old: before, next: after };

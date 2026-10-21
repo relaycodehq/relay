@@ -76,17 +76,22 @@ export class Memes {
       setUp: !!read.file || !!read.problem,
       folder: this.folder,
       list: this.list,
-      memes: list.memes.map((m) => {
-        const file = pictures.get(m.id);
-        return {
-          id: m.id,
-          name: memeName(m),
-          meaning: m.meaning,
-          ...(m.find && { find: m.find }),
-          ...(m.caption && { caption: m.caption }),
-          ...(file && { url: mediaUrl(file) }),
-        };
-      }),
+      memes: await Promise.all(
+        list.memes.map(async (m) => {
+          const file = pictures.get(m.id);
+          const url = file
+            ? await mediaUrl(file, this.folder).catch(() => undefined)
+            : undefined;
+          return {
+            id: m.id,
+            name: memeName(m),
+            meaning: m.meaning,
+            ...(m.find && { find: m.find }),
+            ...(m.caption && { caption: m.caption }),
+            ...(url && { url }),
+          };
+        }),
+      ),
       problems: [...(read.problem ? [read.problem] : []), ...list.problems],
     };
   }

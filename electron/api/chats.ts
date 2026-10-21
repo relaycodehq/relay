@@ -1,5 +1,6 @@
 import { openPath } from "./open-path";
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
@@ -253,8 +254,10 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     projectChatVideo: takes(
       [idSchema, idSchema, imagePathSchema],
-      async (id, messageId, path) =>
-        mediaUrl(await projectChats.videoPath(id, messageId, path)),
+      async (id, messageId, path) => {
+        const full = await projectChats.videoPath(id, messageId, path);
+        return mediaUrl(full, dirname(full));
+      },
     ),
     projectChatPreviewShot: takes(
       [idSchema, messageIdSchema],

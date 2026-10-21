@@ -333,9 +333,10 @@ export function projectHandlers(ctx: ApiContext) {
     projectVideo: takes(
       [fileRootSchema, workingPathSchema],
       async (where, path) => {
-        const full = await entryPath((await fileRoot(where)).root, path);
+        const { root } = await fileRoot(where);
+        const full = await entryPath(root, path);
         if (!videoMime(full)) throw new Error("That is not a video.");
-        return mediaUrl(full);
+        return mediaUrl(full, root);
       },
     ),
     projectThumbnail: takes(
