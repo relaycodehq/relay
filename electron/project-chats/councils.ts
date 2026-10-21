@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import type {
-  DeepReviewStart,
-  ResumeReview,
-  ReviewerTask,
+import {
+  latestReview,
+  reviewerRound,
+  type DeepReviewStart,
+  type ResumeReview,
+  type ReviewerTask,
 } from "../../shared/deep-review";
 import type { AgentProvider } from "../../shared/agents";
 import {
@@ -97,9 +99,12 @@ export class Councils {
    */
   async root(chat: ProjectChat, make = true) {
     const state = chat.reviewer
-      ? (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
-          ?.deepReview
-      : chat.deepReview;
+      ? reviewerRound(
+          (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
+            ?.reviews,
+          chat.reviewer,
+        )
+      : latestReview(chat);
     const checkout = state?.scope.checkout;
     if (!checkout || !state.scope.head) return;
     if (!make)

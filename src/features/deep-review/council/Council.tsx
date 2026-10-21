@@ -45,22 +45,25 @@ export function CouncilHalted({
   text: string;
   action: string;
   busy: boolean;
-  onResume: () => void;
+  /** Left out when a later round took over: the stop just stays on record. */
+  onResume?: () => void;
   /** A second way on, like handing over without the missing reports. */
   other?: { label: string; onClick: () => void };
 }) {
   return (
     <div className="deep-review-stopped" role="status">
       <span>{text}</span>
-      <button
-        type="button"
-        className="resume-answer"
-        disabled={busy}
-        onClick={onResume}
-      >
-        <RotateCcw size={13} />
-        {action}
-      </button>
+      {onResume && (
+        <button
+          type="button"
+          className="resume-answer"
+          disabled={busy}
+          onClick={onResume}
+        >
+          <RotateCcw size={13} />
+          {action}
+        </button>
+      )}
       {other && (
         <button
           type="button"

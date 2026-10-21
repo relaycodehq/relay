@@ -32,7 +32,7 @@ const prScope: ReviewScope = {
   branch: "main",
 };
 
-const review = (): NonNullable<ProjectChat["deepReview"]> => ({
+const review = (): NonNullable<ProjectChat["reviews"]>[number] => ({
   scope: prScope,
   request: "request",
   reviewers: [],
@@ -64,7 +64,7 @@ it("adds the saved PR title to an old review without changing its activity date"
   const chat = thread({
     title: "Deep review · PR #4",
     scope: { kind: "review" },
-    deepReview: review(),
+    reviews: [review()],
   });
   expect(reviveChat(chat, () => false)).toBe(true);
   expect(chat.title).toBe(reviewThreadTitle(prScope));
@@ -77,7 +77,7 @@ it("keeps manually renamed and generated review names", () => {
     { title: "Deep review · PR #4", renamed: true },
     { title: "Check linked folders" },
   ]) {
-    const chat = thread({ ...fields, deepReview: review() });
+    const chat = thread({ ...fields, reviews: [review()] });
     expect(reviveChat(chat, () => false)).toBe(false);
     expect(chat.title).toBe(fields.title);
   }
@@ -118,32 +118,34 @@ it("pauses a queue that was waiting when Relay closed and moves old modes over",
 
 it("stops reviews an earlier session left running, reopening findings being fixed", () => {
   const chat = thread({
-    deepReview: {
-      scope: prScope,
-      status: "leading",
-      statuses: { a: "fixing", b: "fixed" },
-      fixing: { m: ["a", "b"] },
-    } as unknown as ProjectChat["deepReview"],
+    reviews: [
+      {
+        scope: prScope,
+        status: "leading",
+        statuses: { a: "fixing", b: "fixed" },
+        fixing: { m: ["a", "b"] },
+      } as unknown as NonNullable<ProjectChat["reviews"]>[number],
+    ],
   });
   expect(reviveChat(chat, () => false)).toBe(true);
-  expect(chat.deepReview).toMatchObject({ status: "failed" });
+  expect(chat.reviews?.at(-1)).toMatchObject({ status: "failed" });
   // An older save's findings move to the thread on the way.
   expect(chat.findings).toEqual({
     reports: [],
     statuses: { a: "open", b: "fixed" },
   });
-  expect(chat.deepReview).not.toHaveProperty("statuses");
+  expect(chat.reviews?.at(-1)).not.toHaveProperty("statuses");
 });
 
 it("keeps a review leading when the lead's session carries on through the restart", () => {
   const lead = message({ status: "streaming", body: "Half" });
   const chat = thread({
     messages: [lead],
-    deepReview: { ...review(), status: "leading" },
+    reviews: [{ ...review(), status: "leading" }],
   });
   reviveChat(chat, () => true);
-  expect(chat.deepReview).toMatchObject({ status: "leading" });
-  expect(chat.deepReview).not.toHaveProperty("leadStopped");
+  expect(chat.reviews?.at(-1)).toMatchObject({ status: "leading" });
+  expect(chat.reviews?.at(-1)).not.toHaveProperty("leadStopped");
   expect(lead.status).toBe("streaming");
 });
 

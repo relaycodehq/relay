@@ -221,16 +221,16 @@ type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
   activeAgentWorktree?: ActiveAgentWorktree;
-  /** On summaries; the full thread has it as `deepReview.scope.checkout`. */
+  /** On summaries; the full thread has it as its latest round's `scope.checkout`. */
   reviewFolder?: ReviewFolder;
-  deepReview?: { scope: { checkout?: ReviewCheckout } };
+  reviews?: { scope: { checkout?: ReviewCheckout } }[];
 };
 
 export const reviewFolder = (
   chat: ThreadWorkspace | undefined,
 ): ReviewFolder | undefined => {
   if (chat?.reviewFolder) return chat.reviewFolder;
-  const checkout = chat?.deepReview?.scope.checkout;
+  const checkout = chat?.reviews?.at(-1)?.scope.checkout;
   return (
     checkout && {
       path: checkout.path,

@@ -3,6 +3,7 @@
 // for how a review runs.
 export { DeepReviewCouncil } from "./Council";
 export { DeepReviewRequest } from "./Request";
+export { ReviewRound } from "./Round";
 export { FindingsTray } from "./Report";
 export { findingCode } from "./PriorityTag";
 export { DeepReviewSetup } from "./Setup";

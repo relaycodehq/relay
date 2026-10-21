@@ -53,7 +53,8 @@ export interface ProjectChat extends ChatSummary {
   };
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
-  deepReview?: DeepReviewState;
+  /** Deep review rounds, oldest first; see shared/deep-review. */
+  reviews?: DeepReviewState[];
   /** Findings the thread's answers published; see shared/findings. */
   findings?: ThreadFindings;
   /** Each agent's session on a side conversation, by its root message. */

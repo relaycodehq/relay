@@ -194,7 +194,7 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
     version: 1,
   };
   saved.messages = [lead];
-  saved.deepReview = {
+  saved.reviews = [{
     scope: { label: "PR #4" },
     request: "request",
     reviewers: [],
@@ -202,7 +202,7 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
     runChecks: false,
     runtimeMode: "full-access",
     status: "leading",
-  };
+  }];
   await writeFile(file, JSON.stringify(saved));
   const codex = agentRuntime("codex");
   const key = JSON.stringify([join(root, "chats"), chat.id, "main"]);
@@ -211,12 +211,12 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   await chats.reattach();
   await vi.waitFor(
-    async () => expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+    async () => expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
   const after = await chats.get(chat.id);
   expect(after.messages.find((m) => m.id === lead.id)?.status).toBe("complete");
-  expect(after.deepReview).not.toHaveProperty("leadStopped");
+  expect(after.reviews?.at(-1)).not.toHaveProperty("leadStopped");
 }, 30_000);
 
 /**
@@ -246,7 +246,7 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
   };
   const reviewer = { provider: "codex", choice: input("").choice };
   await edit(review.id, (saved) => {
-    saved.deepReview = {
+    saved.reviews = [{
       scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
       request: "request",
       reviewers: [
@@ -257,7 +257,7 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
       runChecks: false,
       runtimeMode: "full-access",
       status: "reviewing",
-    };
+    }];
   });
   const cutOff = answer("Reading the diff", "streaming");
   await edit(kept.id, (saved) => {
@@ -286,7 +286,7 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
 it("waits for a reviewer that carried on through a restart, then hands over to the lead", async () => {
   const { review, kept, cutOff } = await reviewAcrossRestart("reported");
   await vi.waitFor(
-    async () => expect((await chats.get(review.id)).deepReview?.status).toBe("done"),
+    async () => expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
   const answer = (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id);
@@ -307,7 +307,7 @@ it("stops a review a restart cut a reviewer off from, letting the kept one finis
   );
   await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
   // Resume runs the reviewer that was cut off, then the lead.
-  expect((await chats.get(review.id)).deepReview?.status).toBe("stopped");
+  expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("stopped");
 }, 30_000);
 
 it("waits for every reviewer that carried on through a restart, however slowly each is picked back up", async () => {
@@ -324,7 +324,7 @@ it("waits for every reviewer that carried on through a restart, however slowly e
   };
   const reviewer = { provider: "codex", choice: input("").choice };
   await edit(review.id, (saved) => {
-    saved.deepReview = {
+    saved.reviews = [{
       scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
       request: "request",
       reviewers: [
@@ -335,7 +335,7 @@ it("waits for every reviewer that carried on through a restart, however slowly e
       runChecks: false,
       runtimeMode: "full-access",
       status: "reviewing",
-    };
+    }];
   });
   for (const [slot, chat] of [first, second].entries())
     await edit(chat.id, (saved) => {
@@ -380,7 +380,7 @@ it("waits for every reviewer that carried on through a restart, however slowly e
   });
   await chats.reattach();
   await vi.waitFor(
-    async () => expect((await chats.get(review.id)).deepReview?.status).toBe("done"),
+    async () => expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
   expect(leadPrompts).toHaveLength(1);

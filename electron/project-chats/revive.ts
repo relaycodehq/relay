@@ -1,5 +1,9 @@
 import { savedRuntimeMode } from "../../shared/agent-modes";
-import { reviewThreadTitle } from "../../shared/deep-review";
+import {
+  latestReview,
+  reviewRunning,
+  reviewThreadTitle,
+} from "../../shared/deep-review";
 import { migrateAgentSessions } from "../../shared/projects";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import { settleActivities } from "./answer-recorder";
@@ -51,22 +55,22 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  const review = chat.deepReview;
+  // The thread is named after its first round.
+  const first = chat.reviews?.[0];
   if (
-    review &&
+    first &&
     !chat.renamed &&
-    chat.title === `Deep review · ${review.scope.label}`
+    chat.title === `Deep review · ${first.scope.label}`
   ) {
-    const title = reviewThreadTitle(review.scope);
+    const title = reviewThreadTitle(first.scope);
     if (title !== chat.title) {
       chat.title = title;
       interrupted = true;
     }
   }
-  if (
-    earlierSession &&
-    (review?.status === "reviewing" || review?.status === "leading")
-  ) {
+  // Only the latest round can still have been at work.
+  const review = latestReview(chat);
+  if (earlierSession && review && reviewRunning(review)) {
     // The lead's answer the app closed on is where resuming the lead goes on.
     const lead =
       review.status === "leading" &&

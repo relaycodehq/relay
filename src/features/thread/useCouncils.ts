@@ -35,7 +35,9 @@ export function useCouncils({
   /** Something went to the agents; the thread follows the answer. */
   onSent: () => void;
 }) {
-  const review = data?.deepReview;
+  const reviews = data?.reviews;
+  // Stop, Resume and fixes go to the latest round.
+  const review = reviews?.at(-1);
   // Reviewers work in threads of their own; this one waits for the lead.
   const reviewing = review?.status === "reviewing";
   // A start that failed leaves its thread for the next try. Kept apart from
@@ -111,6 +113,7 @@ export function useCouncils({
   }
   return {
     review,
+    reviews,
     findings: data?.findings,
     reviewing,
     startReview,

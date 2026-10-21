@@ -153,8 +153,12 @@ export function reviewThreadTitle(scope: ReviewScope): string {
   return title.length > 120 ? `${title.slice(0, 119).trimEnd()}…` : title;
 }
 
+/**
+ * One round of a deep review. A thread can hold several, one after another;
+ * the user message that asked for a round names it.
+ */
 export interface DeepReviewState {
-  /** The user message that asked for the review. */
+  /** The user message that asked for the review, and the round's key. */
   request: string;
   scope: ReviewScope;
   /** Each reviewer works in a thread of its own, listed under the review's. */
@@ -170,6 +174,21 @@ export interface DeepReviewState {
    */
   leadStopped?: string;
 }
+/** The thread's latest round: the one Stop, Resume and following its branch act on. */
+export const latestReview = (chat: { reviews?: DeepReviewState[] }) =>
+  chat.reviews?.at(-1);
+
+/** The round a reviewer works for. */
+export const reviewerRound = (
+  reviews: DeepReviewState[] | undefined,
+  task: ReviewerTask,
+) =>
+  task.round ? reviews?.find((r) => r.request === task.round) : reviews?.[0];
+
+/** Reviewers or the lead's first turn are at work: a new round waits for them. */
+export const reviewRunning = (state: DeepReviewState | undefined) =>
+  state?.status === "reviewing" || state?.status === "leading";
+
 /** Picks a stopped review up in part: one reviewer again, or the lead with the reports that are in. */
 export type ResumeReview = { slot: number } | { lead: true };
 
@@ -190,6 +209,8 @@ export function reviewerTitle(slot: number, reviewer: ReviewAgent) {
 /** A reviewer thread's place in its review. */
 export interface ReviewerTask {
   parent: string;
+  /** Its round's `request`; reviewers from before rounds belong to the first. */
+  round?: string;
   slot: number;
   /** Codex's own review target, when it runs `/review`. */
   codex?: CodexReviewTarget;

@@ -42,7 +42,8 @@ export function DeepReviewCouncil({
   busy: boolean;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
-  onResume: () => void;
+  /** Left out on a round a later one took over from. */
+  onResume?: () => void;
   /** Stops the reviewers at work, as the composer's Stop does. */
   onStop?: () => void;
   onStopMember?: (slot: number) => void;
