@@ -11,4 +11,3 @@ export * from "./projects/composer";
 export * from "./projects/sync";
 export * from "./projects/api";
 export type { AgentProvider } from "./agents";
-export { isImagePath } from "./answer-images";

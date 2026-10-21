@@ -1,9 +1,10 @@
-import { triageState } from "./chat-activity";
-import type { ChatSummary, ChatTriage } from "./projects";
-import type { RemoteChatSummary } from "./remote";
+import { triageState } from "../../shared/chat-activity";
+import type { ChatSummary, ChatTriage } from "../../shared/projects";
+import type { RemoteChatSummary } from "../../shared/remote";
 
 /**
- * Takes back a settle or snooze made from a phone, as the desktop's ⌘Z does.
+ * The Undo a phone sends after a settle or snooze; the phone apps build the
+ * same in Kotlin and Swift. Takes it back as the desktop's ⌘Z does.
  * A phone's list doesn't carry every mark (`unsettledAt`, `archivedAt`), so
  * those come from what the desktop answered: settling and snoozing leave them
  * alone, and only the marks the phone does see go back.

@@ -592,12 +592,6 @@
   filter: drop-shadow(0 6px 14px #0004);
 }
 
-.settings-screen .settings-account {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 0;
-}
 /* Settings forms: a card of label-left, control-right rows. */
 .settings-card {
   border: 1px solid var(--border);

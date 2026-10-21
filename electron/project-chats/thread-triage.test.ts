@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
-import { undoTriage } from "../../shared/remote-triage";
+import { undoTriage } from "../../tests/fixtures/phone-undo";
 import { chatActivitySection } from "../../shared/chat-activity";
 import { triageState } from "../../shared/chat-activity";
 import type { ChatCore } from "./core";
