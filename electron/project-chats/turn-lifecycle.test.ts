@@ -34,7 +34,8 @@ const answers = async (id: string) =>
 
 const recorded = (provider: AgentProvider, scenario: string) =>
   existsSync(join("tests/fixtures/replays", provider, scenario, "01.jsonl"));
-const replayed: AgentProvider[] = ["claude", "codex", "opencode", "muse"];
+// OpenCode's recordings were of its ACP mode; Relay now runs it natively.
+const replayed: AgentProvider[] = ["claude", "codex", "muse"];
 
 describe.each(replayed.filter((p) => recorded(p, "simple")))(
   "a recorded %s",
