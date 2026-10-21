@@ -380,6 +380,138 @@ test("reopens a long thread where the reader left it, before or after paging bac
   }
 });
 
+test("restores mixed-height messages without a jump during the first paints", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-mixed-scroll-")),
+  );
+  const repo = join(root, "project"),
+    data = join(root, "data"),
+    bin = join(root, "bin");
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(repo);
+    await mkdir(bin);
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
+    for (const name of ["codex", "claude"])
+      await fakeCli(join(bin, name), agent);
+    await mkdir(join(data, "project-chats"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const projectId = randomUUID();
+    const mixed = thread(projectId, "Mixed", 40),
+      short = thread(projectId, "Short", 4);
+    // Compact turns among answers much taller than the off-screen estimate.
+    // A short scroll leaves the reader deep inside the last tall answer;
+    // a fast scroll crosses skipped rows whose real layout arrives later.
+    for (const [i, message] of mixed.messages.entries()) {
+      message.body =
+        i % 4 === 1
+          ? Array.from(
+              { length: 35 },
+              (_, j) =>
+                `${j + 1}. **Finding ${j + 1}.** A paragraph about the shared service callers and the code that changes under the reader.\n   More detail about the changes, the call sites, and how this part is used.`,
+            ).join("\n")
+          : i % 2
+            ? "Done."
+            : `Question ${i}.`;
+    }
+    for (const chat of [mixed, short])
+      await writeFile(
+        join(data, "project-chats", chat.id + ".json"),
+        JSON.stringify(chat),
+      );
+    await writeFile(
+      join(data, "state.json"),
+      JSON.stringify({
+        version: 1,
+        folders: {},
+        progress: {},
+        projects: [
+          {
+            id: projectId,
+            path: repo,
+            name: "project",
+            repository: null,
+            added: 1,
+          },
+        ],
+        chats: [mixed, short].map(({ messages: _, ...summary }) => summary),
+      }),
+    );
+    const env = relayEnv();
+    app = await electron.launch({
+      env: { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data },
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    const open = (title: string) =>
+      page.locator(".sb-thread", { hasText: title }).click();
+    const rows = page.locator(".project-messages [data-message-id]");
+    await open("Mixed");
+    await expect(rows).toHaveCount(40);
+    await settled(page);
+    for (const pixels of [300, 600, 1400, 3000, 4000]) {
+      const box = (await page.locator(".project-messages").boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 200);
+      await page.mouse.wheel(0, -pixels);
+      await settled(page);
+      await expect(page.locator("[data-reading-anchor]")).toHaveCount(0);
+      if (pixels === 4000) {
+        // Reflow while reading, without relying on another wheel event to
+        // refresh the saved position before switching away.
+        await page.setViewportSize({ width: 1000, height: 900 });
+        await settled(page);
+      }
+      const before = (await topOfView(page))!;
+      await open("Short");
+      await expect(rows).toHaveCount(4);
+      // Observe every frame, rather than letting a wrong first paint settle
+      // into the right position and pass an eventual-position assertion.
+      await page.evaluate((id) => {
+        const frames = { offsets: [] as number[], frame: 0 };
+        Object.assign(window, { restorationFrames: frames });
+        const sample = () => {
+          const view = document.querySelector(".project-messages")!;
+          const message = view.querySelector(`[data-message-id="${id}"]`);
+          if (message)
+            frames.offsets.push(
+              message.getBoundingClientRect().top -
+                view.getBoundingClientRect().top,
+            );
+          frames.frame = requestAnimationFrame(sample);
+        };
+        frames.frame = requestAnimationFrame(sample);
+      }, before.id!);
+      await open("Mixed");
+      await expect(rows).toHaveCount(40);
+      await settled(page);
+      const offsets = await page.evaluate(() => {
+        const frames = (
+          window as unknown as {
+            restorationFrames: { offsets: number[]; frame: number };
+          }
+        ).restorationFrames;
+        cancelAnimationFrame(frames.frame);
+        return frames.offsets;
+      });
+      expectSamePlace(await topOfView(page), before);
+      expect(offsets.length).toBeGreaterThan(1);
+      expect(
+        Math.max(...offsets.map((offset) => Math.abs(offset - before.offset))),
+        `message ${before.id} after a ${pixels}px scroll`,
+      ).toBeLessThanOrEqual(1);
+    }
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-mixed-scroll-restored.png"),
+    });
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("lets the reader scroll up while an answer streams", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-stream-scroll-")),

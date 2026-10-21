@@ -57,10 +57,19 @@ function placeInView(view: HTMLElement): ReadingPlace | undefined {
 function scrollToPlace(view: HTMLElement, { id, offset }: ReadingPlace) {
   const message = view.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
   if (!message) return false;
-  view.scrollTop +=
+  // A tall skipped message still has its estimated height. Lay this one out
+  // before scrolling into it, or the browser clamps the offset to that estimate
+  // and paints the wrong place for a frame before its real height arrives.
+  const previous = view.querySelector("[data-reading-anchor]");
+  if (previous !== message) {
+    previous?.removeAttribute("data-reading-anchor");
+    message.setAttribute("data-reading-anchor", "");
+  }
+  const delta =
     message.getBoundingClientRect().top -
     view.getBoundingClientRect().top -
     offset;
+  view.scrollTop += delta;
   return true;
 }
 
@@ -231,15 +240,21 @@ export function useThreadScroll({
       }
       if (!changed) return;
       if (follow.current) el.scrollTop = el.scrollHeight;
-      else if (returning.current && scrollToPlace(el, returning.current))
-        placed.current = el.scrollTop;
+      else if (returning.current) {
+        if (scrollToPlace(el, returning.current)) placed.current = el.scrollTop;
+      } else {
+        // Lazy layout can move the messages without another scroll event.
+        // Save where the reader is now, rather than where that event left them.
+        const top = placeInView(el);
+        if (top) readingPlaces.set(place, top);
+      }
     });
     observer.observe(content);
     // Resizing the terminal or window changes the view without changing the
     // messages. Keep following now, before another answer snaps it back.
     if (scroll.current) observer.observe(scroll.current);
     return () => observer.disconnect();
-  }, [isEmpty]);
+  }, [isEmpty, place]);
   function onScroll() {
     const e = scroll.current!;
     const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
@@ -263,6 +278,9 @@ export function useThreadScroll({
     if (held) return;
     // The reader scrolling anywhere else lets the held message go.
     returning.current = undefined;
+    e.querySelector("[data-reading-anchor]")?.removeAttribute(
+      "data-reading-anchor",
+    );
     if (follow.current) {
       readingPlaces.delete(place);
       return;
