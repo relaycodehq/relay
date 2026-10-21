@@ -4,6 +4,7 @@ import { MonitorOff, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import "./handoff.css";
+import { usePoll } from "../../lib/poll";
 
 /**
  * A thread waiting on an agent that sets its project up on the computer it's
@@ -17,6 +18,7 @@ export function SetupLine({
   chat: ChatSummary;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [choosing, setChoosing] = useState(false);
@@ -25,7 +27,7 @@ export function SetupLine({
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const computer = chat.sentTo!.computer;
   const online = view.data?.online ?? true;

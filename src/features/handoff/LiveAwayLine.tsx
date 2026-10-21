@@ -6,6 +6,7 @@ import { api } from "../../lib/api";
 import { chatKey, fetchChat } from "../../lib/chat-events";
 import { projectComputer, usePairedComputers } from "./usePairedComputers";
 import "./handoff.css";
+import { usePoll } from "../../lib/poll";
 
 /**
  * A thread followed live from another computer: it reads and answers as if
@@ -18,12 +19,13 @@ export function LiveAwayLine({
   chat: ChatSummary;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   // The thread view fetches it; this only reads along.
   const thread = useQuery({

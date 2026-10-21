@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { InstallLog } from "../../ui/InstallLog";
 import { Spinner } from "../../ui/ui";
 import type { Checkup } from "./useCheckup";
+import { usePoll } from "../../lib/poll";
 
 type Mark = "todo" | "busy" | "ok" | "fix";
 type Line = { mark: Mark; text: string; fix?: ReactNode };
@@ -22,13 +23,14 @@ export function CheckupLines({
   onInstall: () => void;
   onAgain: () => void;
 }) {
+  const poll = usePoll();
   const { target, phase } = c;
   const log = useQuery({
     queryKey: ["relay-install", target.kind === "route" && target.route],
     queryFn: () =>
       target.kind === "route" ? api.relayInstallOutput(target.route) : "",
     enabled: target.kind === "route" && phase === "installing",
-    refetchInterval: 1000,
+    refetchInterval: poll(1000),
   });
   const again = (
     <button type="button" onClick={onAgain}>

@@ -6,6 +6,7 @@ import { AddComputer } from "./AddComputer";
 import { ComputerCard } from "./ComputerCard";
 import { MapDiagram } from "./MapDiagram";
 import "./computers.css";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Settings → Computers: this computer, a wire out to each paired one with a
@@ -17,10 +18,11 @@ export function ComputersMap({
 }: {
   onOpenChat?: (projectId: string, chatId: string) => void;
 }) {
+  const poll = usePoll();
   const overview = useQuery({
     queryKey: ["computers-overview"],
     queryFn: () => api.computersOverview(),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const [picked, setPicked] = useState<string>();
   // Bumped by the Add box, so it lands in the field even when it shows.

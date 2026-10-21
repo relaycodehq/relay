@@ -5,12 +5,14 @@ import type { GitAction, WorkingTree } from "../../../shared/working-tree";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import type { SelectedChange } from "./working-changes";
+import { usePoll } from "../../lib/poll";
 
 /**
  * A checkout's working tree, a project's or a PR's linked folder, and the Git
  * actions on it, with what the last one said.
  */
 export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
+  const poll = usePoll();
   const qc = useQueryClient(),
     key = projectId
       ? workingTreeKey(projectId)
@@ -23,7 +25,7 @@ export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
     queryFn: () =>
       projectId ? api.projectWorkingTree(projectId) : api.workingTree(pull!),
     // A project's tree is polled by the shell; a PR checkout polls here.
-    refetchInterval: busy || projectId ? false : 3000,
+    refetchInterval: poll(busy || projectId ? false : 3000),
   });
   /** Runs `action`; `done` follows a commit or push once its tree is in. */
   async function act(action: GitAction, done?: () => void) {

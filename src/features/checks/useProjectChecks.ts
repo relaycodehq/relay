@@ -4,6 +4,7 @@ import type { Pull } from "../../../shared/types";
 import type { ProjectCheckState } from "../../../shared/checks";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
+import { usePoll } from "../../lib/poll";
 
 /** How long Relay sits in the background before the checker quits to free its memory. */
 const SLEEP_AFTER_MS = 2 * 60_000;
@@ -42,6 +43,7 @@ export function useProjectChecks(
   local?: { id: string; head: string },
   busy = false,
 ) {
+  const poll = usePoll();
   const qc = useQueryClient();
   // This window's hold on a checker other windows may share.
   const [holder] = useState(() => crypto.randomUUID());
@@ -76,7 +78,7 @@ export function useProjectChecks(
       local ? api.localCheckInfo(local.id) : api.projectCheckInfo(pull!),
     enabled: !!(pull || local),
     retry: false,
-    refetchInterval: (q) => (q.state.data === null ? 3000 : false),
+    refetchInterval: (q) => poll(q.state.data === null ? 3000 : false),
   });
   const queryKey = useMemo(() => ["project-check-state", identity], [identity]);
   const state = useQuery({
@@ -86,7 +88,7 @@ export function useProjectChecks(
         ? api.localCheckState(local.id, local.head)
         : api.projectCheckState(pull!, pull!.head.sha),
     enabled: !!(pull || local),
-    refetchInterval: enabled && !asleep ? (paused ? 5000 : 1000) : false,
+    refetchInterval: poll(enabled && !asleep ? (paused ? 5000 : 1000) : false),
     retry: false,
   });
   const target =

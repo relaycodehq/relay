@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BatteryLow, BatteryMedium, BatteryFull, Laptop } from "lucide-react";
 import type { ProjectTask } from "../../../shared/tasks";
 import { api } from "../../lib/api";
+import { usePoll } from "../../lib/poll";
 
 /** Looks kept per line: 30 at the card's 3 s is the last minute and a half. */
 const KEEP = 30;
@@ -105,10 +106,11 @@ const gb = (mb: number) => {
 
 /** The open card's last line: the whole computer, and the battery while it's on one. */
 export function MachineLine() {
+  const poll = usePoll();
   const load = useQuery({
     queryKey: ["machine-load"],
     queryFn: () => api.machineLoad(),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const [cpus, setCpus] = useState<number[]>([]);
   const cpu = load.data?.cpu;

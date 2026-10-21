@@ -19,6 +19,7 @@ import { FileViewer } from "./FileViewer";
 import { PaneResizer } from "../../ui/PaneResizer";
 import { ErrorBox, IconButton } from "../../ui/ui";
 import { useStoredFlag } from "../../lib/useStoredFlag";
+import { usePoll } from "../../lib/poll";
 
 type Selection =
   | { kind: "file"; path: string; line?: number }
@@ -52,6 +53,7 @@ export function ProjectFiles({
   /** Files to open, such as ones clicked in the chat. */
   opens?: RequestChannel<FileTarget>;
 }) {
+  const poll = usePoll();
   // Refreshed by the shell's working-tree poll.
   const tree = useQuery({
     queryKey: workingTreeKey(where),
@@ -99,7 +101,7 @@ export function ProjectFiles({
   const files = useQuery({
     queryKey: ["project-files", where],
     queryFn: () => api.projectFiles(where),
-    refetchInterval: 5000,
+    refetchInterval: poll(5000),
     enabled: active && !listHidden && !!filter,
     staleTime: 0,
   });

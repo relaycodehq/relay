@@ -4,6 +4,7 @@ import type { ChatSummary } from "../../../shared/projects";
 import { outsideBatch, subagentFanOuts } from "../../../shared/subagents";
 import { api } from "../../lib/api";
 import { readJson, writeJson } from "../../lib/persisted-store";
+import { usePoll } from "../../lib/poll";
 
 const CLEARED = "subagents-cleared:";
 
@@ -15,6 +16,7 @@ export function useBackgroundWork(
   chat: ChatSummary | undefined,
   running: boolean,
 ) {
+  const poll = usePoll();
   // A turn doesn't end background work, so it stays listed through one; a
   // wake-up is relisted as the turn ends.
   const live = running
@@ -29,11 +31,13 @@ export function useBackgroundWork(
     queryFn: () => api.projectChatAgents(chat!.id),
     enabled: !!chat,
     refetchInterval: (query) =>
-      running ||
-      pending ||
-      query.state.data?.some((a) => a.status === "running")
-        ? 1500
-        : false,
+      poll(
+        running ||
+          pending ||
+          query.state.data?.some((a) => a.status === "running")
+          ? 1500
+          : false,
+      ),
   });
   // A turn can send agents off and end between two polls: look again as it
   // starts and ends, and when the thread's background work changes.

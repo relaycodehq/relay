@@ -10,6 +10,7 @@ import { AbandonDialog } from "./AbandonDialog";
 import "./waiting-strip.css";
 import { retryHandoff } from "./retry-handoff";
 import "./handoff.css";
+import { usePoll } from "../../lib/poll";
 
 /** The composer's placeholder while the thread is elsewhere, or on its way. */
 export function awayPlaceholder(chat: ChatSummary) {
@@ -110,13 +111,14 @@ export function HandoffStrip({
   chat: ChatSummary;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const data = view.data;
   // The summary catches up once the handoff settles, or ends.

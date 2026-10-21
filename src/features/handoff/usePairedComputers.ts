@@ -4,16 +4,18 @@ import { api } from "../../lib/api";
 
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { computerQueryIds, keyNames } from "./computer-status";
+import { usePoll } from "../../lib/poll";
 
 export { projectComputer } from "./computer-status";
 
 /** The computers this one is paired with; `watch` keeps their online state fresh. */
 export function usePairedComputers(watch = false) {
+  const poll = usePoll();
   return useQuery({
     queryKey: ["paired-computers"],
     queryFn: () => api.pairedComputers(),
     staleTime: 10_000,
-    ...(watch ? { refetchInterval: 10_000 } : {}),
+    ...(watch ? { refetchInterval: poll(10_000) } : {}),
   });
 }
 

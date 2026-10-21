@@ -6,6 +6,7 @@ import type { Progress, Pull, PullRef } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { useAISettings } from "../agents/useAISettings";
 import { openGroups } from "./review-order";
+import { usePoll } from "../../lib/poll";
 
 const NO_PATHS: string[] = [];
 
@@ -22,6 +23,7 @@ export function useReviewTriage(
   restoring: boolean,
   progress: Progress,
 ) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const on = helperOn(useAISettings().data, "grouping");
   const key = ["triage", selected, revision];
@@ -29,7 +31,8 @@ export function useReviewTriage(
     queryKey: key,
     queryFn: () => api.triageState(selected!, pull!.head.sha, pull!.merge_base),
     enabled: !!pull && !restoring,
-    refetchInterval: (query) => (isAnalyzing(query.state.data) ? 600 : false),
+    refetchInterval: (query) =>
+      poll(isAnalyzing(query.state.data) ? 600 : false),
   });
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),

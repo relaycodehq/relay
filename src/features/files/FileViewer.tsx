@@ -16,6 +16,7 @@ import {
   RevealButtons,
   VideoFile,
 } from "./FileViews";
+import { usePoll } from "../../lib/poll";
 const LocalFileEditor = lazy(() => import("./editor/LocalFileEditor"));
 
 type EditorProps = Omit<
@@ -42,13 +43,14 @@ export function FileViewer({
   editor?: EditorProps;
   editorKey: string;
 }) {
+  const poll = usePoll();
   const info = useQuery({
     queryKey: ["project-file-info", where, path],
     queryFn: () => api.projectFileInfo(where, path),
     enabled: active,
     staleTime: 0,
     retry: false,
-    refetchInterval: (q) => (q.state.data?.kind === "text" ? false : 3000),
+    refetchInterval: (q) => poll(q.state.data?.kind === "text" ? false : 3000),
   });
   const [actionError, setActionError] = useState<unknown>();
   if (info.error)

@@ -7,6 +7,7 @@ import { api } from "../../lib/api";
 import { LineDivider } from "../../ui/LineDivider";
 import { Message } from "./ProjectMessage";
 import "./thread-setup.css";
+import { usePoll } from "../../lib/poll";
 
 const noop = () => {};
 const noRewind = async () => ({ conflicts: [] });
@@ -51,6 +52,7 @@ export function ThreadSetup({
   chat: ChatSummary;
   setup: Setup;
 }) {
+  const poll = usePoll();
   const working = setup.state === "cloning" || setup.state === "agent";
   const [open, setOpen] = useState<boolean>();
   const [asked, setAsked] = useState(false);
@@ -58,7 +60,7 @@ export function ThreadSetup({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
     enabled: setup.state === "cloning",
-    refetchInterval: 1000,
+    refetchInterval: poll(1000),
   });
   const shown = open ?? setup.state === "agent";
   // Relay's own request opens the setup's thread there; it's shown on asking.

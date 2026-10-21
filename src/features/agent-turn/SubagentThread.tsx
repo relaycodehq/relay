@@ -22,6 +22,7 @@ import { RichText } from "../../ui/RichText";
 import { SubagentStatus } from "./Subagents";
 import { POPUPS } from "../../lib/shortcuts";
 import { errorMessage } from "../../../shared/error-message";
+import { usePoll } from "../../lib/poll";
 
 export function SubagentThread({
   chatId,
@@ -42,13 +43,14 @@ export function SubagentThread({
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const self = useRef<HTMLDivElement>(null);
   const detail = useQuery({
     queryKey: ["project-chat-agent", chatId, openId],
     queryFn: () => api.projectChatAgent(chatId, openId),
     refetchInterval: (query) =>
-      query.state.data?.status === "running" ? 1000 : false,
+      poll(query.state.data?.status === "running" ? 1000 : false),
   });
   const run = detail.data;
   const tabs = batchOf(runs, openId).sort(bySubagentStanding);

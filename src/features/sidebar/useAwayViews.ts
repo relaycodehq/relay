@@ -3,14 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import type { HandoffView } from "../../../shared/handoff";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import { usePoll } from "../../lib/poll";
 
 /** Every away thread's view, asked every few seconds while there is one. */
 export function useAwayViews(chats: ChatSummary[]) {
+  const poll = usePoll();
   const query = useQuery({
     queryKey: ["handoff-views"],
     queryFn: () => api.handoffViews(),
     enabled: chats.some((c) => c.sentTo),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   return query.data ?? {};
 }

@@ -3,6 +3,7 @@ import type { ClockifyStatus } from "../../../shared/clockify";
 import type { PluginId, PluginToggles } from "../../../shared/plugins";
 import { api } from "../../lib/api";
 import { useProjectList } from "../../lib/workspace-queries";
+import { usePoll } from "../../lib/poll";
 
 const usePlugins = () =>
   useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
@@ -58,16 +59,20 @@ export const useDevOpsConnection = (enabled: boolean) =>
 export const clockifyKey = ["clockify-status"];
 
 /** Polls while Luna is writing the descriptions, so they appear when ready. */
-export const useClockifyStatus = (enabled = true) =>
-  useQuery({
+export function useClockifyStatus(enabled = true) {
+  const poll = usePoll();
+  return useQuery({
     queryKey: clockifyKey,
     queryFn: () => api.clockifyStatus(),
     enabled,
     refetchInterval: (q) =>
-      (q.state.data as ClockifyStatus | undefined)?.review?.describing
-        ? 1500
-        : false,
+      poll(
+        (q.state.data as ClockifyStatus | undefined)?.review?.describing
+          ? 1500
+          : false,
+      ),
   });
+}
 
 /** The Clockify workspaces the saved key can see. */
 export const useClockifyWorkspaces = (host: string, enabled: boolean) =>

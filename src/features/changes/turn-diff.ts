@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { TurnFileChange, WorktreeStatus } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import type { usePoll } from "../../lib/poll";
 
 export type TurnDiffTarget = {
   chatId: string;
@@ -29,12 +30,19 @@ export function worktreeDiff(
   };
 }
 
-/** A managed worktree's branch, path and what it has that its source branch doesn't. */
-export const worktreeQuery = (chatId: string | undefined, enabled: boolean) =>
+/**
+ * A managed worktree's branch, path and what it has that its source branch
+ * doesn't, polled as `poll` paces it (see lib/poll).
+ */
+export const worktreeQuery = (
+  chatId: string | undefined,
+  enabled: boolean,
+  poll: ReturnType<typeof usePoll>,
+) =>
   queryOptions({
     queryKey: ["worktree", chatId],
     queryFn: () => api.projectWorktree(chatId!),
     enabled: !!chatId && enabled,
     // Naming takes a second or two, and the agent starts right after.
-    refetchInterval: (q) => (q.state.data?.naming ? 400 : 5000),
+    refetchInterval: (q) => poll(q.state.data?.naming ? 400 : 5000),
   });
