@@ -1,10 +1,11 @@
-import { it, expect, beforeEach, afterEach } from "vitest";
+import { it, expect, beforeEach, afterEach, vi } from "vitest";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { commitDetail, commitDiff, commitLog } from "./history";
 import { layoutGraph } from "../../src/features/changes/commit-graph";
+import * as gitCommands from "./git";
 let root: string;
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", root, ...args], {
@@ -22,7 +23,10 @@ beforeEach(async () => {
   git("config", "user.email", "relay@example.com");
   git("config", "user.name", "Relay");
 });
-afterEach(() => rm(root, { recursive: true, force: true }));
+afterEach(async () => {
+  vi.restoreAllMocks();
+  await rm(root, { recursive: true, force: true });
+});
 
 it("reads an empty repository as no history", async () => {
   expect(await commitLog(root, "head", 50)).toEqual({
@@ -123,4 +127,37 @@ it("tells a local branch with a slash from a remote one", async () => {
   );
   expect(latest.refs).toHaveLength(4);
   expect((await commitDetail(root, sha)).refs).toEqual(latest.refs);
+});
+
+it("resolves a selected rename without rereading commit details or line counts", async () => {
+  const original = "same\n".repeat(20);
+  await writeFile(join(root, "old name.txt"), original);
+  await writeFile(join(root, "unchanged.txt"), "unchanged\n");
+  const first = commit("First");
+  git("mv", "old name.txt", "new name.txt");
+  await writeFile(join(root, "new name.txt"), original + "new\n");
+  const second = commit(
+    "Renamed\n\nLong message irrelevant to file selection.",
+  );
+  const commands = vi.spyOn(gitCommands, "git");
+  expect(await commitDiff(root, second, "new name.txt")).toMatchObject({
+    old: { name: "old name.txt", contents: original },
+    next: { name: "new name.txt", contents: original + "new\n" },
+  });
+  // One revision/first-parent lookup and one rename-aware name scan. In
+  // particular, restricting diff-tree to the new path would lose the rename.
+  expect(commands.mock.calls.map(([, args]) => args[0])).toEqual([
+    "show",
+    "diff-tree",
+  ]);
+  expect(commands.mock.calls.flatMap(([, args]) => args)).not.toContain(
+    "--numstat",
+  );
+  await expect(commitDiff(root, second, "unchanged.txt")).rejects.toThrow(
+    "didn't change",
+  );
+  expect(await commitDiff(root, first, "old name.txt")).toMatchObject({
+    old: null,
+    next: { contents: original },
+  });
 });

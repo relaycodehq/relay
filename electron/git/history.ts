@@ -77,16 +77,52 @@ export async function commitLog(
   return { commits: commits.slice(0, limit), more: commits.length > limit };
 }
 
+type CommitChange = Pick<CommitFileChange, "path" | "previousPath" | "status">;
+
+async function commitChanges(
+  root: string,
+  sha: string,
+  parent: string | undefined,
+): Promise<CommitChange[]> {
+  const status = await git(root, [
+    "diff-tree",
+    "-r",
+    "-z",
+    "-M",
+    "--no-commit-id",
+    "--name-status",
+    ...(parent ? [parent, sha] : ["--root", sha]),
+  ]);
+  const files: CommitChange[] = [];
+  const names = status.split("\0");
+  for (let i = 0; i < names.length - 1;) {
+    const code = names[i][0] as CommitFileChange["status"];
+    const moved = code === "R" || code === "C";
+    const previousPath = moved ? names[i + 1] : undefined;
+    const path = names[i + (moved ? 2 : 1)];
+    i += moved ? 3 : 2;
+    if (!workingPathSchema.safeParse(path).success) continue;
+    files.push({ path, ...(previousPath && { previousPath }), status: code });
+  }
+  return files;
+}
+
 async function commitFiles(
   root: string,
   sha: string,
   parent: string | undefined,
 ): Promise<CommitFileChange[]> {
-  const range = parent ? [parent, sha] : ["--root", sha];
-  const args = ["diff-tree", "-r", "-z", "-M", "--no-commit-id"];
-  const [status, numstat] = await Promise.all([
-    git(root, [...args, "--name-status", ...range]),
-    git(root, [...args, "--numstat", ...range]),
+  const [files, numstat] = await Promise.all([
+    commitChanges(root, sha, parent),
+    git(root, [
+      "diff-tree",
+      "-r",
+      "-z",
+      "-M",
+      "--no-commit-id",
+      "--numstat",
+      ...(parent ? [parent, sha] : ["--root", sha]),
+    ]),
   ]);
   const counts = new Map<string, [string, string]>();
   const stats = numstat.split("\0");
@@ -97,26 +133,15 @@ async function commitFiles(
     else i += 3;
     counts.set(path || stats[i - 1], [additions, deletions]);
   }
-  const files: CommitFileChange[] = [];
-  const names = status.split("\0");
-  for (let i = 0; i < names.length - 1;) {
-    const code = names[i][0] as CommitFileChange["status"];
-    const moved = code === "R" || code === "C";
-    const previousPath = moved ? names[i + 1] : undefined;
-    const path = names[i + (moved ? 2 : 1)];
-    i += moved ? 3 : 2;
-    if (!workingPathSchema.safeParse(path).success) continue;
-    const [additions, deletions] = counts.get(path) ?? ["0", "0"];
-    files.push({
-      path,
-      ...(previousPath && { previousPath }),
-      status: code,
+  return files.map((file) => {
+    const [additions, deletions] = counts.get(file.path) ?? ["0", "0"];
+    return {
+      ...file,
       additions: Number(additions) || 0,
       deletions: Number(deletions) || 0,
       binary: additions === "-",
-    });
-  }
-  return files;
+    };
+  });
 }
 
 async function resolveCommit(root: string, sha: string) {
@@ -152,9 +177,14 @@ export async function commitDiff(
   sha: string,
   path: string,
 ): Promise<FilePair> {
-  const commit = await resolveCommit(root, sha);
-  const parent = commit.parents[0];
-  const change = (await commitFiles(root, commit.sha, parent)).find(
+  // File selection needs only an immutable commit and its first parent, not
+  // decorations, message bodies, or line counts for every file in the commit.
+  const [resolved, parent] = (
+    await git(root, ["show", "-s", "--format=%H %P", `${sha}^{commit}`, "--"])
+  )
+    .trim()
+    .split(" ");
+  const change = (await commitChanges(root, resolved, parent)).find(
     (f) => f.path === path,
   );
   if (!change) throw new Error("This commit didn't change that file.");
@@ -165,7 +195,7 @@ export async function commitDiff(
   });
   const oldName = change.previousPath ?? path,
     oldSpec = !parent || change.status === "A" ? null : `${parent}:${oldName}`,
-    nextSpec = change.status === "D" ? null : `${commit.sha}:${path}`;
+    nextSpec = change.status === "D" ? null : `${resolved}:${path}`;
   let old: FilePair["old"], next: FilePair["next"];
   try {
     old = oldSpec ? await read(oldSpec, oldName) : null;
