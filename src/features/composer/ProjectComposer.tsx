@@ -554,8 +554,8 @@ export function ProjectComposer({
                   computer={computer}
                   account={{
                     of: accounts.of,
-                    footer: (provider, now) =>
-                      accountUsageFooter(provider, accounts, now),
+                    footer: (provider, now, container) =>
+                      accountUsageFooter(provider, accounts, now, container),
                   }}
                 />
               ),

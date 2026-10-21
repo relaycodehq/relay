@@ -36,7 +36,7 @@ import {
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
 import { RegistryGlyph } from "./RegistryGlyph";
-import { UsageMeters } from "./UsageMeters";
+import { UsageStrip } from "./UsageStrip";
 import {
   isGrouped,
   modelKey,
@@ -114,7 +114,11 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
    */
   account?: {
     of: (provider: UsageProvider) => string | undefined;
-    footer: (provider: UsageProvider, now: number) => ReactNode;
+    footer: (
+      provider: UsageProvider,
+      now: number,
+      container?: HTMLElement,
+    ) => ReactNode;
   };
   /** The paired computer the project lives on, whose agents list the models. */
   computer?: { id: string; name: string };
@@ -521,8 +525,13 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   />
                 )}
               {reportsUsage(category) &&
-                (account?.footer(category, now) ?? (
-                  <UsageMeters usage={usage[category]} now={now} />
+                (account?.footer(category, now, container) ?? (
+                  <UsageStrip
+                    usage={usage[category]}
+                    now={now}
+                    accountId={account?.of(category)}
+                    container={container}
+                  />
                 ))}
               {category === "message" && (
                 <p className="model-picker-note">

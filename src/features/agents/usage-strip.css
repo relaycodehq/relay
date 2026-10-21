@@ -1,0 +1,108 @@
+.usage-strip {
+  padding: 7px 12px;
+}
+.usage-strip-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.usage-strip-account {
+  min-width: 0;
+  flex-shrink: 0;
+  max-width: 40%;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-strip-account select {
+  max-width: 100%;
+  padding: 3px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+}
+.usage-strip-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 5px 12px;
+  min-width: 0;
+  padding: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.usage-strip-status:hover {
+  background: var(--hover);
+}
+.usage-strip-reading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.usage-strip-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-strip-reading strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.usage-strip-dot {
+  flex-shrink: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.usage-strip-dot[data-pace="warn"] {
+  background: #e3a23a;
+}
+.usage-strip-dot[data-pace="hot"],
+.usage-strip-dot[data-pace="spent"] {
+  background: #ef6a5a;
+}
+.usage-strip-resources {
+  padding-top: 5px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.usage-strip-balance {
+  min-width: 0;
+}
+.usage-strip-resources .usage-reset {
+  flex-shrink: 0;
+  gap: 4px;
+  height: 23px;
+  padding: 0 3px;
+  font-size: 10px;
+}
+.usage-strip-details {
+  width: 340px;
+  max-width: calc(100vw - 24px);
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 8px 28px #0004;
+}
+.usage-strip-details > .usage-footer {
+  border-top: 0;
+}
+@media (pointer: coarse) {
+  .usage-strip-status,
+  .usage-strip-account select,
+  .usage-strip-resources .usage-reset {
+    min-height: 44px;
+  }
+}

@@ -1,4 +1,9 @@
 import { Flame } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
+import { ResetUsage } from "./saved-resets/ResetUsage";
+import { expiryWords } from "./saved-resets/saved-resets";
+import { putUsage } from "./provider-usage";
 import {
   creditsLabel,
   creditsReach,
@@ -11,10 +16,44 @@ import {
 export function UsageMeters({
   usage,
   now,
+  accountId = SYSTEM_ACCOUNT,
+  accountName = "Codex",
+  container,
+  showResetAction = true,
 }: {
   usage: ProviderUsage | undefined;
   now: number;
+  accountId?: string;
+  accountName?: string;
+  container?: HTMLElement;
+  showResetAction?: boolean;
 }) {
+  const qc = useQueryClient();
+  const resets = usage?.provider === "codex" ? usage.resets : null;
+  const expiry = resets && expiryWords(resets);
+  const saved = resets && (
+    <div className="usage-saved-resets">
+      <div>
+        <strong>
+          {resets.count} {resets.count === 1 ? "reset" : "resets"} available
+        </strong>
+        {expiry && <small>{expiry}</small>}
+      </div>
+      {showResetAction && (
+        <ResetUsage
+          key={accountId}
+          accountId={accountId}
+          accountName={accountName}
+          resets={resets}
+          low={
+            usage?.windows.some((window) => window.usedPercent > 80) ?? false
+          }
+          container={container}
+          onUsage={(next) => putUsage(qc, "codex", accountId, next)}
+        />
+      )}
+    </div>
+  );
   if (!usage) {
     return (
       <div className="usage-footer" aria-busy="true">
@@ -29,6 +68,7 @@ export function UsageMeters({
           {usage.message ?? "No usage limits reported"}
         </p>
         {usage.credits && <CreditsRow credits={usage.credits} />}
+        {saved}
       </div>
     );
   }
@@ -100,6 +140,7 @@ export function UsageMeters({
         })}
       </div>
       {usage.credits && <CreditsRow credits={usage.credits} />}
+      {saved}
     </div>
   );
 }

@@ -15,6 +15,19 @@ const REFRESH_MS = 60_000;
 export type UsageAccount = { provider: UsageProvider; account?: string };
 export const usageKey = (provider: UsageProvider, account = SYSTEM_ACCOUNT) =>
   ["provider-usage", provider, account] as const;
+/** A redeemed reset wins over a poll that started before it. */
+export async function putUsage(
+  qc: QueryClient,
+  provider: UsageProvider,
+  account: string,
+  usage: ProviderUsage,
+) {
+  await qc.cancelQueries({
+    queryKey: usageKey(provider, account),
+    exact: true,
+  });
+  qc.setQueryData(usageKey(provider, account), usage);
+}
 export const usageOptions = (
   provider: UsageProvider,
   account = SYSTEM_ACCOUNT,
@@ -90,12 +103,7 @@ export function useUsageReadings(
     account: string,
     usage: ProviderUsage,
   ) => {
-    // A redeemed reset is authoritative over a poll that started before it.
-    await qc.cancelQueries({
-      queryKey: usageKey(provider, account),
-      exact: true,
-    });
-    qc.setQueryData(usageKey(provider, account), usage);
+    await putUsage(qc, provider, account, usage);
   };
   return {
     readings: readings.map((reading, i) => ({

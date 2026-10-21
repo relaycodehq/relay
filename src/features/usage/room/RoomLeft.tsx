@@ -1,28 +1,22 @@
 // The rhythm row's third chart: what's left on each account right now, in the
 // page's own columns, and Codex's saved resets with a way to spend one.
 import { useState } from "react";
-import { Popover } from "@base-ui/react/popover";
-import { ExternalLink, RefreshCw, RotateCcw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { api } from "../../../lib/api";
 import { errorMessage } from "../../../../shared/error-message";
 import { HarnessMark } from "../usage-charts";
-import { dayLabel } from "../format";
 import { usagePage } from "../../accounts/usage-page";
 import {
-  attemptAfter,
-  expiryWords,
-  firstToLapse,
   isLow,
-  outcomeWords,
-  resetCount,
   roomiest,
   tankWords,
   windowName,
   windowTitle,
-  type ResetAttempt,
   type RoomAccount,
   type RoomTank,
 } from "./room";
+import { expiryWords, resetCount } from "../../agents/saved-resets/saved-resets";
+import { ResetUsage } from "../../agents/saved-resets/ResetUsage";
 import type { Room } from "./useRoom";
 import "./room.css";
 
@@ -138,116 +132,14 @@ function SavedRow({ account: a, room }: { account: RoomAccount; room: Room }) {
         </span>
         {expiry && <small>{expiry}</small>}
       </span>
-      <ResetUsage account={a} room={room} />
+      <ResetUsage
+        key={a.id}
+        accountId={a.id}
+        accountName={a.name}
+        resets={resets}
+        low={isLow(a)}
+        onUsage={(usage) => room.put(a.provider, a.id, usage)}
+      />
     </div>
-  );
-}
-
-/** "Reset usage": quiet while there's room, in the accent once the account is low. */
-function ResetUsage({
-  account: a,
-  room,
-}: {
-  account: RoomAccount;
-  room: Room;
-}) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  // Kept until Codex gives a clear answer: after a failure or an answer Relay
-  // doesn't know, trying again sends the same attempt, which can't spend a
-  // second reset.
-  const [attempt, setAttempt] = useState<ResetAttempt | null>(null);
-  const resets = a.resets!;
-  const credit = firstToLapse(resets);
-  const stays = resets.count - 1;
-  const resetUsage = async () => {
-    const sent = attempt ?? {
-      key: crypto.randomUUID(),
-      creditId: credit?.id ?? null,
-    };
-    setAttempt(sent);
-    setBusy(true);
-    setNote(null);
-    try {
-      const { outcome, usage } = await api.redeemCodexReset(
-        a.id,
-        sent.creditId,
-        sent.key,
-      );
-      setAttempt(attemptAfter(sent, outcome));
-      room.put(a.provider, a.id, usage);
-      const words = outcomeWords(outcome);
-      if (words) setNote(words);
-      else setOpen(false);
-    } catch (error) {
-      setNote(
-        `${errorMessage(error)} Trying again can’t spend a second reset.`,
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setNote(null);
-      }}
-    >
-      <Popover.Trigger
-        type="button"
-        className="us-room-reset"
-        data-low={isLow(a) || undefined}
-      >
-        <RotateCcw size={12} />
-        Reset usage
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          className="us-room-positioner"
-          side="bottom"
-          align="end"
-          sideOffset={6}
-        >
-          <Popover.Popup
-            className="us-room-ask"
-            aria-label="Reset usage"
-            aria-busy={busy || undefined}
-          >
-            <p>
-              Reset usage for {a.name}? Its limits start fresh
-              {stays > 0
-                ? `, and ${resetCount(stays)} ${stays === 1 ? "stays" : "stay"}.`
-                : "; it’s the last saved one."}
-              {credit?.expiresAt != null && (
-                <small>
-                  Spends the one that runs out {dayLabel(credit.expiresAt)}.
-                </small>
-              )}
-            </p>
-            {note && (
-              <p className="us-room-note" role="alert">
-                {note}
-              </p>
-            )}
-            <div className="us-room-ask-actions">
-              <button
-                type="button"
-                className="primary"
-                disabled={busy}
-                onClick={() => void resetUsage()}
-              >
-                {busy ? "Resetting…" : "Reset usage"}
-              </button>
-              <button type="button" onClick={() => setOpen(false)}>
-                Not now
-              </button>
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
   );
 }
