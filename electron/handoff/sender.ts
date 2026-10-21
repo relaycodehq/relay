@@ -15,7 +15,6 @@ import {
   handoffMessageSchema,
   handoffMessagesSchema,
   needsFullBundle,
-  type ComputerInfo,
   type AwayThread,
   type ComputersOverview,
   type HandoffRemoteStatus,
@@ -30,8 +29,6 @@ import {
 import {
   onComputerMessage,
   projectChatSendSchema,
-  sharedWith,
-  threadsSharing,
   type ProjectChatSend,
   type ChatMessage,
   type ChatSummary,
@@ -41,7 +38,6 @@ import {
   setupBridge,
   folderHandoffBridge,
   startHandoffBridge,
-  liveHandoffBridge,
   skillsBridge,
   pastesBridge,
   remoteProjectsBridge,
@@ -60,7 +56,9 @@ import { receivePastes, sendPastes } from "./pastes";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { computerName, type Computers } from "./computers";
+import { ComputerInfos, outdated, unsupportedCall } from "./computer-infos";
 import { cloneUrl } from "./remote-setup";
+import { HandoffTargets, nameOf, sharing } from "./targets";
 import {
   bundleBranch,
   fetchBundle,
@@ -68,8 +66,8 @@ import {
   landReturned,
   repositoryNames,
 } from "../git/bundles";
+import { errorMessage } from "../../shared/error-message";
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const chatMethods = new Set<string>(handoffChatMethods);
 /**
  * The calls a thread waiting on a setup makes to the setup's agent: talking
@@ -101,11 +99,6 @@ const seconds = (since: number) =>
 /** Why a thread of a project on another computer can't run here instead. */
 const stays = (computer: string) =>
   `This thread's project is on ${computer}, so it runs there only.`;
-/** What a Relay from before bridge 10 answers a call it doesn't know. */
-const unknownCall = "Phones can't do that.";
-/** A call a Relay doesn't know: from before bridge 10, or before the call was added. */
-const unsupportedCall = (e: unknown) =>
-  message(e) === unknownCall || message(e) === "Computers can't do that.";
 
 /** What another computer tells of a thread it took over live. */
 const handoffNewsSchema = z.object({
@@ -131,8 +124,6 @@ export class Handoffs {
     string,
     { at: number; status: HandoffRemoteStatus | null }
   >();
-  /** Each computer's version and update, as it last said; `null` for one too old to say. */
-  private infos = new Map<string, { at: number; info: ComputerInfo | null }>();
   /**
    * Setups being asked for, by computer and project, so threads failing
    * together share one, with the threads waiting to join it.
@@ -141,16 +132,8 @@ export class Handoffs {
     string,
     { job: Promise<string>; waiting: Set<string> }
   >();
-  /** Clones of this computer's projects on paired ones, by computer and project id; a failed one keeps its error. */
-  private clones = new Map<
-    string,
-    {
-      job: Promise<ComputerProject>;
-      step: string;
-      progress: number | null;
-      error?: string;
-    }
-  >();
+  private infos: ComputerInfos;
+  private places: HandoffTargets;
   constructor(
     private store: Store,
     private computers: Computers,
@@ -161,6 +144,8 @@ export class Handoffs {
     /** How long the other computer's answers are reused; tests ask every time. */
     private reuse = { statusMs: 4000, infoMs: 3000 },
   ) {
+    this.infos = new ComputerInfos(computers, reuse.infoMs);
+    this.places = new HandoffTargets(store, computers, projects, this.infos);
     computers.onOnline((id) => {
       void this.acknowledge(id);
       void this.notifyAbandoned(id);
@@ -169,7 +154,7 @@ export class Handoffs {
     });
     computers.onOffline((id) => {
       for (const c of [...this.liveOn(id), ...this.setupsOn(id)])
-        this.chats.setHandoffLive(c.id, undefined);
+        this.chats.liveHandoff.setLive(c.id, undefined);
     });
     computers.onEvent((id, event) => this.event(id, event));
     // A thread of a project on another computer goes there with its first send.
@@ -235,7 +220,8 @@ export class Handoffs {
       method === "sendProjectChat"
         ? projectChatSendSchema.parse(args[1])
         : undefined;
-    const waiting = send && (await this.chats.handoffOutbox(chatId)).length;
+    const waiting =
+      send && (await this.chats.liveHandoff.outbox(chatId)).length;
     if (online() && !waiting)
       try {
         const client = await this.computers.connected(sentTo.computerId);
@@ -255,7 +241,7 @@ export class Handoffs {
       throw new Error(
         `${sentTo.computer} is offline. The thread carries on once it's back.`,
       );
-    await this.chats.holdHandoffSend(chatId, sentTo.id, send);
+    await this.chats.liveHandoff.hold(chatId, sentTo.id, send);
     if (online()) void this.flush(chatId);
   }
   /** A call for the agent setting the thread's project up on the computer it's going to. */
@@ -289,7 +275,7 @@ export class Handoffs {
         const sentTo = chat && liveAway(chat) ? chat.sentTo! : undefined;
         if (!sentTo || this.computers.status(sentTo.computerId) !== "online")
           return;
-        const next = (await this.chats.handoffOutbox(chatId)).find(
+        const next = (await this.chats.liveHandoff.outbox(chatId)).find(
           (h) => !h.error,
         );
         if (!next) return;
@@ -299,10 +285,14 @@ export class Handoffs {
             chatId,
             await this.sendFor(sentTo.computerId, client, next.input),
           ]);
-          await this.chats.settleHandoffSend(chatId, next.input.id);
+          await this.chats.liveHandoff.settle(chatId, next.input.id);
         } catch (e) {
           if (this.computers.status(sentTo.computerId) !== "online") return;
-          await this.chats.settleHandoffSend(chatId, next.input.id, message(e));
+          await this.chats.liveHandoff.settle(
+            chatId,
+            next.input.id,
+            errorMessage(e),
+          );
         }
       }
     } catch (e) {
@@ -319,7 +309,10 @@ export class Handoffs {
   async runHere(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (!sentTo)
-      return this.sendHere(chatId, await this.chats.takeHandoffSends(chatId));
+      return this.sendHere(
+        chatId,
+        await this.chats.liveHandoff.takeOut(chatId),
+      );
     if (!sentTo.live || sentTo.state !== "away")
       throw new Error("This thread isn't live on another computer.");
     if (sentTo.home) throw new Error(stays(sentTo.computer));
@@ -327,7 +320,7 @@ export class Handoffs {
       throw new Error(
         `${sentTo.computer} is back. Bring the thread back instead, with what it did there.`,
       );
-    const held = await this.chats.runHandoffHere(chatId, sentTo.id);
+    const held = await this.chats.handoffs.takeBack(chatId, sentTo.id);
     if (!held) return;
     console.info(
       `Handoff ${named(sentTo.id, sentTo.computer)}: runs here while it's offline.`,
@@ -347,14 +340,18 @@ export class Handoffs {
       try {
         await this.chats.sendYours(chatId, send);
       } catch (e) {
-        await this.chats.putBackHandoffSends(chatId, held.slice(i), message(e));
+        await this.chats.liveHandoff.putBack(
+          chatId,
+          held.slice(i),
+          errorMessage(e),
+        );
         return;
       }
     }
   }
   /** Drops a send that waits for the computer a live thread is on. */
   async dropHeld(chatId: string, sendId: string) {
-    await this.chats.settleHandoffSend(chatId, sendId);
+    await this.chats.liveHandoff.settle(chatId, sendId);
   }
   /** Threads live on the computer, rather than on their way or coming back. */
   private liveOn(computerId: string) {
@@ -373,7 +370,7 @@ export class Handoffs {
       await Promise.all(
         chats.map(async (c) => {
           const { id } = c.sentTo!;
-          const known = await this.chats.handoffHeld(c.id);
+          const known = await this.chats.liveHandoff.held(c.id);
           const answer = await client.call("handoffChat", id, known);
           const messages = z
             .array(z.union([z.string(), handoffMessageSchema]))
@@ -384,12 +381,12 @@ export class Handoffs {
             messages.filter((m): m is ChatMessage => typeof m !== "string"),
           );
           let next = 0;
-          await this.chats.handoffSynced(
+          await this.chats.liveHandoff.synced(
             c.id,
             id,
             messages.map((m) => (typeof m === "string" ? m : carried[next++]!)),
           );
-          this.chats.setHandoffLive(c.id, answer.live);
+          this.chats.liveHandoff.setLive(c.id, answer.live);
           void this.flush(c.id);
         }),
       );
@@ -416,13 +413,13 @@ export class Handoffs {
           const answer = await client.call(
             "handoffChat",
             c.sentTo!.setup!,
-            await this.chats.setupHeld(c.id),
+            await this.chats.setupMirror.held(c.id),
           );
           const messages = z
             .array(z.union([z.string(), handoffMessageSchema]))
             .parse(answer.messages) as (ChatMessage | string)[];
-          await this.chats.setupSynced(c.id, messages);
-          this.chats.setHandoffLive(c.id, answer.live);
+          await this.chats.setupMirror.synced(c.id, messages);
+          this.chats.liveHandoff.setLive(c.id, answer.live);
           // It may have finished while this computer wasn't listening.
           this.checkSetup(c.id);
         }),
@@ -440,7 +437,7 @@ export class Handoffs {
   /** What the agent setting a thread's project up there writes, and how it stands. */
   private setupEvent(chat: ChatSummary, event: RemoteEvent) {
     if (event.kind === "handoff") {
-      this.chats.setHandoffLive(chat.id, event.live);
+      this.chats.liveHandoff.setLive(chat.id, event.live);
       return;
     }
     if (event.kind === "news") {
@@ -454,8 +451,8 @@ export class Handoffs {
     if (!parsed.success)
       return console.warn("A setup's message didn't read:", parsed.error);
     const message = parsed.data as ChatMessage;
-    void this.chats
-      .mirrorSetup(chat.id, message)
+    void this.chats.setupMirror
+      .mirror(chat.id, message)
       .then(() => {
         if (message.role === "assistant" && message.status !== "streaming")
           this.checkSetup(chat.id);
@@ -482,7 +479,7 @@ export class Handoffs {
       return;
     }
     if (event.kind === "handoff") {
-      this.chats.setHandoffLive(chat.id, event.live);
+      this.chats.liveHandoff.setLive(chat.id, event.live);
       return;
     }
     // Its answers end there, so their news is told here as that computer decided it.
@@ -512,7 +509,7 @@ export class Handoffs {
             console.warn("A live handoff's paste wasn't copied:", e);
             return [live];
           });
-        await this.chats.mirrorHandoff(chat.id, handoffId, message!);
+        await this.chats.liveHandoff.mirror(chat.id, handoffId, message!);
       })
       .catch((e) => console.warn("A live handoff's message wasn't kept:", e))
       .finally(() => {
@@ -526,165 +523,16 @@ export class Handoffs {
     return chat;
   }
   /** The paired computers, and whether each has this thread's repository. */
-  async targets(chatId: string): Promise<HandoffTarget[]> {
-    const chat = this.summary(chatId);
-    const targets = await this.targetsIn(chat.projectId, liveHandoffBridge);
-    // A worktree other threads work in stays here, wherever it could go.
-    return this.sharing(chat)
-      ? targets.map((t) => ({ ...t, problem: "Shared with another thread" }))
-      : targets;
-  }
-  /** Who else works in the thread's worktree, by title; undefined when nobody does. */
-  private sharing(chat: ChatSummary) {
-    const others = threadsSharing(this.store.get().chats ?? [], chat);
-    return others.length ? sharedWith(others) : undefined;
+  targets(chatId: string): Promise<HandoffTarget[]> {
+    return this.places.forThread(this.summary(chatId));
   }
   /** The paired computers a new thread in the project can start on. */
   startTargets(projectId: string): Promise<HandoffTarget[]> {
-    return this.targetsIn(projectId, startHandoffBridge);
+    return this.places.forStart(projectId);
   }
-  /**
-   * One paired computer, and its copy of the project; for no project, only
-   * whether it's reachable. Either way it must speak `bridge`.
-   */
-  async targetOn(
-    computerId: string,
-    projectId: string | null,
-    bridge: number,
-  ): Promise<HandoffTarget> {
-    const computer = this.computers.list().find((c) => c.id === computerId);
-    if (!computer) throw new Error("This computer is no longer paired.");
-    return this.targetFor(
-      computer,
-      projectId
-        ? { id: projectId, repositories: await this.repositoriesOf(projectId) }
-        : null,
-      bridge,
-    );
-  }
-  private async targetsIn(
-    projectId: string,
-    bridge: number,
-  ): Promise<HandoffTarget[]> {
-    const project = {
-      id: projectId,
-      repositories: await this.repositoriesOf(projectId),
-    };
-    return Promise.all(
-      this.computers.list().map((c) => this.targetFor(c, project, bridge)),
-    );
-  }
-  private repositoriesOf(projectId: string) {
-    return this.projects
-      .root(projectId)
-      .then(repositoryNames)
-      .catch((): string[] => []);
-  }
-  private async targetFor(
-    c: ReturnType<Computers["list"]>[number],
-    project: { id: string; repositories: string[] } | null,
-    bridge: number,
-  ): Promise<HandoffTarget> {
-    const repositories = project?.repositories ?? null;
-    const base = { id: c.id, name: c.name };
-    // A WSL distribution asleep wakes on `connected` below.
-    if (c.status !== "online" && !c.asleep)
-      return {
-        ...base,
-        online: false,
-        problem:
-          c.status === "denied"
-            ? "Pair again"
-            : c.stopped
-              ? "WSL stopped it"
-              : "Offline",
-      };
-    if (repositories && !repositories.length)
-      return { ...base, online: true, problem: "No Git remote to match" };
-    try {
-      const client = await this.computers.connected(c.id);
-      const info = await this.info(c.id, client);
-      if (outdated(info) || (info?.bridge ?? 0) < bridge)
-        return { ...base, online: true, problem: "Needs a Relay update" };
-      if (!repositories) return { ...base, online: true };
-      const projects = await client.call("computerProjects");
-      const match = projects.find((p) =>
-        p.repositories.some((r) => repositories.includes(r)),
-      );
-      if (match)
-        return {
-          ...base,
-          online: true,
-          project: { id: match.id, name: match.name },
-        };
-      return {
-        ...base,
-        online: true,
-        problem: `Not cloned on ${c.name}`,
-        ...((info?.bridge ?? 0) >= cloneBridge
-          ? { clone: repositories[0] }
-          : {}),
-      };
-    } catch (e) {
-      return { ...base, online: false, problem: message(e) };
-    }
-  }
-  /**
-   * Clones the project on a paired computer that lacks it, or joins the
-   * clone under way; a failed one starts over. The computer clones it into
-   * the folder its clones go to and adds it as a project.
-   */
-  private cloneOn(computerId: string, projectId: string) {
-    const key = `${computerId}/${projectId}`;
-    const running = this.clones.get(key);
-    if (running && !running.error) return running.job;
-    const clone = {
-      step: "Starting",
-      progress: null as number | null,
-      error: undefined as string | undefined,
-      job: Promise.resolve<ComputerProject>({
-        id: "",
-        name: "",
-        repositories: [],
-      }),
-    };
-    clone.job = this.clone(computerId, projectId, (step, progress) => {
-      clone.step = step;
-      clone.progress = progress;
-    }).then(
-      (made) => {
-        this.clones.delete(key);
-        return made;
-      },
-      (e: unknown) => {
-        clone.error = message(e);
-        throw e;
-      },
-    );
-    this.clones.set(key, clone);
-    return clone.job;
-  }
-  private async clone(
-    computerId: string,
-    projectId: string,
-    onStep: (step: string, progress: number | null) => void,
-  ) {
-    const name = this.nameOf(computerId);
-    const url = await cloneUrl(await this.projects.root(projectId));
-    if (!url)
-      throw new Error(
-        `This project has no Git remote ${name} could clone it from.`,
-      );
-    for (;;) {
-      const client = await this.computers.connected(computerId);
-      const answer = await client.call("cloneProject", url).catch((e) => {
-        throw unsupportedCall(e)
-          ? new Error(`${name} needs a Relay update to clone projects.`)
-          : e;
-      });
-      if (answer.done) return answer.project;
-      onStep(answer.step, answer.progress);
-    }
+  /** One paired computer, and its copy of the project; see HandoffTargets. */
+  targetOn(computerId: string, projectId: string | null, bridge: number) {
+    return this.places.on(computerId, projectId, bridge);
   }
   /**
    * Asks each online computer about the threads it has from here, unless
@@ -708,7 +556,7 @@ export class Handoffs {
           if (!stale && !withInfo) return;
           try {
             const client = await this.computers.connected(c.id);
-            if (withInfo) await this.info(c.id, client);
+            if (withInfo) await this.infos.get(c.id, client);
             if (!stale) return;
             const found = await client.call("handoffStatus", ids);
             for (const id of ids) this.remember(id, found[id] ?? null);
@@ -791,7 +639,8 @@ export class Handoffs {
     return {
       name: computerName(),
       computers: computers.map((c) => {
-        const known = c.status === "online" ? this.infos.get(c.id) : undefined;
+        const known =
+          c.status === "online" ? this.infos.known(c.id) : undefined;
         const info = known?.info;
         return {
           ...c,
@@ -805,22 +654,9 @@ export class Handoffs {
     };
   }
   /** Has the computer update Relay; it restarts, and its link comes back by itself. */
-  async update(computerId: string) {
-    const client = await this.computers.connected(computerId);
-    if ((await this.info(computerId, client, true)) === null)
-      throw new Error(
-        `${this.computers.get(computerId).name} runs a Relay too old to update from here. Update it there once.`,
-      );
-    const update = await client.call("updateNow");
-    const known = this.infos.get(computerId)?.info;
-    if (known)
-      this.infos.set(computerId, {
-        at: Date.now(),
-        info: { ...known, update },
-      });
-    return update;
+  update(computerId: string) {
+    return this.infos.update(computerId);
   }
-  /** The computer's version and update, asked at most every few seconds. */
   /** A send as a computer this old takes it: one before `skillsBridge` refuses its pills' skills. */
   private async sendFor(
     computerId: string,
@@ -831,10 +667,11 @@ export class Handoffs {
       [send],
       client,
       async () =>
-        ((await this.info(computerId, client))?.bridge ?? 0) >= pastesBridge,
+        ((await this.infos.get(computerId, client))?.bridge ?? 0) >=
+        pastesBridge,
     );
     if (!send.skills) return carried!;
-    const info = await this.info(computerId, client).catch(() => null);
+    const info = await this.infos.get(computerId, client).catch(() => null);
     if ((info?.bridge ?? 0) >= skillsBridge) return carried!;
     const { skills: _, ...older } = carried!;
     return older;
@@ -844,20 +681,10 @@ export class Handoffs {
     client: RemoteClient,
     messages: ChatMessage[],
   ) {
-    const info = await this.info(computerId, client);
+    const info = await this.infos.get(computerId, client);
     return receivePastes(messages, client, (info?.bridge ?? 0) >= pastesBridge);
   }
-  private async info(computerId: string, client: RemoteClient, fresh = false) {
-    const cached = this.infos.get(computerId);
-    if (!fresh && cached && Date.now() - cached.at < this.reuse.infoMs)
-      return cached.info;
-    const info = await client.call("computerInfo").catch((e) => {
-      if (message(e) === unknownCall) return null;
-      throw e;
-    });
-    this.infos.set(computerId, { at: Date.now(), info });
-    return info;
-  }
+
   async handOff(chatId: string, computerId: string) {
     // A thread that just came back is here already while its job still tells
     // the other computer so.
@@ -874,14 +701,14 @@ export class Handoffs {
       throw new Error(onComputerMessage(this.projects.get(chat.projectId)));
     const blocked = home ? undefined : handoffBlocked(chat);
     if (blocked) throw new Error(blocked);
-    const sharing = this.sharing(chat);
-    if (sharing)
+    const others = sharing(this.store, chat);
+    if (others)
       throw new Error(
-        `${sharing} works in this worktree too; a shared worktree stays on this computer.`,
+        `${others} works in this worktree too; a shared worktree stays on this computer.`,
       );
     const computer = this.computers.get(computerId);
     const id = randomUUID();
-    await this.chats.markHandoff(chatId, {
+    await this.chats.handoffs.mark(chatId, {
       id,
       computerId,
       computer: computer.name,
@@ -900,7 +727,9 @@ export class Handoffs {
   async retry(chatId: string) {
     const sentTo = this.summary(chatId).sentTo;
     if (sentTo?.state !== "sending" || this.jobs.has(chatId)) return;
-    await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
+    await this.chats.handoffs.updateSentTo(chatId, sentTo.id, {
+      error: undefined,
+    });
     // Back in its setup, it catches up on what the agent wrote meanwhile.
     if (sentTo.setup) return this.followSetups(sentTo.computerId, chatId);
     const done = this.run(chatId, () =>
@@ -922,7 +751,7 @@ export class Handoffs {
         "The handoff hasn't finished. Try it again, or keep the thread here.",
       );
     if (this.jobs.has(chatId)) return;
-    await this.chats.updateSentTo(chatId, sentTo.id, {
+    await this.chats.handoffs.updateSentTo(chatId, sentTo.id, {
       state: "returning",
       error: undefined,
       conflicts: undefined,
@@ -955,7 +784,7 @@ export class Handoffs {
       );
     }
     if (status) {
-      await this.chats.updateSentTo(chatId, sentTo.id, {
+      await this.chats.handoffs.updateSentTo(chatId, sentTo.id, {
         state: "away",
         error: undefined,
       });
@@ -963,7 +792,7 @@ export class Handoffs {
         `${sentTo.computer} got this thread after all. Bring it back instead, or take the thread back without ${sentTo.computer}.`,
       );
     }
-    await this.chats.updateSentTo(chatId, sentTo.id, null);
+    await this.chats.handoffs.updateSentTo(chatId, sentTo.id, null);
   }
   /**
    * Takes the thread back without the computer that has it, for when that
@@ -982,11 +811,11 @@ export class Handoffs {
       await this.dropSetup(chatId, sentTo.computerId, sentTo.setup);
     // Taken back mid-clone: the clone's job lets go of any setup it starts.
     else if (sentTo.state === "sending")
-      await this.chats.updateSetup(chatId, {
+      await this.chats.setupMirror.update(chatId, {
         state: "dropped",
         ended: Date.now(),
       });
-    if (!(await this.chats.abandonHandoff(chatId, sentTo.id))) return;
+    if (!(await this.chats.handoffs.abandon(chatId, sentTo.id))) return;
     console.info(
       `Handoff ${named(sentTo.id, sentTo.computer)}: taken back without it.`,
     );
@@ -1002,17 +831,15 @@ export class Handoffs {
       online && sentTo.state !== "sending"
         ? await this.remote(sentTo).catch(() => undefined)
         : this.statuses.get(sentTo.id)?.status;
-    const clone =
+    const cloning =
       sentTo.state === "sending"
-        ? this.clones.get(`${sentTo.computerId}/${projectId}`)
+        ? this.places.cloning(sentTo.computerId, projectId)
         : undefined;
     return {
       sentTo,
       online,
       ...(remote ? { remote } : {}),
-      ...(clone && !clone.error
-        ? { cloning: { step: clone.step, progress: clone.progress } }
-        : {}),
+      ...(cloning ? { cloning } : {}),
     };
   }
   /** The other computer's view of the thread, asked at most every few seconds. */
@@ -1060,7 +887,7 @@ export class Handoffs {
       if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
       const client = await this.computers.connected(computerId);
-      const info = await this.info(computerId, client, true);
+      const info = await this.infos.get(computerId, client, true);
       if (outdated(info))
         throw new Error(
           `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
@@ -1078,7 +905,7 @@ export class Handoffs {
       // same tick as the stop, a thread started here instead keeps its turn.
       if (!this.onHandoff(chatId, id)) return;
       if (!this.summary(chatId).sentTo?.setup)
-        await this.chats.haltForHandoff(chatId);
+        await this.chats.handoffs.halt(chatId);
       if (!this.onHandoff(chatId, id)) return;
       const ready = await this.readied(
         chatId,
@@ -1090,7 +917,7 @@ export class Handoffs {
       );
       if (!ready) return;
       if (!this.onHandoff(chatId, id)) return;
-      const { chat, root, tip } = await this.chats.leave(chatId, name);
+      const { chat, root, tip } = await this.chats.handoffs.leave(chatId, name);
       if (!this.onHandoff(chatId, id)) return;
       const worktree = chat.worktree!;
       const input = chat.lastInput;
@@ -1145,10 +972,10 @@ export class Handoffs {
         await across(false);
       } catch (e) {
         // The other side lacks what the lean bundle builds on.
-        if (message(e) !== needsFullBundle) throw e;
+        if (errorMessage(e) !== needsFullBundle) throw e;
         await across(true);
       }
-      await this.chats.updateSentTo(chatId, id, {
+      await this.chats.handoffs.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
         live: true,
@@ -1165,7 +992,7 @@ export class Handoffs {
     } catch (e) {
       console.warn(
         `Handoff ${named(id, this.nameOf(computerId))} didn't go out:`,
-        message(e),
+        errorMessage(e),
       );
       // A look at a setup that didn't get through keeps the thread in it:
       // the computer coming back looks again.
@@ -1173,7 +1000,9 @@ export class Handoffs {
         e instanceof Unanswered ||
         this.computers.status(computerId) !== "online";
       if (lost && this.summary(chatId).sentTo?.setup) return;
-      await this.chats.updateSentTo(chatId, id, { error: message(e) });
+      await this.chats.handoffs.updateSentTo(chatId, id, {
+        error: errorMessage(e),
+      });
     }
   }
   /**
@@ -1188,7 +1017,7 @@ export class Handoffs {
       if (!this.onHandoff(chatId, id)) return;
       const { name } = this.computers.get(computerId);
       const client = await this.computers.connected(computerId);
-      const info = await this.info(computerId, client, true);
+      const info = await this.infos.get(computerId, client, true);
       if (!info || info.bridge < remoteProjectsBridge)
         throw new Error(
           `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
@@ -1220,7 +1049,7 @@ export class Handoffs {
       asked = true;
       await client.call("startInProject", id, project.projectId, thread);
       if (!this.onHandoff(chatId, id)) return;
-      await this.chats.updateSentTo(chatId, id, {
+      await this.chats.handoffs.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
         live: true,
@@ -1236,7 +1065,7 @@ export class Handoffs {
     } catch (e) {
       console.warn(
         `Thread ${named(id, this.nameOf(computerId))} didn't start there:`,
-        message(e),
+        errorMessage(e),
       );
       // Refused there, or never asked: it isn't there, and trying again the
       // same way would fail the same way, so the thread is new again. An
@@ -1246,10 +1075,12 @@ export class Handoffs {
         (!(e instanceof Unanswered) &&
           this.computers.status(computerId) === "online")
       ) {
-        await this.chats.homeStartRefused(chatId, id);
+        await this.chats.handoffs.startRefused(chatId, id);
         throw e;
       }
-      await this.chats.updateSentTo(chatId, id, { error: message(e) });
+      await this.chats.handoffs.updateSentTo(chatId, id, {
+        error: errorMessage(e),
+      });
     }
   }
   /**
@@ -1285,7 +1116,11 @@ export class Handoffs {
       return true;
     if (bridge < cloneBridge) return true;
     const name = this.nameOf(computerId);
-    await this.chats.beginSetup(chatId, name, this.projects.get(projectId).name);
+    await this.chats.setupMirror.begin(
+      chatId,
+      name,
+      this.projects.get(projectId).name,
+    );
     try {
       return await this.setUp(
         chatId,
@@ -1298,10 +1133,10 @@ export class Handoffs {
     } catch (e) {
       // A setup that never got its agent ends here, not left cloning.
       if (!this.summary(chatId).sentTo?.setup)
-        await this.chats.updateSetup(chatId, {
+        await this.chats.setupMirror.update(chatId, {
           state: "dropped",
           ended: Date.now(),
-          error: message(e),
+          error: errorMessage(e),
         });
       throw e;
     }
@@ -1324,9 +1159,9 @@ export class Handoffs {
     }
     let failed: string;
     try {
-      const made = await this.cloneOn(computerId, projectId);
+      const made = await this.places.clone(computerId, projectId);
       if (!this.onHandoff(chatId, id)) return false;
-      await this.chats.updateSetup(chatId, {
+      await this.chats.setupMirror.update(chatId, {
         state: "done",
         ended: Date.now(),
         project: made.name,
@@ -1341,7 +1176,7 @@ export class Handoffs {
         this.computers.status(computerId) !== "online"
       )
         throw e;
-      failed = message(e);
+      failed = errorMessage(e);
     }
     if (!this.onHandoff(chatId, id)) return false;
     // Another thread's setup may have started while this clone failed.
@@ -1420,11 +1255,11 @@ export class Handoffs {
     setup: string,
     error?: string,
   ) {
-    await this.chats.updateSetup(chatId, {
+    await this.chats.setupMirror.update(chatId, {
       state: "agent",
       ...(error ? { error } : {}),
     });
-    await this.chats.updateSentTo(chatId, id, { setup });
+    await this.chats.handoffs.updateSentTo(chatId, id, { setup });
     void this.followSetups(computerId, chatId);
   }
   /** The setup's agent got the project there: the thread goes on, and its thread there settles. */
@@ -1435,14 +1270,14 @@ export class Handoffs {
     project: ComputerProject,
   ) {
     const { computerId } = this.summary(chatId).sentTo!;
-    await this.chats.updateSetup(chatId, {
+    await this.chats.setupMirror.update(chatId, {
       state: "done",
       ended: Date.now(),
       project: project.name,
       ...(project.folder ? { folder: project.folder } : {}),
     });
-    await this.chats.updateSentTo(chatId, id, { setup: undefined });
-    this.chats.setHandoffLive(chatId, undefined);
+    await this.chats.handoffs.updateSentTo(chatId, id, { setup: undefined });
+    this.chats.liveHandoff.setLive(chatId, undefined);
     for (const c of this.setupsOn(computerId))
       if (c.sentTo!.setup === setup) this.checkSetup(c.id);
     void this.computers
@@ -1471,7 +1306,9 @@ export class Handoffs {
     );
     if (!answer.done) return false;
     if (sentTo.error)
-      await this.chats.updateSentTo(chatId, sentTo.id, { error: undefined });
+      await this.chats.handoffs.updateSentTo(chatId, sentTo.id, {
+        error: undefined,
+      });
     this.checkSetup(chatId);
     return true;
   }
@@ -1490,7 +1327,7 @@ export class Handoffs {
           : "This thread is here already.",
       );
     await this.dropSetup(chatId, sentTo.computerId, sentTo.setup);
-    await this.chats.updateSentTo(chatId, sentTo.id, null);
+    await this.chats.handoffs.updateSentTo(chatId, sentTo.id, null);
     console.info(
       `Handoff ${named(sentTo.id, sentTo.computer)}: stays here instead of its setup there.`,
     );
@@ -1498,11 +1335,11 @@ export class Handoffs {
   }
   /** The setup's agent there is let go, even across a restart. */
   private async dropSetup(chatId: string, computerId: string, setup: string) {
-    await this.chats.updateSetup(chatId, {
+    await this.chats.setupMirror.update(chatId, {
       state: "dropped",
       ended: Date.now(),
     });
-    this.chats.setHandoffLive(chatId, undefined);
+    this.chats.liveHandoff.setLive(chatId, undefined);
     const shared = this.setupsOn(computerId).some(
       (c) => c.id !== chatId && c.sentTo!.setup === setup,
     );
@@ -1511,12 +1348,9 @@ export class Handoffs {
     void this.notifyAbandoned(computerId);
   }
   private nameOf(computerId: string) {
-    try {
-      return this.computers.get(computerId).name;
-    } catch {
-      return "a computer no longer paired";
-    }
+    return nameOf(this.computers, computerId);
   }
+
   /** The other side stops, notes and commits; its work comes back into this worktree. */
   private async back(
     chatId: string,
@@ -1556,7 +1390,7 @@ export class Handoffs {
         const conflicts = await landReturned(path, back.tip, computer).catch(
           (e) => {
             throw new Error(
-              `Its work couldn't land in the worktree (${message(e)}). It's kept at ${ref}.`,
+              `Its work couldn't land in the worktree (${errorMessage(e)}). It's kept at ${ref}.`,
             );
           },
         );
@@ -1564,7 +1398,7 @@ export class Handoffs {
           console.warn(
             `Handoff ${named(id, computer)}: came back clashing in ${conflicts.length} file(s), kept at ${ref}.`,
           );
-          await this.chats.updateSentTo(chatId, id, {
+          await this.chats.handoffs.updateSentTo(chatId, id, {
             error: `Its work and what was committed here meanwhile both change ${conflicts.join(", ")}. It's kept at ${ref}.`,
             conflicts,
           });
@@ -1572,7 +1406,7 @@ export class Handoffs {
         }
         await git(path, ["update-ref", "-d", ref]).catch(() => {});
       }
-      await this.chats.returned(chatId, id, messages);
+      await this.chats.handoffs.returned(chatId, id, messages);
       console.info(
         `Handoff ${named(id, this.nameOf(computerId))}: back in ${seconds(started)}${park ? ", parked" : ""}.`,
       );
@@ -1582,9 +1416,11 @@ export class Handoffs {
     } catch (e) {
       console.warn(
         `Handoff ${named(id, this.nameOf(computerId))} didn't come back:`,
-        message(e),
+        errorMessage(e),
       );
-      await this.chats.updateSentTo(chatId, id, { error: message(e) });
+      await this.chats.handoffs.updateSentTo(chatId, id, {
+        error: errorMessage(e),
+      });
     }
   }
   /** Tells the other computer its copies came back, including any it missed. */
@@ -1667,10 +1503,6 @@ function readReturned(text: string, computer: string): ChatMessage[] {
     `${computer} sent the thread back in a form this Relay can't read (${where}: ${issue!.message}). Nothing was changed here.`,
   );
 }
-
-/** Too old to take threads from this computer: from before live handoffs, which it follows them by. */
-export const outdated = (info: ComputerInfo | null | undefined) =>
-  info === null || (!!info && info.bridge < liveHandoffBridge);
 
 async function upload(
   client: RemoteClient,

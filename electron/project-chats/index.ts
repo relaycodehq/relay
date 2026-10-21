@@ -6,21 +6,11 @@ import type { DeepReviewStart, ResumeReview } from "../../shared/deep-review";
 import type { FindingStatus } from "../../shared/findings";
 import { setFindingStatus } from "../findings";
 import type {
-  ChatCameFrom,
-  ChatSentTo,
-  HandoffLive,
-  HeldSend,
-  ThreadSetup,
-  HandoffThread,
-} from "../../shared/handoff";
-import type { HomeThread } from "../../shared/remote";
-import type {
   ChatMessage,
   ChatScope,
   ChatTriage,
   ChatWorkspace,
   StartedBy,
-  ChatWorktree,
   KnownMessages,
   LinkedFolder,
   ProjectChat,
@@ -118,9 +108,9 @@ export class ProjectChats {
   private worktrees: ThreadWorktrees;
   private cleanup: WorktreeCleanup;
   private files: TurnFiles;
-  private handoffs: ComputerHandoff;
-  private liveHandoff: LiveHandoff;
-  private setupMirror: SetupMirror;
+  readonly handoffs: ComputerHandoff;
+  readonly liveHandoff: LiveHandoff;
+  readonly setupMirror: SetupMirror;
   private runner: TurnRunner;
   private asides: SideQuestions;
   private queue: ChatQueue;
@@ -544,91 +534,6 @@ export class ProjectChats {
   ) {
     return this.terminal.continue(projectId, pick, workspace, branch, links);
   }
-  markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
-    return this.handoffs.mark(id, sentTo);
-  }
-  updateSentTo(
-    id: string,
-    handoffId: string,
-    change: Partial<ChatSentTo> | null,
-  ) {
-    return this.handoffs.updateSentTo(id, handoffId, change);
-  }
-  homeStartRefused(id: string, handoffId: string) {
-    return this.handoffs.startRefused(id, handoffId);
-  }
-  abandonHandoff(id: string, handoffId: string) {
-    return this.handoffs.abandon(id, handoffId);
-  }
-  runHandoffHere(id: string, handoffId: string) {
-    return this.handoffs.takeBack(id, handoffId);
-  }
-  haltForHandoff(id: string) {
-    return this.handoffs.halt(id);
-  }
-  leave(id: string, computer: string, since = 0) {
-    return this.handoffs.leave(id, computer, since);
-  }
-  handedOver(handoffId: string) {
-    return this.handoffs.handedOver(handoffId);
-  }
-  adopt(
-    projectId: string,
-    thread: HandoffThread,
-    cameFrom: Omit<ChatCameFrom, "carried">,
-    worktree: ChatWorktree,
-    renamed?: string,
-  ) {
-    return this.handoffs.adopt(projectId, thread, cameFrom, worktree, renamed);
-  }
-  /** On the computer a project lives on: a thread another computer starts in it. */
-  adoptHome(
-    projectId: string,
-    thread: HomeThread,
-    cameFrom: Omit<ChatCameFrom, "carried" | "tip" | "home">,
-  ) {
-    return this.handoffs.adoptHome(projectId, thread, cameFrom);
-  }
-  adoptSetup(
-    projectId: string,
-    title: string,
-    cameFrom: Omit<ChatCameFrom, "carried" | "tip">,
-    input: ProjectChatSend,
-  ) {
-    return this.handoffs.adoptSetup(projectId, title, cameFrom, input);
-  }
-  handBack(id: string, deviceId: string) {
-    return this.handoffs.handBack(id, deviceId);
-  }
-  latestTurn(id: string) {
-    return this.handoffs.latestTurn(id);
-  }
-  handedBack(id: string) {
-    return this.handoffs.handedBack(id);
-  }
-  handoffAbandoned(id: string) {
-    return this.handoffs.abandoned(id);
-  }
-  returned(id: string, handoffId: string, messages: ChatMessage[]) {
-    return this.handoffs.returned(id, handoffId, messages);
-  }
-  /** On the computer a thread was handed to: see LiveHandoff. */
-  handoffOutgoing(id: string, message: ChatMessage) {
-    return this.liveHandoff.outgoing(id, message);
-  }
-  handoffWritten(id: string, known?: KnownMessages) {
-    return this.liveHandoff.writtenHere(id, known);
-  }
-  handoffLive(id: string) {
-    return this.liveHandoff.live(id);
-  }
-  handoffArgs(id: string, args: unknown[]) {
-    return this.liveHandoff.inbound(id, args);
-  }
-  /** On the computer a thread came from: see LiveHandoff. */
-  mirrorHandoff(id: string, handoffId: string, message: ChatMessage) {
-    return this.liveHandoff.mirror(id, handoffId, message);
-  }
   /** News of a thread live on another computer, as that computer told it. */
   handoffNews(
     id: string,
@@ -636,50 +541,6 @@ export class ProjectChats {
     news: Omit<ThreadNews, "chatId"> & Pick<NewsItem, "byAgent">,
   ) {
     this.news.retell({ ...news, chatId: id }, projectId);
-  }
-  handoffHeld(id: string) {
-    return this.liveHandoff.held(id);
-  }
-  handoffSynced(
-    id: string,
-    handoffId: string,
-    messages: (ChatMessage | string)[],
-  ) {
-    return this.liveHandoff.synced(id, handoffId, messages);
-  }
-  setHandoffLive(id: string, live: HandoffLive | undefined) {
-    this.liveHandoff.setLive(id, live);
-  }
-  /** On the computer a thread is handed from, the computer it goes to readied for it: see SetupMirror. */
-  beginSetup(id: string, computer: string, project: string) {
-    return this.setupMirror.begin(id, computer, project);
-  }
-  updateSetup(id: string, change: Partial<Omit<ThreadSetup, "messages">>) {
-    return this.setupMirror.update(id, change);
-  }
-  setupHeld(id: string) {
-    return this.setupMirror.held(id);
-  }
-  mirrorSetup(id: string, message: ChatMessage) {
-    return this.setupMirror.mirror(id, message);
-  }
-  setupSynced(id: string, messages: (ChatMessage | string)[]) {
-    return this.setupMirror.synced(id, messages);
-  }
-  handoffOutbox(id: string) {
-    return this.liveHandoff.outbox(id);
-  }
-  holdHandoffSend(id: string, handoffId: string, input: ProjectChatSend) {
-    return this.liveHandoff.hold(id, handoffId, input);
-  }
-  takeHandoffSends(id: string) {
-    return this.liveHandoff.takeOut(id);
-  }
-  putBackHandoffSends(id: string, held: HeldSend[], error: string) {
-    return this.liveHandoff.putBack(id, held, error);
-  }
-  settleHandoffSend(id: string, sendId: string, error?: string) {
-    return this.liveHandoff.settle(id, sendId, error);
   }
   /**
    * What waits in the thread now, which isn't saved with it; for a live

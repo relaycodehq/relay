@@ -21,10 +21,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats();
 
@@ -920,7 +917,7 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   vi.mocked(findExecutable).mockRejectedValue(
     new Error("Codex isn't installed"),
   );
-  const { id } = await chats.adopt(
+  const { id } = await chats.handoffs.adopt(
     projectId,
     {
       from: "Laptop",

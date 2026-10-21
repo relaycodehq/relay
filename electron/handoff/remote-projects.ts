@@ -14,15 +14,13 @@ import type {
   ComputerFolders,
   TerminalOp,
 } from "../../shared/remote";
-import {
-  computerAddingMethods,
-  remoteAddingBridge,
-} from "../../shared/remote";
+import { computerAddingMethods, remoteAddingBridge } from "../../shared/remote";
 import { draftTerminalKey, terminalSlotKey } from "../../shared/terminals";
 import type { Api } from "../../shared/types";
 import type { Projects } from "../projects/projects";
 import type { Computers } from "./computers";
 import { RemoteShells } from "./remote-shells";
+import { errorMessage } from "../../shared/error-message";
 
 const projectMethods = new Set<string>(remoteProjectMethods);
 const hereOnlyMethods = new Set<string>(handoffHereOnlyMethods);
@@ -42,11 +40,10 @@ const shellOps = new Map<string, TerminalOp>([
 const whileAsleep = new Map<string, unknown>([["projectIcon", null]]);
 const addingMethods = new Set<string>(computerAddingMethods);
 type Client = Awaited<ReturnType<Computers["connected"]>>;
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** What a Relay from before `remoteProjectsBridge` answers a call it doesn't know. */
 const unknownCall = (e: unknown) =>
-  message(e) === "Phones can't do that." ||
-  message(e) === "Computers can't do that.";
+  errorMessage(e) === "Phones can't do that." ||
+  errorMessage(e) === "Computers can't do that.";
 
 export class RemoteProjects {
   private shells: RemoteShells;

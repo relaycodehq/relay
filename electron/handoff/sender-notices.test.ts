@@ -42,13 +42,15 @@ async function setup(call: (method: string, id: string) => Promise<void>) {
   vi.spyOn(computers, "connected").mockResolvedValue({ call } as RemoteClient);
   const chats = {
     startsThereWith: () => {},
-    abandonHandoff: async (chatId: string, id: string) => {
-      if (store.get().chats!.find((c) => c.id === chatId)?.sentTo?.id !== id)
-        return false;
-      await store.update((s) => {
-        delete s.chats!.find((c) => c.id === chatId)!.sentTo;
-      });
-      return true;
+    handoffs: {
+      abandon: async (chatId: string, id: string) => {
+        if (store.get().chats!.find((c) => c.id === chatId)?.sentTo?.id !== id)
+          return false;
+        await store.update((s) => {
+          delete s.chats!.find((c) => c.id === chatId)!.sentTo;
+        });
+        return true;
+      },
     },
   } as unknown as ProjectChats;
   const sender = new Handoffs(store, computers, chats, {} as Projects, root);

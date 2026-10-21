@@ -51,6 +51,7 @@ import {
   type RelayToolArgs,
   type RelayToolName,
 } from "../relay-mcp";
+import { errorMessage } from "../../shared/error-message";
 
 export { localTime } from "./tool-output";
 export type { AgentProjects } from "./project-access";
@@ -86,8 +87,7 @@ type Chats = Pick<
   | "askWithPage"
   | "enterWorktree"
   | "notes"
-  | "handoffOutbox"
->;
+> & { liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox"> };
 
 /** Moving threads to the user's other computers, as the thread header does. */
 export interface ThreadHandoffs {
@@ -177,7 +177,7 @@ export class StartedThreads {
   /** Answers one tool call made by the agent in `chatId`. */
   handle: ToolHandler = (chatId, name, args, signal) =>
     this.answer(chatId, name, args, signal).catch((error: unknown) =>
-      toolText(error instanceof Error ? error.message : String(error), true),
+      toolText(errorMessage(error), true),
     );
 
   private async answer(
@@ -693,7 +693,7 @@ export class StartedThreads {
         });
       } catch (error) {
         started.push({
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -933,7 +933,7 @@ export class StartedThreads {
     if (this.handoffs?.forwards("sendProjectChat", [id, send])) {
       const computer = chat.sentTo!.computer;
       await this.handoffs.forward("sendProjectChat", [id, send]);
-      const held = (await this.chats.handoffOutbox(id)).some(
+      const held = (await this.chats.liveHandoff.outbox(id)).some(
         (h) => h.input.id === send.id,
       );
       return toolText(

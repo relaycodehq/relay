@@ -14,10 +14,7 @@ import {
 import { ThreadWorktrees } from "./worktrees";
 import { ThreadList } from "./thread-list";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats();
 
@@ -97,7 +94,7 @@ it("reports async questions while work continues, then needs input once the turn
 
 it("uses the other computer's live requests and queue instead of saved state here", async () => {
   const chat = await completedThread();
-  await chats.markHandoff(chat.id, {
+  await chats.handoffs.mark(chat.id, {
     id: "handoff",
     computerId: "other",
     computer: "Other computer",
@@ -105,13 +102,13 @@ it("uses the other computer's live requests and queue instead of saved state her
     home: true,
     live: true,
   });
-  await chats.updateSentTo(chat.id, "handoff", { state: "away" });
+  await chats.handoffs.updateSentTo(chat.id, "handoff", { state: "away" });
   const queue = [{ input: input("Continue there"), created: Date.now() }];
-  chats.setHandoffLive(chat.id, { queue });
+  chats.liveHandoff.setLive(chat.id, { queue });
   expect(await chats.status(chat.id)).toMatchObject({ status: "working" });
-  chats.setHandoffLive(chat.id, { queue, queuePaused: true });
+  chats.liveHandoff.setLive(chat.id, { queue, queuePaused: true });
   expect(await chats.status(chat.id)).toMatchObject({ status: "done" });
-  chats.setHandoffLive(chat.id, {
+  chats.liveHandoff.setLive(chat.id, {
     running: true,
     waiting: true,
     blocked: true,
@@ -130,7 +127,7 @@ it("uses the other computer's live requests and queue instead of saved state her
     asks: ["Run checks there?"],
   });
   expect(status.folder).toBeUndefined();
-  chats.setHandoffLive(chat.id, {});
+  chats.liveHandoff.setLive(chat.id, {});
   expect((await chats.status(chat.id)).asks).toBeUndefined();
 });
 

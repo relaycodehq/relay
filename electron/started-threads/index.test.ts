@@ -1488,7 +1488,7 @@ test("handing off always asks; the thread then says where it runs, and sends and
   const forwarded: { method: string; args: unknown[] }[] = [];
   const held: { input: ProjectChatSend }[] = [];
   let online = true;
-  api.handoffOutbox = async () => held;
+  api.liveHandoff = { outbox: async () => held };
   const handoffs = {
     forwards: (_method: string, args: unknown[]) =>
       chats.get(args[0] as string)?.sentTo?.live === true,

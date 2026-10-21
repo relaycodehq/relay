@@ -25,7 +25,8 @@ import type { NewsItem } from "../../shared/thread-news";
 
 type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
 import { HandoffReceiver } from "./receiver";
-import { Handoffs, outdated } from "./sender";
+import { outdated } from "./computer-infos";
+import { Handoffs } from "./sender";
 import { RemoteProjects } from "./remote-projects";
 import { ThreadTerminals, threadTerminals } from "../terminal/thread-terminals";
 import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
@@ -39,10 +40,7 @@ import { defaultAISettings } from "../../shared/settings";
 import { RemoteClient } from "../../shared/remote-client";
 import { parsePairingUrl } from "../../shared/remote";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 let root: string;
 const cleanup: (() => Promise<unknown> | unknown)[] = [];
@@ -711,17 +709,19 @@ it("refuses a hand-back whose messages are malformed, and changes nothing here",
   const { laptop, mini, sender, thread, here } = await awayWithChangelog(false);
   const before = (await laptop.chats.get(thread.id)).messages;
   const head = git(here, "rev-parse", "HEAD");
-  const real = mini.chats.handBack.bind(mini.chats);
-  vi.spyOn(mini.chats, "handBack").mockImplementation(async (id, deviceId) => {
-    const back = await real(id, deviceId);
-    return {
-      ...back,
-      messages: [
-        ...back.messages,
-        { id: "bad", role: "assistant", body: 42, created: 1, version: 1 },
-      ] as never,
-    };
-  });
+  const real = mini.chats.handoffs.handBack.bind(mini.chats.handoffs);
+  vi.spyOn(mini.chats.handoffs, "handBack").mockImplementation(
+    async (id, deviceId) => {
+      const back = await real(id, deviceId);
+      return {
+        ...back,
+        messages: [
+          ...back.messages,
+          { id: "bad", role: "assistant", body: 42, created: 1, version: 1 },
+        ] as never,
+      };
+    },
+  );
 
   await sender.bringBack(thread.id);
   await vi.waitFor(async () =>
@@ -937,7 +937,7 @@ it("tells once here that a live handoff's thread needs you, as the other compute
   const told: NewsItem[] = [];
   laptop.chats.onNews((item) => told.push(item));
   // What the other computer sends when its agent asks: the live state, then its news.
-  laptop.chats.setHandoffLive(thread.id, { running: true, waiting: true });
+  laptop.chats.liveHandoff.setLive(thread.id, { running: true, waiting: true });
   laptop.chats.handoffNews(thread.id, laptop.projectId, {
     kind: "waiting",
     title: thread.title,
@@ -1060,7 +1060,9 @@ it("runs a live handoff's folder calls on the other computer's worktree, and won
     sender.forward("revealProjectPath", [where, ""]),
   ).rejects.toThrow(`This thread's files are on ${sentTo!.computer};`);
   // Handed to a Relay too old for folder calls, they read the copy here.
-  await laptop.chats.updateSentTo(thread.id, sentTo!.id, { folder: undefined });
+  await laptop.chats.handoffs.updateSentTo(thread.id, sentTo!.id, {
+    folder: undefined,
+  });
   expect(await sender.forward("projectWorkingTree", [where], here)).toBe(
     "here",
   );
@@ -1394,7 +1396,7 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
     });
   });
   let chat = await laptop.chats.get(id);
-  const setup = mini.chats.handedOver(chat.sentTo!.setup!)!;
+  const setup = mini.chats.handoffs.handedOver(chat.sentTo!.setup!)!;
   expect(mini.projects.get(setup.projectId).scratch).toBe(true);
   // What Relay asked comes first; it went to the agent there, not here.
   expect(chat.setup!.messages[0]).toMatchObject({ role: "user" });
@@ -1403,7 +1405,7 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   expect(chat.messages).toHaveLength(1);
   expect(chat.setup!.error).toBeTruthy();
   // The sidebar reads the thread as that agent stands: here, waiting on the user.
-  laptop.chats.setHandoffLive(id, { blocked: true, waiting: true });
+  laptop.chats.liveHandoff.setLive(id, { blocked: true, waiting: true });
   expect(laptop.chats.list(projectId).find((c) => c.id === id)).toMatchObject({
     blocked: true,
     waiting: true,
@@ -1440,7 +1442,7 @@ it("has an agent there set up a project it couldn't clone, answered from the thr
   expect(mini.chats.list(there.id).filter((c) => c.cameFrom)).toHaveLength(1);
   await vi.waitFor(() =>
     expect(
-      mini.chats.handedOver(setup.cameFrom!.id)?.cameFrom?.returnedAt,
+      mini.chats.handoffs.handedOver(setup.cameFrom!.id)?.cameFrom?.returnedAt,
     ).toBeTruthy(),
   );
 });
@@ -1479,8 +1481,8 @@ it("tells a Relay too old to set a project up apart from a failed clone, and end
   const { projectId, reachable } = await lackedProject(laptop);
   await reachable(false);
   vi.spyOn(
-    sender as never as { info: () => unknown },
-    "info",
+    (sender as never as { infos: { get: () => unknown } }).infos,
+    "get",
   ).mockResolvedValue({
     version: "0.17.0",
     bridge: setupBridge - 1,
@@ -1524,7 +1526,9 @@ it("has threads waiting on the same project there share one setup, and lets one 
   // One gives up; the setup goes on for the others.
   await sender.abandon(third);
   expect((await laptop.chats.get(third)).sentTo).toBeUndefined();
-  expect(mini.chats.handedOver(setup)?.cameFrom?.abandonedAt).toBeUndefined();
+  expect(
+    mini.chats.handoffs.handedOver(setup)?.cameFrom?.abandonedAt,
+  ).toBeUndefined();
 
   await reachable(true);
   git(mini.dir, "clone", "-q", url, join(mini.dir, "tool"));
@@ -1551,7 +1555,8 @@ it("starts a thread here instead when its setup there is given up on", async () 
     expect((await laptop.chats.get(id)).setup?.state).toBe("agent"),
   );
   const setupId = (await laptop.chats.get(id)).sentTo!.setup!;
-  const setupChat = () => mini.chats.get(mini.chats.handedOver(setupId)!.id);
+  const setupChat = () =>
+    mini.chats.get(mini.chats.handoffs.handedOver(setupId)!.id);
   await vi.waitFor(async () =>
     expect((await setupChat()).messages.at(-1)?.status).toBe("streaming"),
   );
@@ -1563,7 +1568,9 @@ it("starts a thread here instead when its setup there is given up on", async () 
   expect(chat.setup?.state).toBe("dropped");
   // The agent there is let go and stops, and the first message is answered here.
   await vi.waitFor(async () => {
-    expect(mini.chats.handedOver(setupId)?.cameFrom?.abandonedAt).toBeTruthy();
+    expect(
+      mini.chats.handoffs.handedOver(setupId)?.cameFrom?.abandonedAt,
+    ).toBeTruthy();
     expect((await setupChat()).messages.at(-1)?.status).toBe("cancelled");
   });
   await finished(laptop.chats, id, 2);
@@ -1574,8 +1581,8 @@ it("starts no setup for a thread taken back while its clone was under way", asyn
   const { projectId } = await lackedProject(laptop);
   let fail!: (e: Error) => void;
   vi.spyOn(
-    sender as never as { cloneOn: () => unknown },
-    "cloneOn",
+    (sender as never as { places: { clone: () => unknown } }).places,
+    "clone",
   ).mockImplementation(() => new Promise((_, reject) => (fail = reject)));
   const id = await startOnMini(laptop, sender, computerId, projectId);
   await vi.waitFor(async () =>
@@ -1697,7 +1704,7 @@ async function stuckSending() {
   );
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);
-  await laptop.chats.markHandoff(thread.id, {
+  await laptop.chats.handoffs.mark(thread.id, {
     id: randomUUID(),
     computerId,
     computer: computers.get(computerId).name,
@@ -1708,7 +1715,7 @@ async function stuckSending() {
 
 it("keeps a stuck handoff here once the other computer says it never got the thread", async () => {
   const { laptop, sender, thread } = await stuckSending();
-  await laptop.chats.updateSentTo(
+  await laptop.chats.handoffs.updateSentTo(
     thread.id,
     (await laptop.chats.get(thread.id)).sentTo!.id,
     { error: "The link dropped." },
@@ -1731,7 +1738,7 @@ it("won't keep a handoff here when the other computer did take the thread", asyn
   const { laptop, mini, sender, thread } = await awayWithChangelog(false);
   const { id } = (await laptop.chats.get(thread.id)).sentTo!;
   // The answer to `receiveHandoff` got lost, so the laptop still thinks it's sending.
-  await laptop.chats.updateSentTo(thread.id, id, {
+  await laptop.chats.handoffs.updateSentTo(thread.id, id, {
     state: "sending",
     error: "The link dropped.",
   });
@@ -2113,14 +2120,14 @@ it("leaves a remote project's thread new again when its computer refuses to star
 
   // A retry refused the same way also lets go of it.
   await laptop.chats.firstMessageOnly(thread.id, input("@codex Again"));
-  await laptop.chats.markHandoff(thread.id, {
+  await laptop.chats.handoffs.mark(thread.id, {
     id: "00000000-0000-4000-8000-000000000001",
     computerId,
     computer: "mini",
     at: Date.now(),
     home: true,
   });
-  await laptop.chats.updateSentTo(
+  await laptop.chats.handoffs.updateSentTo(
     thread.id,
     "00000000-0000-4000-8000-000000000001",
     { error: "mini didn't answer in time." },
