@@ -328,7 +328,7 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     connection.onRequest = undefined;
     // What the last Relay's cancels were answered with, in the replay.
     if (adopted) connection.dropOrphans();
-    settle(agent, !!key);
+    agent.settle(!!key);
   }
 }
 
@@ -362,13 +362,4 @@ function finish(
     case "max_turn_requests":
       if (!turn.answer()) throw new Error(`${name} reached its limit of steps for one turn.`);
   }
-}
-
-/** The turn is over: the process keeps its session for the next, unless it was a private one. */
-function settle(agent: AcpAgent, kept: boolean) {
-  agent.inflight = undefined;
-  agent.busy = false;
-  if (!kept) return agent.close();
-  agent.connection.mark("end");
-  agent.keep();
 }

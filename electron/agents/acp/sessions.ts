@@ -1,10 +1,10 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
 import { HostedChild } from "../../agent-host/child";
 import { executableCommand } from "../../platform/executables";
 import { withTimeout } from "../../util/timeout";
 import { signedOutError } from "../errors";
-import { HostedSessions, savedMeta, type Lease } from "../hosted-sessions";
+import { HostedAgent } from "../hosted-agent";
+import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { highestRequestId, replayLines } from "../hosted-replay";
 import { withWorktreeEnv } from "../worktree-env";
 import { hearCommands } from "./commands";
@@ -54,8 +54,7 @@ const metaSchema = z
 const startTimeout = 60_000;
 
 /** One agent process and the one session it runs. */
-export class AcpAgent implements Lease {
-  busy = false;
+export class AcpAgent extends HostedAgent<AcpConnection, { id: number }> {
   caps?: AcpCaps;
   /**
    * `base`: the settings it opened with, which Default goes back to. `cost`:
@@ -68,19 +67,15 @@ export class AcpAgent implements Lease {
     base?: Record<string, string>;
     cost?: number;
   };
-  /** The prompt a restart cut off, for an `adopt` turn to show. */
-  inflight?: { id: number };
 
   constructor(
     readonly profile: AcpProfile,
-    readonly connection: AcpConnection,
-  ) {}
-
-  get closed() {
-    return this.connection.closed;
+    connection: AcpConnection,
+  ) {
+    super(connection);
   }
 
-  /** What the next Relay reads about this process. */
+  /** What the next Relay reads about this process; `run`, the prompt it's in. */
   keep(run?: { id: number }) {
     this.connection.keep({
       provider: hostedName(this.profile),
@@ -88,10 +83,6 @@ export class AcpAgent implements Lease {
       session: this.session,
       run,
     } satisfies z.infer<typeof metaSchema>);
-  }
-
-  close() {
-    this.connection.close();
   }
 }
 
@@ -126,19 +117,11 @@ async function launch(
       ...env,
     }),
   };
-  const child = await sessionsOf(profile).spawn(
+  const child = await sessionsOf(profile).spawnGroup(
     key,
     { provider: hostedName(profile) },
-    { ...spec, cwd, group: true },
-    () =>
-      spawn(spec.command, spec.args, {
-        cwd,
-        env: spec.env,
-        stdio: ["pipe", "pipe", "pipe"],
-        // Its own group, so the tools it starts stop with it.
-        detached: process.platform !== "win32",
-        windowsHide: true,
-      }) as ChildProcessWithoutNullStreams,
+    spec,
+    cwd,
   );
   const connection = new AcpConnection(child, profile.name);
   connection.onUpdate = (update) => hearCommands(profile.provider, update);
@@ -209,17 +192,11 @@ export function acquireAcpAgent(
   cwd: string,
   env?: Record<string, string>,
 ): Promise<AcpAgent> {
-  return sessionsOf(profile).acquire(key, async () => {
-    const agent = new AcpAgent(profile, await launch(profile, key, cwd, env));
-    try {
-      await initialize(agent);
-    } catch (error) {
-      agent.close();
-      throw error;
-    }
-    agent.keep();
-    return agent;
-  });
+  return sessionsOf(profile).acquire(key, async () =>
+    new AcpAgent(profile, await launch(profile, key, cwd, env)).start(
+      initialize,
+    ),
+  );
 }
 
 /**
