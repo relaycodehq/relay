@@ -12,6 +12,11 @@ import {
 } from "../../tests/fixtures/turn-scenario";
 
 vi.mock("../platform/executables");
+vi.mock("../agents/antigravity/install", async (original) => ({
+  ...(await original<object>()),
+  ...(await import("../../tests/fixtures/antigravity-stand-in"))
+    .antigravityStandIn,
+}));
 
 // How a thread's turns start and end, as a person or a phone sees it: whether
 // the thread reads running, what was news, what each answer ended as. See
@@ -34,7 +39,13 @@ const answers = async (id: string) =>
 
 const recorded = (provider: AgentProvider, scenario: string) =>
   existsSync(join("tests/fixtures/replays", provider, scenario, "01.jsonl"));
-const replayed: AgentProvider[] = ["claude", "codex", "opencode", "muse"];
+const replayed: AgentProvider[] = [
+  "claude",
+  "codex",
+  "opencode",
+  "muse",
+  "antigravity",
+];
 
 describe.each(replayed.filter((p) => recorded(p, "simple")))(
   "a recorded %s",

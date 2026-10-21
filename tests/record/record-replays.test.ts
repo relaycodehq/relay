@@ -25,6 +25,10 @@ import {
 import type { AgentProvider } from "../../shared/projects";
 
 vi.mock("../../electron/platform/executables");
+vi.mock("../../electron/agents/antigravity/install", async (original) => ({
+  ...(await original<object>()),
+  ...(await import("../fixtures/antigravity-stand-in")).antigravityStandIn,
+}));
 
 const agents = (process.env.RELAY_RECORD ?? "").split(",").filter(Boolean);
 const rawRoot = process.env.RELAY_RECORD_OUT ?? "/tmp/relay-replays-raw";
@@ -38,10 +42,15 @@ async function recording(provider: AgentProvider, scenario: string) {
   const out = join(rawRoot, provider, scenario);
   await rm(out, { recursive: true, force: true });
   await mkdir(out, { recursive: true });
-  const real = which(provider);
-  const version = execFileSync(real, ["--version"], {
-    encoding: "utf8",
-  }).trim();
+  const real =
+    provider === "antigravity"
+      ? (await installedAntigravityHere()).command
+      : which(provider);
+  // Antigravity's --version prints its build machine; its folder's version says enough.
+  const version =
+    provider === "antigravity"
+      ? (await installedAntigravityHere()).version
+      : execFileSync(real, ["--version"], { encoding: "utf8" }).trim();
   // One per agent for the whole run: Codex's processes race to set up a
   // fresh folder's database, so it's set up once before the first scenario.
   const clean = join(rawRoot, ".config", provider);
@@ -83,6 +92,18 @@ async function recording(provider: AgentProvider, scenario: string) {
         join(homedir(), ".config", "muse", "auth.json"),
         join(clean, "muse", "auth.json"),
       );
+    }
+  }
+  if (provider === "antigravity") {
+    // Its sign-in: the token file (or the Keychain item, read as is) and which kind it is.
+    env.GEMINI_HOME = clean;
+    if (fresh) {
+      await mkdir(join(clean, "antigravity-acp"), { recursive: true });
+      for (const file of ["acp_token.json", "settings.json"])
+        await symlink(
+          join(homedir(), ".gemini", "antigravity-acp", file),
+          join(clean, "antigravity-acp", file),
+        ).catch(() => {});
     }
   }
   let proxy: Awaited<ReturnType<typeof openCodeRecordingProxy>> | undefined;
@@ -141,6 +162,21 @@ async function recording(provider: AgentProvider, scenario: string) {
     name === provider ? cli : which(name),
   );
   return s;
+}
+
+/** The Antigravity server Relay downloaded on this computer. */
+async function installedAntigravityHere() {
+  const root = join(
+    homedir(),
+    "Library",
+    "Application Support",
+    process.env.RELAY_RECORD_APP ?? "Relay Experimental",
+    "antigravity",
+  );
+  const { version, cmd } = JSON.parse(
+    await readFile(join(root, "current.json"), "utf8"),
+  ) as { version: string; cmd: string };
+  return { version, command: join(root, version, cmd) };
 }
 
 const freePort = () =>

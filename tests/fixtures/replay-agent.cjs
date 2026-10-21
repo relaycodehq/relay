@@ -22,6 +22,7 @@
 //                     by itself, does so after a pause here too
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const { StringDecoder } = require("node:string_decoder");
 
 const agent = process.env.RELAY_REPLAY_AGENT;
@@ -48,8 +49,16 @@ const here = (text) =>
     .replaceAll("{{home}}", "/home/replay")
     .replaceAll("{{service}}", process.env.RELAY_REPLAY_SERVICE ?? "{{service}}");
 
-/** What a process was started for, as far as its arguments say. */
-function roleOf(args) {
+/** Where a process ran: Relay's helper folder, the home folder, or the project. */
+function placeOf(cwd) {
+  if (cwd === "/tmp/replay-temp" || /^relay-[\w-]*helper-/.test(path.basename(cwd))) return "temp";
+  return cwd === "{{home}}" || cwd === os.homedir() ? "home" : "project";
+}
+
+/** What a process was started for, as far as its arguments (or, for Antigravity, its folder) say. */
+function roleOf(args, cwd) {
+  // Antigravity runs with no arguments for its turns, helpers and model probe alike.
+  if (agent === "antigravity") return `run:${placeOf(cwd)}`;
   // OpenCode's service commands differ only in their words: `service status`, `service get password`.
   if (agent === "opencode") return `run:${args.join(" ")}`;
   if (args.includes("--permission-prompt-tool")) return "turn";
@@ -74,7 +83,7 @@ function keyOf(m) {
 const requestId = (m) =>
   m.type === "control_request" ? m.request_id : typeof m.method === "string" ? m.id : undefined;
 
-const role = roleOf(process.argv.slice(2));
+const role = roleOf(process.argv.slice(2), process.cwd());
 const candidates = fs
   .readdirSync(dir)
   // http.jsonl is OpenCode's service, played by opencode-replay.ts.
@@ -91,7 +100,7 @@ const candidates = fs
     );
     return { file, meta: first.meta, entries, last: entries.findLastIndex((x, i) => endsTurn(entries, x, i)) };
   })
-  .filter(({ meta }) => meta.agent === agent && roleOf(meta.args) === role)
+  .filter(({ meta }) => meta.agent === agent && roleOf(meta.args, meta.cwd) === role)
   // Ones that answer a prompt first: a process that hasn't said what it's for
   // yet is more likely a turn than a probe.
   .sort((a, b) => ends(b.entries) - ends(a.entries));
