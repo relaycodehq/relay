@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { ProjectChat } from "../../shared/projects";
+import { agentWorktreeUnavailable } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { ThreadWorktrees } from "./worktrees";
 import { TurnFiles } from "./turn-files";
@@ -178,6 +179,52 @@ it("rejects another project's thread and a removed folder instead of running wor
     "unavailable",
   );
 });
+
+const resolvers = {
+  agent: () => worktrees.root(chat),
+  workspace: () => worktrees.rootFor("project", "chat", "original"),
+  terminal: () => worktrees.terminalFolder("project", "chat"),
+};
+
+it.each(Object.keys(resolvers) as (keyof typeof resolvers)[])(
+  "%s resolution publishes an external deletion inside the discovery cache window",
+  async (resolver) => {
+    const scans = vi.spyOn(gitApi, "worktreeList");
+    try {
+      await worktrees.refreshAgentWorktrees(chat);
+      const selected = structuredClone(chat.activeAgentWorktree);
+      git("worktree", "remove", recovered);
+      // No inRepo invalidation and no five-second wait: the stale selected
+      // folder must trigger discovery and publish the unavailable summary.
+      await expect(resolvers[resolver]()).rejects.toThrow("unavailable");
+      expect(agentWorktreeUnavailable(chat)).toBe(true);
+      expect(chat.activeAgentWorktree).toEqual(selected);
+      expect(save).toHaveBeenCalledTimes(2);
+      expect(scans).toHaveBeenCalledTimes(2);
+      await expect(resolvers[resolver]()).rejects.toThrow("unavailable");
+      expect(scans).toHaveBeenCalledTimes(2);
+    } finally {
+      scans.mockRestore();
+    }
+  },
+);
+
+it.each(Object.keys(resolvers) as (keyof typeof resolvers)[])(
+  "%s resolution follows an externally repaired move inside the discovery cache window",
+  async (resolver) => {
+    await worktrees.refreshAgentWorktrees(chat);
+    const moved = join(temp, "moved-again");
+    await rename(recovered, moved);
+    git("worktree", "repair", moved);
+    expect(await resolvers[resolver]()).toBe(moved);
+    expect(chat.activeAgentWorktree).toMatchObject({
+      path: moved,
+      gitdir: "original",
+    });
+    expect(agentWorktreeUnavailable(chat)).toBe(false);
+    expect(save).toHaveBeenCalledTimes(2);
+  },
+);
 
 it("keeps discovered worktrees inactive until selected, and keeps that selection when another is discovered", async () => {
   delete chat.activeAgentWorktree;

@@ -142,7 +142,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     await expect(
       page.getByRole("menuitemradio", { name: "Current checkout", exact: true }),
     ).toHaveAttribute("aria-checked", "true");
-    await screenshot(page, { path: "test-results/agent-worktree-picker.png" });
+    await screenshot(page, { path: join(root, "agent-worktree-picker.png") });
     await page.getByRole("menuitemradio", { name: /^local-urls/ }).click();
     await expect(page.locator(".agent-worktree-trigger")).toHaveText(
       "local-urls",
@@ -164,7 +164,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.getByRole("menuitemradio", { name: /^newer/ }),
     ).toHaveAttribute("aria-checked", "false");
     await screenshot(page, {
-      path: "test-results/agent-worktree-selected.png",
+      path: join(root, "agent-worktree-selected.png"),
     });
     await page.keyboard.press("Escape");
     const where = workspaceId(chat.projectId, chat.id, "old-temp-folder");
@@ -209,7 +209,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       worktree,
     );
     await screenshot(page, {
-      path: "test-results/agent-worktree-recovered.png",
+      path: join(root, "agent-worktree-recovered.png"),
     });
 
     await page.getByRole("button", { name: "More Git actions" }).click();
@@ -230,7 +230,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     gitIn(worktree, "checkout", "-q", "--detach");
     await expect(footer).toHaveText("Detached HEAD");
     await screenshot(page, {
-      path: "test-results/agent-worktree-detached.png",
+      path: join(root, "agent-worktree-detached.png"),
     });
     gitIn(worktree, "checkout", "-q", "local-urls");
     await page.locator(".agent-worktree-trigger").click();
@@ -271,7 +271,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.getByRole("button", { name: "Send message", exact: true }),
     ).toBeDisabled();
     await screenshot(page, {
-      path: "test-results/agent-worktree-deleted.png",
+      path: join(root, "agent-worktree-deleted.png"),
     });
     await page.getByRole("button", { name: "Recreate worktree" }).click();
     await expect(

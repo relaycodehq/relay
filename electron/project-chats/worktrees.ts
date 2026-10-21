@@ -163,6 +163,29 @@ export class ThreadWorktrees {
     await pending;
   }
 
+  /** Resolve the selected folder, reconciling a deletion or repaired move even inside the discovery cache window. */
+  private async agentFolder(chat: ProjectChat, expectedWorktree?: string) {
+    await this.refreshAgentWorktrees(chat);
+    let selected = selectedAgentWorktree(chat);
+    let exists = selected && (await worktreeExists(selected));
+    if (selected && !exists) {
+      await this.refreshAgentWorktrees(chat, true);
+      selected = selectedAgentWorktree(chat);
+      exists = selected && (await worktreeExists(selected));
+    }
+    if (
+      expectedWorktree &&
+      (!chat.activeAgentWorktree ||
+        agentWorktreeKey(chat.activeAgentWorktree) !== expectedWorktree)
+    )
+      throw new Error(
+        "This thread's active workspace changed. Refresh before trying again.",
+      );
+    if (!chat.activeAgentWorktree) return;
+    if (!selected || !exists) throw new Error(agentWorktreeUnavailableError);
+    return selected.path;
+  }
+
   /** Where a thread's agent works: its worktree, made with its first message, the reviewed code's for a review, or the checkout. */
   async root(
     chat: ProjectChat,
@@ -173,14 +196,7 @@ export class ThreadWorktrees {
     if (review) return review;
     const root = await this.core.projects.root(chat.projectId);
     const worktree = chat.worktree;
-    if (!worktree) {
-      await this.refreshAgentWorktrees(chat);
-      if (!chat.activeAgentWorktree) return root;
-      const selected = selectedAgentWorktree(chat);
-      if (!selected || !(await worktreeExists(selected)))
-        throw new Error(agentWorktreeUnavailableError);
-      return selected.path;
-    }
+    if (!worktree) return (await this.agentFolder(chat)) ?? root;
     if (await worktreeExists(worktree)) return worktree.path!;
     // Outside the repository's queue: a slow remote mustn't hold up every
     // other thread's worktree there.
@@ -923,14 +939,10 @@ export class ThreadWorktrees {
     const review = await this.councils.root(chat);
     if (review) return review;
     const worktree = chat.worktree;
-    if (!worktree) {
-      await this.refreshAgentWorktrees(chat);
-      if (!chat.activeAgentWorktree) return this.core.projects.root(projectId);
-      const agent = selectedAgentWorktree(chat);
-      if (!agent || !(await worktreeExists(agent)))
-        throw new Error(agentWorktreeUnavailableError);
-      return agent.path!;
-    }
+    if (!worktree)
+      return (
+        (await this.agentFolder(chat)) ?? this.core.projects.root(projectId)
+      );
     if (
       worktree.removedAt ||
       (worktree.path && !(await worktreeExists(worktree)))
@@ -1088,19 +1100,9 @@ export class ThreadWorktrees {
         "This thread's active workspace changed. Refresh before trying again.",
       );
     if (!chat.worktree) {
-      await this.refreshAgentWorktrees(chat);
-      if (
-        expectedWorktree &&
-        (!chat.activeAgentWorktree ||
-          agentWorktreeKey(chat.activeAgentWorktree) !== expectedWorktree)
-      )
-        throw new Error(
-          "This thread's active workspace changed. Refresh before trying again.",
-        );
-      const agent = selectedAgentWorktree(chat);
-      if (!agent || !(await worktreeExists(agent)))
-        throw new Error(agentWorktreeUnavailableError);
-      return agent.path!;
+      const folder = await this.agentFolder(chat, expectedWorktree);
+      if (!folder) throw new Error(agentWorktreeUnavailableError);
+      return folder;
     }
     return this.path(id);
   }
