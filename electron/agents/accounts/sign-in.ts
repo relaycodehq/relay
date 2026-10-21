@@ -1,5 +1,7 @@
 // Signs an account in with the CLI's own browser flow, run with the account's
 // folder as its home. Relay never sees the token: the CLI saves it there.
+import { signInAcp } from "../acp/sign-in";
+import { antigravityProfile } from "../acp/profiles";
 import type { ChildProcess } from "node:child_process";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import { findExecutable, spawnExecutable } from "../../platform/executables";
@@ -8,6 +10,7 @@ import { terminate } from "../../platform/terminate";
 const LOGIN: Record<AccountProvider, string[]> = {
   claude: ["auth", "login"],
   codex: ["login"],
+  antigravity: [],
 };
 /** Long enough to find the right browser window and pick an organisation. */
 const TIMEOUT = 10 * 60_000;
@@ -22,6 +25,16 @@ export async function startSignIn(
   provider: AccountProvider,
   env: Record<string, string>,
 ): Promise<SignIn> {
+  if (provider === "antigravity") {
+    const controller = new AbortController();
+    return {
+      done: signInAcp(
+        antigravityProfile(env, env.GEMINI_HOME ?? "default"),
+        controller.signal,
+      ),
+      cancel: () => controller.abort(),
+    };
+  }
   const executable = await findExecutable(provider);
   const child: ChildProcess = spawnExecutable(executable, LOGIN[provider], {
     env,

@@ -5,16 +5,20 @@ import {
   planFor,
   type AgentPlan,
   type Fetch,
-} from "./registry/catalog";
-import { installInto, installedIn, type InstallIo } from "./registry/install";
+} from "../acp/registry/catalog";
+import {
+  installInto,
+  installedIn,
+  type InstallIo,
+} from "../acp/registry/install";
 
 /**
  * Google ships Antigravity's ACP server as a download, not a CLI on the
  * machine: Relay installs Google's own entry in the ACP registry into its
  * data folder like any registry agent, but only from Google's server.
  */
-export type { Fetch } from "./registry/catalog";
-export { registryTarget } from "./registry/catalog";
+export type { Fetch } from "../acp/registry/catalog";
+export { registryTarget } from "../acp/registry/catalog";
 
 const registryId = "antigravity-acp";
 /** Relay runs only what comes from Google's download server, whatever the registry says. */
@@ -31,7 +35,8 @@ type Release = Extract<AgentPlan, { kind: "binary" }>;
 /** Antigravity's release for `target` in the ACP registry, refused unless it's Google's. */
 export function releaseIn(registry: unknown, target: string): Release {
   const entry = entriesOf(registry).find((agent) => agent.id === registryId);
-  if (!entry) throw new Error("The ACP registry has no usable Antigravity entry.");
+  if (!entry)
+    throw new Error("The ACP registry has no usable Antigravity entry.");
   if (!entry.distribution.binary?.[target])
     throw new Error(`Antigravity has no build for ${target}.`);
   const plan = planFor(entry, target);
@@ -46,7 +51,10 @@ export function releaseIn(registry: unknown, target: string): Release {
   return plan;
 }
 
-export async function latestAntigravity(fetch: Fetch, target = machineTarget()) {
+export async function latestAntigravity(
+  fetch: Fetch,
+  target = machineTarget(),
+) {
   const entries = await fetchRegistry(fetch);
   return releaseIn({ agents: entries }, target);
 }
@@ -56,7 +64,13 @@ export async function installedAntigravity(
   root: string,
 ): Promise<InstalledAntigravity | undefined> {
   const found = await installedIn(root);
-  return found && { version: found.version, command: found.command, args: found.args };
+  return (
+    found && {
+      version: found.version,
+      command: found.command,
+      args: found.args,
+    }
+  );
 }
 
 interface InstallOptions {

@@ -7,6 +7,7 @@ import {
   SYSTEM_ACCOUNT,
   type AccountProvider,
 } from "../../../shared/agent-accounts";
+import { readAntigravityAccount } from "../antigravity";
 import { profileDir, usualHome } from "./profiles";
 
 export interface AccountIdentity {
@@ -68,6 +69,13 @@ export async function readIdentity(
   id: string,
 ): Promise<AccountIdentity> {
   const system = id === SYSTEM_ACCOUNT;
+  if (provider === "antigravity")
+    return (
+      (await readAntigravityAccount(
+        system ? usualHome(provider) : profileDir(provider, id),
+        !system || !!process.env.AGY_ACP_FORCE_FILE_STORAGE,
+      )) ?? { signedIn: false }
+    );
   if (provider === "claude") {
     // The usual sign-in keeps its config beside ~/.claude, not in it.
     const path =

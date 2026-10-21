@@ -97,7 +97,10 @@ export const UsageRing = memo(function UsageRing({
           align="end"
           sideOffset={6}
         >
-          <Popover.Popup className="composer-select-popup usage-ring-popup">
+          <Popover.Popup
+            className="composer-select-popup usage-ring-popup"
+            data-grouped={usage?.windows.some((w) => !!w.label) || undefined}
+          >
             <div className="usage-ring-header">
               <p className="usage-ring-heading">{agent} usage</p>
               <button
@@ -117,7 +120,7 @@ export const UsageRing = memo(function UsageRing({
             </div>
             {state ? (
               state.meters.map((meter) => (
-                <UsageRow key={meter.kind} meter={meter} />
+                <UsageRow key={meter.id ?? meter.kind} meter={meter} />
               ))
             ) : (
               <p className="usage-ring-status">Checking usage…</p>

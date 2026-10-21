@@ -7,13 +7,17 @@ import {
   installedAntigravity,
   registryTarget,
   releaseIn,
-} from "./antigravity-install";
+} from "./install";
 
 const archive = (version: string) =>
   `https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-${version}-darwin-arm64.zip`;
 const registry = (version: string, build: Record<string, unknown> = {}) => ({
   agents: [
-    { id: "gemini", version: "0.62.0", distribution: { npx: { package: "x" } } },
+    {
+      id: "gemini",
+      version: "0.62.0",
+      distribution: { npx: { package: "x" } },
+    },
     {
       id: "antigravity-acp",
       name: "Antigravity",
@@ -94,15 +98,25 @@ describe("installing Antigravity", () => {
     });
 
     for (const version of ["1.3.0", "1.4.0"])
-      await installAntigravity(root, google({ version }).fetch, { target, extract });
+      await installAntigravity(root, google({ version }).fetch, {
+        target,
+        extract,
+      });
     expect((await installedAntigravity(root))?.version).toBe("1.4.0");
-    expect((await readdir(root)).sort()).toEqual(["1.3.0", "1.4.0", "current.json"]);
+    expect((await readdir(root)).sort()).toEqual([
+      "1.3.0",
+      "1.4.0",
+      "current.json",
+    ]);
   });
 
   it("keeps the installed one when a download fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "relay-agy-"));
     const { extract } = google({ version: "1.3.0" });
-    await installAntigravity(root, google({ version: "1.3.0" }).fetch, { target, extract });
+    await installAntigravity(root, google({ version: "1.3.0" }).fetch, {
+      target,
+      extract,
+    });
     await expect(
       installAntigravity(root, google({ version: "1.4.0", fail: true }).fetch, {
         target,

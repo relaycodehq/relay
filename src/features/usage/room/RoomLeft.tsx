@@ -74,10 +74,10 @@ function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
       <div className="us-room-tanks">
         {a.tanks.map((t) => (
           <span
-            key={t.window.kind}
+            key={t.window.id ?? t.window.kind}
             className={lit ? "us-room-tank on" : "us-room-tank"}
             role="img"
-            aria-label={`${a.name}, ${windowTitle(t.window.periodMs)}: ${t.meter.leftPercent}% left`}
+            aria-label={`${a.name}, ${t.window.label ?? windowTitle(t.window.periodMs)}: ${t.meter.leftPercent}% left`}
             onMouseEnter={() => setHover(t)}
           >
             <span
@@ -88,7 +88,9 @@ function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
       </div>
       <div className="us-room-ticks">
         {a.tanks.map((t) => (
-          <span key={t.window.kind}>{windowName(t.window.periodMs)}</span>
+          <span key={t.window.id ?? t.window.kind} title={t.window.label}>
+            {windowName(t.window.periodMs)}
+          </span>
         ))}
       </div>
       <div className="us-room-name" title={a.name}>

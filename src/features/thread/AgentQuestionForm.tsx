@@ -61,7 +61,7 @@ export function AgentQuestionForm({
       const option = question.options?.[Number(event.key) - 1];
       if (/^[1-9]$/.test(event.key) && option) {
         event.preventDefault();
-        pick.current(option.label);
+        pick.current(option.value ?? option.label);
       }
     };
     document.addEventListener("keydown", keydown);
@@ -99,14 +99,16 @@ export function AgentQuestionForm({
             >
               {question.options.map((option, i) => {
                 const checked =
-                  answers[question.id]?.includes(option.label) ?? false;
+                  answers[question.id]?.includes(
+                    option.value ?? option.label,
+                  ) ?? false;
                 return (
                   <button
                     type="button"
                     className="agent-question-option"
-                    key={option.label}
+                    key={option.value ?? option.label}
                     aria-pressed={checked}
-                    onClick={() => select(option.label)}
+                    onClick={() => select(option.value ?? option.label)}
                   >
                     <span className="agent-question-option-key" aria-hidden>
                       {checked ? (
@@ -126,26 +128,31 @@ export function AgentQuestionForm({
               })}
             </div>
           ) : null}
-          <input
-            type={question.isSecret ? "password" : "text"}
-            maxLength={16000}
-            aria-label={question.question}
-            placeholder={
-              question.options?.length
-                ? "Or write your own answer…"
-                : "Your answer…"
-            }
-            value={(answers[question.id] ?? [])
-              .filter((a) => !question.options?.some((o) => o.label === a))
-              .join(", ")}
-            onChange={(event) => {
-              clearTimeout(timer.current);
-              setAnswers((old) => ({
-                ...old,
-                [question.id]: [event.target.value],
-              }));
-            }}
-          />
+          {question.allowCustomAnswer !== false && (
+            <input
+              type={question.isSecret ? "password" : "text"}
+              maxLength={16000}
+              aria-label={question.question}
+              placeholder={
+                question.options?.length
+                  ? "Or write your own answer…"
+                  : "Your answer…"
+              }
+              value={(answers[question.id] ?? [])
+                .filter(
+                  (a) =>
+                    !question.options?.some((o) => (o.value ?? o.label) === a),
+                )
+                .join(", ")}
+              onChange={(event) => {
+                clearTimeout(timer.current);
+                setAnswers((old) => ({
+                  ...old,
+                  [question.id]: [event.target.value],
+                }));
+              }}
+            />
+          )}
           <footer>
             {question.options?.length && !deferred ? (
               <span className="agent-question-hint">

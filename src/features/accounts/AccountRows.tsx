@@ -20,6 +20,7 @@ type OnError = (error: unknown) => void;
 const usagePage: Record<AccountProvider, string> = {
   claude: "https://claude.ai/settings/usage",
   codex: "https://chatgpt.com/settings/usage?tab=overview",
+  antigravity: "https://antigravity.google.com/",
 };
 
 /**
@@ -82,7 +83,9 @@ function AccountRow({
   const folder = account.system
     ? provider === "claude"
       ? "~/.claude"
-      : "~/.codex"
+      : provider === "antigravity"
+        ? "~/.gemini"
+        : "~/.codex"
     : undefined;
   return (
     <div

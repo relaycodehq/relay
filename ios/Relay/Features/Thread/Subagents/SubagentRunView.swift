@@ -48,7 +48,7 @@ struct SubagentRunView: View {
                     .font(.caption)
                     .foregroundStyle(colors.muted)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let run = model.run, run.running {
+                if let run = model.run, run.running, run.canStop != false {
                     StripButton(
                         label: "Stop agent", busyLabel: "Stopping…", failed: "Couldn't stop it",
                         unsure: "Stop may still go through", confirm: confirmStop(run)

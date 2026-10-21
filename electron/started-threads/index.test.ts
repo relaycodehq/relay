@@ -898,11 +898,13 @@ test("usage limits read each agent on the account the thread pinned for it", asy
       weekly: { usedPercent: 12 },
     },
     { agent: "muse", note: "Sign in with muse" },
+    { agent: "antigravity", note: "Sign in with antigravity" },
   ]);
   expect(reads).toEqual([
     ["codex", false, "work"],
     ["claude", false, undefined],
     ["muse", false, undefined],
+    ["antigravity", false, undefined],
   ]);
 });
 

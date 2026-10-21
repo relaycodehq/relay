@@ -13,6 +13,7 @@ struct SubagentMark: View {
             case "completed":
                 Image(systemName: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(colors.additionText)
                     .accessibilityLabel("Done")
+            case "idle": Image(systemName: "circle").font(.caption).foregroundStyle(colors.muted).accessibilityLabel("Child status unavailable")
             case "failed": Image(systemName: "xmark.circle").font(.caption).foregroundStyle(colors.muted).accessibilityLabel("Failed")
             default: Image(systemName: "stop.circle").font(.caption).foregroundStyle(colors.muted).accessibilityLabel("Stopped")
             }
@@ -206,7 +207,7 @@ private struct AgentRow: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            if run.running {
+            if run.running && run.canStop != false {
                 StripButton(
                     label: "Stop", busyLabel: "Stopping…", failed: "Couldn't stop it", unsure: "Stop may still go through",
                     confirm: confirmStop(run)

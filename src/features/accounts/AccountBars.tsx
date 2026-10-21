@@ -14,7 +14,7 @@ export function headroom(usage: ProviderUsage | undefined) {
   return Math.min(...meters(usage).map((m) => m.leftPercent));
 }
 
-/** An account's session and weekly limits as two thin bars. */
+/** An account's reported limits as thin bars. */
 export function AccountBars({
   usage,
   resets,
@@ -31,9 +31,16 @@ export function AccountBars({
       </span>
     );
   return (
-    <span className="account-bars">
+    <span
+      className="account-bars"
+      data-grouped={usage.windows.some((w) => w.id) || undefined}
+    >
       {meters(usage).map((meter) => (
-        <AccountBar key={meter.kind} meter={meter} resets={resets} />
+        <AccountBar
+          key={meter.id ?? meter.kind}
+          meter={meter}
+          resets={resets}
+        />
       ))}
     </span>
   );
@@ -49,7 +56,9 @@ function AccountBar({
   return (
     <span className="account-bar" data-pace={meter.pace}>
       <span className="account-bar-top">
-        <span>{meter.kind === "session" ? "5h" : "Week"}</span>
+        <span>
+          {meter.id ? meter.label : meter.kind === "session" ? "5h" : "Week"}
+        </span>
         <span className="account-bar-left">{meter.leftPercent}% left</span>
       </span>
       <span

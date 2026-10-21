@@ -2,29 +2,37 @@
 import type { AgentRuntime } from "../types";
 import { acpCatalog } from "./catalog";
 import type { AgentProvider, RegistryProvider } from "../../../shared/agents";
-import { acpProfiles, type AcpProfile } from "./profiles";
+import { runAccount } from "../accounts";
+import {
+  antigravityBatches,
+  antigravityCredentialRevision,
+} from "../antigravity";
+import { acpProfiles, antigravityProfile, type AcpProfile } from "./profiles";
 import { runAcp } from "./run";
-import { closeAcpSession, detachAcp, disposeAcp, reattachAcp } from "./sessions";
+import {
+  closeAcpSession,
+  detachAcp,
+  disposeAcp,
+  reattachAcp,
+} from "./sessions";
 import type { SdkIo } from "../agent-updates";
 import {
   currentAntigravity,
   newestAntigravity,
   updateAntigravity,
-} from "./antigravity-install";
+} from "../antigravity";
 import { signInAcp, signOutAcp } from "./sign-in";
 import { AcpRegistry, acpRegistry, registryProfile } from "./registry";
 
 export type { AcpProvider } from "./profiles";
-export { configureAntigravity } from "./antigravity-install";
-export {
-  AcpRegistry,
-  acpRegistry,
-  configureAcpRegistry,
-} from "./registry";
+export { configureAntigravity } from "../antigravity";
+export { AcpRegistry, acpRegistry, configureAcpRegistry } from "./registry";
 
 /** Who `provider` is signed in as, for an ACP agent Relay signs in; undefined when it can't tell. */
 export const acpAccount = async (provider: AgentProvider) =>
-  (acpProfiles as Partial<Record<AgentProvider, AcpProfile>>)[provider]?.account?.();
+  (acpProfiles as Partial<Record<AgentProvider, AcpProfile>>)[
+    provider
+  ]?.account?.();
 
 /** The runtime for one of Relay's own ACP agents. */
 export const acpRuntime = (provider: keyof typeof acpProfiles) =>
@@ -42,26 +50,61 @@ export function registryRuntime(provider: RegistryProvider): AgentRuntime {
 }
 
 function profileRuntime(profile: AcpProfile): AgentRuntime {
-  const catalog = acpCatalog(profile);
+  const catalogs = new Map<string, ReturnType<typeof acpCatalog>>();
+  const revisions = new Map<string, string | undefined>();
+  const selected = async (account?: string) => {
+    if (profile.provider !== "antigravity") return profile;
+    const who = await runAccount("antigravity", account);
+    const bound = antigravityProfile(who.env, who.id);
+    return {
+      ...bound,
+      credentialsRevision: await antigravityCredentialRevision(
+        bound.home!,
+        !!who.env.AGY_ACP_FORCE_FILE_STORAGE,
+      ),
+    };
+  };
+  const catalog = async () => {
+    const current = await selected();
+    const key = current.accountKey ?? "default";
+    let found = catalogs.get(key);
+    // A different login or auth setting under the same account invalidates its catalog too.
+    const revision = current.credentialsRevision;
+    if (!found || revisions.get(key) !== revision) {
+      catalogs.set(key, (found = acpCatalog(current)));
+      revisions.set(key, revision);
+    }
+    return found;
+  };
+  const forget = () => {
+    catalogs.clear();
+    revisions.clear();
+  };
   return {
-    run: (options) => runAcp(profile, options),
-    closeSession: (key) => closeAcpSession(profile, key),
+    run: async (options) => runAcp(await selected(options.account), options),
+    closeSession: (key) => {
+      if (profile.provider === "antigravity") antigravityBatches.drop(key);
+      return closeAcpSession(profile, key);
+    },
+    ...(profile.provider === "antigravity"
+      ? { subagents: (key: string) => antigravityBatches.get(key) }
+      : {}),
     ...(profile.authMethod && {
       signIn: async () => {
-        await signInAcp(profile);
-        catalog.forget();
+        await signInAcp(await selected());
+        forget();
       },
       signOut: async () => {
-        await signOutAcp(profile);
-        catalog.forget();
+        await signOutAcp(await selected());
+        forget();
       },
     }),
-    models: catalog.models,
+    models: async () => (await catalog()).models(),
     // Asks a fresh session again; ACP has no call to refresh the list itself.
-    reloadModels: async () => catalog.forget(),
-    defaults: catalog.defaults,
-    commands: catalog.commands,
-    knownCommands: catalog.knownCommands,
+    reloadModels: async () => forget(),
+    defaults: async () => (await catalog()).defaults(),
+    commands: async (root) => (await catalog()).commands(root),
+    knownCommands: async (root) => (await catalog()).knownCommands(root),
     dispose: async () => disposeAcp(profile),
     detach: () => detachAcp(profile),
     reattach: (owns) => reattachAcp(profile, owns),
@@ -76,7 +119,10 @@ export const antigravityIo: SdkIo = {
   install: async (version) => {
     await updateAntigravity(version);
   },
-  account: async () => acpProfiles.antigravity.account?.(),
+  account: async () => {
+    const who = await runAccount("antigravity");
+    return antigravityProfile(who.env, who.id).account?.();
+  },
 };
 
 /** The registry agents for Settings' agent cards. */

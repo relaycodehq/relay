@@ -99,7 +99,7 @@ describe("setting memes up", () => {
     system: true,
     signedIn,
   });
-  const inUse = { claude: "default", codex: "default" };
+  const inUse = { claude: "default", codex: "default", antigravity: "default" };
 
   it("picks Codex's Luna when it's signed in, else Claude's Sonnet", () => {
     const both = { accounts: [account("claude", true), account("codex", true)], inUse };

@@ -6,7 +6,7 @@ import {
 import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext, type Handlers } from "./context";
 
-/** Claude Code and Codex accounts: Settings' list, and a thread's own pick. */
+/** Agent accounts: Settings' list, and a thread's own pick. */
 export function accountHandlers(ctx: ApiContext) {
   const { agentAccounts: accounts, projectChats } = ctx;
   return {

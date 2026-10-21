@@ -4,7 +4,14 @@
 // the user's setup comes along. Only the credentials are the account's own.
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { lstat, mkdir, readdir, rm, symlink } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readdir,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -19,6 +26,7 @@ const exec = promisify(execFile);
 const OWN: Record<AccountProvider, Set<string>> = {
   claude: new Set([".credentials.json", ".claude.json", ".DS_Store"]),
   codex: new Set(["auth.json", ".DS_Store"]),
+  antigravity: new Set(),
 };
 /** Credentials a profile must not inherit from Relay's own environment. */
 const ENV_CREDENTIALS: Record<AccountProvider, string[]> = {
@@ -28,6 +36,13 @@ const ENV_CREDENTIALS: Record<AccountProvider, string[]> = {
     "CLAUDE_CODE_OAUTH_TOKEN",
   ],
   codex: ["OPENAI_API_KEY", "CODEX_API_KEY", "CODEX_ACCESS_TOKEN"],
+  antigravity: [
+    "GEMINI_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_GENAI_USE_VERTEXAI",
+    "GOOGLE_GEMINI_BASE_URL",
+  ],
 };
 
 let root: string | undefined;
@@ -43,6 +58,8 @@ const expand = (path: string) =>
 export function usualHome(provider: AccountProvider) {
   if (provider === "claude")
     return expand(process.env.CLAUDE_CONFIG_DIR?.trim() || "~/.claude");
+  if (provider === "antigravity")
+    return expand(process.env.GEMINI_HOME?.trim() || "~/.gemini");
   return expand(process.env.CODEX_HOME?.trim() || "~/.codex");
 }
 
@@ -62,6 +79,10 @@ export async function prepareProfile(provider: AccountProvider, id: string) {
   const dir = profileDir(provider, id);
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const home = usualHome(provider);
+  if (provider === "antigravity") {
+    await prepareGoogleProfile(home, dir);
+    return dir;
+  }
   const [theirs, mine] = await Promise.all([
     readdir(home).catch(() => [] as string[]),
     readdir(dir),
@@ -94,6 +115,10 @@ export function accountEnv(
     env.CLAUDE_CONFIG_DIR = dir;
     // Claude Code names the Keychain item after this folder.
     env.CLAUDE_SECURESTORAGE_CONFIG_DIR = dir;
+  } else if (provider === "antigravity") {
+    env.GEMINI_HOME = dir;
+    // Google names one global Keychain item; separate profiles must use files.
+    env.AGY_ACP_FORCE_FILE_STORAGE = "1";
   } else env.CODEX_HOME = dir;
   return env;
 }
@@ -121,4 +146,35 @@ export async function removeProfile(provider: AccountProvider, id: string) {
   const info = await lstat(dir).catch(() => null);
   // Removes the links, not what they point at.
   if (info?.isDirectory()) await rm(dir, { recursive: true, force: true });
+}
+
+/** Share conversation history and user tooling, never Google's auth settings or token. */
+async function prepareGoogleProfile(home: string, dir: string) {
+  const own = join(dir, "antigravity-acp");
+  await mkdir(own, { recursive: true, mode: 0o700 });
+  await writeFile(
+    join(own, "settings.json"),
+    JSON.stringify({ auth: { type: "oauth-personal" } }),
+    { flag: "wx", mode: 0o600 },
+  ).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "EEXIST") throw error;
+  });
+  const link = async (from: string, to: string) => {
+    if (await lstat(to).catch(() => undefined)) return;
+    if (!(await lstat(from).catch(() => undefined))) return;
+    await symlink(from, to).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== "EEXIST") throw error;
+    });
+  };
+  await link(join(home, "config"), join(dir, "config"));
+  await mkdir(join(dir, "antigravity-cli"), { recursive: true, mode: 0o700 });
+  await link(
+    join(home, "antigravity-cli", "skills"),
+    join(dir, "antigravity-cli", "skills"),
+  );
+  for (const name of ["conversations", "brain"]) {
+    const source = join(home, "antigravity-acp", name);
+    await mkdir(source, { recursive: true, mode: 0o700 });
+    await link(source, join(own, name));
+  }
 }

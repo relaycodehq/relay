@@ -960,6 +960,18 @@
   display: grid;
   gap: 10px;
 }
+.usage-ring-popup[data-grouped] {
+  width: 304px;
+  max-width: calc(100vw - 24px);
+}
+.usage-ring-popup[data-grouped] .usage-row-top {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+.usage-ring-popup[data-grouped] .usage-row-label {
+  white-space: normal;
+  min-width: 0;
+}
 .usage-ring-header {
   display: flex;
   align-items: center;

@@ -101,7 +101,9 @@ export interface AgentQuestion {
   question: string;
   isSecret?: boolean;
   multiple?: boolean;
-  options?: { label: string; description?: string }[];
+  /** Native fixed-choice questions cannot accept arbitrary text. */
+  allowCustomAnswer?: boolean;
+  options?: { label: string; description?: string; value?: string }[];
 }
 export interface AgentRequest {
   id: string;

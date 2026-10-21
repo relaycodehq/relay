@@ -113,7 +113,8 @@ struct UsageRings: View {
     @Environment(\.colors) private var colors
 
     var body: some View {
-        let meters = Array(usageMeters(connection.usage[provider], now: nowMs()).prefix(2))
+        let all = usageMeters(connection.usage[provider], now: nowMs())
+        let meters = ["weekly", "session"].compactMap { kind in all.filter { $0.kind == kind }.min { $0.leftPercent < $1.leftPercent } }
         ZStack {
             ForEach(0..<max(1, meters.count), id: \.self) { i in
                 let inset = CGFloat(i) * 4
@@ -161,7 +162,7 @@ struct UsageBars: View {
             if let used {
                 bar("Context", "\(used)%", Double(used), paceColor(contextPace(Double(used)), colors.muted))
             }
-            ForEach(meters, id: \.kind) { m in
+            ForEach(meters, id: \.label) { m in
                 bar(m.label, "\(m.leftPercent)% left", Double(m.leftPercent),
                     paceColor(m.pace, m.kind == "session" ? colors.accent : colors.muted))
             }
@@ -319,7 +320,7 @@ struct UsagePage: View {
                 } else if meters.isEmpty {
                     Text(usage?.message ?? "No usage limits reported").foregroundStyle(colors.muted)
                 } else {
-                    ForEach(meters, id: \.kind) { meterRow($0) }
+                    ForEach(meters, id: \.label) { meterRow($0) }
                 }
                 if reportsUsage(provider) {
                     Button("Check Again") { Task { await connection.loadUsage(provider, force: true) } }

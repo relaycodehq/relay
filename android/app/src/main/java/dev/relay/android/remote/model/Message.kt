@@ -107,10 +107,11 @@ data class AgentQuestion(
     val question: String,
     val isSecret: Boolean? = null,
     val multiple: Boolean? = null,
+    val allowCustomAnswer: Boolean? = null,
     val options: List<QuestionOption>? = null,
 )
 
-@Serializable data class QuestionOption(val label: String, val description: String? = null)
+@Serializable data class QuestionOption(val label: String, val description: String? = null, val value: String? = null)
 
 @Serializable
 data class AsyncAgentQuestions(

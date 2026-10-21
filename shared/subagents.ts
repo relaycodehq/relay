@@ -12,7 +12,8 @@ import { liveLabel, plural } from "./activity-labels";
 import { agentName } from "./agents";
 import { formatTokens } from "./tokens";
 
-export type SubagentStatus = "running" | "completed" | "failed" | "stopped";
+export type SubagentStatus =
+  "running" | "completed" | "failed" | "stopped" | "idle";
 
 export interface SubagentRun {
   /** The Agent tool call that started it. */
@@ -26,6 +27,8 @@ export interface SubagentRun {
   /** The prompt its lead agent wrote for it. */
   brief?: string;
   status: SubagentStatus;
+  /** False when the provider cannot stop an individual agent or batch. */
+  canStop?: boolean;
   started: number;
   ended?: number;
   /** Its latest ~30s progress summary, while it runs. */
@@ -147,6 +150,7 @@ export function subagentNow(
     return run.summary ?? (current ? display(liveLabel(current)) : "Starting…");
   }
   const outcome = run.outcome?.split(/(?<=\.)\s/)[0];
+  if (run.status === "idle") return outcome ?? "Child status unavailable";
   if (run.status === "completed") return outcome ?? "Done";
   return run.status === "failed" ? "Failed" : "Stopped";
 }
