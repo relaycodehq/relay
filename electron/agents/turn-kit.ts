@@ -99,7 +99,7 @@ export class TurnText {
     for (const part of this.parts) {
       if (part.commentary || !part.text.trim()) continue;
       part.commentary = true;
-      this.onCommentary?.(part.id, part.text.slice(0, 12000));
+      this.onCommentary?.(part.id, part.text);
     }
     this.publish();
   }

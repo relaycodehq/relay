@@ -209,11 +209,7 @@ export class AnswerRecorder {
     if (text === null) {
       if (index >= 0) trace.splice(index, 1);
     } else {
-      const entry = {
-        kind: "commentary" as const,
-        id,
-        text: text.slice(0, 12000),
-      };
+      const entry = { kind: "commentary" as const, id, text };
       if (index >= 0) trace[index] = entry;
       else if (makeRoom(this.message, trace)) trace.push(entry);
     }

@@ -6,6 +6,7 @@ import type {
   ProjectChat,
 } from "../../shared/projects";
 import { readTurn, turnHeading } from "../../shared/agent-trace";
+import { TurnText } from "../agents/turn-kit";
 
 const call = (id: string, parentId?: string): AgentActivity =>
   ({
@@ -210,5 +211,33 @@ it("leaves an import offer out of what streams, and under the answer once it end
   expect(emitted.every((m) => !m.importOffer)).toBe(true);
   answer.end();
   expect(emitted.at(-1)!.importOffer?.id).toBe("offer");
+  vi.useRealTimers();
+});
+
+it("keeps a whole report the agent wrote before another call, however long", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("opencode");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => {},
+  );
+  const text = new TurnText(
+    (body) => answer.text(body),
+    (id, note) => answer.commentary(id, note),
+  );
+  const report = `## Findings\n${"A finding worth reading. ".repeat(1000)}\n### Honorable mentions`;
+  text.add(report);
+  text.toCommentary();
+  answer.activity(call("echo"));
+  text.add("The shorter answer.");
+  expect(message.trace![0]).toMatchObject({
+    kind: "commentary",
+    text: report,
+  });
+  expect(message.body).toBe("The shorter answer.");
+  answer.end();
   vi.useRealTimers();
 });
