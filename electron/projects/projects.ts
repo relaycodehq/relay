@@ -578,10 +578,6 @@ export class Projects {
         throw new Error(
           "The checkout moved to another commit. Reopen the file; your unsaved text is kept.",
         );
-      if (!(await readWorkingFile(root, path)))
-        throw new Error(
-          "The file was deleted on disk. Reopen it before saving.",
-        );
     });
     return { version: digest(contents) };
   }
