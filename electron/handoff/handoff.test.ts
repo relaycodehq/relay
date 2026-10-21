@@ -1349,6 +1349,22 @@ async function startOnMini(
   return thread.id;
 }
 
+/**
+ * The setup an agent there works on for thread `id`, once it does: the
+ * setup's state and its id are saved apart, either first.
+ */
+async function setupAgent(
+  laptop: Awaited<ReturnType<typeof computer>>,
+  id: string,
+) {
+  return vi.waitFor(async () => {
+    const chat = await laptop.chats.get(id);
+    expect(chat.setup?.state).toBe("agent");
+    expect(chat.sentTo?.setup).toBeTruthy();
+    return chat.sentTo!.setup!;
+  });
+}
+
 it("starts a thread on a computer that lacks its project by cloning it there first", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const { projectId } = await lackedProject(laptop);
@@ -1505,10 +1521,7 @@ it("has threads waiting on the same project there share one setup, and lets one 
   const { url, projectId, reachable } = await lackedProject(laptop);
   await reachable(false);
   const first = await startOnMini(laptop, sender, computerId, projectId);
-  await vi.waitFor(async () =>
-    expect((await laptop.chats.get(first)).setup?.state).toBe("agent"),
-  );
-  const setup = (await laptop.chats.get(first)).sentTo!.setup!;
+  const setup = await setupAgent(laptop, first);
   const second = await startOnMini(laptop, sender, computerId, projectId);
   const third = await startOnMini(laptop, sender, computerId, projectId);
   await vi.waitFor(async () => {
@@ -1551,10 +1564,7 @@ it("starts a thread here instead when its setup there is given up on", async () 
   // The setup's agent is still at it when it's given up on.
   vi.stubEnv("RELAY_AGENT_TURN_MS", "60000");
   const id = await startOnMini(laptop, sender, computerId, projectId);
-  await vi.waitFor(async () =>
-    expect((await laptop.chats.get(id)).setup?.state).toBe("agent"),
-  );
-  const setupId = (await laptop.chats.get(id)).sentTo!.setup!;
+  const setupId = await setupAgent(laptop, id);
   const setupChat = () =>
     mini.chats.get(mini.chats.handoffs.handedOver(setupId)!.id);
   await vi.waitFor(async () =>
