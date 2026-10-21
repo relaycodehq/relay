@@ -43,3 +43,41 @@
   float: left;
   height: 0;
 }
+/* A suggested next message over the empty draft, set like the text it would be. */
+.composer-ghost {
+  position: absolute;
+  inset: 0 0 auto;
+  padding: 18px 48px 9px 20px;
+  font-family: var(--font-prompt, inherit);
+  font-size: var(--prompt-font-size, 13px);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: color-mix(in oklab, var(--text) 42%, transparent);
+  pointer-events: none;
+  animation: composer-ghost-in 240ms ease-out;
+}
+.composer-ghost-key {
+  pointer-events: auto;
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  vertical-align: 1px;
+  cursor: pointer;
+}
+.composer-ghost-key:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+@keyframes composer-ghost-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}

@@ -124,6 +124,13 @@ export function settingsHandlers(ctx: ApiContext) {
       });
       return scope;
     }),
+    composerPredictions: () => store.get().composerPredictions ?? false,
+    saveComposerPredictions: takes([z.boolean()], async (enabled) => {
+      await store.update((s) => {
+        s.composerPredictions = enabled;
+      });
+      return enabled;
+    }),
     renderMode: () => store.get().renderMode ?? "auto",
     saveRenderMode: takes([z.enum(renderModes)], async (mode) => {
       await store.update((s) => {

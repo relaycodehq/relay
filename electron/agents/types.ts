@@ -66,6 +66,13 @@ export type AgentWatch = {
   onSpend?: (spend: WatchSpend) => void;
 };
 
+/** Guessing the person's next message once a turn's answer is in; see ./predict. */
+export type AgentPredict = {
+  /** What the person asked this turn, in their own words. */
+  request: string;
+  onPrediction: (text: string) => void;
+};
+
 /** One turn of any agent, as a thread, title or helper job runs it. */
 export interface AgentOptions {
   job: AgentJob;
@@ -142,6 +149,7 @@ export interface AgentOptions {
   };
   onRequest?: AskAgentRequest;
   watch?: AgentWatch;
+  predict?: AgentPredict;
   session?: {
     key?: string;
     id?: string;

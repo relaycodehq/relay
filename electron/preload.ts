@@ -241,6 +241,8 @@ const methods = [
   "saveKeepAwake",
   "watchThreads",
   "saveWatchThreads",
+  "composerPredictions",
+  "saveComposerPredictions",
   "renderMode",
   "saveRenderMode",
   "autoSettleDays",

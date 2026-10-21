@@ -30,6 +30,8 @@ export function ComposerPromptInput({
   inputRef,
   handleRef,
   draftKey,
+  ghost,
+  onGhost,
   "aria-label": ariaLabel,
   "aria-expanded": expanded,
   "aria-controls": controls,
@@ -43,6 +45,9 @@ export function ComposerPromptInput({
   inputRef: RefObject<HTMLElement | null>;
   handleRef: Ref<PromptInputHandle>;
   draftKey: string;
+  /** A suggested message shown over the empty draft, which Tab or a click on its key takes. */
+  ghost?: string;
+  onGhost?: () => void;
 } & PromptEvents &
   Omit<HTMLAttributes<HTMLDivElement>, "onChange">) {
   const pills = useDraftPills(draftKey);
@@ -56,12 +61,27 @@ export function ComposerPromptInput({
   const tip = useQuoteTip(editor);
   const [peek, setPeek] = useImagePeek(editor);
   const more = useLineCount(editor) - 1;
-  usePromptSync(editor, value, pills, images, placeholder);
+  usePromptSync(editor, value, pills, images, ghost ? "" : placeholder);
   useComboboxRole(editor, expanded, controls, activeId, autocomplete);
   usePromptHandle(handleRef, editor, draftKey, pills);
   return (
     <div {...events} className="composer-prompt" data-more={more || undefined}>
       <EditorContent editor={editor} />
+      {ghost && (
+        <div className="composer-ghost" key={ghost}>
+          <span aria-hidden>{ghost}</span>
+          <button
+            type="button"
+            className="composer-ghost-key"
+            title="Use this message"
+            aria-label={`Use the suggested message: ${ghost}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={onGhost}
+          >
+            Tab
+          </button>
+        </div>
+      )}
       {more > 0 && (
         <span className="composer-more-lines" aria-hidden>
           +{more} {more === 1 ? "line" : "lines"}

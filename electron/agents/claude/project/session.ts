@@ -110,6 +110,8 @@ export type ClaudeSession = {
   goal?: ClaudeGoalWatch;
   /** What its side questions cost; made with the first frame it reads. */
   meter?: ClaudeMeter;
+  /** The side question asked last; the next waits for it, so the meter measures one at a time. */
+  asking?: Promise<unknown>;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
   watch?: { checks: WatchChecks; subagents: SubagentWatch };
 };
@@ -124,11 +126,32 @@ export function meterOf(session: ClaudeSession) {
   return session.meter;
 }
 
+/**
+ * A measured side question to the live session, after any asked before it:
+ * two at once would each count the other's requests as their own.
+ */
+export function askMeasured(
+  session: ClaudeSession,
+  question: string,
+  signal: AbortSignal,
+) {
+  const asked = (session.asking ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => {
+      signal.throwIfAborted();
+      return meterOf(session).measure(() =>
+        askLive(session.stream, question, signal),
+      );
+    });
+  session.asking = asked;
+  return asked;
+}
+
 /** The session's side checks; they ask whatever stream the session has at the time. */
 export function watchOf(session: ClaudeSession) {
   if (!session.watch) {
     const checks = new WatchChecks((question, signal) =>
-      meterOf(session).measure(() => askLive(session.stream, question, signal)),
+      askMeasured(session, question, signal),
     );
     session.watch = { checks, subagents: new SubagentWatch() };
   }

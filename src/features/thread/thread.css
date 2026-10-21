@@ -371,6 +371,10 @@
   overflow: hidden;
   padding-top: 12px;
 }
+/* Folded, a suggested message waits until the composer opens again. */
+.thread-bottom-composer.collapsed:not(:focus-within) .composer-ghost {
+  visibility: hidden;
+}
 /* Folded, the corner is "+N lines"'s. */
 .thread-bottom-composer.collapsed:not(:focus-within) .composer-attach {
   opacity: 0;

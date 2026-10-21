@@ -115,6 +115,8 @@ export interface ComposerConversation {
    */
   cold?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
+  /** The message the agent guessed comes next, offered while the draft is empty; `id` is its answer's. */
+  prediction?: { id: string; text: string };
 }
 export function ProjectComposer({
   ref,
@@ -199,6 +201,20 @@ export function ProjectComposer({
   const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
+  // Escape puts a guess away for good; typing only hides it until the draft is empty again.
+  const [dismissed, setDismissed] = useState<string>();
+  const { prediction } = conversation;
+  const ghost =
+    prediction &&
+    prediction.id !== dismissed &&
+    !draft.text.trim() &&
+    !draft.images.length
+      ? prediction.text
+      : undefined;
+  const takeGhost = () => {
+    if (!ghost) return;
+    promptInput.current?.replace(ghost);
+  };
   const recall = usePromptHistory(promptInput, sent);
   const mounted = useRef(false);
   useEffect(() => {
@@ -448,6 +464,11 @@ export function ProjectComposer({
             }}
             onOpenPaste={setViewingPaste}
             onPasteRefused={draft.pasteRefused}
+            ghost={ghost}
+            onGhost={() => {
+              takeGhost();
+              promptInput.current?.focusEnd();
+            }}
             images={draft.chips}
             onOpenImage={(n) =>
               draft.sketch(draft.images.find((image) => image.n === n)?.id)
@@ -468,6 +489,16 @@ export function ProjectComposer({
               )
                 return;
               if (e.nativeEvent.isComposing) return;
+              if (
+                ghost &&
+                e.key === "Tab" &&
+                !(e.shiftKey || e.altKey || e.metaKey || e.ctrlKey)
+              ) {
+                e.preventDefault();
+                takeGhost();
+                return;
+              }
+              if (ghost && e.key === "Escape") setDismissed(prediction?.id);
               if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
                 const at = promptInput.current?.caret();
                 if (at?.start === 0 && at.end === 0 && onEditQueued()) {

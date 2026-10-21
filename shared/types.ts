@@ -417,6 +417,9 @@ export interface Api
   /** Flag what I'd miss in Claude threads: off (the default), the main thread, or with its subagents. */
   watchThreads(): Promise<WatchScope>;
   saveWatchThreads(scope: WatchScope): Promise<WatchScope>;
+  /** Draft the message you'd likely send next once a Claude or Codex turn ends; off by default. */
+  composerPredictions(): Promise<boolean>;
+  saveComposerPredictions(enabled: boolean): Promise<boolean>;
   /** When agents show pages in answers: on their own (the default), only when asked, or never. */
   renderMode(): Promise<RenderMode>;
   saveRenderMode(mode: RenderMode): Promise<RenderMode>;

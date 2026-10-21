@@ -38,6 +38,8 @@ interface State {
   customSounds?: import("../sounds").StoredCustomSound[];
   /** Flag what I'd miss in Claude threads; unset is off. */
   watchThreads?: import("../../shared/watch").WatchScope;
+  /** Draft the message you'd likely send next once a Claude or Codex turn ends; unset is off. */
+  composerPredictions?: boolean;
   /** When agents show pages in answers; unset is auto. */
   renderMode?: import("../../shared/html-render").RenderMode;
   /** Topics the watcher was told are already known, newest last. */

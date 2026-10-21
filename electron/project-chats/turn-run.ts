@@ -21,7 +21,7 @@ import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
 import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
-import type { AgentWatch, UsageReport } from "../agents/types";
+import type { AgentPredict, AgentWatch, UsageReport } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
@@ -226,6 +226,19 @@ export class TurnRunner {
             onSpend: (spend) => this.core.watchSpend?.add(chat.id, spend),
           }
         : undefined;
+    // A guess at the next message, asked on the same session as the check.
+    const predict: AgentPredict | undefined =
+      this.core.store.get().composerPredictions &&
+      (provider === "claude" || provider === "codex") &&
+      turn.kind === "reply" &&
+      !rules.side &&
+      !branch &&
+      !chat.reviewer
+        ? {
+            request: turn.request ?? "",
+            onPrediction: (text) => answer.predict(text),
+          }
+        : undefined;
     try {
       const relayTools = relayToolsFor(
         chat.id,
@@ -334,6 +347,7 @@ export class TurnRunner {
           ? undefined
           : this.core.active.get(chat.id)?.requests.ask,
         ...(watch ? { watch } : {}),
+        ...(predict ? { predict } : {}),
         session: {
           key: sessionKey,
           id: sessionId,

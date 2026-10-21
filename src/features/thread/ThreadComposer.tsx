@@ -6,7 +6,11 @@ import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
 import { openPlan } from "../../../shared/open-plan";
-import type { ChatScope, Project } from "../../../shared/projects";
+import type {
+  ChatMessage,
+  ChatScope,
+  Project,
+} from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
@@ -155,6 +159,16 @@ function ThreadBranch({
       />
     );
   return picker;
+}
+
+/** The guess at the next message the last answer left, while it is the last word. */
+function nextGuess(view: ChatMessage[]) {
+  const last = view.at(-1);
+  return last?.role === "assistant" &&
+    last.status === "complete" &&
+    last.prediction
+    ? { id: last.id, text: last.prediction }
+    : undefined;
 }
 
 /**
@@ -334,6 +348,7 @@ export function ThreadComposer({
             })) ??
           lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
+        prediction: running || root ? undefined : nextGuess(shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
         cold,
