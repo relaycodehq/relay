@@ -17,6 +17,7 @@ import { Projects } from "./projects";
 import { Gitea } from "../pull-requests/gitea";
 import { fixtureServer } from "../../tests/fixtures/gitea";
 import { folderGoneMessage, projectTitle } from "../../shared/projects";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 it("titles a folder name by its words, leaving one with none as it is", () => {
   expect(projectTitle("relay-releases")).toBe("Relay Releases");
@@ -29,8 +30,7 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
   const fixture = await fixtureServer();
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   const root = join(dir, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     execFileSync("git", ["init", "-q", root]);
     // Git lists remotes alphabetically, so the deleted one is tried first.
@@ -63,8 +63,7 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
 it("links a github.com remote without any account, preferring origin over an older fork", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   const root = join(dir, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     execFileSync("git", ["init", "-q", root]);
     // `old` sorts before `origin`, the way Git lists them.
@@ -236,8 +235,7 @@ it("opens and saves files in a folder without Git", async () => {
 it("edits an unborn checkout and refuses a stale save after its first commit", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   const root = join(dir, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     execFileSync("git", ["init", "-q", "-b", "main", root]);
     git("config", "user.email", "test@example.com");

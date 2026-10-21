@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { constants } from "node:fs";
-import { execFileSync } from "node:child_process";
 import {
   mkdtemp,
   open,
@@ -15,6 +14,7 @@ import { join } from "node:path";
 import { Store } from "../app/store";
 import { Projects } from "./projects";
 import { readLocalFile, saveLocalFile } from "../pull-requests/local-files";
+import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 
 vi.mock("node:fs/promises", async (actual) => {
   const fs = await actual<typeof import("node:fs/promises")>();
@@ -50,14 +50,8 @@ it("checks the disk version twice when saving, without extra existence reads", a
 });
 
 it("also checks the disk version twice through the PR editor", async () => {
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], {
-      encoding: "utf8",
-      stdio: "pipe",
-    }).trim();
-  git("init", "-q");
-  git("config", "user.email", "test@example.com");
-  git("config", "user.name", "Test");
+  const git = (...args: string[]) => gitIn(root, ...args);
+  initRepo(root);
   const server = "https://git.example.test";
   const ref = { owner: "team", name: "repo", number: 1 };
   git("remote", "add", "origin", `${server}/team/repo.git`);

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentOptions } from "../agents/types";
 import { defaultAISettings } from "../../shared/settings";
+import { tempRepo } from "../../tests/fixtures/git-repo";
 
 let reply = "";
 const runs: AgentOptions[] = [];
@@ -28,10 +28,7 @@ const lines = (n: number) => Array.from({ length: n }, () => "x");
 const text = (l: string[]) => l.join("\n") + "\n";
 
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-split-")));
-  git("init", "-q");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  root = await tempRepo("relay-split-");
   // Identical lines: a hunk placed at the wrong line still finds its context,
   // so only correct line numbers put it back where it was.
   await writeFile(join(root, "same.txt"), text(lines(60)));

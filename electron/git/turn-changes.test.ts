@@ -1,20 +1,7 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  readlink,
-  realpath,
-  rm,
-  symlink,
-  stat,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { chmod, mkdir, readFile, readlink, rm, symlink, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   finishTurn,
@@ -27,18 +14,12 @@ import {
   turnDiff,
   turnRef,
 } from "./turn-changes";
+import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-turn-")));
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  root = await tempRepo("relay-turn-");
   await writeFile(join(root, ".gitignore"), "build/\n");
   await writeFile(join(root, "a.ts"), "one\ntwo\n");
   await writeFile(join(root, "gone.ts"), "bye\n");

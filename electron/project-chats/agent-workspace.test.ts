@@ -10,6 +10,7 @@ import { ThreadWorktrees } from "./worktrees";
 import { TurnFiles } from "./turn-files";
 import { threadControl } from "./control";
 import * as gitApi from "../git/git";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 let temp: string,
   root: string,
@@ -17,8 +18,7 @@ let temp: string,
   chat: ProjectChat,
   worktrees: ThreadWorktrees;
 let core: ChatCore;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+const git = (...args: string[]) => gitIn(root, ...args);
 const save = vi.fn();
 beforeEach(async () => {
   temp = await realpath(

@@ -18,16 +18,13 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { setGitPath } from "./git";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 let root: string;
 let userData: string;
 vi.mock("electron", () => ({ app: { getPath: () => userData } }));
 
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-video-")));
   userData = await mkdtemp(join(tmpdir(), "relay-video-data-"));

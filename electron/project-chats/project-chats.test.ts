@@ -22,6 +22,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
+import { gitIn } from "../../tests/fixtures/git-repo";
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
   findExecutable: vi.fn(),
@@ -1035,11 +1036,7 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
 
 it("starts a thread on the project folder's own branch off it, and refuses only a branch that's nowhere", async () => {
   const repo = join(root, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, ...args], {
-      encoding: "utf8",
-      stdio: "pipe",
-    }).trim();
+  const git = (...args: string[]) => gitIn(repo, ...args);
   git(
     "-c",
     "user.name=T",
@@ -1081,8 +1078,7 @@ it("starts a thread on the project folder's own branch off it, and refuses only 
 
 it("starts a thread whose named branch got taken before its first message on relay/…, and keeps why", async () => {
   const repo = join(root, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(repo, ...args);
   git(
     "-c",
     "user.name=T",

@@ -10,17 +10,11 @@ import {
   changeBranch,
 } from "./branches";
 import type { BranchCounts } from "../../shared/branches";
+import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-branches-")));
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  root = await tempRepo("relay-branches-");
   await writeFile(join(root, "file.ts"), "base\n");
   git("add", ".");
   git("commit", "-qm", "Base");

@@ -31,6 +31,7 @@ import {
 import { mergeBranch, mergePlan } from "./branch-merge";
 import { worktreeStartSchema } from "../../shared/projects";
 import type { ChatWorktree } from "../../shared/projects";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
@@ -49,9 +50,7 @@ beforeEach(async () => {
   const temp = await realpath(await mkdtemp(join(tmpdir(), "relay-wt-")));
   root = join(temp, "project");
   dir = join(temp, "worktrees");
-  execFileSync("git", ["init", "-q", "-b", "main", root]);
-  git(root, "config", "user.name", "Test");
-  git(root, "config", "user.email", "test@example.invalid");
+  initRepo(root);
   await writeFile(join(root, "a.ts"), "one\ntwo\nthree\nfour\nfive\n");
   await writeFile(join(root, "b.ts"), "bee\n");
   git(root, "add", ".");
@@ -534,9 +533,7 @@ it("moves every uncommitted edit into a new worktree, leaving the checkout at it
 
 it("leaves a nested repository where it is and moves the rest", async () => {
   const inner = join(root, "inner");
-  execFileSync("git", ["init", "-q", "-b", "main", inner]);
-  git(inner, "config", "user.name", "Test");
-  git(inner, "config", "user.email", "test@example.invalid");
+  initRepo(inner);
   await writeFile(join(inner, "x.ts"), "x\n");
   git(inner, "add", ".");
   git(inner, "commit", "-qm", "Inner");

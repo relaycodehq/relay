@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 import {
   chmod,
   link,
@@ -15,14 +14,14 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readLocalFile, saveLocalFile } from "./local-files";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 const ref = { owner: "Web", name: "portal", number: 7 };
 const server = "https://git.example.test/gitea";
 let root: string, head: string;
 const path = "src/code.ts";
 const original = "\ufeffexport const count = 1;\r\n";
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 const read = () => readLocalFile(root, server, ref, head, path);
 const save = (version: string, contents: string) =>
   saveLocalFile(root, server, ref, head, path, version, contents);

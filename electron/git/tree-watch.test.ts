@@ -10,6 +10,7 @@ import {
   TreeWatch,
   type TreeWatchDeps,
 } from "./tree-watch";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 /** Stands in for the Linux folder-at-a-time watch while set. */
 const eachFolder = vi.hoisted(() => ({
@@ -367,9 +368,7 @@ it("sees a commit in a worktree, whose HEAD lives in the main checkout", async (
     worktree = join(temp, "worktree");
   const git = (dir: string, ...args: string[]) =>
     execFileSync("git", ["-C", dir, ...args], { stdio: "pipe" });
-  execFileSync("git", ["init", "-q", "-b", "main", main]);
-  git(main, "config", "user.email", "t@t");
-  git(main, "config", "user.name", "t");
+  initRepo(main);
   git(main, "commit", "-q", "--allow-empty", "-m", "one");
   git(main, "worktree", "add", "-q", "-b", "feature", worktree);
   git(worktree, "config", "user.email", "t@t");

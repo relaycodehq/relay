@@ -1,27 +1,19 @@
 import { it, expect, beforeEach, afterEach, vi } from "vitest";
-import { execFileSync } from "node:child_process";
-import { mkdtemp, realpath, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { commitDetail, commitDiff, commitLog } from "./history";
 import { layoutGraph } from "../../src/features/changes/commit-graph";
 import * as gitCommands from "./git";
+import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 const commit = (message: string) => {
   git("add", "-A");
   git("commit", "-q", "-m", message);
   return git("rev-parse", "HEAD");
 };
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-history-")));
-  git("init", "-q", "-b", "main");
-  git("config", "user.email", "relay@example.com");
-  git("config", "user.name", "Relay");
+  root = await tempRepo("relay-history-");
 });
 afterEach(async () => {
   vi.restoreAllMocks();

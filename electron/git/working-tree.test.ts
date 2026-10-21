@@ -13,12 +13,9 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { workingTree, workingDiff, performGitAction } from "./working-tree";
 import { revisionDiff } from "./turn-changes";
+import { gitIn } from "../../tests/fixtures/git-repo";
 let root: string, remote: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-git-")));
   remote = await mkdtemp(join(tmpdir(), "relay-origin-"));

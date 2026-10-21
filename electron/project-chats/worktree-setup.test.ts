@@ -7,7 +7,6 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -26,6 +25,7 @@ import type {
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import type { ChatCore } from "./core";
 import { WorktreeSetup, freePortOffset } from "./worktree-setup";
+import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 
 vi.mock("../platform/executables", async (actual) => ({
   ...(await actual<typeof import("../platform/executables")>()),
@@ -59,11 +59,8 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-setup-")));
   repo = join(root, "repo");
   await mkdir(repo);
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, ...args], { stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  const git = (...args: string[]) => gitIn(repo, ...args);
+  initRepo(repo);
   await writeFile(join(repo, ".gitignore"), ".env\n");
   await writeFile(join(repo, ".worktreeinclude"), ".env\n");
   git("add", ".");

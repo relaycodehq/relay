@@ -20,11 +20,11 @@ import type {
   AgentWorktree,
   ProjectChat,
 } from "../../shared/projects";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 let temp: string;
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+const git = (...args: string[]) => gitIn(root, ...args);
 const ran = (label: string): AgentActivity => ({
   id: label,
   kind: "command",

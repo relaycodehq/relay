@@ -15,6 +15,7 @@ import { Gitea } from "./gitea";
 import type { PullHost } from "./host";
 import { PullRequestCreation, branchPulls } from "./pull-request-create";
 import type { CreatePullRequest } from "../../shared/pull-request-create";
+import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 let root: string,
   remote: string,
   parent: string,
@@ -22,11 +23,7 @@ let root: string,
   service: PullRequestCreation;
 let pulls: any[], posts: number, failPost: boolean;
 const repo = { owner: "team", name: "project" };
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 const remoteGit = (...args: string[]) =>
   execFileSync("git", ["--git-dir", remote, ...args], {
     encoding: "utf8",
@@ -45,9 +42,7 @@ beforeEach(async () => {
   remote = join(parent, "remote.git");
   await mkdir(root);
   execFileSync("git", ["init", "--bare", "-q", remote]);
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  initRepo(root);
   await writeFile(join(root, "file.ts"), "base\n");
   git("add", ".");
   git("commit", "-qm", "Base");
