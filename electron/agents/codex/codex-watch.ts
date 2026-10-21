@@ -67,7 +67,8 @@ export const FORK_NOTE = `You are reading a copy of this thread taken while it w
 /**
  * One check: fork the thread, ask, read the answer and what the fork's
  * requests used. A fork that starts any tool is stopped and its answer
- * dropped; it may not act, as the thread or otherwise.
+ * dropped; it may not act, as the thread or otherwise. `midTurn` when the
+ * thread may still be working, so the fork is told why its last call looks cut off.
  */
 export async function askCodexSide(
   wire: CodexSideWire,
@@ -75,6 +76,7 @@ export async function askCodexSide(
   settings: Record<string, unknown>,
   question: string,
   signal: AbortSignal,
+  midTurn = true,
 ): Promise<{ reply: string | null; cost?: CheckCost }> {
   signal.throwIfAborted();
   const fork = (await wire.request("thread/fork", {
@@ -123,7 +125,7 @@ export async function askCodexSide(
       input: [
         {
           type: "text",
-          text: `${FORK_NOTE}\n\n${question}`,
+          text: midTurn ? `${FORK_NOTE}\n\n${question}` : question,
           text_elements: [],
         },
       ],
@@ -225,7 +227,8 @@ export function codexTurnWatcher(
       async (question, signal) => {
         const { id, settings } = thread();
         if (!id || !settings) return { reply: null };
-        return askCodexSide(wire, id, settings, question, signal);
+        // Asked once the turn is over: nothing is still running.
+        return askCodexSide(wire, id, settings, question, signal, false);
       },
       options.signal,
     );
