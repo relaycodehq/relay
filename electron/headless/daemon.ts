@@ -3,79 +3,45 @@
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
 import { delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
-import { AgentHosts } from "../agent-host/client";
-import { hostAgents, loadRegistryAgents, watchSavedSignIns } from "../agents";
-import { AgentAccounts, setProfilesRoot } from "../agents/accounts";
+import { watchSavedSignIns } from "../agents";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
 import {
   cursorSdkIo,
   signInCursor,
   signOutCursor,
 } from "../agents/cursor/account";
-import { configureCursor } from "../agents/cursor/sdk";
-import {
-  AcpRegistry,
-  antigravityIo,
-  configureAcpRegistry,
-  configureAntigravity,
-  registryUpdatesIo,
-} from "../agents/acp";
-import { keepUsageHistory } from "../agents/usage-history";
+import { antigravityIo, registryUpdatesIo } from "../agents/acp";
 import { createDispatch, type Dispatch } from "../api";
 import { apiContext } from "../api/context";
 import { DevBuild } from "../app/dev-build";
 import { KeepAwake } from "../app/keep-awake";
 import { AppLinks } from "../app/links";
-import { GiteaLogin, seal, unseal } from "../app/login";
+import { GiteaLogin } from "../app/login";
 import { Menubar } from "../app/menubar";
 import { Store } from "../app/store";
 import { Updater } from "../app/updater";
-import { rearmOnWake } from "../app/wake";
 import { AppWindow } from "../app/window";
 import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
 import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
-import { gitExecutable, setGitPath } from "../git/git";
 import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
-import { Computers } from "../handoff/computers";
-import { HandoffReceiver } from "../handoff/receiver";
-import { RemoteProjects } from "../handoff/remote-projects";
-import { Handoffs } from "../handoff/sender";
 import { setComputerName, computerName } from "../platform/computer-name";
-import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
 import { finishPath, pathReady } from "../platform/shell-path";
-import { ClockifyPlugin } from "../plugins/clockify/service";
-import { DevOps } from "../plugins/devops/service";
-import { PluginSecrets } from "../plugins/secrets";
-import { ProjectChats } from "../project-chats";
-import { ChatSummaryFeed } from "../project-chats/chat-summaries";
-import { PullMerges } from "../project-chats/pull-merges";
-import { Projects } from "../projects/projects";
 import { ProjectAdding } from "../project-add";
 import { GithubLogin } from "../github";
-import { pullRequestHosts } from "../pull-requests/setup";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { ReadAloud } from "../read-aloud";
 import { setOnnxRuntimeDir } from "../util/onnxruntime";
 import { PhoneRemote } from "../remote/phone-remote";
-import { DraftStore, Drafts, setPastesRoot, sweepPastes } from "../drafts";
-import { applyLinkedTools, teaTokenFor } from "../source-control";
-import {
-  agentProjects,
-  answerRelayTools,
-  prepareRelayTools,
-  threadAgents,
-} from "../started-threads/serve";
-import { projectTasks } from "../terminal/tasks";
+import { DraftStore, Drafts } from "../drafts";
+import { teaTokenFor } from "../source-control";
 import { TriageService } from "../triage/service";
-import { keepUsageLog } from "../usage";
 import type { ChatSummary } from "../../shared/projects";
 import {
   serveControl,
@@ -98,6 +64,15 @@ import { keepUpdated } from "./auto-update";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
 import { errorMessage } from "../../shared/error-message";
+import {
+  agentHost,
+  downloadedAgents,
+  followSummaries,
+  prepareData,
+  remoteServices,
+  resumeThreads,
+  threadServices,
+} from "../startup";
 
 export { logTo } from "./log";
 
@@ -153,70 +128,32 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const drafts = new Drafts(draftStore, {
     changed: (change) => phoneRemote?.draftChanged(change),
   });
-  let handoffs:
-    | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
-    | undefined;
-  let agentHosts: AgentHosts | undefined;
-  // The host runs from a plain file beside this one.
-  const hostScript = join(__dirname, "agent-host.mjs");
-  if (existsSync(hostScript)) {
-    const hosts = new AgentHosts(join(home, "agent-host"), hostScript);
-    agentHosts = hosts;
-    hostAgents(hosts);
-    projectTasks.hosts = () => hosts.pids();
-  }
-  // Before any agent session starts, so each gets the tools.
-  const relayTools = await prepareRelayTools(join(home, "agent-host"));
-  setGitPath(store.get().gitPath ?? null);
-  setLinkedAgents(store.get().agentPaths ?? {});
-  setOwnAgentsDir(join(home, "agent-clis"));
-  setProfilesRoot(join(home, "agent-accounts"));
-  setPastesRoot(join(home, "pastes"));
-  void sweepPastes([
-    join(home, "project-chats"),
-    join(home, "drafts.json"),
-    join(home, "state.json"),
-  ]).catch((e) => console.warn("Could not sweep old pastes:", e));
-  configureCursor({
-    worker: join(__dirname, "cursor-worker.mjs"),
-    root: join(home, "cursor-sdk"),
-    store: join(home, "cursor-agents"),
-    fetch: fetcher,
-  });
-  configureAntigravity({ root: join(home, "antigravity"), fetch: fetcher });
-  const acpAgents = new AcpRegistry(join(home, "acp-agents"), fetcher);
-  configureAcpRegistry(acpAgents);
-  const agentAccounts = new AgentAccounts(store, () => watchSavedSignIns());
-  watchSavedSignIns();
-  applyLinkedTools(store);
-  void gitExecutable().catch(() => {});
-  const login = new GiteaLogin(teaTokenFor);
-  const projects = new Projects(store);
-  const github = new GithubLogin(fetcher);
-  const pullHosts = pullRequestHosts({
-    store,
-    login,
-    github,
-    projects,
-    fetch: fetcher,
-  });
-  const devops = new DevOps(
-    store,
+  let handoffs: ReturnType<typeof remoteServices>["handoffs"] | undefined;
+  const { hosts: agentHosts, tools: relayTools } = await agentHost(
+    home,
+    // The host runs from a plain file beside this one.
+    join(__dirname, "agent-host.mjs"),
+  );
+  const acpAgents = downloadedAgents(
+    home,
     fetcher,
-    seal,
-    unseal,
-    join(home, "devops-relevance.json"),
-    pullHosts.azureTokens,
+    join(__dirname, "cursor-worker.mjs"),
   );
-  keepUsageHistory(join(home, "usage-history.json"));
-  keepUsageLog(join(home, "usage.jsonl"));
-  const chats = new ProjectChats(
-    store,
-    projects,
-    join(home, "project-chats"),
-    (event) => phoneRemote?.chatEvent(event),
-    pullHosts.evidence,
+  const agentAccounts = await prepareData(home, store, () =>
+    watchSavedSignIns(),
   );
+  const login = new GiteaLogin(teaTokenFor);
+  const github = new GithubLogin(fetcher);
+  const { projects, pullHosts, devops, chats, pullMerges, clockify } =
+    threadServices({
+      dir: home,
+      store,
+      fetch: fetcher,
+      login,
+      github,
+      online: () => true,
+      chatEvent: (event) => phoneRemote?.chatEvent(event),
+    });
   chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
     {
@@ -225,29 +162,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     },
     headlessPower(),
   );
-  const pullMerges = new PullMerges({
-    chats: () => store.get().chats ?? [],
-    ...pullHosts.merges,
-    record: (id) => chats.pullMerged(id),
-    online: () => true,
-  });
-  const clockify = new ClockifyPlugin({
-    store,
-    secrets: new PluginSecrets(store, seal, unseal),
-    fetch: fetcher,
-    chats: {
-      summaries: () => store.get().chats ?? [],
-      get: (id) => chats.get(id),
-    },
-    projectName: (id) => {
-      try {
-        return projects.get(id).name;
-      } catch {
-        return "Removed project";
-      }
-    },
-    aiSettings: () => store.aiSettings(),
-  });
   // The window's services, built so the dispatch has them; with no window
   // they never open one, and what they'd show goes nowhere.
   // Speech for phones, its engines downloaded into the home folder when set up.
@@ -324,52 +238,29 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     drafts,
   });
   const dispatch: Dispatch = createDispatch(api);
-  const summaries = new ChatSummaryFeed(api.listChats, (event) =>
-    phoneRemote?.chatsEvent(event),
-  );
-  chats.onSummaries((projectId) => {
-    summaries.changed(projectId);
-    void keepAwake.refresh();
+  followSummaries({
+    chats,
+    listChats: api.listChats,
+    pullMerges,
+    login,
+    keepAwake,
+    send: (event) => phoneRemote?.chatsEvent(event),
   });
-  setInterval(() => void keepAwake.refresh(), 15_000).unref();
-  login.changed = () => {
-    chats.summariesChanged();
-    void pullMerges.sweep();
-  };
-  // A quiet thread settles itself as days pass; the feed sends only what changed.
-  setInterval(() => {
-    chats.summariesChanged();
-    void pullMerges.sweep();
-    void chats.cleanUpWorktrees();
-  }, 5 * 60_000).unref();
-  setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
   const updater = new HeadlessUpdater(installRoot(__dirname), headlessVersion, {
     restart: () => {
       setTimeout(() => void shutDown(true, { restart: true }), 50);
     },
   });
-  const handoffDir = join(home, "handoffs");
-  const computers = new Computers(store, seal, unseal);
-  handoffs = {
-    computers,
-    remote: new RemoteProjects(computers, projects),
-    sender: new Handoffs(
-      store,
-      computers,
-      chats,
-      projects,
-      join(handoffDir, "out"),
-    ),
-  };
-  const receiver = new HandoffReceiver({
-    projects: () => projects.list(login.client),
-    root: (id) => projects.root(id),
+  const remoteSide = remoteServices({
+    dir: home,
+    store,
+    projects,
     chats,
-    worktrees: join(home, "worktrees"),
-    dir: join(handoffDir, "in"),
-    version: () => headlessVersion,
+    login,
+    listChats: api.listChats,
     dispatch,
     adding: projectAdding,
+    version: () => headlessVersion,
     // A paired computer or phone may update this one, as on the desktop.
     updates: {
       state: () => updater.now,
@@ -377,57 +268,35 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       download: () => updater.download(),
       install: () => updater.install(),
     },
-  });
-  const remote = new PhoneRemote(
-    store,
-    seal,
-    unseal,
-    {
-      projects: () => projects.list(login.client),
-      pairedComputers: () => computers.list(),
-      projectPath: (id) => projects.get(id).path,
-      chats: api.listChats,
-      chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
-      cost: (id) => chats.cost(id),
-      version: () => headlessVersion,
-      // The bridge forwards only its allowlist; see shared/remote.ts.
-      dispatch,
+    host: {
       // Images go to phones whole, re-encoded smaller where that's possible.
       shrinkImage: (dataUrl) => compressImage(dataUrl),
-      renderPage: (chatId, renderId, page) =>
-        chats.renderPage(chatId, renderId, page),
-      news: (cursor) => chats.newsSince(cursor),
       drafts,
       dictation: speech.forPhones.dictation,
       readAloud: speech.forPhones.readAloud,
-      handoffs: receiver,
     },
     port,
-  );
+  });
+  handoffs = remoteSide.handoffs;
+  const { receiver, phoneRemote: remote } = remoteSide;
+  const { computers } = handoffs;
   phoneRemote = remote;
   // Default phone access on once, even if Tailscale isn't available yet.
   // start() watches for it; an explicitly saved false remains false.
   await remote.start(true);
   void computers.start();
-  // Agent sessions that kept running through a restart come back first.
-  await loadRegistryAgents();
-  await chats.reattach();
-  if (relayTools)
-    void answerRelayTools(
-      relayTools,
-      chats,
-      agentHosts,
-      agentProjects(projects, () => login.client, home),
-      {
-        handoffs: handoffs.sender,
-        agents: threadAgents(agentUpdates, () => store.aiSettings()),
-      },
-    );
-  chats.armWakeups();
-  void chats
-    .reconcileSummaries()
-    .catch((e) => console.warn("Could not reconcile thread summaries:", e));
-  rearmOnWake(powerMonitor, () => chats.armWakeups());
+  await resumeThreads({
+    dir: home,
+    chats,
+    projects,
+    login,
+    agentHosts,
+    relayTools,
+    agentUpdates,
+    aiSettings: () => store.aiSettings(),
+    tools: { handoffs: handoffs.sender },
+    powerMonitor,
+  });
   if (!process.env.RELAY_TEST_DATA) {
     agentUpdates.start(store.get().agentUpdateChecks ?? true);
     keepUpdated(updater, {
