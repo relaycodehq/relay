@@ -68,6 +68,8 @@ export interface AgentInfo {
    * same conversation loads skills, plugins and instructions changed since.
    */
   reload: boolean;
+  /** Its reload restarts configuration in a service every project shares, not one thread's session. */
+  reloadsService?: true;
   /** Reports plan usage windows for the usage ring. */
   usage: boolean;
   /** Lists models from many upstream providers, so the picker groups them. */
@@ -127,6 +129,7 @@ export const agents = {
     compactInstructions: false,
     side: true,
     reload: true,
+    reloadsService: true,
     usage: false,
     modelGroups: true,
   },

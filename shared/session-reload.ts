@@ -8,11 +8,18 @@ const kinds = (reload: SessionReload) =>
     [reload.agents, "agent", "Agents"],
   ] as [NameChanges | undefined, string, string][];
 
-/** "Session reloaded · picked up 2 new skills · 1 agent gone", or "Reloading session…" while `live`. */
-export function reloadNote(reload: SessionReload, live = false) {
+/**
+ * "Session reloaded · picked up 2 new skills · 1 agent gone", or "Reloading
+ * session…" while `live`. `agent` names the one whose shared service reloaded.
+ */
+export function reloadNote(
+  reload: SessionReload,
+  live = false,
+  agent = "The agent's",
+) {
   if (live)
     return reload.scope === "service"
-      ? "Reloading OpenCode configuration across projects…"
+      ? `Reloading ${agent} configuration across projects…`
       : "Reloading session…";
   const added = kinds(reload)
     .filter(([c]) => c?.added.length)
@@ -22,7 +29,7 @@ export function reloadNote(reload: SessionReload, live = false) {
     .map(([c, word]) => count(c!.removed.length, word));
   return [
     reload.scope === "service"
-      ? "OpenCode configuration reloaded across projects"
+      ? `${agent} configuration reloaded across projects`
       : "Session reloaded",
     ...(added.length ? [`picked up ${added.join(" and ")}`] : []),
     ...(removed.length ? [`${removed.join(" and ")} gone`] : []),

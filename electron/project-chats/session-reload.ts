@@ -40,7 +40,7 @@ export function reloadSessions(core: ChatCore, id: string) {
       provider,
       created: Date.now(),
       version: 1,
-      reload: provider === "opencode" ? { scope: "service" } : {},
+      reload: agentInfo(provider).reloadsService ? { scope: "service" } : {},
     };
     chat.messages.push(message);
     await core.storage.save(chat);

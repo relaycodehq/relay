@@ -66,7 +66,7 @@ export interface NameChanges {
 }
 /** Local marker: the agent's process was restarted on the same session. Each list is left out when the agent couldn't say. */
 export interface SessionReload {
-  /** OpenCode rebuilds configuration across all projects in its shared service. */
+  /** The agent rebuilt configuration across all projects in its shared service. */
   scope?: "service";
   skills?: NameChanges;
   agents?: NameChanges;

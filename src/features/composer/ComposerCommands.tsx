@@ -193,8 +193,10 @@ export function useComposerCommands({
                   name: c.name,
                   label: "/" + c.name + ("args" in c ? " " + c.args : ""),
                   description:
-                    c.name === "reload" && provider === "opencode"
-                      ? "Reload OpenCode configuration across all projects"
+                    c.name === "reload" &&
+                    provider !== "message" &&
+                    agentInfo(provider).reloadsService
+                      ? `Reload ${agentName(provider)} configuration across all projects`
                       : c.description,
                   source: "Relay",
                   Icon: Zap,
