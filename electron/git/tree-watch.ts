@@ -159,6 +159,8 @@ export interface TreeWatchDeps {
   /** Git's own folder and the one its worktrees share. */
   gitDirs?(root: string): Promise<string[]>;
   isFolder?(path: string): Promise<boolean>;
+  /** How long a change settles and the least time between two; tests go faster. */
+  pace?: { settleMs: number; gapMs: number };
 }
 
 /**
@@ -360,7 +362,11 @@ export class TreeWatch {
 
   private soon(where: string, w: Watch) {
     if (w.closed || w.timer) return;
-    const wait = Math.max(SETTLE_MS, w.last + GAP_MS - Date.now());
+    const { settleMs, gapMs } = this.deps.pace ?? {
+      settleMs: SETTLE_MS,
+      gapMs: GAP_MS,
+    };
+    const wait = Math.max(settleMs, w.last + gapMs - Date.now());
     w.timer = setTimeout(() => {
       w.timer = undefined;
       w.last = Date.now();

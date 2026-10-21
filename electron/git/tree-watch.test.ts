@@ -12,6 +12,9 @@ import {
 } from "./tree-watch";
 import { initRepo } from "../../tests/fixtures/git-repo";
 
+/** Real folders, at a pace that doesn't keep the tests waiting. */
+const pace = { settleMs: 100, gapMs: 300 };
+
 /** Stands in for the Linux folder-at-a-time watch while set. */
 const eachFolder = vi.hoisted(() => ({
   instead: undefined as
@@ -379,6 +382,7 @@ it("sees a commit in a worktree, whose HEAD lives in the main checkout", async (
     root: async () => worktree,
     changed: (where) => changes.push(where),
     platform: "darwin",
+    pace,
   });
   expect(await trees.show({}, "wt")).toBe(true);
   // FSEvents may still report what happened before the watch started.
@@ -415,12 +419,14 @@ it("on Linux, watches each folder Git shows and none it ignores", async () => {
     root: async () => temp!,
     changed: (where) => changes.push(where),
     platform: "linux",
+    pace,
   });
   expect(await trees.show({}, "a")).toBe(true);
   await new Promise((r) => setTimeout(r, 600));
   changes.length = 0;
+  // Long enough for a change to arrive and settle, were one coming.
   const quiet = async () => {
-    await new Promise((r) => setTimeout(r, 2600));
+    await new Promise((r) => setTimeout(r, 700));
     return changes.length;
   };
 
@@ -434,7 +440,7 @@ it("on Linux, watches each folder Git shows and none it ignores", async () => {
   // A folder made after the watch started is followed; an ignored one isn't.
   await mkdir(join(temp, "src", "later"));
   await mkdir(join(temp, "build"));
-  await new Promise((r) => setTimeout(r, 2600));
+  await new Promise((r) => setTimeout(r, 700));
   changes.length = 0;
   await writeFile(join(temp, "build", "out.js"), "x");
   expect(await quiet()).toBe(0);
