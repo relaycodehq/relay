@@ -26,6 +26,13 @@ import { keyedQueue } from "../util/keyed-queue";
 import type { Store } from "../app/store";
 import { RenderFiles } from "../html-renders";
 import { imageMimeType } from "./images";
+import {
+  liveTurn,
+  savedBase,
+  withLiveTurn,
+  type LiveTurn,
+  type SavedBase,
+} from "./live-turn";
 import { reviveChat } from "./revive";
 import { ShownImages } from "./shown-images";
 
@@ -135,7 +142,8 @@ const KEEP_LOADED = 12;
 const RECONCILE_MARGIN_MS = 5000;
 
 /**
- * The threads' files in Relay's data folder (`<id>.json`, their screenshots
+ * The threads' files in Relay's data folder (`<id>.json`, a running turn's
+ * progress over it in `<id>.live.json` (see ./live-turn), their screenshots
  * under `images/<id>/` and copies of the images their answers show under
  * `images/<id>/shown/<message id>/`), the one cached copy of each, and their
  * summaries in the store, with whoever listens for a list reading differently.
@@ -158,6 +166,9 @@ export class ChatStorage {
   private ready: Promise<void> = Promise.resolve();
   private listeners = new Set<(projectId: string) => void>();
   private savedListeners = new Set<(chat: ProjectChat) => void>();
+  /** What each loaded thread's file holds, for its checkpoints to write only what changed since. */
+  private bases = new WeakMap<ProjectChat, SavedBase>();
+  private lastRev = 0;
   /** The pages answers showed with show_html. */
   readonly renders: RenderFiles;
   readonly shown: ShownImages;
@@ -192,12 +203,8 @@ export class ChatStorage {
       if (!pending) {
         pending = (async () => {
           // Behind the writes, which a copy let go of may have left queued.
-          const text = await this.writes(id, () =>
-            readFile(join(this.dir, id + ".json"), "utf8"),
-          );
-          const chat = JSON.parse(text) as ProjectChat;
-          if (chat.id !== id)
-            throw new Error("Saved chat identity does not match.");
+          const { chat, base } = await this.writes(id, () => this.read(id));
+          if (base) this.bases.set(chat, base);
           this.readLinks(chat);
           const changed = reviveChat(
             chat,
@@ -219,6 +226,38 @@ export class ChatStorage {
     }
     this.readLinks(chat);
     return chat;
+  }
+
+  /** The thread as its files have it, without keeping it loaded; the loaded copy if it is. */
+  async peek(id: string): Promise<ProjectChat> {
+    return this.cached(id) ?? (await this.read(id)).chat;
+  }
+
+  private file(id: string, live = false) {
+    return join(this.dir, id + (live ? ".live.json" : ".json"));
+  }
+
+  /** The thread's file with the progress of a turn that was running over it, and what the file itself held. */
+  private async read(id: string) {
+    const [text, liveText] = await Promise.all([
+      readFile(this.file(id), "utf8"),
+      readFile(this.file(id, true), "utf8").catch(() => undefined),
+    ]);
+    const { rev, ...saved } = JSON.parse(text) as ProjectChat & {
+      rev?: number;
+    };
+    if (saved.id !== id) throw new Error("Saved chat identity does not match.");
+    let live: LiveTurn | undefined;
+    try {
+      live = liveText ? (JSON.parse(liveText) as LiveTurn) : undefined;
+    } catch (e) {
+      // Cut off mid-write it can't be: it's renamed into place whole.
+      console.warn("Could not read a thread's last turn:", e);
+    }
+    return {
+      chat: withLiveTurn(saved, rev, live),
+      base: rev ? savedBase(saved, rev, text.length) : undefined,
+    };
   }
 
   /** Link scopes are authoritative in the state file so promotions commit atomically. */
@@ -270,9 +309,10 @@ export class ChatStorage {
   /** Takes back a thread that was added but never shown, like a reviewer whose review didn't start. */
   async remove(chat: ProjectChat) {
     this.forget(chat.id);
-    await this.writes(chat.id, () =>
-      rm(join(this.dir, chat.id + ".json"), { force: true }),
-    );
+    await this.writes(chat.id, async () => {
+      await rm(this.file(chat.id), { force: true });
+      await rm(this.file(chat.id, true), { force: true });
+    });
     await rm(join(this.dir, "images", chat.id), {
       recursive: true,
       force: true,
@@ -298,21 +338,56 @@ export class ChatStorage {
   async save(chat: ProjectChat, { holdSummary = false } = {}) {
     // Links belong to the state-file transaction, not a second persisted copy.
     const { links: _, ...record } = chat;
-    const value = JSON.stringify(record),
-      path = join(this.dir, chat.id + ".json");
+    this.lastRev = Math.max(Date.now(), this.lastRev + 1);
+    const rev = this.lastRev;
+    const value = JSON.stringify({ ...record, rev });
+    // Checkpoints from here on build on this file, even before it's written:
+    // theirs queue behind it.
+    this.bases.set(chat, savedBase(chat, rev, value.length));
+    await this.persist(chat, holdSummary, async () => {
+      await this.replace(this.file(chat.id), value);
+      // The file now has all of the turn the live file had.
+      await rm(this.file(chat.id, true), { force: true });
+    });
+  }
+
+  /**
+   * Keeps a running turn's progress: what changed since the thread's last
+   * full save, mostly the turn's answer, goes to `<id>.live.json` rather than
+   * the thread being rewritten whole. A full save takes over without a file
+   * to build on, or once the turn changed a good part of the thread.
+   */
+  async checkpoint(chat: ProjectChat) {
+    const base = this.bases.get(chat);
+    const live = base && JSON.stringify(liveTurn(chat, base));
+    if (!live || live.length > base.bytes / 4) return this.save(chat);
+    await this.persist(chat, false, () =>
+      this.replace(this.file(chat.id, true), live),
+    );
+  }
+
+  /** Writes `value` to `path` whole: to a file beside it, then renamed over it. */
+  private async replace(path: string, value: string) {
+    await mkdir(this.dir, { recursive: true, mode: 0o700 });
+    const tmp = path + "." + randomUUID() + ".tmp";
+    await writeFile(tmp, value, { mode: 0o600 });
+    await rename(tmp, path);
+  }
+
+  private async persist(
+    chat: ProjectChat,
+    holdSummary: boolean,
+    write: () => Promise<void>,
+  ) {
     const id = chat.id;
     this.saving.set(id, (this.saving.get(id) ?? 0) + 1);
     try {
-      await this.writes(id, async () => {
-        await mkdir(this.dir, { recursive: true, mode: 0o700 });
-        const tmp = path + "." + randomUUID() + ".tmp";
-        await writeFile(tmp, value, { mode: 0o600 });
-        await rename(tmp, path);
-      });
+      await this.writes(id, write);
       this.unsaved.delete(id);
     } catch (e) {
-      // Kept loaded, so flush can retry what only lives in memory.
+      // Kept loaded, so flush can retry what only lives in memory, in full.
       this.unsaved.add(id);
+      this.bases.delete(chat);
       if (this.cached(id) === chat) this.use(chat);
       throw e;
     } finally {
@@ -356,12 +431,13 @@ export class ChatStorage {
     const recent = await Promise.all(
       listed.map(async ({ id, providers }) => {
         if (!providers) return id;
-        const saved = await stat(join(this.dir, id + ".json")).catch(
-          () => undefined,
+        const [saved, live] = await Promise.all(
+          [this.file(id), this.file(id, true)].map((path) =>
+            stat(path).catch(() => undefined),
+          ),
         );
-        return saved && saved.mtimeMs > storeSavedAt - RECONCILE_MARGIN_MS
-          ? id
-          : undefined;
+        const at = Math.max(saved?.mtimeMs ?? 0, live?.mtimeMs ?? 0);
+        return at > storeSavedAt - RECONCILE_MARGIN_MS ? id : undefined;
       }),
     );
     for (const id of recent) {
@@ -381,8 +457,12 @@ export class ChatStorage {
     if (!strays.length) return;
     for (const { id } of strays) {
       this.forget(id);
-      await rm(join(this.dir, id + ".json"), { force: true }).catch((e) =>
-        console.warn("Could not remove a retired thinker thread:", e),
+      await Promise.all(
+        [this.file(id), this.file(id, true)].map((path) =>
+          rm(path, { force: true }).catch((e) =>
+            console.warn("Could not remove a retired thinker thread:", e),
+          ),
+        ),
       );
     }
     await this.store.update((s) => {
@@ -401,11 +481,7 @@ export class ChatStorage {
     const listed = this.store.get().chats ?? [];
     const byId = new Map(listed.map((c) => [c.id, c]));
     // Read without caching: a long history of reviews needn't sit in memory.
-    const read = async (id: string) =>
-      this.cached(id) ??
-      (JSON.parse(
-        await readFile(join(this.dir, id + ".json"), "utf8"),
-      ) as ProjectChat);
+    const read = (id: string) => this.peek(id);
     for (const stray of listed) {
       const review = stray.reviewer && byId.get(stray.reviewer.parent);
       if (!review || stray.startedBy) continue;
@@ -488,7 +564,7 @@ export class ChatStorage {
 
   /** The complete saved conversation, readable by a fresh agent in chunks. */
   historyPath(chatId: string) {
-    return join(this.dir, chatId + ".json");
+    return this.file(chatId);
   }
 
   imagePath(chatId: string, image: ChatImage) {

@@ -24,7 +24,7 @@ function reviews(path: string) {
   const summaries = ["a", "b"].map((id) => ({ id, title: id, updated: now }));
   const store = { get: () => ({ chats: summaries }) } as unknown as Store;
   const storage = {
-    cached: (id: string) => ({
+    peek: async (id: string) => ({
       id,
       messages: [
         {
@@ -46,7 +46,7 @@ function reviews(path: string) {
       ],
     }),
   } as unknown as ChatStorage;
-  return new WatchReviews(store, storage, dir, path);
+  return new WatchReviews(store, storage, path);
 }
 function answer(service: WatchReviews) {
   return vi

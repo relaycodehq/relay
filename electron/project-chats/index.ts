@@ -179,7 +179,6 @@ export class ProjectChats {
     this.watchNotes = new WatchReviews(
       store,
       this.storage,
-      dir,
       join(dirname(dir), "watch-verdicts.jsonl"),
     );
     // Hosts look methods up at call time, not with .bind(this): tests

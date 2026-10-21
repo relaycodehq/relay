@@ -1,5 +1,3 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type {
   WatchNote,
@@ -57,7 +55,6 @@ export class WatchReviews {
   constructor(
     private store: Store,
     private storage: ChatStorage,
-    private chatsDir: string,
     path: string,
   ) {
     this.records = new JsonLines(path);
@@ -189,15 +186,7 @@ export class WatchReviews {
 
   /** The live copy when the thread is open, else its file, so a week of threads isn't kept in memory. */
   private async read(id: string): Promise<ProjectChat | undefined> {
-    const cached = this.storage.cached(id);
-    if (cached) return cached;
-    try {
-      return JSON.parse(
-        await readFile(join(this.chatsDir, `${id}.json`), "utf8"),
-      ) as ProjectChat;
-    } catch {
-      return undefined;
-    }
+    return this.storage.peek(id).catch(() => undefined);
   }
 
   private load() {
