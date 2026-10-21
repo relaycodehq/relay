@@ -46,7 +46,14 @@ export class TurnPredictor {
     if (this.done || this.signal.aborted) return;
     this.done = true;
     if (!worthPredicting(this.predict.request, this.calls.size)) return;
-    if (this.predict.allows && !this.predict.allows()) return;
+    const allowed = this.predict.allows?.() ?? true;
+    // Asked at once when it can be, so it queues ahead of the turn's check.
+    if (allowed === true) this.guess();
+    else if (allowed)
+      void allowed.then((yes) => yes && !this.signal.aborted && this.guess());
+  }
+
+  private guess() {
     void this.ask(predictionPrompt, this.signal)
       .then(({ reply, cost }) => {
         const next = reply && parsePrediction(reply);

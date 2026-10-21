@@ -28,6 +28,7 @@ export class PredictionLog {
   private writing = Promise.resolve();
   /** Messages sent since one was a guess; unknown until the log is read. */
   private unused?: number;
+  private reading?: Promise<number>;
   private passes = 0;
 
   constructor(path: string) {
@@ -38,8 +39,16 @@ export class PredictionLog {
    * Whether a turn that earns a guess gets one. After a long run of guesses
    * nobody sent, only one turn in ten does, until one of them is sent.
    */
-  allows() {
-    if (this.unused === undefined) void this.streak().catch(() => {});
+  allows(): boolean | Promise<boolean> {
+    if (this.unused === undefined)
+      return this.streak().then(
+        () => this.allowed(),
+        () => true,
+      );
+    return this.allowed();
+  }
+
+  private allowed() {
     if ((this.unused ?? 0) < UNUSED_STREAK) return true;
     return ++this.passes % BACKED_OFF_EVERY === 0;
   }
@@ -52,9 +61,17 @@ export class PredictionLog {
   sent(chatId: string, guess: string, body: string) {
     const taken =
       (agentMention(body)?.question ?? body.trim()) === guess.trim();
-    if (this.unused !== undefined) this.unused = taken ? 0 : this.unused + 1;
+    const count = () => {
+      if (this.unused !== undefined) this.unused = taken ? 0 : this.unused + 1;
+    };
     if (taken) this.passes = 0;
-    this.add({ kind: "sent", taken, at: Date.now(), chatId });
+    // Before the log is read, counted once the read queued ahead of it is in.
+    const late = this.unused === undefined;
+    if (!late) count();
+    this.add(
+      { kind: "sent", taken, at: Date.now(), chatId },
+      late ? count : undefined,
+    );
   }
 
   async summary(
@@ -93,22 +110,37 @@ export class PredictionLog {
     return summary;
   }
 
-  /** Read once from the log, then kept as messages are sent. */
-  private async streak() {
-    await this.writing;
-    if (this.unused !== undefined) return this.unused;
-    let unused = 0;
-    for (const e of await this.load())
-      if (e.kind === "sent") unused = e.taken ? 0 : unused + 1;
-    this.unused ??= unused;
-    return this.unused;
+  /** Read once from the log, in line with its writes, then kept as messages are sent. */
+  private streak(): Promise<number> {
+    if (this.unused !== undefined) return Promise.resolve(this.unused);
+    if (!this.reading) {
+      const reading = this.writing
+        .then(() => this.load())
+        .then((entries) => {
+          let unused = 0;
+          for (const e of entries)
+            if (e.kind === "sent") unused = e.taken ? 0 : unused + 1;
+          this.unused = unused;
+          return unused;
+        })
+        .finally(() => {
+          this.reading = undefined;
+        });
+      this.reading = reading;
+      this.writing = reading.then(
+        () => {},
+        () => {},
+      );
+    }
+    return this.reading;
   }
 
-  private add(entry: Entry) {
+  private add(entry: Entry, written?: () => void) {
     // After the first load, which may rewrite the file without old entries.
     this.writing = this.writing
       .then(() => this.load())
       .then(() => this.records.append(entry))
+      .then(written)
       .catch((e) => console.warn("Could not log a next-message guess:", e));
   }
 

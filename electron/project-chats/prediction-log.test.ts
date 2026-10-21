@@ -65,3 +65,20 @@ it("backs off after 20 guesses nobody sent, until one is", async () => {
   expect(log.allows()).toBe(true);
   expect((await log.summary(7, async () => 0)).backingOff).toBe(false);
 });
+
+it("keeps backing off from the first turn after a start, counting sends made meanwhile", async () => {
+  const path = join(dir, "predictions.jsonl");
+  const lines = Array.from({ length: 19 }, () => ({
+    kind: "sent",
+    taken: false,
+    at: Date.now(),
+    chatId: "a",
+  }));
+  await writeFile(path, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+  const log = new PredictionLog(path);
+  const first = log.allows();
+  log.sent("a", "go with B", "no, revert it");
+  await expect(first).resolves.toBe(true);
+  expect((await log.summary(7, async () => 0)).backingOff).toBe(true);
+  expect(log.allows()).toBe(false);
+});
