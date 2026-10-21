@@ -41,8 +41,8 @@ import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
 import { chatStatus, type ProjectChats } from "../project-chats";
-import type { PreviewToolName, ThreadPreviews } from "../preview";
-import type { RenderToolName, RenderTools } from "../html-renders";
+import type { ThreadPreviews } from "../preview";
+import type { RenderTools } from "../html-renders";
 import {
   relayToolSchemas,
   toolText,
@@ -124,6 +124,11 @@ const answers = (chat: ProjectChat) =>
 const head = (text: string, limit = 600) =>
   text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
 
+/** Keeps each validated tool name paired with its own schema output. */
+type ToolCall = {
+  [N in RelayToolName]: { name: N; input: RelayToolArgs<N> };
+}[RelayToolName];
+
 type ReadUsage = (
   provider: UsageProvider,
   force: boolean,
@@ -189,8 +194,9 @@ export class StartedThreads {
     args: unknown,
     signal: AbortSignal,
   ) {
+    if (!Object.hasOwn(relayToolSchemas, name))
+      return toolText(`There is no tool ${name}.`, true);
     const schema = relayToolSchemas[name as RelayToolName];
-    if (!schema) return toolText(`There is no tool ${name}.`, true);
     const parsed = schema.safeParse(args);
     if (!parsed.success)
       return toolText(
@@ -205,8 +211,10 @@ export class StartedThreads {
         "A thread started by another thread can't start or drive threads of its own.",
         true,
       );
-    const input = parsed.data as any;
-    switch (name as RelayToolName) {
+    // The lookup and parse above establish this pairing; keep it together so
+    // narrowing the tool name also narrows its arguments in every branch.
+    const { name: tool, input } = { name, input: parsed.data } as ToolCall;
+    switch (tool) {
       case "start_threads":
         return this.start(lead, input, signal);
       case "list_threads":
@@ -259,7 +267,7 @@ export class StartedThreads {
             true,
           );
         return toolText(
-          name === "import_sources"
+          tool === "import_sources"
             ? await offers.sources(lead.importFrom, input.project)
             : await offers.offer(lead.id, lead.importFrom, input),
         );
@@ -274,17 +282,16 @@ export class StartedThreads {
       case "open_preview":
       case "screenshot":
       case "console_errors":
-        return this.pages.preview(lead, name as PreviewToolName, input, signal);
+        return this.pages.preview(lead, tool, input, signal);
       case "ask_html":
         return this.pages.ask(lead.id, input, signal);
       case "show_html":
       case "preview_html":
-        return this.pages.render(
-          lead.id,
-          name as RenderToolName,
-          input,
-          signal,
-        );
+        return this.pages.render(lead.id, tool, input, signal);
+      default: {
+        const unhandled: never = tool;
+        throw new Error(`There is no handler for tool ${unhandled}.`);
+      }
     }
   }
 

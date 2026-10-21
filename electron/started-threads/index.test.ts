@@ -180,6 +180,30 @@ const parse = (result: ToolResult) => JSON.parse(resultText(result));
 const ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
 
+test.each(["missing_tool", "constructor", "__proto__"])(
+  "rejects unknown tool %s before reading the caller's thread",
+  async (name) => {
+    const { lead, api } = fakeChats();
+    api.get = vi.fn(api.get);
+    const result = await call(new StartedThreads(api), lead.id, name, {});
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(`There is no tool ${name}.`);
+    expect(api.get).not.toHaveBeenCalled();
+  },
+);
+
+test("rejects invalid tool arguments before reading the caller or sending", async () => {
+  const { lead, api, sent } = fakeChats();
+  api.get = vi.fn(api.get);
+  const result = await call(new StartedThreads(api), lead.id, "start_threads", {
+    threads: [{ prompt: "   " }],
+  });
+  expect(result.isError).toBe(true);
+  expect(resultText(result)).toContain("threads.0.prompt:");
+  expect(api.get).not.toHaveBeenCalled();
+  expect(sent).toEqual([]);
+});
+
 test("starts threads on the lead's agent and settings, each saying who sent it", async () => {
   const { lead, sent, chats, api } = fakeChats();
   const threads = new StartedThreads(api);
