@@ -626,7 +626,6 @@ test("lets the reader scroll up while an answer streams", async () => {
     }
     await page.waitForTimeout(200);
     const afterSmall = await fromBottom();
-    console.log("distance from bottom after 240px of small steps:", afterSmall);
 
     // Once up, what the reader looks at must stay put while the answer grows.
     for (let i = 0; i < 5; i++) {
@@ -640,7 +639,6 @@ test("lets the reader scroll up while an answer streams", async () => {
       await page.waitForTimeout(25);
       drift.push((await offsetOf(page, anchor!.id!)) - anchor!.offset);
     }
-    console.log("anchor", anchor, "drift", JSON.stringify(drift));
     // Back down to the end: the thread follows the answer again.
     await page.mouse.wheel(0, 20000);
     await page.waitForTimeout(300);
@@ -652,7 +650,6 @@ test("lets the reader scroll up while an answer streams", async () => {
       await page.waitForTimeout(50);
       trailing.push(await fromBottom());
     }
-    console.log("following again", JSON.stringify(trailing));
     expect(Math.max(...trailing)).toBeLessThan(2);
     expect(afterSmall).toBeGreaterThan(150);
     expect(Math.max(...drift.map(Math.abs))).toBeLessThan(2);
