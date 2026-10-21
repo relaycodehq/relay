@@ -69,6 +69,9 @@ it("colours a block streamed line by line exactly like the finished block", asyn
     "}",
   ].join("\n");
   const lines = code.split("\n");
+  // First, so the grammar's patterns are compiled: a busy machine compiling
+  // them mid-line runs past Shiki's time limit, which leaves the line plain.
+  const whole = await highlight(code, "tsx", "pierre-dark", null);
   let prior: Highlighted | null = null;
   for (let end = 1; end <= lines.length; end++)
     prior = await highlight(
@@ -77,7 +80,6 @@ it("colours a block streamed line by line exactly like the finished block", asyn
       "pierre-dark",
       prior,
     );
-  const whole = await highlight(code, "tsx", "pierre-dark", null);
   // Offsets count from each pass's start; only what's drawn has to match.
   const drawn = (lines: Highlighted["lines"] = []) =>
     lines.map((line) =>
