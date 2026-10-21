@@ -175,7 +175,10 @@ async function pairedComputers() {
             return mini.chats.respond(id, rest[0] as string, rest[1] as never);
           if (method === "cancelProjectChat") return mini.chats.cancel(id);
           if (method === "createScratch")
-            return mini.projects.scratch(join(mini.dir, "scratch"), () => false);
+            return mini.projects.scratch(
+              join(mini.dir, "scratch"),
+              () => false,
+            );
           if (
             method === "projectWorkingTree" ||
             method === "projectRebase" ||
@@ -865,6 +868,16 @@ it("keeps a live handoff's thread here as the other computer writes it, and runs
     handedOver: true,
   });
 
+  // The answer there before handing off is told here too, and can come after
+  // the thread caught up; listen only once both earlier answers were told.
+  const { epoch } = laptop.chats.newsSince();
+  await vi.waitFor(() =>
+    expect(
+      laptop.chats
+        .newsSince({ epoch, seq: 0 })
+        .items?.filter((i) => i.chatId === thread.id && i.kind === "finished"),
+    ).toHaveLength(2),
+  );
   const told: NewsItem[] = [];
   laptop.chats.onNews((item) => told.push(item));
   setPastesRoot(join(laptop.dir, "pastes"));
@@ -1310,9 +1323,7 @@ async function lackedProject(laptop: Awaited<ReturnType<typeof computer>>) {
     url,
     projectId: (await laptop.projects.add(tool, null)).id,
     reachable: async (on: boolean) =>
-      on
-        ? await rename(hidden, origin)
-        : await rename(origin, hidden),
+      on ? await rename(hidden, origin) : await rename(origin, hidden),
   };
 }
 
@@ -1328,7 +1339,10 @@ async function startOnMini(
     { kind: "project" },
     "worktree",
   );
-  await laptop.chats.firstMessageOnly(thread.id, input("@codex Add a changelog"));
+  await laptop.chats.firstMessageOnly(
+    thread.id,
+    input("@codex Add a changelog"),
+  );
   await sender.handOff(thread.id, computerId);
   return thread.id;
 }
@@ -1559,8 +1573,10 @@ it("starts no setup for a thread taken back while its clone was under way", asyn
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const { projectId } = await lackedProject(laptop);
   let fail!: (e: Error) => void;
-  vi.spyOn(sender as never as { cloneOn: () => unknown }, "cloneOn")
-    .mockImplementation(() => new Promise((_, reject) => (fail = reject)));
+  vi.spyOn(
+    sender as never as { cloneOn: () => unknown },
+    "cloneOn",
+  ).mockImplementation(() => new Promise((_, reject) => (fail = reject)));
   const id = await startOnMini(laptop, sender, computerId, projectId);
   await vi.waitFor(async () =>
     expect((await laptop.chats.get(id)).setup?.state).toBe("cloning"),
@@ -2132,8 +2148,13 @@ it("opens a remote project's shells on its computer, in its folder, and shows th
   cleanup.push(() => {
     for (const spy of [...spies, passed]) spy.mockRestore();
   });
-  const { laptop, mini, computers, computerId, remote: miniRemote } =
-    await pairedComputers();
+  const {
+    laptop,
+    mini,
+    computers,
+    computerId,
+    remote: miniRemote,
+  } = await pairedComputers();
   const remote = new RemoteProjects(computers, laptop.projects);
   const folder = await mini.projects.root(mini.projectId);
   const project = await remote.add(computerId, folder);
