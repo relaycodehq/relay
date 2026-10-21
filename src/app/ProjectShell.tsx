@@ -78,14 +78,13 @@ import { SignInDialog } from "../features/settings/SignInDialog";
 import { ErrorBox, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
+import { bootstrapQuery, projectChatsQuery } from "../lib/workspace-queries";
 const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {
   const qc = useQueryClient();
   const boot = useQuery({
-    queryKey: ["bootstrap"],
-    queryFn: () => api.bootstrap(),
-    staleTime: Infinity,
+    ...bootstrapQuery,
     refetchInterval: (q) =>
       q.state.data?.loginRestore === "unlocking" ? 500 : false,
     refetchIntervalInBackground: true,
@@ -222,10 +221,7 @@ export default function ProjectShell() {
     const p = projects.data?.find((p) => p.id === projectId);
     if (!p) return;
     void qc
-      .query({
-        queryKey: ["project-chats", projectId],
-        queryFn: () => api.projectChats(projectId),
-      })
+      .query(projectChatsQuery(projectId))
       .then((list) => {
         const next = list.find((c) => c.id === chatId);
         if (!next) return;

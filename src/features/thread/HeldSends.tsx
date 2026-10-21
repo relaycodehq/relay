@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import { Message } from "./ProjectMessage";
 import { errorMessage } from "../../../shared/error-message";
+import { usePoll } from "../../lib/poll";
 
 const noop = () => {};
 
@@ -27,13 +28,14 @@ export function HeldSends({
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string>();
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
     enabled: !!chat.sentTo,
   });
   if (!held.length) return null;

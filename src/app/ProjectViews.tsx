@@ -12,6 +12,7 @@ import { TurnChanges } from "../features/changes/TurnChanges";
 import type { Viewing } from "../features/thread/useThreadView";
 import type { RequestChannel } from "../lib/request-channel";
 import type { PaneSlots } from "../ui/WorkspacePanes";
+import { usePoll } from "../lib/poll";
 
 /**
  * Uncommitted work in the folder the thread works in (the checkout, or its
@@ -53,7 +54,8 @@ export function ProjectChanges({
   onOpenOutside?: (path: string) => void;
   agentRunning?: boolean;
 }) {
-  const worktree = useQuery(worktreeQuery(chatId, !!inWorktree)).data;
+  const poll = usePoll();
+  const worktree = useQuery(worktreeQuery(chatId, !!inWorktree, poll)).data;
   const live = worktree?.path && !worktree.removed ? worktree : undefined;
   const toggle = chatId && live && (
     <WorktreeSwitch

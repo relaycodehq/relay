@@ -18,6 +18,7 @@ import { Switch } from "../../ui/SettingsCard";
 import { ErrorBox } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { fileManager } from "../../lib/mod-key";
+import { projectsQuery } from "../../lib/workspace-queries";
 
 /** Project settings are scoped to the project their entry point asked for. */
 export function useSettingsProject(
@@ -25,8 +26,7 @@ export function useSettingsProject(
   projectId: string | undefined,
 ) {
   const projects = useQuery({
-    queryKey: ["projects", accountId],
-    queryFn: () => api.projects(),
+    ...projectsQuery(accountId),
     enabled: !!projectId,
   });
   return projects.data?.find((p) => p.id === projectId && !p.scratch);

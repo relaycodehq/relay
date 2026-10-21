@@ -18,6 +18,7 @@ import { openSettings } from "../../lib/settings-page";
 import { prefillSignIn } from "../terminal/thread-terminals";
 import { InstallLog } from "../../ui/InstallLog";
 import { useAgentVersions } from "../updates/agent-updates";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Says before sending that the composer's agent can't run where it would,
@@ -114,6 +115,7 @@ function ComputerAgentMissing({
   projectId: string;
   chatId?: string;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const queryKey = ["agent-versions", computer.id];
   const versions = useQuery({
@@ -130,10 +132,12 @@ function ComputerAgentMissing({
     retry: false,
     // While it installs there, how it's going.
     refetchInterval: (query) =>
-      mineIn(query.state.data, provider) &&
-      isUpdating(mineIn(query.state.data, provider)!)
-        ? 2000
-        : false,
+      poll(
+        mineIn(query.state.data, provider) &&
+          isUpdating(mineIn(query.state.data, provider)!)
+          ? 2000
+          : false,
+      ),
   });
   const [checking, setChecking] = useState(false);
   const agent = mineIn(versions.data, provider);
@@ -238,6 +242,7 @@ function ComputerSignedOut({
   projectId: string;
   chatId?: string;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const key = `${computer.id}:${provider}`;
   const watching = () =>
@@ -249,7 +254,7 @@ function ComputerSignedOut({
     staleTime: 60_000,
     retry: false,
     refetchInterval: (query) =>
-      query.state.data === false && watching() ? 3000 : false,
+      poll(query.state.data === false && watching() ? 3000 : false),
   });
   // Signed out, an agent there lists no models; once signed in, every agent
   // there whose list failed asks again, so the picker names its models.

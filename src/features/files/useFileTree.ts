@@ -3,6 +3,7 @@ import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import type { DirListing } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import { visibleDirectories } from "../../lib/file-tree";
+import { usePoll } from "../../lib/poll";
 
 export const directoryKey = (where: string, dir?: string) =>
   dir === undefined
@@ -74,6 +75,7 @@ export function useDirectories(
   watched: boolean,
   active: boolean,
 ) {
+  const poll = usePoll();
   const dirs = useMemo(() => visibleDirectories(open), [open]);
   const combine = useCallback(
     (results: UseQueryResult<DirListing>[]) => ({
@@ -90,7 +92,7 @@ export function useDirectories(
       queryFn: () => api.projectDirectory(where, dir),
       enabled: active,
       staleTime: 0,
-      refetchInterval: listingPoll(watched),
+      refetchInterval: poll(listingPoll(watched)),
       retry: false,
     })),
     combine,

@@ -8,6 +8,7 @@ import {
   type WorkingTree,
 } from "../../../shared/working-tree";
 import { errorMessage } from "../../../shared/error-message";
+import { usePoll } from "../../lib/poll";
 
 // A branch change can touch anything shown, but it just talked to the
 // upstream (or didn't need to), so the periodic fetch can wait its turn.
@@ -22,6 +23,7 @@ export const everythingButFetch = {
  * `where` is the checkout or thread worktree workspace id.
  */
 export function useBranchSync(where: string) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const treeKey = workingTreeKey(where);
   const tree = useQuery({
@@ -40,7 +42,7 @@ export function useBranchSync(where: string) {
     },
     enabled: !!tree.data?.upstream,
     staleTime: 60_000,
-    refetchInterval: 180_000,
+    refetchInterval: poll(180_000),
     refetchOnWindowFocus: true,
     retry: false,
   });

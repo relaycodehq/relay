@@ -14,6 +14,7 @@ import { useProjectChecks } from "../features/checks/useProjectChecks";
 import { directoryKey } from "../features/files/useFileTree";
 import type { ShellNavigation } from "./useShellNavigation";
 import { workingTreeKey } from "../lib/working-tree-key";
+import { usePoll } from "../lib/poll";
 
 export type ThreadFolder = ReturnType<typeof useThreadFolder>;
 
@@ -28,6 +29,7 @@ export function useThreadFolder({
   inbox,
   pull,
 }: Pick<ShellNavigation, "project" | "chat" | "chats" | "inbox" | "pull">) {
+  const poll = usePoll();
   const inWorktree = worktreeThread(chat);
   const worktree = threadWorktree(inWorktree);
   // Its agent worktree was deleted: Git there only fails until the composer's row picks where it goes on.
@@ -59,7 +61,7 @@ export function useThreadFolder({
     queryKey: workingTreeKey(where),
     queryFn: () => api.projectWorkingTree(where),
     enabled: hasTree,
-    refetchInterval: watched ? 60_000 : 3000,
+    refetchInterval: poll(watched ? 60_000 : 3000),
   });
   // A plain folder has no tree to poll; its root listing, shared with the
   // Files tree, notices the folder going instead.
@@ -67,7 +69,7 @@ export function useThreadFolder({
     queryKey: directoryKey(where, ""),
     queryFn: () => api.projectDirectory(where, ""),
     enabled: !!project && !inbox && !!project.plain,
-    refetchInterval: 5000,
+    refetchInterval: poll(5000),
     retry: false,
   });
   /** The project folder's path once it was moved or deleted, so panes stand aside. */

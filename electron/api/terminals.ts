@@ -90,7 +90,7 @@ export function terminalHandlers(ctx: ApiContext) {
     ),
     adoptTerminal: takes([idSchema, idSchema], async (projectId, chatId) => {
       // A thread in its own worktree starts its own shell there.
-      if (await projectChats.worksInCheckout(projectId, chatId))
+      if (await projectChats.agentWorkspaces.worksInCheckout(projectId, chatId))
         threadTerminals.adopt(draftTerminalKey(projectId), chatId);
     }),
   } satisfies Handlers;

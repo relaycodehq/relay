@@ -19,6 +19,7 @@ import { MergeSheet } from "./MergeSheet";
 import { Spinner } from "../../ui/ui";
 import { gitBlockedReason } from "./working-changes";
 import "./git-actions.css";
+import { usePoll } from "../../lib/poll";
 
 type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
 export type GitActionsHandle = {
@@ -56,6 +57,7 @@ export function GitActions({
   onChanges: () => void;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const key = workingTreeKey(where);
   const disabled = !!locked;
@@ -69,7 +71,7 @@ export function GitActions({
     queryFn: () => api.projectBranchPulls(where),
     enabled: connected && !!project.repository && !!tree.data?.branch,
     staleTime: 30000,
-    refetchInterval: 60000,
+    refetchInterval: poll(60000),
   });
   // Fails on the main branch itself, which has nothing to merge into.
   const plan = useQuery({

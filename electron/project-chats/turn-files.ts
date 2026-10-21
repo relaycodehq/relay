@@ -162,7 +162,7 @@ export class TurnFiles {
     return this.core.control(chatId, async () => {
       await this.core.storage.load(chatId);
       const chat = this.core.storage.cached(chatId)!;
-      await this.worktrees.refreshAgentWorktrees(chat);
+      await this.worktrees.agents.refresh(chat);
       const worktree = threadWorktree(chat);
       if (!chat.worktree && !worktree)
         this.core.projects.assertCheckoutAvailable(chat.projectId);

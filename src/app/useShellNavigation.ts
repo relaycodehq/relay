@@ -22,6 +22,7 @@ import { openThread } from "../lib/thread-storage";
 import type { ThreadView } from "../features/thread/useThreadView";
 import { useWorkspacePanes } from "../lib/workspace-panes";
 import type { ThreadWindow } from "../../shared/thread-windows";
+import { projectChatsQuery } from "../lib/workspace-queries";
 
 /** What the main pane shows: a project, the Pull requests page or Usage. */
 export type Surface = "project" | "inbox" | "usage" | "processes";
@@ -83,8 +84,7 @@ export function useShellNavigation(
   const [restoredProject, setRestoredProject] = useState<string>();
   const qc = useQueryClient();
   const chats = useQuery({
-    queryKey: ["project-chats", project?.id],
-    queryFn: () => api.projectChats(project!.id),
+    ...projectChatsQuery(project?.id ?? ""),
     enabled: !!project,
     // Every Scratchpad chat is its own project, so opening one switches
     // projects; until its list loads, the sidebar's Scratchpad list already

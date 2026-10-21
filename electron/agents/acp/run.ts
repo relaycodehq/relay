@@ -1,9 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { agentName } from "../../../shared/agents";
 import type { AgentDecision } from "../../../shared/agent-modes";
-import { TurnText } from "../cursor/activity";
 import { signedOutError } from "../errors";
-import { answerLimitError } from "../turn-kit";
+import {
+  answerLimitError,
+  CANCEL_GRACE_MS,
+  cancelledByYou,
+  TurnText,
+} from "../turn-kit";
 import type { AgentOptions } from "../types";
 import {
   acpActivity,
@@ -33,8 +37,6 @@ import {
 } from "./sessions";
 import { applySettings } from "./settings";
 
-/** How long a cancelled turn may take to say so before Relay stops waiting. */
-const cancelGrace = 5000;
 
 const decisionKinds: Record<Exclude<AgentDecision, "cancel">, string> = {
   accept: "allow_once",
@@ -387,10 +389,7 @@ export async function runAcp(
       turnAbort.signal.addEventListener(
         "abort",
         () => {
-          cancelTimer = setTimeout(
-            () => reject(new Error("Cancelled by you.")),
-            cancelGrace,
-          );
+          cancelTimer = setTimeout(() => reject(cancelledByYou()), CANCEL_GRACE_MS);
           cancelTimer.unref();
         },
         { once: true },

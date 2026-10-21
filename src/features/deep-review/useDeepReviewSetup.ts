@@ -28,6 +28,7 @@ import {
   type ReviewSetupChoice,
 } from "./review-setups";
 import { useClaudeModels } from "../agents/useClaudeModels";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Keeps `change` with the unsent review, and the setup it was made with the
@@ -117,6 +118,7 @@ function useTargetPick(
   branch: string | undefined,
   changes: number,
 ) {
+  const poll = usePoll();
   const [saved] = useState(() => threadStorage(draftId).review.load());
   // A pull request kept from a repository the project no longer points at is gone.
   const [pull, setPull] = useState<PullRef | null>(() =>
@@ -154,7 +156,7 @@ function useTargetPick(
     queryKey: ["project-branch-changes", projectId, base],
     queryFn: () => api.projectBranchChanges(projectId, base!),
     enabled: setup.kind === "branch" && !!base,
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   // A kept commit that is no longer among the recent ones gives way to the newest.
   const chosenCommit = commits.data?.some((c) => c.sha === commit)

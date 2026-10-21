@@ -673,7 +673,7 @@ export class ProjectChats {
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
-    await this.worktrees.refreshAgentWorktrees(chat);
+    await this.worktrees.agents.refresh(chat);
     return {
       ...structuredClone(chat),
       ...structuredClone(this.waitingIn(chat)),
@@ -715,7 +715,7 @@ export class ProjectChats {
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
     const saved = await this.storage.load(id);
-    await this.worktrees.refreshAgentWorktrees(saved);
+    await this.worktrees.agents.refresh(saved);
     const { messages, ...chat } = saved;
     return {
       ...structuredClone(chat),
@@ -1003,20 +1003,9 @@ export class ProjectChats {
   terminalFolder(projectId: string, id: string) {
     return this.worktrees.terminalFolder(projectId, id);
   }
-  worksInCheckout(projectId: string, id: string) {
-    return this.worktrees.worksInCheckout(projectId, id);
-  }
-  agentWorktreePath(id: string, path: string) {
-    return this.worktrees.agentWorktreePath(id, path);
-  }
-  selectAgentWorktree(id: string, path: string | null) {
-    return this.worktrees.selectAgentWorktree(id, path);
-  }
-  agentWorktreeRecreatable(id: string) {
-    return this.worktrees.agentWorktreeRecreatable(id);
-  }
-  recreateAgentWorktree(id: string) {
-    return this.worktrees.recreateAgentWorktree(id);
+  /** The worktrees agents made from project-folder threads. */
+  get agentWorkspaces() {
+    return this.worktrees.agents;
   }
   worktreeRoot(projectId: string, id: string, expectedWorktree?: string) {
     return this.worktrees.rootFor(projectId, id, expectedWorktree);

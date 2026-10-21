@@ -29,6 +29,8 @@ import { workspaceId } from "../../../shared/workspaces";
 import { chatKey } from "../../lib/chat-events";
 import { useNavigationLock } from "../../lib/navigation-lock";
 import { worktreeQuery } from "../changes/turn-diff";
+import { projectChatsQuery } from "../../lib/workspace-queries";
+import { usePoll } from "../../lib/poll";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -44,6 +46,7 @@ export function useThreadWorktree({
   running: boolean;
   onDraftWorkspace?: (workspace: ChatWorkspace) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const lock = useNavigationLock();
   // Where a new thread will work; a started one keeps its own.
@@ -89,8 +92,7 @@ export function useThreadWorktree({
   const joining =
     !chat && start && "thread" in start ? start.thread : undefined;
   const threads = useQuery({
-    queryKey: ["project-chats", project.id],
-    queryFn: () => api.projectChats(project.id),
+    ...projectChatsQuery(project.id),
     enabled: !!joining,
   });
   useEffect(() => {
@@ -98,7 +100,7 @@ export function useThreadWorktree({
     const branch = threads.data.find((c) => c.id === joining)?.worktree?.branch;
     setStart(branch ? { on: branch } : undefined);
   }, [joining, threads.data]);
-  const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree));
+  const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree, poll));
   const status = query.data;
   const live = status?.path && !status.removed ? status : undefined;
   const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;

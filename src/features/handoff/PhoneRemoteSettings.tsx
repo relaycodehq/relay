@@ -21,6 +21,7 @@ import {
   Switch,
 } from "../../ui/SettingsCard";
 import { QrCode } from "./qr/QrCode";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Phone access runs over Tailscale, and over the local network when that's
@@ -29,12 +30,13 @@ import { QrCode } from "./qr/QrCode";
  * phone is paired the steps fold away.
  */
 export function PhoneRemoteSettings() {
+  const poll = usePoll();
   const qc = useQueryClient();
   const state = useQuery({
     queryKey: ["phone-remote"],
     queryFn: () => api.phoneRemoteState(),
     // Notices Tailscale coming up and phones coming and going while Settings is open.
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   // `before`: phones paired when the code was made. A new one used the code up.
   const [pairing, setPairing] = useState<

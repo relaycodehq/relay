@@ -6,7 +6,6 @@ import {
   cursorActivity,
   cursorEdits,
   cursorPlan,
-  TurnText,
   type CursorCall,
 } from "./activity";
 import { cursorPrompt } from "./commands";
@@ -19,7 +18,13 @@ import {
 import type { CursorRun, CursorRunResult, CursorUpdate } from "./protocol";
 import { currentSdk, ensureSdk } from "./sdk";
 import { signedOutError, usageLimitError } from "../errors";
-import { answerLimitError, guardSteer } from "../turn-kit";
+import {
+  answerLimitError,
+  CANCEL_GRACE_MS,
+  cancelledByYou,
+  guardSteer,
+  TurnText,
+} from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
@@ -351,8 +356,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
         "abort",
         () => {
           cancelTimer = setTimeout(
-            () => reject(new Error("Cancelled by you.")),
-            5000,
+            () => reject(cancelledByYou()),
+            CANCEL_GRACE_MS,
           );
           cancelTimer.unref();
         },

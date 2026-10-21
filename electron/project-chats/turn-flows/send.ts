@@ -168,7 +168,7 @@ export class TurnSends {
       const project = this.core.projects.get(chat.projectId);
       if (project.computer && answer)
         throw new Error(onComputerMessage(project));
-      await this.worktrees.refreshAgentWorktrees(chat);
+      await this.worktrees.agents.refresh(chat);
       if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       // Sent again after it went in: nothing to check, move or start.

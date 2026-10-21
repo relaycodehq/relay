@@ -11,7 +11,7 @@ import {
   waitForChatEvent,
   waitForSummary,
 } from "../../tests/fixtures/project-chats-harness";
-import { ThreadWorktrees } from "./worktrees";
+import { AgentWorkspaces } from "./agent-workspaces";
 import { ThreadList } from "./thread-list";
 
 vi.mock("../platform/executables");
@@ -35,7 +35,7 @@ it("reads progress without cloning the history or refreshing worktrees, and keep
   const last = full.messages
     .filter((m) => m.role === "assistant" && !m.parentId)
     .at(-1)!;
-  const refresh = vi.spyOn(ThreadWorktrees.prototype, "refreshAgentWorktrees");
+  const refresh = vi.spyOn(AgentWorkspaces.prototype, "refresh");
   const clone = vi.spyOn(globalThis, "structuredClone");
   const first = await chats.status(chat.id);
   expect(first).toMatchObject({
@@ -174,7 +174,7 @@ it("builds each project's live list once for explicit and started-thread batches
     .filter((s) => !s.archivedAt)
     .map((s) => s.id);
   const lists = vi.spyOn(ThreadList.prototype, "list");
-  const refresh = vi.spyOn(ThreadWorktrees.prototype, "refreshAgentWorktrees");
+  const refresh = vi.spyOn(AgentWorkspaces.prototype, "refresh");
   const clone = vi.spyOn(globalThis, "structuredClone");
   try {
     const batch = await chats.statuses({ ids: [c.id, b.id, a.id, b.id] });
