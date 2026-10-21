@@ -17,6 +17,16 @@ import type { ComposerState } from "./useComposerSettings";
 import { noteUsed } from "../../lib/used";
 import { parseGoalCommand } from "../../../shared/goal";
 
+export interface ComposerSendOptions {
+  steer?: boolean;
+  /** Holds the message until then (Send later). */
+  sendAt?: number;
+  /** Runs once the message is accepted. */
+  after?: () => void;
+  /** Overrides Settings on a cold cache. */
+  compact?: boolean;
+}
+
 /**
  * Sending the draft to `to`: as a message, queued or steering while an
  * answer runs, as a `/btw` on the side, or as the go-ahead for a proposed
@@ -55,28 +65,19 @@ export function useComposerSend({
     draft.preparing ||
     !settings;
   // Sending mid-dictation waits for the last words to land in the draft.
-  const [sendAfterDictation, setSendAfterDictation] = useState<{
-    steer: boolean;
-    sendAt?: number;
-    after?: () => void;
-    compact?: boolean;
-  } | null>(null);
+  const [sendAfterDictation, setSendAfterDictation] =
+    useState<ComposerSendOptions | null>(null);
   useEffect(() => {
     if (!sendAfterDictation) return;
     setSendAfterDictation(null);
-    const { steer, sendAt, after, compact } = sendAfterDictation;
-    void send(steer, sendAt, after, compact);
+    void send(sendAfterDictation);
   }, [sendAfterDictation]);
-  /**
-   * `sendAt` holds the message until then (Send later); `after` runs once it
-   * is in; `compact` overrides Settings on a cold cache.
-   */
-  async function send(
+  async function send({
     steer = false,
-    sendAt?: number,
-    after?: () => void,
-    compact?: boolean,
-  ) {
+    sendAt,
+    after,
+    compact,
+  }: ComposerSendOptions = {}) {
     if (draft.isPreparing()) return;
     const now = dictationSnapshot();
     if (now.owner === dictation && now.phase !== "idle") {

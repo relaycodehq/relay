@@ -1,14 +1,24 @@
 // @vitest-environment happy-dom
-import { expect, it, vi } from "vitest";
-import { mount } from "../../../tests/unit/hook-harness";
+import { beforeEach, expect, it, vi } from "vitest";
+import { flush, mount } from "../../../tests/unit/hook-harness";
 import type { SendSettings } from "../../../shared/compose-send";
 import type { Recipient } from "../../../shared/recipient";
 import { useComposerSend } from "./useComposerSend";
 
-vi.mock("../dictation/audio/session", () => ({
-  dictationSnapshot: () => ({ phase: "idle" }),
-  stopDictation: async () => true,
+const dictation = vi.hoisted(() => ({
+  snapshot: vi.fn<() => { phase: string; owner?: object }>(() => ({
+    phase: "idle",
+  })),
+  stop: vi.fn(async () => true),
 }));
+vi.mock("../dictation/audio/session", () => ({
+  dictationSnapshot: dictation.snapshot,
+  stopDictation: dictation.stop,
+}));
+beforeEach(() => {
+  dictation.snapshot.mockReset().mockReturnValue({ phase: "idle" });
+  dictation.stop.mockReset().mockResolvedValue(true);
+});
 
 it("preserves Send later when the draft starts with /btw", async () => {
   const onSend = vi.fn(async () => true);
@@ -40,7 +50,7 @@ it("preserves Send later when the draft starts with /btw", async () => {
       onSend,
     }),
   );
-  await sending().send(false, sendAt, after);
+  await sending().send({ sendAt, after });
   expect(onSend).toHaveBeenCalledOnce();
   expect(onSend).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -173,3 +183,86 @@ it.each(["claude", "message"] as const)(
     expect(onSend).toHaveBeenCalledTimes(4);
   },
 );
+
+function messageSender(
+  onSend: (value: unknown, dispatch?: () => void) => Promise<boolean>,
+) {
+  const choice = { model: "", reasoningEffort: "" as const, fast: false };
+  const outgoing = {
+    dispatch: vi.fn(),
+    restore: vi.fn(),
+    forget: vi.fn(async () => {}),
+  };
+  const sending = mount(() =>
+    useComposerSend({
+      draft: {
+        text: "Continue",
+        attached: [],
+        images: [],
+        preparing: false,
+        isPreparing: () => false,
+        skills: () => [],
+        take: () => outgoing,
+      } as never,
+      state: { saveLastModel: vi.fn() } as never,
+      runs: {
+        sendSettings: () => ({
+          to: "codex",
+          choice,
+          runtimeMode: "full-access",
+          interactionMode: "default",
+        }),
+        choiceFor: () => choice,
+        contextFor: () => ({}),
+      } as never,
+      to: "codex",
+      conversation: { busy: false, running: true },
+      complete: false,
+      intercept: () => false,
+      onSend,
+    }),
+  );
+  return { sending, outgoing };
+}
+
+it.each([true, false])(
+  "preserves the compact override %s and runs after only on acceptance",
+  async (accepted) => {
+    const onSend = vi.fn(async () => accepted);
+    const after = vi.fn();
+    const { sending, outgoing } = messageSender(onSend);
+    await sending().send({ steer: true, compact: accepted, after });
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ delivery: "steer", compact: accepted }),
+      outgoing.dispatch,
+    );
+    expect(after).toHaveBeenCalledTimes(accepted ? 1 : 0);
+    expect(outgoing.restore).toHaveBeenCalledTimes(accepted ? 0 : 1);
+    expect(outgoing.forget).toHaveBeenCalledTimes(accepted ? 1 : 0);
+  },
+);
+
+it("retains scheduling, compaction and the completion callback while dictation finishes", async () => {
+  const onSend = vi.fn(async () => true);
+  const after = vi.fn();
+  const { sending, outgoing } = messageSender(onSend);
+  let finish!: (finished: boolean) => void;
+  dictation.stop.mockImplementationOnce(
+    () => new Promise((resolve) => (finish = resolve)),
+  );
+  dictation.snapshot.mockReturnValue({
+    phase: "recording",
+    owner: sending().dictation,
+  });
+  const sendAt = Date.now() + 60_000;
+  await sending().send({ sendAt, compact: false, after });
+  expect(onSend).not.toHaveBeenCalled();
+  dictation.snapshot.mockReturnValue({ phase: "idle" });
+  finish(true);
+  await flush();
+  expect(onSend).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ sendAt, compact: false }),
+    outgoing.dispatch,
+  );
+  expect(after).toHaveBeenCalledOnce();
+});
