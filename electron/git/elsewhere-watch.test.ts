@@ -1,5 +1,9 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
+import { execFileSync } from "node:child_process";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ElsewhereWatch } from "./elsewhere-watch";
 import type { TreeWatchDeps } from "./tree-watch";
 
@@ -62,14 +66,54 @@ it("watches the repositories of the thread each window shows, and says which thr
   expect(watches.showing(main, "lead")).toBe(false);
 });
 
-it("watches nothing off macOS, so windows poll", async () => {
+it("leaves unsupported platforms polling", async () => {
   const { watch, open } = fakeWatch();
   const watches = new ElsewhereWatch({
     changed: () => {},
-    platform: "linux",
+    platform: "freebsd",
     watch,
   });
   watches.show({}, "lead");
   expect(await watches.roots("lead", ["/r/one"])).toBe(false);
   expect(open()).toEqual([]);
+});
+
+it("watches deep changes elsewhere with the Linux backend and releases it when hidden", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-elsewhere-watch-")),
+  );
+  const changed = vi.fn();
+  const watches = new ElsewhereWatch({ changed, platform: "linux" });
+  const owner = {};
+  try {
+    execFileSync("git", ["init", "-q", root]);
+    await mkdir(join(root, "src", "deep"), { recursive: true });
+    await writeFile(join(root, "src", "deep", "file.txt"), "before");
+    watches.show(owner, "lead");
+    expect(watches.watches).toBe(true);
+    expect(await watches.roots("lead", [root])).toBe(true);
+    await writeFile(join(root, "src", "deep", "file.txt"), "after");
+    await vi.waitFor(() => expect(changed).toHaveBeenCalledWith("lead"));
+    watches.release(owner);
+    changed.mockClear();
+    await writeFile(join(root, "src", "deep", "file.txt"), "hidden");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(changed).not.toHaveBeenCalled();
+    expect(watches.showing(owner, "lead")).toBe(false);
+  } finally {
+    watches.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("falls back to polling when a Linux repository cannot be watched", async () => {
+  const root = await mkdtemp(join(tmpdir(), "relay-elsewhere-missing-"));
+  await rm(root, { recursive: true, force: true });
+  const watches = new ElsewhereWatch({ changed: vi.fn(), platform: "linux" });
+  try {
+    watches.show({}, "lead");
+    expect(await watches.roots("lead", [root])).toBe(false);
+  } finally {
+    watches.dispose();
+  }
 });

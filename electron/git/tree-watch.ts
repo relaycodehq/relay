@@ -121,6 +121,11 @@ export const watchesWholeTrees = (
   platform: NodeJS.Platform = process.platform,
 ) => platform === "darwin" || platform === "win32";
 
+/** A native recursive watch, or Linux's budgeted folder-at-a-time backend. */
+export const supportsTreeWatch = (
+  platform: NodeJS.Platform = process.platform,
+) => watchesWholeTrees(platform) || platform === "linux";
+
 const within = (dir: string, path: string) => {
   const rel = relative(dir, path);
   return !rel.startsWith("..") && !isAbsolute(rel);
@@ -172,7 +177,7 @@ export class TreeWatch {
   /** `owner` now shows `where`, or nothing. False when it should poll instead. */
   async show(owner: object, where: string | null): Promise<boolean> {
     const platform = this.deps.platform ?? process.platform;
-    if (!watchesWholeTrees(platform) && platform !== "linux") return false;
+    if (!supportsTreeWatch(platform)) return false;
     const was = this.shown.get(owner);
     if (was !== where) {
       if (was !== undefined) this.leave(owner, was);

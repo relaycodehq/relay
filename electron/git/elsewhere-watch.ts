@@ -1,4 +1,4 @@
-import { TreeWatch, watchesWholeTrees, type TreeWatchDeps } from "./tree-watch";
+import { TreeWatch, supportsTreeWatch, type TreeWatchDeps } from "./tree-watch";
 
 export interface ElsewhereWatchDeps extends Pick<
   TreeWatchDeps,
@@ -36,7 +36,7 @@ export class ElsewhereWatch {
 
   /** Whether this computer watches at all; elsewhere windows poll. */
   get watches() {
-    return watchesWholeTrees(this.deps.platform);
+    return supportsTreeWatch(this.deps.platform);
   }
 
   /** `owner` now shows `chatId`'s changes, or none; `roots` then says where they are. */
