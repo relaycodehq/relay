@@ -1673,6 +1673,50 @@ it("carries commits the shared remote never saw, and answers a repeated handoff 
   ).toHaveLength(1);
 });
 
+it("sends the branch's whole history when the other computer lacks what the lean bundle builds on", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  // A commit only a remote the mini never had knows: the lean bundle leaves
+  // it out, as something "a remote has", and the mini can't build on it.
+  const fork = join(root, "fork.git");
+  git(root, "init", "--bare", "-q", fork);
+  await writeFile(join(laptop.clone, "NOTES.md"), "on the fork only\n");
+  git(laptop.clone, "add", "-A");
+  git(laptop.clone, "commit", "-q", "-m", "Fork only");
+  git(laptop.clone, "remote", "add", "fork", fork);
+  git(laptop.clone, "push", "-q", "fork", "HEAD:side");
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Tidy the notes"));
+  await finished(laptop.chats, thread.id, 2);
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await sender.view(thread.id))?.sentTo).toMatchObject({
+      state: "away",
+    }),
+  );
+  const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
+  expect(
+    await readFile(join(arrived!.worktree!.path!, "NOTES.md"), "utf8"),
+  ).toBe("on the fork only\n");
+});
+
+it("hands a thread out again while it's still on its way back, once it's here", async () => {
+  const { laptop, sender, thread, computerId } = await liveThread();
+  const first = (await laptop.chats.get(thread.id)).sentTo!.id;
+  await sender.bringBack(thread.id);
+  // Not waiting for it to land: the second handoff waits for that itself.
+  await sender.handOff(thread.id, computerId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo).toMatchObject({
+      state: "away",
+    }),
+  );
+  expect((await laptop.chats.get(thread.id)).sentTo!.id).not.toBe(first);
+});
+
 it("updates the other computer's Relay from here, and tells an older one apart", async () => {
   const { sender, updater, computerId } = await pairedComputers();
   expect((await sender.overview()).computers[0]).toMatchObject({
