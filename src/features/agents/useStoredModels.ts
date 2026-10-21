@@ -53,7 +53,10 @@ export function useFavoriteModels() {
   return [favoriteModels.use(), setFavoriteModels] as const;
 }
 
-/** The last tab chosen in the full model picker, shared across threads. */
+/**
+ * The last tab chosen in the full model picker, shared across threads. Only
+ * favorites sticks; any other tab opens on the agent in use.
+ */
 export function useModelPickerCategory() {
   return [modelPickerCategory.use(), modelPickerCategory.set] as const;
 }

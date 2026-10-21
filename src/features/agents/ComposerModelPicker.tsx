@@ -135,14 +135,9 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     provider === "message" ? undefined : provider,
   );
   const offered = (providers ?? runnable).filter((p) => catalogs[p]);
+  // Opens on the agent in use, unless favorites was the last tab picked.
   const openingCategory =
-    !providers &&
-    savedCategory &&
-    (savedCategory === "favorites" ||
-      savedCategory === "message" ||
-      offered.includes(savedCategory))
-      ? savedCategory
-      : provider;
+    !providers && savedCategory === "favorites" ? "favorites" : provider;
   const selectedKey = JSON.stringify([
     provider,
     provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
