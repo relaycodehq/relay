@@ -18,7 +18,7 @@ import {
   registryUpdatesIo,
 } from "./agents/acp";
 import { apiContext } from "./api/context";
-import { createDispatch, serveApi, type Dispatch } from "./api";
+import { createDispatch, serveApi } from "./api";
 import { AppLinks } from "./app/links";
 import { GiteaLogin, seal, unseal } from "./app/login";
 import { GithubLogin } from "./github";
@@ -560,7 +560,7 @@ app
       treeWatch,
       elsewhereWatch,
     });
-    const dispatch: Dispatch = createDispatch(api);
+    const dispatch = createDispatch(api);
     const summaries = new ChatSummaryFeed(api.listChats, (event) => {
       window.send("relay:project-chats", event);
       phoneRemote?.chatsEvent(event);

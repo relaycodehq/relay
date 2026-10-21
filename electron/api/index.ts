@@ -35,7 +35,9 @@ import { usageHandlers } from "./usage";
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
 
 /** Runs an Api call; its arguments come from the renderer or the phone, so every handler parses them. */
-export function createDispatch(ctx: ApiContext): Dispatch {
+export function createDispatch(
+  ctx: ApiContext,
+): Dispatch & { methods: string[] } {
   const handlers = combine([
     accountHandlers(ctx),
     openCodeHandlers(),
@@ -66,7 +68,7 @@ export function createDispatch(ctx: ApiContext): Dispatch {
     bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   ]) satisfies Required<Handlers>;
-  return async (method, args) => {
+  const dispatch: Dispatch = async (method, args) => {
     // Own keys only: names the renderer made up, "toString" among them, stay unknown.
     if (!Object.hasOwn(handlers, method))
       throw new Error(`Unknown application method: ${String(method)}.`);
@@ -81,9 +83,17 @@ export function createDispatch(ctx: ApiContext): Dispatch {
       return remote.forward(method, args, () => handler([null]));
     return handler(args);
   };
+  return Object.assign(dispatch, { methods: Object.keys(handlers) });
 }
 
-export function serveApi(window: AppWindow, dispatch: Dispatch) {
+export function serveApi(
+  window: AppWindow,
+  dispatch: Dispatch & { methods: string[] },
+) {
+  // The preload script builds `window.relay` from these before the page runs.
+  ipcMain.on("relay:methods", (event) => {
+    event.returnValue = dispatch.methods;
+  });
   ipcMain.handle("relay:invoke", async (event, method, args) => {
     if (!window.trusts(event)) throw new Error("Untrusted IPC sender");
     try {
