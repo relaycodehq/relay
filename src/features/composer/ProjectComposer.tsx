@@ -463,6 +463,7 @@ export function ProjectComposer({
             onOpenPaste={setViewingPaste}
             onPasteRefused={draft.pasteRefused}
             ghost={ghost}
+            onGhostSeen={guess.seen}
             onGhost={() => {
               takeGhost();
               promptInput.current?.focusEnd();

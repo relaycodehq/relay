@@ -374,7 +374,7 @@
 /* Folded, a suggested message waits until the composer opens again, and
    the placeholder holds its place. */
 .thread-bottom-composer.collapsed:not(:focus-within) .composer-ghost {
-  visibility: hidden;
+  display: none;
 }
 .thread-bottom-composer.collapsed:not(:focus-within)
   .composer-prompt-input::before {

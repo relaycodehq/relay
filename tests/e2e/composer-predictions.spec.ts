@@ -100,6 +100,14 @@ test("offers the next-message guess as a draft", async () => {
       .click();
     const ghost = page.locator(".composer-ghost");
     await expect(ghost).toContainText("android first");
+    const saved = join(data, "project-chats", chat.id + ".json");
+    const seen = async () => {
+      const { messages } = JSON.parse(await readFile(saved, "utf8"));
+      return messages.find((m: { id: string }) => m.id === answerId)
+        ?.predictionSeen;
+    };
+    // On screen, so what's sent next counts for or against guessing.
+    await expect.poll(seen).toBe("shown");
     const input = page.getByLabel("Message project");
     await input.click();
     await page.keyboard.type("no wait");
@@ -127,14 +135,7 @@ test("offers the next-message guess as a draft", async () => {
     await expect(ghost).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(ghost).toHaveCount(0);
-    const saved = join(data, "project-chats", chat.id + ".json");
-    await expect
-      .poll(async () => {
-        const { messages } = JSON.parse(await readFile(saved, "utf8"));
-        return messages.find((m: { id: string }) => m.id === answerId)
-          ?.predictionSeen;
-      })
-      .toBe("dismissed");
+    await expect.poll(seen).toBe("dismissed");
     await page.reload();
     await page
       .getByRole("complementary", { name: "Projects" })
