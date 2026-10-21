@@ -33,19 +33,19 @@ test("the disk, home and what holds home are refused", () => {
 });
 
 test("system folders are refused, inside and out", () => {
-  for (const path of [
-    "/System/Library",
-    "/usr/local/lib",
-    "/etc",
-    "/private/etc/ssh",
-    "/Applications/Relay.app",
-    "/opt",
-    "/Volumes",
-    "/private/var",
-    "/private/var/folders",
-    "/private/var/folders/xy/T",
-  ])
-    expect(refused(path), path).toBeDefined();
+  for (const [path, reason] of [
+    ["/System/Library", /system folder/],
+    ["/usr/local/lib", /system folder/],
+    ["/etc", /system folder/],
+    ["/private/etc/ssh", /system folder/],
+    ["/Applications/Relay.app", /system folder/],
+    ["/opt", /system folder; add the folder inside/],
+    ["/Volumes", /whole mounted drive/],
+    ["/private/var", /system folder; add the folder inside/],
+    ["/private/var/folders", /system folder; add the folder inside/],
+    ["/private/var/folders/xy/T", /temporary folder/],
+  ] as const)
+    expect(refused(path), path).toMatch(reason);
   // A checkout under a shelf the system keeps is fine.
   expect(verdict("/private/var/folders/xy/T/scratch-repo")).toEqual({
     kind: "ok",
@@ -54,9 +54,15 @@ test("system folders are refused, inside and out", () => {
 });
 
 test("home's secrets are refused anywhere inside, its shelves only themselves", () => {
-  expect(refused("/Users/ana/.ssh")).toBeDefined();
-  expect(refused("/Users/ana/.aws/sso")).toBeDefined();
-  expect(refused("/Users/ana/Library/Mobile Documents/x")).toBeDefined();
+  expect(refused("/Users/ana/.ssh")).toBe(
+    "Agents don't add anything in ~/.ssh.",
+  );
+  expect(refused("/Users/ana/.aws/sso")).toBe(
+    "Agents don't add anything in ~/.aws.",
+  );
+  expect(refused("/Users/ana/Library/Mobile Documents/x")).toBe(
+    "Agents don't add anything in ~/Library.",
+  );
   expect(refused("/Users/ana/Documents")).toMatch(/holds too much/);
   expect(refused("/Users/ana/Downloads")).toMatch(/holds too much/);
   expect(verdict("/Users/ana/Documents/thesis")).toEqual({ kind: "ok" });
@@ -79,8 +85,9 @@ test("every dot-folder under home is refused, inside and out", () => {
 });
 
 test("mounted drives' roots and other users' homes are refused, what's inside them isn't", () => {
-  for (const path of ["/Volumes/External", "/Users/bob", "/Users/Shared"])
-    expect(refused(path), path).toBeDefined();
+  expect(refused("/Volumes/External")).toMatch(/whole mounted drive/);
+  for (const path of ["/Users/bob", "/Users/Shared"])
+    expect(refused(path), path).toMatch(/another user's home/);
   expect(verdict("/Volumes/External/code/repo")).toEqual({ kind: "ok" });
   expect(verdict("/Users/bob/code")).toEqual({ kind: "ok" });
   const linux: FolderRules = {
@@ -96,10 +103,9 @@ test("mounted drives' roots and other users' homes are refused, what's inside th
     "/media/ana/USB",
     "/run/media/ana/USB",
     "/mnt/c",
-    "/home/bob",
   ])
-    expect(refused(path, linux), path).toBeDefined();
-  expect(refused("/mnt/c", linux)).toMatch(/mounted drive/);
+    expect(refused(path, linux), path).toMatch(/whole mounted drive/);
+  expect(refused("/home/bob", linux)).toMatch(/another user's home/);
   for (const path of ["/media/ana/USB/repo", "/mnt/c/Users/ana/repo"])
     expect(verdict(path, linux), path).toEqual({ kind: "ok" });
 });
@@ -149,7 +155,7 @@ test("Linux minds case, and its system trees are its own", () => {
   };
   expect(verdict("/home/ana/a", linux)).toEqual({ kind: "ok" });
   expect(refused("/var/lib/docker", linux)).toBe("That's a system folder.");
-  expect(refused("/tmp", linux)).toBeDefined();
+  expect(refused("/tmp", linux)).toMatch(/temporary folder/);
   expect(verdict("/tmp/checkout", linux)).toEqual({ kind: "ok" });
 });
 
@@ -163,12 +169,18 @@ test("Windows refuses drive roots and its system trees, ignoring case", () => {
   };
   expect(refused("D:\\", win)).toMatch(/whole disk/);
   expect(refused("c:\\windows\\system32", win)).toBe("That's a system folder.");
-  expect(refused("C:\\Program Files\\Git", win)).toBeDefined();
-  expect(refused("C:\\Users\\ana\\AppData\\Local\\x", win)).toBeDefined();
+  expect(refused("C:\\Program Files\\Git", win)).toBe(
+    "That's a system folder.",
+  );
+  expect(refused("C:\\Users\\ana\\AppData\\Local\\x", win)).toBe(
+    "Agents don't add anything in ~\\AppData.",
+  );
   expect(refused("C:\\Users\\bob", win)).toBe(
     "That's another user's home folder.",
   );
-  expect(refused("C:\\Users\\ana\\.ssh", win)).toBeDefined();
+  expect(refused("C:\\Users\\ana\\.ssh", win)).toBe(
+    "Agents don't add anything in ~\\.ssh.",
+  );
   expect(verdict("D:\\src\\relay", win)).toEqual({ kind: "ok" });
 });
 
