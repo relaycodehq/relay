@@ -4,6 +4,19 @@ Relay downloads Google's official ACP server. The shared ACP transport owns
 connections, sessions, cancellation and streaming; provider-specific behavior
 lives in `electron/agents/antigravity/`.
 
+## Model discovery
+
+Antigravity ACP 1.4.1 filters out non-Gemini models unless the ACP client's
+name is on Google's hardcoded allowlist. Relay sends `clientInfo.name: "zed"`
+only to Antigravity so its catalog includes the account's available Claude
+and GPT models. The client title remains Relay. Remove this compatibility
+identity when Google supports Relay or a capability-based opt-in.
+
+Live probes of the same server and account confirmed that `relay` received
+only Gemini and could not select Claude/GPT, while `zed` received those models
+and completed small prompts with Claude Sonnet 4.6 and GPT-OSS 120B. Model
+availability still depends on the signed-in account.
+
 ## Supported workflows
 
 - Native fixed-choice questions use Relay's question cards, including in Full

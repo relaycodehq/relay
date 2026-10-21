@@ -50,6 +50,22 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+it.each(["antigravity", "amp", "opencode"] as const)(
+  "uses the Antigravity model compatibility identity only for Antigravity (%s)",
+  async (provider) => {
+    const { acp, root, sent } = await agent({}, { provider });
+    await acquireAcpAgent(acp, undefined, root);
+    expect(
+      (await sent()).find((message) => message.method === "initialize")?.params
+        .clientInfo,
+    ).toEqual({
+      name: provider === "antigravity" ? "zed" : "relay",
+      title: "Relay",
+      version: "0.1.0",
+    });
+  },
+);
+
 it("shows native fixed choices in full access, preserving duplicate labels and recording readable answers", async () => {
   const id = "interaction_choose";
   const { acp, root, sent } = await agent({

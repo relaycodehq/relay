@@ -167,7 +167,15 @@ async function initialize(agent: AcpAgent) {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
       },
-      clientInfo: { name: "relay", title: "Relay", version: "0.1.0" },
+      // Antigravity 1.4.1 hardcodes third-party model support by client name.
+      // Its "zed" identity exposes the account's Claude/GPT models; "relay"
+      // filters them out and rejects selecting them. Remove when Google lets
+      // Relay opt in without a compatibility identity.
+      clientInfo: {
+        name: profile.provider === "antigravity" ? "zed" : "relay",
+        title: "Relay",
+        version: "0.1.0",
+      },
     }),
     startTimeout,
     `${profile.name} didn't start in time.`,
