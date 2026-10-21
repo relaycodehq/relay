@@ -765,8 +765,9 @@ export class StartedThreads {
           ...(account ? { account } : {}),
           ...Object.fromEntries(
             usage.windows.map((w) => [
-              w.kind,
+              w.id ?? w.kind,
               {
+                ...(w.label ? { label: w.label } : {}),
                 usedPercent: Math.round(w.usedPercent),
                 ...(w.resetsAt
                   ? {

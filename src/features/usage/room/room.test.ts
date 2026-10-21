@@ -21,14 +21,14 @@ const now = new Date(2026, 9, 14, 14, 20).getTime();
 const HOUR = 3_600_000;
 
 const account = (
-  provider: "claude" | "codex",
+  provider: "claude" | "codex" | "antigravity",
   id: string,
   label: string,
   signedIn = true,
 ): AgentAccount => ({ provider, id, label, system: id === "default", signedIn });
 
 const usage = (
-  provider: "claude" | "codex",
+  provider: "claude" | "codex" | "antigravity",
   used: { session?: number; weekly?: number },
   resets: SavedResets | null = null,
 ): ProviderUsage => ({

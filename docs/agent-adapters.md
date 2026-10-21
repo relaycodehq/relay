@@ -31,6 +31,9 @@ Catalogs use the same boundary: `electron/api/projects.ts` calls `models()`,
 `defaults(root)` and `commands(root)`. The desktop's
 `src/features/agents/useAgentPicks.ts` already loads catalogs for new providers.
 
+Antigravity's provider-specific account, helper and compaction rules are
+documented in [Antigravity in Relay](./antigravity.md).
+
 ## The runtime contract
 
 Required methods are `run(options): Promise<string>`, `closeSession(key)`,

@@ -32,12 +32,18 @@ const capsSchema = z.object({
 type AcpCaps = z.infer<typeof capsSchema>;
 
 /** A session's settings as the agent last reported them. */
-export type AcpSettings = Pick<AcpSessionState, "configOptions" | "modes" | "models">;
+export type AcpSettings = Pick<
+  AcpSessionState,
+  "configOptions" | "modes" | "models"
+>;
 
 /** What a hosted agent keeps for the next Relay: how it started, its session, the turn it was in. */
 const metaSchema = z
   .object({
     provider: z.string(),
+    accountKey: z.string().optional(),
+    credentialsRevision: z.string().optional(),
+    home: z.string().optional(),
     caps: capsSchema.optional(),
     session: z
       .object({
@@ -47,14 +53,19 @@ const metaSchema = z
         cost: z.number().optional(),
       })
       .optional(),
-    run: z.object({ id: z.number() }).optional(),
+    run: z
+      .object({ id: z.number(), compaction: z.boolean().optional() })
+      .optional(),
   })
   .loose();
 
 const startTimeout = 60_000;
 
 /** One agent process and the one session it runs. */
-export class AcpAgent extends HostedAgent<AcpConnection, { id: number }> {
+export class AcpAgent extends HostedAgent<
+  AcpConnection,
+  { id: number; compaction?: boolean }
+> {
   caps?: AcpCaps;
   /**
    * `base`: the settings it opened with, which Default goes back to. `cost`:
@@ -76,9 +87,12 @@ export class AcpAgent extends HostedAgent<AcpConnection, { id: number }> {
   }
 
   /** What the next Relay reads about this process; `run`, the prompt it's in. */
-  keep(run?: { id: number }) {
+  keep(run?: { id: number; compaction?: boolean }) {
     this.connection.keep({
       provider: hostedName(this.profile),
+      accountKey: this.profile.accountKey,
+      credentialsRevision: this.profile.credentialsRevision,
+      home: this.profile.home,
       caps: this.caps,
       session: this.session,
       run,
@@ -86,7 +100,8 @@ export class AcpAgent extends HostedAgent<AcpConnection, { id: number }> {
   }
 }
 
-const hostedName = (profile: AcpProfile) => profile.hostedAs ?? profile.provider;
+const hostedName = (profile: AcpProfile) =>
+  profile.hostedAs ?? profile.provider;
 const hosted = new Map<AcpProvider, HostedSessions<AcpAgent>>();
 function sessionsOf(profile: AcpProfile) {
   let sessions = hosted.get(profile.provider);
@@ -112,10 +127,13 @@ async function launch(
   const line = executableCommand(found.command, found.args);
   const spec = {
     ...line,
-    env: withWorktreeEnv(process.env as Record<string, string>, {
-      ...found.env,
-      ...env,
-    }),
+    env: withWorktreeEnv(
+      profile.environment ?? (process.env as Record<string, string>),
+      {
+        ...found.env,
+        ...env,
+      },
+    ),
   };
   const child = await sessionsOf(profile).spawnGroup(
     key,
@@ -186,13 +204,25 @@ async function initialize(agent: AcpAgent) {
  * running. A thread's runs in the agent host; without a key it's a private
  * one that ends with its turn.
  */
-export function acquireAcpAgent(
+export async function acquireAcpAgent(
   profile: AcpProfile,
   key: string | undefined,
   cwd: string,
   env?: Record<string, string>,
 ): Promise<AcpAgent> {
-  return sessionsOf(profile).acquire(key, async () =>
+  const sessions = sessionsOf(profile);
+  const previous = key ? sessions.get(key) : undefined;
+  if (
+    key &&
+    previous &&
+    (previous.profile.accountKey !== profile.accountKey ||
+      previous.profile.credentialsRevision !== profile.credentialsRevision)
+  ) {
+    if (previous.busy)
+      throw new Error("Stop the running answer before changing its account.");
+    await sessions.close(key);
+  }
+  return sessions.acquire(key, async () =>
     new AcpAgent(profile, await launch(profile, key, cwd, env)).start(
       initialize,
     ),
@@ -203,7 +233,10 @@ export function acquireAcpAgent(
  * Runs `call`, reading the agent's "sign in first" as Relay's signed out. A
  * turn never signs in itself: a Google sign-in opens a browser.
  */
-async function signedIn<T>(agent: AcpAgent, call: () => Promise<T>): Promise<T> {
+async function signedIn<T>(
+  agent: AcpAgent,
+  call: () => Promise<T>,
+): Promise<T> {
   try {
     return await call();
   } catch (error) {
@@ -287,23 +320,40 @@ export function disposeAcp(profile: AcpProfile) {
  * restarted. One in a turn waits, holding what it said meanwhile, for an
  * `adopt` turn.
  */
-export function reattachAcp(profile: AcpProfile, owns: (key: string) => boolean) {
+export function reattachAcp(
+  profile: AcpProfile,
+  owns: (key: string) => boolean,
+) {
   return sessionsOf(profile).reattach(owns, (found) => {
     const meta = savedMeta(found, metaSchema);
     if (!meta?.caps || meta.provider !== hostedName(profile)) return;
+    // A two-prompt compaction cannot be adopted as one answer. Its saved chat
+    // still names the original session until the replacement is fully ready.
+    if (profile.provider === "antigravity" && meta.run?.compaction) return;
     const { info } = found;
     const child = new HostedChild(found.attachProcess(), (entries) => {
-      connection.continueAfter(Math.max(meta.run?.id ?? 0, highestRequestId(entries)));
+      connection.continueAfter(
+        Math.max(meta.run?.id ?? 0, highestRequestId(entries)),
+      );
       return replayLines(entries, info.split);
     });
     const connection = new AcpConnection(child, profile.name);
     connection.onUpdate = (update) => hearCommands(profile.provider, update);
-    const agent = new AcpAgent(profile, connection);
+    const agent = new AcpAgent(
+      {
+        ...profile,
+        accountKey: meta.accountKey,
+        credentialsRevision: meta.credentialsRevision,
+        home: meta.home,
+      },
+      connection,
+    );
     agent.caps = meta.caps;
     if (meta.session)
       agent.session = {
         id: meta.session.id,
-        settings: sessionResultSchema.safeParse(meta.session.settings ?? {}).data ?? {},
+        settings:
+          sessionResultSchema.safeParse(meta.session.settings ?? {}).data ?? {},
         base: meta.session.base,
         cost: meta.session.cost,
       };

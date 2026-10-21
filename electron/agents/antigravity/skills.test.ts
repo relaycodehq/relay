@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { discoverAntigravitySkills } from "./antigravity-skills";
+import { discoverAntigravitySkills } from "./skills";
 
 let root: string;
 beforeEach(async () => {

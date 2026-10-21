@@ -19,6 +19,7 @@ import {
   type UsageWindow,
 } from "../../shared/provider-usage";
 import { readClaudeUsage } from "./claude/project";
+import { readAntigravityUsage } from "./antigravity";
 import { readMuseUsage } from "./muse";
 import type { UsageProvider } from "../../shared/agents";
 import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
@@ -67,6 +68,7 @@ const readers: Record<
 > = {
   claude: { load: loadClaude, ttl: CLAUDE_TTL },
   codex: { load: loadCodex },
+  antigravity: { load: readAntigravityUsage },
   // Only one Muse sign-in: its accounts aren't Relay's to switch.
   muse: { load: () => readMuseUsage() },
 };

@@ -126,8 +126,7 @@ export function expiryWords(resets: SavedResets) {
 }
 
 /** The reset to spend: the first to lapse, as Codex listed them. */
-export const firstToLapse = (resets: SavedResets) =>
-  resets.credits[0] ?? null;
+export const firstToLapse = (resets: SavedResets) => resets.credits[0] ?? null;
 
 const time = (at: number) =>
   new Date(at).toLocaleTimeString("en-GB", {
@@ -149,7 +148,7 @@ export function tankWords(t: RoomTank, now: number) {
   const { leftPercent, limitLabel } = t.meter;
   const at = t.window.resetsAt;
   return {
-    title: windowTitle(t.window.periodMs),
+    title: t.window.label ?? windowTitle(t.window.periodMs),
     left: `${leftPercent}% left`,
     end:
       at == null

@@ -1,9 +1,9 @@
 // Several sign-ins for the agents whose CLIs can keep them apart: each extra
-// account is a config folder of its own (CLAUDE_CONFIG_DIR, CODEX_HOME), and
+// account is a config folder of its own (CLAUDE_CONFIG_DIR, CODEX_HOME, GEMINI_HOME), and
 // the CLI's usual one stays where it put it.
 import { z } from "zod";
 
-export const accountProviders = ["claude", "codex"] as const;
+export const accountProviders = ["claude", "codex", "antigravity"] as const;
 export type AccountProvider = (typeof accountProviders)[number];
 export const accountProviderSchema = z.enum(accountProviders);
 export const hasAccounts = (provider: string): provider is AccountProvider =>

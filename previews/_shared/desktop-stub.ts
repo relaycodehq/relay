@@ -171,7 +171,7 @@ const stub: Partial<Api> = {
       system: true,
       signedIn: true,
     })),
-    inUse: { claude: "default", codex: "default" },
+    inUse: { claude: "default", codex: "default", antigravity: "default" },
     signingIn: null,
     signInError: null,
   }),

@@ -25,6 +25,8 @@ import {
   hostedMetaSchema,
   reattachClaudeSessions,
 } from "./claude/project/session";
+import { reattachAcp } from "./acp/sessions";
+import { acpProfiles } from "./acp/profiles";
 import { AsyncQueue } from "../util/async-queue";
 
 afterEach(() => {
@@ -329,6 +331,22 @@ describe("saved sessions from another version of Relay", () => {
   };
   const reattachWith = (...sessions: FoundSession[]) =>
     hostAgents({ discover: async () => sessions } as unknown as AgentHosts);
+
+  it("does not adopt a half-finished Antigravity compaction as a normal answer after restart", async () => {
+    const partial = found({
+      kind: "process",
+      open: true,
+      meta: {
+        provider: "antigravity",
+        caps: { image: true, http: true, load: true, resume: true, auth: [] },
+        session: { id: "replacement-not-committed" },
+        run: { id: 3, compaction: true },
+      },
+    });
+    reattachWith(partial);
+    expect(await reattachAcp(acpProfiles.antigravity, () => true)).toEqual([]);
+    expect(partial.close).toHaveBeenCalledOnce();
+  });
 
   it("ends a session whose saved info isn't what its agent reads, instead of taking it back", async () => {
     const codex = found({

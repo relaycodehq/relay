@@ -26,6 +26,7 @@ const scenario = JSON.parse(
 const log = (v) =>
   process.env.RELAY_ACP_LOG &&
   fs.appendFileSync(process.env.RELAY_ACP_LOG, JSON.stringify(v) + "\n");
+if (scenario.captureEnvKeys) log({ environment: Object.fromEntries(scenario.captureEnvKeys.map((key) => [key, process.env[key] ?? null])) });
 const send = (v) =>
   process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...v }) + "\n");
 
@@ -50,7 +51,7 @@ if (process.argv[2] === "api") {
   process.exit(0);
 }
 
-let signedIn = !scenario.signIn;
+let signedIn = scenario.signedIn ?? !scenario.signIn;
 let nextId = 1000;
 let sessionCount = 0;
 let options = scenario.configOptions ?? [];
@@ -66,10 +67,13 @@ const ask = (method, params) =>
   });
 
 async function prompt(m) {
-  if (scenario.promptError || (scenario.authFile && !fs.existsSync(scenario.authFile)))
-    return send({ id: m.id, error: scenario.promptError ?? { code: -32000, message: "Authentication required: provider authentication required" } });
+  const text = m.params.prompt?.find((block) => block.type === "text")?.text ?? "";
+  const promptError = Object.entries(scenario.promptErrorByPrefix ?? {}).find(([prefix]) => text.startsWith(prefix))?.[1] ?? scenario.promptError;
+  if (promptError || (scenario.authFile && !fs.existsSync(scenario.authFile)))
+    return send({ id: m.id, error: promptError ?? { code: -32000, message: "Authentication required: provider authentication required" } });
   const sessionId = m.params.sessionId;
-  for (const step of scenario.turn ?? []) {
+  const steps = Object.entries(scenario.turnByPrefix ?? {}).find(([prefix]) => text.startsWith(prefix))?.[1] ?? scenario.turn ?? [];
+  for (const step of steps) {
     if (step.update)
       send({
         method: "session/update",
@@ -143,6 +147,11 @@ require("node:readline")
         if (scenario.refuse)
           return send({ id: m.id, error: { code: -32000, message: scenario.refuse } });
         signedIn = m.params.methodId === scenario.signIn;
+        if (signedIn && scenario.saveGoogleLogin) {
+          const dir = require("node:path").join(process.env.GEMINI_HOME, "antigravity-acp");
+          fs.mkdirSync(dir, { recursive: true });
+          fs.writeFileSync(require("node:path").join(dir, "acp_token.json"), JSON.stringify({ refresh_token: "fixture-login" }));
+        }
         return send({ id: m.id, result: {} });
       case "session/new":
         if (needsSignIn(m)) return;

@@ -306,7 +306,7 @@ export type { Exec };
 
 /**
  * An agent Relay downloads itself: Cursor's SDK (electron/agents/cursor),
- * Google's Antigravity server (electron/agents/acp).
+ * Google's Antigravity server (electron/agents/antigravity).
  */
 export interface SdkIo {
   /** Where the download comes from, as the card says it. */

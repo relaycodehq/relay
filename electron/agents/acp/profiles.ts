@@ -1,15 +1,22 @@
-import { access, readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { InteractionMode, RuntimeMode } from "../../../shared/agent-modes";
 import type { AgentModel, RegistryProvider } from "../../../shared/agents";
-import { findExecutable, runExecutable } from "../../platform/executables";
+import { findExecutable } from "../../platform/executables";
 import { readOnlyEnv } from "./amp-review";
-import { currentAntigravity, ensureAntigravity } from "./antigravity-install";
-import { discoverAntigravitySkills } from "./antigravity-skills";
+import {
+  currentAntigravity,
+  ensureAntigravity,
+  antigravityAuthMethod,
+  readAntigravityAccount,
+  antigravityHome,
+  compactPrompt,
+} from "../antigravity";
+import { discoverAntigravitySkills } from "../antigravity";
 import { openCodeCommand } from "../opencode/command";
 import { openCode2Models } from "../opencode/model-ids";
-import { discoverOpenCodeSkills, openCodeSkillContext } from "../opencode/skills";
+import {
+  discoverOpenCodeSkills,
+  openCodeSkillContext,
+} from "../opencode/skills";
 import type { AgentSkill } from "../skill-presentation";
 import type { AgentOptions } from "../types";
 
@@ -46,7 +53,9 @@ export interface AcpProfile {
    * More environment for a read-only thread's process, for an agent that runs
    * its tools without asking Relay first and so can't be turned down over ACP.
    */
-  readOnlyEnv?(cwd: string): Promise<{ env: Record<string, string>; warning?: string }>;
+  readOnlyEnv?(
+    cwd: string,
+  ): Promise<{ env: Record<string, string>; warning?: string }>;
   /** Settings for Relay's approval mode, tried in order; those the agent doesn't offer are skipped. */
   wishes(mode: {
     runtime?: RuntimeMode;
@@ -65,10 +74,20 @@ export interface AcpProfile {
   account?(): Promise<AcpAccount | undefined>;
   /** The prompt that compacts its session, when it has one. */
   compact?: string;
+  /** Native command that enters its planning workflow. */
+  plan?: string;
+  /** Isolates live sessions and catalogs when accounts change. */
+  accountKey?: string;
+  credentialsRevision?: string;
+  home?: string;
+  /** A complete process environment, with inherited credentials removed for an account. */
+  environment?: Record<string, string>;
   /** Skills it doesn't list over ACP, read from its folders for `cwd`. */
   skills?(cwd: string): Promise<AgentSkill[]>;
   /** Selected skills that the agent doesn't expand from ACP prompt text. */
-  skillContext?(options: Pick<AgentOptions, "cwd" | "prompt" | "request" | "signal">): Promise<string[]>;
+  skillContext?(
+    options: Pick<AgentOptions, "cwd" | "prompt" | "request" | "signal">,
+  ): Promise<string[]>;
   /** Its models as Relay offers them, from the list a session sends. */
   models?(listed: AgentModel[]): AgentModel[];
   /** What to tell someone it can't find. */
@@ -76,14 +95,6 @@ export interface AcpProfile {
   /** An answer that is really the agent reporting a failure. */
   failure?(answer: string): string | undefined;
 }
-
-const readJson = async (path: string): Promise<any> =>
-  JSON.parse(await readFile(path, "utf8"));
-const exists = (path: string) =>
-  access(path).then(
-    () => true,
-    () => false,
-  );
 
 /**
  * Amp speaks ACP through amp-acp, a bridge that drives the `amp` CLI. Relay
@@ -111,46 +122,11 @@ const amp: AcpProfile = {
       value: runtime === "full-access" && !readOnly ? "bypass" : "default",
     },
   ],
-  install: "Install Amp in Settings → AI & agents → Agents, or from ampcode.com.",
+  install:
+    "Install Amp in Settings → AI & agents → Agents, or from ampcode.com.",
   // The bridge reports a failed turn as the answer's text.
   failure: (answer) => /^Error: (.+)/s.exec(answer.trim())?.[1],
 };
-
-/** Antigravity's own folder; its `$GEMINI_HOME` stands for the whole `~/.gemini`. */
-const antigravityDir = () =>
-  join(process.env.GEMINI_HOME || join(homedir(), ".gemini"), "antigravity-acp");
-
-/** The sign-in Antigravity saved as its `auth.type`, if any. */
-async function antigravityChoice(): Promise<string | undefined> {
-  const settings = await readJson(join(antigravityDir(), "settings.json")).catch(
-    () => undefined,
-  );
-  const chosen = settings?.auth?.type;
-  return typeof chosen === "string" ? chosen : undefined;
-}
-
-/**
- * Antigravity with Google sign-in chosen and no saved token opens Google's
- * page on its own, so Relay checks before starting it. Its token sits in the Mac keychain
- * (service "gemini", account "antigravity-acp") or else in a file.
- */
-async function antigravityAccount(): Promise<AcpAccount | undefined> {
-  const choice = await antigravityChoice();
-  if (!choice) return { signedIn: false };
-  if (choice !== "oauth-personal") return undefined;
-  if (await exists(join(antigravityDir(), "acp_token.json")))
-    return { signedIn: true };
-  if (process.platform !== "darwin" || process.env.AGY_ACP_FORCE_FILE_STORAGE)
-    return { signedIn: false };
-  // Without -w only the item's attributes are read: no keychain prompt. 44 is "no such item".
-  const found = await runExecutable(
-    "/usr/bin/security",
-    ["find-generic-password", "-s", "gemini", "-a", "antigravity-acp"],
-    5000,
-  ).catch(() => undefined);
-  if (found?.code === 0) return { signedIn: true };
-  return found?.code === 44 ? { signedIn: false } : undefined;
-}
 
 /** Google's Antigravity ACP server, which Relay downloads; see antigravity-install. */
 const antigravity: AcpProfile = {
@@ -167,7 +143,7 @@ const antigravity: AcpProfile = {
       );
     return { command: found.command, args: found.args };
   },
-  // No plan mode: plan and read-only turns ask, and Relay turns down what a read-only turn may not do.
+  // Planning uses /plan, not a permission mode. Read-only work still denies writes.
   wishes: ({ runtime, interaction, readOnly }) => {
     if (readOnly || interaction === "plan")
       return [{ option: "mode", value: "default" }];
@@ -180,10 +156,13 @@ const antigravity: AcpProfile = {
         return [{ option: "mode", value: "default" }];
     }
   },
-  authMethod: async () => (await antigravityChoice()) ?? "oauth-personal",
-  account: antigravityAccount,
+  authMethod: async () => (await antigravityAuthMethod()) ?? "oauth-personal",
+  account: readAntigravityAccount,
+  compact: compactPrompt,
+  plan: "/plan",
   skills: (cwd) => discoverAntigravitySkills(cwd),
-  install: "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
+  install:
+    "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
 };
 
 /** OpenCode runs through its ACP server. */
@@ -195,17 +174,43 @@ const opencode: AcpProfile = {
   command: openCodeCommand,
   // Its approvals come to Relay; plan is its read-only agent.
   wishes: ({ interaction, readOnly }) => [
-    { option: "mode", value: readOnly || interaction === "plan" ? "plan" : "build" },
+    {
+      option: "mode",
+      value: readOnly || interaction === "plan" ? "plan" : "build",
+    },
   ],
   compact: "/compact",
   models: openCode2Models,
   skills: discoverOpenCodeSkills,
   skillContext: openCodeSkillContext,
-  install: "Install OpenCode from opencode.ai, or in Settings → AI & agents → Agents.",
+  install:
+    "Install OpenCode from opencode.ai, or in Settings → AI & agents → Agents.",
 };
 
-export const acpProfiles: Record<"amp" | "antigravity" | "opencode", AcpProfile> = {
+export const acpProfiles: Record<
+  "amp" | "antigravity" | "opencode",
+  AcpProfile
+> = {
   amp,
   antigravity,
   opencode,
 };
+
+/** A profile bound to one Google sign-in, including commands/skills and its credential checks. */
+export function antigravityProfile(
+  env: Record<string, string>,
+  accountKey: string,
+): AcpProfile {
+  const home = antigravityHome(env);
+  return {
+    ...antigravity,
+    accountKey,
+    home,
+    environment: env,
+    authMethod: async () =>
+      (await antigravityAuthMethod(home)) ?? "oauth-personal",
+    account: () =>
+      readAntigravityAccount(home, !!env.AGY_ACP_FORCE_FILE_STORAGE),
+    skills: (cwd) => discoverAntigravitySkills(cwd, home),
+  };
+}
