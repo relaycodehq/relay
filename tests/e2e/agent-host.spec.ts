@@ -21,6 +21,7 @@ import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openCodeNativeFixture } from "../fixtures/opencode-native";
 
 const env = relayEnv();
 
@@ -410,6 +411,8 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
   test.setTimeout(90_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-oc-")));
   const capture = join(root, "opencode.jsonl");
+  // OpenCode runs on its native service; the ACP fixture drives a turn there.
+  const native = await openCodeNativeFixture();
   const relay = await restartable(
     {
       opencode: "acp-agent.cjs",
@@ -419,6 +422,8 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
     {
       RELAY_ACP_LOG: capture,
       RELAY_ACP_SCENARIO: JSON.stringify({
+        nativeUrl: native.url,
+        serviceUrl: native.url,
         turn: [
           {
             ask: {
@@ -489,6 +494,7 @@ test("OpenCode asks again after a restart, and the answer finishes once it's all
     });
   } finally {
     await relay.dispose();
+    await native.close();
     await rm(root, { recursive: true, force: true });
   }
 });

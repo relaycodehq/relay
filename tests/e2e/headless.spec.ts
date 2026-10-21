@@ -174,17 +174,14 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     await page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
-    const settings = page.getByRole("region", {
-      name: "Settings",
-      exact: true,
-    });
-    await settings.getByLabel("Pairing link").fill(forLaptop.url);
-    await settings.getByRole("button", { name: "Pair", exact: true }).click();
-    await expect(
-      settings
-        .getByRole("group", { name: "Your computers" })
-        .getByRole("button", { name: /Connected/ }),
-    ).toBeVisible({ timeout: 20_000 });
+    const pick = page.getByRole("dialog", { name: "Choose a computer" });
+    await pick.getByLabel("Computer", { exact: true }).fill(forLaptop.url);
+    await pick.getByRole("button", { name: "Check", exact: true }).click();
+    await pick
+      .getByRole("button", { name: "Use Mini", exact: true })
+      .click({ timeout: 20_000 });
+    await expect(pick).toBeHidden();
+    // Picking it opens the hand-off menu; it opens again below.
     await page.keyboard.press("Escape");
     expect(relay("devices")).toMatch(/Test phone[\s\S]*computer/);
 
@@ -193,10 +190,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
     await page.getByRole("menuitem", { name: /Continues in Mini/ }).click();
-    const strip = page.locator(".handoff-strip");
-    await expect(strip).toContainText(/finished|Working on/, {
-      timeout: 60_000,
-    });
+    const live = page.locator(".handoff-live");
+    await expect(live).toContainText("Running on Mini", { timeout: 60_000 });
     await screenshot(page, { path: "test-results/headless-handoff-away.png" });
     type Row = { id: string; title: string; computer?: string };
     let arrived: Row | undefined;
@@ -218,9 +213,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     ).toBe("export const guard = true;\n");
 
     // And back again, with the headless Relay's handoff note.
-    await expect(strip).toContainText("finished", { timeout: 60_000 });
-    await strip.getByRole("button", { name: "Bring back" }).click();
-    await expect(strip).toBeHidden({ timeout: 60_000 });
+    await live.getByRole("button", { name: "Bring back" }).click();
+    await expect(live).toBeHidden({ timeout: 60_000 });
     await expect(page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(page, { path: "test-results/headless-handoff-back.png" });
 
