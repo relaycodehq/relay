@@ -4,6 +4,7 @@
 # tag (scripts/mini-ci/poll.sh); pushing to main alone ships nothing.
 #
 #   scripts/tag-release.sh log                  what landed on origin/main since the last release
+#   scripts/tag-release.sh check [commit]       has the mini test it first; waits for the verdict
 #   scripts/tag-release.sh <notes.md> [version]  tag origin/main with those notes and push the tag
 #
 # The version defaults to package.json's, bumped with npm run version:bump.
@@ -14,6 +15,22 @@ git fetch --quiet --tags origin
 last="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --merged origin/main |
   sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
 [[ -n "$last" ]] || { echo "No v* tag on main to start from." >&2; exit 1; }
+
+if [[ "${1:-}" == check ]]; then
+  # The mini tests it alone (scripts/mini-ci/check.sh) and tells as the "Tests" status.
+  commit="$(git rev-parse "${2:-HEAD}^{commit}")"
+  git push --quiet --force origin "$commit:refs/heads/release-check"
+  echo "Testing ${commit:0:9} on the Mac mini…"
+  while :; do
+    sleep 30
+    read -r state description < <(gh api "repos/relaycodehq/relay/commits/$commit/statuses" \
+      --jq '[.[] | select(.context == "Tests")][0] | "\(.state) \(.description)"' 2>/dev/null) || continue
+    case "$state" in
+      success) echo "$description"; exit 0 ;;
+      failure | error) echo "$description" >&2; exit 1 ;;
+    esac
+  done
+fi
 
 if [[ "${1:-}" == log ]]; then
   echo "Since v$last:"

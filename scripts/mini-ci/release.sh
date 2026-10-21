@@ -9,8 +9,7 @@
 # --dry-run builds everything and stops before touching the releases repo.
 set -euo pipefail
 
-ROOT="$HOME/relay-ci.noindex"
-REPO_URL="git@github.com:relaycodehq/relay.git"
+. "$(dirname "$0")/common.sh"
 RELEASES_REPO="relaycodehq/relay"
 SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
@@ -32,12 +31,6 @@ tag="${args[0]:?Usage: release.sh <vX.Y.Z> [--dry-run]}"
 version="${tag#v}"
 major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
 
-export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export JAVA_HOME="$ROOT/jdk21/Contents/Home"
-export ANDROID_HOME="$ROOT/android-sdk"
-export GRADLE_USER_HOME="$ROOT/gradle"
-export NODE_OPTIONS="--max-old-space-size=3072"
-export npm_config_fund=false npm_config_audit=false npm_config_update_notifier=false
 if [[ -f "$TOKEN_FILE" ]]; then
   GH_TOKEN="$(<"$TOKEN_FILE")"
   export GH_TOKEN
@@ -46,19 +39,10 @@ elif ((!dry_run)); then
   exit 1
 fi
 
-step() { printf '\n==> %s  %s\n' "$(date '+%H:%M:%S')" "$*"; }
-
-src="$ROOT/src"
 out="$ROOT/out"
 
 step "Checking out $tag"
-[[ -d "$src/.git" ]] || git clone --quiet "$REPO_URL" "$src"
-cd "$src"
-# --force: a tag moved to another commit on GitHub moves here too.
-git fetch --quiet --force --tags origin
-git checkout --quiet --force --detach "$tag"
-# node_modules survive between builds; installs below redo them when the lockfile changes.
-git clean -ffdxq -e node_modules -e packaging/checks-typescript/node_modules
+checkout "$tag"
 rm -rf "$out" && mkdir -p "$out"
 
 # The mini is short on disk: drop what a build leaves beyond its installers.
@@ -88,12 +72,8 @@ fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
 
-# Linux builds in Docker; boot it now so it's up by the time that starts.
+# Set once the Linux build boots Docker, so cleanup quits it again.
 docker_was_running=1
-if ! docker info >/dev/null 2>&1; then
-  docker_was_running=0
-  open -a Docker
-fi
 linux_pid=""
 cleanup() {
   if [[ -n "$linux_pid" ]] && kill -0 "$linux_pid" 2>/dev/null; then
@@ -104,28 +84,29 @@ cleanup() {
 }
 trap cleanup EXIT
 
-install() { # <dir>: npm ci, skipped while the lockfile is unchanged
-  local stamp="$1/node_modules/.relay-ci-lock" hash
-  hash="$(shasum -a 256 "$1/package-lock.json" | cut -d' ' -f1)"
-  [[ -f "$stamp" && "$(<"$stamp")" == "$hash" ]] && return
-  (cd "$1" && npm ci)
-  echo "$hash" >"$stamp"
-}
 step "Installing dependencies"
-install .
-# Electron 44 fetches its binary on first use instead of at install. Fetch it
-# here, or two test workers race to unpack it into the same folder.
-node -e 'require("electron")' >/dev/null
+install_deps
 
 node scripts/sync-version.mjs "$version"
 
 step "Building"
 npm run build
 
+# Alone, before any build runs beside them: a loaded mini is where races show.
+# Skipped when check.sh already passed this very commit (the "Tests" status).
+tested="$(gh api "repos/$RELEASES_REPO/commits/$(git rev-parse HEAD)/statuses" \
+  --jq '[.[] | select(.context == "Tests")][0].state' 2>/dev/null || true)"
+if [[ "$tested" == success ]]; then
+  step "Testing: passed on this commit before it was tagged"
+else
+  step "Testing"
+  run_tests
+fi
+
 # In an x64 container under Rosetta. Sources go in and installers come out as
 # tar streams: a shared mount drops executable bits and breaks the AppImage.
-# Runs alongside the tests and the other platforms; it only reads dist and
-# tracked files, which nothing after this point changes.
+# Runs alongside the other platforms; it only reads dist and tracked files,
+# which nothing after this point changes.
 build_linux() {
   for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 3; done
   # dist/ is the same on every platform, so only the Electron side is rebuilt.
@@ -168,15 +149,12 @@ pty_version="$(node -p 'require("./node_modules/node-pty/package.json").version'
 pty_linux="$ROOT/node-pty-linux"
 linux_log="$ROOT/linux.log"
 step "Linux, in the background"
+if ! docker info >/dev/null 2>&1; then
+  docker_was_running=0
+  open -a Docker
+fi
 build_linux >"$linux_log" 2>&1 &
 linux_pid=$!
-
-step "Testing"
-# Flagged, not blocking, as on GitHub: a formatting slip shouldn't hold back a release.
-npm run format:check || echo "Formatting check failed (not blocking)."
-npm run test:setup
-npx vitest run --maxWorkers=2
-python3 -m unittest discover -s tests/packaging
 
 step "Mac"
 npx electron-builder --mac --publish never
