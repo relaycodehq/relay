@@ -162,6 +162,8 @@ export const Message = memo(function Message({
   inlineCode,
   after,
   onSignIn,
+  onResume,
+  resumeDisabled,
   onSteer,
   onCompose,
   onRerunSetup,
@@ -197,6 +199,9 @@ export const Message = memo(function Message({
   after?: ReactNode;
   /** Offered when this turn failed on its agent's missing or expired login. */
   onSignIn?: (provider: AgentProvider) => Promise<boolean>;
+  /** Manual recovery for the thread's latest resumable connection failure. */
+  onResume?: () => void;
+  resumeDisabled?: boolean;
   /** Puts a message for the agent in the composer, from a watch note. */
   onSteer?: (text: string) => void;
   /** Puts what a page in the answer composed in the composer that shows. */
@@ -268,10 +273,19 @@ export const Message = memo(function Message({
   }, [m.role, m.body]);
   // A message of only attachments leaves just the agent mention, or its
   // screenshots' tokens, behind; the images below say it all.
+  const failure = m.error ? agentError(m.error) : undefined;
+  // A saved synthetic API notice belongs in the error's details. Only an
+  // exact duplicate is hidden; real answer text and the saved body stay intact.
+  const errorBody =
+    m.status === "failed" &&
+    failure?.connectionFailed &&
+    parsed.body?.trim() === failure.details;
   const said =
     m.role === "user"
       ? parsed.body?.replace(agentMentionPattern, "")
-      : parsed.body;
+      : errorBody
+        ? ""
+        : parsed.body;
   const text = m.role === "user" && said && onlyImageTokens(said) ? "" : said;
   const memes = useSentMemes(m.role === "user" ? text : undefined);
   const images = useWorkingImages(allImages, viewing);
@@ -576,7 +590,21 @@ export const Message = memo(function Message({
           {stoppedNote(m)}
         </p>
       )}
-      {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
+      {m.error && m.status !== "cancelled" && (
+        <AgentError
+          error={m.error}
+          interrupted={
+            !!(
+              text?.trim() ||
+              m.activity?.length ||
+              m.trace?.length ||
+              m.changes?.length
+            )
+          }
+          onRetry={onResume}
+          retryDisabled={resumeDisabled}
+        />
+      )}
       {onSignIn && (m.signIn || (m.provider === "opencode" && m.error && agentError(m.error).authenticationRequired)) && (
         <SignIn provider={m.signIn ?? m.provider} directory={projectRoot} onSignIn={onSignIn} />
       )}

@@ -65,14 +65,14 @@ function resumable(
   rootId: string | null,
 ) {
   const last = listed.filter(isAnswer).at(-1);
-  return (
-    !!last &&
+  return !!last &&
     ["cancelled", "failed"].includes(last.status) &&
     // A missing agent fails the same way again.
     !(last.error && agentError(last.error).notInstalled) &&
     !!lastInput &&
     (lastInput.parentId ?? null) === rootId
-  );
+    ? last
+    : undefined;
 }
 
 /**
@@ -184,6 +184,13 @@ export function ThreadMessages({
     [arrival, root, listed],
   );
   const onScreen = listed.slice(-visible);
+  const resume = !running
+    ? resumable(listed, history.data?.lastInput, root?.id ?? null)
+    : undefined;
+  const inlineResume =
+    resume?.error && !resume.side && agentError(resume.error).connectionFailed
+      ? resume.id
+      : undefined;
   const responseCache = useRef(new Map<string, QuestionResponse>());
   const responses = useMemo(() => {
     const next = questionResponses(onScreen, responseCache.current);
@@ -365,6 +372,8 @@ export function ThreadMessages({
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
                 onSignIn={m.id === listed.at(-1)?.id ? signIn : undefined}
+                onResume={m.id === inlineResume ? onResume : undefined}
+                resumeDisabled={busy}
                 onSteer={root?.side ? undefined : onSteer}
                 onCompose={onCompose}
                 unread={
@@ -414,16 +423,11 @@ export function ThreadMessages({
             ),
           ];
         })}
-        {!running &&
-          resumable(listed, history.data?.lastInput, root?.id ?? null) && (
-            <button
-              className="resume-answer"
-              disabled={busy}
-              onClick={onResume}
-            >
-              <RotateCcw size={13} /> Resume answer
-            </button>
-          )}
+        {resume && !inlineResume && (
+          <button className="resume-answer" disabled={busy} onClick={onResume}>
+            <RotateCcw size={13} /> Resume answer
+          </button>
+        )}
         {chat && held && (
           <HeldSends
             chat={chat}

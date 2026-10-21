@@ -199,6 +199,9 @@ export class ClaudeTurnReader {
   }
 
   private said(message: SDKAssistantMessage) {
+    // The CLI writes API failures as synthetic assistant messages. The
+    // failure watcher keeps their diagnostic; they mustn't replace real output.
+    if (message.error) return;
     const parent = message.parent_tool_use_id;
     if (!parent) {
       // The newest entry of the main conversation is where a fork continues.

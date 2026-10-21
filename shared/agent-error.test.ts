@@ -1,6 +1,30 @@
 import { expect, it } from "vitest";
 import { agentError, withDetails } from "./agent-error";
 
+it("explains Claude connection failures once, with the provider diagnostic folded away", () => {
+  const diagnostic =
+    "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
+  expect(
+    agentError(`Claude could not complete this turn: ${diagnostic}`),
+  ).toEqual({
+    message: "Couldn’t connect to Claude.",
+    hint: "Try again when the connection is back.",
+    details: diagnostic,
+    connectionFailed: true,
+  });
+  for (const reason of [
+    "API Error: overloaded",
+    "HTTP 401 Unauthorized",
+    "HTTP 403 Forbidden",
+    "HTTP 429 Too Many Requests",
+    "HTTP 500 Internal Server Error",
+  ])
+    expect(
+      agentError(`Claude could not complete this turn: ${reason}`)
+        .connectionFailed,
+    ).toBeUndefined();
+});
+
 it("recognizes the stored ACP authentication refusal without classifying other failures as sign-outs", () => {
   expect(
     agentError("Authentication required: provider authentication required"),

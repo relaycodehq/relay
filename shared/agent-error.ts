@@ -26,6 +26,8 @@ export function agentError(error: string): {
   notInstalled?: boolean;
   /** ACP's documented authentication error, including answers saved before it was classified. */
   authenticationRequired?: boolean;
+  /** Claude's API could not be reached; the turn can be retried manually. */
+  connectionFailed?: boolean;
 } {
   const at = error.indexOf(DETAILS);
   if (at >= 0)
@@ -34,6 +36,16 @@ export function agentError(error: string): {
       details: error.slice(at + DETAILS.length),
     };
   const raw = error.trim();
+  const connection = raw.match(
+    /^Claude could not complete this turn: (API Error: Can't reach the API server\b.*)$/i,
+  );
+  if (connection)
+    return {
+      message: "Couldn’t connect to Claude.",
+      hint: "Try again when the connection is back.",
+      details: connection[1],
+      connectionFailed: true,
+    };
   if (/^Authentication required(?:: provider authentication required)?\.?$/i.test(raw))
     return {
       message: "The model provider needs you to sign in again.",
