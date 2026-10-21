@@ -14,10 +14,10 @@
 .git-actions > button:first-child {
   border-radius: 6px 0 0 6px;
 }
-.git-actions-more {
-  border-left: 1px solid var(--border) !important;
-  border-radius: 0 6px 6px 0 !important;
-  padding: 6px 7px !important;
+.git-actions > .git-actions-more {
+  border-left: 1px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  padding: 6px 7px;
   color: var(--muted);
 }
 .git-actions-menu .composer-select-item {
@@ -71,9 +71,9 @@
   font-variant-numeric: tabular-nums;
 }
 /* Nothing to commit, push or merge: just the menu, with a Git glyph. */
-.git-actions-more.idle {
+.git-actions > .git-actions-more.idle {
   display: inline-flex;
   gap: 3px;
-  border-left: 0 !important;
-  border-radius: 6px !important;
+  border-left: 0;
+  border-radius: 6px;
 }
