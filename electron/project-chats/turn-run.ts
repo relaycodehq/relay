@@ -232,7 +232,13 @@ export class TurnRunner {
         .slice(0, Math.max(0, at))
         .reverse()
         .find((m) => !m.parentId && !m.side);
-      if (at >= 0 && before?.role === "assistant" && before.prediction)
+      // Only a guess the composer showed counts for or against guessing.
+      if (
+        at >= 0 &&
+        before?.role === "assistant" &&
+        before.prediction &&
+        before.predictionSeen
+      )
         this.core.predictions?.sent(
           chat.id,
           before.prediction,
@@ -246,7 +252,9 @@ export class TurnRunner {
       turn.kind === "reply" &&
       !rules.side &&
       !branch &&
-      !chat.reviewer
+      !chat.reviewer &&
+      // An agent drives it over Relay's tools: nobody sits at its composer.
+      !chat.startedBy
         ? {
             request: turn.request ?? "",
             // Not while a plan or a question waits on them: that's their next move.
@@ -254,6 +262,13 @@ export class TurnRunner {
               !answer.message.proposedPlan &&
               !answer.message.questions?.some(
                 (q) => !q.answers && !q.answerMessageId && !q.dismissed,
+              ) &&
+              // A queued message goes out next anyway.
+              !(
+                !chat.queuePaused &&
+                chat.queue?.some(
+                  (q) => !q.compact && !q.input.parentId && !q.input.side,
+                )
               ) &&
               (this.core.predictions?.allows() ?? true),
             onPrediction: (text) => answer.predict(text),

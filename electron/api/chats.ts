@@ -398,6 +398,10 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     watchSpend: () => projectChats.watchSpend(7),
     predictionSpend: () => projectChats.predictionSpend(7),
+    seePrediction: takes(
+      [idSchema, idSchema, z.enum(["shown", "dismissed"])],
+      (id, messageId, how) => projectChats.seePrediction(id, messageId, how),
+    ),
     watchReview: () => projectChats.watchReview(7),
     judgeWatchNotes: () => projectChats.judgeWatchNotes(7),
   } satisfies Handlers;

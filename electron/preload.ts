@@ -165,6 +165,7 @@ const methods = [
   "closeWatchNote",
   "watchSpend",
   "predictionSpend",
+  "seePrediction",
   "watchReview",
   "judgeWatchNotes",
   "resumeProjectChat",

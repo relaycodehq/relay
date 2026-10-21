@@ -653,6 +653,20 @@ export class ProjectChats {
       }) ?? Promise.resolve(undefined)
     );
   }
+  /** The composer showed a guess, so what's sent next counts for or against it; Escape hides it for good. */
+  seePrediction(id: string, messageId: string, how: "shown" | "dismissed") {
+    return this.core.control(id, async () => {
+      const chat = await this.storage.load(id);
+      const message = chat.messages.find((m) => m.id === messageId);
+      if (!message?.prediction || message.predictionSeen === "dismissed")
+        return;
+      if (message.predictionSeen === how) return;
+      message.predictionSeen = how;
+      message.version++;
+      await this.storage.save(chat);
+      this.core.emit({ chatId: id, message: structuredClone(message) });
+    });
+  }
   /** The notes of the last `days` with what was done with each. */
   watchReview(days: number) {
     return this.watchNotes.review(days);

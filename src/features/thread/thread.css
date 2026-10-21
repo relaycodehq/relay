@@ -371,9 +371,14 @@
   overflow: hidden;
   padding-top: 12px;
 }
-/* Folded, a suggested message waits until the composer opens again. */
+/* Folded, a suggested message waits until the composer opens again, and
+   the placeholder holds its place. */
 .thread-bottom-composer.collapsed:not(:focus-within) .composer-ghost {
   visibility: hidden;
+}
+.thread-bottom-composer.collapsed:not(:focus-within)
+  .composer-prompt-input::before {
+  visibility: visible;
 }
 /* Folded, the corner is "+N lines"'s. */
 .thread-bottom-composer.collapsed:not(:focus-within) .composer-attach {

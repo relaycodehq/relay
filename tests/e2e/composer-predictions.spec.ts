@@ -4,7 +4,14 @@ import {
   expect,
   _electron as electron,
 } from "../fixtures/electron";
-import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+  realpath,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -13,7 +20,8 @@ import { randomUUID } from "node:crypto";
 test.setTimeout(90_000);
 
 // The guess the last answer left shows over the empty composer: typing hides
-// it, emptying the draft brings it back, Tab takes it and Escape puts it away.
+// it, emptying the draft brings it back, Tab takes it and Escape puts it away
+// for good.
 test("offers the next-message guess as a draft", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-predictions-")),
@@ -25,6 +33,7 @@ test("offers the next-message guess as a draft", async () => {
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   const projectId = randomUUID();
   const start = Date.now() - 60_000;
+  const answerId = randomUUID();
   const chat = {
     id: randomUUID(),
     projectId,
@@ -34,7 +43,7 @@ test("offers the next-message guess as a draft", async () => {
     updated: start + 1000,
     messages: [
       {
-        id: "u1",
+        id: randomUUID(),
         role: "user",
         provider: "claude",
         status: "complete",
@@ -43,7 +52,7 @@ test("offers the next-message guess as a draft", async () => {
         version: 1,
       },
       {
-        id: "a1",
+        id: answerId,
         role: "assistant",
         provider: "claude",
         status: "complete",
@@ -75,6 +84,7 @@ test("offers the next-message guess as a draft", async () => {
         },
       ],
       chats: [{ ...chat, messages: undefined }],
+      composerPredictions: true,
     }),
   );
   const app = await electron.launch({
@@ -104,7 +114,34 @@ test("offers the next-message guess as a draft", async () => {
     );
     await page.keyboard.press("Backspace");
     await expect(ghost).toBeVisible();
+    // Its key is a button that keeps Enter, not Send's.
+    await page
+      .getByRole("button", { name: /Use the suggested message/ })
+      .focus();
+    await page.keyboard.press("Enter");
+    await expect(input).toHaveText("yeah do the phones too, android first");
+    await page.keyboard.press(
+      process.platform === "darwin" ? "Meta+A" : "Control+A",
+    );
+    await page.keyboard.press("Backspace");
+    await expect(ghost).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(ghost).toHaveCount(0);
+    const saved = join(data, "project-chats", chat.id + ".json");
+    await expect
+      .poll(async () => {
+        const { messages } = JSON.parse(await readFile(saved, "utf8"));
+        return messages.find((m: { id: string }) => m.id === answerId)
+          ?.predictionSeen;
+      })
+      .toBe("dismissed");
+    await page.reload();
+    await page
+      .getByRole("complementary", { name: "Projects" })
+      .getByText("Composer predictions")
+      .first()
+      .click();
+    await expect(page.getByText("want me to do Android")).toBeVisible();
     await expect(ghost).toHaveCount(0);
   } finally {
     await app.close();

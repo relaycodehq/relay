@@ -1,4 +1,5 @@
 import { JsonLines } from "../util/json-lines";
+import { agentMention } from "../../shared/agents";
 import type {
   PredictionAsked,
   PredictionSummary,
@@ -47,9 +48,10 @@ export class PredictionLog {
     this.add({ kind: "asked", ...asked, at: Date.now(), chatId });
   }
 
-  /** A message went out while `guess` was on offer. */
+  /** A message went out after `guess` was on screen; `body` as stored, with the composer's leading mention. */
   sent(chatId: string, guess: string, body: string) {
-    const taken = body.trim() === guess.trim();
+    const taken =
+      (agentMention(body)?.question ?? body.trim()) === guess.trim();
     if (this.unused !== undefined) this.unused = taken ? 0 : this.unused + 1;
     if (taken) this.passes = 0;
     this.add({ kind: "sent", taken, at: Date.now(), chatId });

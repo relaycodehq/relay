@@ -35,6 +35,7 @@ import { formatTokens } from "../../../shared/tokens";
 import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
+import { useNextGuess, type NextGuess } from "./useNextGuess";
 import { draftRecipient } from "../../../shared/recipient";
 import { AgentMissingNotice } from "./AgentMissingNotice";
 import { OtherDraftNotice } from "./OtherDraftNotice";
@@ -115,8 +116,8 @@ export interface ComposerConversation {
    */
   cold?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
-  /** The message the agent guessed comes next, offered while the draft is empty; `id` is its answer's. */
-  prediction?: { id: string; text: string };
+  /** The message the agent guessed comes next, offered while the draft is empty. */
+  prediction?: NextGuess;
 }
 export function ProjectComposer({
   ref,
@@ -201,16 +202,13 @@ export function ProjectComposer({
   const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
-  // Escape puts a guess away for good; typing only hides it until the draft is empty again.
-  const [dismissed, setDismissed] = useState<string>();
-  const { prediction } = conversation;
-  const ghost =
-    prediction &&
-    prediction.id !== dismissed &&
-    !draft.text.trim() &&
-    !draft.images.length
-      ? prediction.text
-      : undefined;
+  // Typing only hides it until the draft is empty again.
+  const guess = useNextGuess(
+    conversation.chatId,
+    conversation.prediction,
+    !draft.text.trim() && !draft.attached.length,
+  );
+  const ghost = guess.text;
   const takeGhost = () => {
     if (!ghost) return;
     promptInput.current?.replace(ghost);
@@ -480,6 +478,8 @@ export function ProjectComposer({
                   "Ask about the code, plan a change, or build something…")
             }
             onKeyDownCapture={(e) => {
+              // The guess's own button keeps its keys.
+              if ((e.target as Element).closest(".composer-ghost")) return;
               // A recalled message takes ↑/↓ even from a menu it opened.
               if (recall.keyDown(e, draft.text)) return;
               if (
@@ -498,7 +498,7 @@ export function ProjectComposer({
                 takeGhost();
                 return;
               }
-              if (ghost && e.key === "Escape") setDismissed(prediction?.id);
+              if (ghost && e.key === "Escape") guess.dismiss();
               if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
                 const at = promptInput.current?.caret();
                 if (at?.start === 0 && at.end === 0 && onEditQueued()) {

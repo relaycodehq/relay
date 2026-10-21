@@ -61,7 +61,7 @@ export function ComposerPromptInput({
   const tip = useQuoteTip(editor);
   const [peek, setPeek] = useImagePeek(editor);
   const more = useLineCount(editor) - 1;
-  usePromptSync(editor, value, pills, images, ghost ? "" : placeholder);
+  usePromptSync(editor, value, pills, images, placeholder);
   useComboboxRole(editor, expanded, controls, activeId, autocomplete);
   usePromptHandle(handleRef, editor, draftKey, pills);
   return (

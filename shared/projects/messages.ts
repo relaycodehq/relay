@@ -145,6 +145,8 @@ export interface ChatMessage {
   questions?: AsyncAgentQuestions[];
   /** Local: the message the person would likely send next, which the composer offers as a draft. */
   prediction?: string;
+  /** Local: the composer showed `prediction`, or Escape put it away, which hides it for good. */
+  predictionSeen?: "shown" | "dismissed";
   /** Local: what the side check flagged during this turn; see shared/watch. */
   notes?: WatchNote[];
   /** Local: pages the agent showed in its answer with show_html, above its reply. */

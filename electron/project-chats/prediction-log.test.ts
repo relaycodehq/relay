@@ -32,7 +32,7 @@ it("weighs the week's guesses against what was sent and what the threads spent",
   log.asked("a", { offered: true, cost: cost(0.02) });
   log.asked("a", { offered: false, cost: cost(0.01) });
   log.asked("b", { offered: true });
-  log.sent("a", "go with B", " go with B ");
+  log.sent("a", "go with B", "@claude go with B ");
   log.sent("b", "run the e2e too", "no, revert it");
   const threadUsd = vi.fn(async () => 1.5);
   const summary = await log.summary(7, threadUsd);

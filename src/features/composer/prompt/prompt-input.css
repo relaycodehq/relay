@@ -43,6 +43,10 @@
   float: left;
   height: 0;
 }
+/* The guess stands in for the placeholder. */
+.composer-prompt:has(> .composer-ghost) .composer-prompt-input::before {
+  visibility: hidden;
+}
 /* A suggested next message over the empty draft, set like the text it would be. */
 .composer-ghost {
   position: absolute;
