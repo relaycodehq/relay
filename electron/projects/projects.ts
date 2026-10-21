@@ -540,11 +540,15 @@ export class Projects {
     // Only HEAD and the branch are needed, not a full status scan.
     const [head, branch] = (
       await Promise.all([
-        git(root, ["rev-parse", "HEAD"]),
+        // --revs-only returns no revision on an unborn branch, without
+        // swallowing failures such as a missing repository or Git binary.
+        git(root, ["rev-parse", "--revs-only", "HEAD"]),
         git(root, ["branch", "--show-current"]),
       ])
     ).map((out) => out.trim());
-    const entry = await git(root, ["ls-tree", "-z", head, "--", path]);
+    const entry = head
+      ? await git(root, ["ls-tree", "-z", head, "--", path])
+      : "";
     const original = entry
       ? decodeText(await gitBytes(root, ["show", `${head}:${path}`]))
       : "";
@@ -566,7 +570,10 @@ export class Projects {
   ) {
     await writeWorkingFile(root, path, version, { contents }, async () => {
       if (
-        (plain ? "" : (await git(root, ["rev-parse", "HEAD"])).trim()) !== head
+        (plain
+          ? ""
+          : (await git(root, ["rev-parse", "--revs-only", "HEAD"])).trim()) !==
+        head
       )
         throw new Error(
           "The checkout moved to another commit. Reopen the file; your unsaved text is kept.",

@@ -233,6 +233,64 @@ it("opens and saves files in a folder without Git", async () => {
   }
 });
 
+it("edits an unborn checkout and refuses a stale save after its first commit", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  const root = join(dir, "repo");
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main", root]);
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    await writeFile(join(root, "notes.txt"), "first\n");
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const project = await projects.add(root, null);
+    const place = await projects.inspect(project.id);
+    expect(place.plain).not.toBe(true);
+    const file = await projects.file(place, "notes.txt");
+    expect(file).toMatchObject({
+      contents: "first\n",
+      original: "",
+      head: "",
+      branch: "main",
+    });
+    await projects.save(
+      place,
+      "notes.txt",
+      file.head,
+      file.version,
+      "second\n",
+    );
+    const saved = await projects.file(place, "notes.txt");
+    expect(saved.contents).toBe("second\n");
+    git("add", "notes.txt");
+    git("commit", "-qm", "first commit");
+    await expect(
+      projects.save(place, "notes.txt", saved.head, saved.version, "unsaved\n"),
+    ).rejects.toThrow("The checkout moved to another commit.");
+    expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("second\n");
+    const committed = await projects.file(place, "notes.txt");
+    expect(committed).toMatchObject({
+      contents: "second\n",
+      original: "second\n",
+      branch: "main",
+    });
+    expect(committed.head).toBe(git("rev-parse", "HEAD").toString().trim());
+    await projects.save(
+      place,
+      "notes.txt",
+      committed.head,
+      committed.version,
+      "third\n",
+    );
+    expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("third\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("reuses the Scratchpad folder no thread has used before making another", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   try {
