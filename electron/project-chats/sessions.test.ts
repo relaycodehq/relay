@@ -19,8 +19,12 @@ const source = (key: string) => {
 const runtime = {
   closeSession: async (key: string) => void live.delete(key),
   subagents: source,
+  contextReport: vi.fn(async () => null),
 };
+const claudeContextReport = vi.fn(async () => null);
 vi.mock("../agents", () => ({
+  agentRuntime: (provider: string) =>
+    provider === "codex" ? runtime : { contextReport: claudeContextReport },
   agentRuntimes: () => [["codex", runtime]],
   everyAgentRuntime: () => [runtime],
 }));
@@ -55,6 +59,28 @@ beforeEach(async () => {
   live.clear();
 });
 afterEach(() => rm(dir, { recursive: true, force: true }));
+
+it("counts the selected provider and side session only, without reopening a closed session", async () => {
+  const sessions = new ProviderSessions(dir, () => {});
+  const usage = { usedTokens: 100, maxTokens: 200 };
+  const key = sessions.key("chat", "side");
+  try {
+    expect(
+      await sessions.contextReport("chat", "codex", usage, "side"),
+    ).toBeNull();
+    expect(runtime.contextReport).not.toHaveBeenCalled();
+    sessions.add(key);
+    await sessions.contextReport("chat", "codex", usage, "side");
+    expect(runtime.contextReport).toHaveBeenCalledExactlyOnceWith(key, usage);
+    expect(claudeContextReport).not.toHaveBeenCalled();
+    await sessions.contextReport("chat", "claude", usage, "side");
+    expect(claudeContextReport).toHaveBeenCalledExactlyOnceWith(key, usage);
+    expect(await sessions.contextReport("chat", "codex", usage)).toBeNull();
+    expect(runtime.contextReport).toHaveBeenCalledTimes(1);
+  } finally {
+    sessions.stopListening();
+  }
+});
 
 it("keeps a thread's subagents past the session that followed them, and past a restart", async () => {
   const sessions = new ProviderSessions(dir, () => {});

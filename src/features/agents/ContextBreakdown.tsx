@@ -19,6 +19,9 @@ const slots: Record<string, number> = {
   "Memory files": 5,
   Skills: 6,
   Messages: 7,
+  "Relay instructions": 1,
+  "Environment notes": 5,
+  "Tool calls and results": 2,
 };
 const colour = (name: string) =>
   slots[name] ? `var(--context-${slots[name]})` : "var(--muted)";
@@ -166,7 +169,7 @@ function relayItems(relay: RelayShare) {
  */
 export function ContextBreakdown({
   report,
-  title = "What's in it",
+  title = report.estimated ? "Estimated breakdown" : "What's in it",
   note,
 }: {
   report: ContextReport;
@@ -325,6 +328,15 @@ export function ContextBreakdown({
           </li>
         ))}
       </ul>
+      {report.estimated && (
+        <p
+          className="context-deferred"
+          title="About 4 characters per token, scaled down if visible text exceeds Codex’s reported total. Other includes hidden instructions, tool definitions, images, reasoning, compaction summaries and history outside the recent sample."
+        >
+          Approximate text counts; total reported by Codex. Hidden content and
+          older history remain unaccounted for.
+        </p>
+      )}
       {!!deferred.length && (
         <p className="context-deferred">
           Loaded only when used:{" "}

@@ -5,15 +5,15 @@ import type {
   ProjectChat,
   ProjectChatSend,
   SessionReload,
+  ContextUsage,
 } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import { codexQuestionChoice } from "../../shared/settings";
-import { agentRuntimes, everyAgentRuntime } from "../agents";
+import { agentRuntime, agentRuntimes, everyAgentRuntime } from "../agents";
 import {
   claudeLive,
   claudePending,
   onClaudePending,
-  readClaudeContext,
 } from "../agents/claude/project";
 import type { Store } from "../app/store";
 import type { SubagentDetail } from "../../shared/subagents";
@@ -353,10 +353,18 @@ export class ProviderSessions {
     const kept = await this.archive.read(chatId);
     return kept.find((run) => run.id === agentId) ?? null;
   }
-  /** What fills the window of Claude's live session on the thread, or on one side conversation. */
-  contextReport(chatId: string, parentId?: string) {
+  /** What fills the live provider session on this conversation. */
+  contextReport(
+    chatId: string,
+    provider: AgentProvider,
+    usage: ContextUsage,
+    parentId?: string,
+  ) {
     const key = this.key(chatId, parentId);
-    return this.keys.has(key) ? readClaudeContext(key) : Promise.resolve(null);
+    return this.keys.has(key)
+      ? (agentRuntime(provider).contextReport?.(key, usage) ??
+          Promise.resolve(null))
+      : Promise.resolve(null);
   }
   async stopSubagent(chatId: string, agentId: string) {
     const found = this.subagentSources(chatId).find(({ source }) =>

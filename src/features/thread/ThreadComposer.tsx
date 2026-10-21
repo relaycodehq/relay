@@ -263,11 +263,11 @@ export function ThreadComposer({
     () =>
       chatId
         ? {
-            key: `${chatId}:${root?.id ?? ""}`,
+            key: `${chatId}:${root?.id ?? ""}:${context?.provider ?? ""}`,
             count: () => api.projectChatContext(chatId, root?.id ?? null),
           }
         : undefined,
-    [chatId, root?.id],
+    [chatId, root?.id, context?.provider],
   );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;

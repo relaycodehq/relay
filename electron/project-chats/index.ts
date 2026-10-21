@@ -19,7 +19,14 @@ import type {
   ResumeSettings,
   WorktreeStart,
 } from "../../shared/projects";
-import { PAGE_QUESTION_ID, replyRoot } from "../../shared/projects";
+import {
+  PAGE_QUESTION_ID,
+  replyRoot,
+  replyRoots,
+  mainConversation,
+  threadOrder,
+} from "../../shared/projects";
+import { latestContext } from "../../shared/context-usage";
 import { parseGoalCommand } from "../../shared/goal";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
@@ -386,8 +393,23 @@ export class ProjectChats {
   agents(id: string) {
     return this.sessions.subagents(id);
   }
-  contextReport(id: string, parentId?: string) {
-    return this.sessions.contextReport(id, parentId);
+  async contextReport(id: string, parentId?: string) {
+    const { messages } = await this.storage.load(id);
+    const roots = parentId ? replyRoots(messages) : undefined;
+    const shown = parentId
+      ? messages.filter(
+          (m) => m.id === parentId || roots!.get(m.id) === parentId,
+        )
+      : mainConversation(messages);
+    const context = latestContext([...shown].sort(threadOrder));
+    return context?.provider
+      ? this.sessions.contextReport(
+          id,
+          context.provider,
+          context.usage,
+          parentId,
+        )
+      : null;
   }
   agentRun(id: string, agentId: string) {
     return this.sessions.subagentRun(id, agentId);

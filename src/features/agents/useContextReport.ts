@@ -11,7 +11,7 @@ export type ContextCounter = {
 };
 
 /**
- * What fills Claude's window, counted while the meter's details are open.
+ * What fills the agent's window, counted while the meter's details are open.
  * Each count is kept until `version` changes (a new reply), so hovering
  * again doesn't ask again. Without a live session, `saved` (the thread's
  * latest /context answer) stands in.
@@ -23,7 +23,7 @@ export function useContextReport({
   saved,
 }: {
   counter?: ContextCounter;
-  version: number;
+  version: string | number;
   open: boolean;
   saved?: DatedReport;
 }): { shown?: DatedReport; live: boolean; counting: boolean } {
@@ -37,9 +37,12 @@ export function useContextReport({
     staleTime: Infinity,
     gcTime: 10 * 60_000,
     retry: false,
-    // The last count stays up while the next reply's comes in, for this session only.
+    // Keep Claude's last count for this session. An estimate must match the
+    // reported total, especially when compaction has just shrunk the window.
     placeholderData: (previous, previousQuery) =>
-      previousQuery?.queryKey[1] === counter?.key ? previous : undefined,
+      previousQuery?.queryKey[1] === counter?.key && !previous?.report.estimated
+        ? previous
+        : undefined,
   });
   const live = query.data ?? undefined;
   const settled = query.isFetched || query.isError;

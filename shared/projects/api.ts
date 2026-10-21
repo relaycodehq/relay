@@ -286,7 +286,7 @@ export interface ProjectChatApi {
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   /** The subagents Claude started in the thread's live sessions. */
   projectChatAgents(id: string): Promise<SubagentRun[]>;
-  /** What fills the window of Claude's live session, counted as /context does; null without one. */
+  /** What fills the live session's window, counted or estimated; null without one. */
   projectChatContext(
     id: string,
     parentId?: string | null,

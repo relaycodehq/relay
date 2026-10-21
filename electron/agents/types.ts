@@ -20,6 +20,7 @@ import type { ModelChoice } from "../../shared/settings";
 import type { Streamed, UsageJob, UsageTokens } from "../../shared/usage";
 import type { RenderMode } from "../../shared/html-render";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
+import type { ContextReport } from "../../shared/context-report";
 
 /** What one request of a run used, as the agent reported it. */
 export type UsageReport = {
@@ -177,6 +178,11 @@ export interface AgentRuntime {
   reloadSession?(key: string): Promise<SessionReload | undefined>;
   /** The subagents of the session under `key`, for an agent that starts them. */
   subagents?(key: string): SubagentSource | undefined;
+  /** Counts or estimates the live session's context against its last reported usage. */
+  contextReport?(
+    key: string,
+    usage: ContextUsage,
+  ): Promise<ContextReport | null>;
   /**
    * Signs the agent in from Relay, for one with no login command; resolves
    * once the user is through.

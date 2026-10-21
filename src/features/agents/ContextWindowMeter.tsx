@@ -331,7 +331,7 @@ export function ContextWindowMeter({
   onCompact: () => void;
   /** Opens the details whenever this changes, e.g. from a /context command. */
   openSignal?: number;
-  /** Asked on opening the details, for Claude's breakdown of its window. */
+  /** Asked on opening the details, for the provider's context breakdown. */
   counter?: ContextCounter;
   /** Claude's latest /context answer in the thread, shown when its session can't count. */
   savedReport?: DatedReport;
@@ -373,12 +373,12 @@ export function ContextWindowMeter({
   const shown = decoration(worn);
   const heatLabel =
     heat === "fire" ? "fresh" : heat === "warm" ? "warm" : "cold";
-  // Only Claude reports what fills its window.
+  // Claude counts its categories; Codex estimates the content it exposes.
   const claude = provider === "claude";
   const auto = useAutoCompact();
   const breakdown = useContextReport({
-    counter: claude ? counter : undefined,
-    version: usage.usedTokens,
+    counter: claude || provider === "codex" ? counter : undefined,
+    version: `${usage.usedTokens}:${usage.maxTokens}:${usage.totalTokens}`,
     open,
     saved: claude ? savedReport : undefined,
   });

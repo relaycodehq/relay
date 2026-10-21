@@ -11,6 +11,7 @@ import {
   closeCodexConnection,
   reattachCodexSessions,
   detachCodex,
+  readCodexContext,
 } from "./codex/codex-connection";
 import { runClaude } from "./claude/claude";
 import {
@@ -22,6 +23,7 @@ import {
   listClaudeModels,
   reattachClaudeSessions,
   reloadClaudeSession,
+  readClaudeContext,
 } from "./claude/project";
 import { codexDefaults, codexModels, codexSkills } from "./provider-commands";
 import { codexSkill, skillCommands } from "./skill-presentation";
@@ -50,6 +52,7 @@ const codex: AgentRuntime = {
     return closeCodexConnection(key).catch(() => {});
   },
   subagents: (key) => codexSubagentBooks.get(key),
+  contextReport: readCodexContext,
   models: codexModels,
   defaults: async (root) => {
     const [defaults, models] = await Promise.all([
@@ -69,6 +72,7 @@ const claude: AgentRuntime = {
   closeSession: async (key) => closeClaudeSession(key),
   reloadSession: reloadClaudeSession,
   subagents: claudeSubagents,
+  contextReport: readClaudeContext,
   models: listClaudeModels,
   defaults: async (root) => {
     const [defaults, models] = await Promise.all([
