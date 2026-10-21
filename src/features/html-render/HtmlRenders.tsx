@@ -26,6 +26,7 @@ import { RenderActions, type RenderAction } from "./RenderActions";
 import "../../ui/workspace-panes.css";
 import "./html-render.css";
 import { errorMessage } from "../../../shared/error-message";
+import { useFlash } from "../../lib/useFlash";
 
 /** How far outside the thread's view a page stays loaded. */
 const KEEP_MARGIN = "800px 0px";
@@ -99,8 +100,8 @@ const RenderCard = memo(function RenderCard({
   const [zoom, setZoom] = useState<number>();
   const expanded = zoom !== undefined;
   const scale = zoom ?? 1;
-  const [done, setDone] = useState(false);
-  const [failure, setFailure] = useState<string>();
+  const [done, setDone] = useFlash(1200);
+  const [failure, setFailure] = useFlash<string>(6000);
   const theme = useRenderTheme();
   const focused = useWindowFocused();
   const paused = !focused || (!inView && !expanded);
@@ -230,17 +231,6 @@ const RenderCard = memo(function RenderCard({
     if (expanded) expand();
   };
 
-  useEffect(() => {
-    if (!done) return;
-    const timer = setTimeout(() => setDone(false), 1200);
-    return () => clearTimeout(timer);
-  }, [done]);
-  useEffect(() => {
-    if (!failure) return;
-    const timer = setTimeout(() => setFailure(undefined), 6000);
-    return () => clearTimeout(timer);
-  }, [failure]);
-
   const variants = render.pages.length > 1;
   const label = (i: number) => render.pages[i].label ?? `Variant ${i + 1}`;
   const run = async (action: RenderAction) => {
@@ -350,7 +340,7 @@ const RenderCard = memo(function RenderCard({
           </button>
           <RenderActions
             onPick={(action) => void run(action)}
-            done={done && !expanded}
+            done={!!done && !expanded}
           />
         </div>
       </header>
@@ -399,7 +389,7 @@ const RenderCard = memo(function RenderCard({
                 </div>
                 <RenderActions
                   onPick={(action) => void run(action)}
-                  done={done}
+                  done={!!done}
                   container={stage.current}
                 />
                 <button

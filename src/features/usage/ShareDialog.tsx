@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { useAppearance } from "../../lib/appearance";
 import { ErrorBox, Modal } from "../../ui/ui";
 import { cardPng, UsageCard, type CardOptions } from "./share-card";
+import { useFlash } from "../../lib/useFlash";
 
 /** The card to share, with what it shows and ways to take it out of Relay. */
 export function ShareDialog({
@@ -23,7 +24,7 @@ export function ShareDialog({
     names: false,
     dollars: measure === "usd",
   });
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useFlash(1600);
   const [error, setError] = useState<unknown>();
   const run = (action: (png: string) => Promise<unknown>) => async () => {
     setError(undefined);
@@ -36,7 +37,6 @@ export function ShareDialog({
   const copy = run(async (png) => {
     await api.writeClipboardImage(png);
     setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
   });
   const save = run((png) =>
     api.saveUsageImage(png, `relay-usage-${summary.range}.png`),

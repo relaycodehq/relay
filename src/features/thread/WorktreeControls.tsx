@@ -1,5 +1,4 @@
 import { Menu } from "@base-ui/react/menu";
-import { useEffect, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -34,6 +33,7 @@ import { Modal, Spinner } from "../../ui/ui";
 import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
 import { fileManager } from "../../lib/mod-key";
+import { useCopy } from "../../lib/useCopy";
 
 /** The composer's workspace slot: where an unsent thread will work, then where it does. */
 export function WorkspaceControl({
@@ -242,9 +242,7 @@ export function CheckoutControl({
         }
       >
         <Icon size={13} />
-        <span>
-          {selected ? folderName(selected.path) : "Current checkout"}
-        </span>
+        <span>{selected ? folderName(selected.path) : "Current checkout"}</span>
         {moved && <MovedDot />}
         <ChevronDown size={12} />
       </Menu.Trigger>
@@ -261,8 +259,8 @@ export function CheckoutControl({
           >
             {moved && <MovedNote move={moved} />}
             <div className="composer-menu-label agent-worktree-note">
-              Choose where Git, files and future agent turns work. This
-              choice stays until you change it.
+              Choose where Git, files and future agent turns work. This choice
+              stays until you change it.
             </div>
             <Menu.RadioGroup
               value={selected?.path ?? "checkout"}
@@ -534,23 +532,13 @@ function MovedNote({ move }: { move: WorkspaceMove }) {
 
 /** Shown short, copied whole: the agent's own messages name the absolute path. */
 function WorktreePath({ path }: { path: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 1500);
-    return () => clearTimeout(t);
-  }, [copied]);
+  const [copied, copy] = useCopy();
   return (
     <Menu.Item
       className="composer-select-item worktree-item worktree-path"
       closeOnClick={false}
       title={`Copy ${path}`}
-      onClick={() =>
-        void api.writeClipboard(path).then(
-          () => setCopied(true),
-          () => {},
-        )
-      }
+      onClick={() => copy(path)}
     >
       <span>{tildePath(path)}</span>
       {copied ? (
