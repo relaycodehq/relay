@@ -84,7 +84,9 @@ it("marks the calls a Stop cut short as stopped, not failed", () => {
   answer.activity({ ...call("ls"), status: "complete" });
   answer.activity(call("rg"));
   answer.stop();
-  expect(message.trace!.map((e) => e.kind === "activity" && e.activity.status)).toEqual(["complete", "stopped"]);
+  expect(
+    message.trace!.map((e) => e.kind === "activity" && e.activity.status),
+  ).toEqual(["complete", "stopped"]);
   vi.useRealTimers();
 });
 
@@ -161,4 +163,27 @@ it("keeps a resumed answer whole when the taken-back session replays the steer i
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("moves the version of a change that came just before a checkpoint, so the checkpoint keeps it", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const saved: { body: string; version: number }[] = [];
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => saved.push({ body: message.body, version: message.version }),
+  );
+  answer.text("a");
+  vi.advanceTimersByTime(40);
+  const published = message.version;
+  // Lands inside the 40ms a change waits to be published, right before the 1s checkpoint.
+  vi.advanceTimersByTime(950);
+  answer.text("ab");
+  vi.advanceTimersByTime(10);
+  expect(saved).toEqual([{ body: "ab", version: published + 1 }]);
+  answer.end();
+  vi.useRealTimers();
 });

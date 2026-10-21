@@ -112,6 +112,11 @@ export class AnswerRecorder {
     this.flush ??= setTimeout(() => this.publish(), 40);
     this.checkpoint ??= setTimeout(() => {
       this.checkpoint = null;
+      // The version only moves on publish; a checkpoint reads changes by it.
+      if (this.flush) {
+        clearTimeout(this.flush);
+        this.publish();
+      }
       this.save();
     }, 1000);
   }
