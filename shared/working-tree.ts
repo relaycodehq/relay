@@ -15,6 +15,8 @@ export interface WorkingChange {
   index: string;
   worktree: string;
   conflict: boolean;
+  /** Changes whenever this file's diff may have; unset from a Relay before it. */
+  stamp?: string;
 }
 /** Has a diff between HEAD and the index; untracked files don't. */
 export const isStaged = (c: WorkingChange) =>

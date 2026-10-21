@@ -73,15 +73,25 @@ export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
   };
 }
 
-/** The selected file's diff in its list, read again whenever the tree moves. */
+/** The selected file's diff in its list, read again whenever that file's change moves. */
 export function useWorkingDiff(
   { key, tree }: { key: readonly unknown[]; tree?: WorkingTree },
   pull: Pull | undefined,
   projectId: string | undefined,
   selected: SelectedChange | null,
 ) {
+  const change =
+    selected?.area !== "ignored" &&
+    tree?.changes.find((c) => c.path === selected?.path);
   return useQuery({
-    queryKey: [...key, "diff", selected?.path, selected?.area, tree?.revision],
+    queryKey: [
+      ...key,
+      "diff",
+      selected?.path,
+      selected?.area,
+      // An ignored file, or an older Relay's tree, has no stamp of its own.
+      (change && change.stamp) || tree?.revision,
+    ],
     queryFn: () => {
       const { path, area } = selected!;
       if (area === "ignored") return api.projectIgnoredDiff(projectId!, path);

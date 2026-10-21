@@ -75,6 +75,23 @@ export async function repositoryRoot(dir: string) {
     throw e;
   }
 }
+const knownRoots = new Map<string, { key: string; repository: string }>();
+/**
+ * `repositoryRoot` for a folder asked about on every project call: kept while
+ * its `.git` stays the same. A plain folder is asked each time, since a
+ * repository can be made around it.
+ */
+async function knownRepositoryRoot(dir: string) {
+  const s = await lstat(join(dir, ".git")).catch(() => null);
+  // Not its mtime: Git touches the folder with every index write.
+  const key = s ? `${s.dev}:${s.ino}:${s.mode}` : "";
+  const known = knownRoots.get(dir);
+  if (key && known?.key === key) return known.repository;
+  const repository = await repositoryRoot(dir);
+  if (key && repository) knownRoots.set(dir, { key, repository });
+  else knownRoots.delete(dir);
+  return repository;
+}
 /** Marks a folder without Git, so the app leaves out branches, changes and history. */
 const withKind = async (p: Project): Promise<Project> =>
   p.computer
@@ -298,7 +315,8 @@ export class Projects {
         throw new Error(folderGoneMessage(p.path));
       throw e;
     });
-    const repository = root === p.path ? await repositoryRoot(root) : undefined;
+    const repository =
+      root === p.path ? await knownRepositoryRoot(root) : undefined;
     if (repository === undefined || (repository && repository !== root))
       throw new Error(
         "This project’s Git root changed. Add the correct folder again.",

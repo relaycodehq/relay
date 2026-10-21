@@ -35,11 +35,9 @@ import {
 import { generateCommitMessage } from "../git/commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../git/commit-split";
 import { commitDetail, commitDiff, commitLog } from "../git/history";
-import {
-  performGitAction,
-  workingDiff,
-  workingTree,
-} from "../git/working-tree";
+import { performGitAction } from "../git/git-actions";
+import { workingDiff } from "../git/working-diff";
+import { workingTree } from "../git/working-tree";
 import { dismissIgnored, ignoredDiff } from "../git/ignored-touches";
 import { takes, type ApiContext, type Handlers } from "./context";
 

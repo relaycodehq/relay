@@ -18,12 +18,9 @@ import { launchCodex } from "../pull-requests/local";
 import { readLocalFile, saveLocalFile } from "../pull-requests/local-files";
 import { launchLineQuestion } from "../pull-requests/questions";
 import { inspectFolder } from "../git/repository";
-import {
-  performGitAction,
-  validateRepo,
-  workingDiff,
-  workingTree,
-} from "../git/working-tree";
+import { performGitAction } from "../git/git-actions";
+import { workingDiff } from "../git/working-diff";
+import { validateRepo, workingTree } from "../git/working-tree";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** A reviewed repository's linked local checkout: its changes, files, and agents run in it. */

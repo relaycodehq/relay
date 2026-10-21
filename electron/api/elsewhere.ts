@@ -7,7 +7,8 @@ import type { ProjectChat } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { topLevel, uncommitted } from "../git/elsewhere";
-import { headDiff, performGitAction } from "../git/working-tree";
+import { performGitAction } from "../git/git-actions";
+import { headDiff } from "../git/working-diff";
 import { takes, type ApiContext } from "./context";
 
 const rootSchema = z

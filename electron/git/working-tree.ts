@@ -1,42 +1,20 @@
 import { chunks } from "../util/chunks";
 import { keyedQueue } from "../util/keyed-queue";
 import { execFile } from "node:child_process";
-import {
-  appendFile,
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { lstat, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { inspectRepository } from "./repository";
-import {
-  git,
-  gitBytes,
-  gitEnv,
-  gitError,
-  gitExecutable,
-  redactCredentials,
-} from "./git";
+import { git, gitEnv, gitError, gitExecutable, redactCredentials } from "./git";
 import { digest } from "../util/hash";
-import { imageSides, type FileSource } from "./image-pair";
-import { videoSides } from "./video-pair";
-import { NotText, decodeText, readWorkingFile } from "./working-files";
 import { ignoredTouches } from "./ignored-touches";
+import { configStamp, gitDirs, memo, remoteRefsStamp } from "./repo-facts";
+import { parseStatusV2, statusArgs } from "./working-status";
 import {
-  checkoutChanged,
-  isStaged,
   workingPathSchema,
   type WorkingTree,
-  type GitAction,
-  type ChangeArea,
   type WorkingChange,
 } from "../../shared/working-tree";
-import type { Repo, FilePair } from "../../shared/types";
+import type { Repo } from "../../shared/types";
 import { headlineStat, statsByKind } from "../../shared/diff-kinds";
 /** The rule ignoring each of `paths`, as `.gitignore:4 .env*.local`; paths no rule ignores are left out. */
 export async function ignoreRules(root: string, paths: string[]) {
@@ -74,7 +52,7 @@ async function checkIgnore(root: string, paths: string[]) {
   });
 }
 export async function gitOperation(root: string): Promise<string | null> {
-  const dir = (await git(root, ["rev-parse", "--absolute-git-dir"])).trim();
+  const dir = (await gitDirs(root)).gitDir;
   const names = [
     "MERGE_HEAD",
     "CHERRY_PICK_HEAD",
@@ -100,24 +78,6 @@ export async function validateRepo(root: string, server: string, repo: Repo) {
     );
   return local.path;
 }
-function parseStatus(raw: string): WorkingChange[] {
-  const entries = raw.split("\0"),
-    result: WorkingChange[] = [];
-  for (let i = 0; i < entries.length; i++) {
-    const row = entries[i];
-    if (!row) continue;
-    const index = row[0],
-      worktree = row[1],
-      path = row.slice(3);
-    const previousPath = /[RC]/.test(index + worktree)
-      ? entries[++i]
-      : undefined;
-    const conflict =
-      /U/.test(index + worktree) || ["AA", "DD"].includes(index + worktree);
-    result.push({ path, previousPath, index, worktree, conflict });
-  }
-  return result;
-}
 /**
  * Where `git push` would send the branch: its push remote (`pushRemote`, then
  * `remote.pushDefault`) or else the remote it tracks, under the branch's own
@@ -126,10 +86,8 @@ function parseStatus(raw: string): WorkingChange[] {
  * `tracks` says the push goes where the branch fetches from, so pushing may
  * set its upstream.
  */
-export async function pushDestination(root: string, branch: string) {
-  if (!branch) return null;
-  // Every working-tree refresh asks, so one read of all settings rather than
-  // a Git run per key. Section and key names come lowercased, branch and
+async function readPushDestination(root: string, branch: string) {
+  // One read of all settings rather than a Git run per key. Section and key names come lowercased, branch and
   // remote names as written; a later value wins, as with `config --get`.
   const settings = new Map<string, string>();
   const listed = await git(root, ["config", "-z", "--list"]).catch(() => "");
@@ -160,17 +118,12 @@ export async function pushDestination(root: string, branch: string) {
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref, tracks, label: `${remote}/${ref.slice(11)}` };
 }
-/** The branch HEAD tracks, as `origin/main`; null when it tracks none. */
-const upstreamOf = (root: string) =>
-  git(root, [
-    "rev-parse",
-    "--abbrev-ref",
-    "--symbolic-full-name",
-    "@{upstream}",
-  ]).then(
-    (out) => out.trim() || null,
-    () => null,
+export async function pushDestination(root: string, branch: string) {
+  if (!branch) return null;
+  return destinations(root, `${branch}\0${await configStamp(root)}`, () =>
+    readPushDestination(root, branch),
   );
+}
 export async function fetchUpstream(root: string, branch: string) {
   // Detached or local-only branches have nothing to fetch.
   const remote = branch
@@ -225,12 +178,16 @@ async function lineCounts(
       untracked.map((c) => c.path),
     ),
   ]);
-  const by = statsByKind([...numstatFiles(diff), ...untrackedFiles]);
+  const by = statsByKind([...numstatFiles(diff), ...untrackedFiles.files]);
   const lines = headlineStat(by);
-  return lines === by.generated ||
-    !(by.generated.additions || by.generated.deletions)
-    ? lines
-    : { ...lines, generated: by.generated };
+  return {
+    lines:
+      lines === by.generated ||
+      !(by.generated.additions || by.generated.deletions)
+        ? lines
+        : { ...lines, generated: by.generated },
+    partial: untrackedFiles.partial,
+  };
 }
 /** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
 function numstatFiles(output: string) {
@@ -251,7 +208,8 @@ function numstatFiles(output: string) {
 async function untrackedLines(root: string, paths: string[]) {
   const previous = untrackedCache.get(root),
     seen = new Map<string, number>();
-  let budget = untrackedBytesPerRefresh;
+  let budget = untrackedBytesPerRefresh,
+    partial = false;
   const files: { path: string; additions: number; deletions: number }[] = [];
   for (const part of chunks(paths, 64)) {
     const stats = await Promise.all(
@@ -264,7 +222,10 @@ async function untrackedLines(root: string, paths: string[]) {
         const key = `${path}\0${s.size}\0${s.mtimeMs}`;
         let lines = previous?.get(key);
         if (lines === undefined) {
-          if (s.size > budget) return 0;
+          if (s.size > budget) {
+            partial = true;
+            return 0;
+          }
           budget -= s.size;
           lines = textLines(await readFile(join(root, path)).catch(() => null));
         }
@@ -278,7 +239,7 @@ async function untrackedLines(root: string, paths: string[]) {
   }
   if (seen.size) untrackedCache.set(root, seen);
   else untrackedCache.delete(root);
-  return files;
+  return { files, partial };
 }
 function textLines(bytes: Buffer | null) {
   // Git counts a file with a NUL byte as binary, with no lines.
@@ -288,97 +249,84 @@ function textLines(bytes: Buffer | null) {
     lines++;
   return bytes[bytes.length - 1] === 10 ? lines : lines + 1;
 }
+// Each is read again only when what it depends on changed: a refresh while
+// an agent edits files runs `git status` and, for the line counts, `git diff`.
+const destinations = memo<Awaited<ReturnType<typeof readPushDestination>>>();
+const counted = memo<Awaited<ReturnType<typeof lineCounts>>>();
+const outgoingLog = memo<string>();
+const unpushed = memo<number>();
+
+/**
+ * The checkout as the Changes pane shows it. Runs often (on every change the
+ * watch sees, and around every Git action), so it asks Git once and reads the
+ * rest from disk or from what the last refresh already found.
+ */
 export async function workingTree(root: string): Promise<WorkingTree> {
-  // This runs every few seconds and around every Git action, so reads that
-  // don't depend on each other run together (status takes no index lock).
-  const [headRaw, branchRaw, raw, upstream, operation] = await Promise.all([
-    git(root, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => ""),
-    git(root, ["branch", "--show-current"]),
-    git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
-    upstreamOf(root),
+  const [raw, operation] = await Promise.all([
+    git(root, statusArgs),
     gitOperation(root),
   ]);
-  const head = headRaw.trim(),
-    branch = branchRaw.trim(),
-    // Paths Relay can't open, such as a nested repository's "inner/", stay
-    // out of the list instead of failing it.
-    changes = parseStatus(raw).filter(
-      (c) => workingPathSchema.safeParse(c.path).success,
-    );
-  // Staging the status line doesn't show (such as `git add -p`) only happens
-  // on changed paths. The whole index is megabytes in a large repository.
-  const tracked = changes.filter((c) => c.index !== "?").map((c) => c.path);
-  const destinationRead = pushDestination(root, branch);
-  // A branch never pushed has no upstream; what it would push is everything
-  // the push remote doesn't have on any branch yet.
-  const outgoingRange = upstream
-    ? Promise.resolve([`${upstream}..HEAD`])
-    : destinationRead.then((d) =>
-        d && head ? ["HEAD", "--not", `--remotes=${d.remote}`] : null,
-      );
-  const [index, stamps, destination, counts, log, lines, ignored] =
-    await Promise.all([
-      tracked.length
-        ? git(root, [
-            "ls-files",
-            "--stage",
-            "-z",
-            ...(tracked.length > 1000 ? [] : ["--", ...tracked]),
-          ])
-        : "",
-      Promise.all(
-        changes.map(async (c) => {
-          const s = await lstat(join(root, c.path)).catch(
-            (e: NodeJS.ErrnoException) => {
-              // ENOTDIR: a tracked folder was replaced by a file of its name.
-              if (e.code !== "ENOENT" && e.code !== "ENOTDIR") throw e;
-              return null;
-            },
-          );
-          return s
-            ? [c.path, s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode]
-            : [c.path, null];
-        }),
-      ),
-      destinationRead,
-      !upstream
-        ? outgoingRange.then(async (range) =>
-            range
-              ? [
-                  0,
-                  Number(
-                    (await git(root, ["rev-list", "--count", ...range])).trim(),
-                  ),
-                ]
-              : [0, 0],
-          )
-        : head
-          ? git(root, [
-              "rev-list",
-              "--left-right",
-              "--count",
-              `${upstream}...HEAD`,
-            ]).then((out) => out.trim().split(/\s+/).map(Number))
-          : // An unborn branch has nothing ahead, and everything upstream is behind.
-            git(root, ["rev-list", "--count", upstream]).then((out) => [
-              Number(out.trim()),
-              0,
-            ]),
-      head
-        ? outgoingRange.then((range) =>
-            range ? git(root, ["log", "-30", "--format=%H %s", ...range]) : "",
-          )
-        : "",
-      lineCounts(root, changes, head),
-      ignoredTouches(root, head),
-    ]);
+  const status = parseStatusV2(raw);
+  const { head, branch } = status;
+  // Paths Relay can't open, such as a nested repository's "inner/", stay
+  // out of the list instead of failing it.
+  const opened = status.changes.flatMap((c, i) =>
+    workingPathSchema.safeParse(c.path).success
+      ? [{ c, row: status.rows[i]! }]
+      : [],
+  );
+  // Git compares with the upstream only when it exists and HEAD has a commit;
+  // on a branch with none yet, everything upstream is behind.
+  const unbornBehind =
+    !head && status.upstream
+      ? await git(root, ["rev-list", "--count", status.upstream]).then(
+          (out) => Number(out.trim()),
+          () => null,
+        )
+      : null;
+  const upstream = status.ab || unbornBehind !== null ? status.upstream : null;
+  const [stamps, destination, ignored] = await Promise.all([
+    Promise.all(
+      opened.map(async ({ c, row }) => {
+        const s = await lstat(join(root, c.path)).catch(
+          (e: NodeJS.ErrnoException) => {
+            // ENOTDIR: a tracked folder was replaced by a file of its name.
+            if (e.code !== "ENOENT" && e.code !== "ENOTDIR") throw e;
+            return null;
+          },
+        );
+        return [
+          row,
+          ...(s ? [s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode] : [null]),
+        ];
+      }),
+    ),
+    pushDestination(root, branch),
+    ignoredTouches(root, head),
+  ]);
+  // A change's stamp moves with anything its diff shows: HEAD, what's staged
+  // (the index hash in its row) and the file on disk.
+  const changes = opened.map(({ c }, i) => ({
+    ...c,
+    stamp: digest(JSON.stringify([head, stamps[i]])),
+  }));
+  const countsRead = counted(root, digest(JSON.stringify([head, stamps])), () =>
+    lineCounts(root, changes, head),
+  );
+  const [counts, log, { lines, partial }] = await Promise.all([
+    outgoingCounts(root, head, upstream, status.ab, unbornBehind, destination),
+    outgoing(root, head, upstream, status.ab, destination),
+    countsRead,
+  ]);
+  // Untracked files left for the next refresh to count.
+  if (partial) counted.forget(root, countsRead);
   return {
     head,
     branch,
     changes,
     upstream,
-    ahead: counts[1],
-    behind: counts[0],
+    ahead: counts.ahead,
+    behind: counts.behind,
     operation,
     lines,
     pushTarget: destination?.label ?? null,
@@ -395,12 +343,12 @@ export async function workingTree(root: string): Promise<WorkingTree> {
         subject: r.slice(r.indexOf(" ") + 1),
       })),
     ...(ignored.touches.length ? { ignored: ignored.touches } : {}),
+    // Ahead and behind stay out: a fetch in the background mustn't make a
+    // Git action the user started read as made on a stale view.
     revision: digest(
       JSON.stringify([
         head,
         branch,
-        raw,
-        index,
         stamps,
         upstream,
         destination,
@@ -409,374 +357,78 @@ export async function workingTree(root: string): Promise<WorkingTree> {
     ),
   };
 }
+
+type Destination = Awaited<ReturnType<typeof pushDestination>>;
+
+/**
+ * Commits ahead of and behind the upstream. A branch never pushed has none;
+ * what it would push is everything its push remote has on no branch yet.
+ */
+async function outgoingCounts(
+  root: string,
+  head: string,
+  upstream: string | null,
+  ab: { ahead: number; behind: number } | null,
+  unbornBehind: number | null,
+  destination: Destination,
+) {
+  if (upstream) return ab ?? { ahead: 0, behind: unbornBehind ?? 0 };
+  if (!destination || !head) return { ahead: 0, behind: 0 };
+  const key = [
+    head,
+    destination.remote,
+    await remoteRefsStamp(root, destination.remote, destination.ref),
+  ].join("\0");
+  const ahead = await unpushed(root, key, () =>
+    git(root, [
+      "rev-list",
+      "--count",
+      "HEAD",
+      "--not",
+      `--remotes=${destination.remote}`,
+    ]).then((out) => Number(out.trim())),
+  );
+  return { ahead, behind: 0 };
+}
+
+/** The newest 30 commits a push would send, as `sha subject` lines. */
+async function outgoing(
+  root: string,
+  head: string,
+  upstream: string | null,
+  ab: { ahead: number; behind: number } | null,
+  destination: Destination,
+) {
+  if (!head) return "";
+  if (upstream) {
+    if (!ab?.ahead) return "";
+    return outgoingLog(
+      root,
+      [head, upstream, ab.ahead, ab.behind].join("\0"),
+      () => git(root, ["log", "-30", "--format=%H %s", `${upstream}..HEAD`]),
+    );
+  }
+  if (!destination) return "";
+  const key = [
+    head,
+    destination.remote,
+    await remoteRefsStamp(root, destination.remote, destination.ref),
+  ].join("\0");
+  return outgoingLog(root, key, () =>
+    git(root, [
+      "log",
+      "-30",
+      "--format=%H %s",
+      "HEAD",
+      "--not",
+      `--remotes=${destination.remote}`,
+    ]),
+  );
+}
+
 const queue = keyedQueue();
 export async function flushGitOperations() {
   await Promise.allSettled(queue.pending());
 }
 export const serializeRepo = <T>(root: string, run: () => Promise<T>) =>
   queue(root, run);
-function withPreviousPaths(
-  changes: WorkingChange[],
-  paths: string[],
-  includePrevious: (c: WorkingChange) => boolean,
-) {
-  return [
-    ...new Set(
-      paths.flatMap((path) => {
-        const c = changes.find((c) => c.path === path);
-        if (!c)
-          throw new Error("That file is no longer changed. Refresh first.");
-        return c.previousPath && includePrevious(c)
-          ? [path, c.previousPath]
-          : [path];
-      }),
-    ),
-  ];
-}
-/**
- * Hands a copy of each file on disk to `trash`, so a discard can be undone;
- * discarding staged changes also hands over a staged version that differs
- * from the one on disk, as "name (staged).ext".
- */
-async function keepCopies(
-  root: string,
-  changes: WorkingChange[],
-  paths: string[],
-  trash: (file: string) => Promise<void>,
-  staged: boolean,
-) {
-  const keep = async (name: string, write: (copy: string) => Promise<void>) => {
-    const dir = await mkdtemp(join(tmpdir(), "relay-discard-"));
-    try {
-      const copy = join(dir, name);
-      await write(copy);
-      await trash(copy);
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
-  };
-  for (const path of paths) {
-    const source = join(root, path);
-    const stat = await lstat(source).catch(() => null);
-    if (stat?.isFile())
-      await keep(basename(path), (copy) => copyFile(source, copy));
-    const change = changes.find((c) => c.path === path);
-    if (!staged || !change || !/[MARCT]/.test(change.index)) continue;
-    if (change.worktree === " ") continue;
-    const size = Number(
-      await git(root, ["cat-file", "-s", `:0:${path}`]).catch(() => NaN),
-    );
-    if (!Number.isFinite(size)) continue;
-    const blob = await gitBytes(root, ["cat-file", "blob", `:0:${path}`], size);
-    const ext = extname(path);
-    await keep(`${basename(path, ext)} (staged)${ext}`, (copy) =>
-      writeFile(copy, blob),
-    );
-  }
-}
-export async function performGitAction(
-  root: string,
-  action: GitAction,
-  /** Moves a file to the system Trash; discarding refuses to run without it. */
-  trash?: (file: string) => Promise<void>,
-) {
-  return serializeRepo(root, async () => {
-    if (action.kind === "fetch") {
-      // Background refresh of the upstream so "behind" reflects the remote,
-      // every few minutes: the branch and its upstream decide whether to
-      // fetch, and the whole tree is read once, after it.
-      const [branch, upstream] = await Promise.all([
-        git(root, ["branch", "--show-current"]),
-        upstreamOf(root),
-      ]);
-      if (upstream) await fetchUpstream(root, branch.trim());
-      return workingTree(root);
-    }
-    const state = await workingTree(root);
-    if (action.revision !== state.revision)
-      throw new Error(
-        `${checkoutChanged} Review the refreshed changes and try again.`,
-      );
-    if (action.kind === "stage" || action.kind === "unstage") {
-      // Resetting a conflicted path drops its conflict mark but keeps the markers in the file.
-      if (
-        action.kind === "unstage" &&
-        action.paths.some(
-          (p) => state.changes.find((c) => c.path === p)?.conflict,
-        )
-      )
-        throw new Error(
-          "This file has merge conflicts. Resolve them, then stage the result.",
-        );
-      const allPaths = withPreviousPaths(
-        state.changes,
-        action.paths,
-        (c) => action.kind === "unstage" || /[RC]/.test(c.worktree),
-      );
-      // Bounded chunks avoid argv limits; use literal paths even for names containing Git magic.
-      for (const part of chunks(allPaths, 100))
-        await git(
-          root,
-          action.kind === "stage"
-            ? ["add", "--", ...part]
-            : ["reset", "-q", "HEAD", "--", ...part],
-        );
-    } else if (action.kind === "discard") {
-      if (!trash) throw new Error("Discarding needs the system Trash.");
-      if (
-        action.paths.some((p) => {
-          const c = state.changes.find((c) => c.path === p);
-          return !c || c.conflict || c.index === "?";
-        })
-      )
-        throw new Error(
-          "Only tracked files without conflicts can be discarded. Move untracked files to the Trash instead.",
-        );
-      const staged = action.area === "staged";
-      const paths = withPreviousPaths(
-        state.changes,
-        action.paths,
-        (c) => staged || /[RC]/.test(c.worktree),
-      );
-      await keepCopies(root, state.changes, action.paths, trash, staged);
-      for (const part of chunks(paths, 100))
-        await git(
-          root,
-          staged
-            ? state.head
-              ? [
-                  "restore",
-                  "--source=HEAD",
-                  "--staged",
-                  "--worktree",
-                  "--",
-                  ...part,
-                ]
-              : // Nothing to restore from yet: every staged file is new.
-                ["rm", "-q", "-f", "--", ...part]
-            : ["restore", "--worktree", "--", ...part],
-        );
-    } else if (action.kind === "ignore") {
-      if (
-        action.paths.some(
-          (p) => state.changes.find((c) => c.path === p)?.index !== "?",
-        )
-      )
-        throw new Error("Only untracked files can be ignored.");
-      // A .gitignore rule is one line, so it can't name such a file.
-      if (action.paths.some((p) => /[\r\n]/.test(p)))
-        throw new Error("Git can’t ignore a file with a line break in its name.");
-      const file =
-        action.file === "gitignore"
-          ? join(root, ".gitignore")
-          : resolve(
-              root,
-              (
-                await git(root, ["rev-parse", "--git-path", "info/exclude"])
-              ).trim(),
-            );
-      await mkdir(dirname(file), { recursive: true });
-      const before = await readFile(file, "utf8").catch(() => "");
-      await appendFile(
-        file,
-        (before && !before.endsWith("\n") ? "\n" : "") +
-          action.paths.map(ignorePattern).join("\n") +
-          "\n",
-      );
-    } else {
-      if (state.operation)
-        throw new Error(
-          "Finish the current Git operation on a branch before committing or pushing here.",
-        );
-      if (!state.branch)
-        throw new Error(
-          "This folder is on a detached HEAD. Check out a branch here before committing or pushing.",
-        );
-      if (state.changes.some((c) => c.conflict))
-        throw new Error("Resolve and stage all merge conflicts first.");
-      if (action.kind === "commit" && action.paths) {
-        // Both sides of a rename, so its old path is committed as removed.
-        const paths = withPreviousPaths(
-          state.changes,
-          action.paths,
-          () => true,
-        );
-        // Only files Git doesn't know yet need adding; `commit --only` takes
-        // tracked ones as they are, deleted or renamed away included.
-        const untracked = paths.filter(
-          (p) => state.changes.find((c) => c.path === p)?.index === "?",
-        );
-        if (untracked.length) await git(root, ["add", "--", ...untracked]);
-        await git(
-          root,
-          ["commit", "--only", "-m", action.message, "--", ...paths],
-          120000,
-        );
-      } else if (action.kind === "commit") {
-        if (!state.changes.some(isStaged))
-          throw new Error("Stage the changes you want to commit first.");
-        await git(root, ["commit", "-m", action.message], 120000);
-      } else if (action.kind === "pull") {
-        if (!state.upstream)
-          throw new Error("This branch has no upstream to pull from.");
-        await fetchUpstream(root, state.branch);
-        // An unborn branch has nothing of its own to diverge with.
-        const ahead = state.head
-          ? Number(
-              (
-                await git(root, ["rev-list", "--count", "@{upstream}..HEAD"])
-              ).trim(),
-            )
-          : 0;
-        if (ahead > 0)
-          throw new Error(
-            "This branch has diverged from its upstream. Rebase or merge it yourself first.",
-          );
-        // Fast-forward only: never create a merge commit or rebase behind the user's back.
-        await git(
-          root,
-          ["merge", "--ff-only", "--quiet", "@{upstream}"],
-          120000,
-        );
-      } else {
-        const target = await pushDestination(root, state.branch);
-        if (!target)
-          throw new Error("Configure a Git push remote for this branch first.");
-        try {
-          await git(
-            root,
-            [
-              "push",
-              "--porcelain",
-              // A branch fetching from one remote and pushing to another keeps tracking the first.
-              ...(target.tracks ? ["--set-upstream"] : []),
-              target.remote,
-              `HEAD:${target.ref}`,
-            ],
-            120000,
-          );
-        } catch (e) {
-          if (
-            !(e instanceof Error) ||
-            !/\[rejected\].*\((fetch first|non-fast-forward)\)/.test(e.message)
-          )
-            throw e;
-          // A local status refresh can't discover remote commits. Fetch before
-          // reporting the failure so callers' refreshes offer Pull or Rebase.
-          try {
-            await git(
-              root,
-              ["fetch", "--prune", "--quiet", target.remote],
-              60000,
-            );
-          } catch {
-            // Keep the push failure if the remote also refuses the refresh.
-            throw e;
-          }
-          const fresh = await workingTree(root);
-          if (fresh.upstream !== target.label || !fresh.behind) throw e;
-          throw new Error(
-            `Remote has new commits. ${fresh.ahead ? "Rebase onto" : "Pull from"} ${target.label}, then push again.`,
-          );
-        }
-      }
-    }
-    return workingTree(root);
-  });
-}
-/** A pattern matching just this path from the repository root. */
-function ignorePattern(path: string) {
-  return "/" + path.replace(/[\\*?[]/g, "\\$&").replace(/ $/, "\\ ");
-}
-export async function workingDiff(
-  root: string,
-  path: string,
-  area: ChangeArea,
-): Promise<FilePair> {
-  workingPathSchema.parse(path);
-  const state = await workingTree(root),
-    c = state.changes.find((c) => c.path === path);
-  if (!c) throw new Error("This file no longer has local changes.");
-  if (c.conflict)
-    throw new Error(
-      "This file has merge conflicts. Resolve them in your editor, then stage the result.",
-    );
-  const staged = area === "staged",
-    oldName = c.previousPath ?? path;
-  const oldSource: FileSource | null = staged
-      ? c.index === "A" || c.index === "?"
-        ? null
-        : { name: oldName, spec: `HEAD:${oldName}` }
-      : c.index === "?" || c.index === "D"
-        ? null
-        : { name: path, spec: `:0:${path}` },
-    nextSource: FileSource | null = staged
-      ? c.index === "D"
-        ? null
-        : { name: path, spec: `:0:${path}` }
-      : c.worktree === "D"
-        ? null
-        : { name: path, disk: true };
-  return filePair(root, oldSource, nextSource);
-}
-
-/** The file as `oldSource` and `nextSource` have it, side by side; null for a side that doesn't exist. */
-async function filePair(
-  root: string,
-  oldSource: FileSource | null,
-  nextSource: FileSource | null,
-): Promise<FilePair> {
-  const read = async (source: FileSource | null) => {
-    if (!source) return null;
-    if ("spec" in source)
-      return {
-        name: source.name,
-        contents: decodeText(await gitBytes(root, ["show", source.spec])),
-        cacheKey: "",
-      };
-    // The shared safe reader rejects symlink parents and hardlinks.
-    const value = await readWorkingFile(root, source.name);
-    return value
-      ? { name: source.name, contents: value.contents, cacheKey: value.hash }
-      : null;
-  };
-  let old: FilePair["old"], next: FilePair["next"];
-  try {
-    old = await read(oldSource);
-    next = await read(nextSource);
-  } catch (e) {
-    if (!(e instanceof NotText)) throw e;
-    const [images, videos] = await Promise.all([
-      imageSides(root, oldSource, nextSource),
-      videoSides(root, oldSource, nextSource),
-    ]);
-    return { old: null, next: null, binary: true, images, videos };
-  }
-  for (const f of [old, next]) if (f) f.cacheKey ||= digest(f.contents);
-  return { old, next, binary: false };
-}
-
-/**
- * A changed file against HEAD, staged and unstaged changes together: what a
- * thread's agent left in a repository other than its own.
- */
-export async function headDiff(root: string, path: string): Promise<FilePair> {
-  workingPathSchema.parse(path);
-  const state = await workingTree(root),
-    c = state.changes.find((c) => c.path === path);
-  if (!c) throw new Error("This file no longer has local changes.");
-  if (c.conflict)
-    throw new Error(
-      "This file has merge conflicts. Resolve them in your editor first.",
-    );
-  const oldName = c.previousPath ?? path;
-  return filePair(
-    root,
-    c.index === "A" || c.index === "?"
-      ? null
-      : { name: oldName, spec: `HEAD:${oldName}` },
-    c.worktree === "D" || (c.index === "D" && c.worktree === " ")
-      ? null
-      : { name: path, disk: true },
-  );
-}
