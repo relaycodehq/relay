@@ -2,9 +2,15 @@ import { readFile } from "node:fs/promises";
 import { projectInstructions, sideInstructions } from "../instructions";
 import { renderPrompt } from "../../../shared/html-render";
 import { CodexPlanRows } from "../activity";
-import { TurnText } from "../cursor/activity";
 import { signedOutError, usageLimitError } from "../errors";
-import { answerLimitError, guardSteer, TurnEnd } from "../turn-kit";
+import {
+  answerLimitError,
+  CANCEL_GRACE_MS,
+  cancelledByYou,
+  guardSteer,
+  TurnEnd,
+  TurnText,
+} from "../turn-kit";
 import type { AgentOptions } from "../types";
 import { museActivity, museEditedPaths, todoPlan } from "./activity";
 import { MuseRequestError } from "./connection";
@@ -32,8 +38,6 @@ import {
 import { MuseSubagents, museSubagentBooks } from "./subagents";
 import { museUsageSeen } from "./usage";
 
-/** How long a stopped turn may take to say so before Relay stops waiting. */
-const cancelGrace = 5000;
 
 const planInstructions =
   "Plan mode: investigate and reply with a plan for the request. Do not change any files or run commands that change anything.";
@@ -337,7 +341,7 @@ export async function runMuse(options: AgentOptions): Promise<string> {
       void connection
         .request("turn/interrupt", { commandId: commandId(), sessionId, turnId })
         .catch(() => {});
-    cancelTimer = setTimeout(() => fail(new Error("Cancelled by you.")), cancelGrace);
+    cancelTimer = setTimeout(() => fail(cancelledByYou()), CANCEL_GRACE_MS);
     cancelTimer.unref?.();
   };
   signal.addEventListener("abort", interrupt, { once: true });
