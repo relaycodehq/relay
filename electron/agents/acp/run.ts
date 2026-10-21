@@ -2,32 +2,19 @@ import { readFile } from "node:fs/promises";
 import { agentName } from "../../../shared/agents";
 import type { AgentDecision } from "../../../shared/agent-modes";
 import { signedOutError } from "../errors";
-import {
-  answerLimitError,
-  CANCEL_GRACE_MS,
-  cancelledByYou,
-  TurnText,
-} from "../turn-kit";
+import { CANCEL_GRACE_MS, cancelledByYou, TurnText } from "../turn-kit";
 import type { AgentOptions } from "../types";
-import {
-  acpActivity,
-  acpEdits,
-  editKinds,
-  lookKinds,
-  planText,
-} from "./activity";
+import { editKinds, lookKinds } from "./activity";
 import { AcpRequestError } from "./connection";
 import type { AcpProfile } from "./profiles";
 import {
   cancelledPermission,
-  parseUpdate,
   permissionRequestSchema,
   picked,
   promptResultSchema,
   AUTH_REQUIRED,
   type AcpPermissionRequest,
   type AcpPromptResult,
-  type AcpToolCall,
 } from "./protocol";
 import {
   acquireAcpAgent,
@@ -38,11 +25,10 @@ import {
 import { applySettings } from "./settings";
 import {
   answerAntigravityQuestion,
-  AntigravityBatches,
-  antigravityBatches,
   antigravityHelper,
   compactAntigravity,
 } from "../antigravity";
+import { AcpTurnEvents } from "./turn-events";
 
 const decisionKinds: Record<Exclude<AgentDecision, "cancel">, string> = {
   accept: "allow_once",
@@ -290,140 +276,34 @@ async function runAcpTurn(
     throw new Error(`There is no ${name} turn to pick up.`);
   }
 
-  const turn = new TurnText(
-    options.onText,
-    options.onCommentary,
-    profile.provider,
-  );
-  const steered = (id: string) => {
-    turn.below();
-    options.onSteered?.(id);
-  };
-  const calls = new Map<
-    string,
-    Partial<AcpToolCall> & { toolCallId: string }
-  >();
-  const batches =
-    profile.provider === "antigravity" && key
-      ? new AntigravityBatches(antigravityBatches.open(key))
-      : undefined;
   let overflow!: (error: Error) => void;
   const overflowed = new Promise<never>((_, reject) => (overflow = reject));
   void overflowed.catch(() => {});
   const turnAbort = new AbortController();
   const stop = () => turnAbort.abort();
   signal.addEventListener("abort", stop, { once: true });
+  const events = new AcpTurnEvents(
+    profile,
+    options,
+    agent,
+    key,
+    (error) => {
+      overflow(error);
+      stop();
+    },
+    () => turnAbort.signal.aborted,
+  );
+  const { turn, calls, batches, hear } = events;
+  const steered = (id: string) => {
+    turn.below();
+    options.onSteered?.(id);
+  };
 
   let sessionId = agent.session?.id;
   const cancel = () => {
     if (sessionId) connection.notify("session/cancel", { sessionId });
   };
   turnAbort.signal.addEventListener("abort", cancel, { once: true });
-
-  const hear = (raw: unknown) => {
-    const update = parseUpdate(raw);
-    if (!update) return;
-    switch (update.sessionUpdate) {
-      case "agent_message_chunk": {
-        if (update.content.type !== "text") return;
-        turn.add(update.content.text ?? "");
-        const over = answerLimitError(turn.size);
-        if (over && !turnAbort.signal.aborted) {
-          overflow(over);
-          stop();
-        }
-        return;
-      }
-      case "agent_thought_chunk":
-        return;
-      case "tool_call":
-      case "tool_call_update": {
-        if (
-          profile.provider === "antigravity" &&
-          update.toolCallId.startsWith("interaction_")
-        )
-          return;
-        if (
-          (job.kind === "helper" || job.kind === "compact") &&
-          profile.provider === "antigravity"
-        ) {
-          overflow(
-            new Error(
-              "Antigravity attempted tool work during a text-only helper or compaction job.",
-            ),
-          );
-          stop();
-          return;
-        }
-        const { sessionUpdate: _, ...fields } = update;
-        const known = calls.get(update.toolCallId);
-        const call = {
-          ...known,
-          ...Object.fromEntries(
-            Object.entries(fields).filter(([, v]) => v != null),
-          ),
-        } as Partial<AcpToolCall> & { toolCallId: string };
-        calls.set(update.toolCallId, call);
-        batches?.update(call);
-        if (!known) turn.toCommentary();
-        options.onActivity?.(acpActivity(call));
-        const edits = acpEdits(call);
-        if (edits.length) options.onEdit?.(edits);
-        return;
-      }
-      case "plan":
-        if (update.entries.length) {
-          const detail = planText(update.entries);
-          const over = answerLimitError(detail.length);
-          if (over) {
-            overflow(over);
-            stop();
-            return;
-          }
-          options.onActivity?.({
-            id: `${profile.provider}-plan`,
-            kind: "tool",
-            status: update.entries.some((e) => e.status === "in_progress")
-              ? "running"
-              : "complete",
-            label: "Updated the plan",
-            detail,
-          });
-          if (options.interactionMode === "plan") options.onPlan?.(detail);
-        }
-        return;
-      case "current_mode_update": {
-        const modes = agent.session?.settings.modes;
-        if (modes) modes.currentModeId = update.currentModeId;
-        return;
-      }
-      case "config_option_update":
-        if (agent.session)
-          agent.session.settings.configOptions = update.configOptions;
-        return;
-      case "session_info_update":
-        if (update.title) options.onTitle?.(update.title);
-        return;
-      case "usage_update":
-        options.onContext?.({
-          usedTokens: update.used,
-          ...(update.size ? { maxTokens: update.size } : {}),
-        });
-        // The session's cost so far, which OpenCode only reports once a
-        // turn ends; a turn counts what it added since the last report.
-        if (
-          agent.session &&
-          update.cost &&
-          (!update.cost.currency || update.cost.currency === "USD")
-        ) {
-          const before = agent.session.cost;
-          agent.session.cost = update.cost.amount;
-          const spent = before === undefined ? 0 : update.cost.amount - before;
-          if (spent > 0) options.onCost?.(spent);
-        }
-        return;
-    }
-  };
 
   connection.onRequest = async (method, params) => {
     if (method === "session/request_permission")
