@@ -248,7 +248,13 @@ function cancellableGit(
   });
 }
 
-/** The checked-out branch; empty when HEAD is detached. */
+/** Whether commit `a` is in `b`'s history. */
+export const isAncestor = (root: string, a: string, b: string) =>
+  git(root, ["merge-base", "--is-ancestor", a, b]).then(
+    () => true,
+    () => false,
+  );
+
 /** Paths with unresolved conflicts, as they are on disk rather than C-quoted. */
 export async function conflictedFiles(root: string) {
   const out = await git(root, [
@@ -259,6 +265,7 @@ export async function conflictedFiles(root: string) {
   ]).catch(() => "");
   return out.split("\0").filter(Boolean);
 }
+/** The checked-out branch; empty when HEAD is detached. */
 export async function currentBranch(root: string) {
   return (await git(root, ["branch", "--show-current"])).trim();
 }

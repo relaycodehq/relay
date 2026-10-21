@@ -21,6 +21,7 @@ import {
   type ReviewDraftSetup,
 } from "../../shared/deep-review";
 import { refSchema } from "../../shared/validation";
+import { isRecord } from "../../shared/records";
 
 /**
  * Everything a thread's composers keep for an unsent message, as one record
@@ -132,9 +133,6 @@ export function withBody(
     replies: isBodyEmpty(body) ? rest : { ...rest, [reply]: body },
   };
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
 
 const readSkills = (value: unknown): Record<string, string> =>
   isRecord(value)

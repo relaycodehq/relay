@@ -96,10 +96,6 @@ export async function reattachWorktree(
   };
 }
 
-/** Whether a deleted agent worktree's branch is still there to make it again from. */
-export const branchKept = (root: string, branch: string) =>
-  hasBranch(root, branch);
-
 /**
  * Makes an agent's deleted worktree again in its old folder, on its branch,
  * with the `.worktreeinclude` files and `node_modules` a thread's own gets.

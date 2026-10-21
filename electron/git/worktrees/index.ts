@@ -2,6 +2,7 @@ export {
   type MadeWorktree,
   copiedRef,
   checkedOutAt,
+  hasBranch,
   sameFolder,
 } from "./common";
 export { retitleWorktree, newBranchProblem } from "./naming";
@@ -22,7 +23,6 @@ export { moveIntoWorktree, copyIntoWorktree } from "./carry";
 export { cantCarryOn, adoptWorktree } from "./adopt";
 export {
   reattachWorktree,
-  branchKept,
   recreateWorktree,
   removeWorktree,
 } from "./lifecycle";

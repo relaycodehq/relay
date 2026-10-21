@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { HostedChild } from "../../agent-host/child";
-import { JsonRpcConnection, isRecord } from "../json-rpc";
+import { JsonRpcConnection } from "../json-rpc";
+import { isRecord } from "../../../shared/records";
 
 /** A request `muse serve` answered with a JSON-RPC error. */
 export class MuseRequestError extends Error {

@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { usageProviderSchema } from "./agents";
 import { activeWeight, nextHour, type ActiveHours } from "./usage-history";
+import { asRecord } from "./records";
 
 export const SESSION_MS = 5 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -303,12 +304,6 @@ function runsOutIn(
     t = next;
   }
   return null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function num(value: unknown): number | null {

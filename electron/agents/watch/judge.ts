@@ -1,5 +1,5 @@
 import type { WatchClose, WatchVerdict } from "../../../shared/watch";
-import { unfence } from "../helper-output";
+import { excerpt, unfence } from "../helper-output";
 
 /** A shown note as the judge sees it, under the answer it appeared with. */
 export type JudgedNote = {
@@ -21,17 +21,10 @@ export type JudgedTurn = {
   notes?: JudgedNote[];
 };
 
-const CUT = "\n[…]\n";
 const USER_BUDGET = 1500;
 const ANSWER_BUDGET = 3000;
 /** The whole thread excerpt; past it every message gets a smaller share. */
 const THREAD_BUDGET = 60_000;
-
-function excerpt(text: string, budget: number) {
-  if (text.length <= budget) return text;
-  const half = Math.floor((budget - CUT.length) / 2);
-  return text.slice(0, half) + CUT + text.slice(-half);
-}
 
 const did: Record<JudgedNote["action"], string> = {
   told: "sent it to the agent as their next message",

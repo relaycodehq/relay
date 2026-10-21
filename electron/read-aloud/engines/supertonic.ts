@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type * as Ort from "onnxruntime-node";
 import type { DictationModelFile } from "../../../shared/dictation";
-import type { ReadAloudEngine, ReadAloudModel } from "../engine";
+import { gaussian, type ReadAloudEngine, type ReadAloudModel } from "../engine";
 import { detectLanguage } from "./supertonic/language";
 import {
   endsSentence,
@@ -328,10 +328,4 @@ export async function loadSupertonic(
       );
     },
   };
-}
-
-/** A standard normal sample (Box–Muller), the starting noise of flow matching. */
-function gaussian() {
-  const u = Math.max(1e-10, Math.random());
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
 }

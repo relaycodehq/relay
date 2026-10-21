@@ -18,6 +18,7 @@ import {
   type ModelChoice,
   type ReasoningEffort,
 } from "../../../shared/settings";
+import { isRecord } from "../../../shared/records";
 
 /**
  * The model a composer runs each agent on, one entry per agent in the shape
@@ -165,9 +166,6 @@ export const messageContext = (to: string, models: ComposerModels) => {
   const { contextWindow } = modelOf(models, "claude");
   return to === "claude" && contextWindow ? { contextWindow } : {};
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
 
 function readEffort(provider: AgentProvider, value: unknown): ReasoningEffort {
   // Claude only takes its own levels; the rest are Codex's.

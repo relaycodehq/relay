@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { conflictedFiles, currentBranch, git } from "./git";
+import { conflictedFiles, currentBranch, git, isAncestor } from "./git";
 import { baseCandidates, branches } from "./branches";
 import {
   gitOperation,
@@ -15,11 +15,6 @@ import type {
   MergeResult,
 } from "../../shared/branch-merge";
 
-const isAncestor = (root: string, a: string, b: string) =>
-  git(root, ["merge-base", "--is-ancestor", a, b]).then(
-    () => true,
-    () => false,
-  );
 const revParse = async (root: string, ref: string) =>
   (await git(root, ["rev-parse", "--verify", "--quiet", ref])).trim();
 

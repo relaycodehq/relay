@@ -6,7 +6,8 @@ import type { Store } from "../app/store";
 import type { ChatStorage } from "./storage";
 import { WatchReviews } from "./watch-review";
 vi.mock("../agents", () => ({ agentRuntime: vi.fn() }));
-vi.mock("../agents/helper-output", () => ({
+vi.mock("../agents/helper-output", async (original) => ({
+  ...(await original<typeof import("../agents/helper-output")>()),
   emptyCwd: vi.fn(),
   unfence: (s: string) => s,
 }));

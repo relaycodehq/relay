@@ -2,15 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ThemedToken } from "@pierre/diffs";
 import { api } from "../../lib/api";
-import { tokenize, tokenStyle } from "../../ui/CodeBlock";
+import { syntaxTheme, tokenize, tokenStyle } from "../../ui/CodeBlock";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { FileTree, MentionItem } from "./mention-items";
-
-function syntaxTheme() {
-  const { theme, syntax } = document.documentElement.dataset;
-  return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
-}
 
 function useTokens(path: string, code: string | undefined) {
   const [tokens, setTokens] = useState<{

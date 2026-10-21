@@ -1,10 +1,9 @@
-import { BrowserWindow } from "electron";
-import { join } from "node:path";
+import type { BrowserWindow } from "electron";
 import type { NewsItem } from "../../shared/thread-news";
 import { pickSound, SoundCues } from "../../shared/sound-cues";
 import { customFileId } from "../../shared/sounds";
 import type { Store } from "../app/store";
-import { loadPage } from "../app/page";
+import { hiddenPage, loadPage } from "../app/page";
 import { CustomSounds } from ".";
 
 /** How long the hidden player lingers after a sound, for the next one to come quickly. */
@@ -66,22 +65,7 @@ export class MenubarSounds {
 
   private open() {
     if (this.player && !this.player.win.isDestroyed()) return this.player;
-    const win = new BrowserWindow({
-      show: false,
-      width: 1,
-      height: 1,
-      skipTaskbar: true,
-      webPreferences: {
-        preload: join(__dirname, "preload.cjs"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        // Hidden pages are throttled; a sound waits on nothing.
-        backgroundThrottling: false,
-      },
-    });
-    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    win.webContents.on("will-navigate", (e) => e.preventDefault());
+    const win = hiddenPage();
     win.on("closed", () => {
       if (this.player?.win === win) this.player = undefined;
     });

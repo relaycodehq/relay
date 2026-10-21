@@ -1,11 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { terminate } from "../platform/terminate";
 import { LineConnection, type RpcId } from "./line-connection";
+import { isRecord } from "../../shared/records";
 
 export type { RpcId } from "./line-connection";
 
-export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 const isId = (value: unknown): value is RpcId =>
   typeof value === "string" || typeof value === "number";
 

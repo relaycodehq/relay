@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type * as Ort from "onnxruntime-node";
-import type { ReadAloudModel } from "../../engine";
+import { gaussian, type ReadAloudModel } from "../../engine";
 import { readSafetensors, type StoredTensor } from "./safetensors";
 import { prepareText, splitIntoChunks } from "./text";
 import { SentencePiece } from "./tokenizer";
@@ -352,9 +352,4 @@ function copyCorner<T extends Float32Array | BigInt64Array>(
       );
   };
   copy(0, 0, 0);
-}
-
-function gaussian() {
-  const u = 1 - Math.random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
 }

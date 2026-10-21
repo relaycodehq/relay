@@ -44,7 +44,7 @@ export interface Highlighted {
 
 // Read from the attributes applyToDocument sets on <html>, so the markdown
 // renderer doesn't depend on the appearance store (or localStorage).
-function syntaxTheme() {
+export function syntaxTheme() {
   const { theme, syntax } = document.documentElement.dataset;
   return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
 }

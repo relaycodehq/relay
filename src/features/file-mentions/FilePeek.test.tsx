@@ -16,6 +16,7 @@ vi.mock("../../ui/CodeBlock", () => ({
     code.split("\n").map((content) => [{ content }]),
   ),
   tokenStyle: () => ({}),
+  syntaxTheme: () => "pierre-dark",
 }));
 vi.mock("@pierre/diffs", () => ({ getFiletypeFromFileName: () => "text" }));
 vi.mock("../../ui/FileEntryIcon", () => ({ FileEntryIcon: () => null }));

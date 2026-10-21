@@ -6,7 +6,7 @@ import {
   threadWorktree,
 } from "../../shared/projects";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
-import { branchKept, recreateWorktree, worktreeExists } from "../git/worktrees";
+import { hasBranch, recreateWorktree, worktreeExists } from "../git/worktrees";
 import {
   activeAfter,
   followAgentWorkspace,
@@ -198,7 +198,7 @@ export class AgentWorkspaces {
     const chat = await this.core.storage.load(id);
     const gone = chat.activeAgentWorktree;
     if (!gone?.branch || selectedAgentWorktree(chat)) return false;
-    return branchKept(
+    return hasBranch(
       await this.core.projects.root(chat.projectId),
       gone.branch,
     );

@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
-import { git } from "./git";
+import { git, isAncestor } from "./git";
 import { moveCheckout, replayOnto } from "./branch-rebase";
 import { serializeRepo } from "./working-tree";
 import { repoOf, remoteUrl } from "./repository";
@@ -120,12 +120,6 @@ export async function fetchBundle(
 /** Whether the repository holds the commit, e.g. after fetching the remote. */
 export const hasCommit = (root: string, commit: string) =>
   git(root, ["cat-file", "-e", `${commit}^{commit}`]).then(
-    () => true,
-    () => false,
-  );
-
-const isAncestor = (root: string, a: string, b: string) =>
-  git(root, ["merge-base", "--is-ancestor", a, b]).then(
     () => true,
     () => false,
   );

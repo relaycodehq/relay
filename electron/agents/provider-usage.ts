@@ -26,6 +26,7 @@ import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { recordUsage } from "./usage-history";
 import { profileDir } from "./accounts/profiles";
 import { withTimeout } from "../util/timeout";
+import { asRecord } from "../../shared/records";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -501,12 +502,6 @@ function parseJson(text: string): unknown {
   } catch {
     return null;
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function stringField(

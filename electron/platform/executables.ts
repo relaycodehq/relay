@@ -107,8 +107,6 @@ export function shimTarget(text: string) {
 /** No program by that name is installed or on PATH, as opposed to one that's there but failed. */
 export class NotInstalledError extends Error {}
 
-export const findExecutable = (name: string) => locate(name);
-
 /**
  * Which install a path from `findExecutable` runs: its file and when that was
  * last written. Updating a CLI rewrites it or points its link at another version.
@@ -120,7 +118,7 @@ export async function installStamp(found: string) {
 }
 
 /** Git's own lookup, apart from the agent CLIs `findExecutable` finds. */
-export const findGit = () => locate("git");
+export const findGit = () => findExecutable("git");
 
 const isAgent = (name: string): name is AgentProvider =>
   (agentProviders as readonly string[]).includes(name);
@@ -205,7 +203,7 @@ async function* candidates(name: string) {
   }
 }
 
-async function locate(name: string) {
+export async function findExecutable(name: string) {
   const chosen = isAgent(name) ? linked[name] : tools[name];
   if (chosen) {
     await access(chosen).catch(() => {

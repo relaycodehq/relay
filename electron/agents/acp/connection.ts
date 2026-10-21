@@ -1,4 +1,5 @@
-import { JsonRpcConnection, isRecord, type RpcId } from "../json-rpc";
+import { JsonRpcConnection, type RpcId } from "../json-rpc";
+import { isRecord } from "../../../shared/records";
 import { errorMessage } from "../../../shared/error-message";
 
 /** A request the agent answered with a JSON-RPC error. */
