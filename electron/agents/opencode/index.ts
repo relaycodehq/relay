@@ -6,6 +6,7 @@ import type { AcpAgent } from "../acp/sessions";
 import { AgentError } from "../errors";
 import { openCodeCommand } from "./command";
 import { openCodeClient as client } from "./client";
+import { messagePages } from "./messages";
 import { OpenCodeSession } from "./observer";
 import { openCodeHelper } from "./helper";
 
@@ -25,15 +26,14 @@ const busy = () =>
 async function fork(options: AgentOptions) {
   const point = options.session?.fork;
   if (!point) return options;
-  let cursor: string | undefined;
   let found = false;
   let before: string | undefined;
-  do {
-    const page = await client.message.list(
-      { sessionID: point.thread, order: "asc", limit: 100, cursor },
-      { signal: options.signal },
-    );
-    for (const message of page.data) {
+  for await (const page of messagePages(
+    client,
+    { sessionID: point.thread, order: "asc", limit: 100 },
+    { signal: options.signal },
+  )) {
+    for (const message of page) {
       if (found) {
         before = message.id;
         break;
@@ -41,8 +41,7 @@ async function fork(options: AgentOptions) {
       if (message.id === point.at) found = true;
     }
     if (before) break;
-    cursor = page.cursor.next ?? undefined;
-  } while (cursor);
+  }
   if (!found)
     throw new AgentError(
       "opencode",

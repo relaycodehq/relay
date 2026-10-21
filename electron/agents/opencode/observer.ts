@@ -22,6 +22,7 @@ import { nativeCall } from "./activity";
 import { answerForm } from "./forms";
 import { modelId, nativeUsage } from "./usage";
 import type { NativeClient } from "./client";
+import { messagePages } from "./messages";
 import { splitModel } from "./model-ids";
 import { openCodeSkillContext } from "./skills";
 
@@ -315,18 +316,14 @@ export class OpenCodeSession {
 
   private async messages(sessionID: string, all = false) {
     const messages: SessionMessageInfo[] = [];
-    let cursor: string | undefined;
-    do {
-      const page = await this.client.message.list({
-        sessionID,
-        order: "desc",
-        limit: 20,
-        cursor,
-      });
-      messages.push(...page.data);
-      cursor = page.cursor.next ?? undefined;
-      if (!all && page.data.some((m) => m.time.created < this.since)) break;
-    } while (cursor);
+    for await (const page of messagePages(this.client, {
+      sessionID,
+      order: "desc",
+      limit: 20,
+    })) {
+      messages.push(...page);
+      if (!all && page.some((m) => m.time.created < this.since)) break;
+    }
     return messages;
   }
 
