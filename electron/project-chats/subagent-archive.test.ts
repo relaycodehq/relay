@@ -1,10 +1,24 @@
 import { mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { SubagentDetail } from "../../shared/subagents";
 import { SubagentArchive } from "./subagent-archive";
 
+const failures = vi.hoisted(() => ({ write: false }));
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>();
+  return {
+    ...actual,
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      if (failures.write) {
+        failures.write = false;
+        throw new Error("disk full");
+      }
+      return actual.writeFile(...args);
+    },
+  };
+});
 let dir: string;
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-subagents-"));
@@ -43,6 +57,20 @@ it("lets a queued update retry after failure while retaining the durable baselin
   await expect(second).rejects.toThrow();
   expect(await archive.read("chat")).toEqual([run("a")]);
   await rm(join(dir, "subagents", "chat.json"), { recursive: true });
+  await archive.keep("chat", [run("b")]);
+  expect(await new SubagentArchive(dir).read("chat")).toEqual([
+    run("a"),
+    run("b"),
+  ]);
+});
+
+it("retains the durable baseline after a failed write and persists an identical retry", async () => {
+  const archive = new SubagentArchive(dir);
+  await archive.keep("chat", [run("a")]);
+  failures.write = true;
+  await expect(archive.keep("chat", [run("b")])).rejects.toThrow("disk full");
+  expect(await archive.read("chat")).toEqual([run("a")]);
+  expect(await new SubagentArchive(dir).read("chat")).toEqual([run("a")]);
   await archive.keep("chat", [run("b")]);
   expect(await new SubagentArchive(dir).read("chat")).toEqual([
     run("a"),
