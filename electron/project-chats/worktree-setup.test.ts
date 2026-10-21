@@ -179,8 +179,11 @@ it("runs a failed setup again in its row, and the agent hears it passed", async 
   );
   // Same row, no new one.
   expect((await chats.get(chat.id)).messages).toHaveLength(3);
-  await expect(chats.rerunWorktreeSetup(chat.id, setup.id)).rejects.toThrow(
-    "already went through",
+  // The row ends a moment before the run lets go of the folder.
+  await vi.waitFor(() =>
+    expect(chats.rerunWorktreeSetup(chat.id, setup.id)).rejects.toThrow(
+      "already went through",
+    ),
   );
 
   await chats.send(chat.id, input("@codex Try again"));
@@ -330,9 +333,7 @@ it("runs a shared folder's setup once, and the other thread's turn waits for it"
     let secondDone = false;
     const one = setup.prepare(first, "codex");
     await fileSignal(join(folder, "runs"));
-    const two = setup
-      .prepare(second, "codex")
-      .then(() => (secondDone = true));
+    const two = setup.prepare(second, "codex").then(() => (secondDone = true));
     await new Promise((r) => setTimeout(r, 100));
     expect(secondDone).toBe(false);
     await writeFile(join(folder, "gate"), "");
