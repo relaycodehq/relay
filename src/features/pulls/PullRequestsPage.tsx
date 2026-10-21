@@ -2,7 +2,7 @@
 // opens that project's page, sorted the same way: waiting on you, yours,
 // everyone else's.
 import { useEffect, useRef, useState } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowLeft,
@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { tildePath, type Project } from "../../../shared/projects";
 import type { Account, Repo } from "../../../shared/types";
-import { api } from "../../lib/api";
 import {
   boardPull,
   keyRepo,
@@ -53,6 +52,7 @@ import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { hostKindOf, pullHostName } from "../../../shared/source-control";
 import { errorMessage } from "../../lib/error-message";
 import { accountOn } from "./usePullHosts";
+import { useProjectPulls } from "./project-pulls";
 import "./pull-requests.css";
 
 /** The window title's trail back from a PR or a project's page. Back goes up
@@ -642,13 +642,11 @@ function ProjectPulls({
   board: Board;
   context: PullContext;
 }) {
-  const list = useInfiniteQuery({
-    queryKey: [PULL_BOARD, "project-all", project?.id, state],
-    queryFn: ({ pageParam }) => api.projectPulls(project!.id, state, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (page) => page.nextPage ?? undefined,
-    enabled: !!project,
-  });
+  const list = useProjectPulls(
+    project,
+    accountOn(accounts, project?.repository?.server),
+    state,
+  );
   const involved = board.pulls.filter((p) => repoKey(p.ref) === repo);
   const listed = (list.data?.pages.flatMap((p) => p.items) ?? []).map((item) =>
     relate(

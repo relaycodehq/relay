@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import {
-  useInfiniteQuery,
   useQuery,
   useQueryClient,
   type InfiniteData,
@@ -9,11 +8,20 @@ import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronDown, GitPullRequest, RefreshCw, Search } from "lucide-react";
 import type { Project } from "../../../shared/projects";
-import type { Page, ProjectPull, PullRef } from "../../../shared/types";
+import type {
+  Account,
+  Page,
+  ProjectPull,
+  PullRef,
+} from "../../../shared/types";
 import { api } from "../../lib/api";
+import {
+  projectPullsKey,
+  useProjectPullAccount,
+  useProjectPulls,
+  type PullState,
+} from "./project-pulls";
 import "./pull-picker.css";
-
-type PullState = "open" | "closed" | "all";
 
 export function ProjectPullPicker({
   project,
@@ -35,14 +43,9 @@ export function ProjectPullPicker({
   const [search, setSearch] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const highlighted = useRef<string | null>(null);
-  const list = useInfiniteQuery({
-    queryKey: ["project-pulls", project.id, state],
-    queryFn: ({ pageParam }) => api.projectPulls(project.id, state, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (page) => page.nextPage ?? undefined,
-    enabled: open,
-  });
-  const title = usePickedTitle(project, selected);
+  const { account, pending } = useProjectPullAccount(project);
+  const list = useProjectPulls(project, account, state, open && !pending);
+  const title = usePickedTitle(project, account, selected);
   const items = list.data?.pages.flatMap((page) => page.items) ?? [];
   const query = search.trim().toLocaleLowerCase();
   const matches = items.filter((pull) =>
@@ -258,14 +261,24 @@ export function ProjectPullPicker({
  * The picked PR's title: from the list it was picked in, so the label doesn't
  * change twice, then from the PR itself once a reload has emptied that list.
  */
-function usePickedTitle(project: Project, selected: PullRef | null) {
+function usePickedTitle(
+  project: Project,
+  account: Account | null | undefined,
+  selected: PullRef | null,
+) {
   const qc = useQueryClient();
   const listed = selected
     ? qc
-        .getQueriesData<InfiniteData<Page<ProjectPull>>>({
-          queryKey: ["project-pulls", project.id],
+        .getQueriesData<InfiniteData<Page<ProjectPull>> | Page<ProjectPull>>({
+          queryKey: projectPullsKey(project, account),
         })
-        .flatMap(([, data]) => data?.pages.flatMap((page) => page.items) ?? [])
+        .flatMap(([, data]) =>
+          data
+            ? "pages" in data
+              ? data.pages.flatMap((page) => page.items)
+              : data.items
+            : [],
+        )
         .find((pull) => pull.number === selected.number)?.title
     : undefined;
   const pull = useQuery({
