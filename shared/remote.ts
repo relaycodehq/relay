@@ -799,51 +799,6 @@ export interface SetupRequest {
   settings: HandoffSettings;
 }
 export type RemoteMethod = keyof RemoteApi;
-export const remoteMethods = [
-  "overview",
-  "chat",
-  "diff",
-  "desktop",
-  "projectIcons",
-  "subagents",
-  "subagentRun",
-  "reportApp",
-  "dictate",
-  "readAloud",
-  "activityDetail",
-  "image",
-  "renderPage",
-  "news",
-  "sites",
-  "tunnelAllow",
-  "saveDraft",
-  "draftOther",
-  "sendDraft",
-  "computerProjects",
-  "uploadPaste",
-  "downloadPaste",
-  "cloneProject",
-  "setupProject",
-  "setupProgress",
-  "handoffUpload",
-  "receiveHandoff",
-  "handoffStatus",
-  "handBack",
-  "handoffDownload",
-  "handedBack",
-  "handoffAbandoned",
-  "computerInfo",
-  "updateNow",
-  "handoffChat",
-  "handoffCall",
-  "computerFolders",
-  "computerAddProject",
-  "startInProject",
-  "computerCall",
-  "projectCall",
-  "projectTerminal",
-  "terminalCall",
-] as const satisfies readonly RemoteMethod[];
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
   "uploadPaste",
@@ -872,6 +827,28 @@ export const computerMethods = [
   "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
 export type ComputerMethod = (typeof computerMethods)[number];
+export const remoteMethods = [
+  "overview",
+  "chat",
+  "diff",
+  "desktop",
+  "projectIcons",
+  "subagents",
+  "subagentRun",
+  "reportApp",
+  "dictate",
+  "readAloud",
+  "activityDetail",
+  "image",
+  "renderPage",
+  "news",
+  "sites",
+  "tunnelAllow",
+  "saveDraft",
+  "draftOther",
+  "sendDraft",
+  ...computerMethods,
+] as const satisfies readonly RemoteMethod[];
 /** The bridge from which phones may call `updateMethods` too. */
 export const phoneUpdatesBridge = 11;
 /** About this Relay itself, so a phone may ask too, from `phoneUpdatesBridge`. */
