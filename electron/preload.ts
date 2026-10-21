@@ -81,7 +81,6 @@ const methods = [
   "projectFileInfo",
   "projectImage",
   "projectVideo",
-  "projectThumbnail",
   "revealProjectPath",
   "openProjectPath",
   "projectAbsolutePath",

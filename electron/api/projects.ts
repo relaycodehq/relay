@@ -37,7 +37,7 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
-import { imageMime, videoMime } from "../../shared/project-files";
+import { videoMime } from "../../shared/project-files";
 import { mediaUrl } from "../media";
 import { agentRuntime } from "../agents";
 import {
@@ -337,20 +337,6 @@ export function projectHandlers(ctx: ApiContext) {
         const full = await entryPath(root, path);
         if (!videoMime(full)) throw new Error("That is not a video.");
         return mediaUrl(full, root);
-      },
-    ),
-    projectThumbnail: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => {
-        const { root } = await place(where);
-        const image = imageMime(path)
-          ? nativeImage.createFromPath(await entryPath(root, path))
-          : null;
-        // What the system can't decode (SVG, say) goes as it is.
-        if (!image || image.isEmpty()) return readImage(root, path);
-        return image.getSize().width <= 320
-          ? readImage(root, path)
-          : image.resize({ width: 320, quality: "good" }).toDataURL();
       },
     ),
     revealProjectPath: takes(

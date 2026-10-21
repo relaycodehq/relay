@@ -424,8 +424,6 @@ export interface ProjectFilesApi {
   projectImage(where: string, path: string): Promise<string>;
   /** Where the player streams a video file from. */
   projectVideo(where: string, path: string): Promise<string>;
-  /** An image scaled down for a grid; small ones and vector ones as they are. */
-  projectThumbnail(where: string, path: string): Promise<string>;
   /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */
   revealProjectPath(where: string, path: string): Promise<void>;
   /** Where a file sits on disk, whether or not it's there now. */
