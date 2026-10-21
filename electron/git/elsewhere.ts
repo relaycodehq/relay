@@ -2,7 +2,8 @@
 // they sit in, and what's still uncommitted of them there.
 import { readFile, realpath, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { within } from "../util/paths";
 import type { ElsewhereEdits } from "../../shared/elsewhere";
 import type { TurnFileChange } from "../../shared/projects";
 import { workingPathSchema, type WorkingTree } from "../../shared/working-tree";
@@ -10,10 +11,7 @@ import { git } from "./git";
 import { parseNumstat } from "./turn-changes";
 import { workingTree } from "./working-tree";
 
-const inside = (path: string, folder: string) => {
-  const rel = relative(folder, path);
-  return !rel || (!rel.startsWith("..") && !isAbsolute(rel));
-};
+const inside = (path: string, folder: string) => within(folder, path) !== null;
 
 /** Where agents keep their own notes and scratch files, which nobody reviews as changes. */
 const agentScratch = () => [

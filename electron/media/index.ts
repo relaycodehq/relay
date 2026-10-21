@@ -3,7 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, open, realpath } from "node:fs/promises";
-import { basename, isAbsolute, join, relative, sep } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
+import { within } from "../util/paths";
 import { Readable } from "node:stream";
 import { protocol, session } from "electron";
 import { imageMime, videoMime } from "../../shared/project-files";
@@ -66,15 +67,8 @@ async function openGranted({ root, full }: Grant) {
 
 /** A checked file inside its approved root; later requests revalidate the same boundary. */
 export async function mediaUrl(full: string, root: string) {
-  const path = relative(root, full);
-  if (
-    !isAbsolute(root) ||
-    !isAbsolute(full) ||
-    !path ||
-    isAbsolute(path) ||
-    path === ".." ||
-    path.startsWith(".." + sep)
-  )
+  const path = within(root, full);
+  if (!isAbsolute(root) || !isAbsolute(full) || !path)
     throw new Error("Choose media inside its approved folder.");
   const canonicalRoot = await realpath(root);
   const grant = { root: canonicalRoot, full: join(canonicalRoot, path) };

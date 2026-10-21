@@ -1,6 +1,7 @@
 import { existsSync, watch as watchFolder } from "node:fs";
 import { lstat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { within } from "../util/paths";
 import {
   folderBudget,
   watchEachFolder,
@@ -126,10 +127,7 @@ export const supportsTreeWatch = (
   platform: NodeJS.Platform = process.platform,
 ) => watchesWholeTrees(platform) || platform === "linux";
 
-const within = (dir: string, path: string) => {
-  const rel = relative(dir, path);
-  return !rel.startsWith("..") && !isAbsolute(rel);
-};
+const inside = (dir: string, path: string) => within(dir, path) !== null;
 
 interface Watch {
   owners: Set<object>;
@@ -226,8 +224,10 @@ export class TreeWatch {
       // outside its folder.
       const gitDirs = (await (this.deps.gitDirs ?? gitDirsOf)(root)).filter(
         (dir, i, all) =>
-          !within(root, dir) &&
-          !all.some((d, j) => j !== i && within(d, dir) && (d !== dir || j < i)),
+          !inside(root, dir) &&
+          !all.some(
+            (d, j) => j !== i && inside(d, dir) && (d !== dir || j < i),
+          ),
       );
       if (overtaken()) return false;
       const eachFolder =

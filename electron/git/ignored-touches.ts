@@ -5,7 +5,8 @@
 // costly to keep and has no copy from before. The list sits in the checkout's
 // Git folder and clears at the next commit, like the tracked changes do.
 import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
+import { within } from "../util/paths";
 import { git } from "./git";
 import { ignoreRules } from "./working-tree";
 import { keyedQueue } from "../util/keyed-queue";
@@ -118,9 +119,8 @@ export async function keepIgnored(root: string): Promise<IgnoredStart> {
 function inside(root: string, paths: string[]) {
   const out = new Set<string>();
   for (const path of paths) {
-    const rel = relative(root, resolve(root, path));
-    if (rel && !rel.startsWith("..") && !isAbsolute(rel))
-      out.add(rel.split(sep).join("/"));
+    const rel = within(root, resolve(root, path));
+    if (rel) out.add(rel.split(sep).join("/"));
   }
   return [...out];
 }

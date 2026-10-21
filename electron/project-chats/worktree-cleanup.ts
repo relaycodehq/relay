@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
+import { within } from "../util/paths";
 import type {
   ChatSummary,
   ChatWorktree,
@@ -50,10 +51,8 @@ export interface CleanupScene {
 function relayMade(worktree: ChatWorktree, checkout: string, folder: string) {
   if (worktree.adopted) return false;
   const path = resolve(worktree.path!);
-  const inside = (parent: string, child: string) => {
-    const rel = relative(parent, child);
-    return !rel.startsWith("..") && !isAbsolute(rel);
-  };
+  const inside = (parent: string, child: string) =>
+    within(parent, child) !== null;
   return (
     (!!worktree.branch?.startsWith("relay/") ||
       (!!worktree.named && worktree.branch === worktree.named)) &&
