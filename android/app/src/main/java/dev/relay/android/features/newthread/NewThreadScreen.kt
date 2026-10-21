@@ -54,7 +54,10 @@ import dev.relay.android.remote.drafts.newDraftProject
 import dev.relay.android.remote.drafts.scratchDraftKey
 import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.outbox.outboxLink
+import dev.relay.android.lib.navigation.NEW_THREAD_MORPH
 import dev.relay.android.ui.Screen
+import dev.relay.android.ui.screenSettled
+import dev.relay.android.ui.sharedButton
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
@@ -291,7 +294,9 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
             draftKey = draftKey,
             sendTarget = "${picked.orEmpty()}:$workspace",
             remembered = models,
-            autoFocus = true,
+            autoFocus = screenSettled(),
+            // Home's New thread button, flown down into the composer, until it has sent.
+            newThreadSend = Modifier.sharedButton(NEW_THREAD_MORPH),
             above = { WhereLine(chosen, picked, workspace, ::openSheet) },
         )
     }

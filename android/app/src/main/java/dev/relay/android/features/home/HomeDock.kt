@@ -37,7 +37,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import dev.relay.android.lib.navigation.NEW_THREAD_MORPH
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.sharedButton
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.RelayTheme
@@ -103,7 +105,8 @@ private fun Dock(tab: HomeTab, labels: Boolean, onTab: (HomeTab) -> Unit, onNew:
             DockItem(TablerIcons.Outline.Settings, TablerIcons.Filled.SettingsFilled, LABELS[2], tab == HomeTab.Settings, labels, fill) { onTab(HomeTab.Settings) }
         }
         Box(
-            Modifier.size(DOCK_HEIGHT).shadow(10.dp, CircleShape).clip(CircleShape)
+            Modifier.sharedButton(NEW_THREAD_MORPH)
+                .size(DOCK_HEIGHT).shadow(10.dp, CircleShape).clip(CircleShape)
                 .background(c.primary).pressable(onClick = onNew),
             contentAlignment = Alignment.Center,
         ) { Icon(TablerIcons.Outline.Edit, "New thread", tint = c.onPrimary, size = 24.dp) }

@@ -45,3 +45,9 @@ sealed interface Route : NavKey {
     /** A browser on the computer's localhost, through the tunnel: `url` an http://localhost link, null for the sites. */
     @Serializable data class Browser(val url: String? = null) : Route
 }
+
+/** Shared-bounds key of Home's New thread button and the New thread Send it becomes. */
+const val NEW_THREAD_MORPH = "new-thread"
+
+/** Entry metadata of a screen that rises in under the button that opened it, not slides in. */
+const val MORPHS_IN = "relay.morphsIn"

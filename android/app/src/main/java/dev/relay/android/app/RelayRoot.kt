@@ -1,9 +1,21 @@
 package dev.relay.android.app
 
 import android.app.Activity
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.ui.unit.IntOffset
+import androidx.navigation3.scene.Scene
+import dev.relay.android.lib.navigation.MORPHS_IN
+import dev.relay.android.ui.LocalSharedTransitions
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -73,6 +85,7 @@ private var stackRestored = false
  * Home in a sidebar beside a detail pane (600dp and wider). After a [crash],
  * only its page until [onCrashSeen].
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Crash?, onCrashSeen: () -> Unit) {
     val prefs = container.prefs
@@ -154,29 +167,28 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
         ) {
             Box(Modifier.fillMaxSize().background(RelayTheme.colors.background)) {
                 WideLayout(panes, prefs, sidebar = { HomeSidebar(container) }) {
-                    CompositionLocalProvider(LocalScreenNotice provides notice) {
-                        NavDisplay(
-                            backStack = backStack,
-                            // Nothing paired: Home behind pairing is only a redirect, so back leaves the app.
-                            onBack = { if (!paired && top is Route.Pair && backStack.size == 2) activity?.finish() else navigator.pop() },
-                            entryDecorators = listOf(
-                                rememberSaveableStateHolderNavEntryDecorator(),
-                                rememberViewModelStoreNavEntryDecorator(),
-                            ),
-                            transitionSpec = {
-                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it } togetherWith
-                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 }
-                            },
-                            popTransitionSpec = {
-                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
-                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
-                            },
-                            predictivePopTransitionSpec = {
-                                slideInHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { -it / 4 } togetherWith
-                                    slideOutHorizontally(tween(Motion.SLIDE, easing = Motion.EaseOutQuint)) { it }
-                            },
-                            entryProvider = entryProvider { appEntries(container) { isWide } },
-                        )
+                    SharedTransitionLayout {
+                        CompositionLocalProvider(LocalScreenNotice provides notice, LocalSharedTransitions provides this.takeIf { !panes }) {
+                            NavDisplay(
+                                backStack = backStack,
+                                // Nothing paired: Home behind pairing is only a redirect, so back leaves the app.
+                                onBack = { if (!paired && top is Route.Pair && backStack.size == 2) activity?.finish() else navigator.pop() },
+                                entryDecorators = listOf(
+                                    rememberSaveableStateHolderNavEntryDecorator(),
+                                    rememberViewModelStoreNavEntryDecorator(),
+                                ),
+                                transitionSpec = {
+                                    if (!isWide && targetState.morphsIn()) riseIn() else slideIn()
+                                },
+                                popTransitionSpec = {
+                                    if (!isWide && initialState.morphsIn()) sinkOut() else slideOut()
+                                },
+                                predictivePopTransitionSpec = {
+                                    if (!isWide && initialState.morphsIn()) sinkOut() else slideOut()
+                                },
+                                entryProvider = entryProvider { appEntries(container) { isWide } },
+                            )
+                        }
                     }
                 }
                 NeedsYou(
@@ -194,6 +206,21 @@ fun RelayRoot(container: AppContainer, links: ReceiveChannel<Route>, crash: Cras
         }
     }
 }
+
+private fun Scene<*>.morphsIn() = entries.lastOrNull()?.metadata?.get(MORPHS_IN) == true
+
+private val slide = tween<IntOffset>(Motion.SLIDE, easing = Motion.EaseOutQuint)
+private fun slideIn() = slideInHorizontally(slide) { it } togetherWith slideOutHorizontally(slide) { -it / 4 }
+private fun slideOut() = slideInHorizontally(slide) { -it / 4 } togetherWith slideOutHorizontally(slide) { it }
+
+// The screen rises into place behind its button, which flies into it on its own (shared
+// bounds), and the one under it sinks back a little, as if the new one came up off the glass.
+private val rise = tween<IntOffset>(380, easing = Motion.EaseOutQuint)
+private val depth = tween<Float>(380, easing = Motion.EaseOutQuint)
+private fun riseIn() = (slideInVertically(rise) { it / 10 } + fadeIn(tween(240, delayMillis = 40))) togetherWith
+    (scaleOut(depth, targetScale = 0.94f) + fadeOut(depth))
+private fun sinkOut() = (scaleIn(depth, initialScale = 0.94f) + fadeIn(depth)) togetherWith
+    (slideOutVertically(rise) { it / 10 } + fadeOut(tween(200)))
 
 @Composable
 private fun SystemBars(dark: Boolean) {

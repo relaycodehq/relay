@@ -1,9 +1,12 @@
 package dev.relay.android.app
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.graphics.Color
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import dev.relay.android.app.gallery.GalleryScreen
 import dev.relay.android.app.screens.PaneEmpty
 import dev.relay.android.app.screens.PlaceholderScreen
@@ -27,7 +30,9 @@ import dev.relay.android.features.settings.LicencesScreen
 import dev.relay.android.features.settings.SettingsScreen
 import dev.relay.android.features.thread.SubagentRunScreen
 import dev.relay.android.features.thread.ThreadScreen
+import dev.relay.android.lib.navigation.MORPHS_IN
 import dev.relay.android.lib.navigation.Route
+import dev.relay.android.ui.LocalScreenAnimation
 import dev.relay.android.ui.theme.HextaDark
 import dev.relay.android.ui.theme.RelayTheme
 
@@ -38,7 +43,7 @@ import dev.relay.android.ui.theme.RelayTheme
  *     entry<Route.Thread> { ThreadScreen(it.id, container.remote) }
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
-    entry<Route.Home> { if (wide()) PaneEmpty() else AppHome(container, pane = false, selected = null) }
+    entry<Route.Home> { if (wide()) PaneEmpty() else Animated { AppHome(container, pane = false, selected = null) } }
     entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
     entry<Route.Gallery> { GalleryScreen() }
     entry<Route.Licences> { LicencesScreen() }
@@ -48,9 +53,12 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Pair> {
         RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, it.link) }
     }
-    entry<Route.NewThread> { route ->
-        ProvideProjectIcons(container.home) {
-            NewThreadScreen(route, container.remote) { project, size -> ProjectCardBadge(project.id, project.name, size = size) }
+    // Home's New thread button flies into the screen as its Send; one opened from a draft or a project slides in.
+    entry<Route.NewThread>(metadata = { if (it == Route.NewThread()) mapOf(MORPHS_IN to true) else emptyMap() }) { route ->
+        Animated {
+            ProvideProjectIcons(container.home) {
+                NewThreadScreen(route, container.remote) { project, size -> ProjectCardBadge(project.id, project.name, size = size) }
+            }
         }
     }
     val seen = { id: String, updated: Long ->
@@ -78,3 +86,8 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     entry<Route.Tasks> { TasksScreen(container.remote, it.where) }
     entry<Route.Browser> { BrowserScreen(container.remote, container.tunnels, container.tunnelPorts, it.url) }
 }
+
+/** Hands the screen's navigation transition to the elements in it that morph across screens. */
+@Composable
+private fun Animated(content: @Composable () -> Unit) =
+    CompositionLocalProvider(LocalScreenAnimation provides LocalNavAnimatedContentScope.current, content = content)

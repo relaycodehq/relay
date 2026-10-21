@@ -144,6 +144,8 @@ internal fun ComposerCore(
     /** A new thread's models, per agent, for switching to one not picked here yet. */
     remembered: NewThreadModels = emptyMap(),
     autoFocus: Boolean = false,
+    /** Draws Send as the New thread button (pencil, its fill), with this modifier on it. */
+    newThreadSend: Modifier? = null,
     /**
      * The model, permissions, plan and usage live up in the screen's header
      * (through [handle]) instead of around the message box, where they took
@@ -541,6 +543,7 @@ internal fun ComposerCore(
                     onSteer = { send("steer") },
                     onSend = { if (stop) onStop?.invoke() else send() },
                     onLater = { sheet = Sheet.Later },
+                    newThread = newThreadSend,
                 )
             }
         }
