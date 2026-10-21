@@ -96,7 +96,8 @@ test("a worktree thread goes to another computer from its header and comes back 
     const link = await accept
       .getByLabel("This computer's pairing link")
       .inputValue();
-    expect(link).toMatch(/^relay-remote:\/\/pair\?h=127\.0\.0\.1/);
+    // Its tailnet stand-in, after any address on the local network.
+    expect(link).toMatch(/^relay-remote:\/\/pair\?h=(?:[^&]*%2C)?127\.0\.0\.1/);
 
     // A worktree thread on the laptop; the fixture agent edits a file there.
     await laptop.page.getByRole("button", { name: /Current checkout/ }).click();

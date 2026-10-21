@@ -82,7 +82,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     expect(status.status).toMatchObject({
       name: "Mini",
       version: "9.9.9",
-      remote: { listening: true, hosts: ["127.0.0.1"] },
+      // Its tailnet stand-in, after any address on the local network.
+      remote: { listening: true, hosts: expect.arrayContaining(["127.0.0.1"]) },
     });
 
     // A phone pairs with the code `relay pair` shows, and starts a thread there.
