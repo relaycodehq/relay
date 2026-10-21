@@ -84,6 +84,11 @@ export async function openCodeHelper(
     return answer;
   } finally {
     // Only the helper's own temporary session; saved thread sessions are never deleted here.
-    await client.session.remove({ sessionID: temporary.id });
+    // A failed cleanup mustn't replace the answer or the error that ended the job.
+    await client.session
+      .remove({ sessionID: temporary.id })
+      .catch((e) =>
+        console.warn("Could not remove OpenCode's helper session:", e),
+      );
   }
 }

@@ -177,7 +177,11 @@ export type AcpRunObserver = {
 export async function runAcp(
   profile: AcpProfile,
   options: AgentOptions,
-  observe?: (agent: AcpAgent) => Promise<AcpRunObserver>,
+  /** `steered` acknowledges a steer the native API saw read, so its answer goes below it. */
+  observe?: (
+    agent: AcpAgent,
+    steered: (id: string) => void,
+  ) => Promise<AcpRunObserver>,
 ): Promise<string> {
   const { signal, job } = options;
   const name = agentName(profile.provider);
@@ -221,6 +225,10 @@ export async function runAcp(
     options.onCommentary,
     profile.provider,
   );
+  const steered = (id: string) => {
+    turn.below();
+    options.onSteered?.(id);
+  };
   const calls = new Map<
     string,
     Partial<AcpToolCall> & { toolCallId: string }
@@ -332,7 +340,7 @@ export async function runAcp(
     let reply: Promise<unknown>;
     if (adopted) {
       connection.listen(sessionId!, hear);
-      observer = await observe?.(agent);
+      observer = await observe?.(agent, steered);
       reply = connection.wait(adopted.id, "session/prompt");
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
@@ -363,7 +371,7 @@ export async function runAcp(
       const prompt = await promptBlocks(options, agent, name);
       signal.throwIfAborted();
       connection.listen(opened.id, hear);
-      observer = await observe?.(agent);
+      observer = await observe?.(agent, steered);
       signal.throwIfAborted();
       const id = connection.reserve();
       agent.keep({ id });

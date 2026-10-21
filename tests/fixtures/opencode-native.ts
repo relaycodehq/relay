@@ -40,6 +40,8 @@ export async function openCodeNativeFixture() {
     lostPromptReply: false,
     failCancel: false,
     failRead: false,
+    rejectReply: false,
+    failRemove: false,
     authUrl: "",
     watchReply: "learn: none",
   };
@@ -263,6 +265,7 @@ export async function openCodeNativeFixture() {
         rest = match[2];
       if (!sessions.has(sessionID)) create(sessionID);
       if (!rest && req.method === "DELETE") {
+        if (controls.failRemove) return json({}, 503);
         sessions.delete(sessionID);
         messages.delete(sessionID);
         return empty();
@@ -391,6 +394,7 @@ export async function openCodeNativeFixture() {
         const found = forms.get(form[1]);
         if (!found) return json({}, 404);
         if (form[2] === "/reply") {
+          if (controls.rejectReply) return json({ _tag: "FormInvalid" }, 400);
           found.state = { status: "answered", answer: body.answer };
           emit("form.replied", { id: found.id, sessionID }, false);
           wake(sessionID);

@@ -156,6 +156,12 @@ export class TurnText {
     this.publish();
   }
 
+  /** Steering was read and the answer goes on below it: what was shown stays above. */
+  below() {
+    this.parts = [];
+    this.shown = "";
+  }
+
   answer() {
     return this.parts
       .filter((part) => !part.commentary && part.text.trim())

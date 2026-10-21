@@ -49,6 +49,8 @@ export class NativeEvents {
           if (event.type === "server.connected") {
             if (connected) await this.recover();
             connected = true;
+            // The budget is per outage; a retained session outlives many.
+            attempt = 0;
             this.ready.succeed();
           } else this.hear(event);
         }

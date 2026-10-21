@@ -818,6 +818,97 @@ it("runs a picked OpenCode skill through the thread's real prompt wrapper", asyn
   }
 });
 
+it("lets an OpenCode steer go once admitted and sends one the turn never read as the next turn", async () => {
+  const native = await openCodeNativeFixture();
+  try {
+    native.controls.deliver = false;
+    const codex = await findExecutable("codex");
+    const cli = await fakeCli(
+      join(root, "opencode"),
+      await readFile(resolve("tests/fixtures/acp-agent.cjs"), "utf8"),
+      "opencode v2.0.32",
+    );
+    vi.mocked(findExecutable).mockImplementation(async (name) =>
+      name === "opencode" ? cli : codex,
+    );
+    const capture = join(root, "opencode-capture.jsonl");
+    vi.stubEnv("RELAY_ACP_LOG", capture);
+    vi.stubEnv(
+      "RELAY_ACP_SCENARIO",
+      JSON.stringify({
+        nativeUrl: native.url,
+        serviceUrl: native.url,
+        turn: [
+          { waitNative: true },
+          {
+            update: {
+              sessionUpdate: "agent_message_chunk",
+              content: { type: "text", text: "Answered." },
+            },
+          },
+        ],
+      }),
+    );
+    const release = (sessionID: string) =>
+      fetch(native.url + "/fixture/release", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionID }),
+      });
+    const choice = { model: "", reasoningEffort: "" as const, fast: false };
+    const chat = await chats.create(projectId, { kind: "project" });
+    await chats.send(chat.id, {
+      ...input("@opencode Write the notes"),
+      provider: "opencode",
+      choice,
+    });
+    await vi.waitFor(() => expect(native.active.size).toBe(1));
+    const sessionID = [...native.active][0];
+    const steer = {
+      ...input("@opencode Keep them short"),
+      provider: "opencode" as const,
+      choice,
+      delivery: "steer" as const,
+    };
+    // Returns while OpenCode still holds it undelivered, mid-turn.
+    await chats.send(chat.id, steer);
+    expect(native.inbox.size).toBe(1);
+    expect(
+      (await chats.get(chat.id)).messages.find((m) => m.id === steer.id),
+    ).toMatchObject({ steered: true, unread: true });
+    await release(sessionID);
+    // The next turn waits too; let it through once it asks.
+    await release(sessionID);
+    await vi.waitFor(async () => {
+      const prompts = (await readFile(capture, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+        .filter((c) => c.method === "session/prompt");
+      expect(prompts).toHaveLength(2);
+      const text = prompts[1].params.prompt
+        .map((p: { text?: string }) => p.text ?? "")
+        .join("\n");
+      expect(text).toContain("Keep them short");
+      expect(text).toContain("ended before you read");
+    });
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+        "complete",
+      ),
+    );
+    const saved = await chats.get(chat.id);
+    expect(saved.messages.find((m) => m.id === steer.id)).not.toMatchObject({
+      status: "failed",
+    });
+    expect(saved.queue ?? []).toHaveLength(0);
+    expect(native.inbox.size).toBe(0);
+  } finally {
+    await chats.dispose();
+    await native.close();
+  }
+});
+
 it("lists Codex's enabled skills and sends a picked one as the `$name` Codex parses", async () => {
   const { agentRuntime } = await import("../agents");
   const skills = await agentRuntime("codex").commands(join(root, "repo"));
@@ -918,7 +1009,7 @@ it("steers an active Codex turn natively, and resumes its saved session with the
   });
   expect(calls.some((c) => c.interrupt)).toBe(true);
   expect(calls.filter((c) => c.turn).at(-1).turn.input[0].text).toMatch(
-    /^My request: Focus only on the cache key\n\nYour previous response was stopped/,
+    /^My request: Focus only on the cache key\n\nYour previous response ended/,
   );
   expect(calls.filter((c) => c.thread).map((c) => c.method)).toEqual([
     "thread/start",
@@ -1210,7 +1301,7 @@ it("carries a steer Claude never read before the stop, screenshot included, into
     .filter((m) => !m.priority)
     .map((m) => m.message.content as { type: string; text?: string }[]);
   expect(prompts.at(-2)![0]!.text).toMatch(
-    /^My request: I meant better matching\n\nYour previous response was stopped before you read/,
+    /^My request: I meant better matching\n\nYour previous response ended before you read/,
   );
   expect(prompts.at(-2)!.map((part) => part.type)).toEqual(["text", "image"]);
   expect(prompts.at(-1)![0]!.text).toMatch(/^My request: Carry on/);

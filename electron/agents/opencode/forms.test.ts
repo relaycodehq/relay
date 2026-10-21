@@ -65,7 +65,8 @@ it("lets the service reject field constraints, then explains the rejected answer
   const { reply, cancel } = await answer(
     { key: "value", type: "number", minimum: 5 },
     ["2"],
-    new OpenCodeHttpError(400),
+    // As the SDK hands it over: our fetch's error inside its ClientError("Transport").
+    new Error("Transport", { cause: new OpenCodeHttpError(400) }),
   );
   expect(reply).toHaveBeenCalledTimes(1);
   expect(cancel).toHaveBeenCalledExactlyOnceWith(

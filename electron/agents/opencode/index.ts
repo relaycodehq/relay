@@ -13,6 +13,13 @@ export { configureOpenCodeFetch } from "./client";
 
 const sessions = new Map<string, OpenCodeSession>();
 const base = acpRuntime("opencode");
+/** Turns and helpers here, from their start: the service only knows one once it executes. */
+let running = 0;
+let reloading: Promise<unknown> | undefined;
+const busy = () =>
+  new Error(
+    "Wait for OpenCode's running sessions to finish. Reloading its configuration affects every project.",
+  );
 
 /** Copy through the selected message; OpenCode's fork endpoint cuts BEFORE its boundary. */
 async function fork(options: AgentOptions) {
@@ -87,6 +94,17 @@ async function observe(options: AgentOptions, agent: AcpAgent) {
 }
 
 async function run(options: AgentOptions) {
+  // A reload closes every ACP connection, a starting turn's too.
+  while (reloading) await reloading.catch(() => {});
+  running++;
+  try {
+    return await runHere(options);
+  } finally {
+    running--;
+  }
+}
+
+async function runHere(options: AgentOptions) {
   await openCodeCommand();
   if (options.job.kind === "helper")
     return openCodeHelper(client, { ...options, job: options.job });
@@ -96,13 +114,19 @@ async function run(options: AgentOptions) {
     const answer = await runAcp(
       acpProfiles.opencode,
       { ...prepared, onUsage: undefined, onCost: undefined },
-      async (agent) => {
-        const observer = await observe(prepared, agent);
+      async (agent, steered) => {
+        const observer = await observe(
+          { ...prepared, onSteered: steered },
+          agent,
+        );
         native = sessions.get(prepared.session?.key ?? agent.session!.id);
         return observer;
       },
     );
-    await native?.ended(answer);
+    // The answer is in; its watcher's last check or fork point can't undo that.
+    await native
+      ?.ended(answer)
+      .catch((e) => console.warn("Could not finish OpenCode's turn:", e));
     return answer;
   } finally {
     if (!prepared.session?.key && native) {
@@ -129,17 +153,25 @@ export const openCodeRuntime: AgentRuntime = {
       await client.session.generate({ sessionID: thread, prompt }, { signal })
     ).text;
   },
-  reloadSession: async () => {
-    const active = await client.session.active();
-    if (Object.keys(active).length)
-      throw new Error(
-        "Wait for OpenCode's running sessions to finish. Reloading its configuration affects every project.",
-      );
-    await client.location.reload();
-    for (const sessionKey of sessions.keys())
-      await base.closeSession(sessionKey);
-    await base.reloadModels?.(() => Promise.resolve());
-    return { scope: "service" };
+  reloadSession: () => {
+    // Checked and claimed in one step, so no turn starts in between.
+    if (running || reloading) return Promise.reject(busy());
+    const reload = (async () => {
+      const active = await client.session.active();
+      if (Object.keys(active).length) throw busy();
+      await client.location.reload();
+      for (const sessionKey of sessions.keys())
+        await base.closeSession(sessionKey);
+      await base.reloadModels?.(() => Promise.resolve());
+      return { scope: "service" as const };
+    })();
+    reloading = reload;
+    void reload
+      .finally(() => {
+        if (reloading === reload) reloading = undefined;
+      })
+      .catch(() => {});
+    return reload;
   },
   detach: () => {
     for (const native of sessions.values()) native.close();

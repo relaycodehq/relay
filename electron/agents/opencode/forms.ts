@@ -3,7 +3,7 @@ import type {
   AgentQuestion,
   AskAgentRequest,
 } from "../../../shared/agent-modes";
-import { OpenCodeHttpError, type NativeClient } from "./client";
+import { httpStatus, type NativeClient } from "./client";
 
 function question(field: FormField): AgentQuestion | undefined {
   if (field.type === "external" || field.when?.length) return undefined;
@@ -130,8 +130,7 @@ export async function answerForm(
     // The service validates native constraints (ranges, formats, patterns and item counts).
     await client.session.form.reply({ ...target, answer }, { signal });
   } catch (error) {
-    if (!(error instanceof OpenCodeHttpError) || error.status !== 400)
-      throw error;
+    if (httpStatus(error) !== 400) throw error;
     await client.session.form.cancel({
       ...target,
       message:

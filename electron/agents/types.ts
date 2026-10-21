@@ -89,6 +89,11 @@ export interface AgentOptions {
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
+  /**
+   * The agent took steering message `id`, but its turn ended before reading
+   * it. With `error`, whether it still reaches the agent can't be told.
+   */
+  onSteerUnread?: (id: string, error?: Error) => void;
   cwd: string;
   /** Folders beyond `cwd` the user linked, and whether the agent may edit them. */
   links?: LinkedFolder[];

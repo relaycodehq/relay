@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { UncertainSteerError } from "../errors";
-import { TurnEnd, guardSteer } from "../turn-kit";
+import { guardSteer } from "../turn-kit";
 import { SubagentBook } from "../subagent-book";
 import type { AcpAgent } from "../acp/sessions";
 import type { AgentOptions } from "../types";
@@ -27,9 +27,10 @@ import { openCodeSkillContext } from "./skills";
 
 type PendingSteer = {
   chatId?: string;
-  end: TurnEnd<void>;
   admission?: Promise<unknown>;
-  cancellation?: Promise<void>;
+  /** OpenCode took it; its delivery comes at the next step boundary, or never. */
+  admitted?: boolean;
+  cancellation?: Promise<"delivered" | "returned">;
 };
 
 /** One ACP session's native observations, retained between turns for background children. */
@@ -64,6 +65,7 @@ export class OpenCodeSession {
   private since = 0;
   private begun = false;
   private point?: string;
+  private pointAt = 0;
   private buffered: OpenCodeEvent[] = [];
 
   constructor(
@@ -73,16 +75,9 @@ export class OpenCodeSession {
   ) {
     this.events = new NativeEvents(
       client,
-      (event) => {
-        if (this.initializing) {
-          if (
-            "sessionID" in event.data &&
-            (event.data.sessionID === this.id ||
-              this.children.has(event.data.sessionID))
-          )
-            this.buffered.push(event);
-        } else this.hear(event);
-      },
+      // All of it: hear() filters by the children start() is still listing.
+      (event) =>
+        this.initializing ? this.buffered.push(event) : this.hear(event),
       () => this.recover(),
     );
     this.checks = new WatchChecks(async (prompt, signal) => ({
@@ -126,6 +121,7 @@ export class OpenCodeSession {
     }
     this.begun = true;
     this.point = undefined;
+    this.pointAt = 0;
     this.delivered.clear();
     this.finished = false;
     this.working = true;
@@ -172,10 +168,7 @@ export class OpenCodeSession {
             },
             async (input) => {
               const id = `msg_${randomUUID().replaceAll("-", "")}`;
-              const pending: PendingSteer = {
-                chatId,
-                end: new TurnEnd<void>(),
-              };
+              const pending: PendingSteer = { chatId };
               this.steers.set(id, pending);
               // resume:false cannot accidentally start an unobserved turn after ACP settles.
               pending.admission = this.client.session.prompt({
@@ -191,13 +184,13 @@ export class OpenCodeSession {
                 // A lost reply may have applied; recover delivery before deciding.
                 // If recovery is also unavailable, only a confirmed cancellation is safe to retry.
                 await this.drain(this.id).catch(() => {});
-                if (!this.delivered.has(id)) {
-                  await this.cancelSteer(id, pending);
+                if ((await this.cancelSteer(id, pending)) === "returned")
                   throw error;
-                }
+                return;
               }
-              if (this.delivered.has(id)) pending.end.succeed();
-              await pending.end.promise;
+              // Delivery can be minutes away, behind a long tool call: the
+              // thread mustn't wait for it. settle() reports one never read.
+              pending.admitted = true;
             },
           ),
         retune: async (choice) => {
@@ -245,14 +238,22 @@ export class OpenCodeSession {
     this.working = false;
     await Promise.allSettled([...this.steers.values()].map((p) => p.admission));
     try {
-      await this.recover();
-      for (const [id, pending] of this.steers)
-        await this.cancelSteer(id, pending);
-    } catch (error) {
-      for (const pending of this.steers.values())
-        pending.end.fail(new UncertainSteerError());
-      this.steers.clear();
-      throw error;
+      // The answer stands without it; each steer below settles its own delivery.
+      await this.recover().catch((e) =>
+        console.warn("Could not recover OpenCode's last events:", e),
+      );
+      // One whose admission failed belongs to the steer call still deciding it.
+      for (const [id, pending] of this.steers) {
+        if (!pending.admitted) continue;
+        const outcome = await this.cancelSteer(id, pending).catch(
+          (error: Error) => error,
+        );
+        if (outcome !== "delivered" && pending.chatId)
+          this.options.onSteerUnread?.(
+            pending.chatId,
+            outcome === "returned" ? undefined : outcome,
+          );
+      }
     } finally {
       const forms = [...this.forms.entries()];
       for (const [, { abort }] of forms) abort.abort();
@@ -284,44 +285,32 @@ export class OpenCodeSession {
     this.working = false;
     this.events.close();
     for (const { abort } of this.forms.values()) abort.abort();
-    for (const pending of this.steers.values())
-      pending.end.fail(new UncertainSteerError());
     this.book.close();
   }
 
   private cancelSteer(id: string, pending: PendingSteer) {
-    return (pending.cancellation ??= this.finishSteer(id, pending));
+    return (pending.cancellation ??= this.finishSteer(id));
   }
 
-  private async finishSteer(id: string, pending: PendingSteer) {
-    if (this.delivered.has(id)) {
-      pending.end.succeed();
-      this.steers.delete(id);
-      return;
-    }
+  /** "returned": confirmed never delivered. Throws when that can't be told. */
+  private async finishSteer(id: string) {
     try {
-      await this.client.session.inbox.cancel({
-        sessionID: this.id,
-        inboxID: id,
-      });
-    } catch {
-      await this.drain(this.id).catch(() => {});
-      if (this.delivered.has(id)) {
-        pending.end.succeed();
-        this.steers.delete(id);
-        return;
+      if (this.delivered.has(id)) return "delivered";
+      try {
+        await this.client.session.inbox.cancel({
+          sessionID: this.id,
+          inboxID: id,
+        });
+        return "returned";
+      } catch {
+        await this.drain(this.id).catch(() => {});
+        if (this.delivered.has(id)) return "delivered";
+        // Do not report an undelivered message as accepted.
+        throw new UncertainSteerError();
       }
-      // Do not report an undelivered message as accepted.
-      pending.end.fail(new UncertainSteerError());
+    } finally {
       this.steers.delete(id);
-      throw new UncertainSteerError();
     }
-    pending.end.fail(
-      new Error(
-        "This turn has finished. Send the queued message as a new turn.",
-      ),
-    );
-    this.steers.delete(id);
   }
 
   private async messages(sessionID: string, all = false) {
@@ -341,12 +330,18 @@ export class OpenCodeSession {
     return messages;
   }
 
+  /** The newest main-session message so far, whether an event or recovery saw it. */
+  private reached(messageID: string, at: number) {
+    if (at < this.pointAt) return;
+    this.point = messageID;
+    this.pointAt = at;
+  }
+
   private deliveredSteer(id: string) {
     const pending = this.steers.get(id);
     if (!pending || this.delivered.has(id)) return;
     this.delivered.add(id);
     if (pending.chatId) this.options.onSteered?.(pending.chatId);
-    pending.end.succeed();
   }
 
   private report(
@@ -375,6 +370,8 @@ export class OpenCodeSession {
     for (const message of [...messages].reverse()) {
       if (message.type === "user") this.deliveredSteer(message.id);
       if (message.type !== "assistant") continue;
+      if (!child && message.time.created >= this.since)
+        this.reached(message.id, message.time.created);
       if (message.tokens)
         this.report(
           sessionID,
@@ -444,18 +441,21 @@ export class OpenCodeSession {
             this.active.has(child.id) ||
             this.book.detail(child.id)?.status === "running";
           this.child(child);
-          if (!changed) continue;
-          await this.drain(child.id);
-          if (!this.active.has(child.id) && child.outcome)
-            this.book.end(
-              child.id,
-              child.outcome === "failed"
-                ? "failed"
-                : child.outcome === "interrupted"
-                  ? "stopped"
-                  : "completed",
-              this.answers.get(child.id),
-            );
+          if (changed) {
+            await this.drain(child.id);
+            // Without an outcome it never ran; one that starts later resumes.
+            if (!this.active.has(child.id))
+              this.book.end(
+                child.id,
+                child.outcome === "succeeded"
+                  ? "completed"
+                  : child.outcome === "failed"
+                    ? "failed"
+                    : "stopped",
+                this.answers.get(child.id),
+              );
+          }
+          // A finished worker's own background workers can still change.
           await visit(child.id);
         }
         cursor = page.cursor.next ?? undefined;
@@ -586,7 +586,7 @@ export class OpenCodeSession {
       case "session.step.ended":
       case "session.step.failed": {
         const data = native.data;
-        if (!child) this.point = data.assistantMessageID;
+        if (!child) this.reached(data.assistantMessageID, native.created);
         const model = this.models.get(data.assistantMessageID);
         if (model && data.tokens)
           this.report(

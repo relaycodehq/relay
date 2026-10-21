@@ -295,10 +295,16 @@ export class ProjectChats {
       compactNow: (id, parentId, instructions) =>
         this.compactions.now(id, parentId, instructions),
     });
-    const ends = new TurnEndings(core, this.councils, this.queue, (id) => {
-      void this.idle.arm(id);
-      return this.triaging.ended(id);
-    });
+    const ends = new TurnEndings(
+      core,
+      this.councils,
+      this.queue,
+      (id) => {
+        void this.idle.arm(id);
+        return this.triaging.ended(id);
+      },
+      (id) => this.turns.resumeMissedHeld(id),
+    );
     this.turns = new TurnSends(
       core,
       this.worktrees,
