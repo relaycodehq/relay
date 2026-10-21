@@ -76,7 +76,7 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     },
   },
   opencode: {
-    npm: "opencode-ai",
+    npm: "@opencode/cli",
     native: {
       args: ["upgrade"],
       owns: (path) =>

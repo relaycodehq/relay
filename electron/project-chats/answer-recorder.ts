@@ -252,6 +252,23 @@ export class AnswerRecorder {
     this.changed();
   }
   /**
+   * The turn ended before the agent read steering message `steerId`. It
+   * goes out with the next turn, unless `error` leaves in doubt whether the
+   * agent has it anyway.
+   */
+  unreadSteer(steerId: string, error?: Error) {
+    const steer = this.chat.messages.find((m) => m.id === steerId);
+    if (!steer?.unread) return;
+    delete steer.unread;
+    if (error) {
+      steer.status = "failed";
+      steer.error = error.message;
+    } else steer.missed = true;
+    steer.version++;
+    this.emit(structuredClone(steer));
+    this.changed();
+  }
+  /**
    * The user stopped the turn: the answer shows as stopped now, as it stands,
    * rather than once the agent has wound down. What the agent still writes
    * meanwhile is dropped; `end` later adds what the turn changed.

@@ -5,6 +5,7 @@ import {
   events,
   useProjectChats,
 } from "../../tests/fixtures/project-chats-harness";
+import { agentRuntime } from "../agents";
 import { readFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
 import { join } from "node:path";
@@ -78,7 +79,7 @@ it("restarts Codex on the same thread and notes it quietly", async () => {
   expect(calls[1].thread.threadId).toBe("fixture-thread");
 });
 
-it("refuses while an answer runs, and for agents it can't reload", async () => {
+it("refuses while an answer runs and reports OpenCode’s shared reload scope", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await expect(chats.reloadSessions(chat.id)).rejects.toThrow(
     "no agent session",
@@ -110,6 +111,16 @@ it("refuses while an answer runs, and for agents it can't reload", async () => {
     version: 1,
   });
   await internals.storage.save(saved);
-  await expect(chats.reloadSessions(other.id)).rejects.toThrow("OpenCode");
-  expect((await chats.get(other.id)).messages).toHaveLength(1);
+  const reload = vi
+    .spyOn(agentRuntime("opencode"), "reloadSession")
+    .mockResolvedValue({ scope: "service" });
+  try {
+    await chats.reloadSessions(other.id);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect((await chats.get(other.id)).messages.at(-1)?.reload).toEqual({
+      scope: "service",
+    });
+  } finally {
+    reload.mockRestore();
+  }
 });

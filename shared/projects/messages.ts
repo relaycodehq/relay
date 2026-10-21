@@ -66,6 +66,8 @@ export interface NameChanges {
 }
 /** Local marker: the agent's process was restarted on the same session. Each list is left out when the agent couldn't say. */
 export interface SessionReload {
+  /** The agent rebuilt configuration across all projects in its shared service. */
+  scope?: "service";
   skills?: NameChanges;
   agents?: NameChanges;
 }
@@ -124,8 +126,9 @@ export interface ChatMessage {
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**
-   * Local: a steer whose turn stopped or failed before the agent read it, so
-   * its session never got it. The agent's next turn carries it as the request.
+   * Local: a steer whose turn stopped, failed or ended before the agent read
+   * it, so its session never got it. The agent's next turn carries it as the
+   * request.
    */
   missed?: boolean;
   /**

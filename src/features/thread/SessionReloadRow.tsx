@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { agentName } from "../../../shared/agents";
 import type { ChatMessage, SessionReload } from "../../../shared/projects";
 import { reloadDetail, reloadNote } from "../../../shared/session-reload";
 import { LineDivider } from "../../ui/LineDivider";
@@ -17,7 +18,11 @@ export function SessionReloadRow({
     <LineDivider data-message-id={m.id} role="status">
       {unread}
       <span title={reloadDetail(reload)}>
-        {reloadNote(reload, m.status === "streaming")}
+        {reloadNote(
+          reload,
+          m.status === "streaming",
+          m.provider && agentName(m.provider),
+        )}
       </span>
     </LineDivider>
   );

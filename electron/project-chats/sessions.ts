@@ -234,20 +234,21 @@ export class ProviderSessions {
    * conversation's comes back at once where its agent can say what changed;
    * the rest resume with their next message.
    */
-  async reload(chatId: string): Promise<SessionReload | undefined> {
+  async reload(
+    chatId: string,
+    provider: AgentProvider,
+  ): Promise<SessionReload | undefined> {
     const main = this.key(chatId);
     const keys = this.of(chatId);
     const runtimes = everyAgentRuntime();
     void this.keepSubagents(chatId);
     let changes: SessionReload | undefined;
-    // First, so one still working refuses before anything else closed.
-    if (keys.includes(main))
-      for (const runtime of runtimes)
-        if (runtime.reloadSession)
-          changes = (await runtime.reloadSession(main)) ?? changes;
+    // Only the selected provider may reload shared services. Other adapters just close.
+    const selected = agentRuntimes().find(([p]) => p === provider)?.[1];
+    if (selected?.reloadSession) changes = await selected.reloadSession(main);
     for (const key of keys)
       for (const runtime of runtimes)
-        if (key !== main || !runtime.reloadSession)
+        if (key !== main || runtime !== selected || !runtime.reloadSession)
           await runtime.closeSession(key).catch(() => {});
     this.changed(chatId);
     return changes;

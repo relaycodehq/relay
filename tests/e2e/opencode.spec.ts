@@ -17,6 +17,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openCodeNativeFixture } from "../fixtures/opencode-native";
 import { openCodeAuthFixture } from "../fixtures/opencode-auth";
 
 /**
@@ -38,13 +39,20 @@ async function launchWithOpenCode(acp: Record<string, unknown>) {
     await readFile(resolve("tests/fixtures/acp-agent.cjs"), "utf8"),
     "opencode v2.0.28",
   );
+  const native = await openCodeNativeFixture();
+  native.controls.authUrl =
+    typeof acp.serviceUrl === "string" ? acp.serviceUrl : "";
   const env = relayEnv();
   const app = await electron.launch({
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_ACP_SCENARIO: JSON.stringify(acp),
+      RELAY_ACP_SCENARIO: JSON.stringify({
+        ...acp,
+        nativeUrl: native.url,
+        serviceUrl: native.url,
+      }),
       RELAY_ACP_LOG: capture,
     },
   });
@@ -74,7 +82,7 @@ async function launchWithOpenCode(acp: Record<string, unknown>) {
   await page.evaluate(async () => {
     await window.relay.addProject();
   });
-  return { app, page, root, capture };
+  return { app, page, root, capture, native };
 }
 
 test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Default, keeps the thread", async () => {
@@ -91,7 +99,7 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
     currentValue,
     options: options.map(([value, name]) => ({ value, name })),
   });
-  const { app, page, root, capture } = await launchWithOpenCode({
+  const { app, page, root, capture, native } = await launchWithOpenCode({
     configOptions: [
       // Named as OpenCode 2 names them, its provider first.
       select("model", "opencode/big-pickle", [
@@ -246,8 +254,12 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
         )
         .map((m) => m.params.value),
     ).toEqual(["default"]);
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
   } finally {
     await app.close();
+    await native.close();
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -256,7 +268,7 @@ test("OpenCode 2 offers REA in the skill picker and sends its instructions over 
   test.setTimeout(90000);
   const body =
     "REA sample instructions: inspect references/native.md before analysis.";
-  const { app, page, root, capture } = await launchWithOpenCode({
+  const { app, page, root, capture, native } = await launchWithOpenCode({
     skills: [
       {
         id: "reverse-engineer-anything",
@@ -342,8 +354,12 @@ test("OpenCode 2 offers REA in the skill picker and sends its instructions over 
         "location[directory]",
       ),
     ).toBe(join(root, "notes"));
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
   } finally {
     await app.close();
+    await native.close();
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -355,7 +371,7 @@ test("OpenCode reconnects from the failed answer in Relay, recovers a paused bro
   );
   const authFile = join(authRoot, "connected");
   const service = await openCodeAuthFixture(authFile);
-  const { app, page, root, capture } = await launchWithOpenCode({
+  const { app, page, root, capture, native } = await launchWithOpenCode({
     serviceUrl: service.url,
     authFile,
     configOptions: [
@@ -518,8 +534,169 @@ test("OpenCode reconnects from the failed answer in Relay, recovers a paused bro
     ).toBe(true);
   } finally {
     await app.close();
+    await native.close();
     await service.close();
     await rm(root, { recursive: true, force: true });
     await rm(authRoot, { recursive: true, force: true });
+  }
+});
+
+test("OpenCode supports side questions, subagent controls, native questions and steering in Relay", async () => {
+  test.setTimeout(120000);
+  const { app, page, root, native } = await launchWithOpenCode({
+    configOptions: [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: "opencode/big-pickle",
+        options: [
+          { value: "opencode/big-pickle", name: "opencode/Big Pickle" },
+        ],
+      },
+    ],
+    turn: [
+      { waitNative: true },
+      { waitNative: true },
+      {
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Updated the plan using SQLite." },
+        },
+      },
+    ],
+  });
+  try {
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Choose model and provider" })
+      .click();
+    await page
+      .getByRole("toolbar", { name: "Model providers" })
+      .getByRole("button", { name: "OpenCode", exact: true })
+      .click();
+    await page.getByRole("option", { name: "Big Pickle", exact: true }).click();
+    const composer = page.getByLabel("Message project");
+    await composer.fill("Inspect the cache");
+    await composer.press("Enter");
+    await expect.poll(() => native.active.size).toBe(1);
+    const sessionID = [...native.active][0];
+
+    await composer.fill("/btw why use a local database?");
+    await composer.press("Enter");
+    await expect(
+      page.getByRole("heading", { name: "Side question" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("An answer beside the thread", { exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Back to conversation" }).click();
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+
+    native.create("ses_ui_child", {
+      parentID: sessionID,
+      title: "Inspect cache tests",
+      agent: "explore",
+      location: { directory: join(root, "notes") },
+    });
+    native.active.add("ses_ui_child");
+    native.emit("session.execution.started", { sessionID: "ses_ui_child" });
+    native.emit("session.tool.input.started", {
+      sessionID: "ses_ui_child",
+      assistantMessageID: "msg_child",
+      id: "read_cache",
+      name: "read",
+    });
+    native.emit("session.tool.called", {
+      sessionID: "ses_ui_child",
+      assistantMessageID: "msg_child",
+      id: "read_cache",
+      input: { filePath: "cache.test.ts" },
+      executed: true,
+    });
+    const chip = page.getByRole("button", {
+      name: "1 subagent: 0 done, 1 working",
+      exact: true,
+    });
+    await expect(chip).toBeVisible();
+    await chip.click();
+    const card = page.getByRole("dialog", { name: "Subagents" });
+    await expect(card).toContainText("Inspect cache tests");
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode-native-subagents.png"),
+    });
+    await card.getByRole("button", { name: "Stop agent", exact: true }).click();
+    await expect.poll(() => native.active.has("ses_ui_child")).toBe(false);
+    expect(native.active.has(sessionID)).toBe(true);
+    await page.keyboard.press("Escape");
+
+    const form = {
+      id: "frm_ui_database",
+      sessionID,
+      title: "Choose a database",
+      fields: [
+        {
+          key: "database",
+          type: "string",
+          title: "Which database should this use?",
+          options: [
+            { value: "sqlite", label: "SQLite" },
+            { value: "postgres", label: "PostgreSQL" },
+          ],
+        },
+      ],
+      state: { status: "pending" },
+    };
+    native.forms.set(form.id, form);
+    native.emit("form.created", { form }, false);
+    const questions = page.getByRole("region", { name: "Choose a database" });
+    await expect(questions).toBeVisible();
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode-native-question.png"),
+    });
+    await questions.getByRole("button", { name: /SQLite/ }).click();
+    await expect
+      .poll(() => native.forms.get(form.id)?.state.status)
+      .toBe("answered");
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toBeVisible();
+
+    await composer.fill("Use SQLite and finish the plan");
+    await composer.press("Enter");
+    const queue = page.getByRole("region", { name: "Queued messages" });
+    await expect(queue).toBeVisible();
+    await queue.getByRole("button", { name: "Steer now", exact: true }).click();
+    await expect(
+      page.getByText("Updated the plan using SQLite.", { exact: true }),
+    ).toBeVisible();
+    await expect(queue).toHaveCount(0);
+    expect(native.calls.filter((c) => c.path.endsWith("/prompt"))).toHaveLength(
+      1,
+    );
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-opencode-native-steered.png"),
+    });
+
+    await expect(
+      page.getByRole("button", { name: "Stop answer", exact: true }),
+    ).toHaveCount(0);
+    await composer.fill("/reload");
+    await composer.press("Enter");
+    await expect(
+      page.getByText("OpenCode configuration reloaded across projects", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(native.calls.some((c) => c.path === "/api/location/reload")).toBe(
+      true,
+    );
+  } finally {
+    await app.close();
+    await native.close();
+    await rm(root, { recursive: true, force: true });
   }
 });

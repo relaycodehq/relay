@@ -89,23 +89,25 @@ export class TurnSends {
    * stopped, as any stop does.
    */
   resumeMissed(id: string) {
-    return this.core.control(id, async () => {
-      await this.core.active.finished(id);
-      const chat = await this.core.storage.load(id);
-      const last = chat.lastInput;
-      if (
-        this.core.active.has(id) ||
-        !last ||
-        !chat.messages.some(
-          (m) =>
-            m.missed &&
-            m.provider === sentAgent(last) &&
-            (m.parentId ?? null) === (last.parentId ?? null),
-        )
+    return this.core.control(id, () => this.resumeMissedHeld(id));
+  }
+  /** resumeMissed for a job that already holds the thread's control. */
+  async resumeMissedHeld(id: string) {
+    await this.core.active.finished(id);
+    const chat = await this.core.storage.load(id);
+    const last = chat.lastInput;
+    if (
+      this.core.active.has(id) ||
+      !last ||
+      !chat.messages.some(
+        (m) =>
+          m.missed &&
+          m.provider === sentAgent(last) &&
+          (m.parentId ?? null) === (last.parentId ?? null),
       )
-        return;
-      await this.resumeHeld(id);
-    });
+    )
+      return;
+    await this.resumeHeld(id);
   }
   /** Resume for a job that already holds the thread's control. */
   async resumeHeld(id: string, settings?: ResumeSettings) {
@@ -138,7 +140,7 @@ export class TurnSends {
         id: randomUUID(),
         to: provider,
         body: missed
-          ? `@${provider} Your previous response was stopped before you read what I wrote above. Check what has already been done before repeating any actions.`
+          ? `@${provider} Your previous response ended before you read what I wrote above. Check what has already been done before repeating any actions.`
           : `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
         asyncQuestionAnswer: undefined,
         questionMessageId: undefined,

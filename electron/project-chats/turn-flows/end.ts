@@ -4,6 +4,20 @@ import type { ChatCore } from "../core";
 import type { Councils } from "../councils";
 import type { ChatQueue } from "../queue";
 
+/**
+ * A steer the agent took but gave back unread when its finished turn ended
+ * (OpenCode's inbox) goes out on its own, as one sent a moment later would.
+ */
+function returnedSteer(chat: ProjectChat, answerId?: string) {
+  const at = chat.messages.findIndex((m) => m.id === answerId);
+  return (
+    at >= 0 &&
+    chat.messages[at].status === "complete" &&
+    !chat.queuePaused &&
+    chat.messages.slice(at + 1).some((m) => m.missed && m.steered)
+  );
+}
+
 /** What every turn in a thread does when it ends, whichever flow ran it. */
 export class TurnEndings {
   constructor(
@@ -12,6 +26,8 @@ export class TurnEndings {
     private queue: ChatQueue,
     /** A run ended and its queue went out; see ThreadTriage.ended. */
     private ended: (id: string) => Promise<void>,
+    /** Sends the steers the agent missed as the next turn; the caller holds control. */
+    private resumeMissed: (id: string) => Promise<void>,
   ) {}
   /**
    * Ends a run. The thread goes idle first: the finished answer moved
@@ -38,6 +54,8 @@ export class TurnEndings {
       .control(chat.id, async () => {
         await stepped;
         await this.queue.drain(chat.id);
+        // Unless a queued message just took it along.
+        if (returnedSteer(chat, turn?.answer)) await this.resumeMissed(chat.id);
         // A reviewer's step waited for its queue; nothing went out after all.
         if (chat.reviewer && !this.core.active.has(chat.id))
           await this.councils.step(chat.id, {});

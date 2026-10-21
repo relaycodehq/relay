@@ -1,13 +1,10 @@
 import { app, dialog, net, powerMonitor, systemPreferences } from "electron";
+import { configureOpenCodeFetch } from "./agents/opencode";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
-import {
-  hostAgents,
-  loadRegistryAgents,
-  watchSavedSignIns,
-} from "./agents";
+import { hostAgents, loadRegistryAgents, watchSavedSignIns } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { configureCursor } from "./agents/cursor/sdk";
 import {
@@ -95,10 +92,7 @@ import { DevBuild } from "./app/dev-build";
 import { listenDevSwitch } from "./app/dev-switch";
 import { keepUsageHistory } from "./agents/usage-history";
 import { keepUsageLog } from "./usage";
-import {
-  AgentAccounts,
-  setProfilesRoot,
-} from "./agents/accounts";
+import { AgentAccounts, setProfilesRoot } from "./agents/accounts";
 import { ProjectAdding } from "./project-add";
 import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
@@ -157,6 +151,9 @@ let treeWatch: TreeWatch | undefined;
 /** Which other repositories the windows' threads changed files in; unset until Relay has started. */
 let elsewhereWatch: ElsewhereWatch | undefined;
 const login = new GiteaLogin(teaTokenFor);
+configureOpenCodeFetch((url, options) =>
+  net.fetch(url instanceof Request ? url.url : url.toString(), options),
+);
 const github = new GithubLogin((url, options) => net.fetch(url, options));
 /** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({

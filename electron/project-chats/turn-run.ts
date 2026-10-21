@@ -260,6 +260,8 @@ export class TurnRunner {
             .catch((e) => console.warn("Could not save the goal:", e));
         },
         onSteered: (id: string) => answer.continueBelow(id),
+        onSteerUnread: (id: string, error?: Error) =>
+          answer.unreadSteer(id, error),
         job: agentJob(turn, chat),
         // A reviewer's work counts toward the thread it serves.
         usage: {
