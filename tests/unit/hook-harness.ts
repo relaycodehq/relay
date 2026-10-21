@@ -1,4 +1,4 @@
-import { act, createElement } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach } from "vitest";
 
@@ -11,7 +11,10 @@ afterEach(() => {
 });
 
 /** Mounts a hook in actual React, including subscriptions, effects and cleanup. */
-export function mount<T>(hooks: () => T) {
+export function mount<T>(
+  hooks: () => T,
+  wrap: (child: ReactElement) => ReactElement = (child) => child,
+) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -21,7 +24,7 @@ export function mount<T>(hooks: () => T) {
     return null;
   }
   const rerender = () => {
-    act(() => root.render(createElement(Hook)));
+    act(() => root.render(wrap(createElement(Hook))));
   };
   const unmount = () => {
     if (!cleanups.delete(unmount)) return;
