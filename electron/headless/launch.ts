@@ -18,6 +18,7 @@ import { lockPath } from "./lock";
 import { recordedAlive, recordProcess } from "./process-identity";
 import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
+import { sleep } from "../util/sleep";
 
 /** What a Relay run as a service exits with to be started again. */
 export const restartCode = 75;
@@ -95,8 +96,6 @@ export async function running(home: string): Promise<DaemonStatus | null> {
     throw e;
   }
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Waits for Relay to answer, or for `exited` to say it never will. */
 async function answering(home: string, exited?: () => number | null) {

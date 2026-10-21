@@ -27,7 +27,8 @@ import {
   reachProblem,
   needRunning,
 } from "./daemon";
-import { sleep, Quiet, pick, tilde, signIn, printJson } from "./util";
+import { Quiet, pick, tilde, signIn, printJson } from "./util";
+import { sleep } from "../../util/sleep";
 
 // Pairing, and what the running Relay has: projects, threads, devices.
 

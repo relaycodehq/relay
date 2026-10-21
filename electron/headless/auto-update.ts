@@ -1,4 +1,5 @@
 import type { UpdateState } from "../../shared/updates";
+import { sleep } from "../util/sleep";
 
 /** What auto-updating needs of ./updater's HeadlessUpdater. */
 export interface Updates {
@@ -36,7 +37,6 @@ export function keepUpdated(
   } = {},
 ) {
   let running: Promise<void> | undefined;
-  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms).unref?.());
   const pass = async () => {
     const found = await updates.check();
     if (found.status !== "available" && found.status !== "ready") return;
@@ -56,7 +56,7 @@ export function keepUpdated(
     for (const since = Date.now(); host.busy();) {
       if (!(await host.enabled())) return;
       if (Date.now() - since > waitAtMost) break;
-      await sleep(poll);
+      await sleep(poll, { unref: true });
     }
     if (!(await host.enabled())) return;
     console.log(`Installing Relay ${ready.version}.`);

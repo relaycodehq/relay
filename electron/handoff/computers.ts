@@ -22,11 +22,11 @@ import {
   runningWslDistros,
 } from "./pipe-route";
 import type { WslHolders } from "./wsl-holder";
+import { sleep } from "../util/sleep";
 
 export type { SavedComputer };
 export { computerName };
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /**
  * How long a call waits for a computer to come online. A WSL distribution's
  * first start after Windows boots can take far longer than waking it later.

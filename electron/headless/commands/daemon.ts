@@ -19,7 +19,8 @@ import {
 import { headlessPaths } from "../paths";
 import { installedService } from "../service";
 import { type Flags } from "./args";
-import { script, sleep, printJson } from "./util";
+import { script, printJson } from "./util";
+import { sleep } from "../../util/sleep";
 
 // Running Relay in the background here: start, stop, status, logs.
 

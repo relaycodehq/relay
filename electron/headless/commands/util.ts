@@ -14,8 +14,6 @@ export const minimumNode = 22;
 /** The desktop app's bundle id, which `relay <folder>` opens on macOS. */
 export const desktopAppId = "dev.relay.experimental";
 
-export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /** An error already explained on the terminal. */
 export class Quiet extends Error {}
 

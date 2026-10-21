@@ -21,6 +21,7 @@ import { DevServers } from "./dev-servers";
 import { pickElement } from "./element-pick";
 import { localPort } from "./local-urls";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
+import { sleep } from "../util/sleep";
 
 /** Where a thread's preview runs and what it loads. */
 export interface PreviewTarget {
@@ -78,7 +79,6 @@ interface Preview {
 const KEPT_CONSOLE = 200;
 /** What an agent's screenshot of a preview never shown is taken at. */
 const UNSHOWN_SIZE = { width: 1280, height: 800 };
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** A preview out of sight this long gives its page's memory back. */
 const UNLOAD_MS =
   (process.env.RELAY_TEST_DATA &&
@@ -674,7 +674,7 @@ export class ThreadPreviews {
   async settled(key: string, timeoutMs: number, signal?: AbortSignal) {
     const end = this.now() + timeoutMs;
     // A load just asked for may not have begun yet.
-    await wait(150);
+    await sleep(150);
     while (!signal?.aborted && this.now() < end) {
       const preview = this.previews.get(key);
       if (!preview) return;
@@ -685,7 +685,7 @@ export class ThreadPreviews {
         !(wc && !wc.isDestroyed() && wc.isLoading())
       )
         return;
-      await wait(150);
+      await sleep(150);
     }
   }
 
@@ -713,7 +713,7 @@ export class ThreadPreviews {
       if (attempt === 10) throw new Error("The preview could not be drawn.");
       if (attempt === 4 && !preview.shown && !preview.popOut)
         await this.prime(preview);
-      await wait(100);
+      await sleep(100);
     }
   }
 
@@ -728,7 +728,7 @@ export class ThreadPreviews {
     const bounds = view.getBounds();
     view.setBounds({ ...bounds, x: 100_000, y: 0 });
     win.contentView.addChildView(view, 0);
-    await wait(50);
+    await sleep(50);
     // The panel may have asked for it meanwhile.
     if (preview.view !== view || preview.shown || preview.popOut) return;
     win.contentView.removeChildView(view);
