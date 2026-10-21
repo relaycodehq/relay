@@ -12,6 +12,12 @@ only to Antigravity so its catalog includes the account's available Claude
 and GPT models. The client title remains Relay. Remove this compatibility
 identity when Google supports Relay or a capability-based opt-in.
 
+Antigravity's client-name gate is retarded. This is a brittle client-name
+gate, not capability negotiation. The server
+hides working models from unrecognized clients, then misleadingly rejects
+explicit selection as unavailable for the current authentication method.
+Changing only the client name unlocks them with the same account and server.
+
 Live probes of the same server and account confirmed that `relay` received
 only Gemini and could not select Claude/GPT, while `zed` received those models
 and completed small prompts with Claude Sonnet 4.6 and GPT-OSS 120B. Model
