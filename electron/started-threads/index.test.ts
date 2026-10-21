@@ -753,9 +753,9 @@ test("a read starts at the newest page that fits, pages back with `before` and o
     page = await read({ before: page.earlier });
     back = [...ids(page), ...back];
   }
-  expect(back.filter((id) => id.startsWith("a"))).toEqual(
-    answers.map((a) => a.id),
-  );
+  // The thread's own first messages have random ids, so pick the answers by theirs.
+  const answerIds = answers.map((a) => a.id);
+  expect(back.filter((id) => answerIds.includes(id))).toEqual(answerIds);
   page = await read({ after: back[0] });
   let on = ids(page);
   while (page.more) {
