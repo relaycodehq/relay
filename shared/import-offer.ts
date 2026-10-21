@@ -3,7 +3,7 @@
 import { z } from "zod";
 import type { ImportApp, ImportChat } from "./project-import";
 import type { Project } from "./projects";
-import { moveProjectInList } from "./project-folders";
+import { moveProjectInList, projectFolderSchema } from "./project-folders";
 
 export interface ImportOfferProject {
   /** The source project's key, as ProjectImports lists it. */
@@ -47,7 +47,7 @@ export const ghostKey = (id: string) =>
 export const importPlacementSchema = z
   .object({
     key: z.string().min(1).max(100),
-    group: z.string().max(400),
+    group: projectFolderSchema,
     before: z.string().min(1).max(200).nullable(),
   })
   .strict();
@@ -79,7 +79,8 @@ export const offeredPicks = (offer: ImportOffer): ImportPicks =>
 /**
  * The sidebar's projects with the offer's new ones among them, as stand-ins
  * the user drags about: each in its group, above what `order` says follows
- * it. `order` lists real and stand-in ids as the sidebar last showed them.
+ * it. `order` lists real and stand-in ids as the sidebar last showed them;
+ * a stand-in it doesn't list ends its group.
  */
 export function withGhosts<T extends Pick<Project, "id" | "folder">>(
   real: T[],
@@ -101,6 +102,15 @@ export function withGhosts<T extends Pick<Project, "id" | "folder">>(
         )?.id ?? null;
     list = moveProjectInList([...list, ghost], ghost.id, folder, before);
   }
+  // One ticked again since the last move wasn't listed then: it ends its group.
+  for (const ghost of ghosts)
+    if (!order.some((n) => n.id === ghost.id))
+      list = moveProjectInList(
+        [...list, ghost],
+        ghost.id,
+        ghost.folder ?? "",
+        null,
+      );
   return list;
 }
 

@@ -33,6 +33,7 @@ export function useProjectGroups(
   /** An import plan's new projects stand among `projects`; it hears every move. */
   planned?: {
     move: (id: string, folder: string, before: string | null) => void;
+    regroup: (from: string, to: string) => void;
   },
 ) {
   const qc = useQueryClient();
@@ -116,10 +117,13 @@ export function useProjectGroups(
     renameGroup(path: string, name: string, open: boolean) {
       const to = joinGroup(parentGroup(path), name);
       setOpen(groupKey(to), open);
+      planned?.regroup(path, to);
       void change(() => api.renameProjectGroup(path, to));
     },
-    removeGroup: (path: string) =>
-      void change(() => api.removeProjectGroup(path)),
+    removeGroup(path: string) {
+      planned?.regroup(path, parentGroup(path));
+      void change(() => api.removeProjectGroup(path));
+    },
     moveGroup(
       path: string,
       target: { path: string; where: "before" | "after" },

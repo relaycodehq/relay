@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { Store } from "../app/store";
@@ -170,4 +170,114 @@ it("places a new project above another new one the user put below it", async () 
       .filter((p) => p.folder === "Work")
       .map((p) => p.path),
   ).toEqual([join(dir, "beta"), join(dir, "alpha")]);
+});
+
+it("keeps the import marker in the thread's file, which a restart reads", async () => {
+  await mkdir(join(dir, "scratch"));
+  const scratch = await projects.add(join(dir, "scratch"), null, {});
+  const thread = await chats.create(scratch.id, { kind: "project" });
+  await chats.importOffers.open(thread.id, "codex");
+  const saved = JSON.parse(
+    await readFile(join(dir, "chats", `${thread.id}.json`), "utf8"),
+  );
+  expect(saved.importFrom).toBe("codex");
+});
+
+it("leaves a project added since the offer where it is", async () => {
+  await source("website", 1);
+  const { thread, keys } = await offered((k) => [
+    {
+      key: k.website!,
+      name: "website",
+      path: join(dir, "website"),
+      group: "Work",
+      chats: [],
+      picked: [],
+    },
+  ]);
+  const website = await projects.add(join(dir, "website"), null, {
+    exact: true,
+  });
+  await projects.move(website.id, "Mine", null);
+  await chats.importOffers.run(thread.id, "answer", {
+    picks: { [keys.website!]: [] },
+    placements: [{ key: keys.website!, group: "Work", before: null }],
+  });
+  expect(
+    (await projects.list(null)).find((p) => p.id === website.id)?.folder,
+  ).toBe("Mine");
+});
+
+it("puts a project placed above one that didn't come in above what that one would have sat above", async () => {
+  await source("alpha", 1);
+  await source("beta", 1);
+  const backend = await projects.add(await source("backend", 0), null, {
+    exact: true,
+  });
+  const zeta = await projects.add(await source("zeta", 0), null, {
+    exact: true,
+  });
+  await projects.move(backend.id, "Work", null);
+  await projects.move(zeta.id, "Work", null);
+  const { thread, keys } = await offered((k) => [
+    {
+      key: k.alpha!,
+      name: "alpha",
+      path: join(dir, "alpha"),
+      group: "Work",
+      chats: [],
+      picked: [],
+    },
+    {
+      key: k.beta!,
+      name: "beta",
+      path: join(dir, "beta"),
+      group: "Work",
+      chats: [],
+      picked: [],
+    },
+  ]);
+  // Beta's folder goes before the import, so it fails.
+  await rm(join(dir, "beta"), { recursive: true });
+  const result = await chats.importOffers.run(thread.id, "answer", {
+    picks: { [keys.alpha!]: [], [keys.beta!]: [] },
+    placements: [
+      { key: keys.alpha!, group: "Work", before: ghostId(keys.beta!) },
+      { key: keys.beta!, group: "Work", before: zeta.id },
+    ],
+  });
+  expect(result.failures.map((f) => f.key)).toEqual([keys.beta]);
+  expect(
+    (await projects.list(null))
+      .filter((p) => p.folder === "Work")
+      .map((p) => p.path),
+  ).toEqual([backend.path, join(dir, "alpha"), zeta.path]);
+});
+
+it("records an import whose projects couldn't be placed, so it isn't offered again", async () => {
+  await source("website", 1);
+  const { thread, keys, storage } = await offered((k) => [
+    {
+      key: k.website!,
+      name: "website",
+      path: join(dir, "website"),
+      group: "Work",
+      chats: [],
+      picked: [],
+    },
+  ]);
+  vi.spyOn(projects, "move").mockRejectedValueOnce(new Error("disk full"));
+  await chats.importOffers.run(thread.id, "answer", {
+    picks: { [keys.website!]: [] },
+    placements: [{ key: keys.website!, group: "Work", before: null }],
+  });
+  const done = (await storage.load(thread.id)).messages.at(-1)!.importOffer!
+    .done!;
+  expect(done.imported).toHaveProperty(keys.website!);
+  expect(done.failures).toEqual([
+    {
+      key: keys.website,
+      message: expect.stringContaining("disk full"),
+    },
+  ]);
 });

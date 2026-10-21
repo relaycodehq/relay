@@ -1,6 +1,10 @@
 import { expect, it, vi } from "vitest";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
-import type { AgentActivity, ProjectChat } from "../../shared/projects";
+import type {
+  AgentActivity,
+  ChatMessage,
+  ProjectChat,
+} from "../../shared/projects";
 import { readTurn, turnHeading } from "../../shared/agent-trace";
 
 const call = (id: string, parentId?: string): AgentActivity =>
@@ -185,5 +189,26 @@ it("moves the version of a change that came just before a checkpoint, so the che
   vi.advanceTimersByTime(10);
   expect(saved).toEqual([{ body: "ab", version: published + 1 }]);
   answer.end();
+  vi.useRealTimers();
+});
+
+it("leaves an import offer out of what streams, and under the answer once it ends", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const emitted: ChatMessage[] = [];
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    (m) => emitted.push(m),
+    () => {},
+  );
+  answer.importOffer({ id: "offer", app: "codex", projects: [] });
+  answer.text("Tick what you want.");
+  vi.advanceTimersByTime(1000);
+  expect(emitted.length).toBeGreaterThan(0);
+  expect(emitted.every((m) => !m.importOffer)).toBe(true);
+  answer.end();
+  expect(emitted.at(-1)!.importOffer?.id).toBe("offer");
   vi.useRealTimers();
 });

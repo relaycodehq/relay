@@ -11,7 +11,10 @@ import {
   type ImportOffer,
   type ImportPicks,
 } from "../../../shared/import-offer";
-import { moveProjectInList } from "../../../shared/project-folders";
+import {
+  moveProjectInList,
+  rebaseGroup,
+} from "../../../shared/project-folders";
 import type { Project } from "../../../shared/projects";
 
 export interface ImportPlan {
@@ -138,6 +141,27 @@ export function movePlanned(
       ...current.offer,
       projects: current.offer.projects.map((p) =>
         groups.has(p.key) ? { ...p, group: groups.get(p.key)! } : p,
+      ),
+    },
+  });
+  changed();
+}
+
+/** Group `from` became `to` (its parent when removed): the plan's new projects in it go along. */
+export function regroupPlanned(plan: ImportPlan, from: string, to: string) {
+  const current = plans.get(plan.key) ?? plan;
+  const rebase = (folder = "") => (folder ? rebaseGroup(folder, from, to) : "");
+  plans.set(plan.key, {
+    ...current,
+    ...(current.order && {
+      order: current.order.map(({ id, folder }) =>
+        rebase(folder) ? { id, folder: rebase(folder) } : { id },
+      ),
+    }),
+    offer: {
+      ...current.offer,
+      projects: current.offer.projects.map((p) =>
+        p.projectId ? p : { ...p, group: rebase(p.group) },
       ),
     },
   });

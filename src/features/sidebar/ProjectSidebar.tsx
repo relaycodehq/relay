@@ -20,6 +20,7 @@ import {
   movePlanned,
   plannedChats,
   plannedProjects,
+  regroupPlanned,
   useShownPlan,
 } from "../import-offer/import-plan";
 import { useProjectDrag } from "./useProjectDrag";
@@ -128,6 +129,7 @@ export function ProjectSidebar({
     plan && {
       move: (id, folder, before) =>
         movePlanned(plan, treeProjects, id, folder, before),
+      regroup: (from, to) => regroupPlanned(plan, from, to),
     },
   );
   const drag = useProjectDrag(groups, folds.setOpen);

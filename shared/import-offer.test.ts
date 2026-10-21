@@ -19,6 +19,15 @@ test("stand-ins go where the sidebar last showed them, real projects as they are
     "relay",
     game.id,
   ]);
+  // One ticked again after the move isn't in the order: it ends its group.
+  const design = p(ghostId("design"), "Work");
+  expect(ids(withGhosts(real, [web, design, game], order))).toEqual([
+    web.id,
+    "backend",
+    design.id,
+    "relay",
+    game.id,
+  ]);
   // A real project removed since doesn't leave a stand-in stranded.
   expect(ids(withGhosts([p("relay")], [web], order))).toEqual([
     "relay",

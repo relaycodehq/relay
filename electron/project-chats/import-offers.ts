@@ -2,6 +2,7 @@
 // what its agent reads and offers (import_sources, offer_import), and the
 // import the user runs from that offer. The import itself is ProjectImports'.
 import { randomUUID } from "node:crypto";
+import { errorMessage } from "../../shared/error-message";
 import {
   freshChats,
   ghostKey,
@@ -15,11 +16,15 @@ import {
   type ImportChat,
   type ProjectImportResult,
 } from "../../shared/project-import";
+import { projectFolderSchema } from "../../shared/project-folders";
 import type { RelayToolArgs } from "../relay-mcp";
 import type { ChatCore } from "./core";
 import type { ProjectImports } from "./project-import";
 import { assertHere } from "./handoff";
 import { chatSummary } from "./storage";
+
+/** Projects listed at once; each reads its sessions from the whole history. */
+const LIST_BATCH = 4;
 
 const day = (t: number) => new Date(t).toISOString().slice(0, 10);
 
@@ -32,11 +37,9 @@ export class ImportOffers {
   /** Marks a new thread as opened to import `app`'s history, before its first turn. */
   async open(id: string, app: ImportApp) {
     const chat = await this.core.storage.load(id);
-    await this.core.store.update((s) => {
-      s.chats!.find((c) => c.id === id)!.importFrom = app;
-    });
     chat.importFrom = app;
-    this.core.storage.summariesChanged(chat.projectId);
+    // In the thread's file, which a reload reads; the summary follows it.
+    await this.core.storage.save(chat);
     return chatSummary(chat);
   }
 
@@ -47,7 +50,7 @@ export class ImportOffers {
       const source = projects.find((p) => p.key === key);
       if (!source)
         throw new Error(`There is no project ${key}; list them first.`);
-      const chats = await this.imports.chats(app, key);
+      const chats = await this.imports.sourceChats(app, source);
       return [
         `${source.name} (${source.path}): ${chats.length} chats, newest first`,
         ...chats.map(
@@ -56,14 +59,20 @@ export class ImportOffers {
         ),
       ].join("\n");
     }
-    const lines = await Promise.all(
-      projects.map(async (p) => {
-        const chats = p.missing ? [] : await this.imports.chats(app, p.key);
-        const fresh = chats.filter((c) => !c.chatId);
-        const newest = chats.reduce((t, c) => Math.max(t, c.updated), 0);
-        return `${p.key}  ${p.name}  ${p.path}  ${fresh.length} new of ${chats.length} chats${newest ? `, newest ${day(newest)}` : ""}${p.projectId ? "  [project in Relay]" : ""}${p.missing ? "  [folder missing]" : ""}`;
-      }),
-    );
+    const lines: string[] = [];
+    for (let at = 0; at < projects.length; at += LIST_BATCH)
+      lines.push(
+        ...(await Promise.all(
+          projects.slice(at, at + LIST_BATCH).map(async (p) => {
+            const chats = p.missing
+              ? []
+              : await this.imports.sourceChats(app, p);
+            const fresh = chats.filter((c) => !c.chatId);
+            const newest = chats.reduce((t, c) => Math.max(t, c.updated), 0);
+            return `${p.key}  ${p.name}  ${p.path}  ${fresh.length} new of ${chats.length} chats${newest ? `, newest ${day(newest)}` : ""}${p.projectId ? "  [project in Relay]" : ""}${p.missing ? "  [folder missing]" : ""}`;
+          }),
+        )),
+      );
     return lines.length
       ? `${importAppNames[app]} on this computer, key first:\n${lines.join("\n")}`
       : `${importAppNames[app]} has no projects on this computer.`;
@@ -93,19 +102,25 @@ export class ImportOffers {
         if (!source || source.missing) unknown.push(asked.key);
         continue;
       }
-      const chats: ImportChat[] = await this.imports.chats(app, source.key);
+      const group = projectFolderSchema.safeParse(
+        asked.group
+          ?.split("/")
+          .map((g) => g.trim())
+          .filter(Boolean)
+          .join("/") ?? "",
+      );
+      if (!group.success)
+        throw new Error(
+          `"${asked.group}" can't be a group: use names separated by /, up to eight levels, without . or .. or backslashes.`,
+        );
+      const chats: ImportChat[] = await this.imports.sourceChats(app, source);
       const known = new Set(chats.filter((c) => !c.chatId).map((c) => c.id));
       projects.push({
         key: source.key,
         name: source.name,
         path: source.path,
         ...(source.projectId ? { projectId: source.projectId } : {}),
-        group:
-          asked.group
-            ?.split("/")
-            .map((g) => g.trim())
-            .filter(Boolean)
-            .join("/") ?? "",
+        group: group.data,
         chats,
         picked: asked.chats
           ? asked.chats.filter((id) => known.has(id))
@@ -118,7 +133,7 @@ export class ImportOffers {
       );
     active.importOffer({ id: randomUUID(), app, projects });
     const chats = projects.reduce((n, p) => n + p.picked.length, 0);
-    return `The list is in your answer: ${projects.length} projects, ${chats} chats ticked.${unknown.length ? ` Left out, not found: ${unknown.join(", ")}.` : ""} The user imports from it.`;
+    return `The list goes under your answer when it ends: ${projects.length} projects, ${chats} chats ticked.${unknown.length ? ` Left out, not found: ${unknown.join(", ")}.` : ""} The user imports from it.`;
   }
 
   /** Imports what the user ticked in an offer, then puts the new projects where they left them. */
@@ -140,8 +155,15 @@ export class ImportOffers {
         return [{ key, chats: chats.filter((c) => offered.has(c)) }];
       });
       if (!selections.length) throw new Error("Tick something to import.");
+      // What's in Relay before, so only projects this import adds are moved.
+      const had = new Set(
+        (this.core.store.get().projects ?? [])
+          .filter((p) => !p.removed)
+          .map((p) => p.id),
+      );
       const result = await this.imports.run(offer.app, selections);
-      await this.place(offer, input, result);
+      // The import happened: a project that can't be placed is a failure, not a reason to offer it again.
+      const misplaced = await this.place(offer, input, result, had);
       offer.done = {
         at: Date.now(),
         imported: Object.fromEntries(
@@ -152,7 +174,7 @@ export class ImportOffers {
             ),
           ]),
         ),
-        failures: result.failures,
+        failures: [...result.failures, ...misplaced],
       };
       message.version++;
       await this.core.storage.save(chat);
@@ -161,30 +183,52 @@ export class ImportOffers {
     });
   }
 
-  /** Last first, so the project each sits above is already where it goes. */
+  /**
+   * Puts the projects this import added (not in `had`) where the user left
+   * them, last first, so the project each sits above is already where it goes.
+   * Returns the ones that couldn't be moved.
+   */
   private async place(
     offer: ImportOffer,
     input: RunImportOffer,
     result: ProjectImportResult,
+    had: Set<string>,
   ) {
     const made = new Map(
       result.projects
-        .filter((p) => !offer.projects.find((o) => o.key === p.key)?.projectId)
+        .filter((p) => !had.has(p.project.id))
         .map((p) => [p.key, p.project.id]),
     );
+    // Above a stand-in that didn't come in: above whatever it would have sat above.
+    const anchor = (before: string | null) => {
+      const passed = new Set<string>();
+      for (let key = before && ghostKey(before); key; ) {
+        if (made.has(key)) return made.get(key)!;
+        if (passed.has(key)) return null;
+        passed.add(key);
+        before = input.placements.find((p) => p.key === key)?.before ?? null;
+        key = before && ghostKey(before);
+      }
+      return before;
+    };
+    const failures: ProjectImportResult["failures"] = [];
+    const move = async (key: string, group: string, before: string | null) => {
+      try {
+        await this.core.projects.move(made.get(key)!, group, before);
+      } catch (e) {
+        failures.push({
+          key,
+          message: `Imported, but it couldn't be put where you left it: ${errorMessage(e)}`,
+        });
+      }
+    };
     const placements = input.placements.filter((p) => made.has(p.key));
-    for (const placement of [...placements].reverse()) {
-      const below = placement.before && ghostKey(placement.before);
-      const before = below ? (made.get(below) ?? null) : placement.before;
-      await this.core.projects.move(
-        made.get(placement.key)!,
-        placement.group,
-        before,
-      );
-    }
+    for (const placement of [...placements].reverse())
+      await move(placement.key, placement.group, anchor(placement.before));
     // Any the user's layout didn't place go to the end of their group, in the offer's order.
     for (const { key, group } of offer.projects)
       if (made.has(key) && !placements.some((p) => p.key === key))
-        await this.core.projects.move(made.get(key)!, group, null);
+        await move(key, group, null);
+    return failures;
   }
 }

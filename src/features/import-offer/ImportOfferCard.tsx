@@ -54,6 +54,14 @@ function Tick({
 const count = (picks: ImportPicks) =>
   Object.values(picks).reduce((n, ids) => n + ids.length, 0);
 
+/** The same projects with the same chats, whatever their order. */
+const samePicks = (a: ImportPicks, b: ImportPicks) =>
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.entries(a).every(
+    ([key, ids]) =>
+      b[key]?.length === ids.length && ids.every((id) => b[key]!.includes(id)),
+  );
+
 /**
  * What an agent offered to import, laid out like deep review's findings:
  * projects and their chats to tick, then Import. The new projects stand in
@@ -98,6 +106,7 @@ export function ImportOfferCard({
   const everything = allPicks(offer);
   const chosen = count(picks);
   const total = count(everything);
+  const all = samePicks(picks, everything);
   const locked = busy || running || !!done;
   const pick = (key: string, ids: string[] | undefined) => {
     const next = { ...picks };
@@ -197,7 +206,9 @@ export function ImportOfferCard({
                 <ul className="import-offer-chats">
                   {p.chats.map((chat) => {
                     const have = !!chat.chatId;
-                    const ticked = have || !!on?.includes(chat.id);
+                    const ticked =
+                      have ||
+                      !!(done ? imported : on)?.includes(chat.id);
                     const failure = failed.find((f) => f.chatId === chat.id);
                     return (
                       <li key={chat.id}>
@@ -219,7 +230,7 @@ export function ImportOfferCard({
                                 p.key,
                                 v
                                   ? [...rest, chat.id]
-                                  : rest.length || p.projectId
+                                  : rest.length || !p.projectId
                                     ? rest
                                     : undefined,
                               );
@@ -255,10 +266,10 @@ export function ImportOfferCard({
           <span className="spacer" />
           <button
             type="button"
-            disabled={locked || !Object.keys(picks).length || chosen === total}
+            disabled={locked || !Object.keys(picks).length || all}
             onClick={() => void run(picks)}
           >
-            Import selected{chosen && chosen !== total ? ` (${chosen})` : ""}
+            Import selected{chosen && !all ? ` (${chosen})` : ""}
           </button>
           <button
             type="button"

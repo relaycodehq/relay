@@ -96,6 +96,8 @@ export class AnswerRecorder {
   private flush: ReturnType<typeof setTimeout> | null = null;
   private checkpoint: ReturnType<typeof setTimeout> | null = null;
   private model?: TurnModel;
+  /** The import offer waiting for the answer to end; see `importOffer`. */
+  private offer?: ImportOffer;
   /** Stopped by the user; see `stop`. */
   stopped = false;
   constructor(
@@ -178,11 +180,14 @@ export class AnswerRecorder {
     (this.message.renders ??= []).push(render);
     this.changed();
   }
-  /** What the agent offers to import (offer_import), under the reply; a later offer replaces it. */
+  /**
+   * What the agent offers to import (offer_import), under the reply once it
+   * ends; a later offer replaces it. It can list thousands of chats, too many
+   * to copy into every publish and checkpoint while the agent writes on.
+   */
   importOffer(offer: ImportOffer) {
     if (this.stopped) return;
-    this.message.importOffer = offer;
-    this.changed();
+    this.offer = offer;
   }
   /** The thread's preview as the agent left it, under the reply; a later open replaces it. */
   preview(preview: TurnPreview) {
@@ -272,6 +277,8 @@ export class AnswerRecorder {
   }
   /** The turn ended with the message's status: what still ran ends with it, and the window hears it now. */
   end() {
+    if (this.offer) this.message.importOffer = this.offer;
+    this.offer = undefined;
     const { status } = this.message;
     settleActivities(
       this.message,
