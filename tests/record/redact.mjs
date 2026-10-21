@@ -10,7 +10,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { execFileSync } from "node:child_process";
 import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
-import { accountKeys, idKeys, secretKeys } from "./redact-keys.mjs";
+import { accountKeys, accountTier, idKeys, secretKeys } from "./redact-keys.mjs";
 
 const raw = resolve(process.argv[2] ?? "/tmp/relay-replays-raw");
 const only = process.argv.slice(3);
@@ -60,6 +60,7 @@ function scrubValue(key, value, names) {
   if (value === null || value === undefined || value === "") return value;
   if (secretKeys.test(key) && typeof value === "string") return "REDACTED";
   if (idKeys.test(key) && typeof value === "string") return "replay-id";
+  if (accountTier(key, value)) return typeof value === "string" ? "replay" : null;
   if (accountKeys.test(key)) return typeof value === "string" ? "replay" : null;
   if (Array.isArray(value))
     return value.filter((v) => !fromAccount(v, names)).map((v) => scrubValue("", v, names));

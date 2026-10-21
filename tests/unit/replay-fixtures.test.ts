@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 import {
   accountKeys,
+  accountTier,
   idKeys,
   secretKeys,
   // @ts-expect-error A plain module of patterns.
@@ -52,7 +53,8 @@ function keyLeaks(value: unknown, found: string[] = []): string[] {
         (idKeys.test(key) && v === "replay-id") ||
         (secretKeys.test(key) && v === "REDACTED") ||
         (accountKeys.test(key) && v === "replay");
-      if (
+      if (accountTier(key, v)) found.push(key);
+      else if (
         typeof v !== "object" &&
         !kept &&
         (idKeys.test(key) ||
