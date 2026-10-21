@@ -1,3 +1,4 @@
+import { UncertainSteerError } from "../agents/errors";
 import { rm } from "node:fs/promises";
 import type {
   ChatMessage,
@@ -221,7 +222,16 @@ export class ChatQueue {
         })),
         asked.question,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof UncertainSteerError) {
+        message.status = "failed";
+        message.error = error.message;
+        message.unread = false;
+        chat.queue = chat.queue!.filter((q) => q !== next);
+        await this.core.storage.save(chat);
+        this.core.emit({ chatId: chat.id, message });
+        return;
+      }
       chat.messages.splice(chat.messages.indexOf(message), 1);
       // Sent later as its own turn, which saves its images again.
       await Promise.all(
