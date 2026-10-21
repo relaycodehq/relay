@@ -87,7 +87,10 @@ type Chats = Pick<
   | "askWithPage"
   | "enterWorktree"
   | "notes"
-> & { liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox"> };
+> & {
+  liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
+  importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
+};
 
 /** Moving threads to the user's other computers, as the thread header does. */
 export interface ThreadHandoffs {
@@ -247,6 +250,20 @@ export class StartedThreads {
         );
       case "restart_relay":
         return this.restartRelay(lead, input, signal);
+      case "import_sources":
+      case "offer_import": {
+        const offers = this.chats.importOffers;
+        if (!lead.importFrom || !offers)
+          return toolText(
+            "Only a thread opened to import another app's history can.",
+            true,
+          );
+        return toolText(
+          name === "import_sources"
+            ? await offers.sources(lead.importFrom, input.project)
+            : await offers.offer(lead.id, lead.importFrom, input),
+        );
+      }
       case "report_relay_problem":
         if (!this.reportProblem)
           return toolText("This Relay has no window to report from.", true);

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { Project } from "../../shared/projects";
+import { importAppNames, type ImportApp } from "../../shared/project-import";
 import { api } from "../lib/api";
 import { sendDraft } from "../features/composer/draft-send";
 import {
@@ -11,6 +12,7 @@ import {
   writeDraft,
 } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
+import { SCRATCH_CHATS } from "../lib/chat-events";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import {
   loadComposerSettings,
@@ -121,6 +123,26 @@ export function useNewThreads(
       onError(e);
     }
   }
+  /** A Scratchpad thread whose agent imports `app`'s history, its request started for the user to finish. */
+  async function importThread(app: ImportApp) {
+    if (lock.blocked()) return;
+    try {
+      const { project: p, chat } = await api.startImportThread(app);
+      setAdding(false);
+      writeDraft(
+        threadDraftKey(chat.id),
+        `Import my ${importAppNames[app]} history into Relay. `,
+      );
+      await Promise.all([
+        projects.refetch(),
+        qc.invalidateQueries({ queryKey: SCRATCH_CHATS }),
+      ]);
+      if (nav.navigate(p, chat))
+        requestAnimationFrame(() => requestAnimationFrame(() => focus()));
+    } catch (e) {
+      onError(e);
+    }
+  }
   function open(p: Project) {
     if (!nav.navigate(p, undefined, true)) return;
     // After the new thread's composer mounts and a closing picker hands focus back.
@@ -167,6 +189,7 @@ export function useNewThreads(
     pick,
     scratch,
     scratchDraft,
+    importThread,
     open,
     start,
   };

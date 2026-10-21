@@ -6,12 +6,14 @@ import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 import { relayPrompt, relayPromptList } from "./prompts";
 import {
   DEV_PARAM,
+  IMPORT_PARAM,
   PAGES_PARAM,
   relayToolList,
   startedToolList,
   STARTED_PATH,
   toolText,
   withoutDev,
+  withoutImports,
   withoutPages,
   type ToolResult,
 } from "./tools";
@@ -29,6 +31,8 @@ const toolsFor = (url: URL) => {
     tools = withoutPages(tools);
   if (tools && url.searchParams.get(DEV_PARAM) !== "on")
     tools = withoutDev(tools);
+  if (tools && url.searchParams.get(IMPORT_PARAM) !== "on")
+    tools = withoutImports(tools);
   return tools;
 };
 /**

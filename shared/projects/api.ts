@@ -1,3 +1,4 @@
+import type { RunImportOffer } from "../import-offer";
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
@@ -139,6 +140,16 @@ export interface ProjectFoldersApi {
   importSelectedProjects(
     app: ImportApp,
     selections: ImportSelection[],
+  ): Promise<ProjectImportResult>;
+  /** A Scratchpad thread opened to import `app`'s history with an agent, which gets the import tools. */
+  startImportThread(
+    app: ImportApp,
+  ): Promise<{ project: Project; chat: ChatSummary }>;
+  /** Imports what the user ticked in the list an agent offered (offer_import), and places the new projects. */
+  runImportOffer(
+    chatId: string,
+    messageId: string,
+    input: RunImportOffer,
   ): Promise<ProjectImportResult>;
   inspectFolder(path: string): Promise<FolderInfo>;
   /** The folders inside `dir`, for typing a path; `~` stands for home. */

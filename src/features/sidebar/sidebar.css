@@ -440,6 +440,26 @@
   color: var(--muted);
   font-size: 11px;
 }
+/* Chats an import offer would bring in; on its stand-in rows, the projects it would add. */
+.sb .sb-planned-chats {
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.sb .sb-project-name > .sb-planned-chats {
+  overflow: visible;
+}
+.sb .sb-planned > .sb-project-row {
+  opacity: 0.55;
+  cursor: grab;
+}
+.sb .sb-planned .sb-project-name {
+  align-items: center;
+}
+.sb .sb-planned > .sb-project-row:hover {
+  opacity: 1;
+}
 .sb .sb-project-name.offline {
   opacity: 0.55;
 }

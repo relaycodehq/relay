@@ -69,7 +69,8 @@ export class ProjectImports {
     return this.sourceChats(app, source, folder);
   }
 
-  private async sourceChats(
+  /** A listed source's chats, without listing the sources again to find it. */
+  async sourceChats(
     app: ImportApp,
     source: ImportProject,
     folder?: string,

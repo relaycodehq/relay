@@ -1,0 +1,65 @@
+/* An agent's import offer: the findings tray's rows, with chats under each project. */
+.import-offer {
+  margin-top: 14px;
+}
+.import-offer-project[data-off] .deep-review-task-title {
+  color: var(--muted);
+}
+.import-offer-where {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.import-offer-chats {
+  display: grid;
+  gap: 1px;
+  margin: 2px 0 0;
+  padding: 0 0 0 24px;
+  list-style: none;
+}
+.import-offer-chat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 3px 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  cursor: pointer;
+}
+.import-offer-chat > svg {
+  flex: none;
+  color: var(--muted);
+}
+.import-offer-chat input {
+  transform: scale(0.85);
+}
+.import-offer-chat-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.import-offer-chat-meta {
+  flex: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.import-offer-chat[data-have] {
+  cursor: default;
+}
+.import-offer-chat:is([data-have], [data-off]) .import-offer-chat-title {
+  color: var(--muted);
+}
+.import-offer-failure {
+  margin: 2px 0 4px 24px;
+  color: #e7777d;
+  font-size: 12px;
+}
+.import-offer-hint {
+  color: var(--muted);
+  font-size: 12px;
+}

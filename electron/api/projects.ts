@@ -3,6 +3,7 @@ import {
   importAppSchema,
   importSelectionSchema,
 } from "../../shared/project-import";
+import { runImportOfferSchema } from "../../shared/import-offer";
 import { app, dialog, nativeImage, shell } from "electron";
 import { lstat, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -110,6 +111,22 @@ export function projectHandlers(ctx: ApiContext) {
     importSelectedProjects: takes(
       [importAppSchema, z.array(importSelectionSchema).min(1).max(1000)],
       (app, selections) => projectChats.imports.run(app, selections),
+    ),
+    startImportThread: takes([importAppSchema], async (source) => {
+      const project = await projects.scratch(
+        join(app.getPath("userData"), "Scratchpad"),
+        (id) => projectChats.list(id).some((c) => !chatIsEmpty(c)),
+      );
+      const made = await projectChats.create(project.id, { kind: "project" });
+      return {
+        project,
+        chat: await projectChats.importOffers.open(made.id, source),
+      };
+    }),
+    runImportOffer: takes(
+      [idSchema, z.string().min(1).max(200), runImportOfferSchema],
+      (chatId, messageId, input) =>
+        projectChats.importOffers.run(chatId, messageId, input),
     ),
     projectIcon: takes([idSchema], async (id) =>
       projectIcon(await projects.root(id), (path) => {

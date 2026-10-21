@@ -29,6 +29,8 @@ const methods = [
   "importProjects",
   "importProjectChats",
   "importSelectedProjects",
+  "startImportThread",
+  "runImportOffer",
   "addProjectAt",
   "cloneProject",
   "createProject",

@@ -536,6 +536,7 @@ export default function ProjectShell() {
           initialPage={starts.adding}
           onClose={() => starts.setAdding(false)}
           onDone={(p) => void starts.added(p)}
+          onImportWithAgent={(app) => void starts.importThread(app)}
         />
       )}
       {signIn.open && (
