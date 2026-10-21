@@ -82,7 +82,9 @@ export async function readWorkingFile(
     if (!stat.isFile() || stat.nlink !== 1)
       throw new Error("Choose a regular, unlinked file.");
     if (stat.size > textLimit) throw new NotText(tooLarge);
-    const bytes = Buffer.alloc(textLimit + 1);
+    // Keep one extra byte to detect growth past the text limit. Most files
+    // fit their stat exactly; only grow the buffer if a writer overtook it.
+    let bytes = Buffer.alloc(stat.size + 1);
     let length = 0;
     while (length < bytes.length) {
       const { bytesRead } = await handle.read(
@@ -93,6 +95,13 @@ export async function readWorkingFile(
       );
       if (!bytesRead) break;
       length += bytesRead;
+      if (length === bytes.length && length <= textLimit) {
+        const larger = Buffer.alloc(
+          Math.min(textLimit + 1, Math.max(bytes.length * 2, 16 * 1024)),
+        );
+        bytes.copy(larger, 0, 0, length);
+        bytes = larger;
+      }
     }
     const value = bytes.subarray(0, length);
     return {
