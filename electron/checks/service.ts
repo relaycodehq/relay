@@ -29,6 +29,7 @@ import {
   type SymbolQuery,
   type SymbolResult,
 } from "../../shared/checks";
+import { LineBuffer } from "../util/line-buffer";
 const resultSchema = z.object({
   seq: z.number().int().nonnegative(),
   diagnostics: z
@@ -447,80 +448,76 @@ export class ProjectChecks {
       );
       s.timer.unref();
     };
-    let buffer = "",
-      stderr = "";
+    let stderr = "";
     if (!paused) deadline();
-    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
-      buffer += chunk;
-      if (Buffer.byteLength(buffer) > 8 * 1024 * 1024) {
-        fail("Compiler output exceeded the live-check limit.");
+    const lines = new LineBuffer((line) => {
+      if (!line.trim()) return;
+      if (
+        this.sessions.get(key) !== s ||
+        ["stopped", "failed"].includes(s.state.status)
+      )
         return;
-      }
-      let index: number;
-      while ((index = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, index);
-        buffer = buffer.slice(index + 1);
-        if (!line.trim()) continue;
-        if (
-          this.sessions.get(key) !== s ||
-          ["stopped", "failed"].includes(s.state.status)
-        )
-          continue;
-        try {
-          const value = JSON.parse(line);
-          if (value.type === "memory") {
-            if (Number.isInteger(value.used) && value.used >= 0)
-              s.state.memory = { limit: limits.memoryMb, used: value.used };
-            continue;
-          }
-          if (value.type === "symbol") {
-            const request = s.requests.get(value.requestId);
-            if (request) {
-              clearTimeout(request.timer);
-              s.requests.delete(value.requestId);
-              if (value.error || value.seq !== s.seq)
+      try {
+        const value = JSON.parse(line);
+        if (value.type === "memory") {
+          if (Number.isInteger(value.used) && value.used >= 0)
+            s.state.memory = { limit: limits.memoryMb, used: value.used };
+          return;
+        }
+        if (value.type === "symbol") {
+          const request = s.requests.get(value.requestId);
+          if (request) {
+            clearTimeout(request.timer);
+            s.requests.delete(value.requestId);
+            if (value.error || value.seq !== s.seq)
+              request.reject(
+                new Error(
+                  value.error ??
+                    "The file changed while finding the symbol. Retry.",
+                ),
+              );
+            else {
+              const parsed = symbolResultSchema.safeParse(value.result);
+              if (parsed.success) request.resolve(parsed.data);
+              else
                 request.reject(
                   new Error(
-                    value.error ??
-                      "The file changed while finding the symbol. Retry.",
+                    "The language service returned an invalid symbol response.",
                   ),
                 );
-              else {
-                const parsed = symbolResultSchema.safeParse(value.result);
-                if (parsed.success) request.resolve(parsed.data);
-                else
-                  request.reject(
-                    new Error(
-                      "The language service returned an invalid symbol response.",
-                    ),
-                  );
-              }
             }
-            continue;
           }
-          if (value.seq !== s.seq) continue;
-          if (value.type === "checking" || value.type === "invalidated") {
-            // Do not show stale line positions while buffers or files change.
-            s.state.files = {};
-            s.state.diagnostics = [];
-            if (!s.paused) {
-              s.state.status = "checking";
-              deadline();
-            }
-          } else if (value.type === "result") {
-            const r = resultSchema.parse(value);
-            clearTimeout(s.timer);
-            Object.assign(s.state, {
-              ...r,
-              status: s.paused ? "paused" : "ready",
-              checkedAt: Date.now(),
-              message: r.message,
-            });
-          } else if (value.type === "failure")
-            fail(String(value.message).slice(0, 2000));
-        } catch {
-          fail("The project compiler returned an invalid diagnostic response.");
+          return;
         }
+        if (value.seq !== s.seq) return;
+        if (value.type === "checking" || value.type === "invalidated") {
+          // Do not show stale line positions while buffers or files change.
+          s.state.files = {};
+          s.state.diagnostics = [];
+          if (!s.paused) {
+            s.state.status = "checking";
+            deadline();
+          }
+        } else if (value.type === "result") {
+          const r = resultSchema.parse(value);
+          clearTimeout(s.timer);
+          Object.assign(s.state, {
+            ...r,
+            status: s.paused ? "paused" : "ready",
+            checkedAt: Date.now(),
+            message: r.message,
+          });
+        } else if (value.type === "failure")
+          fail(String(value.message).slice(0, 2000));
+      } catch {
+        fail("The project compiler returned an invalid diagnostic response.");
+      }
+    });
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
+      lines.push(chunk);
+      if (lines.pending > 8 * 1024 * 1024) {
+        lines.clear();
+        fail("Compiler output exceeded the live-check limit.");
       }
     });
     child.stderr.setEncoding("utf8").on("data", (chunk: string) => {

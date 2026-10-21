@@ -13,6 +13,7 @@ import type { UpdateState } from "../../shared/updates";
 import type { SpeechEngine, SpeechState } from "./speech";
 import type { PhonePairing, PhoneRemoteState } from "../../shared/remote";
 import { errorMessage } from "../../shared/error-message";
+import { LineBuffer } from "../util/line-buffer";
 
 /**
  * What the `relay` command asks the Relay running in the background. It
@@ -100,22 +101,15 @@ const maxLine = 4 * 1024 * 1024;
 
 /** Lines from a socket, each handed on once complete. */
 function readLines(socket: Socket, line: (text: string) => void) {
-  let buffered = "";
+  const lines = new LineBuffer((text) => {
+    if (text.trim()) line(text);
+  });
   socket.setEncoding("utf8");
   socket.on("data", (chunk: string) => {
-    buffered += chunk;
-    if (buffered.length > maxLine) {
+    lines.push(chunk);
+    if (lines.pending > maxLine) {
+      lines.clear();
       socket.destroy(new Error("A control message was too long."));
-      return;
-    }
-    for (
-      let end = buffered.indexOf("\n");
-      end >= 0;
-      end = buffered.indexOf("\n")
-    ) {
-      const text = buffered.slice(0, end);
-      buffered = buffered.slice(end + 1);
-      if (text.trim()) line(text);
     }
   });
 }

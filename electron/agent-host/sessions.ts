@@ -24,6 +24,7 @@ import { AsyncQueue } from "../util/async-queue";
 import { readOnlyBashHook } from "./read-only-bash";
 import { terminate } from "../platform/terminate";
 import { errorMessage } from "../../shared/error-message";
+import { LineBuffer } from "../util/line-buffer";
 
 /** Log sizes: past this, what a restart can't need goes first. */
 const limits = { entries: 30_000, line: 8 << 20 };
@@ -318,23 +319,16 @@ export class ProcessSession extends HostSession {
     this.child = child;
     let errors = "";
     const lines = () => {
-      let buffer = "";
+      const buffer = new LineBuffer((text) => {
+        this.append({ kind: "line", text });
+      });
       return {
         take: (chunk: string) => {
-          buffer += chunk;
-          let at: number;
-          while ((at = buffer.indexOf("\n")) >= 0) {
-            this.append({ kind: "line", text: buffer.slice(0, at) });
-            buffer = buffer.slice(at + 1);
-          }
+          buffer.push(chunk);
           // A line this long is broken output; the reader would refuse it anyway.
-          if (buffer.length > limits.line) buffer = "";
+          if (buffer.pending > limits.line) buffer.clear();
         },
-        /** What it printed last without a newline, e.g. an error before it exits. */
-        flush: () => {
-          if (buffer) this.append({ kind: "line", text: buffer });
-          buffer = "";
-        },
+        flush: () => buffer.flush(),
       };
     };
     const out = lines();

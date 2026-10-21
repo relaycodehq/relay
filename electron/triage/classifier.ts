@@ -20,6 +20,7 @@ import { MAX_BATCH_FILES, serializeBatch, type Candidate } from "./evidence";
 import { logUsage } from "../usage";
 import { codexTokens } from "../agents/codex/codex-watch";
 import { listCost } from "../agents/watch/prices";
+import { LineBuffer } from "../util/line-buffer";
 
 /** Why a file the agent failed to classify stays in individual review. */
 export const incompleteHunksReason = (agent: string) =>
@@ -446,8 +447,7 @@ export async function classifyChanges(
         stdio: ["pipe", "pipe", "pipe"],
         detached: process.platform !== "win32",
       });
-      let line = "",
-        bytes = 0,
+      let bytes = 0,
         stderr = "",
         message = "",
         failed: Error | undefined;
@@ -528,18 +528,14 @@ export async function classifyChanges(
           );
         }
       };
+      const lines = new LineBuffer(event);
       child.stdout.setEncoding("utf8").on("data", (data: string) => {
         bytes += Buffer.byteLength(data);
         if (bytes > 2 * 1024 * 1024) {
           stop(new Error("Codex response exceeded the analysis limit."));
           return;
         }
-        line += data;
-        let i: number;
-        while ((i = line.indexOf("\n")) >= 0) {
-          event(line.slice(0, i));
-          line = line.slice(i + 1);
-        }
+        lines.push(data);
       });
       child.stderr.setEncoding("utf8").on("data", (data: string) => {
         stderr = (stderr + data).slice(-4000);
@@ -555,7 +551,7 @@ export async function classifyChanges(
       child.on("close", (code) => {
         clearTimeout(timer);
         signal.removeEventListener("abort", aborted);
-        if (line) event(line);
+        lines.flush();
         if (failed) {
           reject(failed);
           return;

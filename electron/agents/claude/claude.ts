@@ -7,6 +7,7 @@ import { ClaudeFailureWatch, claudeReason } from "./claude-failure";
 import { runAccount } from "../accounts";
 import { RequestUsage } from "./request-usage";
 import { exitedError, stderrTail } from "../errors";
+import { LineBuffer } from "../../util/line-buffer";
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   const { job } = options;
   // Only one-off jobs run as a bare `--print`; the rest are a thread's session.
@@ -49,8 +50,7 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
     );
     const failures = new ClaudeFailureWatch();
     const requests = new RequestUsage();
-    let buffer = "",
-      answer = "",
+    let answer = "",
       settled = false;
     const finish = (error?: Error) => {
       if (settled) return;
@@ -96,64 +96,60 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
       finish(new Error("The Claude connection closed.")),
     );
     child.stdout.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      buffer += chunk;
-      if (buffer.length > 4_000_000) {
-        finish(new Error("Claude sent an oversized protocol message."));
-        return;
-      }
-      let end: number;
-      while ((end = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, end);
-        buffer = buffer.slice(end + 1);
-        if (!line.trim()) continue;
-        try {
-          const m = JSON.parse(line);
-          failures.see(m);
-          requests.observe(m, options.onUsage);
-          if (
-            m.type === "stream_event" &&
-            m.event?.type === "content_block_delta" &&
-            m.event.delta?.type === "text_delta"
-          ) {
-            answer += m.event.delta.text;
-            const over = answerLimitError(answer.length);
-            if (over) {
-              finish(over);
-              return;
-            }
+    const lines = new LineBuffer((line) => {
+      if (settled) return false;
+      if (!line.trim()) return;
+      try {
+        const m = JSON.parse(line);
+        failures.see(m);
+        requests.observe(m, options.onUsage);
+        if (
+          m.type === "stream_event" &&
+          m.event?.type === "content_block_delta" &&
+          m.event.delta?.type === "text_delta"
+        ) {
+          answer += m.event.delta.text;
+          const over = answerLimitError(answer.length);
+          if (over) {
+            finish(over);
+            return;
+          }
+          options.onText(answer);
+        }
+        if (m.type === "result") {
+          const failed = m.is_error || m.subtype !== "success";
+          // A refused request can still end in a "successful" result.
+          const stopped = failures.failure(failed);
+          if (stopped || failed) {
+            const reason = claudeReason(m.result);
+            finish(
+              stopped ??
+                new Error(
+                  reason
+                    ? `Claude could not complete this question: ${reason}`
+                    : "Claude could not complete this question. Check your local Claude Code account and model settings.",
+                ),
+            );
+            return;
+          }
+          if (typeof m.result === "string") {
+            answer = m.result.slice(0, ANSWER_LIMIT);
             options.onText(answer);
           }
-          if (m.type === "result") {
-            const failed = m.is_error || m.subtype !== "success";
-            // A refused request can still end in a "successful" result.
-            const stopped = failures.failure(failed);
-            if (stopped || failed) {
-              const reason = claudeReason(m.result);
-              finish(
-                stopped ??
-                  new Error(
-                    reason
-                      ? `Claude could not complete this question: ${reason}`
-                      : "Claude could not complete this question. Check your local Claude Code account and model settings.",
-                  ),
-              );
-              return;
-            }
-            if (typeof m.result === "string") {
-              answer = m.result.slice(0, ANSWER_LIMIT);
-              options.onText(answer);
-            }
-            finish(
-              answer.trim()
-                ? undefined
-                : new Error("Claude returned an empty answer."),
-            );
-          }
-        } catch {
-          finish(new Error("Claude returned an invalid protocol message."));
+          finish(
+            answer.trim()
+              ? undefined
+              : new Error("Claude returned an empty answer."),
+          );
         }
+      } catch {
+        finish(new Error("Claude returned an invalid protocol message."));
       }
+    });
+    child.stdout.on("data", (chunk: string) => {
+      lines.push(chunk);
+      if (lines.pending > 4_000_000)
+        finish(new Error("Claude sent an oversized protocol message."));
     });
     child.stdin.end(
       images.length

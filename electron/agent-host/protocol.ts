@@ -7,6 +7,7 @@ import type {
   ElicitationRequest,
   OnElicitation,
 } from "@anthropic-ai/claude-agent-sdk";
+import { LineBuffer } from "../util/line-buffer";
 
 /**
  * Bumped when either side can no longer read what the other sends. Additions
@@ -192,25 +193,19 @@ export const queryMethods = [
 
 /** Reads newline-delimited JSON off a socket; a line that doesn't parse ends the connection. */
 export function readLines(socket: Socket, onMessage: (message: any) => void) {
-  let buffer = "";
-  socket.setEncoding("utf8");
-  socket.on("data", (chunk: string) => {
-    buffer += chunk;
-    let at: number;
-    while ((at = buffer.indexOf("\n")) >= 0) {
-      const line = buffer.slice(0, at);
-      buffer = buffer.slice(at + 1);
-      if (!line) continue;
-      let message: unknown;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        socket.destroy();
-        return;
-      }
-      onMessage(message);
+  const lines = new LineBuffer((line) => {
+    if (!line) return;
+    let message: unknown;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      socket.destroy();
+      return false;
     }
+    onMessage(message);
   });
+  socket.setEncoding("utf8");
+  socket.on("data", (chunk: string) => lines.push(chunk));
 }
 
 export function writeLine(socket: Socket, message: unknown) {
