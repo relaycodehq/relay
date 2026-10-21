@@ -335,13 +335,14 @@ class ProjectTasks {
     worktrees: Worktree[] = [],
   ) {
     const task = await this.findTask(root, id, worktrees);
-    const alive = new Map(this.last.map((p) => [p.pid, p]));
+    let alive = new Map(this.last.map((p) => [p.pid, p]));
     const members = [...task.pids].filter(
       ([pid, started]) => alive.get(pid)?.started === started,
     );
     const signal = (name: NodeJS.Signals) => {
       // A group led by one of the task's own processes also catches children the scan hasn't seen yet.
-      for (const [pid] of members) {
+      for (const [pid, started] of members) {
+        if (alive.get(pid)?.started !== started) continue;
         if (alive.get(pid)?.pgid === pid)
           try {
             process.kill(-pid, name);
@@ -353,9 +354,9 @@ class ProjectTasks {
     };
     const running = async () => {
       this.scanned = 0;
-      const now = new Map((await this.scan()).map((p) => [p.pid, p]));
+      alive = new Map((await this.scan()).map((p) => [p.pid, p]));
       return members.some(
-        ([pid, started]) => now.get(pid)?.started === started,
+        ([pid, started]) => alive.get(pid)?.started === started,
       );
     };
     signal("SIGTERM");

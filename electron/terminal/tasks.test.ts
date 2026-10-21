@@ -435,3 +435,68 @@ it("delegates managed restarts only after validating the project and live proces
     kill.mockRestore();
   }
 });
+
+it.each(["leader", "child"])(
+  "does not force-kill a reused %s PID or its new process group",
+  async (reused) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const root = `/projects/reused-${reused}`;
+    fake.cwd = root;
+    const [leader, child] =
+      reused === "leader" ? [9_100_001, 9_100_002] : [9_200_001, 9_200_002];
+    const started = Date.now() - 60_000;
+    const replaced = reused === "leader" ? leader : child;
+    fake.rows = [
+      {
+        pid: leader,
+        ppid: process.pid,
+        pgid: leader,
+        started,
+        line: "node server.js",
+      },
+      {
+        pid: child,
+        ppid: leader,
+        pgid: child,
+        started,
+        line: "node worker.js",
+      },
+    ];
+    projectTasks.trackServer(leader, "node server.js", root, async (stop) =>
+      stop(),
+    );
+    const [task] = await projectTasks.list(root, [], { fresh: true });
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === "SIGKILL")
+        fake.rows = fake.rows.filter((row) => row.pid !== Math.abs(pid));
+      return true;
+    });
+    try {
+      const restarting = projectTasks.restart(root, task!.id);
+      await vi.waitFor(() =>
+        expect(kill).toHaveBeenCalledWith(leader, "SIGTERM"),
+      );
+      // One original process survives the grace period, but the other exits
+      // and its PID now belongs to an unrelated process and process group.
+      fake.rows = fake.rows.map((row) =>
+        row.pid === replaced
+          ? { ...row, ppid: 1, started: started + 1, line: "unrelated process" }
+          : { ...row, ppid: 1 },
+      );
+      await vi.advanceTimersByTimeAsync(4000);
+      await restarting;
+      expect(kill).not.toHaveBeenCalledWith(replaced, "SIGKILL");
+      expect(kill).not.toHaveBeenCalledWith(-replaced, "SIGKILL");
+      expect(kill).toHaveBeenCalledWith(
+        reused === "leader" ? child : leader,
+        "SIGKILL",
+      );
+      expect(fake.rows).toMatchObject([
+        { pid: replaced, started: started + 1 },
+      ]);
+    } finally {
+      kill.mockRestore();
+      vi.useRealTimers();
+    }
+  },
+);
