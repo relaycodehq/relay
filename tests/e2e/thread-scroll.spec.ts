@@ -417,6 +417,16 @@ test("restores mixed-height messages without a jump during the first paints", as
             ? "Done."
             : `Question ${i}.`;
     }
+    // A divider after the answer must not hide that answer's estimated size.
+    const last = mixed.messages.at(-1)!;
+    mixed.messages.push({
+      ...last,
+      id: "mixed-footer",
+      body: "",
+      compaction: true,
+      created: last.created + 60_000,
+      ended: last.ended! + 60_000,
+    });
     for (const chat of [mixed, short])
       await writeFile(
         join(data, "project-chats", chat.id + ".json"),
@@ -450,21 +460,26 @@ test("restores mixed-height messages without a jump during the first paints", as
       page.locator(".sb-thread", { hasText: title }).click();
     const rows = page.locator(".project-messages [data-message-id]");
     await open("Mixed");
-    await expect(rows).toHaveCount(40);
+    await expect(rows).toHaveCount(mixed.messages.length);
     await settled(page);
-    for (const pixels of [300, 600, 1400, 3000, 4000]) {
-      const box = (await page.locator(".project-messages").boundingBox())!;
-      await page.mouse.move(box.x + box.width / 2, box.y + 200);
-      await page.mouse.wheel(0, -pixels);
-      await settled(page);
-      await expect(page.locator("[data-reading-anchor]")).toHaveCount(0);
-      if (pixels === 4000) {
-        // Reflow while reading, without relying on another wheel event to
-        // refresh the saved position before switching away.
-        await page.setViewportSize({ width: 1000, height: 900 });
-        await settled(page);
-      }
+    const checkReturn = async (reason: string, pinned = false) => {
       const before = (await topOfView(page))!;
+      // At the bottom, observe the visible last message. The start of a tall
+      // answer above it can still be skipped before this frame's layout.
+      const anchor = pinned
+        ? await page
+            .locator(".thread-message-column > .project-message")
+            .last()
+            .evaluate((message) => ({
+              id: (message as HTMLElement).dataset.messageId!,
+              offset: Math.round(
+                message.getBoundingClientRect().top -
+                  document
+                    .querySelector(".project-messages")!
+                    .getBoundingClientRect().top,
+              ),
+            }))
+        : before;
       await open("Short");
       await expect(rows).toHaveCount(4);
       // Observe every frame, rather than letting a wrong first paint settle
@@ -483,9 +498,9 @@ test("restores mixed-height messages without a jump during the first paints", as
           frames.frame = requestAnimationFrame(sample);
         };
         frames.frame = requestAnimationFrame(sample);
-      }, before.id!);
+      }, anchor.id!);
       await open("Mixed");
-      await expect(rows).toHaveCount(40);
+      await expect(rows).toHaveCount(mixed.messages.length);
       await settled(page);
       const offsets = await page.evaluate(() => {
         const frames = (
@@ -499,9 +514,24 @@ test("restores mixed-height messages without a jump during the first paints", as
       expectSamePlace(await topOfView(page), before);
       expect(offsets.length).toBeGreaterThan(1);
       expect(
-        Math.max(...offsets.map((offset) => Math.abs(offset - before.offset))),
-        `message ${before.id} after a ${pixels}px scroll`,
+        Math.max(...offsets.map((offset) => Math.abs(offset - anchor.offset))),
+        `message ${anchor.id} ${reason}`,
       ).toBeLessThanOrEqual(1);
+    };
+    await checkReturn("while following the bottom", true);
+    for (const pixels of [300, 600, 1400, 3000, 4000]) {
+      const box = (await page.locator(".project-messages").boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 200);
+      await page.mouse.wheel(0, -pixels);
+      await settled(page);
+      await expect(page.locator("[data-reading-anchor]")).toHaveCount(0);
+      if (pixels === 4000) {
+        // Reflow while reading, without relying on another wheel event to
+        // refresh the saved position before switching away.
+        await page.setViewportSize({ width: 1000, height: 900 });
+        await settled(page);
+      }
+      await checkReturn(`after a ${pixels}px scroll`);
     }
     await screenshot(page, {
       path: join(tmpdir(), "relay-mixed-scroll-restored.png"),
