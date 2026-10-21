@@ -1,6 +1,11 @@
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { mount, update } from "../../../tests/unit/hook-harness";
 import {
   activityDrafts,
+  draftSentAt,
+  markDraftSent,
+  useDraft,
   currentNewThread,
   freshNewThread,
   forgetNewThread,
@@ -14,23 +19,8 @@ import {
   useDraftKeys,
   writeDraft,
 } from "./drafts";
-import { threadStorage } from "../../lib/thread-storage";
+import { threadStorage, writeDraftText } from "../../lib/thread-storage";
 import type { ChatSummary, Project } from "../../../shared/projects";
-
-// What the draft hooks subscribe to, as React would.
-const subscriptions = vi.hoisted(
-  () => [] as { subscribe: (notify: () => void) => void; read: () => unknown }[],
-);
-vi.mock("react", () => ({
-  useCallback: <T,>(fn: T) => fn,
-  useSyncExternalStore: (
-    subscribe: (notify: () => void) => void,
-    read: () => unknown,
-  ) => {
-    subscriptions.push({ subscribe, read });
-    return read();
-  },
-}));
 
 const store = new Map<string, string>();
 beforeEach(() => {
@@ -44,6 +34,7 @@ beforeEach(() => {
       return store.size;
     },
   });
+  window.dispatchEvent(new StorageEvent("storage", { key: null }));
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -103,23 +94,22 @@ it("keeps a deep review set up without text as a draft, and sets it aside once i
   saveDraftScope(review, { kind: "review" });
   // Only opened, it's no draft yet.
   expect(freshNewThread("p1")).toBe(review);
-  expect(useDraftKeys()).toEqual([]);
-  updateReviewDraft(review, { head: "feature", base: "main" });
+  const keys = mount(useDraftKeys);
+  expect(keys()).toEqual([]);
+  update(() => updateReviewDraft(review, { head: "feature", base: "main" }));
   expect(freshNewThread("p1")).not.toBe(review);
   expect(reviewDraftIn("p1")).toBe(review);
   const project = { id: "p1", name: "Relay" } as Project;
-  expect(
-    activityDrafts(useDraftKeys(), new Map([["p1", project]]), new Map()),
-  ).toEqual([
-    { key: "chat-draft:" + review, id: review, project, reply: false },
-  ]);
-  saveDraftScope(review, { kind: "project" });
+  expect(activityDrafts(keys(), new Map([["p1", project]]), new Map())).toEqual(
+    [{ key: "chat-draft:" + review, id: review, project, reply: false }],
+  );
+  update(() => saveDraftScope(review, { kind: "project" }));
   expect(freshNewThread("p1")).toBe(review);
   expect(reviewDraftIn("p1")).toBeUndefined();
   // A fresh thread in the slot, as navigating starts one, leaves it set aside.
-  resetDraftScope(review);
+  update(() => resetDraftScope(review));
   // Back on Deep review, the picks are still there.
-  saveDraftScope(review, { kind: "review" });
+  update(() => saveDraftScope(review, { kind: "review" }));
   expect(threadStorage(review).review.load()).toMatchObject({
     head: "feature",
     base: "main",
@@ -188,33 +178,81 @@ it("reserves a draft holding only linked folders and clears links after it becom
   expect(threadStorage(base).links.load()).toEqual([]);
 });
 
-it("hears a draft written, then sent, in a thread's own window", async () => {
-  const win = new EventTarget();
-  vi.stubGlobal("window", win);
-  const heard = (key: string) =>
-    win.dispatchEvent(Object.assign(new Event("storage"), { key }));
-  // Two windows: two module instances over one storage.
-  vi.resetModules();
-  const main = await import("./drafts");
-  vi.resetModules();
-  const popped = await import("./drafts");
+it("hears a draft written, then sent, in a thread's own window", () => {
+  const keys = mount(useDraftKeys);
+  let renders = 0;
+  const text = mount(() => {
+    renders++;
+    return useDraft("chat-draft:t1");
+  });
+  const heard = (thread: string) =>
+    window.dispatchEvent(
+      new StorageEvent("storage", { key: "relay-draft:" + thread }),
+    );
+  expect(keys()).toEqual([]);
+  expect(text()).toBe("");
+  const initialRenders = renders;
+  // Write the record without this window's feature notifications, as another
+  // window does. Only its storage event should update the mounted hooks.
+  writeDraftText("chat-draft:t1", "Half-written question");
+  expect(text()).toBe("");
+  update(() => heard("t1"));
+  expect(keys()).toEqual(["chat-draft:t1"]);
+  expect(text()).toBe("Half-written question");
+  expect(renders).toBe(initialRenders + 1);
 
-  expect(main.useDraftKeys()).toEqual([]);
-  const index = subscriptions.at(-1)!;
-  let reindexed = 0;
-  index.subscribe(() => reindexed++);
-  popped.writeDraft("chat-draft:t1", "Half-written question");
-  heard("relay-draft:t1");
-  expect(index.read()).toEqual(["chat-draft:t1"]);
-  expect(reindexed).toBe(1);
+  markDraftSent("t1");
+  writeDraftText("chat-draft:t1", "");
+  update(() => heard("t1"));
+  expect(text()).toBe("");
+  expect(keys()).toEqual([]);
+  expect(draftSentAt("t1")).toBeGreaterThan(0);
+  expect(renders).toBe(initialRenders + 2);
+});
 
-  expect(main.useDraft("chat-draft:t1")).toBe("Half-written question");
-  let redrawn = 0;
-  subscriptions.at(-1)!.subscribe(() => redrawn++);
-  popped.markDraftSent("t1");
-  popped.writeDraft("chat-draft:t1", "");
-  heard("relay-draft:t1");
-  expect(redrawn).toBe(1);
-  expect(index.read()).toEqual([]);
-  expect(main.draftSentAt("t1")).toBeGreaterThan(0);
+it("switches draft subscriptions to the new key and releases them on unmount", () => {
+  type("t1", "First draft");
+  type("t2", "Second draft");
+  let key = "chat-draft:t1",
+    renders = 0;
+  const text = mount(() => {
+    renders++;
+    return useDraft(key);
+  });
+  expect(text()).toBe("First draft");
+  update(() => type("t1", "Edited first"));
+  expect(text()).toBe("Edited first");
+  key = "chat-draft:t2";
+  text.rerender();
+  expect(text()).toBe("Second draft");
+  const switchedRenders = renders;
+  update(() => type("t1", "Old key changed"));
+  expect(renders).toBe(switchedRenders);
+  expect(text()).toBe("Second draft");
+  update(() => type("t2", "Edited second"));
+  expect(text()).toBe("Edited second");
+  text.unmount();
+  const unmountedRenders = renders;
+  update(() => type("t2", "After unmount"));
+  expect(renders).toBe(unmountedRenders);
+});
+
+it("updates the mounted draft index only when draft membership changes", () => {
+  let renders = 0;
+  const keys = mount(() => {
+    renders++;
+    return useDraftKeys();
+  });
+  expect(keys()).toEqual([]);
+  update(() => type("t1", "First character"));
+  expect(keys()).toEqual(["chat-draft:t1"]);
+  const indexedRenders = renders;
+  update(() => type("t1", "More typing"));
+  expect(renders).toBe(indexedRenders);
+  update(() => type("t1", ""));
+  expect(keys()).toEqual([]);
+  keys.unmount();
+  const unmountedRenders = renders;
+  update(() => type("t2", "New after unmount"));
+  expect(renders).toBe(unmountedRenders);
 });
