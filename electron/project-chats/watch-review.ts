@@ -1,4 +1,4 @@
-import { appendFile, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 import type {
@@ -17,6 +17,7 @@ import {
 } from "../agents/watch/judge";
 import type { Store } from "../app/store";
 import type { ChatStorage } from "./storage";
+import { JsonLines } from "../util/json-lines";
 
 const DAY = 24 * 60 * 60_000;
 /** A note nothing followed is judged anyway once it's this old. */
@@ -51,13 +52,16 @@ function mainLine(chat: ProjectChat) {
 export class WatchReviews {
   private verdicts?: Promise<Map<string, WatchVerdict>>;
   private judging?: Promise<void>;
+  private records: JsonLines<WatchVerdict>;
 
   constructor(
     private store: Store,
     private storage: ChatStorage,
     private chatsDir: string,
-    private path: string,
-  ) {}
+    path: string,
+  ) {
+    this.records = new JsonLines(path);
+  }
 
   async review(days: number): Promise<WatchReview> {
     const since = Date.now() - days * DAY;
@@ -155,8 +159,8 @@ export class WatchReviews {
         at: Date.now(),
         ...verdict,
       };
+      await this.records.append(entry);
       verdicts.set(entry.noteId, entry);
-      await appendFile(this.path, `${JSON.stringify(entry)}\n`);
     }
   }
 
@@ -197,23 +201,15 @@ export class WatchReviews {
   }
 
   private load() {
-    this.verdicts ??= readFile(this.path, "utf8")
-      .then((text) => {
-        const verdicts = new Map<string, WatchVerdict>();
-        for (const row of text.split("\n").filter(Boolean)) {
-          try {
-            const verdict = JSON.parse(row) as WatchVerdict;
-            verdicts.set(verdict.noteId, verdict);
-          } catch {
-            // A torn line from a crash mid-write; the note is judged again.
-          }
-        }
-        return verdicts;
-      })
-      .catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== "ENOENT")
-          console.warn("Could not read the watch notes' verdicts:", error);
-        return new Map<string, WatchVerdict>();
+    this.verdicts ??= this.records
+      .read()
+      .then(
+        (records) =>
+          new Map(records.map((verdict) => [verdict.noteId, verdict])),
+      )
+      .catch((error) => {
+        this.verdicts = undefined;
+        throw error;
       });
     return this.verdicts;
   }
