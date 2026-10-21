@@ -78,16 +78,37 @@ export async function fetchChat(
   const known = knownOf(previous);
   const fetched = applyChatPatch(await api.projectChat(id, known), previous);
   // A push that overtook the reply holds a newer copy than the reply does.
-  const held = new Map(
-    qc.getQueryData<ProjectChat>(chatKey(id))?.messages.map((m) => [m.id, m]),
-  );
+  const held = qc.getQueryData<ProjectChat>(chatKey(id));
+  const fetchedSetup = fetched.setup;
+  const heldSetup = held?.setup;
   return {
     ...fetched,
-    messages: fetched.messages.map((m) => {
-      const pushed = held.get(m.id);
-      return pushed && pushed.version > m.version ? pushed : m;
-    }),
+    messages: reconcileMessages(fetched.messages, held?.messages),
+    ...(fetchedSetup &&
+      heldSetup &&
+      fetchedSetup.computer === heldSetup.computer &&
+      fetchedSetup.at === heldSetup.at && {
+        setup: {
+          ...fetchedSetup,
+          messages: reconcileMessages(
+            fetchedSetup.messages,
+            heldSetup.messages,
+          ),
+        },
+      }),
   };
+}
+
+/** The reply owns membership; only newer versions of messages it still lists survive. */
+function reconcileMessages(
+  fetched: ChatMessage[],
+  current: ChatMessage[] = [],
+) {
+  const held = new Map(current.map((m) => [m.id, m]));
+  return fetched.map((message) => {
+    const pushed = held.get(message.id);
+    return pushed && pushed.version > message.version ? pushed : message;
+  });
 }
 
 /** `chat` with `message` among its setup's, unless it holds that version or a newer one. */

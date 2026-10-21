@@ -14,6 +14,7 @@ const desktop = vi.hoisted(() => ({
   thread: [] as ChatMessage[],
   hold: false,
   release: () => {},
+  setup: undefined as ProjectChat["setup"],
 }));
 vi.mock("./api", () => ({
   api: {
@@ -26,6 +27,7 @@ vi.mock("./api", () => ({
     projectChat: (id: string, known: KnownMessages = {}) => {
       const patch = {
         id,
+        setup: structuredClone(desktop.setup),
         messages: desktop.thread.map((m) =>
           known[m.id] === m.version ? m.id : structuredClone(m),
         ),
@@ -63,6 +65,7 @@ beforeEach(() => {
   qc = new QueryClient();
   desktop.hold = false;
   desktop.thread = [message("q", { role: "user" })];
+  desktop.setup = undefined;
   followChatEvents(qc);
 });
 
@@ -101,3 +104,52 @@ it("keeps a push that overtook a slower reply", async () => {
   qc.setQueryData(chatKey("t"), await fetching);
   expect(shown()).toEqual(["q:complete:1", "a:streaming:4"]);
 });
+
+const setup = (): NonNullable<ProjectChat["setup"]> => ({
+  computer: "other-computer",
+  after: 1,
+  at: 1,
+  state: "agent",
+  project: "project",
+  messages: [message("setup-answer", { status: "streaming" })],
+});
+
+it("keeps newer setup message versions without replacing fetched setup metadata", async () => {
+  desktop.setup = setup();
+  await refetch();
+  desktop.setup.state = "done";
+  desktop.hold = true;
+  const fetching = fetchChat(qc, "t");
+  desktop.push({
+    chatId: "t",
+    setup: true,
+    message: message("setup-answer", { version: 2 }),
+  });
+  desktop.release();
+  const fetched = await fetching;
+  expect(fetched.setup?.state).toBe("done");
+  expect(fetched.setup?.messages[0].version).toBe(2);
+});
+
+it.each(["removed", "new-at", "new-computer", "removed-message"] as const)(
+  "does not resurrect setup data when the reply has %s",
+  async (change) => {
+    desktop.setup = setup();
+    await refetch();
+    if (change === "removed") desktop.setup = undefined;
+    else if (change === "new-at") desktop.setup.at = 2;
+    else if (change === "new-computer")
+      desktop.setup.computer = "third-computer";
+    else desktop.setup.messages = [];
+    desktop.hold = true;
+    const fetching = fetchChat(qc, "t");
+    desktop.push({
+      chatId: "t",
+      setup: true,
+      message: message("setup-answer", { version: 2 }),
+    });
+    desktop.release();
+    const fetched = await fetching;
+    expect(fetched.setup).toEqual(desktop.setup);
+  },
+);
