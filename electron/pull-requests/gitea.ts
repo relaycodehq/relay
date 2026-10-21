@@ -12,8 +12,6 @@ import type {
   ReviewComment,
   Draft,
 } from "../../shared/types";
-import { networkError } from "../util/network-errors";
-import { readBounded } from "../../shared/http";
 import { diffPaths } from "./diff-paths";
 import { filePair } from "./file-pair";
 import {
@@ -25,17 +23,20 @@ import {
   type SearchFilter,
 } from "./host";
 import { mergedPulls } from "./merged";
+import { HostRequests, type RequestOptions } from "./request";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
-const MAX_JSON = 8 * 1024 * 1024,
-  MAX_FILE = 2 * 1024 * 1024;
+const MAX_FILE = 2 * 1024 * 1024;
 /** Pull requests on the connected Gitea server, as its account. */
 export class Gitea implements PullHost {
+  private requests: HostRequests;
   // Main-process only: the token never crosses the renderer IPC boundary.
   constructor(
     public account: Account,
     private token: string,
-    private fetchRequest: FetchRequest,
-  ) {}
+    fetchRequest: FetchRequest,
+  ) {
+    this.requests = new HostRequests(fetchRequest);
+  }
   /**
    * Another token when this one is refused. tea's OAuth logins hand out one
    * that expires within hours and refresh it only when asked again.
@@ -54,89 +55,54 @@ export class Gitea implements PullHost {
     const fresh = await this.renewing;
     return fresh && fresh !== stale ? fresh : null;
   }
-  private controllers = new Set<AbortController>();
   dispose() {
-    for (const c of this.controllers) c.abort();
-    this.controllers.clear();
+    this.requests.dispose();
   }
-  async request<T>(
+  request<T>(
     path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      raw?: boolean;
-      limit?: number;
-      signal?: AbortSignal;
-    } = {},
+    options: RequestOptions = {},
   ): Promise<{ data: T; headers: Headers }> {
-    const controller = new AbortController();
-    this.controllers.add(controller);
-    const timer = setTimeout(() => controller.abort(), 30000);
-    try {
-      const url = `${this.account.server}/api/v1${path}`;
-      const send = (token: string) =>
-        this.fetchRequest(url, {
-          method: options.method ?? "GET",
-          headers: {
-            Authorization: `token ${token}`,
-            Accept: options.raw
-              ? "application/octet-stream"
-              : "application/json",
-            ...(options.body ? { "Content-Type": "application/json" } : {}),
-          },
-          body: options.body ? JSON.stringify(options.body) : undefined,
-          redirect: "error",
-          credentials: "omit",
-          signal: options.signal
-            ? AbortSignal.any([controller.signal, options.signal])
-            : controller.signal,
-        }).catch((error: unknown) => {
-          throw networkError(error, this.account.server);
-        });
-      const used = this.token;
-      let response = await send(used);
-      if (response.status === 401 && this.renewToken) {
-        const fresh = await this.renewed(used);
-        if (fresh) {
-          await response.body?.cancel();
-          response = await send(fresh);
-        }
-      }
-      if (!response.ok) {
-        await response.body?.cancel();
-        throw new ApiError(
-          response.status,
-          response.status === 401
-            ? "Your token is invalid or expired. Reconnect in Settings."
-            : response.status === 403
-              ? "Gitea denied access. Check the token’s repository and issue permissions."
-              : response.status === 404
-                ? "Not found, or your token cannot access this repository."
-                : response.status === 429
-                  ? "Gitea is rate limiting requests. Wait a moment, then retry."
-                  : `Gitea returned HTTP ${response.status}. Please retry.`,
-        );
-      }
-      const body = await readBounded(
-        response,
-        options.limit ?? MAX_JSON,
-        options.raw
+    return this.requests.request<T>(
+      `${this.account.server}/api/v1${path}`,
+      {
+        ...options,
+        text: options.raw,
+        tooLarge: options.raw
           ? "This file is too large for the inline viewer. Open it in Gitea or your local editor."
           : "Gitea returned more data than Relay can safely handle. Please retry.",
-      );
-      return {
-        data: (options.raw ? body : body ? JSON.parse(body) : null) as T,
-        headers: response.headers,
-      };
-    } catch (e) {
-      // A caller's cancellation would otherwise read as a network failure.
-      if (controller.signal.aborted || options.signal?.aborted)
-        throw new Error("Request cancelled or timed out. Please retry.");
-      throw e;
-    } finally {
-      clearTimeout(timer);
-      this.controllers.delete(controller);
-    }
+      },
+      async (send) => {
+        const headers = (token: string) => ({
+          Authorization: `token ${token}`,
+          Accept: options.raw ? "application/octet-stream" : "application/json",
+        });
+        const used = this.token;
+        let response = await send(headers(used));
+        if (response.status === 401 && this.renewToken) {
+          const fresh = await this.renewed(used);
+          if (fresh) {
+            await response.body?.cancel();
+            response = await send(headers(fresh));
+          }
+        }
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new ApiError(
+            response.status,
+            response.status === 401
+              ? "Your token is invalid or expired. Reconnect in Settings."
+              : response.status === 403
+                ? "Gitea denied access. Check the token’s repository and issue permissions."
+                : response.status === 404
+                  ? "Not found, or your token cannot access this repository."
+                  : response.status === 429
+                    ? "Gitea is rate limiting requests. Wait a moment, then retry."
+                    : `Gitea returned HTTP ${response.status}. Please retry.`,
+          );
+        }
+        return response;
+      },
+    );
   }
   async page<T>(
     path: string,

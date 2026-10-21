@@ -12,11 +12,9 @@ import type {
   Review,
   ReviewComment,
 } from "../../shared/types";
-import { readBounded } from "../../shared/http";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import { parseGithubPullUrl } from "../../shared/validation";
 import type { GithubCredential } from "../github/credentials";
-import { networkError } from "../util/network-errors";
 import {
   ApiError,
   type FetchRequest,
@@ -28,10 +26,10 @@ import {
 } from "./host";
 import { filePair } from "./file-pair";
 import { mergedPulls } from "./merged";
+import { HostRequests, responseMessage, type RequestOptions } from "./request";
 
 const API = "https://api.github.com";
-const MAX_JSON = 8 * 1024 * 1024,
-  MAX_FILE = 2 * 1024 * 1024;
+const MAX_FILE = 2 * 1024 * 1024;
 
 interface GithubIssue extends Omit<
   Issue,
@@ -151,7 +149,7 @@ export class GithubSignedOut extends Error {
  * shapes the Gitea client gives, so the review UI doesn't care which it is.
  */
 export class GitHub implements PullHost {
-  private controllers = new Set<AbortController>();
+  private requests: HostRequests;
   /** Merge bases by `base...head`; the pair is immutable, so its answer is too. */
   private mergeBases = new Map<string, string>();
   /**
@@ -168,9 +166,11 @@ export class GitHub implements PullHost {
   constructor(
     public account: Account,
     private token: string,
-    private fetchRequest: FetchRequest,
+    fetchRequest: FetchRequest,
     private rejected: () => void,
-  ) {}
+  ) {
+    this.requests = new HostRequests(fetchRequest);
+  }
   static async connect(
     fetchRequest: FetchRequest,
     { token, rejected }: GithubCredential,
@@ -200,27 +200,23 @@ export class GitHub implements PullHost {
     return client;
   }
   dispose() {
-    for (const c of this.controllers) c.abort();
-    this.controllers.clear();
+    this.requests.dispose();
   }
-  async request<T>(
+  request<T>(
     path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      raw?: boolean;
-      accept?: string;
-      limit?: number;
-      signal?: AbortSignal;
-    } = {},
+    options: RequestOptions & { accept?: string } = {},
   ): Promise<{ data: T; headers: Headers }> {
-    const controller = new AbortController();
-    this.controllers.add(controller);
-    const timer = setTimeout(() => controller.abort(), 30000);
-    try {
-      const response = await this.fetchRequest(`${API}${path}`, {
-        method: options.method ?? "GET",
-        headers: {
+    return this.requests.request<T>(
+      `${API}${path}`,
+      {
+        ...options,
+        text: options.raw || !!options.accept,
+        tooLarge: options.raw
+          ? "This file is too large for the inline viewer. Open it on GitHub or in your local editor."
+          : "GitHub returned more data than Relay can safely handle. Please retry.",
+      },
+      async (send) => {
+        const response = await send({
           Authorization: `Bearer ${this.token}`,
           Accept:
             options.accept ??
@@ -228,65 +224,28 @@ export class GitHub implements PullHost {
               ? "application/vnd.github.raw+json"
               : "application/vnd.github+json"),
           "X-GitHub-Api-Version": "2022-11-28",
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        redirect: "error",
-        credentials: "omit",
-        signal: options.signal
-          ? AbortSignal.any([controller.signal, options.signal])
-          : controller.signal,
-      }).catch((error: unknown) => {
-        throw networkError(error, API);
-      });
-      if (!response.ok) {
-        if (response.status === 401) this.rejected();
-        const detail = await response.text().catch(() => "");
-        const message = (() => {
-          try {
-            return (JSON.parse(detail) as { message?: string }).message;
-          } catch {
-            return undefined;
-          }
-        })();
-        throw new ApiError(
-          response.status,
-          response.status === 401
-            ? "GitHub rejected the gh login. Run `gh auth login` again."
-            : response.status === 403 || response.status === 429
-              ? /rate limit/i.test(message ?? "")
-                ? "GitHub is rate limiting requests. Wait a moment, then retry."
-                : `GitHub denied this${message ? `: ${message}` : "."}`
-              : response.status === 404
-                ? "Not found, or your gh login can't see this repository."
-                : response.status === 422 && message
-                  ? `GitHub refused this: ${message}`
-                  : `GitHub returned HTTP ${response.status}. Please retry.`,
-        );
-      }
-      const body = await readBounded(
-        response,
-        options.limit ?? MAX_JSON,
-        options.raw
-          ? "This file is too large for the inline viewer. Open it on GitHub or in your local editor."
-          : "GitHub returned more data than Relay can safely handle. Please retry.",
-      );
-      return {
-        data: (options.raw || options.accept
-          ? body
-          : body
-            ? JSON.parse(body)
-            : null) as T,
-        headers: response.headers,
-      };
-    } catch (e) {
-      if (controller.signal.aborted || options.signal?.aborted)
-        throw new Error("Request cancelled or timed out. Please retry.");
-      throw e;
-    } finally {
-      clearTimeout(timer);
-      this.controllers.delete(controller);
-    }
+        });
+        if (!response.ok) {
+          if (response.status === 401) this.rejected();
+          const message = await responseMessage(response);
+          throw new ApiError(
+            response.status,
+            response.status === 401
+              ? "GitHub rejected the gh login. Run `gh auth login` again."
+              : response.status === 403 || response.status === 429
+                ? /rate limit/i.test(message ?? "")
+                  ? "GitHub is rate limiting requests. Wait a moment, then retry."
+                  : `GitHub denied this${message ? `: ${message}` : "."}`
+                : response.status === 404
+                  ? "Not found, or your gh login can't see this repository."
+                  : response.status === 422 && message
+                    ? `GitHub refused this: ${message}`
+                    : `GitHub returned HTTP ${response.status}. Please retry.`,
+          );
+        }
+        return response;
+      },
+    );
   }
   async page<T>(
     path: string,
