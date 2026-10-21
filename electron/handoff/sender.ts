@@ -551,7 +551,9 @@ export class Handoffs {
             .filter((s) => s.computerId === c.id && s.state !== "sending")
             .map((s) => s.id);
           const stale = ids.some(
-            (id) => Date.now() - (this.statuses.get(id)?.at ?? 0) > 4000,
+            (id) =>
+              Date.now() - (this.statuses.get(id)?.at ?? 0) >
+              this.reuse.statusMs,
           );
           if (!stale && !withInfo) return;
           try {
