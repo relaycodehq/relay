@@ -6,10 +6,7 @@ import {
 import { expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { defaultAISettings } from "../../shared/settings";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats({ cli: "codex-goal.cjs" });
 

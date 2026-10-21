@@ -11,10 +11,7 @@ import {
   type ScenarioOptions,
 } from "../../tests/fixtures/turn-scenario";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 // How a thread's turns start and end, as a person or a phone sees it: whether
 // the thread reads running, what was news, what each answer ended as. See

@@ -17,10 +17,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats();
 

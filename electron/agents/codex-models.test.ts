@@ -16,10 +16,7 @@ import {
   supportsEffort,
 } from "../../shared/settings";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 // Answers like `codex app-server`: two pages, one hidden and one legacy model.
 // Signed out, it still lists the few models built into the CLI.

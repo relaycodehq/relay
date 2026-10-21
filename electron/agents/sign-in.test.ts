@@ -5,10 +5,7 @@ import { join } from "node:path";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { findExecutable } from "../platform/executables";
 import { agentSignedIn, signInCommand } from "./sign-in";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 let dir: string | undefined;
 afterEach(async () => {

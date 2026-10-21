@@ -22,10 +22,7 @@ import {
 } from "../fixtures/turn-scenario";
 import type { AgentProvider } from "../../shared/projects";
 
-vi.mock("../../electron/platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../electron/platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../electron/platform/executables");
 
 const agents = (process.env.RELAY_RECORD ?? "").split(",").filter(Boolean);
 const rawRoot = process.env.RELAY_RECORD_OUT ?? "/tmp/relay-replays-raw";

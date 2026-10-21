@@ -8,10 +8,7 @@ import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { agentError } from "../../../shared/agent-error";
 import type { AgentActivity } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 type Wire = Record<string, unknown>;
 // Answers like `codex app-server` whose config.toml sets `model_reasoning_effort = "xhigh"`.

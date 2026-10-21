@@ -23,10 +23,7 @@ import {
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
 import { gitIn } from "../../tests/fixtures/git-repo";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats();
 

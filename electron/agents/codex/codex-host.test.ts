@@ -25,10 +25,7 @@ import {
 // A Codex turn keeps running in the agent host while Relay restarts, and the
 // next Relay picks it up without sending it again.
 
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 // `codex app-server` with one turn: "part one", then, once the release file
 // exists, " and part two". Every request it reads goes to the log.

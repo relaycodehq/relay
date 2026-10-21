@@ -6,10 +6,7 @@ import { findExecutable } from "../../platform/executables";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { runClaude } from "./claude";
 
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 let root: string;
 beforeEach(async () => {

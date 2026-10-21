@@ -12,10 +12,7 @@ import { closeCatalog, forgetMuseModels, museDefaults, museModels } from "./cata
 import { runMuse } from "./run";
 import { disposeMuse } from "./sessions";
 
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 type Sent = { id?: number; method?: string; params?: any };
 let root = "";

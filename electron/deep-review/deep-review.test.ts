@@ -39,10 +39,7 @@ import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { build } from "esbuild";
 import { configureCursor } from "../agents/cursor/sdk";
 import { forgetCursorModels } from "../agents/cursor/catalog";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 const choice = {
   ...defaultAISettings.questions,

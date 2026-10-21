@@ -27,10 +27,7 @@ import {
   writeCodexSession,
 } from "../../tests/fixtures/terminal-sessions";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 let root: string, repo: string, store: Store, chats: ProjectChats;
 let projectId: string;

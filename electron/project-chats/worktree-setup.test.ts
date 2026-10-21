@@ -27,10 +27,7 @@ import type { ChatCore } from "./core";
 import { WorktreeSetup, freePortOffset } from "./worktree-setup";
 import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];

@@ -17,10 +17,7 @@ import { randomUUID } from "node:crypto";
 import { defaultAISettings } from "../../shared/settings";
 import { StartedThreads } from "../started-threads";
 import { serveRelayTools, useRelayMcp, verifyRelayToken } from "../relay-mcp";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 const secret = "c".repeat(64);
 let closeTools: () => Promise<void>;
