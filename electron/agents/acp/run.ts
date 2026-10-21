@@ -5,7 +5,13 @@ import { TurnText } from "../cursor/activity";
 import { signedOutError } from "../errors";
 import { answerLimitError } from "../turn-kit";
 import type { AgentOptions } from "../types";
-import { acpActivity, acpEdits, editKinds, lookKinds, planText } from "./activity";
+import {
+  acpActivity,
+  acpEdits,
+  editKinds,
+  lookKinds,
+  planText,
+} from "./activity";
 import { AcpRequestError } from "./connection";
 import type { AcpProfile } from "./profiles";
 import {
@@ -19,7 +25,12 @@ import {
   type AcpPromptResult,
   type AcpToolCall,
 } from "./protocol";
-import { acquireAcpAgent, openSession, type AcpAgent, type McpServer } from "./sessions";
+import {
+  acquireAcpAgent,
+  openSession,
+  type AcpAgent,
+  type McpServer,
+} from "./sessions";
 import { applySettings } from "./settings";
 
 /** How long a cancelled turn may take to say so before Relay stops waiting. */
@@ -42,7 +53,9 @@ function requestDetail(request: AcpPermissionRequest) {
   const raw = request.toolCall.rawInput as Record<string, unknown> | undefined;
   const command = typeof raw?.command === "string" ? raw.command : undefined;
   const paths = [
-    ...(request.toolCall.content ?? []).flatMap((c) => (c.type === "diff" && c.path ? [c.path] : [])),
+    ...(request.toolCall.content ?? []).flatMap((c) =>
+      c.type === "diff" && c.path ? [c.path] : [],
+    ),
     ...(request.toolCall.locations ?? []).map((l) => l.path),
   ];
   return command ?? ([...new Set(paths)].join("\n") || undefined);
@@ -68,36 +81,60 @@ async function permission(
   if (options.job.kind === "helper") return answer(reject());
   if (options.readOnly && !lookKinds.has(kind)) return answer(reject());
   if (options.runtimeMode === "full-access") return answer(allow());
-  if (options.runtimeMode === "auto-accept-edits" && editKinds.has(kind)) return answer(allow());
+  if (options.runtimeMode === "auto-accept-edits" && editKinds.has(kind))
+    return answer(allow());
   if (!options.onRequest || options.readOnly) return answer(reject());
 
-  const decisions = (Object.keys(decisionKinds) as (keyof typeof decisionKinds)[]).filter(
-    (decision) => request.options.some((o) => o.kind === decisionKinds[decision]),
+  const decisions = (
+    Object.keys(decisionKinds) as (keyof typeof decisionKinds)[]
+  ).filter((decision) =>
+    request.options.some((o) => o.kind === decisionKinds[decision]),
   );
-  const response = await options.onRequest(
-    {
-      kind: "approval",
-      title: request.toolCall.title || `${name} wants to run a tool`,
-      detail: requestDetail(request),
-      decisions,
-    },
-    signal,
-  ).catch(() => undefined);
-  if (signal.aborted || response?.kind !== "approval") return cancelledPermission;
+  const response = await options
+    .onRequest(
+      {
+        kind: "approval",
+        title: request.toolCall.title || `${name} wants to run a tool`,
+        detail: requestDetail(request),
+        decisions,
+      },
+      signal,
+    )
+    .catch(() => undefined);
+  if (signal.aborted || response?.kind !== "approval")
+    return cancelledPermission;
   if (response.decision === "cancel") return answer(reject());
-  return answer(optionOf(request, decisionKinds[response.decision]) ?? reject());
+  return answer(
+    optionOf(request, decisionKinds[response.decision]) ?? reject(),
+  );
 }
 
 /** The turn's prompt as ACP content blocks. */
-async function promptBlocks(options: AgentOptions, agent: AcpAgent, name: string) {
+async function promptBlocks(
+  options: AgentOptions,
+  agent: AcpAgent,
+  name: string,
+) {
   const { job } = options;
   const helper = job.kind === "helper" ? job : undefined;
-  const note = helper ? undefined : await options.context?.().catch(() => undefined);
+  const note = helper
+    ? undefined
+    : await options.context?.().catch(() => undefined);
   const text = job.kind === "compact" ? agent.profile.compact! : options.prompt;
-  const skills = job.kind === "prompt" ? await agent.profile.skillContext?.(options) ?? [] : [];
+  const skills =
+    job.kind === "prompt"
+      ? ((await agent.profile.skillContext?.(options)) ?? [])
+      : [];
   const blocks: object[] = [
-    ...skills.map((text) => ({ type: "text", text, annotations: { audience: ["assistant"] } })),
-    { type: "text", text: [helper?.instructions, note, text].filter(Boolean).join("\n\n") },
+    ...skills.map((text) => ({
+      type: "text",
+      text,
+      annotations: { audience: ["assistant"] },
+    })),
+    {
+      type: "text",
+      text: [helper?.instructions, note, text].filter(Boolean).join("\n\n"),
+    },
   ];
   if (options.images?.length) {
     if (!agent.caps?.image) throw new Error(`${name} can't read images.`);
@@ -119,20 +156,40 @@ const mcpServers = (options: AgentOptions, agent: AcpAgent): McpServer[] =>
           type: "http",
           name: "relay",
           url: options.relayTools.url,
-          headers: [{ name: "Authorization", value: `Bearer ${options.relayTools.token}` }],
+          headers: [
+            {
+              name: "Authorization",
+              value: `Bearer ${options.relayTools.token}`,
+            },
+          ],
         },
       ]
     : [];
 
 /** Runs one turn on an ACP agent, starting or picking up its session in the thread's process. */
-export async function runAcp(profile: AcpProfile, options: AgentOptions): Promise<string> {
+export type AcpRunObserver = {
+  /** Drains native events before the ACP turn settles, including steer acknowledgements. */
+  settle(): Promise<void>;
+  failure?: Promise<never>;
+};
+
+/** Native APIs may augment ACP without replacing its per-session MCP and approvals. */
+export async function runAcp(
+  profile: AcpProfile,
+  options: AgentOptions,
+  observe?: (agent: AcpAgent) => Promise<AcpRunObserver>,
+): Promise<string> {
   const { signal, job } = options;
   const name = agentName(profile.provider);
   signal.throwIfAborted();
   if (job.kind === "compact" && !profile.compact)
-    throw new Error(`${name} summarizes a long thread on its own; there is nothing to compact by hand.`);
+    throw new Error(
+      `${name} summarizes a long thread on its own; there is nothing to compact by hand.`,
+    );
   if (job.kind === "side" || options.session?.fork)
-    throw new Error(`${name} can't copy a conversation, so it can't answer beside the thread.`);
+    throw new Error(
+      `${name} can't copy a conversation, so it can't answer beside the thread.`,
+    );
   if (job.kind === "review" || job.kind === "goal")
     throw new Error(`${name} has no /${job.kind}.`);
 
@@ -143,8 +200,11 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
   // A helper job is one bare question in a process of its own, never the thread's.
   const key = job.kind === "helper" ? undefined : options.session?.key;
   // A thread is read-only from its start, so its process can be started that way.
-  const readOnly = options.readOnly ? await profile.readOnlyEnv?.(options.cwd) : undefined;
-  if (readOnly?.warning) options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
+  const readOnly = options.readOnly
+    ? await profile.readOnlyEnv?.(options.cwd)
+    : undefined;
+  if (readOnly?.warning)
+    options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
   const agent = await acquireAcpAgent(profile, key, options.cwd, {
     ...options.env,
     ...readOnly?.env,
@@ -156,8 +216,15 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     throw new Error(`There is no ${name} turn to pick up.`);
   }
 
-  const turn = new TurnText(options.onText, options.onCommentary, profile.provider);
-  const calls = new Map<string, Partial<AcpToolCall> & { toolCallId: string }>();
+  const turn = new TurnText(
+    options.onText,
+    options.onCommentary,
+    profile.provider,
+  );
+  const calls = new Map<
+    string,
+    Partial<AcpToolCall> & { toolCallId: string }
+  >();
   let overflow!: (error: Error) => void;
   const overflowed = new Promise<never>((_, reject) => (overflow = reject));
   void overflowed.catch(() => {});
@@ -191,7 +258,12 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       case "tool_call_update": {
         const { sessionUpdate: _, ...fields } = update;
         const known = calls.get(update.toolCallId);
-        const call = { ...known, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null)) } as Partial<AcpToolCall> & { toolCallId: string };
+        const call = {
+          ...known,
+          ...Object.fromEntries(
+            Object.entries(fields).filter(([, v]) => v != null),
+          ),
+        } as Partial<AcpToolCall> & { toolCallId: string };
         calls.set(update.toolCallId, call);
         if (!known) turn.toCommentary();
         options.onActivity?.(acpActivity(call));
@@ -215,7 +287,8 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
         return;
       }
       case "config_option_update":
-        if (agent.session) agent.session.settings.configOptions = update.configOptions;
+        if (agent.session)
+          agent.session.settings.configOptions = update.configOptions;
         return;
       case "session_info_update":
         if (update.title) options.onTitle?.(update.title);
@@ -244,15 +317,22 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
   connection.onRequest = async (method, params) => {
     if (method === "session/request_permission")
       return permission(options, name, params, turnAbort.signal);
-    throw new AcpRequestError(-32601, `Relay doesn't offer ${method}.`, null, method);
+    throw new AcpRequestError(
+      -32601,
+      `Relay doesn't offer ${method}.`,
+      null,
+      method,
+    );
   };
 
+  let observer: AcpRunObserver | undefined;
   let cancelTimer: NodeJS.Timeout | undefined;
   try {
     connection.mark("start");
     let reply: Promise<unknown>;
     if (adopted) {
       connection.listen(sessionId!, hear);
+      observer = await observe?.(agent);
       reply = connection.wait(adopted.id, "session/prompt");
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
@@ -263,7 +343,8 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
         mcpServers: mcpServers(options, agent),
       });
       sessionId = opened.id;
-      if (key && opened.id !== options.session?.id) await options.session?.onId(opened.id);
+      if (key && opened.id !== options.session?.id)
+        await options.session?.onId(opened.id);
       if (opened.lost)
         options.onCommentary?.(
           `${profile.provider}-lost`,
@@ -282,9 +363,15 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       const prompt = await promptBlocks(options, agent, name);
       signal.throwIfAborted();
       connection.listen(opened.id, hear);
+      observer = await observe?.(agent);
+      signal.throwIfAborted();
       const id = connection.reserve();
       agent.keep({ id });
-      reply = connection.request("session/prompt", { sessionId: opened.id, prompt }, id);
+      reply = connection.request(
+        "session/prompt",
+        { sessionId: opened.id, prompt },
+        id,
+      );
     }
     void reply.catch(() => {});
     // The agent reports the cancel; if it doesn't, stop waiting anyway.
@@ -292,7 +379,10 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       turnAbort.signal.addEventListener(
         "abort",
         () => {
-          cancelTimer = setTimeout(() => reject(new Error("Cancelled by you.")), cancelGrace);
+          cancelTimer = setTimeout(
+            () => reject(new Error("Cancelled by you.")),
+            cancelGrace,
+          );
           cancelTimer.unref();
         },
         { once: true },
@@ -301,8 +391,14 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     void cancelled.catch(() => {});
     if (signal.aborted) stop();
     const result: AcpPromptResult = promptResultSchema.parse(
-      await Promise.race([reply, cancelled, overflowed]),
+      await Promise.race([
+        reply,
+        cancelled,
+        overflowed,
+        ...(observer?.failure ? [observer.failure] : []),
+      ]),
     );
+    await observer?.settle();
     finish(options, profile, result, turn, name);
     const answer = turn.answer();
     const failed = calls.size === 0 ? profile.failure?.(answer) : undefined;
@@ -310,13 +406,21 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       options.onText("");
       throw new Error(`${name}: ${failed}`);
     }
-    if (options.interactionMode === "plan" && answer.trim()) options.onPlan?.(answer);
+    if (options.interactionMode === "plan" && answer.trim())
+      options.onPlan?.(answer);
     return answer;
   } catch (error) {
+    if (observer) {
+      cancel();
+      await observer.settle().catch(() => {});
+    }
     if (error instanceof AcpRequestError && error.code === AUTH_REQUIRED)
-      throw signedOutError(profile.provider, profile.provider === "opencode"
-        ? "OpenCode's model provider needs you to sign in again. Reconnect the provider, then resume the answer."
-        : undefined);
+      throw signedOutError(
+        profile.provider,
+        profile.provider === "opencode"
+          ? "OpenCode's model provider needs you to sign in again. Reconnect the provider, then resume the answer."
+          : undefined,
+      );
     throw error;
   } finally {
     clearTimeout(cancelTimer);
@@ -357,10 +461,12 @@ function finish(
     case "refusal":
       throw new Error(`${name} refused to go on.`);
     case "max_tokens":
-      if (!turn.answer()) throw new Error(`${name} ran out of tokens before it answered.`);
+      if (!turn.answer())
+        throw new Error(`${name} ran out of tokens before it answered.`);
       return;
     case "max_turn_requests":
-      if (!turn.answer()) throw new Error(`${name} reached its limit of steps for one turn.`);
+      if (!turn.answer())
+        throw new Error(`${name} reached its limit of steps for one turn.`);
   }
 }
 

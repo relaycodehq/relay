@@ -31,8 +31,10 @@ const send = (v) =>
 
 if (process.argv[2] === "service") {
   log({ cli: process.argv.slice(2) });
-  if (process.argv[3] === "status") console.log(scenario.serviceUrl ?? "stopped");
-  else if (process.argv[3] === "get" && process.argv[4] === "password") console.log(scenario.servicePassword ?? "fixture-local-password");
+  if (process.argv[3] === "status")
+    console.log(scenario.serviceUrl ?? "stopped");
+  else if (process.argv[3] === "get" && process.argv[4] === "password")
+    console.log(scenario.servicePassword ?? "fixture-local-password");
   else process.exit(1);
   process.exit(0);
 }
@@ -50,6 +52,15 @@ if (process.argv[2] === "api") {
   process.exit(0);
 }
 
+const native = async (path, body) => {
+  if (!scenario.nativeUrl) return;
+  const res = await fetch(scenario.nativeUrl + path, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+};
 let signedIn = !scenario.signIn;
 let nextId = 1000;
 let sessionCount = 0;
@@ -66,10 +77,24 @@ const ask = (method, params) =>
   });
 
 async function prompt(m) {
-  if (scenario.promptError || (scenario.authFile && !fs.existsSync(scenario.authFile)))
-    return send({ id: m.id, error: scenario.promptError ?? { code: -32000, message: "Authentication required: provider authentication required" } });
+  if (
+    scenario.promptError ||
+    (scenario.authFile && !fs.existsSync(scenario.authFile))
+  )
+    return send({
+      id: m.id,
+      error: scenario.promptError ?? {
+        code: -32000,
+        message: "Authentication required: provider authentication required",
+      },
+    });
   const sessionId = m.params.sessionId;
+  await native("/fixture/turn", { sessionID: sessionId });
   for (const step of scenario.turn ?? []) {
+    if (step.native)
+      await native("/fixture/event", { ...step.native, sessionID: sessionId });
+    if (step.waitNative)
+      await native("/fixture/wait", { sessionID: sessionId });
     if (step.update)
       send({
         method: "session/update",
@@ -100,6 +125,7 @@ async function prompt(m) {
       },
     });
   }
+  await native("/fixture/end", { sessionID: sessionId });
   send({
     id: m.id,
     result: {
@@ -111,19 +137,28 @@ async function prompt(m) {
 
 const needsSignIn = (m) =>
   !signedIn &&
-  send({ id: m.id, error: { code: -32000, message: "Authentication required" } });
+  send({
+    id: m.id,
+    error: { code: -32000, message: "Authentication required" },
+  });
 
 require("node:readline")
   .createInterface({ input: process.stdin })
-  .on("line", (line) => {
+  .on("line", async (line) => {
     const m = JSON.parse(line);
     log(m);
     if (m.method === undefined) return waiting.get(m.id)?.(m.result);
     switch (m.method) {
       case "initialize":
         // Gemini rejects a clientInfo without a version.
-        if (m.params.clientInfo && typeof m.params.clientInfo.version !== "string")
-          return send({ id: m.id, error: { code: -32603, message: "Internal error" } });
+        if (
+          m.params.clientInfo &&
+          typeof m.params.clientInfo.version !== "string"
+        )
+          return send({
+            id: m.id,
+            error: { code: -32603, message: "Internal error" },
+          });
         return send({
           id: m.id,
           result: {
@@ -132,7 +167,8 @@ require("node:readline")
               loadSession: false,
               promptCapabilities: { image: false },
               mcpCapabilities: { http: true },
-              sessionCapabilities: scenario.resume ? { resume: {} } : {},
+              sessionCapabilities:
+                scenario.resume || scenario.nativeUrl ? { resume: {} } : {},
             },
             authMethods: scenario.signIn
               ? [{ id: scenario.signIn, name: "Sign in" }]
@@ -141,23 +177,42 @@ require("node:readline")
         });
       case "authenticate":
         if (scenario.refuse)
-          return send({ id: m.id, error: { code: -32000, message: scenario.refuse } });
+          return send({
+            id: m.id,
+            error: { code: -32000, message: scenario.refuse },
+          });
         signedIn = m.params.methodId === scenario.signIn;
         return send({ id: m.id, result: {} });
-      case "session/new":
+      case "session/new": {
         if (needsSignIn(m)) return;
+        const sessionId = scenario.nativeUrl
+          ? `ses_${process.pid}_${++sessionCount}`
+          : `s${++sessionCount}`;
+        await native("/fixture/session", {
+          id: sessionId,
+          location: { directory: m.params.cwd },
+        });
         return send({
           id: m.id,
-          result: { sessionId: `s${++sessionCount}`, configOptions: options },
+          result: { sessionId, configOptions: options },
         });
+      }
       case "session/resume":
         if (needsSignIn(m)) return;
-        if (!(scenario.sessions ?? []).includes(m.params.sessionId))
-          return send({ id: m.id, error: { code: -32002, message: "No such session" } });
+        if (
+          !scenario.nativeUrl &&
+          !(scenario.sessions ?? []).includes(m.params.sessionId)
+        )
+          return send({
+            id: m.id,
+            error: { code: -32002, message: "No such session" },
+          });
         return send({ id: m.id, result: { configOptions: options } });
       case "session/set_config_option":
         options = options.map((o) =>
-          o.id === m.params.configId ? { ...o, currentValue: m.params.value } : o,
+          o.id === m.params.configId
+            ? { ...o, currentValue: m.params.value }
+            : o,
         );
         return send({ id: m.id, result: { configOptions: options } });
       case "session/prompt":
@@ -166,6 +221,9 @@ require("node:readline")
         return cancelled?.();
       default:
         if (m.id !== undefined)
-          send({ id: m.id, error: { code: -32601, message: "Method not found" } });
+          send({
+            id: m.id,
+            error: { code: -32601, message: "Method not found" },
+          });
     }
   });

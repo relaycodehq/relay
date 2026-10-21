@@ -13,6 +13,7 @@ import {
   detachCodex,
 } from "./codex/codex-connection";
 import { runClaude } from "./claude/claude";
+import { openCodeRuntime } from "./opencode";
 import {
   askClaudeSide,
   claudeDefaults,
@@ -103,7 +104,7 @@ const cursor: AgentRuntime = {
 const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   codex: counted("codex", codex),
   claude: counted("claude", claude),
-  opencode: counted("opencode", acpRuntime("opencode")),
+  opencode: counted("opencode", openCodeRuntime),
   cursor: counted("cursor", cursor),
   muse: counted("muse", museRuntime),
   amp: counted("amp", acpRuntime("amp")),

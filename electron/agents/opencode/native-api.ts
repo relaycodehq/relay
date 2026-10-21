@@ -5,16 +5,8 @@ import { executableCommand, findExecutable } from "../../platform/executables";
 
 const exec = promisify(execFile);
 
-/**
- * OpenCode 2's shared local service. Rediscover on every operation: its owner
- * may have restarted it or replaced its password. Provider credentials stay
- * owned by OpenCode; keys and authorization codes never go in process args.
- */
-export async function openCodeNativeApi(
-  method: "GET" | "POST" | "DELETE",
-  path: string,
-  body?: object,
-): Promise<unknown> {
+/** Resolve each operation against the service that owns its current password. */
+export async function openCodeEndpoint() {
   const executable = await findExecutable("opencode");
   const cli = async (args: string[]) => {
     const line = executableCommand(executable, args);
@@ -56,6 +48,20 @@ export async function openCodeNativeApi(
   )
     throw new Error("OpenCode didn't report a local HTTP service.");
   const password = await cli(["service", "get", "password"]);
+  return { url, password };
+}
+
+/**
+ * OpenCode 2's shared local service. Rediscover on every operation: its owner
+ * may have restarted it or replaced its password. Provider credentials stay
+ * owned by OpenCode; keys and authorization codes never go in process args.
+ */
+export async function openCodeNativeApi(
+  method: "GET" | "POST" | "DELETE",
+  path: string,
+  body?: object,
+): Promise<unknown> {
+  const { url, password } = await openCodeEndpoint();
   const payload = body === undefined ? undefined : JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const req = request(

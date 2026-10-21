@@ -192,7 +192,10 @@ export function useComposerCommands({
                   kind: "relay" as const,
                   name: c.name,
                   label: "/" + c.name + ("args" in c ? " " + c.args : ""),
-                  description: c.description,
+                  description:
+                    c.name === "reload" && provider === "opencode"
+                      ? "Reload OpenCode configuration across all projects"
+                      : c.description,
                   source: "Relay",
                   Icon: Zap,
                 })),

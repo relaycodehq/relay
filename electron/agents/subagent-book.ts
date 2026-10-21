@@ -65,6 +65,17 @@ export class SubagentBook implements SubagentSource {
     }
   }
 
+  /** A follow-up starts another run on a child session that already finished. */
+  resume(id: string) {
+    const run = this.runs.get(id);
+    if (!run || run.status === "running") return;
+    run.status = "running";
+    run.started = this.now();
+    run.ended = undefined;
+    run.report = undefined;
+    run.stopping = false;
+  }
+
   /** What names it, once the agent says more. */
   name(id: string, naming: Partial<SubagentStart>) {
     const run = this.runs.get(id);

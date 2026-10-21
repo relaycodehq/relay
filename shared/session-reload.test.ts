@@ -37,3 +37,12 @@ it("names them on hover only when something changed", () => {
     }),
   ).toBe("New skills: release, deploy\nAgents gone: reviewer");
 });
+
+it("names OpenCode's shared reload scope before and after it finishes", () => {
+  expect(reloadNote({ scope: "service" }, true)).toBe(
+    "Reloading OpenCode configuration across projects…",
+  );
+  expect(reloadNote({ scope: "service" })).toBe(
+    "OpenCode configuration reloaded across projects",
+  );
+});
