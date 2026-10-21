@@ -1,19 +1,16 @@
 import { randomUUID } from "node:crypto";
-import {
-  lstat,
-  mkdir,
-  readdir,
-  rename,
-  rm,
-  utimes,
-  writeFile,
-} from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { lstat, mkdir, readdir, rename, rm, utimes } from "node:fs/promises";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { extname, join } from "node:path";
 import { app } from "electron";
 import { videoMime } from "../../shared/project-files";
 import type { FilePair } from "../../shared/types";
 import { mediaUrl } from "../media";
-import { git, gitBytes } from "./git";
+import { git, gitEnv, gitError, gitExecutable } from "./git";
+import { stopProcessTree } from "../platform/terminate";
 import type { FileSource } from "./image-pair";
 import { safeWorkingPath } from "./working-files";
 
@@ -56,16 +53,81 @@ async function fromGit(root: string, spec: string, ext: string) {
 
 async function copyBlob(root: string, sha: string, dir: string, file: string) {
   const size = Number(await git(root, ["cat-file", "-s", sha]));
-  if (size > blobLimit) throw new TooLarge();
-  const bytes = await gitBytes(root, ["cat-file", "blob", sha], blobLimit);
+  if (!Number.isSafeInteger(size) || size < 0 || size > blobLimit)
+    throw new TooLarge();
   await mkdir(dir, { recursive: true, mode: 0o700 });
   const partial = `${file}.${randomUUID()}.part`;
-  await writeFile(partial, bytes);
-  await rename(partial, file);
+  try {
+    await streamBlob(root, sha, partial, size);
+    await rename(partial, file);
+  } finally {
+    await rm(partial, { force: true }).catch(() => {});
+  }
   void prune(dir, file).catch((e) =>
     console.warn("Could not trim the video cache:", e),
   );
   return file;
+}
+
+/** Backpressure keeps even two large video sides to a handful of stream buffers. */
+async function streamBlob(
+  root: string,
+  sha: string,
+  partial: string,
+  size: number,
+) {
+  const child = spawn(
+    await gitExecutable(),
+    ["-C", root, "cat-file", "blob", sha],
+    {
+      env: gitEnv(),
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  let failure: unknown;
+  let stopping: Promise<void> | undefined;
+  const stop = (error: unknown) => {
+    failure ??= error;
+    stopping ??= stopProcessTree(child).catch((error) => {
+      failure = error;
+    });
+  };
+  let copied = 0,
+    stderr = "";
+  child.stderr.on("data", (chunk: Buffer) => {
+    if (stderr.length < 16_384)
+      stderr += chunk.toString().slice(0, 16_384 - stderr.length);
+  });
+  child.once("error", (error) => {
+    failure ??= error;
+  });
+  const exited = new Promise<number | null>((resolve) =>
+    child.once("close", resolve),
+  );
+  const timer = setTimeout(() => stop(new Error("Git timed out.")), 15_000);
+  try {
+    const transfer = pipeline(
+      child.stdout,
+      new Transform({
+        transform(chunk: Buffer, _encoding, done) {
+          copied += chunk.length;
+          done(copied > blobLimit ? new TooLarge() : null, chunk);
+        },
+      }),
+      createWriteStream(partial, { flags: "wx", mode: 0o600 }),
+    ).catch(stop);
+    const [, code] = await Promise.all([transfer, exited]);
+    await stopping;
+    if (failure) throw gitError(failure);
+    if (code !== 0)
+      throw gitError({ message: `Git exited with ${code}.`, stderr });
+    if (copied !== size)
+      throw new Error("Git returned an incomplete video blob.");
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Trims the cache to its limit, keeping `kept`, which was just copied. */
