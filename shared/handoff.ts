@@ -172,6 +172,7 @@ export const handoffChatMethods = [
   "projectChatQueuedImages",
   "projectChatReadImage",
   "closeWatchNote",
+  "seePrediction",
 ] as const satisfies readonly ApiMethod[];
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];
 

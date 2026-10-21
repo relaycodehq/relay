@@ -1,4 +1,5 @@
 import type { RunImportOffer } from "../import-offer";
+import type { PredictionSummary } from "../prediction";
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
@@ -392,6 +393,14 @@ export interface ProjectCouncilApi {
   ): Promise<void>;
   /** What "Flag what I'd miss" spent this past week, by thread. */
   watchSpend(): Promise<WatchSpendSummary | undefined>;
+  /** What the composer's next-message guesses cost this past week, and how often they were sent. */
+  predictionSpend(): Promise<PredictionSummary | undefined>;
+  /** The composer showed an answer's guess at the next message, or Escape put it away. */
+  seePrediction(
+    id: string,
+    messageId: string,
+    how: "shown" | "dismissed",
+  ): Promise<void>;
   /** This past week's notes with what was done with each; development builds. */
   watchReview(): Promise<WatchReview>;
   /** Has a helper model grade the notes not graded yet; spends on the helper's account. */

@@ -21,7 +21,7 @@ import { hasAccounts, SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { AnswerRecorder } from "./answer-recorder";
 import { agentJob, turnRules, type ChatTurn } from "./chat-turn";
 import { isAgentError, type AgentError } from "../agents/errors";
-import type { AgentWatch, UsageReport } from "../agents/types";
+import type { AgentPredict, AgentWatch, UsageReport } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import { publishFindings, settleFixes } from "../findings";
 import { relayToolsFor } from "../relay-mcp";
@@ -208,6 +208,7 @@ export class TurnRunner {
       fork,
       first: chat.messages.find((m) => m.role === "user")?.id === input.id,
     };
+    this.judgeGuess(t);
     const snapshot = new TurnSnapshot(root, message.id, rules.records);
     try {
       const options = await this.options(t, prompt, sessionId, snapshot);
@@ -280,6 +281,7 @@ export class TurnRunner {
       ...(chat.messages.find((m) => m.id === input.id)?.images ?? []),
     ];
     const watch = this.watch(t);
+    const predict = this.predict(t);
     let goalSaved = 0;
     return {
       onControl: (control: AgentControl) => {
@@ -377,6 +379,7 @@ export class TurnRunner {
         ? undefined
         : this.core.active.get(chat.id)?.requests.ask,
       ...(watch ? { watch } : {}),
+      ...(predict ? { predict } : {}),
       session: {
         key: t.sessionKey,
         id: sessionId,
@@ -423,6 +426,68 @@ export class TurnRunner {
       onNote: (note) => answer.note(note),
       onSpend: (spend) => this.core.watchSpend?.add(chat.id, spend),
     } satisfies AgentWatch;
+  }
+
+  /** A message sent past a guess the composer showed counts for or against guessing. */
+  private judgeGuess({ chat, turn, rules, input, branch }: TurnState) {
+    if (turn.kind !== "reply" || branch || rules.side) return;
+    const at = chat.messages.findIndex((m) => m.id === input.id);
+    const before = chat.messages
+      .slice(0, Math.max(0, at))
+      .reverse()
+      .find((m) => !m.parentId && !m.side);
+    if (
+      at >= 0 &&
+      before?.role === "assistant" &&
+      before.prediction &&
+      before.predictionSeen
+    )
+      this.core.predictions?.sent(
+        chat.id,
+        before.prediction,
+        chat.messages[at]!.body,
+      );
+  }
+
+  /** A guess at the next message, asked on the same session as the check. */
+  private predict({
+    chat,
+    turn,
+    rules,
+    answer,
+    provider,
+    branch,
+  }: TurnState): AgentPredict | undefined {
+    if (
+      !this.core.store.get().composerPredictions ||
+      (provider !== "claude" && provider !== "codex") ||
+      turn.kind !== "reply" ||
+      rules.side ||
+      branch ||
+      chat.reviewer ||
+      // An agent drives it over Relay's tools: nobody sits at its composer.
+      chat.startedBy
+    )
+      return;
+    return {
+      request: turn.request ?? "",
+      // Not while a plan or a question waits on them: that's their next move.
+      allows: () =>
+        !answer.message.proposedPlan &&
+        !answer.message.questions?.some(
+          (q) => !q.answers && !q.answerMessageId && !q.dismissed,
+        ) &&
+        // A queued message goes out next anyway.
+        !(
+          !chat.queuePaused &&
+          chat.queue?.some(
+            (q) => !q.compact && !q.input.parentId && !q.input.side,
+          )
+        ) &&
+        (this.core.predictions?.allows() ?? true),
+      onPrediction: (text) => answer.predict(text),
+      onAsked: (asked) => this.core.predictions?.asked(chat.id, asked),
+    };
   }
 
   /** The agent's answer, asked again once from Relay's record when it lost the history. */

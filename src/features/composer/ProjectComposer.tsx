@@ -32,6 +32,7 @@ import { useAutoCompactSaved } from "../agents/auto-compact";
 import { formatTokens } from "../../../shared/tokens";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
+import { useNextGuess, type NextGuess } from "./useNextGuess";
 import { draftRecipient } from "../../../shared/recipient";
 import { AgentMissingNotice } from "./AgentMissingNotice";
 import { OtherDraftNotice } from "./OtherDraftNotice";
@@ -112,6 +113,8 @@ export interface ComposerConversation {
    */
   cold?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
+  /** The message the agent guessed comes next, offered while the draft is empty. */
+  prediction?: NextGuess;
 }
 export function ProjectComposer({
   ref,
@@ -196,6 +199,20 @@ export function ProjectComposer({
   const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
+  // Typing only hides it until the draft is empty again. A note isn't
+  // what the agent guessed: it was guessing what it would be asked.
+  const guess = useNextGuess(
+    conversation.chatId,
+    conversation.prediction,
+    composer.provider !== "message" &&
+      !draft.text.trim() &&
+      !draft.attached.length,
+  );
+  const ghost = guess.text;
+  const takeGhost = () => {
+    if (!ghost) return;
+    promptInput.current?.replace(ghost);
+  };
   const recall = usePromptHistory(promptInput, sent);
   const mounted = useRef(false);
   useEffect(() => {
@@ -349,9 +366,12 @@ export function ProjectComposer({
       });
     },
   };
-  const onPromptKeyDown = (event: KeyboardEvent<HTMLElement>) =>
+  const onPromptKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    // The guess's own button keeps its keys.
+    if ((event.target as Element).closest(".composer-ghost")) return;
     composerKeys(event, {
       recall: (event) => recall.keyDown(event, draft.text),
+      ghost: ghost ? { take: takeGhost, dismiss: guess.dismiss } : undefined,
       menus: [memes.onKeyDown, mentions.onKeyDown, commands.onKeyDown],
       editQueued: onEditQueued
         ? () => {
@@ -370,6 +390,7 @@ export function ProjectComposer({
       stepEffort: (step) => runs.stepEffort(to, step),
       stepQuick: quick.presets.length ? quick.step : undefined,
     });
+  };
   return (
     <div className="thread-compose-wrap">
       {planner && (
@@ -471,6 +492,12 @@ export function ProjectComposer({
             }}
             onOpenPaste={setViewingPaste}
             onPasteRefused={draft.pasteRefused}
+            ghost={ghost}
+            onGhostSeen={guess.seen}
+            onGhost={() => {
+              takeGhost();
+              promptInput.current?.focusEnd();
+            }}
             images={draft.chips}
             onOpenImage={(n) =>
               draft.sketch(draft.images.find((image) => image.n === n)?.id)

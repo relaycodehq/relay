@@ -1,3 +1,4 @@
+import type { PredictionAsked } from "../../shared/prediction";
 import type { WatchNote, WatchScope, WatchSpend } from "../../shared/watch";
 import type {
   RuntimeMode,
@@ -65,6 +66,17 @@ export type AgentWatch = {
   onNote: (note: WatchNote) => void;
   /** What a check spent, or what the watched session did in a turn. */
   onSpend?: (spend: WatchSpend) => void;
+};
+
+/** Guessing the person's next message once a turn's answer is in; see ./predict. */
+export type AgentPredict = {
+  /** What the person asked this turn, in their own words. */
+  request: string;
+  onPrediction: (text: string) => void;
+  /** Asked once the turn has earned a guess: false skips it after all. */
+  allows?: () => boolean | Promise<boolean>;
+  /** A guess was asked for, whether or not it came back as one. */
+  onAsked?: (asked: PredictionAsked) => void;
 };
 
 /** One turn of any agent, as a thread, title or helper job runs it. */
@@ -148,6 +160,7 @@ export interface AgentOptions {
   };
   onRequest?: AskAgentRequest;
   watch?: AgentWatch;
+  predict?: AgentPredict;
   session?: {
     key?: string;
     id?: string;

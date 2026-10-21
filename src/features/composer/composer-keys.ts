@@ -21,6 +21,8 @@ export interface ComposerSubmitOptions extends Omit<
 interface ComposerKeys {
   recall: (event: KeyboardEvent<HTMLElement>) => boolean;
   menus: readonly ((event: KeyboardEvent<HTMLElement>) => boolean)[];
+  /** The guess shown over the empty draft: Tab takes it, Escape puts it away. */
+  ghost?: { take: () => void; dismiss: () => void };
   /** Takes back a queued message when the caret allows it. */
   editQueued?: () => boolean;
   alternateCompact: boolean;
@@ -40,6 +42,16 @@ export function composerKeys(
   if (context.recall(event)) return;
   if (context.menus.some((handle) => handle(event))) return;
   if (event.nativeEvent.isComposing) return;
+  if (
+    context.ghost &&
+    event.key === "Tab" &&
+    !(event.shiftKey || event.altKey || event.metaKey || event.ctrlKey)
+  ) {
+    event.preventDefault();
+    context.ghost.take();
+    return;
+  }
+  if (context.ghost && event.key === "Escape") context.ghost.dismiss();
   if (
     context.editQueued &&
     !event.repeat &&

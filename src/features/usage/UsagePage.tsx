@@ -9,7 +9,7 @@ import type {
   UsageRange,
   UsageSummary,
 } from "../../../shared/usage";
-import { usageRanges } from "../../../shared/usage";
+import { relayJobLabels, usageRanges } from "../../../shared/usage";
 import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
@@ -197,6 +197,10 @@ const OTHERS_AFTER = 4;
 /** Accounts that fit beside the rhythm charts; more get a row of their own. */
 const ROOM_BESIDE = 4;
 
+/** A label as it reads mid-sentence: "Thread titles" to "thread titles", "PR triage" as is. */
+const midSentence = (label: string) =>
+  label.replace(/^[A-Z](?![A-Z])/, (c) => c.toLowerCase());
+
 function Rhythmic({
   summary,
   measure: m,
@@ -382,13 +386,21 @@ function Rhythmic({
 
       {relay > 0 && (
         <p className="us-footnote">
-          Relay’s own work, titles, commit messages and watcher checks, came to{" "}
-          {measured(relay, m)}
+          Relay’s own work came to {measured(relay, m)}
           {m === "fresh" && " tokens"},{" "}
           {((relay / (m === "usd" ? totals.usd : totals.fresh)) * 100).toFixed(
             1,
           )}
-          % of it.
+          % of it:{" "}
+          {Object.entries(totals.relayJobs)
+            .filter(([, spent]) => spent[m] > 0)
+            .sort((a, b) => b[1][m] - a[1][m])
+            .map(
+              ([job, spent]) =>
+                `${midSentence(relayJobLabels[job as keyof typeof relayJobLabels])} ${measured(spent[m], m)}`,
+            )
+            .join(", ")}
+          .
         </p>
       )}
     </div>

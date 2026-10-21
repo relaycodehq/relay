@@ -1204,7 +1204,8 @@
 .watch-how code {
   font-size: 11px;
 }
-.watch-cost {
+.watch-cost,
+.prediction-cost {
   margin: 8px 0 0;
   font-size: 12px;
   color: var(--muted);

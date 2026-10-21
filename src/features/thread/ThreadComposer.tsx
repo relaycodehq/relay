@@ -1,12 +1,16 @@
 import { useCallback, useMemo, useRef, type ReactNode, type Ref } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
 import { openPlan } from "../../../shared/open-plan";
-import type { ChatScope, Project } from "../../../shared/projects";
+import type {
+  ChatMessage,
+  ChatScope,
+  Project,
+} from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
@@ -157,6 +161,21 @@ function ThreadBranch({
   return picker;
 }
 
+/** The guess the last answer left, while it is the last word and wasn't put away. */
+function nextGuess(view: ChatMessage[]) {
+  const last = view.at(-1);
+  return last?.role === "assistant" &&
+    last.status === "complete" &&
+    last.prediction &&
+    last.predictionSeen !== "dismissed"
+    ? {
+        id: last.id,
+        text: last.prediction,
+        seen: last.predictionSeen === "shown",
+      }
+    : undefined;
+}
+
 /**
  * The open conversation's composer, told what the thread is doing: whether
  * its agents are at work, what it waits on, where it works, and what the
@@ -234,6 +253,11 @@ export function ThreadComposer({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
 }) {
   const qc = useQueryClient();
+  // Off, a guess the last answer already has isn't offered either.
+  const predictions = useQuery({
+    queryKey: ["composer-predictions"],
+    queryFn: () => api.composerPredictions(),
+  });
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
   const cost = useMemo(() => threadCost(shown), [shown]);
   const cacheExpired = useCacheExpired(context?.usage.cache);
@@ -334,6 +358,8 @@ export function ThreadComposer({
             })) ??
           lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
+        prediction:
+          running || root || !predictions.data ? undefined : nextGuess(shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
         cold,

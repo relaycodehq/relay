@@ -24,6 +24,7 @@ import { SubagentWatch } from "../watch/subagents";
 import { ClaudeMeter } from "../watch/spend";
 import { RequestUsage } from "../request-usage";
 import { askLive, sessionTotals } from "./side";
+import { SideQueue } from "./side-queue";
 import {
   claudePermissionMode,
   linksSignature,
@@ -110,6 +111,8 @@ export type ClaudeSession = {
   goal?: ClaudeGoalWatch;
   /** What its side questions cost; made with the first frame it reads. */
   meter?: ClaudeMeter;
+  /** Its side questions, one at a time so the meter measures each alone. */
+  asking?: SideQueue;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
   watch?: { checks: WatchChecks; subagents: SubagentWatch };
 };
@@ -124,11 +127,51 @@ export function meterOf(session: ClaudeSession) {
   return session.meter;
 }
 
+/** How long a background side question may run, and so hold the others up. */
+const ASK_LIMIT_MS = 120_000;
+
+/**
+ * A measured side question to the live session, after any asked before it.
+ * `/btw`, the watcher's checks and the next-message guess all queue here;
+ * `urgent` is for one someone waits on, which goes ahead of the background
+ * ones and runs as long as it takes. Undefined when the session ended
+ * while it waited.
+ */
+export function measuredAsk(
+  session: ClaudeSession,
+  signal: AbortSignal,
+  ask: (stream: ClaudeStream, signal: AbortSignal) => Promise<string | null>,
+  urgent = false,
+) {
+  const limit = urgent ? undefined : ASK_LIMIT_MS;
+  return (session.asking ??= new SideQueue()).run(
+    async () => {
+      if (session.frames.ended) return undefined;
+      const within =
+        limit === undefined
+          ? signal
+          : AbortSignal.any([signal, AbortSignal.timeout(limit)]);
+      return meterOf(session).measure(() => ask(session.stream, within));
+    },
+    signal,
+    { urgent, holdMs: limit },
+  );
+}
+
+export const askMeasured = async (
+  session: ClaudeSession,
+  question: string,
+  signal: AbortSignal,
+) =>
+  (await measuredAsk(session, signal, (stream, within) =>
+    askLive(stream, question, within),
+  )) ?? { reply: null };
+
 /** The session's side checks; they ask whatever stream the session has at the time. */
 export function watchOf(session: ClaudeSession) {
   if (!session.watch) {
     const checks = new WatchChecks((question, signal) =>
-      meterOf(session).measure(() => askLive(session.stream, question, signal)),
+      askMeasured(session, question, signal),
     );
     session.watch = { checks, subagents: new SubagentWatch() };
   }

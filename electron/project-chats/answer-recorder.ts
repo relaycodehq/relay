@@ -174,6 +174,12 @@ export class AnswerRecorder {
     (this.message.notes ??= []).push(note);
     this.changed();
   }
+  /** The message the person would likely send next; the composer offers it while it's the last answer. */
+  predict(text: string) {
+    if (this.stopped) return;
+    this.message.prediction = text;
+    this.changed();
+  }
   /** A page the agent showed with show_html; it sits above the reply. */
   render(render: HtmlRender) {
     if (this.stopped) return;
