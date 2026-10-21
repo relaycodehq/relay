@@ -25,7 +25,11 @@ export function InstallLog({ output }: { output: string }) {
           sideOffset={8}
           collisionPadding={12}
         >
-          <Popover.Popup className="install-log" aria-label="Install log">
+          <Popover.Popup
+            data-shortcut-passive
+            className="install-log"
+            aria-label="Install log"
+          >
             {/* A new ref each render: as the output grows, its end stays in view. */}
             <pre
               ref={(log) => {

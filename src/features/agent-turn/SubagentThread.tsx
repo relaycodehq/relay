@@ -20,7 +20,7 @@ import {
 import { AgentTurn } from "./AgentTurn";
 import { RichText } from "../../ui/RichText";
 import { SubagentStatus } from "./Subagents";
-import { POPUPS } from "../../lib/shortcuts";
+import { keyboardPopups } from "../../lib/popup-keyboard";
 import { errorMessage } from "../../../shared/error-message";
 import { usePoll } from "../../lib/poll";
 
@@ -65,7 +65,7 @@ export function SubagentThread({
     const key = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       // Escape then belongs to a popup open over the run, like an image preview.
-      const popups = [...document.querySelectorAll(POPUPS)];
+      const popups = keyboardPopups();
       if (popups.some((popup) => popup !== self.current)) return;
       event.preventDefault();
       close.current();

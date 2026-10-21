@@ -436,7 +436,10 @@ export function ContextWindowMeter({
           align="end"
           sideOffset={6}
         >
-          <Popover.Popup className="composer-select-popup context-meter-popup">
+          <Popover.Popup
+            data-shortcut-passive
+            className="composer-select-popup context-meter-popup"
+          >
             <div className="usage-meter" data-pace={pace}>
               <div className="usage-meter-top">
                 <span>Context window</span>

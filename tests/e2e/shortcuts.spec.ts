@@ -1,4 +1,9 @@
-import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -92,6 +97,47 @@ test("a changed shortcut moves its command, the app menu's included", async () =
     await expect(row("Open settings").locator(".shortcut-key")).toHaveText(
       mac ? "⌘," : "Ctrl+,",
     );
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("passive update notices leave app shortcuts and Settings Escape available", async () => {
+  const root = await mkdtemp(join(tmpdir(), "relay-shortcut-toasts-"));
+  const app = await electron.launch({
+    env: { ...relayEnv(), RELAY_TEST_DATA: join(root, "data") },
+  });
+  try {
+    const page = await app.firstWindow();
+    await expect(
+      page.getByRole("button", { name: "View activity" }),
+    ).toBeVisible();
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]!.webContents.send("relay:update", {
+        status: "available",
+        current: "0.0.1",
+        version: "99.0.0",
+        install: "manual",
+      });
+    });
+    const toast = page.locator(".update-toast").filter({ hasText: "99.0.0" });
+    await expect(toast).toBeVisible();
+    await expect(toast).toHaveAttribute("role", "dialog");
+    await page.keyboard.press(`${mod}+KeyN`);
+    const picker = page.getByRole("dialog", { name: "New thread in…" });
+    await expect(picker).toBeVisible();
+    // Real dialogs still prevent app navigation underneath them.
+    await page.keyboard.press(`${mod}+Comma`);
+    const settings = page.locator("section.settings-screen");
+    await expect(settings).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(picker).toBeHidden();
+    await page.keyboard.press(`${mod}+Comma`);
+    await expect(settings).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(settings).toBeHidden();
+    await expect(toast).toBeVisible();
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

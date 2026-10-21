@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { SETTINGS_PAGE } from "./settings-page";
+import { keyboardPopups } from "./popup-keyboard";
 import { z } from "zod";
 import {
   accelerator,
@@ -249,11 +249,8 @@ export function handOver(e: KeyboardEvent) {
   return true;
 }
 
-/** Modal `<dialog>`s have no role attribute; popovers and menus do. Settings is a page over the thread that keeps the keyboard too. */
-export const POPUPS = `dialog[open], [role="dialog"], [role="menu"], ${SETTINGS_PAGE}`;
-
-/** A dialog, popover or menu is open, and the keyboard is its. */
-export const popupOpen = () => !!document.querySelector(POPUPS);
+/** A visible popup or Settings owns the keyboard. Passive cards only do when focused. */
+export const popupOpen = () => keyboardPopups().length > 0;
 
 /**
  * Calls `onFire` when `id`'s keys are pressed anywhere in the window, except

@@ -59,7 +59,11 @@ export function NotesChip({
           sideOffset={8}
           collisionPadding={12}
         >
-          <Popover.Popup className="notes-card" aria-label="Notes">
+          <Popover.Popup
+            data-shortcut-passive
+            className="notes-card"
+            aria-label="Notes"
+          >
             <div className="notes-card-head">
               <b>Notes</b>
               <span>

@@ -130,6 +130,7 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
         const item = toast.data as UpdateItem;
         return (
           <Toast.Root
+            data-shortcut-passive
             key={toast.id}
             toast={toast}
             swipeDirection={["left", "down"]}

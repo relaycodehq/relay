@@ -299,6 +299,7 @@ export function ClockifyTimer({
             sideOffset={8}
           >
             <Popover.Popup
+              data-shortcut-passive
               className="composer-select-popup clockify-panel"
               aria-busy={busy || undefined}
             >

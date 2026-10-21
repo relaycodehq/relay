@@ -98,6 +98,7 @@ export const UsageRing = memo(function UsageRing({
           sideOffset={6}
         >
           <Popover.Popup
+            data-shortcut-passive
             className="composer-select-popup usage-ring-popup"
             data-grouped={usage?.windows.some((w) => !!w.label) || undefined}
           >

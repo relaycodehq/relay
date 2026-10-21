@@ -111,7 +111,11 @@ export function SubagentsIndicator({
           sideOffset={8}
           collisionPadding={12}
         >
-          <Popover.Popup className="subagents-card" aria-label="Subagents">
+          <Popover.Popup
+            data-shortcut-passive
+            className="subagents-card"
+            aria-label="Subagents"
+          >
             <Peek
               batch={batch}
               earlier={earlier}
