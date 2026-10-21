@@ -460,7 +460,10 @@ export class CodexTurn {
     const turnId = this.reviewTurnId || this.turnId;
     if (wire && threadId && turnId) {
       // Keep the transport alive until Codex acknowledges the interruption.
-      this.interruptTimeout = setTimeout(() => this.finish(cancelled()), 3000);
+      this.interruptTimeout = setTimeout(
+        () => this.finish(cancelled()),
+        Number(process.env.RELAY_TEST_CODEX_INTERRUPT_MS) || 3000,
+      );
       void wire
         .request("turn/interrupt", { threadId, turnId })
         .catch(() => this.finish(cancelled()));

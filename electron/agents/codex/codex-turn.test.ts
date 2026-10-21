@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
 import { readCodexContext, closeCodexConnection } from "./codex-connection";
@@ -272,6 +272,9 @@ it("ends a /review when Codex completes it, past the turn it starts for the revi
 });
 
 it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one", async () => {
+  // A busy machine can't run Codex's 3s to acknowledge out before the fake has the interrupt.
+  vi.stubEnv("RELAY_TEST_CODEX_INTERRUPT_MS", "60000");
+  onTestFinished(() => void vi.unstubAllEnvs());
   const stop = new AbortController();
   const { answer, log } = await ask(
     {
@@ -286,35 +289,17 @@ it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one
     {
       job: reviewJob,
       signal: stop.signal,
-      onActivity: (a) => {
-        if (a.kind !== "command") return;
-        // Held, Codex's 3s to acknowledge can't run out on a busy machine
-        // before the fake has taken the interrupt.
-        vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
-        stop.abort();
-      },
+      onActivity: (a) => a.kind === "command" && stop.abort(),
     },
   );
   await expect(answer).rejects.toThrow();
   // The answer ends at Stop, before the fake has written the interrupt down.
-  const interrupted = async () => {
-    const text = await readFile(log, "utf8");
-    try {
-      return JSON.parse(text).turnId === "inner";
-    } catch {
-      return false; // Read mid-write.
-    }
-  };
-  try {
-    while (!(await interrupted()))
-      await new Promise((resolve) => setImmediate(resolve));
-  } finally {
-    vi.useRealTimers();
-  }
-  expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
-    threadId: "thread",
-    turnId: "inner",
-  });
+  await vi.waitFor(async () =>
+    expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
+      threadId: "thread",
+      turnId: "inner",
+    }),
+  );
 });
 
 it("ends a turn Codex rejected the login of as signed out, and a spent plan as a limit", async () => {
