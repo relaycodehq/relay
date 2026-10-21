@@ -580,7 +580,7 @@ function CompactRow({
               regenerating={actions.regenerating.has(c.id)}
             />
             {(c.branch || c.commit) && !p?.scratch && (
-              <ThreadRef chat={c} branchIcon />
+              <ThreadRef chat={c} />
             )}
           </span>
         )}
