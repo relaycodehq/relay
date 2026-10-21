@@ -336,11 +336,13 @@ export function watchAgentWorktrees(
     if (JSON.stringify(next) !== JSON.stringify(recorded()))
       await onChange(next);
   };
-  return (activity: AgentActivity) => {
+  const watch = (activity: AgentActivity) => {
     if (activity.kind !== "command" || activity.status === "running") return;
     if (!/worktree/i.test(activity.label) && activity.label.length < 500)
       return;
     queue = queue.then(() => check(activity.label)).catch(() => {});
     return queue;
   };
+  /** Settles once the worktrees there before the turn are known. */
+  return Object.assign(watch, { ready: before.then(() => {}) });
 }

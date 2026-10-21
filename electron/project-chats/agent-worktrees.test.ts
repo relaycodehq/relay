@@ -314,7 +314,10 @@ it("drops worktrees older saves credited to the wrong thread", () => {
 });
 
 /** A project-folder thread's turn, wired as the turn runner wires it. */
-function projectTurn(chat = { scope: { kind: "project" }, messages: [] }) {
+/** A turn's watcher, once it knows the worktrees there before the turn's commands. */
+async function projectTurn(
+  chat = { scope: { kind: "project" }, messages: [] },
+) {
   const thread = chat as unknown as ProjectChat;
   const watch = watchAgentWorktrees(
     root,
@@ -322,11 +325,12 @@ function projectTurn(chat = { scope: { kind: "project" }, messages: [] }) {
     () => thread.agentWorktrees ?? [],
     turnWorkspace(thread),
   );
+  await watch.ready;
   return { thread, run: (label: string) => watch(ran(label)) };
 }
 
 it("moves the thread into the first worktree its agent makes, not later ones", async () => {
-  const { thread, run } = projectTurn();
+  const { thread, run } = await projectTurn();
   const made = join(temp, "file-mentions");
   const later = join(temp, "later");
   git("worktree", "add", "-q", "-b", "file-mentions", made);
@@ -358,7 +362,7 @@ it("notes Relay leaving a followed worktree, but not learning its Git name", () 
 });
 
 it("leaves the project folder alone once the user went back to it", async () => {
-  const { thread, run } = projectTurn();
+  const { thread, run } = await projectTurn();
   const made = join(temp, "file-mentions");
   git("worktree", "add", "-q", "-b", "file-mentions", made);
   await run(`git worktree add -b file-mentions ${made}`);
@@ -371,7 +375,7 @@ it("leaves the project folder alone once the user went back to it", async () => 
 });
 
 it("goes back to the project folder when the turn removes the worktree it moved into", async () => {
-  const { thread, run } = projectTurn();
+  const { thread, run } = await projectTurn();
   const made = join(temp, "scratch");
   git("worktree", "add", "-q", "-b", "scratch", made);
   await run(`git worktree add -b scratch ${made}`);
@@ -383,7 +387,7 @@ it("goes back to the project folder when the turn removes the worktree it moved 
 });
 
 it("goes back to the project folder when a later turn, or a check after a restart, finds the followed worktree gone", async () => {
-  const { thread, run } = projectTurn();
+  const { thread, run } = await projectTurn();
   const made = join(temp, "relay-goal-e2e");
   git("worktree", "add", "-q", "--detach", made);
   await run(`W=${made}; git worktree add --detach "$W" HEAD`);
@@ -393,7 +397,9 @@ it("goes back to the project folder when a later turn, or a check after a restar
   });
   git("worktree", "remove", made);
   expect(activeAfter(thread, [])).toBeUndefined();
-  await projectTurn(thread as never).run(`git worktree remove --force ${made}`);
+  await (
+    await projectTurn(thread as never)
+  ).run(`git worktree remove --force ${made}`);
   expect(thread.agentWorktrees).toBeUndefined();
   expect(thread.activeAgentWorktree).toBeUndefined();
 });
@@ -415,7 +421,7 @@ it("keeps a worktree the user chose selected, as unavailable, when a turn remove
     ],
   } as unknown as ProjectChat);
   const active = { path: chosen, gitdir: recorded.gitdir, branch: "chosen" };
-  const { thread, run } = projectTurn({
+  const { thread, run } = await projectTurn({
     scope: { kind: "project" },
     messages: [],
     agentWorktrees: [recorded],
