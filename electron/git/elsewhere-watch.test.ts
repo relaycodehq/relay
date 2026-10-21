@@ -92,8 +92,17 @@ it("watches deep changes elsewhere with the Linux backend and releases it when h
     watches.show(owner, "lead");
     expect(watches.watches).toBe(true);
     expect(await watches.roots("lead", [root])).toBe(true);
-    await writeFile(join(root, "src", "deep", "file.txt"), "after");
-    await vi.waitFor(() => expect(changed).toHaveBeenCalledWith("lead"));
+    // Off Linux this backend sits on FSEvents, which can miss a write made
+    // while its stream is still starting, so write until one is seen.
+    let edits = 0;
+    await vi.waitFor(async () => {
+      if (!changed.mock.calls.length)
+        await writeFile(
+          join(root, "src", "deep", "file.txt"),
+          `after ${edits++}`,
+        );
+      expect(changed).toHaveBeenCalledWith("lead");
+    });
     watches.release(owner);
     changed.mockClear();
     await writeFile(join(root, "src", "deep", "file.txt"), "hidden");
