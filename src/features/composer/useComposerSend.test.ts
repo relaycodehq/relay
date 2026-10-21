@@ -1,10 +1,10 @@
+// @vitest-environment happy-dom
 import { expect, it, vi } from "vitest";
-import { harnessReact, mount } from "../../../tests/unit/hook-harness";
+import { mount } from "../../../tests/unit/hook-harness";
 import type { SendSettings } from "../../../shared/compose-send";
 import type { Recipient } from "../../../shared/recipient";
 import { useComposerSend } from "./useComposerSend";
 
-vi.mock("react", () => harnessReact);
 vi.mock("../dictation/audio/session", () => ({
   dictationSnapshot: () => ({ phase: "idle" }),
   stopDictation: async () => true,

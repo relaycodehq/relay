@@ -1,15 +1,10 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-  flush,
-  harnessReact,
-  mount,
-  rerender,
-} from "../../../tests/unit/hook-harness";
+// @vitest-environment happy-dom
+import { beforeEach, expect, it, vi } from "vitest";
+import { flush, mount, update } from "../../../tests/unit/hook-harness";
 import { numberImages } from "../../../shared/image-refs";
 import type { DraftImage } from "../images/draft-images";
 import type { DraftEditor } from "./useComposerDraft";
 
-vi.mock("react", () => harnessReact);
 const savePaste = vi.hoisted(() =>
   vi.fn(async (_text: string, n: number) =>
     n > 1
@@ -77,25 +72,14 @@ vi.mock("../images/image-clipboard", () => ({
   },
 }));
 
-const store = new Map<string, string>();
 beforeEach(() => {
-  store.clear();
+  localStorage.clear();
   saved.clear();
   savedListeners.clear();
   savePaste.mockClear();
   preparing = 0;
   finishScreenshot = undefined;
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-    removeItem: (key: string) => store.delete(key),
-    key: (i: number) => [...store.keys()][i] ?? null,
-    get length() {
-      return store.size;
-    },
-  });
 });
-afterEach(() => vi.unstubAllGlobals());
 
 const KEY = "chat-draft:t1";
 const screenshot = (name: string) => ({ name }) as File;
@@ -106,12 +90,10 @@ async function composer() {
     useComposerDraft(KEY, { current: { insertImages() {} } as never }),
   );
   await flush();
-  rerender();
   return draft;
 }
 async function settle() {
   await flush();
-  rerender();
 }
 const state = (draft: Awaited<ReturnType<typeof composer>>) => ({
   shown: draft().images.map((image) => image.id),
@@ -120,12 +102,11 @@ const state = (draft: Awaited<ReturnType<typeof composer>>) => ({
 
 it("keeps a screenshot pasted while the last one goes out, and only that one", async () => {
   const draft = await composer();
-  draft().addFiles([screenshot("first.png")]);
+  update(() => draft().addFiles([screenshot("first.png")]));
   await settle();
   const outgoing = draft().take(true);
-  outgoing.dispatch();
-  rerender();
-  draft().addFiles([screenshot("second.png")]);
+  update(() => outgoing.dispatch());
+  update(() => draft().addFiles([screenshot("second.png")]));
   await settle();
   expect(state(draft).shown).toEqual(["second.png"]);
   // The send is accepted.
@@ -139,14 +120,13 @@ it("keeps a screenshot pasted while the last one goes out, and only that one", a
 
 it("puts a refused message's screenshot back once, ahead of one pasted meanwhile", async () => {
   const draft = await composer();
-  draft().addFiles([screenshot("first.png")]);
+  update(() => draft().addFiles([screenshot("first.png")]));
   await settle();
   const outgoing = draft().take(true);
-  outgoing.dispatch();
-  rerender();
-  draft().addFiles([screenshot("second.png")]);
+  update(() => outgoing.dispatch());
+  update(() => draft().addFiles([screenshot("second.png")]));
   await settle();
-  outgoing.restore();
+  update(() => outgoing.restore());
   await settle();
   expect(state(draft)).toEqual({
     shown: ["first.png", "second.png"],
@@ -157,9 +137,8 @@ it("puts a refused message's screenshot back once, ahead of one pasted meanwhile
 it("keeps both of two screenshots pasted while the first is still being prepared", async () => {
   preparing = 30;
   const draft = await composer();
-  draft().addFiles([screenshot("one.png")]);
-  rerender();
-  draft().addFiles([screenshot("two.png")]);
+  update(() => draft().addFiles([screenshot("one.png")]));
+  update(() => draft().addFiles([screenshot("two.png")]));
   await new Promise((r) => setTimeout(r, 120));
   await settle();
   expect({ ...state(draft), error: draft().error }).toEqual({
@@ -180,7 +159,7 @@ it("persists a screenshot's token when its editor disappears during preparation"
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().addFiles([screenshot("pasted.png")]);
+  update(() => draft().addFiles([screenshot("pasted.png")]));
   await flush();
   expect(finishScreenshot).toBeTypeOf("function");
   editor.current = null;
@@ -203,10 +182,10 @@ it("keeps a pending screenshot in its original draft when another conversation s
   const editor = { current: { insertImages } as unknown as DraftEditor };
   const draft = mount(() => useComposerDraft(key, editor));
   await settle();
-  draft().addFiles([screenshot("pasted.png")]);
+  update(() => draft().addFiles([screenshot("pasted.png")]));
   // Switching before the queued work even starts must still load the original draft.
   key = other;
-  rerender();
+  draft.rerender();
   await flush();
   finishScreenshot!();
   await settle();
@@ -214,27 +193,58 @@ it("keeps a pending screenshot in its original draft when another conversation s
   expect(readDraft(other)).toBe("Other conversation");
   expect(insertImages).not.toHaveBeenCalled();
   key = KEY;
-  rerender();
+  draft.rerender();
   await settle();
   expect(draft().attached).toHaveLength(1);
 });
 
-it("hears a screenshot completed by a composer that was closed and reopened", async () => {
-  const draft = await composer();
+it("hears a screenshot completed after its composer unmounts and reopens", async () => {
+  preparing = -1;
+  const { useComposerDraft } = await import("./useComposerDraft");
   const { writeDraft } = await import("./drafts");
-  const { saveDraftImages } = await import("../images/draft-images");
-  await saveDraftImages(KEY, [
-    {
-      id: "late.png",
-      n: 1,
-      name: "late.png",
-      mimeType: "image/png",
-      dataUrl: "data:image/png;base64,AAAA",
-    },
-  ]);
-  writeDraft(KEY, "Look at this screenshot [Image #1]");
+  writeDraft(KEY, "Look at this screenshot");
+  const editor: { current: DraftEditor | null } = {
+    current: { insertImages: vi.fn() } as unknown as DraftEditor,
+  };
+  const original = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  expect(draft().attached.map((image) => image.id)).toEqual(["late.png"]);
+  update(() => original().addFiles([screenshot("late.png")]));
+  await flush();
+  expect(finishScreenshot).toBeTypeOf("function");
+  expect(savedListeners.size).toBe(1);
+  // React clears editor refs during navigation; the pending image keeps its draft.
+  editor.current = null;
+  original.unmount();
+  expect(savedListeners.size).toBe(0);
+  const reopened = await composer();
+  expect(savedListeners.size).toBe(1);
+  expect(reopened().attached).toEqual([]);
+  finishScreenshot!();
+  await settle();
+  expect(reopened().text).toBe("Look at this screenshot [Image #1]");
+  expect(reopened().attached.map((image) => image.id)).toEqual(["late.png"]);
+  reopened.unmount();
+  expect(savedListeners.size).toBe(0);
+});
+
+it("subscribes to draft writes without a manual render and unsubscribes on unmount", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { writeDraft } = await import("./drafts");
+  let renders = 0;
+  const draft = mount(() => {
+    renders++;
+    return useComposerDraft(KEY, { current: null });
+  });
+  await settle();
+  update(() => writeDraft(KEY, "Changed in another composer"));
+  expect(draft().text).toBe("Changed in another composer");
+  draft.unmount();
+  const before = renders;
+  update(() => writeDraft(KEY, "Changed after unmount"));
+  await settle();
+  expect(renders).toBe(before);
+  const reopened = await composer();
+  expect(reopened().text).toBe("Changed after unmount");
 });
 
 it("pastes a copied message's screenshots as pills numbered after the draft's own", async () => {
@@ -270,7 +280,7 @@ it("pastes a copied message's screenshots as pills numbered after the draft's ow
     preventDefault: vi.fn(),
     stopPropagation: vi.fn(),
   };
-  draft().paste(event as never);
+  update(() => draft().paste(event as never));
   expect(event.preventDefault).toHaveBeenCalled();
   await settle();
   expect(pasteText).toHaveBeenCalledWith("Theirs: [Image #2]");
@@ -300,19 +310,21 @@ it("still pastes a copied message's words when its screenshots don't fit", async
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().paste({
-    clipboardData: {
-      getData: (type: string) =>
-        type === "text/html"
-          ? JSON.stringify([
-              { n: 1, name: "a.png" },
-              { n: 2, name: "b.png" },
-            ])
-          : "See [Image #1] and [Image #2]",
-    },
-    preventDefault: vi.fn(),
-    stopPropagation: vi.fn(),
-  } as never);
+  update(() =>
+    draft().paste({
+      clipboardData: {
+        getData: (type: string) =>
+          type === "text/html"
+            ? JSON.stringify([
+                { n: 1, name: "a.png" },
+                { n: 2, name: "b.png" },
+              ])
+            : "See [Image #1] and [Image #2]",
+      },
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    } as never),
+  );
   await settle();
   expect(draft().error).toBe("Attach up to three screenshots per message.");
   expect(pasteText).toHaveBeenCalledWith("See  and ");
@@ -357,11 +369,13 @@ it("pastes a long copied message as a paste pill with its screenshots' pills aft
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   const log = "  line\n".repeat(250);
-  draft().paste(
-    copiedMessage(`${log}first [Image #2]\n\n[Image #1]\n\nthen`, [
-      { n: 2, name: "second.png" },
-      { n: 1, name: "first.png" },
-    ]) as never,
+  update(() =>
+    draft().paste(
+      copiedMessage(`${log}first [Image #2]\n\n[Image #1]\n\nthen`, [
+        { n: 2, name: "second.png" },
+        { n: 1, name: "first.png" },
+      ]) as never,
+    ),
   );
   await settle();
   expect(pasteText).not.toHaveBeenCalled();
@@ -387,10 +401,12 @@ it("keeps no screenshots from a copied message too long for the draft", async ()
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().paste(
-    copiedMessage(`${"x".repeat(40_000)} [Image #1]`, [
-      { n: 1, name: "theirs.png" },
-    ]) as never,
+  update(() =>
+    draft().paste(
+      copiedMessage(`${"x".repeat(40_000)} [Image #1]`, [
+        { n: 1, name: "theirs.png" },
+      ]) as never,
+    ),
   );
   await settle();
   expect(insertPaste).toHaveBeenCalled();
@@ -409,12 +425,14 @@ it("gives each of two copied messages' #1 its own screenshot, and a repeated one
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().paste(
-    copiedMessage("[Image #1] then [Image #1]\nalso [Image #1]", [
-      { n: 1, name: "a.png" },
-      { n: 1, name: "a.png" },
-      { n: 1, name: "b.png" },
-    ]) as never,
+  update(() =>
+    draft().paste(
+      copiedMessage("[Image #1] then [Image #1]\nalso [Image #1]", [
+        { n: 1, name: "a.png" },
+        { n: 1, name: "a.png" },
+        { n: 1, name: "b.png" },
+      ]) as never,
+    ),
   );
   await settle();
   expect(pasteText).toHaveBeenCalledWith(
@@ -443,11 +461,11 @@ it("pastes the words that came with a file that isn't on disk, and mentions one 
     stopPropagation: vi.fn(),
   });
   const pathless = paste({});
-  draft().paste(pathless as never);
+  update(() => draft().paste(pathless as never));
   expect(pathless.preventDefault).not.toHaveBeenCalled();
   expect(draft().error).toBeUndefined();
   const saved = paste({ path: "/docs/notes.pdf" });
-  draft().paste(saved as never);
+  update(() => draft().paste(saved as never));
   expect(saved.preventDefault).toHaveBeenCalled();
   expect(insertFiles).toHaveBeenCalledWith(["/docs/notes.pdf"], undefined);
 });
@@ -475,7 +493,7 @@ it("sends a paste of 32KB or more as a file named in the message, numbered after
   await settle();
   const huge = "log line\n".repeat(4000);
   const event = plainPaste(huge);
-  draft().paste(event as never);
+  update(() => draft().paste(event as never));
   await settle();
   expect(event.preventDefault).toHaveBeenCalled();
   expect(insertPaste).not.toHaveBeenCalled();
@@ -494,7 +512,7 @@ it("sends a long paste the message can't hold as a file instead of refusing it",
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
   const long = "line\n".repeat(300).trimEnd();
-  draft().paste(plainPaste(long) as never);
+  update(() => draft().paste(plainPaste(long) as never));
   await settle();
   expect(insertPaste).toHaveBeenCalledWith(long);
   expect(savePaste).toHaveBeenCalledWith(long, 1);
@@ -510,7 +528,7 @@ it("reports when the saved paste's reference cannot fit", async () => {
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().paste(plainPaste("x".repeat(40_000)) as never);
+  update(() => draft().paste(plainPaste("x".repeat(40_000)) as never));
   await settle();
   expect(pasteFile).toHaveBeenCalledWith("/data/pastes/x/pasted-text.txt");
   expect(draft().error).toContain("32,000");
@@ -532,10 +550,10 @@ it("names the saved paste in the draft it was pasted in, once another thread sho
   let key = KEY;
   const draft = mount(() => useComposerDraft(key, editor));
   await settle();
-  draft().pasteRefused("x".repeat(40_000));
+  update(() => draft().pasteRefused("x".repeat(40_000)));
   await flush();
   key = "chat-draft:t2";
-  rerender();
+  draft.rerender();
   finish("/data/pastes/y/pasted-text.txt");
   await settle();
   expect(pasteFile).not.toHaveBeenCalled();
@@ -558,9 +576,9 @@ it("keeps Send blocked until queued paste files land, and recovers after a faile
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
-  draft().pasteRefused("first log");
+  update(() => draft().pasteRefused("first log"));
   expect(draft().isPreparing()).toBe(true);
-  draft().pasteRefused("second log");
+  update(() => draft().pasteRefused("second log"));
   await settle();
   expect(draft().preparing).toBe(true);
   expect(savePaste).toHaveBeenCalledTimes(1);
@@ -570,11 +588,11 @@ it("keeps Send blocked until queued paste files land, and recovers after a faile
   expect(draft().preparing).toBe(false);
   expect(draft().isPreparing()).toBe(false);
   savePaste.mockRejectedValueOnce(new Error("disk full"));
-  draft().pasteRefused("third log");
+  update(() => draft().pasteRefused("third log"));
   await settle();
   expect(draft().error).toContain("disk full");
   expect(draft().isPreparing()).toBe(false);
-  draft().pasteRefused("retry");
+  update(() => draft().pasteRefused("retry"));
   await settle();
   expect(draft().error).toBeUndefined();
   expect(pasteFile).toHaveBeenCalledTimes(3);
