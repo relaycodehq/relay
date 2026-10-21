@@ -25,6 +25,7 @@ import { Segmented, Switch } from "../../../ui/SettingsCard";
 import { ErrorBox } from "../../../ui/ui";
 import type { SettingEntry } from "../settings-search";
 import { useSavedSetting } from "../useSavedSetting";
+import { PredictionSpendLine } from "../PredictionSpend";
 
 /** Settings → Composer: what it shows, and what Send does. */
 export function useComposerEntries(): SettingEntry[] {
@@ -138,7 +139,9 @@ export function useComposerEntries(): SettingEntry[] {
         "After a Claude or Codex turn that did real work, the agent guesses what you'd send next and the empty composer shows it as a draft; Tab takes it. One extra question per turn on the thread's own session, mostly read from its prompt cache, counted against that account.",
       keywords:
         "predict prediction suggest suggestion next message ghost draft autocomplete tab complete composer",
-      render: () => <PredictionsSwitch />,
+      block: true,
+      accessory: () => <PredictionsSwitch />,
+      render: () => <PredictionSpendLine />,
     },
     {
       id: "image-pills",

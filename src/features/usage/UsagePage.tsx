@@ -9,7 +9,7 @@ import type {
   UsageRange,
   UsageSummary,
 } from "../../../shared/usage";
-import { usageRanges } from "../../../shared/usage";
+import { relayJobLabels, usageRanges } from "../../../shared/usage";
 import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
@@ -382,13 +382,21 @@ function Rhythmic({
 
       {relay > 0 && (
         <p className="us-footnote">
-          Relay’s own work, titles, commit messages and watcher checks, came to{" "}
-          {measured(relay, m)}
+          Relay’s own work came to {measured(relay, m)}
           {m === "fresh" && " tokens"},{" "}
           {((relay / (m === "usd" ? totals.usd : totals.fresh)) * 100).toFixed(
             1,
           )}
-          % of it.
+          % of it:{" "}
+          {Object.entries(totals.relayJobs)
+            .filter(([, spent]) => spent[m] > 0)
+            .sort((a, b) => b[1][m] - a[1][m])
+            .map(
+              ([job, spent]) =>
+                `${relayJobLabels[job as keyof typeof relayJobLabels].toLowerCase()} ${measured(spent[m], m)}`,
+            )
+            .join(", ")}
+          .
         </p>
       )}
     </div>

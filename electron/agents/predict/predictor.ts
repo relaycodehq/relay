@@ -1,3 +1,4 @@
+import type { PredictionAsked } from "../../../shared/prediction";
 import type { AgentPredict } from "../types";
 import { predictionPrompt, parsePrediction } from "./prompt";
 
@@ -7,11 +8,11 @@ const MIN_CALLS = 3;
 const CHORE =
   /^\W*(please\s+)?(commit|push|pull|merge|rebase|stage|amend|squash|tag|release|ship)\b/i;
 
-/** Asks beside the thread's session; null with no answer. */
+/** Asks beside the thread's session; `reply` is null with no answer. */
 export type PredictAsk = (
   question: string,
   signal: AbortSignal,
-) => Promise<string | null>;
+) => Promise<{ reply: string | null; cost?: PredictionAsked["cost"] }>;
 
 /** Whether a turn earns a guess at the message after it. */
 export function worthPredicting(request: string, calls: number) {
@@ -46,9 +47,11 @@ export class TurnPredictor {
     this.done = true;
     if (!worthPredicting(this.predict.request, this.calls.size)) return;
     void this.ask(predictionPrompt, this.signal)
-      .then((reply) => {
+      .then(({ reply, cost }) => {
         const next = reply && parsePrediction(reply);
-        if (next && !this.signal.aborted) this.predict.onPrediction(next);
+        const offered = !!next && !this.signal.aborted;
+        if (offered) this.predict.onPrediction(next);
+        this.predict.onAsked?.({ offered, ...(cost ? { cost } : {}) });
       })
       .catch((e) => console.warn("Could not guess the next message:", e));
   }

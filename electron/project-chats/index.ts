@@ -72,6 +72,8 @@ import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
+import { PredictionLog } from "./prediction-log";
+import { usageLog } from "../usage";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
@@ -170,6 +172,7 @@ export class ProjectChats {
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
+      predictions: new PredictionLog(join(dirname(dir), "predictions.jsonl")),
       away: new Map(),
     };
     this.core = core;
@@ -631,6 +634,23 @@ export class ProjectChats {
     return (
       this.core.watchSpend?.summary(days, (id) => titles.get(id)) ??
       Promise.resolve(undefined)
+    );
+  }
+  /** The composer's guesses of the last `days`: what they cost and how often they were sent. */
+  predictionSpend(days: number) {
+    return (
+      this.core.predictions?.summary(days, async (chats, since) => {
+        let usd = 0;
+        for (const e of await usageLog())
+          if (
+            e.at >= since &&
+            e.job === "thread" &&
+            e.chat &&
+            chats.has(e.chat)
+          )
+            for (const spend of Object.values(e.models)) usd += spend.usd ?? 0;
+        return usd;
+      }) ?? Promise.resolve(undefined)
     );
   }
   /** The notes of the last `days` with what was done with each. */

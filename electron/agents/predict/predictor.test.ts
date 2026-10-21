@@ -38,9 +38,18 @@ describe("parsePrediction", () => {
 describe("TurnPredictor", () => {
   it("asks once, after a turn with enough calls", async () => {
     const onPrediction = vi.fn();
-    const ask = vi.fn(async () => '{"next":"now the phone"}');
+    const onAsked = vi.fn();
+    const cost = {
+      model: "claude-opus-5-5",
+      tokens: { input: 40, cacheWrite: 0, cacheRead: 30_000, output: 20 },
+      usd: 0.0065,
+    };
+    const ask = vi.fn(async () => ({
+      reply: '{"next":"now the phone"}',
+      cost,
+    }));
     const predictor = new TurnPredictor(
-      { request: "add the setting", onPrediction },
+      { request: "add the setting", onPrediction, onAsked },
       ask,
       new AbortController().signal,
     );
@@ -51,5 +60,22 @@ describe("TurnPredictor", () => {
       expect(onPrediction).toHaveBeenCalledWith("now the phone"),
     );
     expect(ask).toHaveBeenCalledTimes(1);
+    expect(onAsked).toHaveBeenCalledWith({ offered: true, cost });
+  });
+
+  it("still reports what an abstention cost", async () => {
+    const onPrediction = vi.fn();
+    const onAsked = vi.fn();
+    const predictor = new TurnPredictor(
+      { request: "explain the meter", onPrediction, onAsked },
+      async () => ({ reply: '{"next":null}' }),
+      new AbortController().signal,
+    );
+    predictor.called(["a", "b", "c"]);
+    predictor.ended();
+    await vi.waitFor(() =>
+      expect(onAsked).toHaveBeenCalledWith({ offered: false }),
+    );
+    expect(onPrediction).not.toHaveBeenCalled();
   });
 });

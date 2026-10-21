@@ -224,9 +224,8 @@ export function codexTurnWatcher(
       options.predict,
       async (question, signal) => {
         const { id, settings } = thread();
-        if (!id || !settings) return null;
-        return (await askCodexSide(wire, id, settings, question, signal))
-          .reply;
+        if (!id || !settings) return { reply: null };
+        return askCodexSide(wire, id, settings, question, signal);
       },
       options.signal,
     );

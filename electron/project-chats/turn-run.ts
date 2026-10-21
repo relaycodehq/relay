@@ -226,6 +226,19 @@ export class TurnRunner {
             onSpend: (spend) => this.core.watchSpend?.add(chat.id, spend),
           }
         : undefined;
+    if (turn.kind === "reply" && !branch && !rules.side) {
+      const at = chat.messages.findIndex((m) => m.id === input.id);
+      const before = chat.messages
+        .slice(0, Math.max(0, at))
+        .reverse()
+        .find((m) => !m.parentId && !m.side);
+      if (at >= 0 && before?.role === "assistant" && before.prediction)
+        this.core.predictions?.sent(
+          chat.id,
+          before.prediction,
+          chat.messages[at]!.body,
+        );
+    }
     // A guess at the next message, asked on the same session as the check.
     const predict: AgentPredict | undefined =
       this.core.store.get().composerPredictions &&
@@ -237,6 +250,7 @@ export class TurnRunner {
         ? {
             request: turn.request ?? "",
             onPrediction: (text) => answer.predict(text),
+            onAsked: (asked) => this.core.predictions?.asked(chat.id, asked),
           }
         : undefined;
     try {

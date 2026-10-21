@@ -71,8 +71,7 @@ export class ClaudeTurnReader {
     if (options.predict)
       this.predictor = new TurnPredictor(
         options.predict,
-        async (question, signal) =>
-          (await askMeasured(session, question, signal)).reply,
+        (question, signal) => askMeasured(session, question, signal),
         options.signal,
       );
   }

@@ -1,3 +1,4 @@
+import type { PredictionAsked } from "../../shared/prediction";
 import type { WatchNote, WatchScope, WatchSpend } from "../../shared/watch";
 import type {
   RuntimeMode,
@@ -71,6 +72,8 @@ export type AgentPredict = {
   /** What the person asked this turn, in their own words. */
   request: string;
   onPrediction: (text: string) => void;
+  /** A guess was asked for, whether or not it came back as one. */
+  onAsked?: (asked: PredictionAsked) => void;
 };
 
 /** One turn of any agent, as a thread, title or helper job runs it. */
