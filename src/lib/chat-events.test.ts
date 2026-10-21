@@ -114,6 +114,24 @@ const setup = (): NonNullable<ProjectChat["setup"]> => ({
   messages: [message("setup-answer", { status: "streaming" })],
 });
 
+it("ignores setup pushes older than the cached message", async () => {
+  desktop.setup = setup();
+  await refetch();
+  desktop.push({
+    chatId: "t",
+    setup: true,
+    message: message("setup-answer", { version: 3 }),
+  });
+  desktop.push({
+    chatId: "t",
+    setup: true,
+    message: message("setup-answer", { version: 2 }),
+  });
+  expect(
+    qc.getQueryData<ProjectChat>(chatKey("t"))?.setup?.messages[0].version,
+  ).toBe(3);
+});
+
 it("keeps newer setup message versions without replacing fetched setup metadata", async () => {
   desktop.setup = setup();
   await refetch();
