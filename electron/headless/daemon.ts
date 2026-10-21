@@ -9,11 +9,7 @@ import { delimiter, dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { watchSavedSignIns } from "../agents";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
-import {
-  cursorSdkIo,
-  signInCursor,
-  signOutCursor,
-} from "../agents/cursor/account";
+import { cursorSdkIo } from "../agents/cursor/account";
 import { antigravityIo, registryUpdatesIo } from "../agents/acp";
 import { createDispatch, type Dispatch } from "../api";
 import { apiContext } from "../api/context";
@@ -31,7 +27,7 @@ import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
 import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
-import { setComputerName, computerName } from "../platform/computer-name";
+import { setComputerName } from "../platform/computer-name";
 import { finishPath, pathReady } from "../platform/shell-path";
 import { ProjectAdding } from "../project-add";
 import { GithubLogin } from "../github";
@@ -42,13 +38,7 @@ import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
 import { teaTokenFor } from "../source-control";
 import { TriageService } from "../triage/service";
-import type { ChatSummary } from "../../shared/projects";
-import {
-  serveControl,
-  type ControlApi,
-  type CursorLogin,
-  type ThreadRow,
-} from "./control";
+import { serveControl } from "./control";
 import { onAppQuit, powerMonitor } from "./electron-stand-in";
 import {
   autoUpdateEnabled,
@@ -63,7 +53,6 @@ import { HeadlessSpeech, SpeechRuntime } from "./speech";
 import { keepUpdated } from "./auto-update";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
-import { errorMessage } from "../../shared/error-message";
 import {
   agentHost,
   downloadedAgents,
@@ -73,6 +62,7 @@ import {
   resumeThreads,
   threadServices,
 } from "../startup";
+import { controlApi } from "./control-api";
 
 export { logTo } from "./log";
 
@@ -354,119 +344,22 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const)
     process.on(signal, () => void shutDown(true));
 
-  /** Cursor's sign-in, done on another device from the link it gives. */
-  let cursorLogin: CursorLogin | undefined;
-
-  const listThreads = async (): Promise<ThreadRow[]> => {
-    const list = await projects.list(login.client);
-    return list
-      .flatMap((project) =>
-        api
-          .listChats(project.id)
-          .filter((chat) => !chat.empty && !chat.archivedAt)
-          .map((chat) => threadRow(chat, project.name)),
-      )
-      .sort((a, b) => b.updated - a.updated);
-  };
-
-  const controlApi: ControlApi = {
-    async status() {
-      const known = agentUpdates.current;
-      const [state, list, versions] = await Promise.all([
-        remote.state(),
-        projects.list(login.client),
-        // Asked once; after that a stale answer goes out while a fresh one is found.
-        known.checkedAt ? known : agentUpdates.check(),
-      ]);
-      if (known.checkedAt && Date.now() - known.checkedAt > 5 * 60_000)
-        void agentUpdates.check().catch(() => {});
-      const rows = list.flatMap((p) => api.listChats(p.id));
-      return {
-        version: headlessVersion,
-        name: computerName(),
-        pid: process.pid,
-        startedAt,
-        home,
-        remote: state,
-        projects: list.length,
-        threads: {
-          working: rows.filter((c) => c.running).length,
-          waiting: rows.filter((c) => c.waiting).length,
-          total: rows.filter((c) => !c.empty && !c.archivedAt).length,
-        },
-        agents: versions.agents,
-        update: updater.now,
-      };
-    },
-    async pair(pipe = false) {
-      if (!remote.devices.settings.enabled || !(await remote.state()).listening)
-        await remote.setEnabled(true);
-      const pairing = await remote.pairing({ pipe });
-      return { ...pairing, remote: await remote.state() };
-    },
-    update: (check) => (check ? updater.check() : updater.install()),
-    remote: (enabled) => remote.setEnabled(enabled),
-    removeDevice: (id) => remote.revoke(id),
-    projects: () => projects.list(login.client),
-    addProject: (path) => projects.add(path, login.client),
-    removeProject: async (id) => {
-      await dispatch("removeProject", [id]);
-    },
-    threads: listThreads,
-    async stop({ force, detach }) {
-      if (!force && !detach) {
-        const working = (await listThreads()).filter(
-          (t) => t.state === "working",
-        );
-        if (working.length)
-          throw new Error(
-            `${working.length === 1 ? "A thread is" : `${working.length} threads are`} still working: ${working
-              .map((t) => `“${t.title}”`)
-              .join(
-                ", ",
-              )}. Stop with --force to end them, or restart to keep them going.`,
-          );
-      }
-      // Answered first; the socket closes as Relay goes.
-      setTimeout(() => void shutDown(!!detach), 50);
-    },
-    async cursorSignIn() {
-      if (cursorLogin?.status === "waiting" && cursorLogin.url)
-        return { ...cursorLogin };
-      const login: CursorLogin = { status: "waiting" };
-      cursorLogin = login;
-      await new Promise<void>((resolve, reject) => {
-        signInCursor((url) => {
-          login.url = url;
-          resolve();
-        }).then(
-          () => {
-            login.status = "done";
-            void agentUpdates.check(true);
-            resolve();
-          },
-          (e) => {
-            login.status = "failed";
-            login.error = errorMessage(e);
-            reject(e);
-          },
-        );
-      });
-      return { ...login };
-    },
-    cursorSignInState: async () => (cursorLogin ? { ...cursorLogin } : null),
-    async cursorSignOut() {
-      cursorLogin = undefined;
-      await signOutCursor();
-      await agentUpdates.check(true);
-    },
-    speech: async () => speech.state(),
-    installSpeech: async (engine, voice) => speech.install(engine, voice),
-    removeSpeech: (engine, voice) => speech.remove(engine, voice),
-    call: (method, args) =>
-      dispatch(method as Parameters<Dispatch>[0], args.slice(0, 10)),
-  };
-  control = await serveControl(paths.control, controlApi);
+  control = await serveControl(
+    paths.control,
+    controlApi({
+      home,
+      startedAt,
+      remote,
+      projects,
+      login,
+      listChats: api.listChats,
+      agentUpdates,
+      updater,
+      speech,
+      dispatch,
+      stop: (detach) => void shutDown(detach),
+    }),
+  );
   const state = await remote.state();
   console.log(
     `Relay ${headlessVersion} is running (pid ${process.pid}, data in ${home}).`,
@@ -476,31 +369,4 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       ? `Phones and computers reach it at ${state.hosts.join(", ")}:${state.port}.`
       : `Not reachable yet: ${state.error ?? "waiting for Tailscale."}`,
   );
-}
-
-function threadRow(chat: ChatSummary, project: string): ThreadRow {
-  const state: ThreadRow["state"] = chat.sentTo
-    ? "away"
-    : chat.running
-      ? "working"
-      : chat.waiting
-        ? "waiting"
-        : chat.settledAt || chat.archivedAt
-          ? "settled"
-          : "idle";
-  return {
-    id: chat.id,
-    projectId: chat.projectId,
-    project,
-    title: chat.title,
-    ...(chat.provider ? { provider: chat.provider } : {}),
-    state,
-    updated: chat.updated,
-    ...(chat.branch ? { branch: chat.branch } : {}),
-    ...(chat.sentTo
-      ? { computer: chat.sentTo.computer }
-      : chat.cameFrom && !chat.cameFrom.returnedAt
-        ? { computer: chat.cameFrom.computer }
-        : {}),
-  };
 }
