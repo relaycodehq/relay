@@ -69,14 +69,27 @@ const lines = (text: string) =>
     .split("\n")
     .filter(Boolean)
     .flatMap((line) => {
-      const entry = JSON.parse(line) as { line?: string };
-      try {
-        return entry.line === undefined
-          ? [entry]
-          : [entry, JSON.parse(entry.line)];
-      } catch {
-        return [entry];
-      }
+      const entry = JSON.parse(line) as {
+        line?: string;
+        body?: string;
+        data?: string;
+      };
+      // A CLI's line, or what OpenCode's service answered and streamed.
+      const inner = [
+        entry.line,
+        entry.body,
+        ...(entry.data?.match(/^data: .*$/gm) ?? []).map((d) => d.slice(6)),
+      ];
+      return [
+        entry,
+        ...inner.flatMap((text) => {
+          try {
+            return text === undefined ? [] : [JSON.parse(text)];
+          } catch {
+            return [];
+          }
+        }),
+      ];
     });
 
 it("keeps paths, names, emails and keys out of the recorded transcripts", () => {

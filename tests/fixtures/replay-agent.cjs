@@ -13,6 +13,10 @@
 // RELAY_REPLAY_DIR    the scenario's transcripts
 // RELAY_REPLAY_FAULT  "exit": exit 1 instead of the line that ends the last
 //                     turn; "close": end the stream there and exit 0
+// RELAY_REPLAY_SERVICE where OpenCode's service plays back
+//                     (tests/fixtures/opencode-replay.ts), for `opencode service status`
+// RELAY_REPLAY_STATE  a folder the scenario's processes share, so the second
+//                     `opencode service status` plays the second one recorded
 // RELAY_REPLAY_GAP_MS the longest pause kept from the recording (300ms): an
 //                     agent that went quiet for a while, then started a turn
 //                     by itself, does so after a pause here too
@@ -41,10 +45,13 @@ const parse = (line) => {
 const here = (text) =>
   text
     .replaceAll("{{project}}", JSON.stringify(process.cwd()).slice(1, -1))
-    .replaceAll("{{home}}", "/home/replay");
+    .replaceAll("{{home}}", "/home/replay")
+    .replaceAll("{{service}}", process.env.RELAY_REPLAY_SERVICE ?? "{{service}}");
 
 /** What a process was started for, as far as its arguments say. */
 function roleOf(args) {
+  // OpenCode's service commands differ only in their words: `service status`, `service get password`.
+  if (agent === "opencode") return `run:${args.join(" ")}`;
   if (args.includes("--permission-prompt-tool")) return "turn";
   if (args.includes("--print") || args.includes("-p")) return "print";
   if (args.includes("--chrome")) return "chrome";
@@ -70,7 +77,8 @@ const requestId = (m) =>
 const role = roleOf(process.argv.slice(2));
 const candidates = fs
   .readdirSync(dir)
-  .filter((f) => f.endsWith(".jsonl"))
+  // http.jsonl is OpenCode's service, played by opencode-replay.ts.
+  .filter((f) => f.endsWith(".jsonl") && f !== "http.jsonl")
   .sort()
   .map((file) => {
     const [first, ...rest] = fs
@@ -81,7 +89,7 @@ const candidates = fs
     const entries = rest.map((e) =>
       e.line === undefined ? e : { ...e, message: parse(here(e.line)) },
     );
-    return { meta: first.meta, entries, last: entries.findLastIndex((x, i) => endsTurn(entries, x, i)) };
+    return { file, meta: first.meta, entries, last: entries.findLastIndex((x, i) => endsTurn(entries, x, i)) };
   })
   .filter(({ meta }) => meta.agent === agent && roleOf(meta.args) === role)
   // Ones that answer a prompt first: a process that hasn't said what it's for
@@ -90,6 +98,23 @@ const candidates = fs
 if (!candidates.length) {
   process.stderr.write(`replay-agent: no ${role} transcript for ${agent}\n`);
   process.exit(2);
+}
+/**
+ * OpenCode's service commands say nothing Relay could tell them apart by, and
+ * answer differently as the service comes up: the nth one run plays the nth
+ * recorded, the last once they run out.
+ */
+const state = process.env.RELAY_REPLAY_STATE;
+if (agent === "opencode" && state && process.argv[2] !== "acp") {
+  const recorded = candidates.slice().sort((a, b) => a.file.localeCompare(b.file));
+  let n = 0;
+  for (;; n++) {
+    try {
+      fs.closeSync(fs.openSync(path.join(state, `${role.replace(/[^\w.-]/g, "_")}.${n}`), "wx"));
+      break;
+    } catch {}
+  }
+  candidates.splice(0, candidates.length, recorded[Math.min(n, recorded.length - 1)]);
 }
 function ends(entries) {
   return entries.filter((e, i) => endsTurn(entries, e, i)).length;

@@ -28,6 +28,14 @@ npx vitest run tests/unit/replay-fixtures.test.ts electron/project-chats/turn-li
   plan, credit and computer name into placeholders, and drops what came from
   claude.ai; `tests/unit/replay-fixtures.test.ts` fails on anything it
   missed. Read a new transcript before committing it anyway.
+- OpenCode also talks HTTP to its local service beside its ACP turns. While
+  recording, `opencode service status` points Relay at a proxy
+  (`tests/record/opencode-proxy.ts`) that writes the requests, answers and
+  events down as `http.jsonl`; a replay serves them back from
+  `tests/fixtures/opencode-replay.ts`. The recording's OpenCode runs its own
+  service on a port of its own, beside yours, and stops it after. It runs
+  OpenCode Zen's free DeepSeek model, which refuses Relay's title jobs ("only
+  from within OpenCode"); the replays keep that 503 as it came.
 - Cursor has no transcripts: its SDK talks HTTP from a worker, with no stdio
   to record. Neither has Amp, until `amp-acp` is installed where they're
   recorded.

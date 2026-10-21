@@ -10,11 +10,13 @@
 // tests/record/redact.mjs` redacts them into tests/fixtures/replays.
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rm, stat, symlink } from "node:fs/promises";
+import { createServer, type AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, it, vi } from "vitest";
 import { findExecutable } from "../../electron/platform/executables";
 import { fakeCli } from "../fixtures/fake-cli";
+import { openCodeRecordingProxy } from "./opencode-proxy";
 import {
   recordedChoice,
   startScenario,
@@ -83,11 +85,31 @@ async function recording(provider: AgentProvider, scenario: string) {
       );
     }
   }
+  let proxy: Awaited<ReturnType<typeof openCodeRecordingProxy>> | undefined;
   if (provider === "opencode") {
     env.XDG_CONFIG_HOME = clean;
     env.OPENCODE_CONFIG_DIR = clean;
-    // Its sessions go here too, not into the person's own OpenCode history.
+    // Its sessions go here too, not into the person's own OpenCode history,
+    // and its service is its own, not the one the person's OpenCode runs.
     env.XDG_DATA_HOME = join(clean, "data");
+    env.XDG_STATE_HOME = join(clean, "state");
+    // The service listens on one fixed port; the person's own is on the default.
+    execFileSync(real, ["service", "set", "port", String(await freePort())], {
+      env: { ...process.env, ...env },
+      timeout: 30_000,
+    });
+    proxy = await openCodeRecordingProxy(out);
+    stops.push(async () => {
+      await proxy!.close();
+      try {
+        execFileSync(real, ["service", "stop"], {
+          env: { ...process.env, ...env },
+          timeout: 30_000,
+        });
+      } catch {
+        // Not started.
+      }
+    });
     if (fresh) {
       await mkdir(join(clean, "data", "opencode"), { recursive: true });
       await symlink(
@@ -109,6 +131,9 @@ async function recording(provider: AgentProvider, scenario: string) {
       `process.env.RELAY_REPLAY_REAL = ${JSON.stringify(real)};\n` +
       `process.env.RELAY_REPLAY_OUT = ${JSON.stringify(out)};\n` +
       `process.env.RELAY_REPLAY_VERSION = ${JSON.stringify(version)};\n` +
+      (proxy
+        ? `process.env.RELAY_REPLAY_PROXY = ${JSON.stringify(proxy.url)};\n`
+        : "") +
       tee,
     version,
   );
@@ -118,10 +143,23 @@ async function recording(provider: AgentProvider, scenario: string) {
   return s;
 }
 
+const freePort = () =>
+  new Promise<number>((done, fail) => {
+    const server = createServer();
+    server.on("error", fail);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => done(port));
+    });
+  });
+
 let s: Scenario | undefined;
+/** What a recording started beside its scenario, stopped after it. */
+const stops: (() => Promise<void>)[] = [];
 afterEach(async () => {
   await s?.dispose();
   s = undefined;
+  for (const stop of stops.splice(0)) await stop();
 });
 
 for (const provider of agents as AgentProvider[]) {

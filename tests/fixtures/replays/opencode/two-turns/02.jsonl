@@ -1,0 +1,3 @@
+{"t":0,"meta":{"agent":"opencode","version":"opencode v2.0.32","args":["service","status"],"cwd":"/tmp/replay/relay"}}
+{"t":63,"dir":"in","line":"stopped"}
+{"t":64,"exit":{"code":0,"signal":null,"afterStdin":false}}
