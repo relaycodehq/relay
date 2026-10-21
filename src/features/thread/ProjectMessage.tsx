@@ -27,6 +27,7 @@ import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn, type TurnPresentation } from "../agent-turn/AgentTurn";
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
+import { ImportOfferCard } from "../import-offer/ImportOfferCard";
 import { HtmlRenders, type RenderCompose } from "../html-render/HtmlRenders";
 import { TurnPreview } from "../browser/TurnPreview";
 import { AgentError } from "../agents/AgentError";
@@ -504,6 +505,14 @@ export const Message = memo(function Message({
           answer
         )
       ) : null}
+      {chatId && m.importOffer && (
+        <ImportOfferCard
+          chatId={chatId}
+          messageId={m.id}
+          offer={m.importOffer}
+          running={m.status === "streaming"}
+        />
+      )}
       {chatId && m.preview && m.status !== "streaming" && (
         <TurnPreview chatId={chatId} messageId={m.id} preview={m.preview} />
       )}

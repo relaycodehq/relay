@@ -30,6 +30,7 @@ import {
 import { agentsSince } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { dropSide, type ProjectDrag } from "./useProjectDrag";
+import { ghostKey } from "../../../shared/import-offer";
 import type { ProjectGroups } from "./useProjectGroups";
 import { groupKey, type SidebarFolds } from "./useSidebarFolds";
 import { NameInput } from "../../ui/NameInput";
@@ -63,6 +64,8 @@ export interface ProjectTree {
   onNew: (p: Project) => void;
   /** Opens the project's page in Settings. */
   onProjectSettings: (p: Project) => void;
+  /** An import plan's chats coming into each project, its stand-ins' included. */
+  importing?: Map<string, number>;
 }
 
 /** A group's insides: a new group's name field, its groups, then its projects. */
@@ -313,7 +316,68 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
   return open ? <FolderOpen size={15} /> : <Folder size={15} />;
 }
 
+/** A project an import would add: dimmed, dragged into place, nothing else until it's imported. */
+function PlannedProject({
+  project: p,
+  tree,
+}: {
+  project: Project;
+  tree: ProjectTree;
+}) {
+  const { drag } = tree;
+  const chats = tree.importing?.get(p.id) ?? 0;
+  return (
+    <section
+      className={[
+        "sb-project",
+        "sb-planned",
+        drag.dragging === p.id && "dragging",
+        drag.drop?.kind === "project" &&
+          drag.drop.id === p.id &&
+          drag.dragging !== p.id &&
+          `drop-${drag.drop.where}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onDragOver={(e) =>
+        drag.over(e, { kind: "project", id: p.id, where: dropSide(e) })
+      }
+      onDrop={(e) => drag.drop?.kind === "project" && drag.dropOn(e, drag.drop)}
+    >
+      <div
+        className="sb-project-row"
+        draggable
+        title={`${p.path}\nNot imported yet. Drag to place it.`}
+        onDragStart={(e) => drag.startProject(e, p.id)}
+        onDragEnd={drag.end}
+      >
+        <span className="sb-project-expand">
+          <Folder size={15} />
+        </span>
+        <span className="sb-project-name">
+          <span>{p.name}</span>
+          {chats > 0 && <span className="sb-planned-chats">+{chats}</span>}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function ProjectSection({
+  project,
+  tree,
+}: {
+  project: Project;
+  tree: ProjectTree;
+}) {
+  return ghostKey(project.id) ? (
+    <PlannedProject project={project} tree={tree} />
+  ) : (
+    <RealProject project={project} tree={tree} />
+  );
+}
+
+function RealProject({
   project: p,
   tree: {
     groups,
@@ -324,12 +388,14 @@ function ProjectSection({
     current,
     onNew,
     onProjectSettings,
+    importing,
   },
 }: {
   project: Project;
   tree: ProjectTree;
 }) {
   const chats = threads.filter((c) => c.projectId === p.id);
+  const incoming = importing?.get(p.id) ?? 0;
   const computers = usePairedComputers(!!p.computer);
   const where = projectComputer(p, computers.data);
   const isOpen = folds.isOpen(p.id, p.id === current);
@@ -400,6 +466,14 @@ function ProjectSection({
             >
               <span>{p.name}</span>
               {where && <span className="sb-project-where">{where.name}</span>}
+              {incoming > 0 && (
+                <span
+                  className="sb-planned-chats"
+                  title={`${incoming} ${incoming === 1 ? "chat" : "chats"} to import`}
+                >
+                  +{incoming}
+                </span>
+              )}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>

@@ -139,6 +139,7 @@ export class TurnRunner {
       active.render = (render) => answer.render(render);
       active.askPage = (group) => answer.askPage(group);
       active.preview = (preview) => answer.preview(preview);
+      active.importOffer = (offer) => answer.importOffer(offer);
       active.answerId = () => answer.message.id;
     }
     const branch = input.parentId ?? undefined;
@@ -231,6 +232,7 @@ export class TurnRunner {
         chat.id,
         !!chat.startedBy,
         this.core.store.get().renderMode,
+        !!chat.importFrom,
       );
       const env = await this.host.env(chat);
       const links = await this.links(chat, root);

@@ -38,6 +38,7 @@ import { LinkStep } from "./LinkStep";
 import { relatedFolders } from "./related";
 import { useAdding } from "./useAdding";
 import { ImportProjects } from "./ImportProjects";
+import type { ImportApp } from "../../../shared/project-import";
 import { AddProjectHeading } from "./AddProjectHeading";
 import { ComputerPicker } from "../handoff/ComputerPicker";
 import { ProjectFolders } from "./ProjectFolders";
@@ -63,12 +64,15 @@ export function AddProjectPalette({
   initialPage = "root",
   onClose,
   onDone,
+  onImportWithAgent,
 }: {
   projects: readonly Project[];
   computerId?: string;
   initialPage?: AddProjectPage;
   onClose: () => void;
   onDone: (project: Project) => void;
+  /** Opens a thread whose agent imports `app`'s history, sorted as the user says. */
+  onImportWithAgent?: (app: ImportApp) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -262,6 +266,7 @@ export function AddProjectPalette({
           onBack={() => go("root")}
           onClose={close}
           onDone={onDone}
+          onAskAgent={onImportWithAgent}
           onBusy={setImportBusy}
         />
       ) : linking ? (

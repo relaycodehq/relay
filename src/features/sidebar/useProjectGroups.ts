@@ -13,6 +13,8 @@ import {
   type ProjectPlace,
 } from "../../../shared/project-folders";
 import { api } from "../../lib/api";
+import { ghostKey } from "../../../shared/import-offer";
+import { realBefore } from "../import-offer/import-plan";
 import { errorMessage } from "../../../shared/error-message";
 import { groupKey } from "./useSidebarFolds";
 
@@ -28,6 +30,10 @@ export function useProjectGroups(
   projects: Project[],
   setOpen: (key: string, open: boolean) => void,
   setError: (message: string | undefined) => void,
+  /** An import plan's new projects stand among `projects`; it hears every move. */
+  planned?: {
+    move: (id: string, folder: string, before: string | null) => void;
+  },
 ) {
   const qc = useQueryClient();
   const groups = useQuery({
@@ -63,7 +69,11 @@ export function useProjectGroups(
   const place = async (id: string, target: ProjectPlace) => {
     const placement = projectPlacement(projects, id, target);
     if (!placement) return;
-    const { folder, before } = placement;
+    const { folder } = placement;
+    planned?.move(id, folder, placement.before);
+    // A stand-in isn't a project yet: only the plan moves it.
+    if (ghostKey(id)) return;
+    const before = realBefore(projects, folder, placement.before);
     qc.setQueriesData<Project[]>({ queryKey: ["projects"] }, (list) =>
       list ? moveProjectInList(list, id, folder, before) : list,
     );

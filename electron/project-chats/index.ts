@@ -75,6 +75,7 @@ import { WatchSpendLog } from "./watch-spend";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
+import { ImportOffers } from "./import-offers";
 import { chatStatus } from "./status";
 
 export { chatStatus, type ChatStatus } from "./status";
@@ -132,6 +133,8 @@ export class ProjectChats {
   private creating: ThreadCreate;
   private terminal: TerminalContinue;
   readonly imports: ProjectImports;
+  /** Importing another app's history with an agent. */
+  readonly importOffers: ImportOffers;
   constructor(
     private store: Store,
     projects: Projects,
@@ -250,6 +253,7 @@ export class ProjectChats {
       terminalSessions,
     );
     this.imports = new ProjectImports(core, terminalSessions, this.terminal);
+    this.importOffers = new ImportOffers(core, this.imports);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>

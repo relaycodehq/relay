@@ -13,6 +13,7 @@ import type { WatchNote } from "../../shared/watch";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
+import type { ImportOffer } from "../../shared/import-offer";
 import { addStreamed, type Streamed } from "../../shared/usage";
 
 /** A fresh assistant message the agent is about to stream into. */
@@ -170,6 +171,12 @@ export class AnswerRecorder {
   render(render: HtmlRender) {
     if (this.stopped) return;
     (this.message.renders ??= []).push(render);
+    this.changed();
+  }
+  /** What the agent offers to import (offer_import), under the reply; a later offer replaces it. */
+  importOffer(offer: ImportOffer) {
+    if (this.stopped) return;
+    this.message.importOffer = offer;
     this.changed();
   }
   /** The thread's preview as the agent left it, under the reply; a later open replaces it. */

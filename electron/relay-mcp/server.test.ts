@@ -261,6 +261,37 @@ test("dev=on adds restart_relay, and never for a started thread", async () => {
   ).not.toContain("restart_relay");
 });
 
+test("the import tools are listed only to a thread opened for an import", async () => {
+  const calls: string[] = [];
+  const url = await serve(async (_chat, name) => {
+    calls.push(name);
+    return toolText("ok");
+  });
+  const names = async (path: string) =>
+    (
+      await (
+        await post(path, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+      ).json()
+    ).result.tools.map((t: { name: string }) => t.name);
+  for (const tool of ["import_sources", "offer_import"]) {
+    expect(await names(url)).not.toContain(tool);
+    expect(await names(`${url}?import=on`)).toContain(tool);
+    expect(
+      await names(`${url.replace(/\/mcp$/, STARTED_PATH)}?import=on`),
+    ).not.toContain(tool);
+  }
+  const refused = await (
+    await post(url, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "import_sources", arguments: {} },
+    })
+  ).json();
+  expect(refused.error.code).toBe(-32602);
+  expect(calls).toEqual([]);
+});
+
 test("a failing call comes back as a tool error, not a dead request", async () => {
   const url = await serve(async () => {
     throw new Error("That isn't a thread you started.");

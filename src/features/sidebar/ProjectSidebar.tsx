@@ -16,6 +16,12 @@ import { useSidebarView } from "./useSidebarView";
 import { useSidebarFolds } from "./useSidebarFolds";
 import { useShelves } from "./useShelves";
 import { useProjectGroups } from "./useProjectGroups";
+import {
+  movePlanned,
+  plannedChats,
+  plannedProjects,
+  useShownPlan,
+} from "../import-offer/import-plan";
 import { useProjectDrag } from "./useProjectDrag";
 import { useSidebarThreads } from "./useSidebarThreads";
 import { useUnread } from "./useUnread";
@@ -112,7 +118,18 @@ export function ProjectSidebar({
   const folds = useSidebarFolds();
   const shelves = useShelves();
   const [error, setError] = useState<string>();
-  const groups = useProjectGroups(realProjects, folds.setOpen, setError);
+  // The open thread's import offer stands its new projects in the tree.
+  const plan = useShownPlan();
+  const treeProjects = plan ? plannedProjects(realProjects, plan) : realProjects;
+  const groups = useProjectGroups(
+    treeProjects,
+    folds.setOpen,
+    setError,
+    plan && {
+      move: (id, folder, before) =>
+        movePlanned(plan, treeProjects, id, folder, before),
+    },
+  );
   const drag = useProjectDrag(groups, folds.setOpen);
   const autoSettleDays = useQuery({
     queryKey: ["auto-settle-days"],
@@ -330,6 +347,7 @@ export function ProjectSidebar({
                 current: projectId,
                 onNew: newThread,
                 onProjectSettings: (p) => onSettings("project", p.id),
+                importing: plan && plannedChats(plan),
               }}
               error={error}
               empty={!realProjects.length}

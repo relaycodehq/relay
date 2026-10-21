@@ -10,6 +10,7 @@ import type { TurnPreview } from "../preview";
 import type { Streamed } from "../usage";
 import type { ResumeSettings } from "./send";
 import type { ElsewhereEdits } from "../elsewhere";
+import type { ImportOffer } from "../import-offer";
 
 export interface PageAnswer {
   title: string;
@@ -149,6 +150,8 @@ export interface ChatMessage {
   renders?: HtmlRender[];
   /** Local: the thread's preview as this turn's agent left it, under its reply; the latest open wins. */
   preview?: TurnPreview;
+  /** Local: what the agent offered to import with offer_import, under its reply. */
+  importOffer?: ImportOffer;
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   /** Local: files its file tools wrote in other repositories, which `changes` can't see. */

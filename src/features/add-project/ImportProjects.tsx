@@ -18,12 +18,15 @@ export function ImportProjects({
   onBack,
   onClose,
   onDone,
+  onAskAgent,
   onBusy,
 }: {
   ref?: Ref<{ back: () => void }>;
   onBack: () => void;
   onClose: () => void;
   onDone: (project: Project) => void;
+  /** Hands the import to an agent in a thread of its own instead. */
+  onAskAgent?: (app: ImportApp) => void;
   onBusy: (busy: boolean) => void;
 }) {
   const qc = useQueryClient();
@@ -232,6 +235,15 @@ export function ImportProjects({
                 />
                 Include saved chats
               </label>
+            )}
+            {!complete && onAskAgent && !!projects.data?.length && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => onAskAgent(app)}
+              >
+                Ask an agent…
+              </button>
             )}
             <span role="status">
               {busy && !complete
