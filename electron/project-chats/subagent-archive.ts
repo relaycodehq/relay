@@ -70,15 +70,19 @@ export class SubagentArchive {
         before.saved = next.saved;
         return;
       }
-      this.cache.set(chatId, next);
       await mkdir(join(this.dir, "subagents"), {
         recursive: true,
         mode: 0o700,
       });
       const path = this.path(chatId);
       const tmp = `${path}.${randomUUID()}.tmp`;
-      await writeFile(tmp, JSON.stringify(next), { mode: 0o600 });
-      await rename(tmp, path);
+      try {
+        await writeFile(tmp, JSON.stringify(next), { mode: 0o600 });
+        await rename(tmp, path);
+        this.cache.set(chatId, next);
+      } finally {
+        await rm(tmp, { force: true }).catch(() => {});
+      }
     });
   }
 
