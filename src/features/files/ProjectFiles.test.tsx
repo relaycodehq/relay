@@ -7,12 +7,12 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Project } from "../../shared/projects";
-import type { FileInfo } from "../../shared/project-files";
-import type { ChecksController } from "../features/checks/useProjectChecks";
-import { requestChannel } from "../lib/request-channel";
+import type { Project } from "../../../shared/projects";
+import type { FileInfo } from "../../../shared/project-files";
+import type { ChecksController } from "../checks/useProjectChecks";
+import { requestChannel } from "../../lib/request-channel";
 import type { FileTarget } from "./file-link-target";
-import { ProjectFiles } from "./ProjectViews";
+import { ProjectFiles } from "./ProjectFiles";
 
 const mocks = vi.hoisted(() => ({
   info: vi.fn(),
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   mounted: vi.fn(),
   unmounted: vi.fn(),
 }));
-vi.mock("../lib/api", () => ({
+vi.mock("../../lib/api", () => ({
   api: {
     projectFileInfo: mocks.info,
     projectFiles: mocks.files,
@@ -32,19 +32,12 @@ vi.mock("../lib/api", () => ({
     projectDirectory: mocks.directory,
   },
 }));
-vi.mock("../features/changes/WorktreeSwitch", () => ({
-  WorktreeSwitch: () => null,
-}));
-vi.mock("../features/changes/LocalChanges", () => ({
-  LocalChanges: () => null,
-}));
-vi.mock("../features/changes/TurnChanges", () => ({ TurnChanges: () => null }));
-vi.mock("../ui/PaneResizer", () => ({ PaneResizer: () => null }));
-vi.mock("../features/files/FileTree", () => ({ FileTree: () => null }));
+vi.mock("../../ui/PaneResizer", () => ({ PaneResizer: () => null }));
+vi.mock("./FileTree", () => ({ FileTree: () => null }));
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: () => ({ getTotalSize: () => 0, getVirtualItems: () => [] }),
 }));
-vi.mock("../ui/ui", () => ({
+vi.mock("../../ui/ui", () => ({
   ErrorBox: () => null,
   Loading: () => null,
   IconButton: ({
@@ -54,7 +47,7 @@ vi.mock("../ui/ui", () => ({
     <button aria-label={label} {...props} />
   ),
 }));
-vi.mock("../features/files/editor/LocalFileEditor", () => ({
+vi.mock("./editor/LocalFileEditor", () => ({
   default: function Editor() {
     const [text, setText] = useState("original");
     useEffect(() => {
@@ -178,22 +171,26 @@ it("stops hidden file searches and refreshes the list on return", async () => {
   expect(mocks.files).toHaveBeenCalledTimes(1);
 });
 
-it("keeps an edited buffer mounted when the Files tab hides and shows", async () => {
-  localStorage.setItem("relay-project-file:project", "file.txt");
-  await render(true);
-  // Lazy imports can resolve after the first query notification.
-  await advance(10);
-  const editor = host.querySelector("textarea")!;
-  expect(editor).not.toBeNull();
-  await act(async () => {
-    editor.value = "unsaved changes";
-    editor.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await render(false);
-  await advance(15_000);
-  await render(true);
-  expect(host.querySelector("textarea")).toBe(editor);
-  expect(editor.value).toBe("unsaved changes");
-  expect(mocks.mounted).toHaveBeenCalledTimes(1);
-  expect(mocks.unmounted).not.toHaveBeenCalled();
-});
+it.each(["file.txt", "/tmp/outside.txt"])(
+  "keeps an edited %s buffer mounted when the Files tab hides and shows",
+  async (path) => {
+    await render(true);
+    await act(async () =>
+      opens.send({ path, outside: path.startsWith("/"), directory: false }),
+    );
+    await advance(10);
+    const editor = host.querySelector("textarea")!;
+    expect(editor).not.toBeNull();
+    await act(async () => {
+      editor.value = "unsaved changes";
+      editor.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await render(false);
+    await advance(15_000);
+    await render(true);
+    expect(host.querySelector("textarea")).toBe(editor);
+    expect(editor.value).toBe("unsaved changes");
+    expect(mocks.mounted).toHaveBeenCalledTimes(1);
+    expect(mocks.unmounted).not.toHaveBeenCalled();
+  },
+);

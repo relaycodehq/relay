@@ -7,7 +7,11 @@ import {
 import type { QuestionTarget } from "../../shared/questions";
 import type { Pull } from "../../shared/types";
 import { api } from "../lib/api";
-import { changedTarget, fileTarget, type FileTarget } from "./file-link-target";
+import {
+  changedTarget,
+  fileTarget,
+  type FileTarget,
+} from "../features/files/file-link-target";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { requestChannel } from "../lib/request-channel";
 import type { TurnDiffTarget } from "../features/changes/turn-diff";

@@ -1,7 +1,7 @@
 import {
   matchLink,
   type ProjectFileLink,
-} from "../../shared/project-file-links";
+} from "../../../shared/project-file-links";
 
 /** A file for the Files pane to open. */
 export type FileTarget = ProjectFileLink & {

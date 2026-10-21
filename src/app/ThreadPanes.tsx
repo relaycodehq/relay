@@ -13,22 +13,16 @@ import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
 import type { ThreadFolder } from "./useThreadFolder";
-import type {
-  ThreadView,
-  Viewing,
-} from "../features/thread/useThreadView";
+import type { ThreadView, Viewing } from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
-import { ProjectChanges, ProjectFiles } from "./ProjectViews";
+import { ProjectChanges } from "./ProjectViews";
+import { ProjectFiles } from "../features/files/ProjectFiles";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
 import { ElsewhereOnly } from "../features/changes/elsewhere/ElsewhereOnly";
 import { WORKTREE_DELETED } from "./thread-folder";
-import {
-  NO_SLOTS,
-  PaneHeader,
-  type PaneSlots,
-} from "../ui/WorkspacePanes";
+import { NO_SLOTS, PaneHeader, type PaneSlots } from "../ui/WorkspacePanes";
 import { PaneTabs } from "../ui/PaneTabs";
 import { IconButton } from "../ui/ui";
 import type { PanelTabs } from "../features/panel/panel-tabs";
