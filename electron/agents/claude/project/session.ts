@@ -126,25 +126,50 @@ export function meterOf(session: ClaudeSession) {
   return session.meter;
 }
 
+/** How long a side question may run, and so how long the next one waits for it. */
+const ASK_LIMIT_MS = 120_000;
+
 /**
  * A measured side question to the live session, after any asked before it:
- * two at once would each count the other's requests as their own.
+ * two at once would each count the other's requests as their own. `/btw`,
+ * the watcher's checks and the next-message guess all queue here.
  */
-export function askMeasured(
+export function measuredAsk(
+  session: ClaudeSession,
+  signal: AbortSignal,
+  ask: (signal: AbortSignal) => Promise<string | null>,
+) {
+  const limited = () =>
+    AbortSignal.any([signal, AbortSignal.timeout(ASK_LIMIT_MS)]);
+  const asked = settled(session.asking, limited()).then(() => {
+    signal.throwIfAborted();
+    const within = limited();
+    return meterOf(session).measure(() => ask(within));
+  });
+  session.asking = asked;
+  return asked;
+}
+
+export const askMeasured = (
   session: ClaudeSession,
   question: string,
   signal: AbortSignal,
-) {
-  const asked = (session.asking ?? Promise.resolve())
-    .catch(() => {})
-    .then(() => {
-      signal.throwIfAborted();
-      return meterOf(session).measure(() =>
-        askLive(session.stream, question, signal),
-      );
-    });
-  session.asking = asked;
-  return asked;
+) =>
+  measuredAsk(session, signal, (within) =>
+    askLive(session.stream, question, within),
+  );
+
+/** Once `work` settles or `signal` aborts: one that hangs mustn't hold the queue. */
+function settled(work: Promise<unknown> | undefined, signal: AbortSignal) {
+  if (!work || signal.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      signal.removeEventListener("abort", done);
+      resolve();
+    };
+    signal.addEventListener("abort", done, { once: true });
+    work.then(done, done);
+  });
 }
 
 /** The session's side checks; they ask whatever stream the session has at the time. */

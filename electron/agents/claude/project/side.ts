@@ -5,10 +5,11 @@ import { withTimeout } from "../../../util/timeout";
 import { sdk, type ClaudeInput, type ClaudeStream } from "./sdk";
 import type { UsageReport } from "../../types";
 import { ClaudeMeter, type SessionTotals } from "../watch/spend";
-import { meterOf, sessions } from "./session";
+import { measuredAsk, sessions } from "./session";
 
 /** An earlier question in a side thread, and what Claude said to it. */
 export type SideExchange = { question: string; response: string };
+type Measured = Awaited<ReturnType<ClaudeMeter["measure"]>>;
 type SideAsking = ClaudeStream & {
   askSideQuestion(
     question: string,
@@ -33,14 +34,14 @@ export async function askClaudeSide(options: {
   onUsage?: (usage: UsageReport) => void;
 }): Promise<string> {
   // The answer carries no counts; the session's totals moving around it do.
-  const ask = async (stream: ClaudeStream, meter: ClaudeMeter) => {
-    const { reply, cost } = await meter.measure(async () => {
-      const answer = await (stream as SideAsking).askSideQuestion(
-        options.question,
-        { history: options.history, signal: options.signal },
-      );
-      return answer?.response ?? null;
-    });
+  const asking = (stream: ClaudeStream) => async (signal: AbortSignal) => {
+    const answer = await (stream as SideAsking).askSideQuestion(
+      options.question,
+      { history: options.history, signal },
+    );
+    return answer?.response ?? null;
+  };
+  const answered = ({ reply, cost }: Measured) => {
     if (cost)
       options.onUsage?.({
         model: cost.model,
@@ -51,7 +52,11 @@ export async function askClaudeSide(options: {
     return reply;
   };
   const live = sessions.get(options.key);
-  if (live && !live.frames.ended) return ask(live.stream, meterOf(live));
+  // In line behind the session's other side questions, which share its meter.
+  if (live && !live.frames.ended)
+    return answered(
+      await measuredAsk(live, options.signal, asking(live.stream)),
+    );
   const [{ query }, executable, { env }] = await Promise.all([
     sdk(),
     findExecutable("claude"),
@@ -79,7 +84,7 @@ export async function askClaudeSide(options: {
     for await (const frame of stream) meter.observe(frame);
   })().catch(() => {});
   try {
-    return await ask(stream, meter);
+    return answered(await meter.measure(() => asking(stream)(options.signal)));
   } finally {
     input.close();
     stream.close();
