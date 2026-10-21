@@ -9,6 +9,9 @@ export const SESSION_MS = 5 * 60 * 60 * 1000;
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 const usageWindowSchema = z.object({
+  /** Providers with independent model pools name their individual windows. */
+  id: z.string().max(200).optional(),
+  label: z.string().max(160).optional(),
   kind: z.enum(["session", "weekly"]),
   usedPercent: z.number().min(0).max(100),
   resetsAt: z.number().nullable(),
@@ -37,7 +40,7 @@ const savedResetsSchema = z.object({
 export const providerUsageSchema = z
   .object({
     provider: usageProviderSchema,
-    windows: z.array(usageWindowSchema).max(2),
+    windows: z.array(usageWindowSchema).max(16),
     message: z.string().max(160).nullable(),
     /** Learned from Relay's own readings; see usage-history. */
     activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
@@ -54,11 +57,7 @@ export type UsageCredits = z.infer<typeof usageCreditsSchema>;
 export type SavedResets = z.infer<typeof savedResetsSchema>;
 /** What Codex answered when asked to spend a saved reset. */
 export type CodexResetOutcome =
-  | "reset"
-  | "nothingToReset"
-  | "noCredit"
-  | "alreadyRedeemed"
-  | "unknown";
+  "reset" | "nothingToReset" | "noCredit" | "alreadyRedeemed" | "unknown";
 export type CodexResetResult = {
   outcome: CodexResetOutcome;
   /** The account's limits read again afterwards. */
@@ -67,7 +66,8 @@ export type CodexResetResult = {
 export type MeterPace = "ok" | "warn" | "hot" | "spent";
 export type UsageMeter = {
   kind: UsageKind;
-  label: "Session" | "Weekly";
+  id?: string;
+  label: string;
   leftPercent: number;
   /** Percent that would be left now at an even burn to the reset, if known. */
   paceLeftPercent: number | null;
@@ -123,7 +123,8 @@ export function presentWindow(
 ): UsageMeter {
   const used = clamp(window.usedPercent, 0, 100);
   const leftPercent = clamp(Math.round(100 - used), 0, 100);
-  const label = window.kind === "session" ? "Session" : "Weekly";
+  const label =
+    window.label ?? (window.kind === "session" ? "Session" : "Weekly");
   const fresh =
     window.kind === "session" && window.resetsAt == null && used <= 0;
   const resetLabel = fresh
@@ -144,6 +145,7 @@ export function presentWindow(
         );
   if (fresh) {
     return {
+      id: window.id,
       kind: window.kind,
       label,
       leftPercent: 100,
@@ -155,6 +157,7 @@ export function presentWindow(
   }
   if (leftPercent <= 0) {
     return {
+      id: window.id,
       kind: window.kind,
       label,
       leftPercent: 0,
@@ -167,6 +170,7 @@ export function presentWindow(
   const projected = project(used, window, now, clock, active != null);
   if (projected?.status === "ahead") {
     return {
+      id: window.id,
       kind: window.kind,
       label,
       leftPercent,
@@ -179,6 +183,7 @@ export function presentWindow(
   if (projected?.status === "onTrack") {
     const spare = Math.round(100 - projected.projected);
     return {
+      id: window.id,
       kind: window.kind,
       label,
       leftPercent,
@@ -192,6 +197,7 @@ export function presentWindow(
     // A few points past the pace mark is one lighter afternoon, not a fire.
     const behind = (paceLeftPercent ?? 100) - leftPercent;
     return {
+      id: window.id,
       kind: window.kind,
       label,
       leftPercent,
@@ -203,6 +209,7 @@ export function presentWindow(
   }
   const percentUsed = Math.round(used);
   return {
+    id: window.id,
     kind: window.kind,
     label,
     leftPercent,

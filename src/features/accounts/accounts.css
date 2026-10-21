@@ -129,11 +129,21 @@
 .accounts-danger {
   color: var(--danger);
 }
-/* An account's limits as two thin bars */
+/* An account's limits */
 .account-bars {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.account-bars[data-grouped] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.account-bars[data-grouped] .account-bar-top {
+  white-space: normal;
+}
+.account-bars[data-grouped] .account-bar-left {
+  flex-shrink: 0;
 }
 .account-bars-status {
   font-size: 11px;

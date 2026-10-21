@@ -113,12 +113,15 @@ public struct AgentQuestion: Codable, Sendable, Equatable, Identifiable {
     public var question: String
     public var isSecret: Bool?
     public var multiple: Bool?
+    public var allowCustomAnswer: Bool?
     public var options: [QuestionOption]?
 }
 
 public struct QuestionOption: Codable, Sendable, Equatable {
     public var label: String
     public var description: String?
+    public var value: String?
+    public var selectionValue: String { value ?? label }
 }
 
 public struct AsyncAgentQuestions: Codable, Sendable, Equatable, Identifiable {

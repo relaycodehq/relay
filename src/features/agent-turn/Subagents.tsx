@@ -10,6 +10,7 @@ import {
   Check,
   ChevronRight,
   CircleStop,
+  Circle,
   CircleX,
   FilePen,
   FileText,
@@ -54,6 +55,8 @@ export function SubagentStatus({ run }: { run: SubagentRun }) {
         <span className="subagent-dot" aria-label="Working" />
       ) : run.status === "completed" ? (
         <Check size={13} className="subagent-done" aria-label="Done" />
+      ) : run.status === "idle" ? (
+        <Circle size={13} aria-label="Child status unavailable" />
       ) : run.status === "failed" ? (
         <CircleX size={13} aria-label="Failed" />
       ) : (
@@ -259,7 +262,7 @@ function Peek({
             Open its run
             <ChevronRight size={13} />
           </button>
-          {run.status === "running" && (
+          {run.status === "running" && run.canStop !== false && (
             <button
               type="button"
               className="text-button"

@@ -147,6 +147,7 @@ data class SubagentRun(
     val brief: String? = null,
     /** "running" | "completed" | "failed" | "stopped" */
     val status: String,
+    val canStop: Boolean? = null,
     val started: Long,
     val ended: Long? = null,
     val summary: String? = null,

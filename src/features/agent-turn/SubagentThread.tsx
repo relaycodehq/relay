@@ -145,7 +145,7 @@ export function SubagentThread({
           {run ? leadName(run) : "the thread's agent"}, not from you.
         </span>
         {error && <span role="alert">{error}</span>}
-        {run?.status === "running" && (
+        {run?.status === "running" && run.canStop !== false && (
           <button
             type="button"
             disabled={stopping === openId}

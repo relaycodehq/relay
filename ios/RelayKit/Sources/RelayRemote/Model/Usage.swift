@@ -5,13 +5,17 @@ import Foundation
 // active hours (shared/usage-history.ts); the phone only paces the week by them.
 
 public struct UsageWindow: Codable, Sendable, Equatable {
+    public var id: String?
+    public var label: String?
     /// "session" | "weekly"
     public var kind: String
     public var usedPercent: Double
     public var resetsAt: Int64?
     public var periodMs: Int64
 
-    public init(kind: String, usedPercent: Double, resetsAt: Int64?, periodMs: Int64) {
+    public init(kind: String, usedPercent: Double, resetsAt: Int64?, periodMs: Int64, id: String? = nil, label: String? = nil) {
+        self.id = id
+        self.label = label
         self.kind = kind
         self.usedPercent = usedPercent
         self.resetsAt = resetsAt
@@ -145,7 +149,7 @@ public func presentWindow(_ window: UsageWindow, now: Int64, activeHours: [Doubl
 {
     let used = clamp(window.usedPercent, 0, 100)
     let left = Int(clamp((100 - used).rounded(), 0, 100))
-    let label = window.kind == "session" ? "Session" : "Weekly"
+    let label = window.label ?? (window.kind == "session" ? "Session" : "Weekly")
     let fresh = window.kind == "session" && window.resetsAt == nil && used <= 0
     let resetLabel = fresh ? "Not started" : window.resetsAt.flatMap { resetsIn($0, now: now) }
     let active = clockFor(window, activeHours, zone)

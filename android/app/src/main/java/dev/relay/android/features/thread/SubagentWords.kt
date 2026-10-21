@@ -74,6 +74,7 @@ fun subagentNow(run: SubagentRun): String {
         return run.summary ?: current?.let(::liveLabel) ?: "Starting…"
     }
     val outcome = run.outcome?.split(Regex("(?<=\\.)\\s"))?.firstOrNull()
+    if (run.status == "idle") return outcome ?: "Child status unavailable"
     if (run.status == "completed") return outcome ?: "Done"
     return if (run.status == "failed") "Failed" else "Stopped"
 }

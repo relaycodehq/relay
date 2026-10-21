@@ -97,7 +97,7 @@ fun SubagentRunScreen(
                     style = RelayTheme.type.xs,
                     color = c.mutedForeground,
                 )
-                if (run?.status == "running") Action(
+                if (run?.status == "running" && run.canStop != false) Action(
                     "Stop agent",
                     busyLabel = "Stopping…",
                     failed = "Couldn't stop it",

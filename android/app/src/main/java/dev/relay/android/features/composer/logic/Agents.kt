@@ -26,7 +26,7 @@ private val builtin = mapOf(
     "cursor" to info("Cursor", fast = true, groups = true),
     "muse" to info("Muse", side = true, usage = true),
     "amp" to info("Amp"),
-    "antigravity" to info("Antigravity"),
+    "antigravity" to info("Antigravity", usage = true),
 )
 
 private val registryId = Regex("^[a-z0-9][a-z0-9-]*$")

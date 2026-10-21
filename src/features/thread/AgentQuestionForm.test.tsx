@@ -29,9 +29,9 @@ function mount() {
     ),
   );
   const option = (label: string) =>
-    [...host.querySelectorAll<HTMLButtonElement>(".agent-question-option")].find(
-      (b) => b.textContent?.includes(label),
-    )!;
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(".agent-question-option"),
+    ].find((b) => b.textContent?.includes(label))!;
   const input = host.querySelector("input")!;
   const type = (value: string) =>
     act(() => {
@@ -42,8 +42,7 @@ function mount() {
       setter.call(input, value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-  const send = () =>
-    act(() => host.querySelector("form")!.requestSubmit());
+  const send = () => act(() => host.querySelector("form")!.requestSubmit());
   return { option, input, type, send, onRespond };
 }
 
@@ -65,4 +64,42 @@ it("writing your own answer replaces the picked option", () => {
     kind: "question",
     answers: { q: ["Both, honestly"] },
   });
+});
+
+it("shows only offered native choices and submits their stable ids, even when labels repeat", () => {
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  const onRespond = vi.fn(async () => {});
+  act(() =>
+    root.render(
+      <AgentQuestionForm
+        questions={[
+          {
+            id: "native",
+            question: "Pick a target.",
+            allowCustomAnswer: false,
+            options: [
+              { label: "Same", value: "first" },
+              { label: "Same", value: "second" },
+            ],
+          },
+        ]}
+        busy={false}
+        deferred
+        onRespond={onRespond}
+      />,
+    ),
+  );
+  expect(host.querySelector("input")).toBeNull();
+  act(() =>
+    host
+      .querySelectorAll<HTMLButtonElement>(".agent-question-option")[1]!
+      .click(),
+  );
+  act(() => host.querySelector("form")!.requestSubmit());
+  expect(onRespond).toHaveBeenCalledWith({
+    kind: "question",
+    answers: { native: ["second"] },
+  });
+  act(() => root.unmount());
 });

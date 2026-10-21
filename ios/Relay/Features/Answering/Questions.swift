@@ -39,15 +39,15 @@ struct Questions: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let options = question.options, !options.isEmpty {
                 VStack(spacing: 0) {
-                    ForEach(options, id: \.label) { option in
-                        OptionRow(option: option, picked: picks.contains(option.label), multiple: question.multiple == true) {
-                            pick(option.label)
+                    ForEach(options, id: \.selectionValue) { option in
+                        OptionRow(option: option, picked: picks.contains(option.selectionValue), multiple: question.multiple == true) {
+                            pick(option.selectionValue)
                         }
-                        if option.label != options.last?.label { Divider().padding(.leading, 36) }
+                        if option.selectionValue != options.last?.selectionValue { Divider().padding(.leading, 36) }
                     }
                 }
             }
-            field
+            if question.allowCustomAnswer != false { field }
             if showsNext {
                 Button(last ? "Send answer" : "Next") { next() }
                     .buttonStyle(.accentGlass)

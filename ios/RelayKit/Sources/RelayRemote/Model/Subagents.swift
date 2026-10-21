@@ -15,6 +15,7 @@ public struct SubagentRun: Codable, Sendable, Equatable, Identifiable {
     public var brief: String?
     /// "running" | "completed" | "failed" | "stopped"
     public var status: String
+    public var canStop: Bool?
     public var started: Int64
     public var ended: Int64?
     /// Its latest ~30s progress summary, while it runs.
@@ -40,6 +41,7 @@ public struct SubagentRun: Codable, Sendable, Equatable, Identifiable {
         model = try c.decodeIfPresent(String.self, forKey: .model)
         brief = try c.decodeIfPresent(String.self, forKey: .brief)
         status = try c.decode(String.self, forKey: .status)
+        canStop = try c.decodeIfPresent(Bool.self, forKey: .canStop)
         started = try c.decode(Int64.self, forKey: .started)
         ended = try c.decodeIfPresent(Int64.self, forKey: .ended)
         summary = try c.decodeIfPresent(String.self, forKey: .summary)
@@ -149,6 +151,7 @@ public func subagentNow(_ run: SubagentRun) -> String {
     let outcome = run.outcome.map { text in
         text.firstMatch(of: #/\.\s/#).map { String(text[..<$0.range.lowerBound]) + "." } ?? text
     }
+    if run.status == "idle" { return outcome ?? "Child status unavailable" }
     if run.status == "completed" { return outcome ?? "Done" }
     return run.status == "failed" ? "Failed" : "Stopped"
 }

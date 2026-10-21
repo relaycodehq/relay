@@ -18,6 +18,7 @@ type Run = {
   brief?: string;
   parentId?: string;
   status: SubagentStatus;
+  canStop?: boolean;
   started: number;
   ended?: number;
   summary?: string;
@@ -31,7 +32,7 @@ type Run = {
 
 export type SubagentStart = Pick<
   Run,
-  "description" | "type" | "model" | "brief" | "parentId" | "stop"
+  "description" | "type" | "model" | "brief" | "parentId" | "stop" | "canStop"
 >;
 
 const limits = {
@@ -126,6 +127,13 @@ export class SubagentBook implements SubagentSource {
         entry.activity = { ...entry.activity, status: "stopped" };
   }
 
+  /** A batch can report its result after the start call itself has finished. */
+  report(id: string, text: string) {
+    const run = this.runs.get(id);
+    if (run && !run.stopping && text.trim())
+      run.report = text.trim().slice(0, limits.text);
+  }
+
   /** The session ended, and its agents with it. */
   close() {
     for (const run of this.runs.values())
@@ -188,6 +196,7 @@ export class SubagentBook implements SubagentSource {
       model: run.model,
       brief: run.brief,
       status: run.status,
+      canStop: run.canStop,
       started: run.started,
       ended: run.ended,
       summary: run.summary,

@@ -46,6 +46,7 @@ import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ChevronUp
+import io.github.lyxnx.compose.ui.tablericons.outline.Circle
 import io.github.lyxnx.compose.ui.tablericons.outline.CircleX
 import io.github.lyxnx.compose.ui.tablericons.outline.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.Robot
@@ -59,6 +60,7 @@ fun SubagentMark(run: SubagentRun) {
         when (run.status) {
             "running" -> Box(Modifier.size(7.dp).background(c.accent, CircleShape))
             "completed" -> Icon(TablerIcons.Outline.Check, "Done", size = 14.dp, tint = c.additionText)
+            "idle" -> Icon(TablerIcons.Outline.Circle, "Child status unavailable", size = 14.dp, tint = c.mutedForeground)
             "failed" -> Icon(TablerIcons.Outline.CircleX, "Failed", size = 14.dp, tint = c.mutedForeground)
             else -> Icon(TablerIcons.Outline.PlayerStop, "Stopped", size = 14.dp, tint = c.mutedForeground)
         }
@@ -264,7 +266,7 @@ private fun AgentRow(run: SubagentRun, display: (String) -> String, onPress: () 
             Text(display(subagentNow(run)), color = c.mutedForeground, maxLines = 2)
             Text(about, style = RelayTheme.type.xs, color = c.faint, maxLines = 1)
         }
-        if (run.status == "running") Action("Stop", busyLabel = "Stopping…", failed = "Couldn't stop it", unsure = "Stop may still go through", confirm = confirmStop(run)) {
+        if (run.status == "running" && run.canStop != false) Action("Stop", busyLabel = "Stopping…", failed = "Couldn't stop it", unsure = "Stop may still go through", confirm = confirmStop(run)) {
             onStop()
         }
     }
