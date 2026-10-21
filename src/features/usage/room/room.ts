@@ -98,18 +98,6 @@ export function roomiest(accounts: readonly RoomAccount[]) {
 
 export const isLow = (a: RoomAccount) => leftOf(a) < LOW_PERCENT;
 
-/**
- * Whether to offer a saved reset. Low, always: Codex says so if it isn't
- * needed. Otherwise as Codex counts the ones it would apply now, or, when it
- * didn't say, once something has been used.
- */
-export function canRefill(a: RoomAccount) {
-  if (!a.resets) return false;
-  if (isLow(a)) return true;
-  if (a.resets.usable != null) return a.resets.usable > 0;
-  return a.tanks.some((t) => t.meter.leftPercent < 95);
-}
-
 export const resetCount = (n: number) =>
   `${n} saved ${n === 1 ? "reset" : "resets"}`;
 
@@ -155,7 +143,7 @@ export function tankWords(t: RoomTank, now: number) {
         ? null
         : leftPercent === 0
           ? `back at ${when(at, now)}`
-          : `refills ${when(at, now)}`,
+          : `resets ${when(at, now)}`,
     // "Out in ~7h" → "runs out in ~7h at this pace".
     pace: limitLabel?.startsWith("Out")
       ? `${limitLabel.replace(/^Out/, "runs out")} at this pace`
@@ -164,7 +152,7 @@ export function tankWords(t: RoomTank, now: number) {
 }
 
 /** One click's request: Codex's idempotency key and the reset it asked for. */
-export type RefillAttempt = { key: string; creditId: string | null };
+export type ResetAttempt = { key: string; creditId: string | null };
 
 /**
  * The attempt to send again on the next click: none once Codex gave a clear
@@ -173,9 +161,9 @@ export type RefillAttempt = { key: string; creditId: string | null };
  * reset asked for stays too: the reading after a spent one lists the next.
  */
 export function attemptAfter(
-  attempt: RefillAttempt,
+  attempt: ResetAttempt,
   outcome: CodexResetOutcome,
-): RefillAttempt | null {
+): ResetAttempt | null {
   switch (outcome) {
     case "reset":
     case "nothingToReset":

@@ -8,13 +8,11 @@ import {
 } from "../../../../shared/provider-usage";
 import {
   attemptAfter,
-  canRefill,
   expiryWords,
   roomAccounts,
   roomiest,
   tankWords,
   windowName,
-  type RoomAccount,
 } from "./room";
 
 const now = new Date(2026, 9, 14, 14, 20).getTime();
@@ -25,7 +23,13 @@ const account = (
   id: string,
   label: string,
   signedIn = true,
-): AgentAccount => ({ provider, id, label, system: id === "default", signedIn });
+): AgentAccount => ({
+  provider,
+  id,
+  label,
+  system: id === "default",
+  signedIn,
+});
 
 const usage = (
   provider: "claude" | "codex" | "antigravity",
@@ -94,7 +98,10 @@ describe("which accounts show", () => {
 
   it("lights the account with the most room before any limit stops it", () => {
     const [a, b] = roomAccounts(
-      [account("claude", "default", "Default"), account("codex", "default", "Default")],
+      [
+        account("claude", "default", "Default"),
+        account("codex", "default", "Default"),
+      ],
       (provider) =>
         provider === "claude"
           ? usage(provider, { session: 0, weekly: 70 })
@@ -105,26 +112,7 @@ describe("which accounts show", () => {
   });
 });
 
-describe("offering a saved reset", () => {
-  const codex = (used: { session?: number; weekly?: number }, r: SavedResets | null) =>
-    roomAccounts(
-      [account("codex", "default", "Default")],
-      () => usage("codex", used, r),
-      now,
-    )[0] as RoomAccount;
-
-  it("offers one on a low account even when Codex counts none it would apply", () => {
-    expect(canRefill(codex({ weekly: 95 }, resets(1, [], 0)))).toBe(true);
-  });
-
-  it("follows Codex's count while there's room, and falls back to any use without it", () => {
-    expect(canRefill(codex({ weekly: 40 }, resets(1, [], 0)))).toBe(false);
-    expect(canRefill(codex({ weekly: 40 }, resets(1, [], 1)))).toBe(true);
-    expect(canRefill(codex({ weekly: 40 }, resets(1)))).toBe(true);
-    expect(canRefill(codex({ weekly: 2 }, resets(1)))).toBe(false);
-    expect(canRefill(codex({ weekly: 99 }, null))).toBe(false);
-  });
-
+describe("saved resets", () => {
   it("says when the first one lapses, or nothing when only the count is known", () => {
     const oct22 = new Date(2026, 9, 22).getTime();
     expect(expiryWords(resets(1, [oct22]))).toBe("runs out Oct 22");
@@ -137,7 +125,7 @@ describe("offering a saved reset", () => {
   });
 });
 
-it("says an empty limit is back at its reset, and one with room refills then", () => {
+it("says an empty limit is back at its reset, and one with room resets then", () => {
   const [a] = roomAccounts(
     [account("codex", "default", "Default")],
     () => usage("codex", { session: 100, weekly: 50 }),
@@ -148,10 +136,10 @@ it("says an empty limit is back at its reset, and one with room refills then", (
     left: "0% left",
     end: "back at 17:20",
   });
-  expect(tankWords(a!.tanks[1]!, now).end).toBe("refills Sat 14:20");
+  expect(tankWords(a!.tanks[1]!, now).end).toBe("resets Sat 14:20");
 });
 
-it("keeps a refill's key and reset until Codex answers clearly, so a retry can't spend two", () => {
+it("keeps a reset's key and reset until Codex answers clearly, so a retry can't spend two", () => {
   const sent = { key: "attempt-1", creditId: "r0" };
   // An answer Relay doesn't know may have spent it: the retry sends the same.
   expect(attemptAfter(sent, "unknown")).toBe(sent);

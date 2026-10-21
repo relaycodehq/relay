@@ -13,15 +13,10 @@ import {
 import { AccountBars, headroom } from "./AccountBars";
 import { useAgentAccounts } from "./agent-accounts";
 import { useAccountsUsage } from "./useAccountUsage";
+import { usagePage } from "./usage-page";
 import "./accounts.css";
 
 type OnError = (error: unknown) => void;
-
-const usagePage: Record<AccountProvider, string> = {
-  claude: "https://claude.ai/settings/usage",
-  codex: "https://chatgpt.com/settings/usage?tab=overview",
-  antigravity: "https://antigravity.google.com/",
-};
 
 /**
  * An agent's accounts as lines of its card in Settings → AI & agents → Agents:

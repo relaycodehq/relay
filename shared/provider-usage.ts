@@ -46,7 +46,7 @@ export const providerUsageSchema = z
     activeHours: z.array(z.number().min(0).max(1)).length(24).nullish(),
     /** Bought credits that carry turns once the windows run out; Codex only. */
     credits: usageCreditsSchema.nullish(),
-    /** Resets saved up that refill the windows when spent; Codex only. */
+    /** Saved resets that reset usage when spent; Codex only. */
     resets: savedResetsSchema.nullish(),
   })
   .strict();

@@ -2,14 +2,14 @@
 // page's own columns, and Codex's saved resets with a way to spend one.
 import { useState } from "react";
 import { Popover } from "@base-ui/react/popover";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { ExternalLink, RefreshCw, RotateCcw } from "lucide-react";
 import { api } from "../../../lib/api";
 import { errorMessage } from "../../../../shared/error-message";
 import { HarnessMark } from "../usage-charts";
 import { dayLabel } from "../format";
+import { usagePage } from "../../accounts/usage-page";
 import {
   attemptAfter,
-  canRefill,
   expiryWords,
   firstToLapse,
   isLow,
@@ -19,7 +19,7 @@ import {
   tankWords,
   windowName,
   windowTitle,
-  type RefillAttempt,
+  type ResetAttempt,
   type RoomAccount,
   type RoomTank,
 } from "./room";
@@ -68,6 +68,7 @@ export function RoomLeft({ room }: { room: Room }) {
 /** One account's limits, full when nothing's used; the roomiest in the accent. */
 function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
   const [hover, setHover] = useState<RoomTank | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const words = hover && tankWords(hover, Date.now());
   return (
     <div className="us-room-account" onMouseLeave={() => setHover(null)}>
@@ -93,10 +94,24 @@ function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
           </span>
         ))}
       </div>
-      <div className="us-room-name" title={a.name}>
+      <a
+        className="us-room-name"
+        href={usagePage[a.provider]}
+        title={`Open usage page for ${a.name}`}
+        aria-label={`Open usage page for ${a.name}`}
+        onClick={(event) => {
+          event.preventDefault();
+          setError(null);
+          void api.openExternal(usagePage[a.provider]).catch((error) => {
+            setError(errorMessage(error));
+          });
+        }}
+      >
         <HarnessMark id={a.provider} size={11} />
         <span>{a.name}</span>
-      </div>
+        <ExternalLink size={10} className="us-room-external" />
+      </a>
+      {error && <small role="alert">{error}</small>}
       {words && (
         <div className="us-tip us-room-tip" role="status">
           <strong>
@@ -123,24 +138,30 @@ function SavedRow({ account: a, room }: { account: RoomAccount; room: Room }) {
         </span>
         {expiry && <small>{expiry}</small>}
       </span>
-      {canRefill(a) && <Refill account={a} room={room} />}
+      <ResetUsage account={a} room={room} />
     </div>
   );
 }
 
-/** "Refill": quiet while there's room, in the accent once the account is low. */
-function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
+/** "Reset usage": quiet while there's room, in the accent once the account is low. */
+function ResetUsage({
+  account: a,
+  room,
+}: {
+  account: RoomAccount;
+  room: Room;
+}) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   // Kept until Codex gives a clear answer: after a failure or an answer Relay
   // doesn't know, trying again sends the same attempt, which can't spend a
   // second reset.
-  const [attempt, setAttempt] = useState<RefillAttempt | null>(null);
+  const [attempt, setAttempt] = useState<ResetAttempt | null>(null);
   const resets = a.resets!;
   const credit = firstToLapse(resets);
   const stays = resets.count - 1;
-  const refill = async () => {
+  const resetUsage = async () => {
     const sent = attempt ?? {
       key: crypto.randomUUID(),
       creditId: credit?.id ?? null,
@@ -177,11 +198,11 @@ function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
     >
       <Popover.Trigger
         type="button"
-        className="us-room-refill"
+        className="us-room-reset"
         data-low={isLow(a) || undefined}
       >
         <RotateCcw size={12} />
-        Refill
+        Reset usage
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner
@@ -192,11 +213,11 @@ function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
         >
           <Popover.Popup
             className="us-room-ask"
-            aria-label="Use a saved reset"
+            aria-label="Reset usage"
             aria-busy={busy || undefined}
           >
             <p>
-              Refill {a.name} now? Its limits start fresh
+              Reset usage for {a.name}? Its limits start fresh
               {stays > 0
                 ? `, and ${resetCount(stays)} ${stays === 1 ? "stays" : "stay"}.`
                 : "; it’s the last saved one."}
@@ -216,9 +237,9 @@ function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
                 type="button"
                 className="primary"
                 disabled={busy}
-                onClick={() => void refill()}
+                onClick={() => void resetUsage()}
               >
-                {busy ? "Refilling…" : "Refill now"}
+                {busy ? "Resetting…" : "Reset usage"}
               </button>
               <button type="button" onClick={() => setOpen(false)}>
                 Not now
