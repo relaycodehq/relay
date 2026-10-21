@@ -46,6 +46,16 @@ export function ImportProjects({
     : 0;
   const loadingChats =
     includeChats && selected.some(([, choice]) => choice.chats === undefined);
+  const selectable = projects.data?.filter((p) => !p.missing) ?? [];
+  const picked = selectable.filter((p) => choices[p.key]).length;
+  function chooseAll(on: boolean) {
+    setChoices((old) => {
+      if (!on) return {};
+      const out = { ...old };
+      for (const p of selectable) out[p.key] ??= {};
+      return out;
+    });
+  }
   function choose(key: string, next: ImportChoice | undefined) {
     setChoices((old) => {
       const out = { ...old };
@@ -170,6 +180,24 @@ export function ImportProjects({
                   !projects.data?.length && (
                     <p>No local projects found for this app.</p>
                   )}
+                {selectable.length > 1 && (
+                  <label className="import-select-all">
+                    <input
+                      type="checkbox"
+                      ref={(el) => {
+                        if (el)
+                          el.indeterminate =
+                            picked > 0 && picked < selectable.length;
+                      }}
+                      checked={picked === selectable.length}
+                      disabled={busy}
+                      onChange={(e) => chooseAll(e.target.checked)}
+                    />
+                    {picked
+                      ? `${picked} of ${selectable.length} selected`
+                      : `Select all ${selectable.length}`}
+                  </label>
+                )}
                 <ul className="import-projects">
                   {projects.data?.map((project) => (
                     <ImportProjectRow
@@ -232,14 +260,6 @@ export function ImportProjects({
                     Done
                   </button>
                 )}
-                <button
-                  type="button"
-                  className="text-button"
-                  disabled={busy || projects.isFetching}
-                  onClick={() => void projects.refetch()}
-                >
-                  Refresh
-                </button>
                 <button
                   type="button"
                   className="primary"

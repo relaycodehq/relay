@@ -174,6 +174,23 @@
   padding: 0;
   margin: 0;
 }
+/* Pinned over the list; the negative top covers the body's padding. */
+.import-select-all {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 0 0;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
 .import-project + .import-project {
   border-top: 1px solid var(--border);
 }
