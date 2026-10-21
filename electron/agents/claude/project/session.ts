@@ -24,6 +24,7 @@ import { SubagentWatch } from "../watch/subagents";
 import { ClaudeMeter } from "../watch/spend";
 import { RequestUsage } from "../request-usage";
 import { askLive, sessionTotals } from "./side";
+import { SideQueue } from "./side-queue";
 import {
   claudePermissionMode,
   linksSignature,
@@ -110,8 +111,8 @@ export type ClaudeSession = {
   goal?: ClaudeGoalWatch;
   /** What its side questions cost; made with the first frame it reads. */
   meter?: ClaudeMeter;
-  /** The side question asked last; the next waits for it, so the meter measures one at a time. */
-  asking?: Promise<unknown>;
+  /** Its side questions, one at a time so the meter measures each alone. */
+  asking?: SideQueue;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
   watch?: { checks: WatchChecks; subagents: SubagentWatch };
 };
@@ -126,51 +127,45 @@ export function meterOf(session: ClaudeSession) {
   return session.meter;
 }
 
-/** How long a side question may run, and so how long the next one waits for it. */
+/** How long a background side question may run, and so hold the others up. */
 const ASK_LIMIT_MS = 120_000;
 
 /**
- * A measured side question to the live session, after any asked before it:
- * two at once would each count the other's requests as their own. `/btw`,
- * the watcher's checks and the next-message guess all queue here.
+ * A measured side question to the live session, after any asked before it.
+ * `/btw`, the watcher's checks and the next-message guess all queue here;
+ * `urgent` is for one someone waits on, which goes ahead of the background
+ * ones and runs as long as it takes. Undefined when the session ended
+ * while it waited.
  */
 export function measuredAsk(
   session: ClaudeSession,
   signal: AbortSignal,
-  ask: (signal: AbortSignal) => Promise<string | null>,
+  ask: (stream: ClaudeStream, signal: AbortSignal) => Promise<string | null>,
+  urgent = false,
 ) {
-  const limited = () =>
-    AbortSignal.any([signal, AbortSignal.timeout(ASK_LIMIT_MS)]);
-  const asked = settled(session.asking, limited()).then(() => {
-    signal.throwIfAborted();
-    const within = limited();
-    return meterOf(session).measure(() => ask(within));
-  });
-  session.asking = asked;
-  return asked;
+  const limit = urgent ? undefined : ASK_LIMIT_MS;
+  return (session.asking ??= new SideQueue()).run(
+    async () => {
+      if (session.frames.ended) return undefined;
+      const within =
+        limit === undefined
+          ? signal
+          : AbortSignal.any([signal, AbortSignal.timeout(limit)]);
+      return meterOf(session).measure(() => ask(session.stream, within));
+    },
+    signal,
+    { urgent, holdMs: limit },
+  );
 }
 
-export const askMeasured = (
+export const askMeasured = async (
   session: ClaudeSession,
   question: string,
   signal: AbortSignal,
 ) =>
-  measuredAsk(session, signal, (within) =>
-    askLive(session.stream, question, within),
-  );
-
-/** Once `work` settles or `signal` aborts: one that hangs mustn't hold the queue. */
-function settled(work: Promise<unknown> | undefined, signal: AbortSignal) {
-  if (!work || signal.aborted) return Promise.resolve();
-  return new Promise<void>((resolve) => {
-    const done = () => {
-      signal.removeEventListener("abort", done);
-      resolve();
-    };
-    signal.addEventListener("abort", done, { once: true });
-    work.then(done, done);
-  });
-}
+  (await measuredAsk(session, signal, (stream, within) =>
+    askLive(stream, question, within),
+  )) ?? { reply: null };
 
 /** The session's side checks; they ask whatever stream the session has at the time. */
 export function watchOf(session: ClaudeSession) {

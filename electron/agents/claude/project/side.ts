@@ -34,7 +34,7 @@ export async function askClaudeSide(options: {
   onUsage?: (usage: UsageReport) => void;
 }): Promise<string> {
   // The answer carries no counts; the session's totals moving around it do.
-  const asking = (stream: ClaudeStream) => async (signal: AbortSignal) => {
+  const asking = async (stream: ClaudeStream, signal: AbortSignal) => {
     const answer = await (stream as SideAsking).askSideQuestion(
       options.question,
       { history: options.history, signal },
@@ -52,11 +52,13 @@ export async function askClaudeSide(options: {
     return reply;
   };
   const live = sessions.get(options.key);
-  // In line behind the session's other side questions, which share its meter.
-  if (live && !live.frames.ended)
-    return answered(
-      await measuredAsk(live, options.signal, asking(live.stream)),
-    );
+  // Ahead of Relay's own side questions, which share the session's meter.
+  const measured =
+    live &&
+    !live.frames.ended &&
+    (await measuredAsk(live, options.signal, asking, true));
+  // A session that ended while it waited is resumed like a saved one.
+  if (measured) return answered(measured);
   const [{ query }, executable, { env }] = await Promise.all([
     sdk(),
     findExecutable("claude"),
@@ -84,7 +86,7 @@ export async function askClaudeSide(options: {
     for await (const frame of stream) meter.observe(frame);
   })().catch(() => {});
   try {
-    return answered(await meter.measure(() => asking(stream)(options.signal)));
+    return answered(await meter.measure(() => asking(stream, options.signal)));
   } finally {
     input.close();
     stream.close();
