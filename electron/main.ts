@@ -7,6 +7,7 @@ import { watchSavedSignIns } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { antigravityIo, registryUpdatesIo } from "./agents/acp";
 import { apiContext } from "./api/context";
+import { reviewedPull } from "./deep-review";
 import { createDispatch, serveApi } from "./api";
 import { AppLinks } from "./app/links";
 import { GiteaLogin } from "./app/login";
@@ -535,6 +536,21 @@ app
           ),
         handoffs: handoffs.sender,
         reportProblem: draftBugReport,
+        reviews: {
+          setups: () => loaded.get().reviewSetups ?? [],
+          start: async (chatId, config) =>
+            chats.startDeepReview(
+              chatId,
+              config,
+              config.target.kind === "pr"
+                ? await reviewedPull(
+                    await api.clientFor(config.target.ref),
+                    config.target.ref,
+                  )
+                : undefined,
+              true,
+            ),
+        },
         ...(process.env.RELAY_DEV_STALE
           ? { restart: () => devBuild.restart() }
           : {}),

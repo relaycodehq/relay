@@ -20,7 +20,7 @@ const branchNameSchema = z
     (v) => !v.startsWith("-") && !v.includes("..") && !/[\s~^:?*[\\]/.test(v),
     "Choose a valid branch.",
   );
-const reviewTargetSchema = z.discriminatedUnion("kind", [
+export const reviewTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("uncommitted") }).strict(),
   z
     .object({
@@ -109,6 +109,21 @@ export const reviewDraftSetupSchema = deepReviewStartSchema
   .strip();
 export type ReviewDraftSetup = z.infer<typeof reviewDraftSetupSchema>;
 
+/** A setup you've run, as the deep review sheet lists it; the main process keeps a copy for the deep_review tool. */
+export const savedReviewSetupSchema = z.object({
+  id: z.string().max(100),
+  /** When it last ran. */
+  at: z.number(),
+  name: z.string().max(80).optional(),
+  pinned: z.boolean().optional(),
+  setup: deepReviewStartSchema.pick({
+    reviewers: true,
+    lead: true,
+    runChecks: true,
+  }),
+});
+export type SavedReviewSetup = z.infer<typeof savedReviewSetupSchema>;
+
 /** What a helper agent names a setup from, to find it again later. */
 export const reviewSetupSchema = deepReviewStartSchema.pick({
   reviewers: true,
@@ -132,6 +147,12 @@ export interface ReviewScope {
   stats?: { files: number; additions: number; deletions: number };
   /** Where the reviewed code is checked out when the thread's checkout doesn't have it; reviewers and the lead work there. */
   checkout?: ReviewCheckout;
+  /**
+   * The folder the thread worked in when a round started in a thread of its
+   * own, not a deep review's; its reviewers work there too. Such a round
+   * makes no checkout: what isn't on disk there, they read from Git.
+   */
+  folder?: string;
 }
 /** A worktree the review reads from and fixes in. */
 export interface ReviewCheckout {

@@ -51,6 +51,8 @@ interface State {
   /** Days after settling before a thread's worktree is removed; null never, unset the default. */
   worktreeCleanupDays?: number | null;
   chats?: import("../../shared/projects").ChatSummary[];
+  /** The deep review sheet's setups, newest first, for the deep_review tool. */
+  reviewSetups?: import("../../shared/deep-review").SavedReviewSetup[];
   /** This computer's last page and known server command for each thread. */
   previews?: Record<string, import("../preview/saved-previews").SavedPreview>;
   aiSettings?: StoredAISettings;

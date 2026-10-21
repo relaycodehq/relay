@@ -8,6 +8,7 @@ import {
   deepReviewStartSchema,
   MAX_REVIEWERS,
   reviewSetupSchema,
+  savedReviewSetupSchema,
 } from "../../shared/deep-review";
 import {
   chatScopeSchema,
@@ -27,6 +28,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
+import { reviewedPull } from "../deep-review/pull-info";
 import { mediaUrl } from "../media";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -337,36 +339,27 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],
-      async (id, config) => {
-        // The forge knows which branch a pull request merges into.
-        const host =
-          config.target.kind === "pr"
-            ? await clientFor(config.target.ref)
-            : undefined;
-        const pull =
-          host && config.target.kind === "pr"
-            ? await host.pull(config.target.ref)
-            : undefined;
-        return projectChats.startDeepReview(
+      async (id, config) =>
+        projectChats.startDeepReview(
           id,
           config,
-          host &&
-            pull && {
-              number: pull.number,
-              title: pull.title,
-              base: pull.base.ref,
-              headRef: host.headRef(pull),
-              ...(pull.head.ref &&
-              pull.head.repo &&
-              pull.head.repo.full_name === pull.base.repo?.full_name
-                ? { headBranch: pull.head.ref }
-                : {}),
-            },
-        );
-      },
+          config.target.kind === "pr"
+            ? await reviewedPull(
+                await clientFor(config.target.ref),
+                config.target.ref,
+              )
+            : undefined,
+        ),
     ),
     nameReviewSetup: takes([reviewSetupSchema], (setup) =>
       nameReviewSetup(setup, store.aiSettings(), AbortSignal.timeout(60_000)),
+    ),
+    saveReviewSetups: takes(
+      [z.array(savedReviewSetupSchema).max(100)],
+      (setups) =>
+        store.update((s) => {
+          s.reviewSetups = setups;
+        }),
     ),
     resumeDeepReview: takes(
       [

@@ -12,6 +12,11 @@ import { ProjectAccess, type AgentProjects } from "./project-access";
 import { ThreadPages } from "./thread-pages";
 import { json, localTime } from "./tool-output";
 import {
+  listReviewSetups,
+  startReview,
+  type ThreadReviews,
+} from "./thread-reviews";
+import {
   agentName,
   usageProviders,
   type AgentProvider,
@@ -55,6 +60,7 @@ import { errorMessage } from "../../shared/error-message";
 
 export { localTime } from "./tool-output";
 export type { AgentProjects } from "./project-access";
+export type { ThreadReviews } from "./thread-reviews";
 
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
@@ -150,6 +156,7 @@ export class StartedThreads {
   private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
   private reportProblem: ReportProblem | undefined;
+  private reviews: ThreadReviews | undefined;
   private agentChoices: AgentChoices;
   private failureWatchMs: number;
   constructor(
@@ -169,6 +176,8 @@ export class StartedThreads {
       restart?: () => void;
       /** Fills in and shows Relay's Report a problem page; absent without windows. */
       reportProblem?: ReportProblem;
+      /** Deep reviews an agent starts in its thread; absent where nothing keeps review setups. */
+      reviews?: ThreadReviews;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -178,6 +187,7 @@ export class StartedThreads {
     this.handoffs = options.handoffs;
     this.restart = options.restart;
     this.reportProblem = options.reportProblem;
+    this.reviews = options.reviews;
     this.agentChoices = new AgentChoices(options.agents);
     this.failureWatchMs = options.failureWatchMs ?? 0;
   }
@@ -250,6 +260,13 @@ export class StartedThreads {
         return this.tickNote(lead, input, signal);
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
+      case "deep_review":
+      case "list_review_setups":
+        if (!this.reviews)
+          return toolText("This Relay can't run deep reviews.", true);
+        return tool === "deep_review"
+          ? toolText(await startReview(this.reviews, lead, input))
+          : listReviewSetups(this.reviews);
       case "list_projects":
         return json(await this.projects.list(lead.projectId));
       case "add_project":

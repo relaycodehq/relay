@@ -19,6 +19,7 @@ import {
   StartedThreads,
   type AgentProjects,
   type ReportProblem,
+  type ThreadReviews,
   type ThreadHandoffs,
 } from ".";
 import type { ThreadAgents } from "./thread-agents";
@@ -92,6 +93,7 @@ export async function answerRelayTools(
     agents?: ThreadAgents;
     restart?: () => void;
     reportProblem?: ReportProblem;
+    reviews?: ThreadReviews;
   } = {},
 ) {
   const started = new StartedThreads(chats, {

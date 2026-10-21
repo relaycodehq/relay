@@ -602,8 +602,18 @@ export class ProjectChats {
       goal,
     };
   }
-  startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
-    return this.councils.startReview(id, config, pull);
+  /** `duringTurn`: the thread's agent asked for it mid-answer, through the deep_review tool. */
+  async startDeepReview(
+    id: string,
+    config: DeepReviewStart,
+    pull?: PullInfo,
+    duringTurn = false,
+  ) {
+    const chat = await this.storage.load(id);
+    // Any other thread is reviewed where it works.
+    const folder =
+      chat.scope.kind === "review" ? undefined : await this.worktrees.root(chat);
+    return this.councils.startReview(id, config, pull, { folder, duringTurn });
   }
   resumeDeepReview(id: string, only?: ResumeReview) {
     return this.councils.resumeReview(id, only);

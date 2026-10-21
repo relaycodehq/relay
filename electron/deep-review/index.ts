@@ -45,6 +45,7 @@ export {
 } from "./checkout";
 
 export { migrateReviewRounds } from "./rounds";
+export { reviewedPull } from "./pull-info";
 export type { PullInfo };
 
 export interface DeepReviewHost {
@@ -89,11 +90,28 @@ export class DeepReviews {
   private awaiting = new Set<string>();
   constructor(private host: DeepReviewHost) {}
 
-  async start(chatId: string, config: DeepReviewStart, pull?: PullInfo) {
+  /**
+   * Starts a round. A deep review's own thread reviews from the project's
+   * checkout, or one made for the review; any other thread passes `folder`,
+   * where it works. `duringTurn` is a round its agent asked for mid-answer:
+   * the lead's turn waits for that answer to end.
+   */
+  async start(
+    chatId: string,
+    config: DeepReviewStart,
+    pull?: PullInfo,
+    { folder, duringTurn = false }: { folder?: string; duringTurn?: boolean } = {},
+  ) {
     const chat = await this.host.load(chatId);
-    if (chat.scope.kind !== "review")
-      throw new Error("Start a deep review from a new deep review thread.");
-    if (reviewRunning(latestReview(chat)) || this.host.active(chat.id))
+    const own = chat.scope.kind === "review";
+    if (!own && !folder)
+      throw new Error("Say where the thread works to review in it.");
+    if (chat.reviewer)
+      throw new Error("A reviewer can't start a review of its own.");
+    if (
+      reviewRunning(latestReview(chat)) ||
+      (!duringTurn && this.host.active(chat.id))
+    )
       throw new Error("Wait for the review to finish first.");
     const first = !chat.reviews?.length;
     const project = this.host.project(chat.projectId);
@@ -103,20 +121,24 @@ export class DeepReviews {
         project.repository?.name !== config.target.ref.name)
     )
       throw new Error("This pull request belongs to a different project.");
-    const root = await this.host.root(chat.projectId);
+    const root = folder ?? (await this.host.root(chat.projectId));
     const scope = await resolveScope(root, config.target, project, pull);
+    if (folder) scope.folder = folder;
     // Reviewers read the code around the changes, so they work where it's
-    // checked out. Without that they still read it from Git.
-    const checkout = await openReviewCheckout(
-      root,
-      scope,
-      this.host.worktrees,
-      chat.id,
-      pull?.headBranch,
-    ).catch((e: unknown) => {
-      console.warn("Could not check out the reviewed code for review:", e);
-      return undefined;
-    });
+    // checked out. Without that they still read it from Git. Another
+    // thread's agent stays in its own folder, so nothing is checked out.
+    const checkout = own
+      ? await openReviewCheckout(
+          root,
+          scope,
+          this.host.worktrees,
+          chat.id,
+          pull?.headBranch,
+        ).catch((e: unknown) => {
+          console.warn("Could not check out the reviewed code for review:", e);
+          return undefined;
+        })
+      : undefined;
     if (checkout) scope.checkout = checkout;
     // An earlier round's folder stays when this one doesn't start.
     const kept = chat.reviews?.some(
@@ -174,10 +196,10 @@ export class DeepReviews {
       branch: chat.branch,
     };
     chat.messages.push(request);
-    // The thread is named after what its first round covers.
-    if (first) chat.title = reviewThreadTitle(scope);
+    // A review's own thread is named after what its first round covers.
+    if (own && first) chat.title = reviewThreadTitle(scope);
     chat.updated = Date.now();
-    chat.branch = scope.branch ?? chat.branch;
+    if (own) chat.branch = scope.branch ?? chat.branch;
     (chat.reviews ??= []).push(state);
     try {
       await this.host.touch(chat, request.id);
@@ -446,6 +468,11 @@ export class DeepReviews {
         this.host.close(chat.id);
       return this.reviewerDone(chat.reviewer.parent, chat.reviewer.round);
     }
+    // A round its agent asked for mid-answer: the reviewers may have finished
+    // while that answer ran, so the lead goes on now.
+    const latest = latestReview(chat);
+    if (latest?.status === "reviewing")
+      return this.reviewerDone(chat.id, latest.request);
     // Only one round's lead can be on its first turn.
     const state = chat.reviews?.find((r) => r.status === "leading");
     if (!state) return;
@@ -528,6 +555,8 @@ export class DeepReviews {
     const state =
       chat && reviewerRound(chat.reviews, { parent: parentId, round, slot: 0 });
     if (!chat || !state || state.status !== "reviewing") return;
+    // The answer that asked for this round still runs; its end comes back here.
+    if (this.host.active(chat.id)) return;
     const working = () =>
       state.reviewers.some(
         (r) => this.host.active(r.chatId) || this.host.waiting(r.chatId),

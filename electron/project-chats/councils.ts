@@ -104,7 +104,13 @@ export class Councils {
             ?.reviews,
           chat.reviewer,
         )
-      : latestReview(chat);
+      : chat.scope.kind === "review"
+        ? latestReview(chat)
+        : // Any other thread keeps working where it did.
+          undefined;
+    // A round started in a thread of its own has its reviewers work there.
+    if (chat.reviewer && state?.scope.folder && !state.scope.checkout)
+      return state.scope.folder;
     const checkout = state?.scope.checkout;
     if (!checkout || !state.scope.head) return;
     if (!make)
@@ -183,13 +189,18 @@ export class Councils {
       .catch((e) => console.warn("Could not reopen the deep review:", e));
   }
 
-  startReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
+  startReview(
+    id: string,
+    config: DeepReviewStart,
+    pull?: PullInfo,
+    options?: { folder?: string; duringTurn?: boolean },
+  ) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
       this.core.projects.assertCheckoutAvailable(
         (await this.core.storage.load(id)).projectId,
       );
-      await this.reviews.start(id, config, pull);
+      await this.reviews.start(id, config, pull, options);
     });
   }
 
