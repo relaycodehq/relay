@@ -9,21 +9,13 @@ import {
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { composeSend, newThreadSettings } from "../../shared/remote-compose";
 import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("a headless Relay pairs from the terminal, works for a phone and takes a thread from the desktop and back", async () => {
   test.setTimeout(240_000);

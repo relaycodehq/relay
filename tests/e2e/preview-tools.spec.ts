@@ -13,20 +13,12 @@ import {
   rm,
   realpath,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { openSurface, panelToggle } from "../fixtures/navigation";
-
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const probe = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 /** Has the thread's agent call one of Relay's tools, and resolves to its answer. */
 async function callTool(page: Page, tool: string, input: unknown) {

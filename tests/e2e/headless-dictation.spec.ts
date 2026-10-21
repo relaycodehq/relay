@@ -10,22 +10,14 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dictationModel } from "../../shared/dictation";
 import { parsePairingUrl, type PhoneDictationHeard } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
+import { freePort } from "../fixtures/free-port";
 
 const modelDir = process.env.RELAY_DICTATION_MODEL;
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
 
 test("a phone dictates with a headless Relay's speech engine", async () => {
   test.skip(

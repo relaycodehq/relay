@@ -12,7 +12,6 @@ import {
   realpath,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -22,14 +21,7 @@ import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
 import type { SharedDraft } from "../../shared/drafts";
 import { composeSend, newThreadSettings } from "../../shared/remote-compose";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 /** Pastes a small screenshot into the composer, as the clipboard would. */
 const pasteShot = (page: Page) =>

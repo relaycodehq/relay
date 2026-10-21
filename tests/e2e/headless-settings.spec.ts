@@ -9,19 +9,11 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { fixtureServer } from "../fixtures/gitea";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("relay settings changes a headless Relay and signs it in to Cursor and Gitea from the terminal", async () => {
   test.setTimeout(120_000);

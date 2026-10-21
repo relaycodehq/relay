@@ -8,7 +8,6 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -20,14 +19,7 @@ import {
   newThreadSettings,
 } from "../../shared/remote-compose";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("a phone pairs from Settings, answers the agent's approval and is removed again", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-"))),

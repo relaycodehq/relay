@@ -14,7 +14,6 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -23,14 +22,7 @@ import {
   type PhoneReadAloudAudio,
 } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 // The tone engine from read-aloud.spec, already downloaded.
 test("a phone hears an answer in the desktop's voice", async () => {

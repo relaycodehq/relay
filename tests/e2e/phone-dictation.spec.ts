@@ -14,24 +14,16 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dictationModel } from "../../shared/dictation";
 import { parsePairingUrl, type PhoneDictationHeard } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
+import { freePort } from "../fixtures/free-port";
 
 // The real speech model is a 670 MB download, so this runs only when pointed
 // at one: RELAY_DICTATION_MODEL=<folder with the files in shared/dictation.ts>.
 const modelDir = process.env.RELAY_DICTATION_MODEL;
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
 
 test("a phone dictates with the desktop's speech engine", async () => {
   test.skip(

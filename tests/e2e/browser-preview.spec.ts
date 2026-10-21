@@ -2,19 +2,12 @@ import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, realpath, rename } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { once } from "node:events";
-import { createServer, connect } from "node:net";
+import { connect } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { openSurface } from "../fixtures/navigation";
-
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const probe = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("the Browser surface starts the project's dev server and shows its page over the panel", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-preview-"))),

@@ -7,19 +7,11 @@ import {
   type ElectronApplication,
 } from "../fixtures/electron";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("a worktree thread goes to another computer from its header and comes back from its strip", async () => {
   test.setTimeout(180_000);
