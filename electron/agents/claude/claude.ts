@@ -1,7 +1,12 @@
 import { terminate } from "../../platform/terminate";
 import { runClaudeProject, type ClaudeRunOptions } from "./project";
 import { claudeImages } from "./project/sdk";
-import { ANSWER_LIMIT, answerLimitError } from "../turn-kit";
+import {
+  ANSWER_LIMIT,
+  QUESTION_LIMIT_MS,
+  answerLimitError,
+  questionLimitError,
+} from "../turn-kit";
 import { findExecutable, spawnExecutable } from "../../platform/executables";
 import { ClaudeFailureWatch, claudeReason } from "./claude-failure";
 import { runAccount } from "../accounts";
@@ -64,13 +69,8 @@ export async function runClaude(options: ClaudeRunOptions): Promise<string> {
     };
     const abort = () => finish(new Error("Cancelled by you."));
     const timeout = setTimeout(
-      () =>
-        finish(
-          new Error(
-            "Claude reached the 10-minute question limit. Partial output was kept.",
-          ),
-        ),
-      600000,
+      () => finish(questionLimitError("Claude")),
+      QUESTION_LIMIT_MS,
     );
     options.signal.addEventListener("abort", abort, { once: true });
     child.on("error", (e) =>

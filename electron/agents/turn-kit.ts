@@ -11,6 +11,14 @@ export const ANSWER_LIMIT = 100_000;
 export const answerLimitError = (length: number) =>
   length > ANSWER_LIMIT ? new Error("Answer size limit reached.") : undefined;
 
+/** The longest a one-off question (a title, a helper job) may run unwatched. */
+export const QUESTION_LIMIT_MS = 10 * 60_000;
+
+export const questionLimitError = (agent: string) =>
+  new Error(
+    `${agent} reached the 10-minute question limit. The partial answer was kept.`,
+  );
+
 /**
  * How a turn ends: the first answer or error settles it, and anything after
  * is dropped. Nobody may be awaiting it yet when it fails, so a failure is
