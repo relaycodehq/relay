@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { flush, mount, update } from "../../../tests/unit/hook-harness";
 import { numberImages } from "../../../shared/image-refs";
 import type { DraftImage } from "../images/draft-images";
+import type { SketchHistory } from "../images/sketch";
 import type { DraftEditor } from "./useComposerDraft";
 
 const savePaste = vi.hoisted(() =>
@@ -132,6 +133,81 @@ it("puts a refused message's screenshot back once, ahead of one pasted meanwhile
     shown: ["first.png", "second.png"],
     stored: ["first.png", "second.png"],
   });
+});
+
+it("restores a refused send to its original draft after navigating away", async () => {
+  const { useComposerDraft } = await import("./useComposerDraft");
+  const { readDraft, writeDraft } = await import("./drafts");
+  const other = "chat-draft:other";
+  let key = KEY;
+  const draft = mount(() => useComposerDraft(key, { current: null }));
+  await settle();
+  update(() => draft().addFiles([screenshot("first.png")]));
+  await settle();
+  update(() => draft().set("Original message"));
+  const outgoing = draft().take(true);
+  update(() => outgoing.dispatch());
+  update(() => writeDraft(KEY, "Typed while sending"));
+  key = other;
+  draft.rerender();
+  await settle();
+  update(() => draft().set("Other conversation"));
+  update(() => draft().addFiles([screenshot("other.png")]));
+  await settle();
+  update(() => outgoing.restore());
+  await settle();
+  expect(readDraft(KEY)).toBe("Original message\n\nTyped while sending");
+  expect(saved.get(KEY)?.map((image) => image.id)).toEqual(["first.png"]);
+  expect(draft().text).toBe("Other conversation [Image #1]");
+  expect(draft().images.map((image) => image.id)).toEqual(["other.png"]);
+  expect(readDraft(other)).toBe("Other conversation [Image #1]");
+});
+
+it("keeps drawing history through refusal and clears only sent screenshots' history", async () => {
+  const draft = await composer();
+  const history: SketchHistory = {
+    past: [[]],
+    present: [{ color: "#fff", points: [{ x: 1, y: 2 }], widths: [3] }],
+    future: [],
+  };
+  const size = { width: 100, height: 50 };
+  update(() => draft().addFiles([screenshot("first.png")]));
+  await settle();
+  update(() => draft().sketch("first.png"));
+  expect(draft().sketching).toBe("first.png");
+  update(() => draft().finishSketch("first.png", history, size));
+  await settle();
+  expect(draft().sketching).toBeUndefined();
+  const outgoing = draft().take(true);
+  update(() => outgoing.dispatch());
+  update(() => outgoing.restore());
+  await settle();
+  const first = draft().images.find((image) => image.id === "first.png")!;
+  expect(saved.get(KEY)?.[0].sketch).toEqual({
+    ...size,
+    strokes: history.present,
+  });
+  expect(draft().historyOf(first)).toEqual(history);
+  const retry = draft().take(true);
+  update(() => retry.dispatch());
+  update(() => draft().addFiles([screenshot("second.png")]));
+  await settle();
+  update(() => draft().finishSketch("second.png", history, size));
+  await settle();
+  const second = draft().images.find((image) => image.id === "second.png")!;
+  expect(draft().historyOf(second)).toEqual(history);
+  await retry.forget();
+  await settle();
+  expect(state(draft)).toEqual({
+    shown: ["second.png"],
+    stored: ["second.png"],
+  });
+  expect(draft().historyOf(first)).toEqual({
+    past: [],
+    present: history.present,
+    future: [],
+  });
+  expect(draft().historyOf(second)).toEqual(history);
 });
 
 it("keeps both of two screenshots pasted while the first is still being prepared", async () => {
