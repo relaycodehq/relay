@@ -197,6 +197,10 @@ const OTHERS_AFTER = 4;
 /** Accounts that fit beside the rhythm charts; more get a row of their own. */
 const ROOM_BESIDE = 4;
 
+/** A label as it reads mid-sentence: "Thread titles" to "thread titles", "PR triage" as is. */
+const midSentence = (label: string) =>
+  label.replace(/^[A-Z](?![A-Z])/, (c) => c.toLowerCase());
+
 function Rhythmic({
   summary,
   measure: m,
@@ -393,7 +397,7 @@ function Rhythmic({
             .sort((a, b) => b[1][m] - a[1][m])
             .map(
               ([job, spent]) =>
-                `${relayJobLabels[job as keyof typeof relayJobLabels].toLowerCase()} ${measured(spent[m], m)}`,
+                `${midSentence(relayJobLabels[job as keyof typeof relayJobLabels])} ${measured(spent[m], m)}`,
             )
             .join(", ")}
           .
