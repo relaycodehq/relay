@@ -29,6 +29,7 @@ import { workspaceId } from "../../../shared/workspaces";
 import { chatKey } from "../../lib/chat-events";
 import { useNavigationLock } from "../../lib/navigation-lock";
 import { worktreeQuery } from "../changes/turn-diff";
+import { projectChatsQuery } from "../../lib/workspace-queries";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -89,8 +90,7 @@ export function useThreadWorktree({
   const joining =
     !chat && start && "thread" in start ? start.thread : undefined;
   const threads = useQuery({
-    queryKey: ["project-chats", project.id],
-    queryFn: () => api.projectChats(project.id),
+    ...projectChatsQuery(project.id),
     enabled: !!joining,
   });
   useEffect(() => {

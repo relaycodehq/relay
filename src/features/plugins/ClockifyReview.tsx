@@ -1,5 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
 import {
   formatDuration,
@@ -14,6 +14,7 @@ import { ClockifyDay } from "./ClockifyDay";
 import { ClockifyEntry } from "./ClockifyEntry";
 import { clock } from "./clockify-format";
 import "./clockify.css";
+import { useProjectList } from "../../lib/workspace-queries";
 
 type Edit = Partial<Omit<ClockifyBlockEdit, "id">>;
 
@@ -38,10 +39,7 @@ export function ClockifyReview({
   const [discarding, setDiscarding] = useState(false);
   const [picked, setPicked] = useState<string>();
   const projects = useClockifyProjects();
-  const relayProjects = useQuery({
-    queryKey: ["clockify-relay-projects"],
-    queryFn: () => api.projects(),
-  });
+  const relayProjects = useProjectList();
 
   const blocks: ClockifyBlock[] = review.blocks.map((b) => ({
     ...b,

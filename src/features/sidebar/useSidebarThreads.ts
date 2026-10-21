@@ -5,6 +5,7 @@ import { api } from "../../lib/api";
 import { SCRATCH_CHATS } from "../../lib/chat-events";
 import { useAwayViews } from "./useAwayViews";
 import { withAway } from "./with-away";
+import { projectChatsQuery } from "../../lib/workspace-queries";
 
 /** Every project's threads and Scratchpad's, as listed, in no order. */
 export const useEveryThread = (
@@ -17,10 +18,7 @@ function useThreadLists(projects: Project[]) {
   // Kept current by the desktop's pushes; see lib/chat-events.
   const lists = useQueries({
     queries: [
-      ...projects.map((p) => ({
-        queryKey: ["project-chats", p.id],
-        queryFn: () => api.projectChats(p.id),
-      })),
+      ...projects.map((p) => projectChatsQuery(p.id)),
       // One list for every Scratchpad folder: there's one per chat.
       {
         queryKey: SCRATCH_CHATS,

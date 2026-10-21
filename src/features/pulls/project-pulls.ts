@@ -10,6 +10,7 @@ import type { Account } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { accountKey } from "./usePullHosts";
 import { useHostAccount } from "./useHostAccount";
+import { bootstrapQuery } from "../../lib/workspace-queries";
 
 export type PullState = "open" | "closed" | "all";
 /** Every board request starts here, including the lists shared with the composer. */
@@ -55,11 +56,7 @@ export function refreshProjectPulls(
 
 /** Same identity as the board, without passing sign-in state through the composer. */
 export function useProjectPullAccount(project: Project) {
-  const boot = useQuery({
-    queryKey: ["bootstrap"],
-    queryFn: () => api.bootstrap(),
-    staleTime: Infinity,
-  });
+  const boot = useQuery(bootstrapQuery);
   const host = useHostAccount(project.repository, boot.data?.account);
   return { account: host.account, pending: boot.isPending || host.pending };
 }

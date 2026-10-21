@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ClockifyStatus } from "../../../shared/clockify";
 import type { PluginId, PluginToggles } from "../../../shared/plugins";
 import { api } from "../../lib/api";
+import { useProjectList } from "../../lib/workspace-queries";
 
 const usePlugins = () =>
   useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
@@ -78,10 +79,7 @@ export const useClockifyWorkspaces = (host: string, enabled: boolean) =>
 
 /** Relay projects that can be tracked: every one but the scratch pad. */
 export const useTrackableProjects = () =>
-  useQuery({
-    queryKey: ["clockify-relay-projects"],
-    queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
-  });
+  useProjectList((projects) => projects.filter((p) => !p.scratch));
 
 /** The workspace's Clockify projects, for names and colours. */
 export const useClockifyProjects = (enabled = true) =>

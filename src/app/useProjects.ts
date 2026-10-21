@@ -4,12 +4,12 @@ import type { Bootstrap } from "../../shared/types";
 import { api } from "../lib/api";
 import { sweepThreadStorage } from "../features/composer/thread-storage-sweep";
 import { forgetSeen, seenThreads } from "../features/sidebar/useUnread";
+import { projectsQuery } from "../lib/workspace-queries";
 
 /** The projects, kept fresh; once they're in, a sweep of what deleted threads left in storage. */
 export function useProjects(boot: Bootstrap | undefined) {
   const projects = useQuery({
-    queryKey: ["projects", boot?.account?.id],
-    queryFn: () => api.projects(),
+    ...projectsQuery(boot?.account?.id),
     refetchInterval: 5000,
     enabled: !!boot,
   });
