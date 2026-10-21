@@ -46,12 +46,15 @@ export function bugReportHandlers(ctx: ApiContext) {
   };
   return {
     openBugReport: () => reports().open(),
-    saveBugReport: takes([fieldsSchema], (fields) => reports().save(fields)),
+    saveBugReport: takes([z.uuid(), fieldsSchema], (id, fields) =>
+      reports().save(id, fields),
+    ),
     writeBugReport: () => reports().writeWithAgent(),
     undoBugReportTidy: () => reports().undoTidy(),
     addBugReportScreenshot: takes(
-      [text(120), pngSchema, z.uuid().optional()],
-      (name, png, replacing) => reports().addScreenshot(name, png, replacing),
+      [z.uuid(), text(120), pngSchema, z.uuid().optional()],
+      (id, name, png, replacing) =>
+        reports().addScreenshot(id, name, png, replacing),
     ),
     removeBugReportScreenshot: takes([z.uuid()], (id) =>
       reports().removeScreenshot(id),

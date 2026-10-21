@@ -247,7 +247,9 @@ export class BugReports {
    * An agent's write-up of what the user asked it to report. Starts a new
    * report, so it never overwrites one the user is still writing.
    */
-  async prefill(fields: Pick<BugReportDraft, "kind" | "title" | "description">) {
+  async prefill(
+    fields: Pick<BugReportDraft, "kind" | "title" | "description">,
+  ) {
     await this.change((draft) => {
       if (draft.submission?.status !== "sent" && !isEmpty(draft))
         throw new Error(
@@ -268,8 +270,9 @@ export class BugReports {
     this.gathered = this.via = this.signedIn = undefined;
   }
 
-  save(fields: BugReportFields) {
+  save(id: string, fields: BugReportFields) {
     return this.change((draft) => {
+      if (draft.id !== id) throw new Error("That report is no longer open.");
       if (locked(draft)) return;
       Object.assign(draft, fields);
     }).then(() => this.preview());
@@ -281,6 +284,7 @@ export class BugReports {
    */
   async writeWithAgent() {
     const draft = await this.load();
+    const id = draft.id;
     if (locked(draft)) throw new Error("This report was already sent.");
     if (!draft.description.trim())
       throw new Error("Write what happened first, in your own words.");
@@ -291,6 +295,7 @@ export class BugReports {
       occasionText(draft.occasion),
     );
     await this.change((next) => {
+      if (next.id !== id) throw new Error("That report is no longer open.");
       if (locked(next)) return;
       next.beforeTidy = { title: next.title, description: next.description };
       Object.assign(next, written);
@@ -313,13 +318,20 @@ export class BugReports {
    * Keeps an edited screenshot; the bytes must already be the flattened PNG.
    * With `replacing`, it takes that one's place, as its edited version.
    */
-  async addScreenshot(name: string, bytes: Uint8Array, replacing?: string) {
+  async addScreenshot(
+    draftId: string,
+    name: string,
+    bytes: Uint8Array,
+    replacing?: string,
+  ) {
     const png = cleanPng(bytes);
     if (!png) throw new Error("That screenshot isn't a PNG Relay can read.");
     if (png.bytes.length > screenshotLimit)
       throw new Error("Screenshots can be up to 10 MB on GitHub.");
     const id = randomUUID();
     await this.change(async (draft) => {
+      if (draft.id !== draftId)
+        throw new Error("That report is no longer open.");
       if (locked(draft)) throw new Error("This report was already sent.");
       const at = replacing
         ? draft.screenshots.findIndex((s) => s.id === replacing)
@@ -367,7 +379,8 @@ export class BugReports {
    */
   async record(seconds: number) {
     const performance = this.deps.performance;
-    if (!performance) throw new Error("This Relay can't record its performance.");
+    if (!performance)
+      throw new Error("This Relay can't record its performance.");
     if (this.recording) throw new Error("Relay is recording already.");
     const draft = await this.load();
     if (locked(draft)) throw new Error("This report was already sent.");
@@ -436,10 +449,15 @@ export class BugReports {
     recording?.stop.abort();
     // Its zip and its draft would land in, or bring back, the folder.
     await recording?.done.catch(() => {});
-    await this.queue;
-    await rm(this.deps.dir, { recursive: true, force: true });
-    this.draft = Promise.resolve(this.fresh({ kind: "asked" }));
-    this.forget();
+    // Reserve our place before awaiting filesystem work. A later save must
+    // resolve against the replacement draft, not write beside this removal.
+    const task = this.queue.then(async () => {
+      await rm(this.deps.dir, { recursive: true, force: true });
+      this.draft = Promise.resolve(this.fresh({ kind: "asked" }));
+      this.forget();
+    });
+    this.queue = task.catch(() => {});
+    await task;
     return this.preview();
   }
 
@@ -454,9 +472,10 @@ export class BugReports {
           return [];
         }) ?? [],
       ]);
-      const facts = [...systemFacts(system, draft.occasion), ...performance].map(
-        (f) => ({ ...f, value: anonymize(f.value) }),
-      );
+      const facts = [
+        ...systemFacts(system, draft.occasion),
+        ...performance,
+      ].map((f) => ({ ...f, value: anonymize(f.value) }));
       return { facts, log: anonymize(await this.readLog(draft.occasion)) };
     })();
     // A failed look is tried again next time rather than kept.

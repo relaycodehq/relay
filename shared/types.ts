@@ -358,6 +358,7 @@ export interface Api
   /** The problem report, looked at afresh: the system, the log and the `gh` login. */
   openBugReport(): Promise<import("./bug-report").BugReportPreview>;
   saveBugReport(
+    draftId: string,
     fields: import("./bug-report").BugReportFields,
   ): Promise<import("./bug-report").BugReportPreview>;
   /** Has the draft's agent tidy up its description; nothing else goes to the agent. */
@@ -366,6 +367,7 @@ export interface Api
   undoBugReportTidy(): Promise<import("./bug-report").BugReportPreview>;
   /** An edited screenshot as a flattened PNG; `replacing` swaps it for that one. */
   addBugReportScreenshot(
+    draftId: string,
     name: string,
     png: Uint8Array,
     replacing?: string,

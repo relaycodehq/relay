@@ -17,11 +17,13 @@ const emptyHistory = { past: [], present: [], future: [] };
  * same bytes the issue gets.
  */
 export function ReportScreenshots({
+  draftId,
   screenshots,
   locked,
   onChange,
   onError,
 }: {
+  draftId: string;
   screenshots: BugReportScreenshot[];
   locked: boolean;
   onChange: (preview: BugReportPreview) => void;
@@ -33,12 +35,20 @@ export function ReportScreenshots({
     replacing?: string;
   }>();
   const [busy, setBusy] = useState(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   async function edit(file: File, replacing?: string, name?: string) {
     try {
-      setEditing({ image: await reportImage(file, name), replacing });
+      const image = await reportImage(file, name);
+      if (mounted.current) setEditing({ image, replacing });
     } catch (error) {
-      onError(error);
+      if (mounted.current) onError(error);
     }
   }
 
@@ -46,11 +56,18 @@ export function ReportScreenshots({
     setBusy(true);
     try {
       const png = await reportPng(image);
-      onChange(await api.addBugReportScreenshot(image.name, png, replacing));
+      if (!mounted.current) return;
+      const next = await api.addBugReportScreenshot(
+        draftId,
+        image.name,
+        png,
+        replacing,
+      );
+      if (mounted.current) onChange(next);
     } catch (error) {
-      onError(error);
+      if (mounted.current) onError(error);
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -100,7 +117,10 @@ export function ReportScreenshots({
             )
           }
           onRemove={() =>
-            api.removeBugReportScreenshot(shot.id).then(onChange, onError)
+            api.removeBugReportScreenshot(shot.id).then(
+              (next) => mounted.current && onChange(next),
+              (error) => mounted.current && onError(error),
+            )
           }
         />
       ))}
