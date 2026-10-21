@@ -8,7 +8,6 @@ import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
-  branchKept,
   cantCarryOn,
   checkedOutAt,
   copyIntoWorktree,
@@ -18,7 +17,6 @@ import {
   moveIntoWorktree,
   newBranchProblem,
   reattachWorktree,
-  recreateWorktree,
   removeWorktree,
   retitleWorktree,
   sameFolder,
@@ -29,11 +27,11 @@ import {
 } from "../git/worktrees";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
-import { assertHere, awaitsReturn } from "./handoff";
+import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
 import { WorktreeSetup } from "./worktree-setup";
+import { AgentWorkspaces } from "./agent-workspaces";
 import {
-  agentWorktreeKey,
   agentWorktreeUnavailableError,
   joinableWorktrees,
   joinedWorktree,
@@ -43,13 +41,7 @@ import {
   threadsSharing,
   threadWorktree,
 } from "../../shared/projects";
-import {
-  activeAfter,
-  followAgentWorkspace,
-  forgetAgentWorktrees,
-  recoverAgentWorktrees,
-  threadWorktreePaths,
-} from "./agent-worktrees";
+import { forgetAgentWorktrees } from "./agent-worktrees";
 import { sentAgent } from "../../shared/recipient";
 import { keyedQueue } from "../util/keyed-queue";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
@@ -102,7 +94,8 @@ export async function joinableOn<
 
 export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
-  private refreshed = new Map<string, { at: number; pending: Promise<void> }>();
+  /** The worktrees a project-folder thread's agent made, and the one it works in. */
+  readonly agents: AgentWorkspaces;
   /** Worktree changes per repository root; see `inRepo`. */
   private making = keyedQueue();
   /** Worktree folders between their teardown and their removal, per repository root; see `drop`. */
@@ -116,74 +109,9 @@ export class ThreadWorktrees {
     private councils: Pick<Councils, "busy" | "root">,
   ) {
     this.setup = new WorktreeSetup(core);
-  }
-
-  /** Reconcile on reads too: old chats can have missed the event that made or moved their worktree. */
-  async refreshAgentWorktrees(chat: ProjectChat, force = false) {
-    if (chat.worktree || chat.scope.kind !== "project") return;
-    // Its checkout is on the computer the project lives on.
-    if (this.core.projects.get(chat.projectId).computer) return;
-    const prior = this.refreshed.get(chat.id);
-    if (prior && !force && Date.now() - prior.at < 5000) return prior.pending;
-    if (prior) await prior.pending;
-    const pending = (async () => {
-      // Git can be unavailable while the conversation itself remains readable.
-      const worktrees = await this.core.projects
-        .root(chat.projectId)
-        .then((root) => {
-          if (force) forgetAgentWorktrees(root);
-          return recoverAgentWorktrees(
-            root,
-            threadWorktreePaths(this.core.store.get().chats),
-            chat,
-            force,
-          );
-        })
-        .catch((error) => {
-          if (force) throw error;
-          return undefined;
-        });
-      if (!worktrees) return;
-      const active = activeAfter(chat, worktrees);
-      if (
-        JSON.stringify(worktrees) ===
-          JSON.stringify(chat.agentWorktrees ?? []) &&
-        JSON.stringify(active) === JSON.stringify(chat.activeAgentWorktree)
-      )
-        return;
-      if (worktrees.length) chat.agentWorktrees = worktrees;
-      else delete chat.agentWorktrees;
-      followAgentWorkspace(chat, active);
-      await this.core.storage.save(chat);
-    })().catch((error) => {
-      this.refreshed.delete(chat.id);
-      throw error;
-    });
-    this.refreshed.set(chat.id, { at: Date.now(), pending });
-    await pending;
-  }
-
-  /** Resolve the selected folder, reconciling a deletion or repaired move even inside the discovery cache window. */
-  private async agentFolder(chat: ProjectChat, expectedWorktree?: string) {
-    await this.refreshAgentWorktrees(chat);
-    let selected = selectedAgentWorktree(chat);
-    let exists = selected && (await worktreeExists(selected));
-    if (selected && !exists) {
-      await this.refreshAgentWorktrees(chat, true);
-      selected = selectedAgentWorktree(chat);
-      exists = selected && (await worktreeExists(selected));
-    }
-    if (
-      expectedWorktree &&
-      (!chat.activeAgentWorktree ||
-        agentWorktreeKey(chat.activeAgentWorktree) !== expectedWorktree)
-    )
-      throw new Error(
-        "This thread's active workspace changed. Refresh before trying again.",
-      );
-    if (!chat.activeAgentWorktree) return;
-    if (!selected || !exists) throw new Error(agentWorktreeUnavailableError);
-    return selected.path;
+    this.agents = new AgentWorkspaces(core, councils, (root, job) =>
+      this.inRepo(root, job),
+    );
   }
 
   /** Where a thread's agent works: its worktree, made with its first message, the reviewed code's for a review, or the checkout. */
@@ -196,7 +124,7 @@ export class ThreadWorktrees {
     if (review) return review;
     const root = await this.core.projects.root(chat.projectId);
     const worktree = chat.worktree;
-    if (!worktree) return (await this.agentFolder(chat)) ?? root;
+    if (!worktree) return (await this.agents.folder(chat)) ?? root;
     if (await worktreeExists(worktree)) return worktree.path!;
     // Outside the repository's queue: a slow remote mustn't hold up every
     // other thread's worktree there.
@@ -285,12 +213,12 @@ export class ThreadWorktrees {
   inRepo<T>(root: string, job: () => Promise<T>) {
     return this.making(root, async () => {
       forgetAgentWorktrees(root);
-      this.refreshed.clear();
+      this.agents.forget();
       try {
         return await job();
       } finally {
         forgetAgentWorktrees(root);
-        this.refreshed.clear();
+        this.agents.forget();
       }
     });
   }
@@ -941,7 +869,7 @@ export class ThreadWorktrees {
     const worktree = chat.worktree;
     if (!worktree)
       return (
-        (await this.agentFolder(chat)) ?? this.core.projects.root(projectId)
+        (await this.agents.folder(chat)) ?? this.core.projects.root(projectId)
       );
     if (
       worktree.removedAt ||
@@ -951,136 +879,6 @@ export class ThreadWorktrees {
     if (!worktree.path)
       throw new Error("This thread's worktree is made with its first message.");
     return worktree.path;
-  }
-
-  async worksInCheckout(projectId: string, id: string) {
-    const chat = await this.core.storage.load(id);
-    await this.refreshAgentWorktrees(chat);
-    return (
-      chat.projectId === projectId && !chat.worktree && !threadWorktree(chat)
-    );
-  }
-
-  /** Only paths Relay saw the thread's agent make, so the renderer can't open any folder. */
-  async agentWorktreePath(id: string, path: string) {
-    const chat = await this.core.storage.load(id);
-    const worktree = chat.agentWorktrees?.find((w) => w.path === path);
-    if (!worktree) throw new Error("This thread didn't make that worktree.");
-    return worktree.path;
-  }
-
-  /** A project-folder thread that is idle enough to change where it works. */
-  private async switchable(id: string) {
-    const chat = await this.core.storage.load(id);
-    assertHere(chat);
-    if (chat.worktree || chat.scope.kind !== "project" || chat.reviewer)
-      throw new Error(
-        "Only project-folder threads can select an agent worktree.",
-      );
-    await this.core.active.finished(id);
-    if (
-      this.core.active.has(id) ||
-      this.core.active.hasSide(id) ||
-      this.councils.busy(chat)
-    )
-      throw new Error(
-        "Wait for the answer to finish before changing workspace.",
-      );
-    if (this.core.sessions.pending(id).length || chat.heldWakeups?.length)
-      throw new Error(
-        "Stop this thread's background work and wake-ups before changing workspace.",
-      );
-    await this.refreshAgentWorktrees(chat, true);
-    return chat;
-  }
-
-  /** Changes only the working folder. Files and branches stay where they are. */
-  selectAgentWorktree(id: string, path: string | null) {
-    return this.core.control(id, async () => {
-      const chat = await this.switchable(id);
-      const selected =
-        path === null
-          ? undefined
-          : chat.agentWorktrees?.find((w) => w.path === path);
-      if (path !== null && (!selected || !(await worktreeExists(selected))))
-        throw new Error(
-          "This thread didn't make that worktree, or it is unavailable.",
-        );
-      if (
-        (!selected && !chat.activeAgentWorktree) ||
-        (selected &&
-          chat.activeAgentWorktree &&
-          agentWorktreeKey(selected) ===
-            agentWorktreeKey(chat.activeAgentWorktree))
-      )
-        return chatSummary(chat);
-      const root = await this.core.projects.root(chat.projectId);
-      const from = threadWorktree(chat)?.path ?? root;
-      if (selected)
-        chat.activeAgentWorktree = {
-          path: selected.path,
-          gitdir: selected.gitdir,
-          branch: selected.branch,
-        };
-      else delete chat.activeAgentWorktree;
-      chat.movedIn = {
-        from,
-        to: selected?.path ?? root,
-        owed: Object.keys(chat.scopeHeard ?? {}),
-        selected: true,
-      };
-      noteWorkspaceMove(chat, {
-        how: "switched",
-        ...(selected ? { to: selected.path } : {}),
-        ...(selected?.branch ? { branch: selected.branch } : {}),
-      });
-      this.core.sessions.close(id);
-      await this.core.storage.save(chat);
-      return chatSummary(chat);
-    });
-  }
-
-  /** Whether the deleted worktree a thread still has selected can be made again: its branch is still there. */
-  async agentWorktreeRecreatable(id: string) {
-    const chat = await this.core.storage.load(id);
-    const gone = chat.activeAgentWorktree;
-    if (!gone?.branch || selectedAgentWorktree(chat)) return false;
-    return branchKept(
-      await this.core.projects.root(chat.projectId),
-      gone.branch,
-    );
-  }
-
-  /** Makes the deleted worktree a thread still has selected again, from its branch, and carries on there. */
-  recreateAgentWorktree(id: string) {
-    return this.core.control(id, async () => {
-      const chat = await this.switchable(id);
-      const gone = chat.activeAgentWorktree;
-      if (!gone || selectedAgentWorktree(chat)) return chatSummary(chat);
-      if (!gone.branch)
-        throw new Error(
-          "Relay never saw this worktree's branch, so it can't make it again.",
-        );
-      const root = await this.core.projects.root(chat.projectId);
-      const made = await this.inRepo(root, () =>
-        recreateWorktree(root, gone.path, gone.branch!),
-      );
-      chat.agentWorktrees = [
-        ...(chat.agentWorktrees ?? []).filter((w) => w.path !== made.path),
-        { ...made, at: Date.now() },
-      ];
-      chat.activeAgentWorktree = {
-        ...made,
-        ...(gone.followed ? { followed: true as const } : {}),
-      };
-      noteWorkspaceMove(chat, {
-        how: "recreated",
-        to: made.path,
-        branch: gone.branch,
-      });
-      await this.core.storage.save(chat);
-      return chatSummary(chat);
-    });
   }
 
   /** A thread's worktree folder, or its review's, for a workspace id; only while it exists, though a review's falls back to the checkout. */
@@ -1100,7 +898,7 @@ export class ThreadWorktrees {
         "This thread's active workspace changed. Refresh before trying again.",
       );
     if (!chat.worktree) {
-      const folder = await this.agentFolder(chat, expectedWorktree);
+      const folder = await this.agents.folder(chat, expectedWorktree);
       if (!folder) throw new Error(agentWorktreeUnavailableError);
       return folder;
     }

@@ -322,17 +322,18 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     revealAgentWorktree: takes(
       [idSchema, z.string().max(4096)],
-      (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
+      (chatId, path) =>
+        openPath(projectChats.agentWorkspaces.path(chatId, path)),
     ),
     selectAgentWorktree: takes(
       [idSchema, z.string().min(1).max(4096).nullable()],
-      (chatId, path) => projectChats.selectAgentWorktree(chatId, path),
+      (chatId, path) => projectChats.agentWorkspaces.select(chatId, path),
     ),
     agentWorktreeRecreatable: takes([idSchema], (chatId) =>
-      projectChats.agentWorktreeRecreatable(chatId),
+      projectChats.agentWorkspaces.recreatable(chatId),
     ),
     recreateAgentWorktree: takes([idSchema], (chatId) =>
-      projectChats.recreateAgentWorktree(chatId),
+      projectChats.agentWorkspaces.recreate(chatId),
     ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],
