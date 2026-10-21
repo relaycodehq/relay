@@ -26,6 +26,7 @@ import {
 import { AsyncQueue } from "../util/async-queue";
 import { toolText, type ToolResult } from "../relay-mcp/tools";
 import { errorMessage } from "../../shared/error-message";
+import { pidAlive as alive } from "../util/pid";
 
 /**
  * How long a session's control call may take. Claude Code answers them at
@@ -65,15 +66,6 @@ export interface HostedProcessOpen {
   meta: unknown;
   process: ProcessSpec;
 }
-
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-};
 
 /** Answers a call an agent made to Relay's tools; see electron/relay-mcp. */
 export type ToolHandler = (

@@ -19,6 +19,7 @@ import { recordedAlive, recordProcess } from "./process-identity";
 import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
 import { sleep } from "../util/sleep";
+import { pidAlive as alive } from "../util/pid";
 
 /** What a Relay run as a service exits with to be started again. */
 export const restartCode = 75;
@@ -234,16 +235,6 @@ export async function stopForService(home: string) {
   if (!(await running(home))) return;
   await callControl(headlessPaths(home).control, "stop", { detach: true });
   await stopped(home);
-}
-
-function alive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    // Someone else's process: alive, just not ours to signal.
-    return (e as NodeJS.ErrnoException).code === "EPERM";
-  }
 }
 
 /** The live process a pid file names, if any. */

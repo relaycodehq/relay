@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { recordedAlive, recordProcess } from "./process-identity";
+import { pidAlive as alive } from "../util/pid";
 
 const owned = new Map<string, string>();
 process.once("exit", () => {
@@ -24,15 +25,6 @@ process.once("exit", () => {
     }
   }
 });
-
-function alive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code !== "ESRCH";
-  }
-}
 
 function occupied(path: string) {
   return Object.assign(new Error(`Another Relay process holds ${path}.`), {
