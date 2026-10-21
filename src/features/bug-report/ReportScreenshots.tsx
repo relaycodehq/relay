@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ImagePlus, PenLine, Trash2 } from "lucide-react";
 import type {
   BugReportPreview,
@@ -42,6 +43,16 @@ export function ReportScreenshots({
       mounted.current = false;
     };
   }, []);
+  const client = useQueryClient();
+  // Redaction creates a new immutable id. Removed/replaced drafts must not
+  // retain either their PNG bytes or their larger data URL in the cache.
+  useEffect(() => {
+    const kept = new Set(screenshots.map((shot) => shot.id));
+    client.removeQueries({
+      queryKey: ["bug-report-screenshot"],
+      predicate: (query) => !kept.has(String(query.queryKey[1])),
+    });
+  }, [client, screenshots]);
 
   async function edit(file: File, replacing?: string, name?: string) {
     try {
@@ -224,34 +235,25 @@ function Shot({
   );
 }
 
-/** Screenshots are immutable per id, so one load serves the strip and the preview. */
-const loads = new Map<string, Promise<{ bytes: Uint8Array; url: string }>>();
-
 export function useScreenshot(id: string) {
-  const [loaded, setLoaded] = useState<{ bytes: Uint8Array; url: string }>();
-  useEffect(() => {
-    let cancelled = false;
-    let load = loads.get(id);
-    if (!load) {
-      load = api.bugReportScreenshot(id).then(async (bytes) => ({
+  return useQuery({
+    queryKey: ["bug-report-screenshot", id],
+    // Immutable ids let the strip and preview share one load. Keep data for a
+    // short page revisit, then release both copies when nobody displays it.
+    staleTime: Infinity,
+    gcTime: 30_000,
+    queryFn: async ({ signal }) => {
+      const bytes = await api.bugReportScreenshot(id);
+      signal.throwIfAborted();
+      return {
         bytes,
         // The page's CSP allows data: images, not blob: ones.
         url: await dataUrl(
           new Blob([bytes.slice().buffer], { type: "image/png" }),
         ),
-      }));
-      loads.set(id, load);
-      load.catch(() => loads.delete(id));
-    }
-    load.then(
-      (l) => cancelled || setLoaded(l),
-      () => {},
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-  return loaded;
+      };
+    },
+  }).data;
 }
 
 export const formatBytes = (n: number) =>
