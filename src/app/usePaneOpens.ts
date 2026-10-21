@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   matchLink,
@@ -33,7 +33,17 @@ export type PaneOpens = ReturnType<typeof usePaneOpens>;
  * the code the panes ask the chat about.
  */
 export function usePaneOpens(
-  { project, panes, pull }: Pick<ShellNavigation, "project" | "panes" | "pull">,
+  {
+    project,
+    panes,
+    pull,
+    chatId,
+    draftId,
+    surface,
+  }: Pick<
+    ShellNavigation,
+    "project" | "panes" | "pull" | "chatId" | "draftId" | "surface"
+  >,
   panel: PanelTabs,
   view: ThreadView,
   folder: ThreadFolder,
@@ -41,12 +51,38 @@ export function usePaneOpens(
   onError: (error: unknown) => void,
 ) {
   const qc = useQueryClient();
-  // Files the chat asks the Files and Changes panes to show. One per project,
-  // so a file asked for in one never opens in the next.
-  const fileOpens = useMemo(() => requestChannel<FileTarget>(), [project?.id]);
+  // A lookup belongs to the workspace and thread where it was clicked, even
+  // when navigation returns there before its response arrives.
+  const location = useMemo(
+    () => ({}),
+    [
+      project?.id,
+      folder.where,
+      chatId,
+      draftId,
+      surface,
+      pull?.server,
+      pull?.owner,
+      pull?.name,
+      pull?.number,
+    ],
+  );
+  const currentLocation = useRef(location);
+  currentLocation.current = location;
+  const request = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  // Pending requests also belong to this location; a pane mounting after a
+  // workspace switch mustn't consume the previous workspace's file.
+  const fileOpens = useMemo(() => requestChannel<FileTarget>(), [location]);
   const changeReveals = useMemo(
     () => requestChannel<ProjectFileLink>(),
-    [project?.id],
+    [location],
   );
   /** Opens the panel with `surface` in front. */
   function openSurface(surface: Surface) {
@@ -66,17 +102,20 @@ export function usePaneOpens(
     if (open && id !== "chat") view.setViewing(NO_VIEWING);
   }
   function openTurnDiff(target: TurnDiffTarget) {
+    request.current++;
     view.showTurn(target);
     panes.show("changes");
   }
   /** Shows `target` in Files; false when an unsaved edit holds the view. */
   function openInEditor(target: FileTarget) {
+    request.current++;
     if (lock.blocked()) return false;
     fileOpens.send(target);
     openSurface("files");
     return true;
   }
   function revealChange(target: ProjectFileLink) {
+    request.current++;
     changeReveals.send(target);
     view.closeTurn();
     panes.show("changes");
@@ -85,6 +124,11 @@ export function usePaneOpens(
   // thread), or opens in Files when it has none. A name that fits several
   // files lists them in Files. A file outside the project opens in Files too.
   async function openChatFile(target: ProjectFileLink) {
+    const sequence = ++request.current;
+    const isCurrent = () =>
+      mounted.current &&
+      currentLocation.current === location &&
+      request.current === sequence;
     if (target.outside) return void openInEditor(target);
     if (pull) return revealChange(target);
     const id = folder.where;
@@ -94,6 +138,7 @@ export function usePaneOpens(
         : (folder.tree ?? (await api.projectWorkingTree(id))).changes.map(
             (c) => c.path,
           );
+      if (!isCurrent()) return;
       const changed = changedTarget(target, changes);
       if (changed) return revealChange(changed);
       if (target.directory) return void openInEditor(target);
@@ -105,6 +150,7 @@ export function usePaneOpens(
           staleTime: 5000,
         }),
       );
+      if (!isCurrent()) return;
       // Ignored files (an agent's output folder) aren't in Git's list but are on disk.
       const onDisk =
         !found.length &&
@@ -112,9 +158,9 @@ export function usePaneOpens(
           () => true,
           () => false,
         ));
-      openInEditor(fileTarget(target, found, onDisk));
+      if (isCurrent()) openInEditor(fileTarget(target, found, onDisk));
     } catch (e) {
-      onError(e);
+      if (isCurrent()) onError(e);
     }
   }
   /** Hands `context` to the chat's composer, showing the chat. */
