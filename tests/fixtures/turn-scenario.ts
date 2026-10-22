@@ -159,6 +159,18 @@ export async function startScenario(
   }
   vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
   vi.stubEnv("RELAY_AGENT_TURN_MS", "20");
+  // A sample Antigravity sign-in, so neither a login on this computer nor its
+  // absence (as on the Mac mini) changes a replay. The empty token has no
+  // quota to fetch.
+  const gemini = join(root, "gemini", "antigravity-acp");
+  await mkdir(gemini, { recursive: true });
+  await writeFile(
+    join(gemini, "settings.json"),
+    JSON.stringify({ auth: { type: "oauth-personal" } }),
+  );
+  await writeFile(join(gemini, "acp_token.json"), "{}");
+  vi.stubEnv("GEMINI_HOME", join(root, "gemini"));
+  vi.stubEnv("AGY_ACP_FORCE_FILE_STORAGE", "1");
   for (const [key, value] of Object.entries(options.env ?? {}))
     vi.stubEnv(key, value);
   const store = new Store(join(root, "state"));
