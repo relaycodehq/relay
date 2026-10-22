@@ -97,7 +97,7 @@ export function ResetUsage({
         }
         title={
           resets.usable === 0
-            ? "Codex says these limits don’t need a reset right now"
+            ? "Codex says this reset can’t be used yet"
             : compact
               ? `Reset usage · ${resets.count} saved ${resets.count === 1 ? "reset" : "resets"}${expiry ? ` · ${expiry}` : ""}`
               : undefined
