@@ -36,6 +36,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.License
 import androidx.compose.ui.platform.LocalContext
 import dev.relay.android.features.dictation.DictationEngine
 import dev.relay.android.features.dictation.DictationEngines
+import dev.relay.android.features.diagnostics.ScrollDiagnosticsRows
 
 /**
  * mobile/src/app/settings.tsx: theme, notifications, this app's version and
@@ -117,6 +118,7 @@ fun SettingsList(
         item(key = "developer-title") { SectionHeader("Developer") }
         item(key = "developer") {
             ListGroup {
+                ScrollDiagnosticsRows()
                 ListRow(
                     "Component gallery",
                     subtitle = "Every building block, light and dark",
