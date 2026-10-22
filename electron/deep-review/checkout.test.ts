@@ -207,6 +207,42 @@ it("reads a pull request detached, and gives it a branch of its own with the fir
   expect(git(made.path, "status", "--porcelain")).toBe("?? fix.ts");
 });
 
+it("moves a pull request's worktree to its new head in the next round, or reads beside edits there", async () => {
+  git(repo, "update-ref", "refs/relay/pulls/7/head", head);
+  const pr = scope({
+    target: { kind: "pr", ref: { owner: "o", name: "r", number: 7 } },
+  });
+  const first = (await openReviewCheckout(repo, pr, worktrees, "c20"))!;
+  // The author pushed again before the next round.
+  git(repo, "switch", "-q", "--detach", head);
+  await writeFile(join(repo, "more.ts"), "export {};\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "More");
+  const next = git(repo, "rev-parse", "HEAD");
+  git(repo, "switch", "-q", "main");
+  git(repo, "update-ref", "refs/relay/pulls/7/head", next);
+  const again = await openReviewCheckout(
+    repo,
+    scope({ ...pr, head: next }),
+    worktrees,
+    "c20",
+  );
+  expect(again).toEqual(first);
+  expect(git(first.path, "rev-parse", "HEAD")).toBe(next);
+  // Edits left there stay, at the head they were made on.
+  await writeFile(join(first.path, "fix.ts"), "export {};\n");
+  const beside = await openReviewCheckout(
+    repo,
+    scope({ ...pr, head }),
+    worktrees,
+    "c20",
+  );
+  expect(beside).toEqual({ ...first, path: `${first.path}-2` });
+  expect(git(beside!.path, "rev-parse", "HEAD")).toBe(head);
+  expect(git(first.path, "rev-parse", "HEAD")).toBe(next);
+  expect(git(first.path, "status", "--porcelain")).toBe("?? fix.ts");
+});
+
 it("puts a pull request's fixes on its head branch: the local one holding its head, or a new one", async () => {
   git(repo, "update-ref", "refs/relay/pulls/5/head", head);
   const pr = scope({

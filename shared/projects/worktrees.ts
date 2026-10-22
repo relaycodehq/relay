@@ -221,7 +221,7 @@ type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
   activeAgentWorktree?: ActiveAgentWorktree;
-  /** On summaries; the full thread has it as its latest round's `scope.checkout`. */
+  /** On summaries; the full thread has it as the latest checkout a round made. */
   reviewFolder?: ReviewFolder;
   reviews?: { scope: { checkout?: ReviewCheckout } }[];
 };
@@ -230,7 +230,8 @@ export const reviewFolder = (
   chat: ThreadWorkspace | undefined,
 ): ReviewFolder | undefined => {
   if (chat?.reviewFolder) return chat.reviewFolder;
-  const checkout = chat?.reviews?.at(-1)?.scope.checkout;
+  const checkout = chat?.reviews?.filter((r) => r.scope.checkout).at(-1)
+    ?.scope.checkout;
   return (
     checkout && {
       path: checkout.path,
@@ -242,8 +243,7 @@ export const reviewFolder = (
 
 /** What a review's folder has checked out, for a branch label: its branch, or the pull request it holds detached. */
 export const reviewFolderLabel = (folder: ReviewFolder | undefined) =>
-  folder?.branch ??
-  (folder?.prNumber ? `PR #${folder.prNumber}` : undefined);
+  folder?.branch ?? (folder?.prNumber ? `PR #${folder.prNumber}` : undefined);
 
 export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
   worktree.gitdir ?? worktree.path;

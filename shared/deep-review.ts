@@ -148,9 +148,9 @@ export interface ReviewScope {
   /** Where the reviewed code is checked out when the thread's checkout doesn't have it; reviewers and the lead work there. */
   checkout?: ReviewCheckout;
   /**
-   * The folder the thread worked in when a round started in a thread of its
-   * own, not a deep review's; its reviewers work there too. Such a round
-   * makes no checkout: what isn't on disk there, they read from Git.
+   * The folder the thread worked in when a round that made no checkout
+   * started; its reviewers work there too. What isn't on disk there, they
+   * read from Git.
    */
   folder?: string;
 }
@@ -199,12 +199,25 @@ export interface DeepReviewState {
 export const latestReview = (chat: { reviews?: DeepReviewState[] }) =>
   chat.reviews?.at(-1);
 
+/**
+ * The round a deep review's own thread works in: the latest that checked the
+ * reviewed code out. A round that made no checkout reviewed where the thread
+ * already worked, so it doesn't move it.
+ */
+export const workingReview = (chat: { reviews?: DeepReviewState[] }) =>
+  chat.reviews?.filter((r) => r.scope.checkout).at(-1);
+
+/** The round `request` asked for; rounds from before rounds had keys are the first. */
+export const roundOf = (
+  reviews: DeepReviewState[] | undefined,
+  request: string | undefined,
+) => (request ? reviews?.find((r) => r.request === request) : reviews?.[0]);
+
 /** The round a reviewer works for. */
 export const reviewerRound = (
   reviews: DeepReviewState[] | undefined,
   task: ReviewerTask,
-) =>
-  task.round ? reviews?.find((r) => r.request === task.round) : reviews?.[0];
+) => roundOf(reviews, task.round);
 
 /** Reviewers or the lead's first turn are at work: a new round waits for them. */
 export const reviewRunning = (state: DeepReviewState | undefined) =>

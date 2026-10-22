@@ -28,7 +28,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSentModel } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
-import { reviewedPull } from "../deep-review/pull-info";
+import { forgePulls } from "../deep-review/pull-info";
 import { mediaUrl } from "../media";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -337,19 +337,10 @@ export function chatHandlers(ctx: ApiContext) {
     recreateAgentWorktree: takes([idSchema], (chatId) =>
       projectChats.agentWorkspaces.recreate(chatId),
     ),
-    startDeepReview: takes(
-      [idSchema, deepReviewStartSchema],
-      async (id, config) =>
-        projectChats.startDeepReview(
-          id,
-          config,
-          config.target.kind === "pr"
-            ? await reviewedPull(
-                await clientFor(config.target.ref),
-                config.target.ref,
-              )
-            : undefined,
-        ),
+    startDeepReview: takes([idSchema, deepReviewStartSchema], (id, config) =>
+      projectChats.startDeepReview(id, config, {
+        pull: forgePulls(clientFor),
+      }),
     ),
     nameReviewSetup: takes([reviewSetupSchema], (setup) =>
       nameReviewSetup(setup, store.aiSettings(), AbortSignal.timeout(60_000)),

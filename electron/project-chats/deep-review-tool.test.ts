@@ -62,7 +62,7 @@ beforeEach(async () => {
       reviews: {
         setups: () => setups,
         start: (id, config) =>
-          chats.startDeepReview(id, config, undefined, true),
+          chats.startDeepReview(id, config, { duringTurn: true }),
       },
     }).handle,
   });
@@ -95,9 +95,7 @@ it("reviews where the thread works, and hands the reports to its agent once its 
     relay("move_to_worktree", { branch: "relay/queue", uncommitted: true }),
   );
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-      "complete",
-    ),
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const folder = (await chats.get(chat.id)).worktree!.path!;
 
@@ -137,18 +135,65 @@ it("reviews where the thread works, and hands the reports to its agent once its 
   const review = calls.find((c) => c.review);
   expect(review.review.target).toEqual({ type: "uncommittedChanges" });
   const reviewerThread = calls.find(
-    (c) => c.thread && c.method === "thread/start" && c.thread.sandbox === "read-only",
+    (c) =>
+      c.thread &&
+      c.method === "thread/start" &&
+      c.thread.sandbox === "read-only",
   );
   expect(reviewerThread.thread.cwd).toBe(folder);
+});
+
+it("hands the reports over once a turn Claude started by itself, which asked for the round, ends", async () => {
+  await writeFile(join(repo, "README.md"), "Hello again\n");
+  // Claude's turn runs on until the test opens this.
+  const gate = join(root, "unprompted-gate");
+  vi.stubEnv("RELAY_FIXTURE_GATE", gate);
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(
+    chat.id,
+    input("@claude fixture background relay deep_review {}"),
+  );
+  // Its reviewers report while that turn still runs.
+  const asked = await vi.waitFor(
+    async () => {
+      const thread = await chats.get(chat.id);
+      const asked = thread.messages.find((m) => m.unprompted);
+      expect(asked?.status).toBe("streaming");
+      const reviewer = await chats.get(
+        thread.reviews![0]!.reviewers[0]!.chatId,
+      );
+      expect(reviewer.messages.at(-1)).toMatchObject({
+        role: "assistant",
+        status: "complete",
+      });
+      return asked!;
+    },
+    { timeout: 20_000 },
+  );
+  expect((await chats.get(chat.id)).reviews![0]!.status).toBe("reviewing");
+
+  await writeFile(gate, "");
+  await vi.waitFor(
+    async () =>
+      expect((await chats.get(chat.id)).reviews?.[0]?.status).toBe("done"),
+    { timeout: 20_000 },
+  );
+  const done = await chats.get(chat.id);
+  const lead = done.messages.at(-1)!;
+  expect(lead.role).toBe("assistant");
+  expect(lead.created).toBeGreaterThanOrEqual(
+    done.messages.find((m) => m.id === asked.id)!.ended!,
+  );
+  expect(done.findings?.reports.map((r) => r.messageId)).toEqual([lead.id]);
+  // "@claude" picked the agent, and so the lead, over the picker's Codex.
+  expect(done.reviews![0]!.lead.provider).toBe("claude");
 });
 
 it("names the setups to pick from when the one asked for isn't saved", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, relay("deep_review", { setup: "Thorough" }));
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
-      "complete",
-    ),
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
   const done = await chats.get(chat.id);
   expect(done.reviews).toBeUndefined();

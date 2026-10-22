@@ -149,6 +149,22 @@ it("keeps a review leading when the lead's session carries on through the restar
   expect(lead.status).toBe("streaming");
 });
 
+it("keeps a round reviewing while the answer that asked for it carries on through the restart", () => {
+  const asking = message({ status: "streaming", body: "Starting a review" });
+  const reviewers = [
+    { provider: "codex" as const, choice: review().lead.choice, chatId: "r1" },
+  ];
+  const chat = thread({
+    messages: [asking, message({ id: "request", role: "user" })],
+    reviews: [{ ...review(), reviewers, status: "reviewing" }],
+  });
+  // Its reviewers had all finished.
+  reviveChat(chat, (m) => m === asking);
+  expect(chat.reviews?.at(-1)).toMatchObject({ status: "reviewing" });
+  reviveChat(chat, () => false);
+  expect(chat.reviews?.at(-1)).toMatchObject({ status: "stopped" });
+});
+
 it("drops worktrees no command of the thread made, and duplicate or unclaimed records", () => {
   const made = message({
     trace: [

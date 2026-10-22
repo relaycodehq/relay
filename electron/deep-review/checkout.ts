@@ -117,9 +117,16 @@ async function addWorktree(
     await git(root, ["worktree", "unlock", path]).catch(() => {});
     await git(root, ["worktree", "prune"]).catch(() => {});
   } else if (left) {
-    // One a discard couldn't remove, a file held open or a lock on it, is
-    // still this repository's worktree: taken back as it is.
-    if (onBranch) await git(path, ["switch", "--quiet", branch], 60000);
+    // One a discard couldn't remove, a file held open or a lock on it, or
+    // an earlier round's, is still this repository's worktree: taken back,
+    // on the branch or at the head this review reads.
+    await git(
+      path,
+      onBranch
+        ? ["switch", "--quiet", branch]
+        : ["switch", "--quiet", "--detach", head],
+      60000,
+    );
     return;
   }
   await git(
@@ -162,16 +169,34 @@ export async function openReviewCheckout(
         : undefined
       : pr && (await pullBranch(root, pr, scope.head, false))?.branch;
   const about = { ...(branch ? { branch } : {}), ...(pr ? { pr } : {}) };
-  const path = join(reviewCheckoutsIn(dir), chatId);
+  const own = join(reviewCheckoutsIn(dir), chatId);
   if (branch) {
     const at = await folderOf(root, branch);
     if (at) {
-      const made = await sameFolder(at, path);
-      return { path: made ? path : at, made, ...about };
+      const made = await sameFolder(at, own);
+      return { path: made ? own : at, made, ...about };
     }
   }
+  const path = branch ? own : await detachedFolder(own, scope.head);
   await addWorktree(root, path, scope.head, branch);
   return { path, made: true, ...about };
+}
+
+/**
+ * Where a review reads code with no branch to be on: its own worktree, moved
+ * to `head`, unless an earlier round's edits there are in the way of that;
+ * then a worktree beside it, the edits left alone.
+ */
+async function detachedFolder(own: string, head: string) {
+  if (!(await exists(own))) return own;
+  const at = await git(own, ["rev-parse", "HEAD"]).then(
+    (s) => s.trim(),
+    () => undefined,
+  );
+  if (at === head || !(await dirty(own).catch(() => false))) return own;
+  let beside = `${own}-2`;
+  for (let n = 3; await exists(beside); n++) beside = `${own}-${n}`;
+  return beside;
 }
 
 /** The review's folder, made again at `head` when it was one Relay made and has since been cleaned up. */

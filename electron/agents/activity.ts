@@ -193,6 +193,8 @@ const relayToolLabels: Record<string, string> = {
   settle_thread: "Settled a started thread",
   settle_this_thread: "Settles this thread when done",
   move_to_worktree: "Moved the thread to its own worktree",
+  deep_review: "Started a deep review",
+  list_review_setups: "Listed review setups",
   list_notes: "Read the notes",
   add_note: "Added a note",
   tick_note: "Ticked an item in the notes",

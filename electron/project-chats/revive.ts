@@ -78,11 +78,18 @@ export function reviveChat(
         .reverse()
         .find((m) => m.role === "assistant" && !m.parentId);
     // A review whose agents ran in an earlier session can only be resumed,
-    // unless its lead's session, or a reviewer's, carries on in the turn;
-    // that turn's end settles it.
+    // unless its lead's session, a reviewer's, or the thread's answer that
+    // asked for the round carries on in the turn; that turn's end settles it.
     const goesOn =
       review.status === "reviewing"
-        ? review.reviewers.some((r) => carriesOn(r.chatId))
+        ? review.reviewers.some((r) => carriesOn(r.chatId)) ||
+          chat.messages.some(
+            (m) =>
+              m.role === "assistant" &&
+              !m.parentId &&
+              m.status === "streaming" &&
+              streams(m),
+          )
         : lead && lead.status === "streaming" && streams(lead);
     if (!goesOn) {
       if (lead) review.leadStopped = lead.id;

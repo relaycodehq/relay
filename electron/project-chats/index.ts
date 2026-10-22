@@ -36,6 +36,7 @@ import type { LineQuestion } from "../../shared/questions";
 import { everyAgentRuntime } from "../agents";
 import { accountHomes } from "../agents/accounts";
 import type { PullInfo } from "../deep-review";
+import type { PullRef } from "../../shared/types";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
@@ -602,18 +603,21 @@ export class ProjectChats {
       goal,
     };
   }
-  /** `duringTurn`: the thread's agent asked for it mid-answer, through the deep_review tool. */
+  /**
+   * A round in the folder the thread works in now. `pull` asks the forge
+   * about a pull request; `duringTurn`: the thread's agent asked for it
+   * mid-answer, through the deep_review tool.
+   */
   async startDeepReview(
     id: string,
     config: DeepReviewStart,
-    pull?: PullInfo,
-    duringTurn = false,
+    options: {
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    } = {},
   ) {
-    const chat = await this.storage.load(id);
-    // Any other thread is reviewed where it works.
-    const folder =
-      chat.scope.kind === "review" ? undefined : await this.worktrees.root(chat);
-    return this.councils.startReview(id, config, pull, { folder, duringTurn });
+    const folder = await this.worktrees.root(await this.storage.load(id));
+    return this.councils.startReview(id, config, { ...options, folder });
   }
   resumeDeepReview(id: string, only?: ResumeReview) {
     return this.councils.resumeReview(id, only);

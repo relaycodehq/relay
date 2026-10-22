@@ -48,19 +48,17 @@ function write(entries: SavedReviewSetup[]) {
 }
 /** Agents start reviews with these too, through the deep_review tool. */
 function share(entries: SavedReviewSetup[]) {
-  shared = true;
   void api
     .saveReviewSetups(entries)
     .catch((e) => console.warn("Could not share the review setups:", e));
 }
-/** Setups saved before the main process kept a copy go over once, when the sheet first shows. */
-let shared = false;
+/** Hands the main process the setups as they are when the app starts: saved before it kept a copy, or in another window. */
+export const shareReviewSetups = () => share(read().entries);
 function changed() {
   version += 1;
   for (const listener of listeners) listener();
 }
 function subscribe(listener: () => void) {
-  if (!shared) share(read().entries);
   listeners.add(listener);
   // Another window ran a review.
   const other = (e: StorageEvent) => e.key === key && changed();

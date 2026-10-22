@@ -13,7 +13,7 @@ import { ThreadPages } from "./thread-pages";
 import { json, localTime } from "./tool-output";
 import {
   listReviewSetups,
-  startReview,
+  reviewRound,
   type ThreadReviews,
 } from "./thread-reviews";
 import {
@@ -261,12 +261,11 @@ export class StartedThreads {
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
       case "deep_review":
+        return this.deepReview(lead, input, signal);
       case "list_review_setups":
         if (!this.reviews)
           return toolText("This Relay can't run deep reviews.", true);
-        return tool === "deep_review"
-          ? toolText(await startReview(this.reviews, lead, input))
-          : listReviewSetups(this.reviews);
+        return listReviewSetups(this.reviews);
       case "list_projects":
         return json(await this.projects.list(lead.projectId));
       case "add_project":
@@ -370,6 +369,40 @@ export class StartedThreads {
 
   private fullAccess(lead: ProjectChat) {
     return this.leadSide(lead).last.runtimeMode === "full-access";
+  }
+
+  /** A deep review round in the lead's own thread; its reviewers run on the user's accounts, so it asks as starting threads does. */
+  private async deepReview(
+    lead: ProjectChat,
+    input: RelayToolArgs<"deep_review">,
+    signal: AbortSignal,
+  ) {
+    if (!this.reviews)
+      return toolText("This Relay can't run deep reviews.", true);
+    const { name, config } = reviewRound(this.reviews, lead, input);
+    const count = config.reviewers.length;
+    const approved = await this.approve(
+      lead,
+      `Start a deep review with ${count === 1 ? "1 reviewer" : `${count} reviewers`}?`,
+      [
+        `"${name}", led by ${agentName(config.lead.provider)}.`,
+        ...config.reviewers.map(
+          (r, i) =>
+            `${i + 1}. ${agentName(r.provider)}${r.choice.model ? ` (${r.choice.model})` : ""}`,
+        ),
+        ...(config.focus ? [`\nFocus: ${head(config.focus)}`] : []),
+      ].join("\n"),
+      signal,
+    );
+    if (!approved)
+      return toolText(
+        "The user didn't start the review. Ask them what they want instead.",
+        true,
+      );
+    await this.reviews.start(lead.id, config);
+    return toolText(
+      `Started ${count === 1 ? "1 reviewer" : `${count} reviewers`} with "${name}". End your answer now: their reports come to you in this thread as your next turn.`,
+    );
   }
 
   private async restartRelay(

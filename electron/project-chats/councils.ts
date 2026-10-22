@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
-import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
 import {
-  latestReview,
+  threadWorktree,
+  type ProjectChat,
+  type ProjectChatSend,
+} from "../../shared/projects";
+import type { PullRef } from "../../shared/types";
+import {
   reviewerRound,
+  workingReview,
   type DeepReviewStart,
   type ResumeReview,
   type ReviewerTask,
@@ -105,10 +110,10 @@ export class Councils {
           chat.reviewer,
         )
       : chat.scope.kind === "review"
-        ? latestReview(chat)
+        ? workingReview(chat)
         : // Any other thread keeps working where it did.
           undefined;
-    // A round started in a thread of its own has its reviewers work there.
+    // A round that made no checkout has its reviewers work where the thread did.
     if (chat.reviewer && state?.scope.folder && !state.scope.checkout)
       return state.scope.folder;
     const checkout = state?.scope.checkout;
@@ -192,15 +197,19 @@ export class Councils {
   startReview(
     id: string,
     config: DeepReviewStart,
-    pull?: PullInfo,
-    options?: { folder?: string; duringTurn?: boolean },
+    options: {
+      folder?: string;
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    },
   ) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
-      this.core.projects.assertCheckoutAvailable(
-        (await this.core.storage.load(id)).projectId,
-      );
-      await this.reviews.start(id, config, pull, options);
+      const chat = await this.core.storage.load(id);
+      // As a message would: a thread in a worktree of its own isn't held up.
+      if (!chat.worktree && !threadWorktree(chat))
+        this.core.projects.assertCheckoutAvailable(chat.projectId);
+      await this.reviews.start(id, config, options);
     });
   }
 

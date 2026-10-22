@@ -20,3 +20,8 @@ export async function reviewedPull(
       : {}),
   };
 }
+
+/** Looks a reviewed pull request up on whichever forge `clientFor` picks. */
+export const forgePulls =
+  (clientFor: (ref: PullRef) => Promise<PullHost>) => async (ref: PullRef) =>
+    reviewedPull(await clientFor(ref), ref);

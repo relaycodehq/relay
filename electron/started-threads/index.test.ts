@@ -1759,3 +1759,58 @@ test("a preview that can't be drawn still leaves its page, and the tool still an
   expect(shown).toEqual([[lead.id, expect.any(Object), null]]);
   warn.mockRestore();
 });
+
+test("asks before a deep review, led by the agent the message went to, with setups told apart by name", async () => {
+  const { lead, api, asked, answer } = fakeChats();
+  // The picker is on Codex; "@claude" sent the message to Claude.
+  lead.lastInput = { ...lead.lastInput!, provider: "codex" };
+  const choice = { model: "m", reasoningEffort: "high" as const, fast: false };
+  const entry = (id: string, model: string) => ({
+    id,
+    at: 1,
+    setup: {
+      reviewers: [{ provider: "codex" as const, choice: { ...choice, model } }],
+      lead: { provider: "codex" as const, choice },
+      runChecks: false,
+    },
+  });
+  const start = vi.fn(async () => {});
+  const threads = new StartedThreads(api, {
+    reviews: {
+      setups: () => [entry("a", "sol"), entry("b", "sol"), entry("c", "astra")],
+      start,
+    },
+  });
+  const listed = parse(await call(threads, lead.id, "list_review_setups", {}));
+  expect(listed.map((s: { name: string }) => s.name)).toEqual([
+    "sol",
+    "sol (2)",
+    "astra",
+  ]);
+
+  answer.decision = "decline";
+  const declined = await call(threads, lead.id, "deep_review", {
+    setup: "Sol (2)",
+  });
+  expect(declined.isError).toBe(true);
+  expect(asked.at(-1)!.request).toMatchObject({
+    kind: "approval",
+    title: "Start a deep review with 1 reviewer?",
+  });
+  expect(start).not.toHaveBeenCalled();
+
+  answer.decision = "accept";
+  await call(threads, lead.id, "deep_review", { setup: "sol (2)" });
+  expect(start).toHaveBeenCalledWith(
+    lead.id,
+    expect.objectContaining({
+      lead: { provider: "claude", choice: lead.lastInput!.choice },
+    }),
+  );
+  // Full access starts it without asking, as it does threads.
+  lead.lastInput = { ...lead.lastInput!, runtimeMode: "full-access" };
+  const before = asked.length;
+  await call(threads, lead.id, "deep_review", {});
+  expect(asked).toHaveLength(before);
+  expect(start).toHaveBeenCalledTimes(2);
+});

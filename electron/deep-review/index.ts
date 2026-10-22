@@ -14,6 +14,8 @@ import {
   latestReview,
   reviewerRound,
   reviewerTitle,
+  roundOf,
+  workingReview,
   reviewRunning,
   reviewThreadTitle,
   type DeepReviewStart,
@@ -32,12 +34,14 @@ import {
 } from "./council";
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
+import type { PullRef } from "../../shared/types";
 import {
   discardReviewCheckout,
   followReviewedBranch,
   openReviewCheckout,
 } from "./checkout";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
+import { fixesFit, roundsOfFindings } from "./rounds";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
@@ -45,7 +49,7 @@ export {
 } from "./checkout";
 
 export { migrateReviewRounds } from "./rounds";
-export { reviewedPull } from "./pull-info";
+export { forgePulls } from "./pull-info";
 export type { PullInfo };
 
 export interface DeepReviewHost {
@@ -91,21 +95,28 @@ export class DeepReviews {
   constructor(private host: DeepReviewHost) {}
 
   /**
-   * Starts a round. A deep review's own thread reviews from the project's
-   * checkout, or one made for the review; any other thread passes `folder`,
-   * where it works. `duringTurn` is a round its agent asked for mid-answer:
+   * Starts a round in `folder`, where the thread works now: the project's
+   * checkout, its own worktree, or the folder an earlier round of a deep
+   * review moved it to. A deep review's own thread checks out the reviewed
+   * code when that folder doesn't have it. `pull` asks the forge about a
+   * pull request. `duringTurn` is a round its agent asked for mid-answer:
    * the lead's turn waits for that answer to end.
    */
   async start(
     chatId: string,
     config: DeepReviewStart,
-    pull?: PullInfo,
-    { folder, duringTurn = false }: { folder?: string; duringTurn?: boolean } = {},
+    {
+      folder,
+      pull: pullInfo,
+      duringTurn = false,
+    }: {
+      folder?: string;
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    } = {},
   ) {
     const chat = await this.host.load(chatId);
     const own = chat.scope.kind === "review";
-    if (!own && !folder)
-      throw new Error("Say where the thread works to review in it.");
     if (chat.reviewer)
       throw new Error("A reviewer can't start a review of its own.");
     if (
@@ -121,9 +132,13 @@ export class DeepReviews {
         project.repository?.name !== config.target.ref.name)
     )
       throw new Error("This pull request belongs to a different project.");
+    // The forge knows which branch a pull request merges into.
+    const pull =
+      config.target.kind === "pr"
+        ? await pullInfo?.(config.target.ref)
+        : undefined;
     const root = folder ?? (await this.host.root(chat.projectId));
     const scope = await resolveScope(root, config.target, project, pull);
-    if (folder) scope.folder = folder;
     // Reviewers read the code around the changes, so they work where it's
     // checked out. Without that they still read it from Git. Another
     // thread's agent stays in its own folder, so nothing is checked out.
@@ -140,6 +155,7 @@ export class DeepReviews {
         })
       : undefined;
     if (checkout) scope.checkout = checkout;
+    else scope.folder = root;
     // An earlier round's folder stays when this one doesn't start.
     const kept = chat.reviews?.some(
       (r) => r.scope.checkout?.path === checkout?.path,
@@ -387,13 +403,23 @@ export class DeepReviews {
    * the branch. A fix request in a pull request's review gives it a local
    * branch first. The thread notes the move, and the lead hears of it.
    * Nothing it can't do holds up a question, which reads on where the
-   * review is; only a fix that can't get onto the branch is refused.
+   * review is; only a fix that can't get onto the branch is refused, or one
+   * of findings from a round that reviewed other code than the thread's.
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
-    const state = latestReview(chat);
+    const state = workingReview(chat);
     const checkout = state?.scope.checkout;
     if (!state?.scope.head || !checkout || this.reviewing(chat)) return;
     const fixing = !!input.fixes?.length;
+    // A later round moved the thread on to other code; fixed there, these
+    // findings would land on the wrong branch.
+    const elsewhere =
+      fixing &&
+      roundsOfFindings(chat, input.fixes!).find((r) => !fixesFit(r, state));
+    if (elsewhere)
+      throw new Error(
+        `Those findings are from the review of ${elsewhere.scope.label}, and this thread works on ${state.scope.label} now. Review ${elsewhere.scope.label} again to fix them there.`,
+      );
     const next = await followReviewedBranch(
       await this.host.root(chat.projectId),
       checkout,
@@ -552,8 +578,7 @@ export class DeepReviews {
     withReportsIn = false,
   ) {
     const chat = await this.host.load(parentId).catch(() => undefined);
-    const state =
-      chat && reviewerRound(chat.reviews, { parent: parentId, round, slot: 0 });
+    const state = chat && roundOf(chat.reviews, round);
     if (!chat || !state || state.status !== "reviewing") return;
     // The answer that asked for this round still runs; its end comes back here.
     if (this.host.active(chat.id)) return;

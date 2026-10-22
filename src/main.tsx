@@ -27,6 +27,7 @@ import { threadWindowOf } from "../shared/thread-windows";
 import { startDraftSync } from "./features/composer/draft-sync";
 import { followHeldSends } from "./features/composer/held-sends";
 import { DragTray } from "./features/bug-report/DragTray";
+import { shareReviewSetups } from "./features/deep-review/review-setups";
 const search = new URLSearchParams(location.search);
 // The menubar's hidden sound player loads this page too, for its sounds
 // alone, and so does the hidden one that sends a phone's draft.
@@ -77,6 +78,8 @@ function startApp() {
     // Each window shares what's typed in it; the main one takes what came from elsewhere.
     startDraftSync({ takes: !thread });
     if (!thread) followHeldSends();
+    // Agents start deep reviews with the setups the sheet keeps.
+    if (!thread) shareReviewSetups();
     // Threads on a registry agent need its name before anything lists them.
     startRegistryAgents();
   }

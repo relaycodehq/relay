@@ -71,7 +71,6 @@ function thread(messages: ChatMessage[]) {
     running: messages.some((m) => m.status === "streaming"),
     replyCounts: new Map(),
     sideThreads: new Map(),
-    leadAnswered: true,
   } as never;
 }
 

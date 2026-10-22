@@ -951,6 +951,87 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
 });
 
+it("runs the next round where the review works, and won't fix an earlier round's findings once a round moved it to another branch", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  for (const branch of ["panel", "queue"]) {
+    git(repo, "switch", "-q", "-c", branch, main);
+    await writeFile(join(repo, "src", `${branch}.ts`), "export {};\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", `Add ${branch}`);
+  }
+  git(repo, "switch", "-q", main);
+  const chat = await chats.create(projectId, { kind: "review" });
+  const rounds = async (n: number) =>
+    vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).reviews?.map((r) => r.status)).toEqual(
+        Array(n).fill("done"),
+      ),
+    );
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "panel", base: main } }),
+  );
+  await rounds(1);
+  const checkout = (await chats.get(chat.id)).reviews![0]!.scope.checkout!;
+
+  // The lead's fix, not committed yet, is what the next round reviews.
+  await writeFile(
+    join(checkout.path, "src", "panel.ts"),
+    "export const p = 1;\n",
+  );
+  await chats.startDeepReview(chat.id, config());
+  await rounds(2);
+  const second = (await chats.get(chat.id)).reviews![1]!;
+  expect(second.scope).toMatchObject({
+    label: "Uncommitted changes",
+    branch: "panel",
+    folder: checkout.path,
+  });
+  expect(second.scope.checkout).toBeUndefined();
+  expect(await chats.worktreeRoot(projectId, second.reviewers[0]!.chatId)).toBe(
+    checkout.path,
+  );
+  // The thread stays where the review moved it.
+  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(checkout.path);
+
+  git(checkout.path, "commit", "-qam", "Fix the panel");
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "queue", base: main } }),
+  );
+  await rounds(3);
+  expect(git(checkout.path, "branch", "--show-current")).toBe("queue");
+  const done = await chats.get(chat.id);
+  expect(
+    done.findings!.reports.flatMap((r) => r.findings.map((f) => f.id)),
+  ).toEqual(["F1", "F2", "F3"]);
+  const fix = (fixes: string[]) =>
+    chats.send(chat.id, {
+      id: randomUUID(),
+      body: "@claude Fix them.",
+      provider: "claude",
+      choice: { ...choice, model: "" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      fixes,
+    });
+  // Fixed now, the panel's findings would land on queue.
+  for (const earlier of ["F1", "F2"])
+    await expect(fix([earlier])).rejects.toThrow(
+      `Those findings are from the review of ${earlier === "F1" ? `panel → ${main}` : "Uncommitted changes"}, and this thread works on queue → ${main} now.`,
+    );
+  await fix(["F3"]);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).findings?.statuses?.F3).toBe("fixed"),
+  );
+});
+
 it("reviews a branch in the folder it's checked out in, edits and all, and follows it to another folder rather than refusing a fix", async () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync(

@@ -3,6 +3,7 @@ import type {
   SavedReviewSetup,
 } from "../../shared/deep-review";
 import type { ProjectChat } from "../../shared/projects";
+import { sentAgent } from "../../shared/recipient";
 import type { RelayToolArgs } from "../relay-mcp";
 import { json } from "./tool-output";
 
@@ -14,14 +15,26 @@ export interface ThreadReviews {
   start(chatId: string, config: DeepReviewStart): Promise<void>;
 }
 
-const setupName = (entry: SavedReviewSetup) =>
-  entry.name?.trim() ||
-  entry.setup.reviewers.map((r) => r.choice.model || r.provider).join(" + ");
+/** Each setup with the name agents pick it by; one two setups would share gets a number. */
+function namedSetups(setups: SavedReviewSetup[]) {
+  const taken = new Set<string>();
+  return setups.map((entry) => {
+    const base =
+      entry.name?.trim() ||
+      entry.setup.reviewers
+        .map((r) => r.choice.model || r.provider)
+        .join(" + ");
+    let name = base;
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})`;
+    taken.add(name.toLowerCase());
+    return { entry, name };
+  });
+}
 
 export const listReviewSetups = (reviews: ThreadReviews) =>
   json(
-    reviews.setups().map((entry) => ({
-      name: setupName(entry),
+    namedSetups(reviews.setups()).map(({ entry, name }) => ({
+      name,
       reviewers: entry.setup.reviewers.map((r) => ({
         agent: r.provider,
         model: r.choice.model || "default",
@@ -33,37 +46,44 @@ export const listReviewSetups = (reviews: ThreadReviews) =>
   );
 
 /**
- * A round in `lead`'s thread, led by the agent and settings its answer runs
- * on, with the reviewers of the setup it names or the one run last.
+ * The round `lead`'s thread asks for: led by the agent and settings its
+ * answer runs on, with the reviewers of the setup it names or the one run
+ * last.
  */
-export async function startReview(
+export function reviewRound(
   reviews: ThreadReviews,
   lead: ProjectChat,
   input: RelayToolArgs<"deep_review">,
-) {
-  const setups = reviews.setups();
+): { name: string; config: DeepReviewStart } {
+  const setups = namedSetups(reviews.setups());
   if (!setups.length)
     throw new Error(
       "No review setup is saved yet. Ask the user to run a deep review once from the deep review sheet.",
     );
   const wanted = input.setup?.toLowerCase();
-  const entry = wanted
-    ? setups.find((e) => setupName(e).toLowerCase() === wanted)
+  const picked = wanted
+    ? setups.find((s) => s.name.toLowerCase() === wanted)
     : setups[0];
-  if (!entry)
+  if (!picked)
     throw new Error(
-      `There's no review setup named ${JSON.stringify(input.setup)}. These are: ${setups.map((e) => JSON.stringify(setupName(e))).join(", ")}.`,
+      `There's no review setup named ${JSON.stringify(input.setup)}. These are: ${setups.map((s) => JSON.stringify(s.name)).join(", ")}.`,
     );
   const sent = lead.lastInput;
-  if (!sent?.provider || !sent.choice)
-    throw new Error("This thread hasn't answered yet, so it can't lead a review.");
-  await reviews.start(lead.id, {
-    target: input.target ?? { kind: "uncommitted" },
-    reviewers: entry.setup.reviewers,
-    lead: { provider: sent.provider, choice: sent.choice },
-    runChecks: entry.setup.runChecks,
-    focus: input.focus ?? "",
-    runtimeMode: sent.runtimeMode,
-  });
-  return `Started ${entry.setup.reviewers.length} reviewers with "${setupName(entry)}". End your answer now: their reports come to you in this thread as your next turn.`;
+  if (!sent?.choice)
+    throw new Error(
+      "This thread hasn't answered yet, so it can't lead a review.",
+    );
+  const { setup } = picked.entry;
+  return {
+    name: picked.name,
+    config: {
+      target: input.target ?? { kind: "uncommitted" },
+      reviewers: setup.reviewers,
+      // The agent the message went to, which an @mention picks over the picker's.
+      lead: { provider: sentAgent(sent), choice: sent.choice },
+      runChecks: setup.runChecks,
+      focus: input.focus ?? "",
+      runtimeMode: sent.runtimeMode,
+    },
+  };
 }
