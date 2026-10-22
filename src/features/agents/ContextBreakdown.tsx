@@ -260,12 +260,15 @@ export function ContextBreakdown({
     ),
   ].filter(Boolean);
   const relay = report.relay && relayItems(report.relay);
-  if (relay?.length)
+  if (report.relay && relay?.length)
     sections.push(
       <Section
         key="relay"
         title="Relay"
-        tokens={relay.reduce((sum, item) => sum + item.tokens, 0)}
+        // Deferred tools aren't in the window until called, so only what's loaded counts.
+        tokens={
+          report.relay.instructions + report.relay.notes + report.relay.loaded
+        }
       >
         <ItemList label="Relay" items={relay} />
       </Section>,

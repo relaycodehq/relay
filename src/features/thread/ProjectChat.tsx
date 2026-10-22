@@ -275,6 +275,7 @@ export function ProjectChat({
     worktree: worktree.status,
     onOpenReply: setRootId,
     onForked,
+    computer: project.computer,
     ...opens,
   });
   const { openChanges, openFile } = actions;

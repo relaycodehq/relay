@@ -9,6 +9,7 @@ import { errorMessage } from "../../../../shared/error-message";
 import { api } from "../../../lib/api";
 import {
   attemptAfter,
+  expiryWords,
   firstToLapse,
   outcomeWords,
   type ResetAttempt,
@@ -23,6 +24,7 @@ export function ResetUsage({
   low,
   onUsage,
   container,
+  compact = false,
 }: {
   accountId: string;
   accountName: string;
@@ -30,6 +32,8 @@ export function ResetUsage({
   low: boolean;
   onUsage: (usage: ProviderUsage) => Promise<void>;
   container?: HTMLElement;
+  /** Just how many are saved ("2 resets"), for one-line footers. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -40,6 +44,7 @@ export function ResetUsage({
   const pending = useRef(false);
   const credit = firstToLapse(resets);
   const remaining = resets.count - 1;
+  const expiry = expiryWords(resets);
   const resetUsage = async () => {
     if (pending.current) return;
     pending.current = true;
@@ -84,14 +89,24 @@ export function ResetUsage({
         className="usage-reset"
         data-low={low || undefined}
         disabled={resets.usable === 0 && !attempt.current}
+        data-compact={compact || undefined}
+        aria-label={
+          compact
+            ? `Reset usage, ${resets.count} saved ${resets.count === 1 ? "reset" : "resets"}`
+            : undefined
+        }
         title={
           resets.usable === 0
-            ? "Codex says these limits don’t need a reset right now"
-            : undefined
+            ? "Codex says this reset can’t be used yet"
+            : compact
+              ? `Reset usage · ${resets.count} saved ${resets.count === 1 ? "reset" : "resets"}${expiry ? ` · ${expiry}` : ""}`
+              : undefined
         }
       >
         <RotateCcw size={12} />
-        Reset usage…
+        {compact
+          ? `${resets.count} ${resets.count === 1 ? "reset" : "resets"}`
+          : "Reset usage…"}
       </Popover.Trigger>
       <Popover.Portal container={container}>
         <Popover.Positioner

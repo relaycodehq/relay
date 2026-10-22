@@ -145,7 +145,7 @@ export function UsageMeters({
   );
 }
 
-function CreditsRow({ credits }: { credits: UsageCredits }) {
+export function CreditsRow({ credits }: { credits: UsageCredits }) {
   const reach = creditsReach(credits);
   return (
     <div className="usage-credits" title="Spent once the limits run out">

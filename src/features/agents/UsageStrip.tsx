@@ -10,10 +10,10 @@ import {
   presentWindow,
   SESSION_MS,
   type ProviderUsage,
+  type UsageMeter,
 } from "../../../shared/provider-usage";
 import { UsageMeters } from "./UsageMeters";
 import { ResetUsage } from "./saved-resets/ResetUsage";
-import { expiryWords } from "./saved-resets/saved-resets";
 import { putUsage } from "./provider-usage";
 import "./usage-strip.css";
 
@@ -48,36 +48,58 @@ export function UsageStrip({
     })) ?? [];
   const resets = usage?.provider === "codex" ? usage.resets : null;
   const credits = usage?.credits;
-  const resources = [
-    credits &&
-      (credits.unlimited
-        ? "Unlimited credits"
-        : `${new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(credits.balance)} credits`),
-    resets && `${resets.count} ${resets.count === 1 ? "reset" : "resets"}`,
-  ].filter(Boolean);
+  // A spent window with credits behind it isn't a stop: what's left is the balance.
+  const onCredits = credits && meters.some((meter) => meter.pace === "spent");
   return (
     <div className="usage-footer usage-strip">
       <div className="usage-strip-line">
         <div className="usage-strip-account">{accountControl ?? name}</div>
+        {resets && (
+          <ResetUsage
+            key={`reset:${accountId}`}
+            compact
+            accountId={accountId}
+            accountName={name}
+            resets={resets}
+            low={meters.some((meter) => meter.leftPercent < 20)}
+            container={container}
+            onUsage={(next) => putUsage(qc, "codex", accountId, next)}
+          />
+        )}
         <Popover.Root key={accountId}>
           <Popover.Trigger
             type="button"
             className="usage-strip-status"
             aria-label={`View usage details for ${name}`}
           >
-            {meters.length ? (
+            {onCredits ? (
+              <span
+                className="usage-strip-reading"
+                title={[creditsLabel(credits), creditsReach(credits)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              >
+                <span className="usage-strip-label">On credits</span>{" "}
+                <strong>
+                  {credits.unlimited
+                    ? "Unlimited"
+                    : new Intl.NumberFormat("en-US", {
+                        notation: "compact",
+                        maximumFractionDigits: 1,
+                      }).format(credits.balance)}
+                </strong>
+              </span>
+            ) : meters.length ? (
               meters.map((meter, i) => (
                 <span
                   className="usage-strip-reading"
                   key={usage!.windows[i].id ?? `${meter.kind}:${i}`}
                   title={`${meter.label}, ${meter.leftPercent}% left. ${[meter.limitLabel, meter.resetLabel].filter(Boolean).join(" · ")}`}
                 >
-                  <span
-                    className="usage-strip-dot"
-                    data-pace={
-                      meter.pace === "spent" && credits ? "ok" : meter.pace
-                    }
-                    aria-hidden
+                  <UsageRing
+                    kind={meter.kind}
+                    left={meter.leftPercent}
+                    pace={meter.pace}
                   />
                   <span className="usage-strip-label">{meter.short}</span>{" "}
                   <strong>{meter.leftPercent}%</strong>
@@ -116,33 +138,43 @@ export function UsageStrip({
           </Popover.Portal>
         </Popover.Root>
       </div>
-      {resources.length > 0 && (
-        <div className="usage-strip-line usage-strip-resources">
-          <span
-            className="usage-strip-balance"
-            title={[
-              credits && creditsLabel(credits),
-              credits && creditsReach(credits),
-              resets && expiryWords(resets),
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          >
-            {resources.join(" · ")}
-          </span>
-          {resets && (
-            <ResetUsage
-              key={accountId}
-              accountId={accountId}
-              accountName={name}
-              resets={resets}
-              low={meters.some((meter) => meter.leftPercent < 20)}
-              container={container}
-              onUsage={(next) => putUsage(qc, "codex", accountId, next)}
-            />
-          )}
-        </div>
-      )}
     </div>
+  );
+}
+
+const RING_RADIUS = 4.5;
+const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+/** One window's ring, drawn like the composer's usage dial. */
+function UsageRing({
+  kind,
+  left,
+  pace,
+}: {
+  kind: UsageMeter["kind"];
+  left: number;
+  pace: UsageMeter["pace"];
+}) {
+  return (
+    <svg
+      className="usage-ring-dial usage-strip-ring"
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      aria-hidden
+    >
+      <g className="usage-ring" data-kind={kind}>
+        <circle className="usage-ring-track" cx="6" cy="6" r={RING_RADIUS} />
+        <circle
+          className="usage-ring-fill"
+          data-pace={pace}
+          cx="6"
+          cy="6"
+          r={RING_RADIUS}
+          strokeDasharray={RING_LENGTH}
+          strokeDashoffset={RING_LENGTH * (1 - left / 100)}
+        />
+      </g>
+    </svg>
   );
 }

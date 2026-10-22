@@ -1,8 +1,8 @@
 import { Popover } from "@base-ui/react/popover";
 import "./install-log.css";
 
-/** Colours and cursor moves left in a CLI's output; progress lines keep their last state. */
-const plain = (output: string) =>
+/** A CLI's output without colours and cursor moves; progress lines keep their last state. */
+export const plainOutput = (output: string) =>
   output
     .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
     .split("\n")
@@ -36,7 +36,7 @@ export function InstallLog({ output }: { output: string }) {
                 if (log) log.scrollTop = log.scrollHeight;
               }}
             >
-              {plain(output)}
+              {plainOutput(output)}
             </pre>
           </Popover.Popup>
         </Popover.Positioner>

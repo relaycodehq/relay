@@ -23,6 +23,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Its agent can't run yet: says what it needs instead of a model. */
+.composer-tools .composer-model-trigger[data-setup] {
+  color: var(--muted);
+}
+.composer-model-trigger[data-setup] .provider-glyph {
+  opacity: 0.5;
+}
 .provider-glyph {
   width: 16px;
   height: 16px;
@@ -112,6 +119,23 @@
 }
 .model-provider-tab:first-child {
   margin-bottom: 8px;
+}
+/* Not installed where the project runs: faded, a down arrow in its corner. */
+.model-provider-tab[data-missing] .provider-glyph {
+  opacity: 0.38;
+}
+.model-provider-tab .model-provider-missing {
+  position: absolute;
+  right: 3px;
+  bottom: 4px;
+  color: var(--muted);
+}
+.model-picker-setup {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 .model-provider-tab:first-child::before {
   content: "";
@@ -982,6 +1006,11 @@
   display: grid;
   gap: 10px;
 }
+.usage-ring-popup .usage-credits {
+  margin-top: 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
 .usage-ring-popup[data-grouped] {
   width: 304px;
   max-width: calc(100vw - 24px);
@@ -1002,6 +1031,18 @@
   /* The button's hit area overhangs the popup padding instead of growing
      the heading row. */
   margin: -4px -6px -4px 0;
+}
+/* Saved resets sit beside the refresh, pushing it to the edge. */
+.usage-ring-header .usage-reset[data-compact] {
+  gap: 4px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-ring-header .usage-reset[data-compact] + .usage-ring-refresh {
+  margin-left: -6px;
 }
 .usage-ring-refresh {
   display: grid;

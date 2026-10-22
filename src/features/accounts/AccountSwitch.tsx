@@ -13,6 +13,16 @@ import type { ThreadAccounts } from "./useThreadAccounts";
 import { useAccountsUsage } from "./useAccountUsage";
 import "./accounts.css";
 
+/** "Codex · Personal": whose usage a reset would spend, as the confirm names it. */
+export function accountUsageName(provider: string, accounts: ThreadAccounts) {
+  if (!hasAccounts(provider) || !accounts.state) return undefined;
+  const current = accounts.of(provider);
+  const selected = accountsOf(accounts.state, provider).find(
+    (a) => a.id === current,
+  );
+  return `${agentName(provider)} · ${selected?.label ?? "Default"}`;
+}
+
 /** The picker's account selector and usage summary share one compact strip. */
 export function accountUsageFooter(
   provider: string,
@@ -53,7 +63,7 @@ function AccountUsageStrip({
       usage={current ? usage[current] : undefined}
       now={now}
       accountId={current}
-      accountName={`${agentName(provider)} · ${selected?.label ?? "Default"}`}
+      accountName={accountUsageName(provider, accounts)}
       container={container}
       accountControl={
         list.length > 1 ? (

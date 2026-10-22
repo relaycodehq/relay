@@ -2,6 +2,8 @@
   padding: 7px 12px;
 }
 .usage-strip-line {
+  /* Fits the reset button, so it can come and go without a jump. */
+  min-height: 23px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -26,6 +28,8 @@
   font-weight: 500;
 }
 .usage-strip-status {
+  --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
+  --usage-ring-session: var(--accent);
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -57,34 +61,19 @@
   color: var(--text);
   font-weight: 500;
 }
-.usage-strip-dot {
+.usage-strip-ring {
   flex-shrink: 0;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
 }
-.usage-strip-dot[data-pace="warn"] {
-  background: #e3a23a;
-}
-.usage-strip-dot[data-pace="hot"],
-.usage-strip-dot[data-pace="spent"] {
-  background: #ef6a5a;
-}
-.usage-strip-resources {
-  padding-top: 5px;
-  font-size: 10px;
-  color: var(--muted);
-}
-.usage-strip-balance {
-  min-width: 0;
-}
-.usage-strip-resources .usage-reset {
+.usage-strip-line > .usage-reset[data-compact] {
   flex-shrink: 0;
   gap: 4px;
-  height: 23px;
-  padding: 0 3px;
-  font-size: 10px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-strip-account + .usage-reset[data-compact] {
+  margin-left: auto;
 }
 .usage-strip-details {
   width: 340px;
@@ -102,7 +91,7 @@
 @media (pointer: coarse) {
   .usage-strip-status,
   .usage-strip-account select,
-  .usage-strip-resources .usage-reset {
+  .usage-strip-line > .usage-reset[data-compact] {
     min-height: 44px;
   }
 }

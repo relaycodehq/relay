@@ -81,11 +81,18 @@ export interface AgentInfo {
    * one sign in through Relay: Settings → Agents.
    */
   login?: string;
+  /**
+   * Its sign-in typed into another computer's shell, finished in a browser on
+   * this one: a login that waits for the browser to call back to that
+   * computer's localhost would never hear from it. `login` where left out.
+   */
+  awayLogin?: string;
 }
 
 export const agents = {
   codex: {
     login: "login",
+    awayLogin: "login --device-auth",
     name: "Codex",
     cli: "Codex CLI",
     defaultModel: "Codex default",
@@ -274,6 +281,14 @@ export function agentInfo(provider: string): AgentInfo | undefined {
 }
 export const agentName = (provider: AgentProvider) =>
   agentInfo(provider)?.name ?? provider;
+/**
+ * The arguments that sign the agent's CLI in, typed into a shell; `away` when
+ * that shell is on another computer than the browser that finishes it.
+ */
+export function loginArgs(provider: AgentProvider, away = false) {
+  const info = agentInfo(provider);
+  return (away && info.awayLogin) || info.login;
+}
 
 /** The built-in agents with `AgentInfo` field `K` on, as a type. */
 type AgentsWith<K extends keyof AgentInfo> = {

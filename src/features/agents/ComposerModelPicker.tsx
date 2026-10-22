@@ -10,6 +10,7 @@ import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
 import { Toolbar } from "@base-ui/react/toolbar";
 import {
+  ArrowDown,
   Check,
   ChevronDown,
   ChevronRight,
@@ -34,6 +35,7 @@ import {
   Meta,
 } from "./ProviderLogos";
 import { keys } from "../../lib/mod-key";
+import { Spinner } from "../../ui/ui";
 import { CursorGlyph } from "./CursorGlyph";
 import { RegistryGlyph } from "./RegistryGlyph";
 import { UsageStrip } from "./UsageStrip";
@@ -75,6 +77,17 @@ export function ProviderIcon({ provider }: { provider: MessageProvider }) {
   const Glyph = providerIcons[provider];
   return <Glyph className="provider-glyph" aria-hidden />;
 }
+/** An agent that can't run where the project does yet. */
+export interface PickerSetup {
+  /** What the trigger says instead of the model. */
+  label: string;
+  /** Being installed: the trigger spins instead of showing the agent. */
+  busy?: boolean;
+  /** Not installed there: marked in the rail. */
+  missing?: boolean;
+  /** Shown instead of the agent's search and models; `close` closes the picker. */
+  panel: (close: () => void) => ReactNode;
+}
 export const ComposerModelPicker = memo(function ComposerModelPicker({
   provider,
   ready = true,
@@ -89,6 +102,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   defaultNames,
   account,
   computer,
+  setup,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -122,6 +136,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   };
   /** The paired computer the project lives on, whose agents list the models. */
   computer?: { id: string; name: string };
+  /** Set while an agent can't run yet, with the way to set it up. */
+  setup?: (provider: AgentProvider) => PickerSetup | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -156,9 +172,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     catalog.find((m) => modelKey(m) === selectedKey) ??
     catalog.find((m) => m.provider === provider && !m.id)!;
   const currentDefault = defaultName(current);
-  const triggerName = currentDefault
-    ? `Default (${currentDefault})`
-    : current.name;
+  const pending = provider === "message" ? undefined : setup?.(provider);
+  const triggerName =
+    pending?.label ??
+    (currentDefault ? `Default (${currentDefault})` : current.name);
+  const blocked =
+    category === "favorites" || category === "message"
+      ? undefined
+      : setup?.(category);
   const grouped = isGrouped(category);
   const searching = !!query.trim();
   const { rows, groups, legacyCount, firstLegacy } = pickerRows(catalog, {
@@ -173,7 +194,10 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   function select(m: PickerModel) {
     const p = m.provider;
     if (m.custom && p !== "message" && !customs[p]?.includes(m.id))
-      setCustoms((all) => ({ ...all, [p]: [...(all[p] ?? []), m.id].slice(-100) }));
+      setCustoms((all) => ({
+        ...all,
+        [p]: [...(all[p] ?? []), m.id].slice(-100),
+      }));
     onSelect(m.provider, m.id);
     setOpen(false);
   }
@@ -253,8 +277,13 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         aria-label={label ? `${label} model` : "Choose model and provider"}
         title={triggerName}
         disabled={!ready}
+        data-setup={pending ? "" : undefined}
       >
-        <ProviderIcon provider={provider} />
+        {pending?.busy ? (
+          <Spinner size={16} steady />
+        ) : (
+          <ProviderIcon provider={provider} />
+        )}
         <span>{triggerName}</span>
         <ChevronDown size={12} />
       </Popover.Trigger>
@@ -277,7 +306,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                 e.preventDefault();
                 e.stopPropagation();
                 const m = rows[Number(e.key) - 1];
-                if (m) select(m);
+                if (m && !blocked) select(m);
               }
             }}
           >
@@ -297,226 +326,248 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                 {(providers
                   ? offered
                   : (["favorites", ...offered, "message"] as const)
-                ).map((tab) => (
-                  <Toolbar.Button
-                    type="button"
-                    key={tab}
-                    aria-label={
-                      tab === "favorites"
-                        ? "Favorites"
-                        : tab === "message"
-                          ? "Message only"
-                          : providerName(tab)
-                    }
-                    title={
-                      tab === "favorites"
-                        ? "Favorites"
-                        : tab === "message"
-                          ? "Message only · no agent"
-                          : providerName(tab)
-                    }
-                    className="model-provider-tab"
-                    aria-pressed={category === tab}
-                    onClick={() => changeCategory(tab)}
-                  >
-                    {tab === "favorites" ? (
-                      <Star className="provider-glyph" fill="currentColor" />
-                    ) : (
-                      <ProviderIcon provider={tab} />
-                    )}
-                  </Toolbar.Button>
-                ))}
+                ).map((tab) => {
+                  const missing =
+                    tab !== "favorites" &&
+                    tab !== "message" &&
+                    !!setup?.(tab)?.missing;
+                  return (
+                    <Toolbar.Button
+                      type="button"
+                      key={tab}
+                      aria-label={
+                        tab === "favorites"
+                          ? "Favorites"
+                          : tab === "message"
+                            ? "Message only"
+                            : providerName(tab)
+                      }
+                      title={
+                        tab === "favorites"
+                          ? "Favorites"
+                          : tab === "message"
+                            ? "Message only · no agent"
+                            : `${providerName(tab)}${missing ? " · not installed" : ""}`
+                      }
+                      className="model-provider-tab"
+                      aria-pressed={category === tab}
+                      data-missing={missing ? "" : undefined}
+                      onClick={() => changeCategory(tab)}
+                    >
+                      {tab === "favorites" ? (
+                        <Star className="provider-glyph" fill="currentColor" />
+                      ) : (
+                        <ProviderIcon provider={tab} />
+                      )}
+                      {missing && (
+                        <ArrowDown
+                          className="model-provider-missing"
+                          size={9}
+                          strokeWidth={3}
+                          aria-hidden
+                        />
+                      )}
+                    </Toolbar.Button>
+                  );
+                })}
               </Toolbar.Root>
             )}
             <div className="model-picker-content">
-              <div className="model-picker-list">
-                <Combobox.Root<string>
-                  inline
-                  open
-                  autoHighlight
-                  items={rows.map(modelKey)}
-                  filter={null}
-                  inputValue={query}
-                  onInputValueChange={changeQuery}
-                  value={selectedKey}
-                  onValueChange={(key) => {
-                    const m = rows.find((row) => modelKey(row) === key);
-                    if (m) select(m);
-                  }}
-                >
-                  <div className="model-picker-search">
-                    <Search size={16} aria-hidden />
-                    <Combobox.Input
-                      ref={search}
-                      aria-label="Search models"
-                      placeholder="Search models…"
-                      autoComplete="off"
-                      spellCheck={false}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setOpen(false);
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="model-picker-columns">
-                    {grouped && !searching && (
-                      <nav
-                        className="model-picker-groups"
-                        aria-label={`${providerName(category as AgentProvider)} providers`}
-                      >
-                        {[
-                          {
-                            name: "",
-                            count: groups.reduce((n, g) => n + g.count, 0),
-                          },
-                          ...groups,
-                        ].map((g) => (
-                          <button
-                            key={g.name}
-                            type="button"
-                            aria-pressed={group === g.name}
-                            onClick={() => {
-                              setGroup(g.name);
-                              search.current?.focus();
-                            }}
-                          >
-                            <span>{g.name || "All"}</span>
-                            {catalogs[category as AgentProvider]?.models && (
-                              <small>{g.count}</small>
-                            )}
-                          </button>
-                        ))}
-                      </nav>
-                    )}
-                    <div className="model-picker-scroll" ref={list}>
-                      <Combobox.List aria-label="Models">
-                        {rows.map((m, index) => {
-                          const key = modelKey(m),
-                            favorite = favorites.includes(key);
-                          return (
-                            <Fragment key={key}>
-                              {index === firstLegacy && legacyToggle}
-                              <Combobox.Item
-                                // A default that knows its model shows it like any other row.
-                                data-default={
-                                  m.provider !== "message" &&
-                                  !m.id &&
-                                  !defaultName(m)
-                                    ? ""
-                                    : undefined
-                                }
-                                onClick={() => {
-                                  if (selectedKey === key) select(m);
-                                }}
-                                data-model-key={key}
-                                value={key}
-                                className="model-picker-row"
-                                data-compact={subtitle(m) ? undefined : ""}
-                                aria-label={m.name}
-                              >
-                                <div className="model-picker-row-label">
-                                  <span>{m.name}</span>
-                                  {subtitle(m) && (
-                                    <small>
-                                      <ProviderIcon provider={m.provider} />
-                                      <span>{subtitle(m)}</span>
-                                    </small>
-                                  )}
-                                </div>
-                                <div className="model-picker-row-actions">
-                                  {selectedKey === key && (
-                                    <Check size={12} aria-hidden />
-                                  )}
-                                  {index < 9 && (
-                                    <kbd>
-                                      {keys("⌘", "Ctrl ")}
-                                      {index + 1}
-                                    </kbd>
-                                  )}
-                                  {m.provider !== "message" && (
-                                    <button
-                                      type="button"
-                                      className="model-favorite"
-                                      aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
-                                      aria-pressed={favorite}
-                                      onMouseDown={(e) => e.stopPropagation()}
-                                      onKeyDown={(e) => {
-                                        if (
-                                          e.key !== "Escape" &&
-                                          e.key !== "Tab"
-                                        )
-                                          e.stopPropagation();
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        captureReorder(key);
-                                        setFavorites((prev) =>
-                                          favorite
-                                            ? prev.filter((v) => v !== key)
-                                            : [...prev, key].slice(-100),
-                                        );
-                                      }}
-                                    >
-                                      <Star
-                                        size={14}
-                                        fill={
-                                          favorite ? "currentColor" : "none"
-                                        }
-                                      />
-                                    </button>
-                                  )}
-                                </div>
-                              </Combobox.Item>
-                            </Fragment>
-                          );
-                        })}
-                      </Combobox.List>
-                      {!searching &&
-                        category !== "favorites" &&
-                        category !== "message" &&
-                        (catalogs[category]?.error ? (
-                          <p className="model-picker-note" role="alert">
-                            Couldn't load models from {agentName(category)}:{" "}
-                            {catalogs[category].error}{" "}
-                            {onOpen && (
-                              <button
-                                type="button"
-                                className="text-button"
-                                onClick={onOpen}
-                              >
-                                Try again
-                              </button>
-                            )}
-                          </p>
-                        ) : (
-                          !catalogs[category]?.models && (
-                            <p className="model-picker-note">
-                              Loading models from {agentName(category)}…
-                            </p>
-                          )
-                        ))}
-                      {rows.length === 0 &&
-                        (searching ||
-                          !catalogs[category as AgentProvider]?.error) && (
-                          <p className="model-picker-empty">
-                            {category === "favorites" && !query
-                              ? "Star models to keep them here."
-                              : "No matching models."}
-                          </p>
-                        )}
-                      {!searching &&
-                        !legacy &&
-                        legacyCount > 0 &&
-                        legacyToggle}
+              {blocked ? (
+                <div className="model-picker-setup">
+                  {blocked.panel(() => setOpen(false))}
+                </div>
+              ) : (
+                <div className="model-picker-list">
+                  <Combobox.Root<string>
+                    inline
+                    open
+                    autoHighlight
+                    items={rows.map(modelKey)}
+                    filter={null}
+                    inputValue={query}
+                    onInputValueChange={changeQuery}
+                    value={selectedKey}
+                    onValueChange={(key) => {
+                      const m = rows.find((row) => modelKey(row) === key);
+                      if (m) select(m);
+                    }}
+                  >
+                    <div className="model-picker-search">
+                      <Search size={16} aria-hidden />
+                      <Combobox.Input
+                        ref={search}
+                        aria-label="Search models"
+                        placeholder="Search models…"
+                        autoComplete="off"
+                        spellCheck={false}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setOpen(false);
+                          }
+                        }}
+                      />
                     </div>
-                  </div>
-                </Combobox.Root>
-              </div>
+                    <div className="model-picker-columns">
+                      {grouped && !searching && (
+                        <nav
+                          className="model-picker-groups"
+                          aria-label={`${providerName(category as AgentProvider)} providers`}
+                        >
+                          {[
+                            {
+                              name: "",
+                              count: groups.reduce((n, g) => n + g.count, 0),
+                            },
+                            ...groups,
+                          ].map((g) => (
+                            <button
+                              key={g.name}
+                              type="button"
+                              aria-pressed={group === g.name}
+                              onClick={() => {
+                                setGroup(g.name);
+                                search.current?.focus();
+                              }}
+                            >
+                              <span>{g.name || "All"}</span>
+                              {catalogs[category as AgentProvider]?.models && (
+                                <small>{g.count}</small>
+                              )}
+                            </button>
+                          ))}
+                        </nav>
+                      )}
+                      <div className="model-picker-scroll" ref={list}>
+                        <Combobox.List aria-label="Models">
+                          {rows.map((m, index) => {
+                            const key = modelKey(m),
+                              favorite = favorites.includes(key);
+                            return (
+                              <Fragment key={key}>
+                                {index === firstLegacy && legacyToggle}
+                                <Combobox.Item
+                                  // A default that knows its model shows it like any other row.
+                                  data-default={
+                                    m.provider !== "message" &&
+                                    !m.id &&
+                                    !defaultName(m)
+                                      ? ""
+                                      : undefined
+                                  }
+                                  onClick={() => {
+                                    if (selectedKey === key) select(m);
+                                  }}
+                                  data-model-key={key}
+                                  value={key}
+                                  className="model-picker-row"
+                                  data-compact={subtitle(m) ? undefined : ""}
+                                  aria-label={m.name}
+                                >
+                                  <div className="model-picker-row-label">
+                                    <span>{m.name}</span>
+                                    {subtitle(m) && (
+                                      <small>
+                                        <ProviderIcon provider={m.provider} />
+                                        <span>{subtitle(m)}</span>
+                                      </small>
+                                    )}
+                                  </div>
+                                  <div className="model-picker-row-actions">
+                                    {selectedKey === key && (
+                                      <Check size={12} aria-hidden />
+                                    )}
+                                    {index < 9 && (
+                                      <kbd>
+                                        {keys("⌘", "Ctrl ")}
+                                        {index + 1}
+                                      </kbd>
+                                    )}
+                                    {m.provider !== "message" && (
+                                      <button
+                                        type="button"
+                                        className="model-favorite"
+                                        aria-label={`${favorite ? "Remove" : "Add"} ${m.name} ${favorite ? "from" : "to"} favorites`}
+                                        aria-pressed={favorite}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => {
+                                          if (
+                                            e.key !== "Escape" &&
+                                            e.key !== "Tab"
+                                          )
+                                            e.stopPropagation();
+                                        }}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          captureReorder(key);
+                                          setFavorites((prev) =>
+                                            favorite
+                                              ? prev.filter((v) => v !== key)
+                                              : [...prev, key].slice(-100),
+                                          );
+                                        }}
+                                      >
+                                        <Star
+                                          size={14}
+                                          fill={
+                                            favorite ? "currentColor" : "none"
+                                          }
+                                        />
+                                      </button>
+                                    )}
+                                  </div>
+                                </Combobox.Item>
+                              </Fragment>
+                            );
+                          })}
+                        </Combobox.List>
+                        {!searching &&
+                          category !== "favorites" &&
+                          category !== "message" &&
+                          (catalogs[category]?.error ? (
+                            <p className="model-picker-note" role="alert">
+                              Couldn't load models from {agentName(category)}:{" "}
+                              {catalogs[category].error}{" "}
+                              {onOpen && (
+                                <button
+                                  type="button"
+                                  className="text-button"
+                                  onClick={onOpen}
+                                >
+                                  Try again
+                                </button>
+                              )}
+                            </p>
+                          ) : (
+                            !catalogs[category]?.models && (
+                              <p className="model-picker-note">
+                                Loading models from {agentName(category)}…
+                              </p>
+                            )
+                          ))}
+                        {rows.length === 0 &&
+                          (searching ||
+                            !catalogs[category as AgentProvider]?.error) && (
+                            <p className="model-picker-empty">
+                              {category === "favorites" && !query
+                                ? "Star models to keep them here."
+                                : "No matching models."}
+                            </p>
+                          )}
+                        {!searching &&
+                          !legacy &&
+                          legacyCount > 0 &&
+                          legacyToggle}
+                      </div>
+                    </div>
+                  </Combobox.Root>
+                </div>
+              )}
               {category !== "favorites" &&
                 category !== "message" &&
+                !blocked &&
                 reloadsModels(category) && (
                   <ModelReload
                     key={category}
@@ -525,6 +576,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                   />
                 )}
               {reportsUsage(category) &&
+                !blocked &&
                 (account?.footer(category, now, container) ?? (
                   <UsageStrip
                     usage={usage[category]}

@@ -371,7 +371,7 @@ export function ThreadMessages({
                 projectRoot={worktree.folder}
                 onOpenFile={openFile}
                 replyCount={root ? 0 : (replyCounts.get(m.id) ?? 0)}
-                onSignIn={m.id === listed.at(-1)?.id ? signIn : undefined}
+                signInAt={m.id === listed.at(-1)?.id ? signIn : undefined}
                 onResume={m.id === inlineResume ? onResume : undefined}
                 resumeDisabled={busy}
                 onSteer={root?.side ? undefined : onSteer}
