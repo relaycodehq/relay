@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.isUnspecified
 import androidx.compose.ui.graphics.toArgb
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.res.ResourcesCompat
 import dev.relay.android.R
+import dev.relay.android.features.diagnostics.LocalScrollTrace
 import dev.relay.android.ui.theme.RelayColors
 import dev.relay.android.ui.theme.RelayTheme
 import java.util.concurrent.ConcurrentHashMap
@@ -61,10 +63,14 @@ internal fun NativeInlines(inlines: List<MdInline>, ctx: MdContext, style: TextS
     val inter = Fonts.inter(context)
     val text = remember(inlines, ctx, c, density, mono, inter) { spannedOf(inlines, ctx, c, density, mono, inter) }
     val weight = (style.fontWeight ?: FontWeight.Normal).weight
+    val trace = LocalScrollTrace.current
     AndroidView(
         factory = { context -> AnswerText(context).apply { setUp(context) } },
-        modifier = modifier.fillMaxWidth(),
-        onReset = {},
+        modifier = modifier.fillMaxWidth().onSizeChanged {
+            trace?.event("text_size", "textChars" to text.length, "widthPx" to it.width, "heightPx" to it.height)
+        },
+        // Reused selectable TextViews can retain another paragraph's measured height.
+        // Let each paragraph own its view so returning lazy rows measure the same text.
         update = { view ->
             view.applyStyle(StyleKey(style, weight, c), density)
             view.show(text, selectable)

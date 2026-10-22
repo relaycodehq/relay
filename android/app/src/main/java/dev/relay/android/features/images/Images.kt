@@ -5,14 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.relay.android.remote.Remote
 import dev.relay.android.ui.Spinner
+import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.ring
 import dev.relay.android.ui.theme.RelayTheme
@@ -119,7 +119,7 @@ fun ReadSwatch(remote: Remote, source: ImageSource, modifier: Modifier = Modifie
     }
 }
 
-/** An image an answer embeds, full width where the text puts it; nothing until it loads, or if it can't. */
+/** A reserved image frame: fetching, decoding and failures never move the paragraphs below it. */
 @Composable
 fun AnswerImage(
     remote: Remote,
@@ -127,24 +127,29 @@ fun AnswerImage(
     alt: String,
     onOpen: (ImageSource) -> Unit,
     modifier: Modifier = Modifier,
+    ready: Boolean = true,
 ) {
     val screen = LocalConfiguration.current.screenWidthDp
-    val loaded = rememberImage(remote, source, pixels(maxOf(ANSWER_HEIGHT, screen).dp))
-    // Decoded before it's placed, so it takes its height once instead of jolting the thread.
-    val bitmap = loaded.bitmap ?: return
-    if (bitmap.width == 0 || bitmap.height == 0) return
-    val ratio = bitmap.width.toFloat() / bitmap.height
-    val shape = RoundedCornerShape(10.dp)
+    // A streaming answer reserves the same frame, but the desktop only serves saved image references.
+    val loaded = if (ready) rememberImage(remote, source, pixels(maxOf(ANSWER_HEIGHT, screen).dp)) else LoadedImage(null, false)
     val label = alt.ifEmpty { if (source is ImageSource.Read) source.path.substringAfterLast('/') else "Image" }
-    Box(
-        modifier
-            // A tall screenshot narrows instead of running screens long.
-            .widthIn(max = (ANSWER_HEIGHT * ratio).dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .ring(RelayTheme.colors.border, shape)
-            .pressable({ onOpen(source) }, role = Role.Image, scale = false),
-    ) {
-        Image(bitmap, label, Modifier.fillMaxWidth().aspectRatio(ratio), contentScale = ContentScale.Fit)
+    AnswerImageFrame(loaded, label, { onOpen(source) }, modifier)
+}
+
+@Composable
+internal fun AnswerImageFrame(loaded: LoadedImage, label: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val bitmap = loaded.bitmap
+    val shape = RoundedCornerShape(10.dp)
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        Box(
+            Modifier.fillMaxWidth().height(minOf(maxWidth, ANSWER_HEIGHT.dp))
+                .clip(shape).background(RelayTheme.colors.muted).ring(RelayTheme.colors.border, shape)
+                .then(if (bitmap != null) Modifier.pressable(onOpen, role = Role.Image, scale = false) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (bitmap != null) Image(bitmap, label, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            else if (loaded.failed) Text("Image unavailable", color = RelayTheme.colors.mutedForeground)
+            else Spinner(color = RelayTheme.colors.mutedForeground)
+        }
     }
 }

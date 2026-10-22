@@ -63,6 +63,14 @@ class HtmlRenderTest {
         assertNull(parseRenderMessage("""{"relayRender":"answer","json":{"sound":"glass"}}"""))
     }
 
+    @Test fun refusesPrelayoutHeightsButAcceptsTheMeasuredViewport() {
+        assertNull(parseRenderMessage("""{"relayRender":"size","height":1376,"availableWidthDp":0,"viewportHeightDp":0}"""))
+        val measured = parseRenderMessage("""{"relayRender":"size","height":764,"availableWidthDp":379,"viewportHeightDp":1376,"scale":0.9475}""") as RenderMessage.Size
+        assertEquals(764, measured.height)
+        assertEquals(379.0, measured.metrics["availableWidthDp"])
+        assertEquals(0.9475, measured.metrics["scale"])
+    }
+
     @Test fun dropsTheRest() {
         listOf(
             "not json", "null", "\"size\"",

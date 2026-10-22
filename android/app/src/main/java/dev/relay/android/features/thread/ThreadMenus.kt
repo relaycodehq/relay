@@ -63,9 +63,11 @@ class ThreadMenuActions(
     val onArchive: () -> Unit,
     /** Where the computer can tunnel its localhost to the phone. */
     val onSites: (() -> Unit)? = null,
+    val onKeepScroll: (() -> Unit)? = null,
 )
 
 fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
+    a.onKeepScroll?.let { add(MenuItem("Keep scroll incident", "Preserve recent layouts and scroll decisions; export in Settings.", onPress = it)) }
     add(MenuItem("Rename", onPress = a.onRename))
     add(
         when {

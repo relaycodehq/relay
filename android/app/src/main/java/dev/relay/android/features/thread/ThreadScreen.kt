@@ -29,6 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import dev.relay.android.features.diagnostics.LocalScrollTrace
+import dev.relay.android.features.diagnostics.scrollGeometry
+import dev.relay.android.features.diagnostics.scrollTouches
+import dev.relay.android.ui.LocalToasts
 import dev.relay.android.ui.dismissKeyboardOnTap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +60,8 @@ import dev.relay.android.features.home.chatSettled
 import dev.relay.android.features.home.openedUpTo
 import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.notes.ThreadNotesButton
+import dev.relay.android.features.images.Lightbox
+import dev.relay.android.features.renders.MessageRenders
 import dev.relay.android.features.thread.logic.chainRoot
 import dev.relay.android.features.thread.logic.latestSetup
 import dev.relay.android.features.thread.logic.mainMessages
@@ -108,6 +116,10 @@ fun ThreadScreen(
 @Composable
 private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Boolean, onSeen: (String, Long) -> Unit) {
     val context = LocalContext.current
+    val activeComputer by remote.active.collectAsState()
+    val measurements = rememberThreadMeasurements(id, rootId, activeComputer)
+    val trace = measurements.trace
+    val toasts = LocalToasts.current
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
     val model = remember { ThreadModel(remote, id, ThreadCache.of(context)) }
@@ -129,6 +141,9 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val composer = remember { ComposerState(screenFollows = true) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
+    val messageStates = remember { mutableMapOf<String, MessageViewState>() }
+    var viewing by remember { mutableStateOf<MessageViewing?>(null) }
+    val onViewMessageImage = remember { { next: MessageViewing -> viewing = next } }
 
     // Open on the phone counts as read, but only while the app is in front and unlocked:
     // answers that land in the background are marked when it comes back.
@@ -171,6 +186,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
         val mine = outgoing.map(::outgoingMessage).filter { it.parentId == rootId }
         if (mine.isEmpty()) own else own + mine
     }
+    val rows = remember(listed) { threadMessageRows(listed) }
+    LaunchedEffect(listed) { messageStates.keys.retainAll(listed.mapTo(HashSet()) { it.id }) }
     // The desktop took one the thread doesn't show yet: ask for it, again on each acknowledgement.
     val fetchSent = outgoing.mapNotNull { it.sent }.joinToString(":")
     LaunchedEffect(fetchSent) { if (fetchSent.isNotEmpty()) runCatching { model.load() } }
@@ -201,7 +218,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val agentBatch = runningBatch(agents.runs)
 
     val earlier = t?.earlier?.takeIf { it > 0 && rootId == null }
-    val scroll = rememberThreadScroll(items = listed.size + if (earlier != null) 2 else 1)
+    ObserveThreadMeasurements(measurements, all, listed, rows, earlier, running, inFront, locked)
+    val scroll = rememberThreadScroll(items = rows.size + if (earlier != null) 2 else 1, trace = trace)
     // Sending from further up goes back down to it, as on the desktop.
     val sends = remember { outgoing.mapTo(HashSet()) { it.send.id } }
     LaunchedEffect(outgoing) { if (outgoing.count { sends.add(it.send.id) } > 0) scroll.toBottom() }
@@ -270,17 +288,19 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     }
 
     val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: made?.title ?: ""
-    CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned) {
+    CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned,
+        LocalScrollTrace provides trace) {
         val line = composer.line
         Screen(
             title,
+            modifier = Modifier.scrollGeometry(trace, "screen").scrollTouches(trace, scroll::touch),
             subtitle = line?.let { l -> listOfNotNull(l.model, l.contextPercent?.let { "$it% context" }, if (l.plan) "Plan" else null).joinToString(" · ") },
             onBack = nav.backAction,
             onTitleClick = if (line != null) composer::openSettings else null,
             actions = {
                 if (rootId == null) {
                     ThreadNotesButton(remote, id, summary?.notesMark, listed, composer::quote) { messageId ->
-                        val at = listed.indexOfFirst { it.id == messageId }
+                        val at = rows.indexOfFirst { it.message.id == messageId }
                         if (at >= 0) scope.launch { scroll.show(at + if (earlier != null) 1 else 0) }
                     }
                     if (projectId != null) CiStatusButton(remote, projectId, id, running)
@@ -290,20 +310,43 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
         ) {
             if (t == null && listed.isEmpty()) Empty(error, online, computerName(remote)) { scope.launchLoad(model) }
             else LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap(),
+                Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.readerScroll).dismissKeyboardOnTap().scrollGeometry(trace, "scroll_view"),
                 state = scroll.list,
                 verticalArrangement = Arrangement.Bottom,
             ) {
-                if (earlier != null) item("earlier") { Earlier(earlier, history < Bridge.MAX_REMOTE_HISTORY, model::loadEarlier) }
-                items(listed, key = { it.id }) { m ->
-                    Column {
-                        MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures)
-                        if (rootId == null) WorkspaceMoveLine(t?.workspaceMoves, m.id)
+                if (earlier != null) item("earlier") {
+                    Box(Modifier.onSizeChanged { measurements.size("earlier", it) }) {
+                        Earlier(earlier, history < Bridge.MAX_REMOTE_HISTORY) {
+                            trace.event("load_earlier", "earlier" to earlier)
+                            model.loadEarlier()
+                        }
+                    }
+                }
+                items(rows, key = { it.key }) { row ->
+                    val m = row.message
+                    val messageTrace = remember(trace, m.id) { trace.child("message" to m.id) }
+                    CompositionLocalProvider(LocalScrollTrace provides messageTrace) {
+                        Column(Modifier.onSizeChanged { measurements.size(row.key, it) }) {
+                            when (row) {
+                                is ThreadMessageRow.Render -> MessageRenders(
+                                    remote, id, listOf(row.render), onCompose = callbacks.onCompose,
+                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp,
+                                        top = if (row.ordinal == 0) 8.dp else 10.dp),
+                                )
+                                is ThreadMessageRow.Content -> {
+                                    MessageView(id, m, t?.root, if (rootId != null) 0 else counts[m.id] ?: 0, callbacks, failures,
+                                        state = messageStates.getOrPut(m.id) { MessageViewState() },
+                                        section = row.section, onView = onViewMessageImage)
+                                    if (rootId == null && row.section != MessageSection.Header)
+                                        WorkspaceMoveLine(t?.workspaceMoves, m.id)
+                                }
+                            }
+                        }
                     }
                 }
                 // Never zero high: an empty item isn't "visible", so the list couldn't tell it's at the bottom.
                 item("end") {
-                    Column(Modifier.heightIn(min = 1.dp)) {
+                    Column(Modifier.heightIn(min = 1.dp).onSizeChanged { measurements.size("end", it) }) {
                         val newest = listed.lastOrNull()
                         if (running && newest?.role == "user") AwaitingAnswer(composer.settings?.provider ?: t?.settings?.provider ?: "claude", newest.id)
                         if (canResume) Row(
@@ -323,73 +366,76 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                     }
                 }
             }
-            Strips(t, summary, rootId, running, actions)
-            if (rootId == null) SubagentStrip(
-                agentBatch, display, onPress = { sheet = Sheet.Agents }, error = agents.error,
-                onRetry = { agents.refresh() }, started = if (started.shown) started.family else emptyList(),
-            )
-            val waitingShown = rootId == null && !waiting.isNullOrEmpty() && !running
-            if (waitingShown) WaitingStrip(waiting.orEmpty()) { actions.stopPending(it.id) }
-            // Last of the desktop's strips: one that asks for something comes first.
-            val pressing = waitingShown || (summary?.limitResume != null && !running) || !t?.stopped?.items.isNullOrEmpty()
-            if (rootId == null && settled && !pressing) SettledStrip(summary?.settleWhenDone != null, actions::unsettle)
-            // The saved copy shows while a refresh fails: without this a question the agent asked since looks like none.
-            if (t != null && error != null) Row(
-                Modifier.fillMaxWidth().pressable(onClick = { scope.launchLoad(model) }, scale = false).padding(horizontal = 12.dp, vertical = 8.dp),
-            ) {
-                Hint("Couldn't refresh this thread, so it may be out of date. Tap to try again.", color = c.destructive)
-            }
-            // Questions and approvals belong to the whole thread, replies included.
-            t?.requests?.firstOrNull()?.let { request ->
-                key(request.id) {
-                    RequestCard(request, (t.requests.size) - 1, onRespond = { actions.respond(request.id, it) })
-                }
-            }
-            UnsentStrip(
-                unsent = outgoing.filter { it.error != null && it.send.parentId == rootId },
-                online = online,
-                onRetry = { outbox.retry(outboxLink(remote.client.value), it.send.id) },
-                onEdit = { o ->
-                    // Unanswered, it may be on the computer already: sent again it would go twice.
-                    if (o.unsure == true && !remote.whenOnline(20_000)) throw IllegalStateException(
-                        "$computerLabel isn't connected yet, so the phone can't tell whether this one arrived. " +
-                            "It isn't lost: once connected, the phone checks and it arrives only once.",
-                    )
-                    if (o.unsure == true && outbox.reached(outboxLink(remote.client.value), o)) {
-                        scope.launchLoad(model)
-                        failures.show(
-                            "The computer received it",
-                            "$computerLabel already accepted this send or is still processing it, so it can't be taken back here.",
-                        )
-                    } else {
-                        composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty()))
-                        outbox.drop(o.send.id)
-                        sentWith(o.send)?.let { composer.setSettings(it) }
-                    }
-                },
-                onUseProjectFolder = if (bridge >= Bridge.WORKSPACE) { o ->
-                    remote.desktop("selectAgentWorktree", id, null)
-                    outbox.retry(outboxLink(remote.client.value), o.send.id)
-                } else null,
-            )
-            val planSettings = composer.settings
-            if (planProvider != null && planSettings != null) Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
-                Button(
-                    "Implement plan",
-                    onClick = click@{
-                        if (goingAhead?.let(outbox::isOut) == true) return@click
-                        val pc = computer ?: return@click
-                        // On the planner's own model, as the composer would switch to it.
-                        val on = composer.settingsOn(planProvider) ?: planSettings
-                        val (message, next) = remotePlanGoAhead(on, planProvider, UUID.randomUUID().toString())
-                        goingAhead = message.id
-                        outbox.deliver(outboxLink(remote.client.value), pc, id, message.copy(parentId = rootId))
-                        composer.setSettings(next)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
+            ThreadDock(pinned, Modifier.fillMaxWidth().scrollGeometry(trace, "thread_dock")) {
+                Strips(t, summary, rootId, running, actions)
+                if (rootId == null) SubagentStrip(
+                    agentBatch, display, onPress = { sheet = Sheet.Agents }, error = agents.error,
+                    onRetry = { agents.refresh() }, started = if (started.shown) started.family else emptyList(),
                 )
+                val waitingShown = rootId == null && !waiting.isNullOrEmpty() && !running
+                if (waitingShown) WaitingStrip(waiting.orEmpty()) { actions.stopPending(it.id) }
+                // Last of the desktop's strips: one that asks for something comes first.
+                val pressing = waitingShown || (summary?.limitResume != null && !running) || !t?.stopped?.items.isNullOrEmpty()
+                if (rootId == null && settled && !pressing) SettledStrip(summary?.settleWhenDone != null, actions::unsettle)
+                // The saved copy shows while a refresh fails: without this a question the agent asked since looks like none.
+                if (t != null && error != null) Row(
+                    Modifier.fillMaxWidth().pressable(onClick = { scope.launchLoad(model) }, scale = false).padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Hint("Couldn't refresh this thread, so it may be out of date. Tap to try again.", color = c.destructive)
+                }
+                // Questions and approvals belong to the whole thread, replies included.
+                t?.requests?.firstOrNull()?.let { request ->
+                    key(request.id) {
+                        RequestCard(request, (t.requests.size) - 1, onRespond = { actions.respond(request.id, it) })
+                    }
+                }
+                UnsentStrip(
+                    unsent = outgoing.filter { it.error != null && it.send.parentId == rootId },
+                    online = online,
+                    onRetry = { outbox.retry(outboxLink(remote.client.value), it.send.id) },
+                    onEdit = { o ->
+                        // Unanswered, it may be on the computer already: sent again it would go twice.
+                        if (o.unsure == true && !remote.whenOnline(20_000)) throw IllegalStateException(
+                            "$computerLabel isn't connected yet, so the phone can't tell whether this one arrived. " +
+                                "It isn't lost: once connected, the phone checks and it arrives only once.",
+                        )
+                        if (o.unsure == true && outbox.reached(outboxLink(remote.client.value), o)) {
+                            scope.launchLoad(model)
+                            failures.show(
+                                "The computer received it",
+                                "$computerLabel already accepted this send or is still processing it, so it can't be taken back here.",
+                            )
+                        } else {
+                            composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty()))
+                            outbox.drop(o.send.id)
+                            sentWith(o.send)?.let { composer.setSettings(it) }
+                        }
+                    },
+                    onUseProjectFolder = if (bridge >= Bridge.WORKSPACE) { o ->
+                        remote.desktop("selectAgentWorktree", id, null)
+                        outbox.retry(outboxLink(remote.client.value), o.send.id)
+                    } else null,
+                )
+                val planSettings = composer.settings
+                if (planProvider != null && planSettings != null) Box(Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp)) {
+                    Button(
+                        "Implement plan",
+                        onClick = click@{
+                            if (goingAhead?.let(outbox::isOut) == true) return@click
+                            val pc = computer ?: return@click
+                            // On the planner's own model, as the composer would switch to it.
+                            val on = composer.settingsOn(planProvider) ?: planSettings
+                            val (message, next) = remotePlanGoAhead(on, planProvider, UUID.randomUUID().toString())
+                            goingAhead = message.id
+                            outbox.deliver(outboxLink(remote.client.value), pc, id, message.copy(parentId = rootId))
+                            composer.setSettings(next)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (projectId != null) Composer(remote, id, composer, rootId = rootId, settingsUp = true,
+                    modifier = Modifier.scrollGeometry(trace, "composer"))
             }
-            if (projectId != null) Composer(remote, id, composer, rootId = rootId, settingsUp = true)
         }
 
         when (sheet) {
@@ -414,6 +460,16 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                         onCompact = actions::compact,
                         onArchive = { sheet = Sheet.Archive },
                         onSites = if (bridge >= Bridge.TUNNEL) ({ nav.push(Route.Browser()) }) else null,
+                        onKeepScroll = {
+                            trace.event("manual_incident_requested")
+                            scope.launch {
+                                try {
+                                    measurements.messages(all, listed, earlier, running, full = true)
+                                    trace.recorder.keepIncident()
+                                    toasts.show("Scroll incident kept", "Save scroll logs in Settings → Developer.")
+                                } catch (e: Exception) { failures.alert(e, "Couldn't keep scroll incident") }
+                            }
+                        },
                     ),
                 ),
                 onClose = { if (sheet == Sheet.Thread) sheet = null },
@@ -457,6 +513,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
             )
         }
         FailureDialog(failures)
+        viewing?.let { v -> Lightbox(remote, v.images, v.index) { viewing = null } }
     }
 }
 

@@ -2,6 +2,7 @@ package dev.relay.android.features.renders
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Rect
 import android.graphics.Color as AndroidColor
 import android.view.MotionEvent
 import android.view.View
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,10 +30,13 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.relay.android.ui.rememberInFront
 import dev.relay.android.ui.theme.RelayColors
+import dev.relay.android.features.diagnostics.LocalScrollTrace
+import dev.relay.android.features.diagnostics.ScrollTrace
 
 /** The phone's colours as a page reads them: the desktop's CSS variable names. */
 fun renderTheme(c: RelayColors) = RenderTheme(
@@ -73,7 +78,8 @@ internal fun pageView(
     zoom: Boolean,
     onMessage: (RenderMessage) -> Unit,
     onFailed: () -> Unit,
-): WebView = WebView(context).apply {
+    trace: ScrollTrace? = null,
+): WebView = (if (trace != null) TracedWebView(context, trace) else WebView(context)).apply {
     setBackgroundColor(AndroidColor.TRANSPARENT)
     isVerticalScrollBarEnabled = zoom
     isHorizontalScrollBarEnabled = zoom
@@ -137,12 +143,18 @@ fun RenderFrame(
     onAnswer: ((String) -> Unit)? = null,
     onSize: ((Int) -> Unit)? = null,
 ) {
+    val trace = LocalScrollTrace.current
+    DisposableEffect(page, trace) {
+        trace?.event("html_mount", "htmlChars" to page.length, "estimateDp" to height)
+        onDispose { trace?.event("html_unmount") }
+    }
     var measured by remember(page) { mutableStateOf<Int?>(null) }
     var failed by remember(page) { mutableStateOf(false) }
     val uri = LocalUriHandler.current
     val handle by rememberUpdatedState { message: RenderMessage ->
         when (message) {
             is RenderMessage.Size -> {
+                trace?.event("html_size", "previousDp" to measured, "heightDp" to message.height, "metrics" to message.metrics)
                 measured = message.height
                 onSize?.invoke(message.height)
             }
@@ -156,24 +168,30 @@ fun RenderFrame(
     val inFront by rememberInFront()
     val holder = remember { arrayOfNulls<WebView>(1) }
 
-    Box(modifier.fillMaxWidth().height(shown.dp).clipToBounds()) {
+    Box(modifier.fillMaxWidth().height(shown.dp).clipToBounds().onSizeChanged {
+        trace?.event("html_frame", "widthPx" to it.width, "heightPx" to it.height, "shownDp" to shown, "scrolls" to scrolls)
+    }) {
         if (measured == null || failed) placeholder()
         if (!failed) {
             AndroidView(
                 factory = { context ->
-                    pageView(context, page, zoom = false, onMessage = { handle(it) }, onFailed = { failed = true })
+                    pageView(context, page, zoom = false, onMessage = { handle(it) }, onFailed = { failed = true }, trace = trace)
                         .also { holder[0] = it }
                 },
                 update = { web ->
                     if (web.tag != page) {
+                        trace?.event("html_reload", "htmlChars" to page.length)
                         web.tag = page
                         web.loadDataWithBaseURL(null, page, "text/html", "utf-8", null)
                     }
                     // Only a page past the cap scrolls itself; one that doesn't must leave the drag to the thread.
                     web.setOnTouchListener(
-                        if (scrolls) {
+                        if (scrolls || trace != null) {
                             View.OnTouchListener { v, e ->
-                                if (e.actionMasked == MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
+                                if (e.actionMasked in setOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL))
+                                    trace?.event("html_touch", "action" to e.actionMasked, "xPx" to e.x, "yPx" to e.y,
+                                        "scrollY" to web.scrollY, "disallowParentIntercept" to scrolls)
+                                if (scrolls && e.actionMasked == MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
                                 false
                             }
                         } else null,
@@ -194,5 +212,26 @@ fun RenderFrame(
     // A page's animations stop while the app is in the background.
     LaunchedEffect(inFront) {
         holder[0]?.let { if (inFront) it.onResume() else it.onPause() }
+    }
+}
+
+/** Records native focus/rectangle scrolling as well as Compose's explicit requests. Always delegates unchanged. */
+private class TracedWebView(context: Context, trace: ScrollTrace) : WebView(context) {
+    // View constructors can call overridden methods before subclass fields are initialized.
+    private val diagnosticTrace: ScrollTrace? = trace
+    override fun requestRectangleOnScreen(rectangle: Rect?, immediate: Boolean): Boolean {
+        diagnosticTrace?.event("html_rectangle_request", "leftPx" to rectangle?.left, "topPx" to rectangle?.top,
+            "rightPx" to rectangle?.right, "bottomPx" to rectangle?.bottom, "immediate" to immediate)
+        return super.requestRectangleOnScreen(rectangle, immediate)
+    }
+
+    override fun onFocusChanged(gainFocus: Boolean, direction: Int, previouslyFocusedRect: Rect?) {
+        super.onFocusChanged(gainFocus, direction, previouslyFocusedRect)
+        diagnosticTrace?.event("html_focus", "focused" to gainFocus, "direction" to direction)
+    }
+
+    override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+        super.onScrollChanged(l, t, oldl, oldt)
+        diagnosticTrace?.event("html_native_scroll", "xPx" to l, "yPx" to t, "oldXPx" to oldl, "oldYPx" to oldt)
     }
 }

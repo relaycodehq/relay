@@ -3,6 +3,7 @@ package dev.relay.android.features.renders
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -23,7 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AppWindow
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowsDiagonal
 import java.util.concurrent.ConcurrentHashMap
+import dev.relay.android.features.diagnostics.LocalScrollTrace
 
 // A page never changes once saved, so the HTML is kept by identity; scrolling
 // back to a thread, or the list unmounting a row, doesn't fetch it again.
@@ -187,33 +189,37 @@ internal fun Variants(
 
 @Composable
 private fun RenderPage(remote: Remote, chatId: String, render: HtmlRender, index: Int, compose: ((String) -> Unit)?) {
-    val c = RelayTheme.colors
-    val loaded = rememberPage(remote, chatId, render.id, index)
-    val width = LocalConfiguration.current.screenWidthDp - 34
-    val settledKey = "${render.id}:$index:$width"
-    val estimate = settled[settledKey]
-        ?: renderHeightAt(render.pages.getOrNull(index)?.heights, width.toDouble())
-        ?: clampRenderHeight(RENDER_MIN_HEIGHT * 2.0)
-    val theme = remember(c) { renderTheme(c) }
-    val page = remember(loaded.html, theme) { loaded.html?.let { phoneRenderDocument(it, theme) } }
-    val note = @Composable {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                if (loaded.failed) "This page couldn't be loaded." else "Loading page…",
-                style = RelayTheme.type.xs.copy(fontSize = 12.sp),
-                color = c.mutedForeground,
-            )
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val c = RelayTheme.colors
+        val loaded = rememberPage(remote, chatId, render.id, index)
+        val width = maxWidth.value.toInt()
+        val settledKey = "${render.id}:$index:$width"
+        val estimate = settled[settledKey]
+            ?: renderHeightAt(render.pages.getOrNull(index)?.heights, width.toDouble())
+            ?: clampRenderHeight(RENDER_MIN_HEIGHT * 2.0)
+        val theme = remember(c) { renderTheme(c) }
+        val page = remember(loaded.html, theme) { loaded.html?.let { phoneRenderDocument(it, theme) } }
+        val note = @Composable {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    if (loaded.failed) "This page couldn't be loaded." else "Loading page…",
+                    style = RelayTheme.type.xs.copy(fontSize = 12.sp),
+                    color = c.mutedForeground,
+                )
+            }
         }
+        if (page == null) {
+            Box(Modifier.fillMaxWidth().height(estimate.dp)) { note() }
+            return@BoxWithConstraints
+        }
+        val parentTrace = LocalScrollTrace.current
+        val trace = remember(parentTrace, render.id, index, width) { parentTrace?.child("render" to render.id, "variant" to index, "frameWidthDp" to width) }
+        CompositionLocalProvider(LocalScrollTrace provides trace) { RenderFrame(
+            page = page,
+            height = estimate,
+            placeholder = note,
+            onCompose = compose,
+            onSize = { settled[settledKey] = it },
+        ) }
     }
-    if (page == null) {
-        Box(Modifier.fillMaxWidth().height(estimate.dp)) { note() }
-        return
-    }
-    RenderFrame(
-        page = page,
-        height = estimate,
-        placeholder = note,
-        onCompose = compose,
-        onSize = { settled[settledKey] = it },
-    )
 }
