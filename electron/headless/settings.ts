@@ -40,6 +40,7 @@ export interface Snapshot {
   /** Where updates stand; "off" for a build from source, which git updates. */
   update: UpdateState;
   keepAwake: boolean;
+  usagePing: boolean;
   autoSettleDays: number | null;
   worktreeCleanupDays: number | null;
   newThreadAgent: AgentProvider | null;
@@ -69,6 +70,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
     status,
     config,
     keepAwake,
+    usagePing,
     autoSettleDays,
     worktreeCleanupDays,
     newThreadAgent,
@@ -80,6 +82,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
     callControl(control(ctx), "status"),
     readConfig(ctx.home),
     call<boolean>(ctx, "keepAwake"),
+    call<boolean>(ctx, "usagePing"),
     call<number | null>(ctx, "autoSettleDays"),
     call<number | null>(ctx, "worktreeCleanupDays"),
     call<AgentProvider | null>(ctx, "newThreadAgent"),
@@ -95,6 +98,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
     autoUpdate: config.autoUpdate ?? true,
     update: status.update,
     keepAwake,
+    usagePing,
     autoSettleDays,
     worktreeCleanupDays,
     newThreadAgent,
@@ -200,6 +204,12 @@ const rows: Row[] = [
     section: "General",
     label: "Keep the computer awake",
     value: (s) => (s.keepAwake ? "on" : "off"),
+  },
+  {
+    key: "usage-ping",
+    section: "General",
+    label: "Count me as a user",
+    value: (s) => (s.usagePing ? "on" : "off"),
   },
   {
     key: "auto-settle",
@@ -377,6 +387,9 @@ export async function setValue(
       return;
     case "keep-awake":
       await call(ctx, "saveKeepAwake", parseOn(value));
+      return;
+    case "usage-ping":
+      await call(ctx, "saveUsagePing", parseOn(value));
       return;
     case "auto-settle":
       await call(ctx, "saveAutoSettleDays", parseDays(value, 1));
@@ -723,6 +736,17 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
         (await ask.yes(
           "Keep the computer from idling to sleep while Relay runs?",
           s.keepAwake,
+        ))
+          ? "on"
+          : "off",
+      );
+    case "usage-ping":
+      return setValue(
+        ctx,
+        "usage-ping",
+        (await ask.yes(
+          "Tell relaycode.io once a day that Relay is in use (version and system, no ID)?",
+          s.usagePing,
         ))
           ? "on"
           : "off",

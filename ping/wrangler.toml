@@ -1,0 +1,10 @@
+name = "relay-ping"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+routes = [{ pattern = "ping.relaycode.io", custom_domain = true }]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "relay-ping"
+database_id = "e6e24aa8-a3d8-41e6-9644-6808c98df494"

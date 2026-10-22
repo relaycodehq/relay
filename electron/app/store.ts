@@ -72,6 +72,8 @@ interface State {
   readAloud?: import("../../shared/read-aloud").ReadAloudSettings;
   /** The speech engine dictation uses; unset, Parakeet. */
   dictationEngine?: import("../../shared/dictation").DictationEngine;
+  /** The UTC day this install last said it was in use; see ./daily-ping. */
+  pingedOn?: string;
   /** The Git executable chosen in Settings; unset, Relay finds its own. */
   gitPath?: string;
   /** Agent CLIs linked in Settings; a missing one is found by searching. */

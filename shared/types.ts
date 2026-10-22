@@ -414,6 +414,9 @@ export interface Api
   /** Plugged in, Relay keeps the computer from idling to sleep; on battery only while it has work or a paired device. */
   keepAwake(): Promise<boolean>;
   saveKeepAwake(enabled: boolean): Promise<boolean>;
+  /** Tell relaycode.io once a day that this copy is in use, with no ID; on by default. */
+  usagePing(): Promise<boolean>;
+  saveUsagePing(enabled: boolean): Promise<boolean>;
   /** Flag what I'd miss in Claude threads: off (the default), the main thread, or with its subagents. */
   watchThreads(): Promise<WatchScope>;
   saveWatchThreads(scope: WatchScope): Promise<WatchScope>;

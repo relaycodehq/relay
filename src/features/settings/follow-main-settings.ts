@@ -1,8 +1,12 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-/** What the main process reads from settings.json, by the queries that show it. */
-const mainSettings = [
+/**
+ * What the main process reads from settings.json, by the queries that show it.
+ * Each preference in electron/settings/app-prefs.ts needs its query here.
+ */
+export const mainSettings = [
   ["keep-awake"],
+  ["usage-ping"],
   ["auto-settle-days"],
   ["worktree-cleanup-days"],
   ["watch-threads"],

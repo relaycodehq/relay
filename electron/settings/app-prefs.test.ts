@@ -41,6 +41,7 @@ it("moves preferences out of state.json into settings.json, keeping what the fil
   await movePrefsToFile(store, file);
   expect(readPrefs(file.state().values)).toEqual({
     keepAwake: false,
+    usagePing: true,
     autoSettleDays: null,
     worktreeCleanupDays: 3,
     watchThreads: "subagents",
@@ -59,6 +60,7 @@ it("reads defaults for keys that are missing or don't read, and saves a default 
   await file.load();
   expect(readPrefs(file.state().values)).toEqual({
     keepAwake: true,
+    usagePing: true,
     autoSettleDays: 3,
     worktreeCleanupDays: null,
     watchThreads: "off",

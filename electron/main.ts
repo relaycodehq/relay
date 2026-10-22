@@ -65,6 +65,7 @@ import { Store } from "./app/store";
 import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
+import { DailyPing } from "./app/daily-ping";
 import { DevBuild } from "./app/dev-build";
 import { listenDevSwitch } from "./app/dev-switch";
 import { ProjectAdding } from "./project-add";
@@ -568,6 +569,13 @@ app
       powerMonitor,
     });
     updater.start();
+    new DailyPing({
+      kind: "desktop",
+      version: app.getVersion(),
+      live: app.isPackaged && !process.env.RELAY_TEST_DATA,
+      enabled: () => readPrefs(file.state().values).usagePing,
+      store: loaded,
+    }).start();
     devBuild.start();
     listenDevSwitch(quit);
     // Tests' stand-in agents only answer what a test expects of them.

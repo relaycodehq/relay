@@ -21,6 +21,7 @@ import { GiteaLogin } from "../app/login";
 import { Menubar } from "../app/menubar";
 import { Store } from "../app/store";
 import { Updater } from "../app/updater";
+import { DailyPing } from "../app/daily-ping";
 import { AppWindow } from "../app/window";
 import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
@@ -304,6 +305,13 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     tools: { handoffs: handoffs.sender },
     powerMonitor,
   });
+  new DailyPing({
+    kind: "headless",
+    version: headlessVersion,
+    live: updater.now.status !== "off" && !process.env.RELAY_TEST_DATA,
+    enabled: () => readPrefs(settingsFile.state().values).usagePing,
+    store,
+  }).start();
   if (!process.env.RELAY_TEST_DATA) {
     agentUpdates.start(store.get().agentUpdateChecks ?? true);
     keepUpdated(updater, {

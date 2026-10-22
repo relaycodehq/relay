@@ -115,6 +115,11 @@ export function settingsHandlers(ctx: ApiContext) {
       await savePref(ctx.settingsFile, "keepAwake", enabled);
       return enabled;
     }),
+    usagePing: () => prefs().usagePing,
+    saveUsagePing: takes([prefSchema("usagePing")], async (enabled) => {
+      await savePref(ctx.settingsFile, "usagePing", enabled);
+      return enabled;
+    }),
     watchThreads: () => prefs().watchThreads,
     saveWatchThreads: takes([prefSchema("watchThreads")], async (scope) => {
       await savePref(ctx.settingsFile, "watchThreads", scope);

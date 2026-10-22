@@ -12,6 +12,7 @@ import type { SettingsFile } from "./settings-file";
  */
 const prefs = {
   keepAwake: { path: ["keepAwake"], schema: z.boolean(), default: true },
+  usagePing: { path: ["usagePing"], schema: z.boolean(), default: true },
   autoSettleDays: {
     path: ["threads", "autoSettleDays"],
     schema: z.number().int().min(1).max(90).nullable(),
