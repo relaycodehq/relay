@@ -148,7 +148,7 @@ export function reviewerTask(
 }
 
 const reportFormat =
-  "For each problem give its priority (P0 drop everything, P1 fix before merging, P2 should fix, P3 nice to have), a one-line title, the file and line like `src/app.ts:42`, and how it fails: the input or state that triggers it and what goes wrong then. Start with the findings, with no preamble or summary of the change. If you find no problems, reply \"No problems found.\"";
+  'For each problem give its priority (P0 drop everything, P1 fix before merging, P2 should fix, P3 nice to have), a one-line title, the file and line like `src/app.ts:42`, and how it fails: the input or state that triggers it and what goes wrong then. Start with the findings, with no preamble or summary of the change. If you find no problems, reply "No problems found."';
 const focusNote = (focus?: string) =>
   focus
     ? [

@@ -89,27 +89,37 @@ it("starts no new agent turn and writes no note of its own when stopped during t
     }),
   );
   await chats.cancel(chat.id);
-  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false), {
-    timeout: 15_000,
-  });
+  await vi.waitFor(
+    () => expect(chats.hasActiveProject(projectId)).toBe(false),
+    {
+      timeout: 15_000,
+    },
+  );
   const after = await chats.get(chat.id);
   expect(after.messages.at(-1)).toMatchObject({ status: "cancelled" });
   expect(after.messages.some((m) => m.handoff?.byRelay)).toBe(false);
-  expect(after.messages.some((m) => m.provider === "claude" && m.role === "assistant")).toBe(false);
+  expect(
+    after.messages.some(
+      (m) => m.provider === "claude" && m.role === "assistant",
+    ),
+  ).toBe(false);
   expect(await agentProviders()).not.toContain("claude");
 }, 30_000);
 
 it("stops the handoff note when the Stop lands while the note is first saved", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
   const chat = await chats.create(projectId, { kind: "project" });
-  const storage = (chats as unknown as {
-    storage: { save: (...a: unknown[]) => Promise<void> };
-  }).storage;
+  const storage = (
+    chats as unknown as {
+      storage: { save: (...a: unknown[]) => Promise<void> };
+    }
+  ).storage;
   const save = storage.save.bind(storage);
   let stopped = false;
   vi.spyOn(storage, "save").mockImplementation(async (c, ...rest) => {
-    const last = (c as { messages?: { handoff?: unknown; status: string }[] })
-      .messages?.at(-1);
+    const last = (
+      c as { messages?: { handoff?: unknown; status: string }[] }
+    ).messages?.at(-1);
     if (!stopped && last?.handoff && last.status === "streaming") {
       stopped = true;
       await chats.cancel(chat.id);
@@ -118,9 +128,12 @@ it("stops the handoff note when the Stop lands while the note is first saved", a
   });
   await switchToClaude(chat.id);
   await vi.waitFor(() => expect(stopped).toBe(true));
-  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false), {
-    timeout: 15_000,
-  });
+  await vi.waitFor(
+    () => expect(chats.hasActiveProject(projectId)).toBe(false),
+    {
+      timeout: 15_000,
+    },
+  );
   const note = (await chats.get(chat.id)).messages.find((m) => m.handoff);
   expect(note?.status).toBe("cancelled");
 }, 30_000);
@@ -131,13 +144,18 @@ it("leaves a /btw answer running when Stop lands while the main thread is idle, 
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
   );
-  const question = { ...input("@codex wait for cancellation"), side: true as const };
+  const question = {
+    ...input("@codex wait for cancellation"),
+    side: true as const,
+  };
   await chats.send(chat.id, question);
   const side = async () =>
     (await chats.get(chat.id)).messages.find(
       (m) => m.parentId === question.id && m.role === "assistant",
     );
-  await vi.waitFor(async () => expect((await side())?.status).toBe("streaming"));
+  await vi.waitFor(async () =>
+    expect((await side())?.status).toBe("streaming"),
+  );
   await chats.cancel(chat.id);
   expect((await side())?.status).toBe("streaming");
   expect((await chats.get(chat.id)).queuePaused).toBeFalsy();
@@ -148,7 +166,9 @@ it("sends messages queued behind a turn that carried on through a restart once i
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain("cache guard"),
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
   );
   const queued = input("@codex Queued meanwhile");
   await chats.send(chat.id, queued);
@@ -167,13 +187,17 @@ it("sends messages queued behind a turn that carried on through a restart once i
   vi.spyOn(codex, "reattach").mockResolvedValue([{ key, open: true }]);
   const run = codex.run.bind(codex);
   vi.spyOn(codex, "run").mockImplementation(async (options) =>
-    options.job?.kind === "adopt" ? "Carried on after the restart." : run(options),
+    options.job?.kind === "adopt"
+      ? "Carried on after the restart."
+      : run(options),
   );
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   await chats.reattach();
   await vi.waitFor(
     async () =>
-      expect((await chats.get(chat.id)).messages.some((m) => m.id === queued.id)).toBe(true),
+      expect(
+        (await chats.get(chat.id)).messages.some((m) => m.id === queued.id),
+      ).toBe(true),
     { timeout: 10_000 },
   );
 }, 30_000);
@@ -194,15 +218,17 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
     version: 1,
   };
   saved.messages = [lead];
-  saved.reviews = [{
-    scope: { label: "PR #4" },
-    request: "request",
-    reviewers: [],
-    lead: { provider: "codex", choice: input("").choice },
-    runChecks: false,
-    runtimeMode: "full-access",
-    status: "leading",
-  }];
+  saved.reviews = [
+    {
+      scope: { label: "PR #4" },
+      request: "request",
+      reviewers: [],
+      lead: { provider: "codex", choice: input("").choice },
+      runChecks: false,
+      runtimeMode: "full-access",
+      status: "leading",
+    },
+  ];
   await writeFile(file, JSON.stringify(saved));
   const codex = agentRuntime("codex");
   const key = JSON.stringify([join(root, "chats"), chat.id, "main"]);
@@ -211,7 +237,8 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   await chats.reattach();
   await vi.waitFor(
-    async () => expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
+    async () =>
+      expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
   const after = await chats.get(chat.id);
@@ -238,7 +265,10 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
     provider: "codex",
     version: 1,
   });
-  const edit = async (id: string, change: (saved: Record<string, unknown>) => void) => {
+  const edit = async (
+    id: string,
+    change: (saved: Record<string, unknown>) => void,
+  ) => {
     const file = join(root, "chats", id + ".json");
     const saved = JSON.parse(await readFile(file, "utf8"));
     change(saved);
@@ -246,18 +276,24 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
   };
   const reviewer = { provider: "codex", choice: input("").choice };
   await edit(review.id, (saved) => {
-    saved.reviews = [{
-      scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
-      request: "request",
-      reviewers: [
-        { ...reviewer, chatId: kept.id },
-        { ...reviewer, chatId: other.id },
-      ],
-      lead: reviewer,
-      runChecks: false,
-      runtimeMode: "full-access",
-      status: "reviewing",
-    }];
+    saved.reviews = [
+      {
+        scope: {
+          target: { kind: "uncommitted" },
+          label: "Uncommitted changes",
+          branch: "main",
+        },
+        request: "request",
+        reviewers: [
+          { ...reviewer, chatId: kept.id },
+          { ...reviewer, chatId: other.id },
+        ],
+        lead: reviewer,
+        runChecks: false,
+        runtimeMode: "full-access",
+        status: "reviewing",
+      },
+    ];
   });
   const cutOff = answer("Reading the diff", "streaming");
   await edit(kept.id, (saved) => {
@@ -276,7 +312,9 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
   const key = JSON.stringify([join(root, "chats"), kept.id, "main"]);
   vi.spyOn(codex, "reattach").mockResolvedValue([{ key, open: true }]);
   vi.spyOn(codex, "run").mockImplementation(async (options) =>
-    options.job?.kind === "adopt" ? "The cache key ignores the locale." : "Findings are in.",
+    options.job?.kind === "adopt"
+      ? "The cache key ignores the locale."
+      : "Findings are in.",
   );
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
   await chats.reattach();
@@ -286,10 +324,13 @@ async function reviewAcrossRestart(second: "reported" | "cut off") {
 it("waits for a reviewer that carried on through a restart, then hands over to the lead", async () => {
   const { review, kept, cutOff } = await reviewAcrossRestart("reported");
   await vi.waitFor(
-    async () => expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
+    async () =>
+      expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
-  const answer = (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id);
+  const answer = (await chats.get(kept.id)).messages.find(
+    (m) => m.id === cutOff.id,
+  );
   expect(answer).toMatchObject({
     status: "complete",
     body: "The cache key ignores the locale.",
@@ -301,7 +342,8 @@ it("stops a review a restart cut a reviewer off from, letting the kept one finis
   await vi.waitFor(
     async () =>
       expect(
-        (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id)?.status,
+        (await chats.get(kept.id)).messages.find((m) => m.id === cutOff.id)
+          ?.status,
       ).toBe("complete"),
     { timeout: 10_000 },
   );
@@ -316,7 +358,10 @@ it("waits for every reviewer that carried on through a restart, however slowly e
   const first = await chats.create(projectId, { kind: "project" });
   const second = await chats.create(projectId, { kind: "project" });
   await chats.dispose();
-  const edit = async (id: string, change: (saved: Record<string, unknown>) => void) => {
+  const edit = async (
+    id: string,
+    change: (saved: Record<string, unknown>) => void,
+  ) => {
     const file = join(root, "chats", id + ".json");
     const saved = JSON.parse(await readFile(file, "utf8"));
     change(saved);
@@ -324,18 +369,24 @@ it("waits for every reviewer that carried on through a restart, however slowly e
   };
   const reviewer = { provider: "codex", choice: input("").choice };
   await edit(review.id, (saved) => {
-    saved.reviews = [{
-      scope: { target: { kind: "uncommitted" }, label: "Uncommitted changes", branch: "main" },
-      request: "request",
-      reviewers: [
-        { ...reviewer, chatId: first.id },
-        { ...reviewer, chatId: second.id },
-      ],
-      lead: reviewer,
-      runChecks: false,
-      runtimeMode: "full-access",
-      status: "reviewing",
-    }];
+    saved.reviews = [
+      {
+        scope: {
+          target: { kind: "uncommitted" },
+          label: "Uncommitted changes",
+          branch: "main",
+        },
+        request: "request",
+        reviewers: [
+          { ...reviewer, chatId: first.id },
+          { ...reviewer, chatId: second.id },
+        ],
+        lead: reviewer,
+        runChecks: false,
+        runtimeMode: "full-access",
+        status: "reviewing",
+      },
+    ];
   });
   for (const [slot, chat] of [first, second].entries())
     await edit(chat.id, (saved) => {
@@ -353,8 +404,12 @@ it("waits for every reviewer that carried on through a restart, however slowly e
       ];
     });
   const codex = agentRuntime("codex");
-  const keys = [first, second].map((c) => JSON.stringify([join(root, "chats"), c.id, "main"]));
-  vi.spyOn(codex, "reattach").mockResolvedValue(keys.map((key) => ({ key, open: true })));
+  const keys = [first, second].map((c) =>
+    JSON.stringify([join(root, "chats"), c.id, "main"]),
+  );
+  vi.spyOn(codex, "reattach").mockResolvedValue(
+    keys.map((key) => ({ key, open: true })),
+  );
   // The second reviewer's folder resolves only after the first has finished.
   let firstDone!: () => void;
   const firstEnded = new Promise<void>((resolve) => (firstDone = resolve));
@@ -380,7 +435,8 @@ it("waits for every reviewer that carried on through a restart, however slowly e
   });
   await chats.reattach();
   await vi.waitFor(
-    async () => expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
+    async () =>
+      expect((await chats.get(review.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 10_000 },
   );
   expect(leadPrompts).toHaveLength(1);
@@ -397,7 +453,9 @@ it("refuses to take a queued message back once it went out", async () => {
   expect((await chats.get(chat.id)).queue).toHaveLength(1);
   // The window still shows the bubble until its next refetch.
   await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).messages.some((m) => m.id === queued.id)).toBe(true),
+    expect(
+      (await chats.get(chat.id)).messages.some((m) => m.id === queued.id),
+    ).toBe(true),
   );
   await expect(chats.queueAction(chat.id, "remove", queued.id)).rejects.toThrow(
     "already went out",

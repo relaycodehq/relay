@@ -421,7 +421,10 @@ it("keeps a steer's move of the answer: the new answer below it, the read steer,
 it("drops the checkpoint once the thread is saved whole, and ignores one written over an older save", async () => {
   const chat = thread();
   const streaming = answer("Start");
-  const earlier = { ...answer("x".repeat(50_000)), status: "complete" as const };
+  const earlier = {
+    ...answer("x".repeat(50_000)),
+    status: "complete" as const,
+  };
   chat.messages = [earlier, streaming];
   await storage.add(chat);
   streaming.body = "Checkpointed";
