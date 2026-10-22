@@ -1,6 +1,6 @@
-import { useCallback } from "react";
+import { useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { agentName, type AgentProvider } from "../../../shared/agents";
+import { agentName } from "../../../shared/agents";
 import {
   matchLink,
   type ProjectFileLink,
@@ -14,9 +14,8 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { forkThreadSettings } from "../agents/composer-settings";
-import { prefillCommand, prefillSignIn } from "../terminal/thread-terminals";
-import { signInAgent } from "../updates/agent-updates";
-import { signInOffer } from "./sign-in-offer";
+import { prefillCommand } from "../terminal/thread-terminals";
+import type { SignInPlace } from "../sign-in/useAgentSignIn";
 import { worktreeDiff, type TurnDiffTarget } from "../changes/turn-diff";
 import { useStableCallback } from "../../lib/useStableCallback";
 import type { ThreadHandle } from "./useThreadHandle";
@@ -40,6 +39,7 @@ export function useMessageActions({
   onOpenTurnDiff,
   onCommitFiles,
   commitPaths,
+  computer,
 }: {
   handle: ThreadHandle;
   messages: ChatMessage[];
@@ -52,18 +52,15 @@ export function useMessageActions({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   onCommitFiles?: (paths: string[]) => void;
   commitPaths?: readonly string[];
+  /** The paired computer the project lives on, where its agents sign in. */
+  computer?: { id: string; name: string };
 }) {
   const qc = useQueryClient();
   const chatId = chat?.id;
-  /** True once signing in is under way or done; false when the terminal is busy. */
-  const signIn = useCallback(
-    async (provider: AgentProvider) => {
-      if (signInOffer(provider).via === "terminal")
-        return chatId ? prefillSignIn(projectId, chatId, provider) : false;
-      await signInAgent(provider);
-      return true;
-    },
-    [projectId, chatId],
+  /** Where a signed-out agent of this thread signs in. */
+  const signIn = useMemo<SignInPlace>(
+    () => ({ projectId, chatId, computer }),
+    [projectId, chatId, computer?.id, computer?.name],
   );
   /** Types a command from an answer at the thread's terminal prompt; false when it couldn't. */
   const runInTerminal = useStableCallback((command: string) =>

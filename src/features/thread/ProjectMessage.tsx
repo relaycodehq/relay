@@ -13,7 +13,7 @@ import {
 } from "../../../shared/answer-images";
 import { stoppedNote } from "../../../shared/agent-trace";
 import { agentError } from "../../../shared/agent-error";
-import { OpenCodeSignIn } from "../agent-settings/OpenCodeSignIn";
+import { useAgentSignIn, type SignInPlace } from "../sign-in/useAgentSignIn";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { parseContextReport } from "../../../shared/context-report";
 import { WatchNotes } from "../watch/WatchNotes";
@@ -54,7 +54,6 @@ import { RichText } from "../../ui/RichText";
 import { pilledImages, sentPills, UserText } from "./UserText";
 import type { SentImage } from "./SentPills";
 import { SentMemes, useSentMemes } from "../memes/SentMemes";
-import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
 import { LineDivider } from "../../ui/LineDivider";
 import type { QuestionResponse } from "./question-responses";
@@ -161,7 +160,7 @@ export const Message = memo(function Message({
   replyCount = 0,
   inlineCode,
   after,
-  onSignIn,
+  signInAt,
   onResume,
   resumeDisabled,
   onSteer,
@@ -198,7 +197,7 @@ export const Message = memo(function Message({
   /** Shown below the answer, like a deep review's findings. */
   after?: ReactNode;
   /** Offered when this turn failed on its agent's missing or expired login. */
-  onSignIn?: (provider: AgentProvider) => Promise<boolean>;
+  signInAt?: SignInPlace;
   /** Manual recovery for the thread's latest resumable connection failure. */
   onResume?: () => void;
   resumeDisabled?: boolean;
@@ -605,8 +604,8 @@ export const Message = memo(function Message({
           retryDisabled={resumeDisabled}
         />
       )}
-      {onSignIn && (m.signIn || (m.provider === "opencode" && m.error && agentError(m.error).authenticationRequired)) && (
-        <SignIn provider={m.signIn ?? m.provider} directory={projectRoot} onSignIn={onSignIn} />
+      {signInAt && (m.signIn || (m.provider === "opencode" && m.error && agentError(m.error).authenticationRequired)) && (
+        <SignIn provider={m.signIn ?? m.provider} place={{ ...signInAt, directory: projectRoot }} />
       )}
       {m.role === "assistant" && !continues && (
         <MessageActions
@@ -626,50 +625,24 @@ export const Message = memo(function Message({
 });
 function SignIn({
   provider,
-  directory,
-  onSignIn,
+  place,
 }: {
   provider: AgentProvider;
-  directory?: string;
-  onSignIn: (provider: AgentProvider) => Promise<boolean>;
+  place: SignInPlace;
 }) {
-  const offer = signInOffer(provider);
-  const [openCode, setOpenCode] = useState(false);
-  const [state, setState] = useState<"idle" | "waiting" | "busy" | "failed">(
-    "idle",
-  );
-  const start = () => {
-    if (provider === "opencode") { setOpenCode(true); return; }
-    setState("waiting");
-    onSignIn(provider).then(
-      (typed) => setState(typed ? "idle" : "busy"),
-      () => setState(offer.via === "relay" ? "failed" : "busy"),
-    );
-  };
+  const signIn = useAgentSignIn(provider, place);
+  if (!signIn.offer) return null;
   return (
     <div className="agent-sign-in">
-      {openCode && <OpenCodeSignIn directory={directory} onClose={() => setOpenCode(false)} />}
+      {signIn.dialog}
       <button
         className="text-button"
-        disabled={state === "waiting" && offer.via === "relay"}
-        onClick={start}
+        disabled={signIn.state === "waiting"}
+        onClick={() => void signIn.start()}
       >
-        {offer.label}
+        {signIn.offer.label}
       </button>
-      {state === "waiting" && offer.via === "relay" && (
-        <small className="muted">Finish signing in in your browser.</small>
-      )}
-      {state === "busy" && offer.via === "terminal" && (
-        <small className="muted">
-          The terminal is busy. Run <code>{offer.command}</code> there once it's
-          free.
-        </small>
-      )}
-      {state === "failed" && offer.via === "relay" && (
-        <small className="muted">
-          Signing in didn't finish. Try again, or use Settings → Agents.
-        </small>
-      )}
+      {signIn.hint && <small className="muted">{signIn.hint}</small>}
     </div>
   );
 }

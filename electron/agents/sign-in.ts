@@ -1,21 +1,9 @@
-import {
-  type AgentProvider,
-  agentInfo,
-} from "../../shared/agents";
+import { type AgentProvider, loginArgs } from "../../shared/agents";
 import {
   type Exec,
   findExecutable,
   runExecutable,
 } from "../platform/executables";
-
-/**
- * Sign-ins finished in a browser on another computer (`away`): the one that
- * typed it into this computer's shell. A login that waits for the browser to
- * call back to this computer's localhost would never hear from it.
- */
-const awayLogins: Partial<Record<AgentProvider, string>> = {
-  codex: "login --device-auth",
-};
 
 /**
  * The line that signs the same CLI Relay runs back in. Typed into the
@@ -27,7 +15,7 @@ export async function signInCommand(
   provider: AgentProvider,
   { away = false }: { away?: boolean } = {},
 ) {
-  const login = (away && awayLogins[provider]) || agentInfo(provider).login;
+  const login = loginArgs(provider, away);
   if (!login) return;
   const executable = await findExecutable(provider);
   if (process.platform === "win32") {

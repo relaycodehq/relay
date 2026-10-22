@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-vi.mock("../../lib/api", () => ({ api: {} }));
+vi.mock("../../lib/api", () => ({ api: { onTerminal: () => () => {} } }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { clock } from "../../../shared/waiting";

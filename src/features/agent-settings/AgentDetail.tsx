@@ -22,11 +22,10 @@ import {
 import { api } from "../../lib/api";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
 import { ErrorBox, IconButton, Spinner } from "../../ui/ui";
-import { OpenCodeSignIn } from "./OpenCodeSignIn";
+import { useAgentSignIn } from "../sign-in/useAgentSignIn";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import {
   linkAgent,
-  signInAgent,
   signOutAgent,
   unlinkAgent,
   updateAgent,
@@ -64,7 +63,7 @@ export function AgentDetail({
   const { cli } = agentInfo(agent.provider);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
-  const [openCodeSignIn, setOpenCodeSignIn] = useState(false);
+  const signIn = useAgentSignIn(agent.provider, {});
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
     setError(undefined);
@@ -188,13 +187,13 @@ export function AgentDetail({
         </div>
       )}
 
-      {openCodeSignIn && <OpenCodeSignIn onClose={() => setOpenCodeSignIn(false)} />}
+      {signIn.dialog}
       {agent.provider === "opencode" && !needsUpgrade(agent) && (
         <>
           <h5 className="agent-detail-section">Provider connections</h5>
           <SettingsCard>
             <SettingsRow label="OpenCode providers" hint="Sign in through your browser or connect an API key.">
-              <button type="button" onClick={() => setOpenCodeSignIn(true)}><LogIn size={14} />Connect provider…</button>
+              <button type="button" onClick={() => void signIn.start()}><LogIn size={14} />Connect provider…</button>
             </SettingsRow>
           </SettingsCard>
         </>
@@ -212,22 +211,23 @@ export function AgentDetail({
                       ? "Not set up"
                       : "Not signed in"
                 }
+                hint={signIn.hint}
               >
                 {(sdk || agent.account?.signedIn === false) && (
                   <button
                     type="button"
                     className={agent.account?.signedIn ? "" : "primary"}
-                    disabled={busy || isUpdating(agent)}
+                    disabled={
+                      busy || signIn.state === "waiting" || isUpdating(agent)
+                    }
                     title={agent.account?.signedIn ? undefined : signInTitle}
                     onClick={() =>
-                      void act(
-                        agent.account?.signedIn
-                          ? () => signOutAgent(agent.provider)
-                          : () => signInAgent(agent.provider),
-                      )
+                      agent.account?.signedIn
+                        ? void act(() => signOutAgent(agent.provider))
+                        : void signIn.start()
                     }
                   >
-                    {busy ? (
+                    {busy || signIn.state === "waiting" ? (
                       <Spinner size={12} />
                     ) : agent.account?.signedIn ? (
                       <LogOut size={14} />
