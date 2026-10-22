@@ -252,6 +252,10 @@ export const faq: { q: string; a: string }[] = [
     a: "Relay is built and used each day on macOS (Apple Silicon). Each release also has Windows and Linux builds. These builds get less use.",
   },
   {
+    q: "Does Relay collect anything?",
+    a: "Once a day each copy tells ping.relaycode.io it is in use, with its version, the system and whether it runs headless. There is no ID, and the address it came from isn't kept, so it only counts how many people use Relay. Turn it off in Settings → About, with relay settings on a headless Relay, or with DO_NOT_TRACK=1.",
+  },
+  {
     q: "Is Relay open source?",
     a: "Yes. The code is on GitHub under the MIT license. Issues and pull requests are welcome.",
   },

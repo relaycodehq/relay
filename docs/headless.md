@@ -49,7 +49,7 @@ A code works once, for ten minutes. `relay devices` lists what's paired; `relay 
 relay settings
 ```
 
-In a terminal it's a menu of what the desktop's Settings would set: the name and port, installing updates by themselves, keeping the computer awake, when quiet threads settle and settled worktrees go, which agent new threads start with, each agent CLI's path (or let Relay find it), Git, and Claude's "Flag what I'd miss". It also sets up what a phone uses this computer for:
+In a terminal it's a menu of what the desktop's Settings would set: the name and port, installing updates by themselves, keeping the computer awake, counting it as a user (one ping a day with no ID; `relay settings set usage-ping off` stops it), when quiet threads settle and settled worktrees go, which agent new threads start with, each agent CLI's path (or let Relay find it), Git, and Claude's "Flag what I'd miss". It also sets up what a phone uses this computer for:
 
 - **Dictation.** Downloads the speech engine and the 671 MB model, then phones dictate with this computer as they would with a desktop.
 - **Read aloud.** Downloads onnxruntime and a voice (Pocket TTS or Supertonic 3); choose the voice and speed there too.

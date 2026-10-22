@@ -40,7 +40,7 @@ export const rivals: Rival[] = [
     pickThem:
       "You want an iPhone app from the store today, agents spread over several SSH machines, or GitLab and Bitbucket.",
     pickRelay:
-      "You want no usage analytics, a thread you can move to another computer while it runs, reviews checked by a lead, and voice both ways.",
+      "You want a thread you can move to another computer while it runs, reviews checked by a lead, and voice both ways.",
   },
   {
     id: "superset",
@@ -70,7 +70,7 @@ export const rivals: Rival[] = [
     pickThem:
       "You want any CLI agent in a terminal, three ways to run remotely, an iPhone app from the store, and Jira or GitLab built in.",
     pickRelay:
-      "You want each step as a structured trace instead of a terminal, no analytics, threads that move between computers, and voice.",
+      "You want each step as a structured trace instead of a terminal, threads that move between computers, and voice.",
   },
 ];
 
@@ -123,7 +123,7 @@ export const groups: { title: string; rows: Row[] }[] = [
       {
         label: "No usage analytics",
         cells: {
-          relay: yes(),
+          relay: part("One daily count with no ID; Settings turns it off"),
           "t3-code": no("On by default, env var opts out"),
           conductor: no("No opt-out documented"),
           superset: no("Tied to your account"),
@@ -383,7 +383,7 @@ export const ahead: { title: string; text: string }[] = [
 export const only: { title: string; text: string }[] = [
   {
     title: "No middleman",
-    text: "Free, MIT, no account, no analytics. Your phone and your computers talk over your own Tailscale or network, encrypted end to end.",
+    text: "Free, MIT, no account. Your phone and your computers talk over your own Tailscale or network, encrypted end to end. All Relay sends home is a daily count with no ID, and you can turn it off.",
   },
   {
     title: "Live handoff",
