@@ -63,9 +63,7 @@
   display: flex;
   width: 400px;
   max-width: calc(100vw - 24px);
-  height: 366px;
-}
-.model-picker-popup:has(.usage-footer) {
+  /* Fixed, so switching tabs never resizes it. */
   height: 434px;
 }
 .model-picker-rail {
@@ -102,11 +100,11 @@
 }
 .model-provider-tab .provider-glyph {
   width: 21px;
+  height: 21px;
+}
 /* Every mark in the rail is plain, so a coloured one doesn't read as picked. */
 .model-provider-tab [data-brand-fill] {
   fill: currentColor;
-}
-  height: 21px;
 }
 .model-picker-rail .model-provider-tab:hover {
   background: var(--hover);
@@ -1171,7 +1169,6 @@
 /* An agent whose models come from many providers lists them in a column. */
 .model-picker-popup[data-wide] {
   width: 560px;
-  height: 420px;
 }
 .model-picker-columns {
   flex: 1;

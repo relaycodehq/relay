@@ -38,7 +38,7 @@ import { keys } from "../../lib/mod-key";
 import { Spinner } from "../../ui/ui";
 import { CursorGlyph } from "./CursorGlyph";
 import { RegistryGlyph } from "./RegistryGlyph";
-import { UsageStrip } from "./UsageStrip";
+import { NoUsageStrip, UsageStrip } from "./UsageStrip";
 import {
   isGrouped,
   modelKey,
@@ -180,6 +180,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     category === "favorites" || category === "message"
       ? undefined
       : setup?.(category);
+  // Favorites show the thread's agent, so every tab keeps the same footer.
+  const footerAgent = category === "favorites" ? provider : category;
   const grouped = isGrouped(category);
   const searching = !!query.trim();
   const { rows, groups, legacyCount, firstLegacy } = pickerRows(catalog, {
@@ -575,16 +577,20 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                     computer={computer}
                   />
                 )}
-              {reportsUsage(category) &&
-                !blocked &&
-                (account?.footer(category, now, container) ?? (
-                  <UsageStrip
-                    usage={usage[category]}
-                    now={now}
-                    accountId={account?.of(category)}
-                    container={container}
-                  />
-                ))}
+              {!blocked &&
+                (reportsUsage(footerAgent) ? (
+                  (account?.footer(footerAgent, now, container) ?? (
+                    <UsageStrip
+                      usage={usage[footerAgent]}
+                      now={now}
+                      accountId={account?.of(footerAgent)}
+                      container={container}
+                    />
+                  ))
+                ) : footerAgent !== "message" &&
+                  !(category === footerAgent && reloadsModels(footerAgent)) ? (
+                  <NoUsageStrip name={agentName(footerAgent)} />
+                ) : null)}
               {category === "message" && (
                 <p className="model-picker-note">
                   Send a message without running an agent.

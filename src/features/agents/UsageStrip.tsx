@@ -142,6 +142,18 @@ export function UsageStrip({
   );
 }
 
+/** The same footer for an agent Relay reads no usage from, so tabs don't jump. */
+export function NoUsageStrip({ name }: { name: string }) {
+  return (
+    <div className="usage-footer usage-strip">
+      <div className="usage-strip-line">
+        <div className="usage-strip-account">{name}</div>
+        <span className="usage-status">Doesn't report usage</span>
+      </div>
+    </div>
+  );
+}
+
 const RING_RADIUS = 4.5;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
