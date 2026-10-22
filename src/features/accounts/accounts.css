@@ -129,11 +129,21 @@
 .accounts-danger {
   color: var(--danger);
 }
-/* An account's limits as two thin bars */
+/* An account's limits */
 .account-bars {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+.account-bars[data-grouped] {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+.account-bars[data-grouped] .account-bar-top {
+  white-space: normal;
+}
+.account-bars[data-grouped] .account-bar-left {
+  flex-shrink: 0;
 }
 .account-bars-status {
   font-size: 11px;
@@ -184,49 +194,11 @@
   color: var(--muted);
 }
 
-/* The model picker's footer: the thread's accounts over the meters */
-.account-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 6px 8px 0;
-  border-top: 1px solid var(--border);
-}
-.account-tabs + .usage-footer {
-  border-top: 0;
-  padding-top: 4px;
-}
-.account-tabs button {
-  gap: 5px;
-  padding: 3px 7px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.account-tabs button:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.account-tabs button[aria-checked="true"] {
-  background: var(--selected);
-  color: var(--text);
-  font-weight: 500;
-}
-.account-tabs small {
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.account-tabs .usage-ring-dial,
 .account-menu .usage-ring-dial {
   width: 14px;
   height: 14px;
 }
 /* The dial's colours live on the composer's usage trigger. */
-.account-tabs,
 .account-menu {
   --usage-ring-weekly: color-mix(in srgb, var(--accent) 55%, var(--muted));
   --usage-ring-session: var(--accent);

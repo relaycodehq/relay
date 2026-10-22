@@ -6,20 +6,11 @@ import type { DeepReviewStart, ResumeReview } from "../../shared/deep-review";
 import type { FindingStatus } from "../../shared/findings";
 import { setFindingStatus } from "../findings";
 import type {
-  ChatCameFrom,
-  ChatSentTo,
-  HandoffLive,
-  HeldSend,
-  ThreadSetup,
-  HandoffThread,
-} from "../../shared/handoff";
-import type {
   ChatMessage,
   ChatScope,
   ChatTriage,
   ChatWorkspace,
   StartedBy,
-  ChatWorktree,
   KnownMessages,
   LinkedFolder,
   ProjectChat,
@@ -28,7 +19,14 @@ import type {
   ResumeSettings,
   WorktreeStart,
 } from "../../shared/projects";
-import { PAGE_QUESTION_ID, replyRoot } from "../../shared/projects";
+import {
+  PAGE_QUESTION_ID,
+  replyRoot,
+  replyRoots,
+  mainConversation,
+  threadOrder,
+} from "../../shared/projects";
+import { latestContext } from "../../shared/context-usage";
 import { parseGoalCommand } from "../../shared/goal";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
@@ -81,10 +79,26 @@ import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
+import { PredictionLog } from "./prediction-log";
+import { usageLog } from "../usage";
 import { AsyncQuestions } from "./async-questions";
 import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
 import { defaultPrefs, type AppPrefs } from "../settings";
+import { ImportOffers } from "./import-offers";
+import { chatStatus } from "./status";
+
+export { chatStatus, type ChatStatus } from "./status";
+
+/** What a first message needs to start its thread on another computer. */
+function startableThere(input: ProjectChatSend, orHere: boolean) {
+  if (input.images?.length)
+    throw new Error(
+      `Screenshots don't go along to another computer yet. Send it without them${orHere ? ", or start it here" : ""}.`,
+    );
+  if (!agentAsked(input))
+    throw new Error("Pick the agent that starts it there.");
+}
 
 /** How often the ledger looks for turns that ended without saying. */
 const LEAK_CHECK_MS = 30_000;
@@ -105,9 +119,9 @@ export class ProjectChats {
   private worktrees: ThreadWorktrees;
   private cleanup: WorktreeCleanup;
   private files: TurnFiles;
-  private handoffs: ComputerHandoff;
-  private liveHandoff: LiveHandoff;
-  private setupMirror: SetupMirror;
+  readonly handoffs: ComputerHandoff;
+  readonly liveHandoff: LiveHandoff;
+  readonly setupMirror: SetupMirror;
   private runner: TurnRunner;
   private asides: SideQuestions;
   private queue: ChatQueue;
@@ -129,6 +143,8 @@ export class ProjectChats {
   private creating: ThreadCreate;
   private terminal: TerminalContinue;
   readonly imports: ProjectImports;
+  /** Importing another app's history with an agent. */
+  readonly importOffers: ImportOffers;
   constructor(
     private store: Store,
     projects: Projects,
@@ -169,6 +185,7 @@ export class ProjectChats {
       emit: (event) => this.emit(event),
       closing: () => this.disposing,
       watchSpend: new WatchSpendLog(join(dirname(dir), "watch-spend.jsonl")),
+      predictions: new PredictionLog(join(dirname(dir), "predictions.jsonl")),
       away: new Map(),
     };
     this.core = core;
@@ -178,7 +195,6 @@ export class ProjectChats {
     this.watchNotes = new WatchReviews(
       store,
       this.storage,
-      dir,
       join(dirname(dir), "watch-verdicts.jsonl"),
     );
     // Hosts look methods up at call time, not with .bind(this): tests
@@ -241,7 +257,7 @@ export class ProjectChats {
     });
     this.storage.onSaved((chat) => this.news.saved(chat));
     this.triaging = new ThreadTriage(core, this.worktrees, this.councils);
-    this.creating = new ThreadCreate(core);
+    this.creating = new ThreadCreate(core, this.worktrees);
     this.notes = new ThreadNotes(core);
     const terminalSessions = new TerminalSessions(async () => accountHomes());
     this.terminal = new TerminalContinue(
@@ -250,6 +266,7 @@ export class ProjectChats {
       terminalSessions,
     );
     this.imports = new ProjectImports(core, terminalSessions, this.terminal);
+    this.importOffers = new ImportOffers(core, this.imports);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>
@@ -284,10 +301,16 @@ export class ProjectChats {
       compactNow: (id, parentId, instructions) =>
         this.compactions.now(id, parentId, instructions),
     });
-    const ends = new TurnEndings(core, this.councils, this.queue, (id) => {
-      void this.idle.arm(id);
-      return this.triaging.ended(id);
-    });
+    const ends = new TurnEndings(
+      core,
+      this.councils,
+      this.queue,
+      (id) => {
+        void this.idle.arm(id);
+        return this.triaging.ended(id);
+      },
+      (id) => this.turns.resumeMissedHeld(id),
+    );
     this.turns = new TurnSends(
       core,
       this.worktrees,
@@ -343,12 +366,7 @@ export class ProjectChats {
     return this.threads.list(projectId);
   }
   private summaryOf(id: string) {
-    const projectId = this.store
-      .get()
-      .chats?.find((c) => c.id === id)?.projectId;
-    return projectId
-      ? this.threads.list(projectId).find((c) => c.id === id)
-      : undefined;
+    return this.threads.byIds([id]).get(id);
   }
   /** What threads are news of, decided once for every window, menubar and phone. */
   onNews(listener: (item: NewsItem) => void) {
@@ -391,8 +409,23 @@ export class ProjectChats {
   agents(id: string) {
     return this.sessions.subagents(id);
   }
-  contextReport(id: string, parentId?: string) {
-    return this.sessions.contextReport(id, parentId);
+  async contextReport(id: string, parentId?: string) {
+    const { messages } = await this.storage.load(id);
+    const roots = parentId ? replyRoots(messages) : undefined;
+    const shown = parentId
+      ? messages.filter(
+          (m) => m.id === parentId || roots!.get(m.id) === parentId,
+        )
+      : mainConversation(messages);
+    const context = latestContext([...shown].sort(threadOrder));
+    return context?.provider
+      ? this.sessions.contextReport(
+          id,
+          context.provider,
+          context.usage,
+          parentId,
+        )
+      : null;
   }
   agentRun(id: string, agentId: string) {
     return this.sessions.subagentRun(id, agentId);
@@ -538,80 +571,6 @@ export class ProjectChats {
   ) {
     return this.terminal.continue(projectId, pick, workspace, branch, links);
   }
-  markHandoff(id: string, sentTo: Omit<ChatSentTo, "state">) {
-    return this.handoffs.mark(id, sentTo);
-  }
-  updateSentTo(
-    id: string,
-    handoffId: string,
-    change: Partial<ChatSentTo> | null,
-  ) {
-    return this.handoffs.updateSentTo(id, handoffId, change);
-  }
-  abandonHandoff(id: string, handoffId: string) {
-    return this.handoffs.abandon(id, handoffId);
-  }
-  runHandoffHere(id: string, handoffId: string) {
-    return this.handoffs.takeBack(id, handoffId);
-  }
-  haltForHandoff(id: string) {
-    return this.handoffs.halt(id);
-  }
-  leave(id: string, computer: string, since = 0) {
-    return this.handoffs.leave(id, computer, since);
-  }
-  handedOver(handoffId: string) {
-    return this.handoffs.handedOver(handoffId);
-  }
-  adopt(
-    projectId: string,
-    thread: HandoffThread,
-    cameFrom: Omit<ChatCameFrom, "carried">,
-    worktree: ChatWorktree,
-    renamed?: string,
-  ) {
-    return this.handoffs.adopt(projectId, thread, cameFrom, worktree, renamed);
-  }
-  adoptSetup(
-    projectId: string,
-    title: string,
-    cameFrom: Omit<ChatCameFrom, "carried" | "tip">,
-    input: ProjectChatSend,
-  ) {
-    return this.handoffs.adoptSetup(projectId, title, cameFrom, input);
-  }
-  handBack(id: string, deviceId: string) {
-    return this.handoffs.handBack(id, deviceId);
-  }
-  latestTurn(id: string) {
-    return this.handoffs.latestTurn(id);
-  }
-  handedBack(id: string) {
-    return this.handoffs.handedBack(id);
-  }
-  handoffAbandoned(id: string) {
-    return this.handoffs.abandoned(id);
-  }
-  returned(id: string, handoffId: string, messages: ChatMessage[]) {
-    return this.handoffs.returned(id, handoffId, messages);
-  }
-  /** On the computer a thread was handed to: see LiveHandoff. */
-  handoffOutgoing(id: string, message: ChatMessage) {
-    return this.liveHandoff.outgoing(id, message);
-  }
-  handoffWritten(id: string, known?: KnownMessages) {
-    return this.liveHandoff.writtenHere(id, known);
-  }
-  handoffLive(id: string) {
-    return this.liveHandoff.live(id);
-  }
-  handoffArgs(id: string, args: unknown[]) {
-    return this.liveHandoff.inbound(id, args);
-  }
-  /** On the computer a thread came from: see LiveHandoff. */
-  mirrorHandoff(id: string, handoffId: string, message: ChatMessage) {
-    return this.liveHandoff.mirror(id, handoffId, message);
-  }
   /** News of a thread live on another computer, as that computer told it. */
   handoffNews(
     id: string,
@@ -619,50 +578,6 @@ export class ProjectChats {
     news: Omit<ThreadNews, "chatId"> & Pick<NewsItem, "byAgent">,
   ) {
     this.news.retell({ ...news, chatId: id }, projectId);
-  }
-  handoffHeld(id: string) {
-    return this.liveHandoff.held(id);
-  }
-  handoffSynced(
-    id: string,
-    handoffId: string,
-    messages: (ChatMessage | string)[],
-  ) {
-    return this.liveHandoff.synced(id, handoffId, messages);
-  }
-  setHandoffLive(id: string, live: HandoffLive | undefined) {
-    this.liveHandoff.setLive(id, live);
-  }
-  /** On the computer a thread is handed from, the computer it goes to readied for it: see SetupMirror. */
-  beginSetup(id: string, computer: string, project: string) {
-    return this.setupMirror.begin(id, computer, project);
-  }
-  updateSetup(id: string, change: Partial<Omit<ThreadSetup, "messages">>) {
-    return this.setupMirror.update(id, change);
-  }
-  setupHeld(id: string) {
-    return this.setupMirror.held(id);
-  }
-  mirrorSetup(id: string, message: ChatMessage) {
-    return this.setupMirror.mirror(id, message);
-  }
-  setupSynced(id: string, messages: (ChatMessage | string)[]) {
-    return this.setupMirror.synced(id, messages);
-  }
-  handoffOutbox(id: string) {
-    return this.liveHandoff.outbox(id);
-  }
-  holdHandoffSend(id: string, handoffId: string, input: ProjectChatSend) {
-    return this.liveHandoff.hold(id, handoffId, input);
-  }
-  takeHandoffSends(id: string) {
-    return this.liveHandoff.takeOut(id);
-  }
-  putBackHandoffSends(id: string, held: HeldSend[], error: string) {
-    return this.liveHandoff.putBack(id, held, error);
-  }
-  settleHandoffSend(id: string, sendId: string, error?: string) {
-    return this.liveHandoff.settle(id, sendId, error);
   }
   /**
    * What waits in the thread now, which isn't saved with it; for a live
@@ -755,6 +670,37 @@ export class ProjectChats {
       Promise.resolve(undefined)
     );
   }
+  /** The composer's guesses of the last `days`: what they cost and how often they were sent. */
+  predictionSpend(days: number) {
+    return (
+      this.core.predictions?.summary(days, async (chats, since) => {
+        let usd = 0;
+        for (const e of await usageLog())
+          if (
+            e.at >= since &&
+            e.job === "thread" &&
+            e.chat &&
+            chats.has(e.chat)
+          )
+            for (const spend of Object.values(e.models)) usd += spend.usd ?? 0;
+        return usd;
+      }) ?? Promise.resolve(undefined)
+    );
+  }
+  /** The composer showed a guess, so what's sent next counts for or against it; Escape hides it for good. */
+  seePrediction(id: string, messageId: string, how: "shown" | "dismissed") {
+    return this.core.control(id, async () => {
+      const chat = await this.storage.load(id);
+      const message = chat.messages.find((m) => m.id === messageId);
+      if (!message?.prediction || message.predictionSeen === "dismissed")
+        return;
+      if (message.predictionSeen === how) return;
+      message.predictionSeen = how;
+      message.version++;
+      await this.storage.save(chat);
+      this.core.emit({ chatId: id, message: structuredClone(message) });
+    });
+  }
   /** The notes of the last `days` with what was done with each. */
   watchReview(days: number) {
     return this.watchNotes.review(days);
@@ -764,16 +710,49 @@ export class ProjectChats {
   }
   async get(id: string): Promise<ProjectChat> {
     const chat = await this.storage.load(id);
-    await this.worktrees.refreshAgentWorktrees(chat);
+    await this.worktrees.agents.refresh(chat);
     return {
       ...structuredClone(chat),
       ...structuredClone(this.waitingIn(chat)),
     };
   }
+  /** Progress reads use the cached thread, without cloning its history or refreshing Git. */
+  async status(id: string) {
+    return (await this.statuses({ ids: [id] }))[0];
+  }
+  /** One live summary list per project, even when a tool waits on many threads. */
+  async statuses(
+    selection: { ids: readonly string[] } | { startedBy: string },
+  ) {
+    const ids =
+      "ids" in selection
+        ? selection.ids
+        : (this.store.get().chats ?? [])
+            .filter(
+              (c) =>
+                c.startedBy?.chatId === selection.startedBy && !c.archivedAt,
+            )
+            .map((c) => c.id);
+    const loaded = new Map(
+      await Promise.all(
+        ids.map(async (id) => [id, await this.storage.load(id)] as const),
+      ),
+    );
+    const summaries = this.threads.byIds(ids);
+    // Explicit IDs retain caller order (and missing-ID errors). Started
+    // threads retain the project grouping and updated order of the sidebar.
+    const ordered = "ids" in selection ? ids : [...summaries.keys()];
+    return ordered.map((id) => {
+      const chat = loaded.get(id)!;
+      const summary = summaries.get(id);
+      if (!summary || summary.archivedAt) throw new Error("Chat not found.");
+      return chatStatus(summary, { ...chat, ...this.waitingIn(chat) });
+    });
+  }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
     const saved = await this.storage.load(id);
-    await this.worktrees.refreshAgentWorktrees(saved);
+    await this.worktrees.agents.refresh(saved);
     const { messages, ...chat } = saved;
     return {
       ...structuredClone(chat),
@@ -826,7 +805,49 @@ export class ProjectChats {
   }
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
+    // A thread of a project on another computer starts there with its first
+    // message, from whichever caller sends it. Send later holds it here first.
+    const home = this.homeOf(id);
+    if (home && this.starter && !input.sendAt)
+      return this.startThere(id, input, home);
     return this.control(id, () => this.sendHeld(id, input, fromRelay));
+  }
+  /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
+  private starter?: (id: string, computerId: string) => Promise<void>;
+  startsThereWith(start: (id: string, computerId: string) => Promise<void>) {
+    this.starter = start;
+  }
+  /** The computer the thread's project lives on, while the thread hasn't gone there yet. */
+  private homeOf(id: string) {
+    const chat = this.store.get().chats?.find((c) => c.id === id);
+    if (!chat || chat.sentTo) return undefined;
+    try {
+      return this.core.projects.get(chat.projectId).computer?.id;
+    } catch {
+      return undefined;
+    }
+  }
+  private async startThere(
+    id: string,
+    input: ProjectChatSend,
+    computerId: string,
+  ) {
+    await this.firstMessageOnly(id, input);
+    // Sent again once it went there: nothing's left to start.
+    if (!this.homeOf(id)) return;
+    try {
+      await this.starter!(id, computerId);
+    } catch (e) {
+      // Refused before it set off: the thread is new again, to send once more.
+      await this.control(id, async () => {
+        const chat = await this.storage.load(id);
+        if (chat.sentTo || chat.messages.some((m) => m.id !== input.id)) return;
+        chat.messages = [];
+        delete chat.lastInput;
+        await this.storage.save(chat);
+      });
+      throw e;
+    }
   }
   /**
    * A new thread's first message, kept with its worktree made but not
@@ -835,16 +856,27 @@ export class ProjectChats {
   firstMessageOnly(id: string, input: ProjectChatSend) {
     return this.control(id, async () => {
       const chat = await this.storage.load(id);
+      // Sent again after the reply got lost.
+      if (chat.messages.some((m) => m.id === input.id)) return;
+      const project = this.core.projects.get(chat.projectId);
+      if (project.computer && chat.messages.length)
+        throw new Error(
+          `This thread hasn't started on ${project.computer.name} yet. Send that once it has.`,
+        );
       if (
         chat.messages.length ||
-        !chat.worktree ||
+        (!chat.worktree && !project.computer) ||
         chat.scope.kind !== "project"
       )
         throw new Error(
           "Only a new thread in a worktree starts on another computer.",
         );
-      if (!agentAsked(input))
-        throw new Error("Pick the agent that starts it there.");
+      // A project's own computer holds a scheduled one here instead (send).
+      if (input.sendAt)
+        throw new Error(
+          "Send later doesn't start a thread on another computer yet. Send it now, or start it here.",
+        );
+      startableThere(input, !project.computer);
       await this.turns.sendNow(id, input, false, false);
       // Named after the message: the title's rename waits for a turn here.
       this.worktrees.unnamed.delete(id);
@@ -883,7 +915,18 @@ export class ProjectChats {
       held.scheduled?.some((s) => s.input.id === input.id)
     )
       return;
-    if (input.sendAt) return this.schedule.add(id, input);
+    if (input.sendAt) {
+      // Held for later, it starts the thread on its project's computer then;
+      // the handoff takes only a thread with nothing else waiting.
+      if (this.homeOf(id)) {
+        if (held.messages.length || held.scheduled?.length)
+          throw new Error(
+            "This thread starts on its project's computer with its first message. Schedule more once it has.",
+          );
+        startableThere(input, false);
+      }
+      return this.schedule.add(id, input);
+    }
     if (input.side || input.parentId) {
       const chat = await this.storage.load(id);
       if (input.side || replyRoot(chat.messages, input.parentId!).side)
@@ -997,20 +1040,9 @@ export class ProjectChats {
   terminalFolder(projectId: string, id: string) {
     return this.worktrees.terminalFolder(projectId, id);
   }
-  worksInCheckout(projectId: string, id: string) {
-    return this.worktrees.worksInCheckout(projectId, id);
-  }
-  agentWorktreePath(id: string, path: string) {
-    return this.worktrees.agentWorktreePath(id, path);
-  }
-  selectAgentWorktree(id: string, path: string | null) {
-    return this.worktrees.selectAgentWorktree(id, path);
-  }
-  agentWorktreeRecreatable(id: string) {
-    return this.worktrees.agentWorktreeRecreatable(id);
-  }
-  recreateAgentWorktree(id: string) {
-    return this.worktrees.recreateAgentWorktree(id);
+  /** The worktrees agents made from project-folder threads. */
+  get agentWorkspaces() {
+    return this.worktrees.agents;
   }
   worktreeRoot(projectId: string, id: string, expectedWorktree?: string) {
     return this.worktrees.rootFor(projectId, id, expectedWorktree);

@@ -24,7 +24,7 @@ import type { AISettings } from "../../shared/settings";
 import { releasesRepo } from "../../shared/updates";
 import { computerName } from "../platform/computer-name";
 import { findExecutable } from "../platform/executables";
-import type { GithubLogin } from "../pull-requests/github-login";
+import type { GithubLogin } from "../github/login";
 import { performanceFacts, setUpPerformance } from "../perf";
 import { keepCrashedRunLog } from "./crash-log";
 import { DragTray } from "./drag-tray";

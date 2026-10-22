@@ -1,5 +1,6 @@
 import { execFile, spawn } from "node:child_process";
 import { readlink } from "node:fs/promises";
+import { cpus } from "node:os";
 import { sep } from "node:path";
 import { agentProviders, type AgentProvider } from "../../shared/agents";
 import {
@@ -12,7 +13,11 @@ import {
   windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
-import { processTable, type ProcessRow } from "../platform/processes";
+import {
+  CpuRates,
+  processTable,
+  type ProcessRow,
+} from "../platform/processes";
 
 type Proc = ProcessRow;
 const windows = process.platform === "win32";
@@ -39,6 +44,8 @@ interface Tracked {
   shell?: number;
   /** Where it runs when the OS can't say (Windows): the folder of the thread or terminal that started it. */
   hint?: string;
+  /** A managed process keeps its own launch and lifecycle state when restarted. */
+  restart?: (stop: () => Promise<void>) => Promise<void>;
   pids: Map<number, number>;
 }
 
@@ -119,6 +126,7 @@ class ProjectTasks {
   private terminalFolders = new Map<number, string>();
   /** Whether the last scan read what each process costs. */
   private costed = false;
+  private rates = new CpuRates();
   /** `workingFolders`' answers by `pid:started`; "" where there was none. */
   private processCwds = new Map<string, string>();
   /** Shells Relay started to restart a task, adopted on the next scan. */
@@ -146,8 +154,19 @@ class ProjectTasks {
   }
 
   /** Dev commands Relay starts directly, outside an agent or terminal shell. */
-  trackServer(pid: number, command: string, cwd: string) {
-    this.adopting.set(pid, { command, cwd, origin: "relay", restarted: true });
+  trackServer(
+    pid: number,
+    command: string,
+    cwd: string,
+    restart: NonNullable<Tracked["restart"]>,
+  ) {
+    this.adopting.set(pid, {
+      command,
+      cwd,
+      origin: "relay",
+      restarted: true,
+      restart,
+    });
     this.scanned = 0;
   }
 
@@ -181,6 +200,7 @@ class ProjectTasks {
           options.includeNewServers),
     );
     const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
+    const cost = options.costed ? this.costs() : undefined;
     // An editor or pager open in a terminal isn't worth listing; servers are.
     return tasks
       .map((t) => {
@@ -204,6 +224,7 @@ class ProjectTasks {
           started: t.started,
           ports: listening,
           pids: t.pids.size,
+          ...cost?.(t),
         };
       })
       .filter(
@@ -214,6 +235,26 @@ class ProjectTasks {
             this.tracked.get(t.id)?.restarted),
       )
       .sort((a, b) => a.started - b.started);
+  }
+
+  /** What a task's live processes cost in the last scan, CPU as a share of the whole computer. */
+  private costs() {
+    const rows = new Map(this.last.map((p) => [p.pid, p]));
+    const cores = cpus().length || 1;
+    return (t: Tracked) => {
+      let cpu: number | undefined;
+      let mb = 0;
+      for (const [pid, started] of t.pids) {
+        const row = rows.get(pid);
+        if (row?.started !== started) continue;
+        mb += row.mb ?? 0;
+        if (row.cpu !== undefined) cpu = (cpu ?? 0) + row.cpu;
+      }
+      return {
+        ...(cpu === undefined ? {} : { cpu: Math.min(100, cpu / cores) }),
+        mb: Math.round(mb),
+      };
+    };
   }
 
   /** Stop every process in the task; force the ones still running after 3 seconds. */
@@ -233,8 +274,18 @@ class ProjectTasks {
 
   /** Stop the task, wait for it to exit so its ports are free, then run its command again in the same folder. */
   async restart(root: string, id: string, worktrees: Worktree[] = []) {
-    if (this.tracked.get(id)?.origin === "terminal")
+    const current = await this.findTask(root, id, worktrees);
+    if (current.origin === "terminal")
       throw new Error("Restart it from its terminal.");
+    if (current.restart)
+      return current.restart(async () => {
+        const { exited } = await this.terminate(root, id, worktrees);
+        await exited;
+        if (this.tracked.has(id))
+          throw new Error(
+            "The dev server is still stopping. Try again shortly.",
+          );
+      });
     const { task, exited } = await this.terminate(root, id, worktrees);
     await exited;
     const options = {
@@ -270,22 +321,28 @@ class ProjectTasks {
     this.scanned = 0;
   }
 
+  private async findTask(root: string, id: string, worktrees: Worktree[]) {
+    const tasks = await this.list(root, worktrees, { fresh: true });
+    const task = this.tracked.get(id);
+    if (!task || !tasks.some((t) => t.id === id))
+      throw new Error("This process is no longer running.");
+    return task;
+  }
+
   private async terminate(
     root: string,
     id: string,
     worktrees: Worktree[] = [],
   ) {
-    const tasks = await this.list(root, worktrees);
-    const task = this.tracked.get(id);
-    if (!task || !tasks.some((t) => t.id === id))
-      throw new Error("This process is no longer running.");
-    const alive = new Map(this.last.map((p) => [p.pid, p]));
+    const task = await this.findTask(root, id, worktrees);
+    let alive = new Map(this.last.map((p) => [p.pid, p]));
     const members = [...task.pids].filter(
       ([pid, started]) => alive.get(pid)?.started === started,
     );
     const signal = (name: NodeJS.Signals) => {
       // A group led by one of the task's own processes also catches children the scan hasn't seen yet.
-      for (const [pid] of members) {
+      for (const [pid, started] of members) {
+        if (alive.get(pid)?.started !== started) continue;
         if (alive.get(pid)?.pgid === pid)
           try {
             process.kill(-pid, name);
@@ -297,9 +354,9 @@ class ProjectTasks {
     };
     const running = async () => {
       this.scanned = 0;
-      const now = new Map((await this.scan()).map((p) => [p.pid, p]));
+      alive = new Map((await this.scan()).map((p) => [p.pid, p]));
       return members.some(
-        ([pid, started]) => now.get(pid)?.started === started,
+        ([pid, started]) => alive.get(pid)?.started === started,
       );
     };
     signal("SIGTERM");
@@ -448,6 +505,7 @@ class ProjectTasks {
 
   private async read(costed: boolean) {
     const procs = await processTable({ usage: costed });
+    if (costed) this.rates.fill(procs);
     this.costed = costed;
     this.last = procs;
     const byPid = new Map(procs.map((p) => [p.pid, p]));

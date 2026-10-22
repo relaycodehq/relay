@@ -4,7 +4,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -51,13 +51,11 @@ async function openProject(root: string) {
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: join(root, "agent.jsonl"),
     },
   });

@@ -27,8 +27,32 @@ it("passes thread identity when an address initializes a preview", async () => {
     project,
     chat,
     "http://localhost:8080/chosen",
+    undefined,
   );
   expect(() =>
     handlers.navigatePreview([project, chat, "file:///tmp/page"]),
+  ).toThrow();
+});
+
+it("passes a validated launch command to the thread's preview", async () => {
+  const navigate = vi.fn(async () => {});
+  const handlers = previewHandlers({
+    previews: { navigate },
+  } as unknown as ApiContext);
+  const project = "11111111-1111-4111-8111-111111111111";
+  await handlers.navigatePreview([
+    project,
+    null,
+    "http://localhost:5173/example/",
+    " npm run dev -- --port 5173 ",
+  ]);
+  expect(navigate).toHaveBeenCalledWith(
+    project,
+    null,
+    "http://localhost:5173/example/",
+    "npm run dev -- --port 5173",
+  );
+  expect(() =>
+    handlers.navigatePreview([project, null, "http://localhost:5173/", " "]),
   ).toThrow();
 });

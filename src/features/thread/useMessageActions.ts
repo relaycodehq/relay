@@ -38,6 +38,8 @@ export function useMessageActions({
   onOpenCode,
   onOpenFile,
   onOpenTurnDiff,
+  onCommitFiles,
+  commitPaths,
 }: {
   handle: ThreadHandle;
   messages: ChatMessage[];
@@ -48,6 +50,8 @@ export function useMessageActions({
   onOpenCode: (mode: "changes" | "files") => void;
   onOpenFile: (target: ProjectFileLink) => void;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
+  onCommitFiles?: (paths: string[]) => void;
+  commitPaths?: readonly string[];
 }) {
   const qc = useQueryClient();
   const chatId = chat?.id;
@@ -129,6 +133,17 @@ export function useMessageActions({
         );
     },
   );
+  // What the turn left in place, rolled-back files aside.
+  const changed = new Set(commitPaths);
+  const canCommitTurn = (m: ChatMessage) =>
+    m.changes?.some((f) => !f.revertedBy && changed.has(f.path));
+  const commitTurn = useStableCallback((m: ChatMessage) =>
+    onCommitFiles?.(
+      (m.changes ?? [])
+        .filter((f) => !f.revertedBy && changed.has(f.path))
+        .map((f) => f.path),
+    ),
+  );
   return {
     signIn,
     runInTerminal,
@@ -138,5 +153,7 @@ export function useMessageActions({
     openFile,
     openTurnDiff,
     rewindTurn,
+    commitTurn: onCommitFiles && commitTurn,
+    canCommitTurn,
   };
 }

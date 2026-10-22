@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -32,18 +33,11 @@ test("a project's PR opens on its thread with the Review, and the page keeps the
     await writeFile(join(repo, path), newCode);
     git("commit", "-qam", "Head");
     fixture.setHead(git("rev-parse", "HEAD"));
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();
@@ -67,6 +61,27 @@ test("a project's PR opens on its thread with the Review, and the page keeps the
         projectId,
       );
 
+    // The composer, board and repository page reuse the same project list.
+    await page
+      .getByRole("button", { name: "Review a PR", exact: true })
+      .click();
+    await expect(
+      page.getByRole("option", { name: /Make pull request reviews faster/ }),
+    ).toBeVisible();
+    await page
+      .getByRole("combobox", { name: "Search pull requests" })
+      .press("Escape");
+    const listRequests = () =>
+      fixture.requests.filter(
+        (request) =>
+          request.path.endsWith("/repos/Web/web-store/pulls") &&
+          request.method === "GET",
+      ).length;
+    // The shell also checks which PRs belong to this branch using the same
+    // endpoint. The board and repository must add no request after the picker.
+    const loadedListRequests = listRequests();
+    expect(loadedListRequests).toBeGreaterThan(0);
+
     // The repository has a clone here, so its card is the project's.
     await openInbox(page);
     await expect(page.locator(".pulls-card")).toHaveCount(1);
@@ -76,6 +91,7 @@ test("a project's PR opens on its thread with the Review, and the page keeps the
       page.getByRole("heading", { name: /^Waiting on you/ }),
     ).toBeVisible();
     await expect(page.locator(".pulls-title")).toContainText("Pull requests");
+    expect(listRequests()).toBe(loadedListRequests);
 
     // Opened from there, it's the project's PR thread with the Review beside it.
     await openPull(page, /Make pull request reviews/);

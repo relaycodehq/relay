@@ -404,6 +404,15 @@
   padding: 3px 9px;
   font-size: 12px;
 }
+/* Being installed there: nothing's wrong, it's on its way. */
+.agent-missing-notice.busy {
+  border-color: var(--border);
+  background: var(--toolbar);
+  color: var(--muted);
+}
+.agent-missing-notice.busy > svg {
+  color: var(--muted);
+}
 /* Edited here and on a phone at once; the other version is a click away. */
 .draft-other-notice {
   display: flex;

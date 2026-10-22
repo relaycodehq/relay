@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -51,19 +52,12 @@ async function launch() {
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   const page = await app.firstWindow();
@@ -97,19 +91,25 @@ async function send(page: Page) {
   await expect(page.getByText("needed no change")).toBeVisible();
 }
 
-test("carries an existing branch on in a worktree, leaving the checkout on its own", async () => {
+test("works on a branch the checkout can't switch to in a worktree, leaving the checkout on its own", async () => {
   const { page, repo, git, folder, close } = await launch();
   try {
     const tip = git(repo, "rev-parse", "relay/setup-phase");
+    // In the way of switching: the branch has a file of that name.
+    await writeFile(join(repo, "setup.ts"), "// mine\n");
     await page.getByRole("button", { name: /Current checkout/ }).click();
+    await expect(
+      page.getByRole("menuitem", { name: /New worktree/ }),
+    ).toBeVisible();
     await screenshot(page, { path: "test-results/worktree-start-menu.png" });
-    await page.getByRole("menuitem", { name: "Worktree on a branch…" }).click();
-    // Main is checked out here, so Git couldn't carry it on in a worktree too.
-    await expect(page.getByRole("option", { name: /^main/ })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "main", exact: true }).click();
     await screenshot(page, { path: "test-results/worktree-start-list.png" });
     await page.getByRole("option", { name: /setup-phase/ }).click();
+    // Refused, it doesn't say no: the thread gets a worktree on it instead.
+    await expect(page.getByRole("button", { name: /^Worktree/ })).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Worktree on relay/setup-phase" }),
+      page.getByText(/own worktree on relay\/setup-phase/),
     ).toBeVisible();
     // Its branch has a name already; there's none to type.
     await expect(page.getByLabel("Branch for the new worktree")).toHaveCount(0);
@@ -133,10 +133,11 @@ test("starts a new worktree off another branch without switching the checkout", 
   try {
     const tip = git(repo, "rev-parse", "relay/setup-phase");
     await page.getByRole("button", { name: /Current checkout/ }).click();
-    await page.getByRole("menuitem", { name: "New worktree off…" }).click();
+    await page.getByRole("menuitem", { name: /New worktree/ }).click();
+    await page.getByRole("button", { name: "Off main" }).click();
     await page.getByRole("option", { name: /setup-phase/ }).click();
     await expect(
-      page.getByRole("button", { name: "New worktree off relay/setup-phase" }),
+      page.getByRole("button", { name: "Off relay/setup-phase" }),
     ).toBeVisible();
     await page
       .getByLabel("Branch for the new worktree")

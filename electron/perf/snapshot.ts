@@ -3,6 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { cpus, freemem, totalmem } from "node:os";
 import { promisify } from "node:util";
 import { processTable } from "../platform/processes";
+import { sleep } from "../util/sleep";
 
 const exec = promisify(execFile);
 
@@ -96,12 +97,12 @@ export async function fullSnapshot(
   const machine = new MachineCpu();
   const [others] = await Promise.all([
     busiestOthers(relayPids).catch(() => undefined),
-    pause(1000),
+    sleep(1000),
   ]);
   return { ...(await quickSnapshot(machine, power)), ...defined({ others }) };
 }
 
-async function memoryNow(): Promise<SystemSnapshot["memory"]> {
+export async function memoryNow(): Promise<SystemSnapshot["memory"]> {
   const memory: SystemSnapshot["memory"] = {
     totalMb: mb(totalmem()),
     freeMb: mb(freemem()),
@@ -223,7 +224,7 @@ async function linuxProcesses(): Promise<Proc[]> {
   const tick = 100; // USER_HZ on every mainstream kernel.
   const first = await procTimes();
   const started = Date.now();
-  await pause(1000);
+  await sleep(1000);
   const second = await procTimes();
   const seconds = (Date.now() - started) / 1000;
   return [...second].flatMap(([pid, now]) => {
@@ -296,4 +297,3 @@ function defined<T extends object>(fields: T) {
 
 const mb = (bytes: number) => Math.round(bytes / 2 ** 20);
 const round = (n: number) => Math.round(n * 10) / 10;
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));

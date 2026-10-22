@@ -3,19 +3,18 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { branchCounts, branches, changeBranch } from "./branches";
+import {
+  branchChanges,
+  branchCounts,
+  branches,
+  changeBranch,
+} from "./branches";
 import type { BranchCounts } from "../../shared/branches";
+import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: "pipe",
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-branches-")));
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  root = await tempRepo("relay-branches-");
   await writeFile(join(root, "file.ts"), "base\n");
   git("add", ".");
   git("commit", "-qm", "Base");
@@ -23,6 +22,51 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
+});
+describe("a branch's uncommitted changes", () => {
+  it("counts staged, unstaged and new files without changing the checkout", async () => {
+    await writeFile(join(root, "file.ts"), "staged\n");
+    git("add", "file.ts");
+    await writeFile(join(root, "file.ts"), "staged\nunstaged\n");
+    await writeFile(join(root, "new.ts"), "new\n");
+    expect(await branchChanges(root, "main")).toEqual({
+      branch: "main",
+      files: 2,
+      lines: { additions: 3, deletions: 1 },
+    });
+    expect(git("diff", "--cached")).toContain("+staged");
+    expect(git("diff")).toContain("+unstaged");
+    expect(git("branch", "--show-current")).toBe("main");
+  });
+
+  it("reads the selected branch's worktree instead of the project's dirty folder", async () => {
+    const linked = `${root}-linked`;
+    try {
+      git("worktree", "add", "-q", linked, "feature");
+      await writeFile(join(root, "file.ts"), "unrelated\n");
+      await writeFile(join(linked, "new.ts"), "one\ntwo\n");
+      expect(await branchChanges(root, "feature")).toEqual({
+        branch: "feature",
+        files: 1,
+        lines: { additions: 2, deletions: 0 },
+      });
+      expect(git("branch", "--show-current")).toBe("main");
+      await rm(linked, { recursive: true, force: true });
+      expect(await branchChanges(root, "feature")).toBeNull();
+    } finally {
+      await rm(linked, { recursive: true, force: true });
+    }
+  });
+
+  it("distinguishes a clean checkout from a branch without a checkout", async () => {
+    expect(await branchChanges(root, "main")).toEqual({
+      branch: "main",
+      files: 0,
+      lines: { additions: 0, deletions: 0 },
+    });
+    expect(await branchChanges(root, "feature")).toBeNull();
+    expect(await branchChanges(root, "origin/main")).toBeNull();
+  });
 });
 it("lists branches in a repository with no commits yet", async () => {
   const empty = await realpath(await mkdtemp(join(tmpdir(), "relay-unborn-")));

@@ -14,6 +14,7 @@ import {
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { relayCommands } from "./open-folder";
+import { errorMessage } from "../../shared/error-message";
 
 /** install.sh leaves a file carrying this alone, so the headless install keeps the shim. */
 const marker = "relay-desktop-command";
@@ -124,7 +125,7 @@ export async function installShellCommand() {
     await dialog.showMessageBox({
       type: "error",
       message: "Couldn't install the relay command",
-      detail: e instanceof Error ? e.message : String(e),
+      detail: errorMessage(e),
     });
   }
 }

@@ -12,6 +12,18 @@ export interface DraftImage {
 }
 
 const STORE = "drafts";
+const METADATA = "metadata";
+
+/** Enough to count attachments and match their pills, without reading pixels or ink. */
+export interface DraftImageMetadata {
+  numbers: (number | undefined)[];
+  loose: number;
+}
+
+const metadataOf = (images: DraftImage[]): DraftImageMetadata => ({
+  numbers: images.map((image) => image.n),
+  loose: images.filter((image) => image.n === undefined).length,
+});
 
 /** An IndexedDB request as a promise of its result. */
 function requested<T>(request: IDBRequest<T>): Promise<T> {
@@ -24,7 +36,11 @@ function requested<T>(request: IDBRequest<T>): Promise<T> {
 /** Settles once a write transaction has committed, or with why it didn't. */
 function committed(transaction: IDBTransaction): Promise<void> {
   return new Promise((resolve, reject) => {
-    const failed = () => reject(transaction.error);
+    const failed = () =>
+      reject(
+        transaction.error ??
+          new Error("Screenshot storage transaction aborted."),
+      );
     transaction.addEventListener("complete", () => resolve());
     transaction.addEventListener("error", failed);
     transaction.addEventListener("abort", failed);
@@ -33,30 +49,63 @@ function committed(transaction: IDBTransaction): Promise<void> {
 
 /** Opens the screenshots database for one piece of work in one transaction, and closes it after. */
 async function withDrafts<T>(
+  stores: string[],
   mode: IDBTransactionMode,
-  work: (store: IDBObjectStore) => Promise<T>,
+  work: (transaction: IDBTransaction) => Promise<T> | T,
 ): Promise<T> {
-  const opening = indexedDB.open("relay-draft-images", 1);
-  opening.addEventListener("upgradeneeded", () =>
-    opening.result.createObjectStore(STORE),
-  );
+  const opening = indexedDB.open("relay-draft-images", 2);
+  opening.addEventListener("upgradeneeded", () => {
+    const db = opening.result;
+    if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
+    const metadata = db.createObjectStore(METADATA);
+    // Upgrade atomically: every existing payload stays byte-for-byte intact,
+    // including screenshots kept for undo and their editable sketches.
+    const cursor = opening.transaction!.objectStore(STORE).openCursor();
+    cursor.addEventListener("success", () => {
+      const row = cursor.result;
+      if (!row) return;
+      metadata.put(metadataOf(row.value as DraftImage[]), row.key);
+      row.continue();
+    });
+  });
   const db = await requested(opening);
+  db.addEventListener("versionchange", () => db.close());
   try {
-    return await work(db.transaction(STORE, mode).objectStore(STORE));
+    const transaction = db.transaction(stores, mode);
+    const finished = committed(transaction);
+    // A request can reject before its transaction does; both are observed.
+    void finished.catch(() => {});
+    try {
+      const result = await work(transaction);
+      await finished;
+      return result;
+    } catch (error) {
+      try {
+        transaction.abort();
+      } catch {
+        /* Already settled. */
+      }
+      await finished.catch(() => {});
+      throw error;
+    }
   } finally {
     db.close();
   }
 }
 
 export const loadDraftImages = (key: string): Promise<DraftImage[]> =>
-  withDrafts("readonly", (store) =>
-    requested(store.get(key)).then((saved) => saved ?? []),
+  withDrafts([STORE], "readonly", (transaction) =>
+    requested(transaction.objectStore(STORE).get(key)).then(
+      (saved) => saved ?? [],
+    ),
   );
 
 /** Every draft key with screenshots saved. */
 export const draftImageKeys = (): Promise<string[]> =>
-  withDrafts("readonly", (store) =>
-    requested(store.getAllKeys()).then((keys) => keys.map(String)),
+  withDrafts([STORE], "readonly", (transaction) =>
+    requested(transaction.objectStore(STORE).getAllKeys()).then((keys) =>
+      keys.map(String),
+    ),
   );
 
 // How many screenshots without a pill each draft holds, so one with nothing
@@ -64,12 +113,14 @@ export const draftImageKeys = (): Promise<string[]> =>
 // text; with its pill deleted it is only kept for undo. Read from the store
 // once, then kept as it's written.
 const counts = new Map<string, number>();
+const metadata = new Map<string, DraftImageMetadata>();
 // Written while the first read was out, so it doesn't bring back what's gone.
 const written = new Set<string>();
 const countListeners = new Set<(key: string) => void>();
-let countsRead: Promise<void> | undefined;
-const loose = (images: DraftImage[]) =>
-  images.filter((image) => image.n === undefined).length;
+const metadataListeners = new Set<
+  (key: string, value: DraftImageMetadata | undefined) => void
+>();
+let metadataRead: Promise<ReadonlyMap<string, DraftImageMetadata>> | undefined;
 
 function setCount(key: string, count: number) {
   if ((counts.get(key) ?? 0) === count) return;
@@ -78,19 +129,52 @@ function setCount(key: string, count: number) {
   countListeners.forEach((notify) => notify(key));
 }
 
-/** Reads every draft's screenshot count, once, then follows other windows' changes; later calls wait on the same read. */
+function setMetadata(key: string, value: DraftImageMetadata | undefined) {
+  if (value) metadata.set(key, value);
+  else metadata.delete(key);
+  setCount(key, value?.loose ?? 0);
+  metadataListeners.forEach((notify) => notify(key, value));
+}
+
+/** One small startup snapshot shared by Activity counts and draft synchronization. */
+export function readDraftImageMetadata(): Promise<
+  ReadonlyMap<string, DraftImageMetadata>
+> {
+  changes();
+  return (metadataRead ??= withDrafts(
+    [METADATA],
+    "readonly",
+    async (transaction) => {
+      const store = transaction.objectStore(METADATA);
+      const [keys, values] = await Promise.all([
+        requested(store.getAllKeys()),
+        requested(store.getAll() as IDBRequest<DraftImageMetadata[]>),
+      ]);
+      keys.forEach((key, i) => {
+        if (!written.has(String(key))) setMetadata(String(key), values[i]);
+      });
+      return metadata;
+    },
+  ).catch((error) => {
+    metadataRead = undefined;
+    throw error;
+  }));
+}
+
+/** Reads counts without bringing every draft's screenshots into the window. */
 export const readDraftImageCounts = (): Promise<void> =>
-  (countsRead ??= withDrafts("readonly", async (store) => {
-    changes();
-    const [keys, values] = await Promise.all([
-      requested(store.getAllKeys()),
-      requested(store.getAll() as IDBRequest<DraftImage[][]>),
-    ]);
-    keys.forEach((key, i) => {
-      if (!written.has(String(key)))
-        setCount(String(key), loose(values[i] ?? []));
-    });
-  }).catch(() => {}));
+  readDraftImageMetadata()
+    .then(() => {})
+    .catch(() => {});
+
+/** Metadata changes here or in another window, after their storage write commits. */
+export function onDraftImageMetadata(
+  listener: (key: string, value: DraftImageMetadata | undefined) => void,
+) {
+  metadataListeners.add(listener);
+  changes();
+  return () => void metadataListeners.delete(listener);
+}
 
 /** How many screenshots without a pill the draft holds, as far as is known yet. */
 export const draftImageCount = (key: string) => counts.get(key) ?? 0;
@@ -113,8 +197,14 @@ function changes() {
   channel.addEventListener("message", ({ data: key }: MessageEvent) => {
     if (typeof key !== "string") return;
     written.add(key);
-    void loadDraftImages(key)
-      .then((images) => setCount(key, loose(images)))
+    void withDrafts([METADATA], "readonly", (transaction) =>
+      requested(
+        transaction.objectStore(METADATA).get(key) as IDBRequest<
+          DraftImageMetadata | undefined
+        >,
+      ),
+    )
+      .then((value) => setMetadata(key, value))
       .catch(() => {});
   });
   return channel;
@@ -143,13 +233,21 @@ export const saveDraftImages = (
   key: string,
   images: DraftImage[],
 ): Promise<void> =>
-  withDrafts("readwrite", (store) => {
-    if (images.length) store.put(images, key);
-    else store.delete(key);
-    return committed(store.transaction);
-  }).then(() => {
+  withDrafts([STORE, METADATA], "readwrite", (transaction) => {
+    const store = transaction.objectStore(STORE);
+    const metadata = transaction.objectStore(METADATA);
+    const value = images.length ? metadataOf(images) : undefined;
+    if (value) {
+      store.put(images, key);
+      metadata.put(value, key);
+    } else {
+      store.delete(key);
+      metadata.delete(key);
+    }
+    return value;
+  }).then((value) => {
     written.add(key);
-    setCount(key, loose(images));
+    setMetadata(key, value);
     changes()?.postMessage(key);
     savedListeners.forEach((listener) => listener(key, images));
   });

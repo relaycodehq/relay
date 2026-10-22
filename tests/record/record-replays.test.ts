@@ -10,11 +10,13 @@
 // tests/record/redact.mjs` redacts them into tests/fixtures/replays.
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, rm, stat, symlink } from "node:fs/promises";
+import { createServer, type AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, it, vi } from "vitest";
 import { findExecutable } from "../../electron/platform/executables";
 import { fakeCli } from "../fixtures/fake-cli";
+import { openCodeRecordingProxy } from "./opencode-proxy";
 import {
   recordedChoice,
   startScenario,
@@ -22,9 +24,10 @@ import {
 } from "../fixtures/turn-scenario";
 import type { AgentProvider } from "../../shared/projects";
 
-vi.mock("../../electron/platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../electron/platform/executables")>()),
-  findExecutable: vi.fn(),
+vi.mock("../../electron/platform/executables");
+vi.mock("../../electron/agents/antigravity/install", async (original) => ({
+  ...(await original<object>()),
+  ...(await import("../fixtures/antigravity-stand-in")).antigravityStandIn,
 }));
 
 const agents = (process.env.RELAY_RECORD ?? "").split(",").filter(Boolean);
@@ -39,10 +42,15 @@ async function recording(provider: AgentProvider, scenario: string) {
   const out = join(rawRoot, provider, scenario);
   await rm(out, { recursive: true, force: true });
   await mkdir(out, { recursive: true });
-  const real = which(provider);
-  const version = execFileSync(real, ["--version"], {
-    encoding: "utf8",
-  }).trim();
+  const real =
+    provider === "antigravity"
+      ? (await installedAntigravityHere()).command
+      : which(provider);
+  // Antigravity's --version prints its build machine; its folder's version says enough.
+  const version =
+    provider === "antigravity"
+      ? (await installedAntigravityHere()).version
+      : execFileSync(real, ["--version"], { encoding: "utf8" }).trim();
   // One per agent for the whole run: Codex's processes race to set up a
   // fresh folder's database, so it's set up once before the first scenario.
   const clean = join(rawRoot, ".config", provider);
@@ -86,11 +94,43 @@ async function recording(provider: AgentProvider, scenario: string) {
       );
     }
   }
+  if (provider === "antigravity") {
+    // Its sign-in: the token file (or the Keychain item, read as is) and which kind it is.
+    env.GEMINI_HOME = clean;
+    if (fresh) {
+      await mkdir(join(clean, "antigravity-acp"), { recursive: true });
+      for (const file of ["acp_token.json", "settings.json"])
+        await symlink(
+          join(homedir(), ".gemini", "antigravity-acp", file),
+          join(clean, "antigravity-acp", file),
+        ).catch(() => {});
+    }
+  }
+  let proxy: Awaited<ReturnType<typeof openCodeRecordingProxy>> | undefined;
   if (provider === "opencode") {
     env.XDG_CONFIG_HOME = clean;
     env.OPENCODE_CONFIG_DIR = clean;
-    // Its sessions go here too, not into the person's own OpenCode history.
+    // Its sessions go here too, not into the person's own OpenCode history,
+    // and its service is its own, not the one the person's OpenCode runs.
     env.XDG_DATA_HOME = join(clean, "data");
+    env.XDG_STATE_HOME = join(clean, "state");
+    // The service listens on one fixed port; the person's own is on the default.
+    execFileSync(real, ["service", "set", "port", String(await freePort())], {
+      env: { ...process.env, ...env },
+      timeout: 30_000,
+    });
+    proxy = await openCodeRecordingProxy(out);
+    stops.push(async () => {
+      await proxy!.close();
+      try {
+        execFileSync(real, ["service", "stop"], {
+          env: { ...process.env, ...env },
+          timeout: 30_000,
+        });
+      } catch {
+        // Not started.
+      }
+    });
     if (fresh) {
       await mkdir(join(clean, "data", "opencode"), { recursive: true });
       await symlink(
@@ -112,6 +152,9 @@ async function recording(provider: AgentProvider, scenario: string) {
       `process.env.RELAY_REPLAY_REAL = ${JSON.stringify(real)};\n` +
       `process.env.RELAY_REPLAY_OUT = ${JSON.stringify(out)};\n` +
       `process.env.RELAY_REPLAY_VERSION = ${JSON.stringify(version)};\n` +
+      (proxy
+        ? `process.env.RELAY_REPLAY_PROXY = ${JSON.stringify(proxy.url)};\n`
+        : "") +
       tee,
     version,
   );
@@ -121,10 +164,38 @@ async function recording(provider: AgentProvider, scenario: string) {
   return s;
 }
 
+/** The Antigravity server Relay downloaded on this computer. */
+async function installedAntigravityHere() {
+  const root = join(
+    homedir(),
+    "Library",
+    "Application Support",
+    process.env.RELAY_RECORD_APP ?? "Relay Experimental",
+    "antigravity",
+  );
+  const { version, cmd } = JSON.parse(
+    await readFile(join(root, "current.json"), "utf8"),
+  ) as { version: string; cmd: string };
+  return { version, command: join(root, version, cmd) };
+}
+
+const freePort = () =>
+  new Promise<number>((done, fail) => {
+    const server = createServer();
+    server.on("error", fail);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      server.close(() => done(port));
+    });
+  });
+
 let s: Scenario | undefined;
+/** What a recording started beside its scenario, stopped after it. */
+const stops: (() => Promise<void>)[] = [];
 afterEach(async () => {
   await s?.dispose();
   s = undefined;
+  for (const stop of stops.splice(0)) await stop();
 });
 
 for (const provider of agents as AgentProvider[]) {

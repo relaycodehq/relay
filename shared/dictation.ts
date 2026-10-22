@@ -125,30 +125,3 @@ export function fitEnd(words: string, after: string) {
   if (/^\p{Ll}/u.test(next)) return words.replace(/\.$/, "");
   return words;
 }
-
-/**
- * Dictated `words` in plain `text` in place of `from`–`to`, spaced from the
- * text around them; `start`–`end` is where they landed.
- */
-export function placeDictation(
-  text: string,
-  from: number,
-  to: number,
-  words: string,
-) {
-  const before = text.slice(0, from),
-    after = text.slice(to);
-  const fitted = fitEnd(
-    fitCase(words, before.slice(before.lastIndexOf("\n") + 1)),
-    after.split("\n", 1)[0],
-  );
-  if (!fitted) return { text: before + after, start: from, end: from };
-  const lead = before && !/\s$/.test(before) ? " " : "",
-    trail = after && !/^[\s.,!?;:)\]]/.test(after) ? " " : "";
-  const start = from + lead.length;
-  return {
-    text: before + lead + fitted + trail + after,
-    start,
-    end: start + fitted.length,
-  };
-}

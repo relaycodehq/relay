@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -12,12 +12,9 @@ test("settings search keeps its query, opens highlighted matches and scrolls to 
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {

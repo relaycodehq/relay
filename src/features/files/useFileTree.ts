@@ -1,7 +1,9 @@
-import { useCallback, useState } from "react";
-import { useQueries } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import type { DirListing } from "../../../shared/project-files";
 import { api } from "../../lib/api";
+import { visibleDirectories } from "../../lib/file-tree";
+import { usePoll } from "../../lib/poll";
 
 export const directoryKey = (where: string, dir?: string) =>
   dir === undefined
@@ -66,24 +68,33 @@ export function useExpanded(where: string) {
  */
 export const listingPoll = (watched: boolean) => (watched ? 60_000 : 5000);
 
-/** The root and every open folder, listed from disk and refreshed while shown. */
+/** Only folders reachable in the tree poll; hidden descendants keep their expansion. */
 export function useDirectories(
   where: string,
   open: ReadonlySet<string>,
   watched: boolean,
+  active: boolean,
 ) {
-  const dirs = ["", ...open];
+  const poll = usePoll();
+  const dirs = useMemo(() => visibleDirectories(open), [open]);
+  const combine = useCallback(
+    (results: UseQueryResult<DirListing>[]) => ({
+      listings: Object.fromEntries(
+        dirs.map((dir, i) => [dir, results[i]?.data]),
+      ),
+      error: results[0]?.error,
+    }),
+    [dirs],
+  );
   return useQueries({
     queries: dirs.map((dir) => ({
       queryKey: directoryKey(where, dir),
       queryFn: () => api.projectDirectory(where, dir),
-      refetchInterval: listingPoll(watched),
+      enabled: active,
+      staleTime: 0,
+      refetchInterval: poll(listingPoll(watched)),
       retry: false,
     })),
-    combine: (results) => ({
-      listing: (dir: string): DirListing | undefined =>
-        results[dirs.indexOf(dir)]?.data,
-      error: results[0]?.error,
-    }),
+    combine,
   });
 }

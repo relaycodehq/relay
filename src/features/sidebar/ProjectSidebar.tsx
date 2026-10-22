@@ -16,6 +16,13 @@ import { useSidebarView } from "./useSidebarView";
 import { useSidebarFolds } from "./useSidebarFolds";
 import { useShelves } from "./useShelves";
 import { useProjectGroups } from "./useProjectGroups";
+import {
+  movePlanned,
+  plannedChats,
+  plannedProjects,
+  regroupPlanned,
+  useShownPlan,
+} from "../import-offer/import-plan";
 import { useProjectDrag } from "./useProjectDrag";
 import { useSidebarThreads } from "./useSidebarThreads";
 import { useUnread } from "./useUnread";
@@ -35,6 +42,7 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
+import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
 import { SnoozePickDialog } from "./SnoozeMenu";
@@ -43,6 +51,7 @@ import { SearchPalette } from "./SearchPalette";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
+import { HoverMark } from "./HoverMark";
 import type { AddProjectPage } from "../add-project/AddProjectPalette";
 import "./sidebar.css";
 
@@ -110,7 +119,19 @@ export function ProjectSidebar({
   const folds = useSidebarFolds();
   const shelves = useShelves();
   const [error, setError] = useState<string>();
-  const groups = useProjectGroups(realProjects, folds.setOpen, setError);
+  // The open thread's import offer stands its new projects in the tree.
+  const plan = useShownPlan();
+  const treeProjects = plan ? plannedProjects(realProjects, plan) : realProjects;
+  const groups = useProjectGroups(
+    treeProjects,
+    folds.setOpen,
+    setError,
+    plan && {
+      move: (id, folder, before) =>
+        movePlanned(plan, treeProjects, id, folder, before),
+      regroup: (from, to) => regroupPlanned(plan, from, to),
+    },
+  );
   const drag = useProjectDrag(groups, folds.setOpen);
   const autoSettleDays = useQuery({
     queryKey: ["auto-settle-days"],
@@ -191,8 +212,14 @@ export function ProjectSidebar({
   const activity = view === "activity";
   const cmdHeld = useActivityKeys({
     active: sections.active,
-    // ⌘1–9 count the cards, which started threads and settled leads don't get.
-    cards: families.cards,
+    // Count drafts first, then thread cards; started threads and settled leads
+    // don't get numbers.
+    cards: [
+      ...drafts
+        .filter((d) => !d.chat)
+        .map((d) => () => onOpen(d.project, undefined, d.id)),
+      ...families.cards.map((c) => () => actions.open(c)),
+    ],
     loaded,
     chatId: shown,
     jumping: activity,
@@ -243,7 +270,7 @@ export function ProjectSidebar({
               Activity <small>({families.top.length})</small>
             </>
           ) : (
-            "Projects"
+            "Threads"
           )}
         </h2>
         <button
@@ -322,11 +349,13 @@ export function ProjectSidebar({
                 current: projectId,
                 onNew: newThread,
                 onProjectSettings: (p) => onSettings("project", p.id),
+                importing: plan && plannedChats(plan),
               }}
               error={error}
               empty={!realProjects.length}
               onAdd={onAdd}
             />
+            <HoverMark />
           </>
         )}
       </div>
@@ -348,6 +377,14 @@ export function ProjectSidebar({
             })
           }
           onClose={() => actions.setPickingSnooze(undefined)}
+        />
+      )}
+      {actions.archiving && (
+        <ArchiveWorktreeDialog
+          chat={actions.archiving.chat}
+          files={actions.archiving.files}
+          onArchive={actions.archive}
+          onCancel={actions.cancelArchive}
         />
       )}
       {actions.moving && (

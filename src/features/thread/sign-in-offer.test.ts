@@ -1,5 +1,4 @@
 import { expect, it } from "vitest";
-import { agentProviders } from "../../../shared/agents";
 import { signInOffer } from "./sign-in-offer";
 
 it("signs CLI agents in at their own login in the terminal", () => {
@@ -12,9 +11,12 @@ it("signs CLI agents in at their own login in the terminal", () => {
     via: "terminal",
     command: "codex login",
   });
-  expect(signInOffer("opencode")).toMatchObject({
-    via: "terminal",
-    command: "opencode auth login",
+});
+
+it("connects OpenCode's providers inside Relay", () => {
+  expect(signInOffer("opencode")).toEqual({
+    via: "relay",
+    label: "Sign in to OpenCode",
   });
 });
 
@@ -23,9 +25,4 @@ it("signs Cursor in through Relay, which has no terminal command for it", () => 
     via: "relay",
     label: "Sign in to Cursor",
   });
-});
-
-it("offers every agent a way to sign in", () => {
-  for (const provider of agentProviders)
-    expect(signInOffer(provider).label).toMatch(/^Sign in to /);
 });

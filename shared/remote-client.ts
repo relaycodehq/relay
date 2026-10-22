@@ -33,7 +33,7 @@ import {
   recipientBridge,
   remoteBridgeVersion,
   slowPhoneMethods,
-  slowRemoteMethods,
+  slowRemoteCall,
   validHost,
 } from "./remote";
 
@@ -57,8 +57,10 @@ export interface RemoteClientOptions {
   staggerMs?: number;
   /** How often a link on a later route looks for an earlier one. */
   betterRouteMs?: number;
-  /** Per call for `slowPhoneMethods` and `slowRemoteMethods`. */
+  /** Per call for `slowPhoneMethods` and `slowRemoteCall`s. */
   slowTimeoutMs?: number;
+  /** The longest wait between reconnects as they keep failing; `wake` starts over. */
+  maxRetryMs?: number;
   /** Silence after which a link counts as dead; the desktop ticks every 15s. */
   staleMs?: number;
   codec?: Codec;
@@ -162,7 +164,7 @@ export class RemoteClient {
     return this.request(
       method,
       args,
-      slowRemoteMethods.includes(method)
+      slowRemoteCall(method, args)
         ? (this.options.slowTimeoutMs ?? 120_000)
         : (this.options.timeoutMs ?? 15000),
     );
@@ -324,7 +326,10 @@ export class RemoteClient {
   }
   private scheduleRetry() {
     clearTimeout(this.retryTimer);
-    const delay = Math.min(15000, 1000 * 2 ** this.retry++);
+    const delay = Math.min(
+      this.options.maxRetryMs ?? 15000,
+      1000 * 2 ** this.retry++,
+    );
     this.retryTimer = setTimeout(() => void this.connect(), delay);
   }
   /** Takes a signed-in link as the connection, the desktop's word on its addresses with it. */

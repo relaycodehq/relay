@@ -611,6 +611,19 @@ if (args.includes("--permission-prompt-tool")) {
       m.method === "thread/fork"
     ) {
       record({ provider: "codex", thread: m.params, method: m.method });
+      if (
+        process.env.RELAY_FIXTURE_MISSING_ROLLOUT &&
+        (m.method === "thread/fork" || m.method === "thread/resume")
+      ) {
+        send({
+          id: m.id,
+          error: {
+            code: -32600,
+            message: `invalid paginated history lineage for ${m.params.threadId}: missing source rollout`,
+          },
+        });
+        return;
+      }
       codexRelayUrl = m.params.config?.["mcp_servers.relay.url"];
       send({
         id: m.id,

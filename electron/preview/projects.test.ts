@@ -4,6 +4,7 @@ import type { ProjectTask } from "../../shared/tasks";
 import { projectTasks } from "../terminal/tasks";
 import { PreviewProjects, worktreeDevPort } from "./projects";
 import * as runningServers from "./running-server";
+import type { SavedPreview } from "./saved-previews";
 
 vi.mock("../git/git", () => ({
   currentBranchOr: async (folder: string) => folder.split("/").at(-1),
@@ -20,6 +21,8 @@ function setup(
     ([folder, ports]) => ({ folder, ports }) as ProjectTask,
   );
   const scan = vi.spyOn(projectTasks, "list").mockResolvedValue(tasks);
+  const settings = { devPort, devCommand: "npm run dev" };
+  const terminalFolder = vi.fn(async () => own.worktree?.path ?? "/repo");
   vi.spyOn(runningServers, "runningServerPorts").mockImplementation(
     async (tasks) => tasks.flatMap((t) => t.ports),
   );
@@ -29,18 +32,18 @@ function setup(
       get: () =>
         ({
           path: "/repo",
-          settings: { devPort, devCommand: "npm run dev" },
+          settings,
         }) as never,
     },
     {
       get: async (id) => ({ ...own, id }),
-      terminalFolder: async () => own.worktree?.path ?? "/repo",
+      terminalFolder,
       worktreeEnv: async () => ({ RELAY_PORT_OFFSET: "10" }),
       worktreeFolders: () => [{ path: "/repo/neighbour", chatId: "other" }],
     },
     () => [],
   );
-  return { resolver, scan };
+  return { resolver, scan, settings, terminalFolder };
 }
 
 it("gives checkout threads their own storage while retaining the checkout as the cookie seed", async () => {
@@ -88,15 +91,11 @@ it("requires an explicit URL between two live agent worktrees and selects its ow
     },
     { "/repo/a": [5173], "/repo/b": [8080] },
   );
-  await expect(
-    resolver.target("project", "one", undefined),
-  ).rejects.toThrow("Several");
+  await expect(resolver.target("project", "one", undefined)).rejects.toThrow(
+    "Several",
+  );
   expect(
-    await resolver.target(
-      "project",
-      "one",
-      "http://localhost:8080/settings",
-    ),
+    await resolver.target("project", "one", "http://localhost:8080/settings"),
   ).toMatchObject({ folder: "/repo/b", worktree: "b", dev: { port: 8080 } });
   expect(
     await resolver.target("project", "one", undefined, "/repo/b"),
@@ -113,9 +112,7 @@ it("retains the managed worktree and its saved port offset", async () => {
     },
     { "/repo": [3000], "/repo/managed": [3010] },
   );
-  expect(
-    await resolver.target("project", "one", undefined),
-  ).toMatchObject({
+  expect(await resolver.target("project", "one", undefined)).toMatchObject({
     folder: "/repo/managed",
     partition: "persist:thread-one",
     dev: { port: 3010, command: "npm run dev" },
@@ -146,7 +143,7 @@ it("validates worktree offsets before returning a configured dev target", async 
 });
 
 it("opens an explicit remote page even when local worktree selection is ambiguous", async () => {
-  const { resolver } = setup(
+  const { resolver, scan, terminalFolder } = setup(
     {
       agentWorktrees: [
         { path: "/repo/a", branch: "a", at: 1 },
@@ -155,6 +152,7 @@ it("opens an explicit remote page even when local worktree selection is ambiguou
     },
     { "/repo/a": [5173], "/repo/b": [8080] },
   );
+  scan.mockRejectedValue(new Error("Process discovery is unavailable"));
   const target = await resolver.target(
     "project",
     "one",
@@ -162,6 +160,20 @@ it("opens an explicit remote page even when local worktree selection is ambiguou
   );
   expect(target.folder).toBe("/repo");
   expect(target.dev).toBeUndefined();
+  expect(terminalFolder).toHaveBeenCalledWith("project", "one");
+  expect(scan).not.toHaveBeenCalled();
+  expect(runningServers.runningServerPorts).not.toHaveBeenCalled();
+
+  await expect(
+    resolver.target("project", "one", "https://example.com/", "/removed"),
+  ).rejects.toThrow("no longer part of this thread");
+  terminalFolder.mockRejectedValueOnce(
+    new Error("Selected workspace is unavailable"),
+  );
+  await expect(
+    resolver.target("project", "one", "https://example.com/"),
+  ).rejects.toThrow("Selected workspace is unavailable");
+  expect(scan).not.toHaveBeenCalled();
 });
 
 it("rejects an overflowing configured port during target resolution", async () => {
@@ -175,7 +187,99 @@ it("rejects an overflowing configured port during target resolution", async () =
     {},
     65530,
   );
+  await expect(resolver.target("project", "one", undefined)).rejects.toThrow(
+    "dev port 65530 plus worktree offset 10",
+  );
+});
+
+const remembered: SavedPreview = {
+  projectId: "project",
+  folder: "/repo/manual",
+  url: "http://localhost:5173/previews/example/?q=one#two",
+  dev: { port: 5173, command: "npm run dev -- --port 5173" },
+  settings: { devPort: 3000, devCommand: "npm run dev" },
+};
+
+it("recovers a stopped manual worktree server using its saved folder and command", async () => {
+  const { resolver } = setup(
+    { agentWorktrees: [{ path: "/repo/manual", branch: "manual", at: 1 }] },
+    { "/repo": [3000] },
+  );
+  expect(
+    await resolver.target(
+      "project",
+      "one",
+      remembered.url,
+      remembered.folder,
+      remembered,
+    ),
+  ).toMatchObject({
+    folder: remembered.folder,
+    url: remembered.url,
+    dev: remembered.dev,
+  });
+});
+
+it("rejects a removed preview folder and a saved port now owned by another worktree", async () => {
+  const removed = setup({}, {});
   await expect(
-    resolver.target("project", "one", undefined),
-  ).rejects.toThrow("dev port 65530 plus worktree offset 10");
+    removed.resolver.target(
+      "project",
+      "one",
+      remembered.url,
+      remembered.folder,
+      remembered,
+    ),
+  ).rejects.toThrow("no longer part of this thread");
+  const conflict = setup(
+    {
+      agentWorktrees: [
+        { path: "/repo/manual", branch: "manual", at: 1 },
+        { path: "/repo/other", branch: "other", at: 1 },
+      ],
+    },
+    { "/repo/other": [5173] },
+  );
+  await expect(
+    conflict.resolver.target(
+      "project",
+      "one",
+      remembered.url,
+      remembered.folder,
+      remembered,
+    ),
+  ).rejects.toThrow("another worktree");
+});
+
+it("uses changed project settings instead of resurrecting an old command", async () => {
+  const { resolver, settings } = setup({}, {});
+  const saved: SavedPreview = {
+    ...remembered,
+    folder: "/repo",
+    url: "http://localhost:3000/settings?q=one#two",
+    dev: { port: 3000, command: "old command" },
+  };
+  settings.devCommand = "new command";
+  settings.devPort = 4000;
+  expect(
+    await resolver.target("project", "one", saved.url, saved.folder, saved),
+  ).toMatchObject({
+    url: "http://localhost:4000/settings?q=one#two",
+    dev: { port: 4000, command: "new command" },
+  });
+});
+
+it("does not reuse another service's saved command for a new URL", async () => {
+  const { resolver } = setup(
+    { agentWorktrees: [{ path: "/repo/manual", branch: "manual", at: 1 }] },
+    {},
+  );
+  const result = await resolver.target(
+    "project",
+    "one",
+    "http://localhost:8080/",
+    remembered.folder,
+    remembered,
+  );
+  expect(result.dev).toEqual({ port: 8080 });
 });

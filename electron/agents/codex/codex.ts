@@ -10,6 +10,7 @@ import { findExecutable } from "../../platform/executables";
 import { runAccount } from "../accounts";
 import { codexGoals, codexGoalCommand } from "./codex-goal";
 import type { AgentOptions } from "../types";
+import { QUESTION_LIMIT_MS, questionLimitError } from "../turn-kit";
 import { codexRequestFailure } from "./codex-limits";
 import { turnStartedSchema } from "./codex-schemas";
 import { withWorktreeEnv } from "../worktree-env";
@@ -66,15 +67,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
   // Project chats can be stopped by hand; titles and helper jobs run with nobody watching.
   const deadline = policy
     ? undefined
-    : setTimeout(
-        () =>
-          finish(
-            new Error(
-              "Codex reached the 10-minute question limit. The partial answer was kept.",
-            ),
-          ),
-        600000,
-      );
+    : setTimeout(() => finish(questionLimitError("Codex")), QUESTION_LIMIT_MS);
   let succeeded = false;
   connection.onNotification = turn.notification;
   connection.onError = finish;

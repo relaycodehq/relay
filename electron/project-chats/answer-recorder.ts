@@ -13,6 +13,7 @@ import type { WatchNote } from "../../shared/watch";
 import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
+import type { ImportOffer } from "../../shared/import-offer";
 import { addStreamed, type Streamed } from "../../shared/usage";
 
 /** A fresh assistant message the agent is about to stream into. */
@@ -95,6 +96,8 @@ export class AnswerRecorder {
   private flush: ReturnType<typeof setTimeout> | null = null;
   private checkpoint: ReturnType<typeof setTimeout> | null = null;
   private model?: TurnModel;
+  /** The import offer waiting for the answer to end; see `importOffer`. */
+  private offer?: ImportOffer;
   /** Stopped by the user; see `stop`. */
   stopped = false;
   constructor(
@@ -112,6 +115,11 @@ export class AnswerRecorder {
     this.flush ??= setTimeout(() => this.publish(), 40);
     this.checkpoint ??= setTimeout(() => {
       this.checkpoint = null;
+      // The version only moves on publish; a checkpoint reads changes by it.
+      if (this.flush) {
+        clearTimeout(this.flush);
+        this.publish();
+      }
       this.save();
     }, 1000);
   }
@@ -166,11 +174,26 @@ export class AnswerRecorder {
     (this.message.notes ??= []).push(note);
     this.changed();
   }
+  /** The message the person would likely send next; the composer offers it while it's the last answer. */
+  predict(text: string) {
+    if (this.stopped) return;
+    this.message.prediction = text;
+    this.changed();
+  }
   /** A page the agent showed with show_html; it sits above the reply. */
   render(render: HtmlRender) {
     if (this.stopped) return;
     (this.message.renders ??= []).push(render);
     this.changed();
+  }
+  /**
+   * What the agent offers to import (offer_import), under the reply once it
+   * ends; a later offer replaces it. It can list thousands of chats, too many
+   * to copy into every publish and checkpoint while the agent writes on.
+   */
+  importOffer(offer: ImportOffer) {
+    if (this.stopped) return;
+    this.offer = offer;
   }
   /** The thread's preview as the agent left it, under the reply; a later open replaces it. */
   preview(preview: TurnPreview) {
@@ -192,11 +215,7 @@ export class AnswerRecorder {
     if (text === null) {
       if (index >= 0) trace.splice(index, 1);
     } else {
-      const entry = {
-        kind: "commentary" as const,
-        id,
-        text: text.slice(0, 12000),
-      };
+      const entry = { kind: "commentary" as const, id, text };
       if (index >= 0) trace[index] = entry;
       else if (makeRoom(this.message, trace)) trace.push(entry);
     }
@@ -247,6 +266,23 @@ export class AnswerRecorder {
     this.changed();
   }
   /**
+   * The turn ended before the agent read steering message `steerId`. It
+   * goes out with the next turn, unless `error` leaves in doubt whether the
+   * agent has it anyway.
+   */
+  unreadSteer(steerId: string, error?: Error) {
+    const steer = this.chat.messages.find((m) => m.id === steerId);
+    if (!steer?.unread) return;
+    delete steer.unread;
+    if (error) {
+      steer.status = "failed";
+      steer.error = error.message;
+    } else steer.missed = true;
+    steer.version++;
+    this.emit(structuredClone(steer));
+    this.changed();
+  }
+  /**
    * The user stopped the turn: the answer shows as stopped now, as it stands,
    * rather than once the agent has wound down. What the agent still writes
    * meanwhile is dropped; `end` later adds what the turn changed.
@@ -260,6 +296,8 @@ export class AnswerRecorder {
   }
   /** The turn ended with the message's status: what still ran ends with it, and the window hears it now. */
   end() {
+    if (this.offer) this.message.importOffer = this.offer;
+    this.offer = undefined;
     const { status } = this.message;
     settleActivities(
       this.message,

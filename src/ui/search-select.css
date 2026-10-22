@@ -107,6 +107,10 @@
 .search-select-popup .composer-select-item > svg {
   flex: none;
 }
+.search-select-popup .composer-select-item[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
 .search-select-check {
   margin-left: auto;
 }

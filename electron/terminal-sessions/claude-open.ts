@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { readdir, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { pidAlive } from "../util/pid";
 
 const run = promisify(execFile);
 
@@ -41,15 +42,7 @@ export const runningSince: RunningSince = async (pids) => {
       if ((e as { code?: unknown }).code === 1) return out;
     }
   }
-  for (const pid of pids) {
-    try {
-      process.kill(pid, 0);
-      out.set(pid, undefined);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === "EPERM")
-        out.set(pid, undefined);
-    }
-  }
+  for (const pid of pids) if (pidAlive(pid)) out.set(pid, undefined);
   return out;
 };
 

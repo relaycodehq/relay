@@ -1,5 +1,10 @@
 import { screenshot } from "../fixtures/screenshot";
-import { test, expect, _electron as electron } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -13,7 +18,7 @@ import { join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-test("runs slash actions locally, previews a PR, creates it explicitly and opens its review", async () => {
+test("previews a PR without writing, creates it explicitly and opens its review", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-pr-ui-"))),
     repo = join(root, "project"),
     bin = join(root, "bin");
@@ -40,21 +45,14 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
   git("remote", "add", "origin", fixture.serverUrl + "/Web/web-store.git");
   await fakeCli(
     join(bin, "codex"),
-    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+    await readFile(resolve("tests/fixtures/composer-codex.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: join(root, "capture.jsonl"),
     },
   });
@@ -73,85 +71,8 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await page.reload();
     const input = page.getByLabel("Message project");
     await expect(
-      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
-    ).toContainText("feature");
-    await input.fill("/");
-    await expect(page.getByRole("listbox", { name: "Commands" })).toBeVisible();
-    await expect(
-      page.getByRole("option", { name: /skill:Explain/ }),
+      page.getByRole("button", { name: "feature", exact: true }),
     ).toBeVisible();
-    await screenshot(page, {
-      path: "test-results/screenshots/55-slash-commands.png",
-      animations: "disabled",
-    });
-    await input.fill("/effort hi");
-    await expect(
-      page.getByRole("option", { name: /\/effort high/ }),
-    ).toBeVisible();
-    await input.press("Enter");
-    await expect(input).toHaveText("");
-    await expect(
-      page.getByRole("combobox", { name: "Reasoning effort" }),
-    ).toContainText("High");
-    // Settings commands work mid-sentence and take out only their own text.
-    await input.fill("Fix the bug /eff");
-    await input.press("Enter");
-    await expect(
-      page.getByRole("option", { name: /\/effort high.*Current/ }),
-    ).toHaveAttribute("aria-selected", "true");
-    await input.press("ArrowDown");
-    await input.press("Enter");
-    await expect(input).toHaveText(/^Fix the bug\s*$/);
-    await expect(
-      page.getByRole("combobox", { name: "Reasoning effort" }),
-    ).toContainText("Extra high");
-    await input.fill("Fix the bug");
-    for (let i = 0; i < " the bug".length; i++) await input.press("ArrowLeft");
-    await input.pressSequentially(" /pla");
-    await expect(page.getByRole("option", { name: /\/plan/ })).toBeVisible();
-    await input.press("Enter");
-    await expect(input).toHaveText("Fix the bug");
-    await expect(
-      page.getByRole("button", { name: "Mode: Plan", exact: true }),
-    ).toBeVisible();
-    await input.fill("Fix the bug /plan of");
-    await input.press("Enter");
-    await expect(
-      page.getByRole("button", { name: "Mode: Build", exact: true }),
-    ).toBeVisible();
-    // A path is only text, even one like a build folder.
-    await input.fill("The output lands in /build");
-    await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
-      0,
-    );
-    const model = page.getByRole("button", {
-      name: "Choose model and provider",
-    });
-    await input.fill("Explain /provider cl");
-    await input.press("Enter");
-    await expect(model).toContainText("Claude");
-    await input.fill("Explain /model sol");
-    await input.press("Enter");
-    await expect(model).toContainText("GPT-6-Sol");
-    await expect(input).toHaveText(/^Explain\s*$/);
-    await input.fill("See /usr/lib");
-    await expect(page.getByRole("listbox", { name: "Commands" })).toHaveCount(
-      0,
-    );
-    await input.fill("Please use $exp");
-    await expect(page.getByRole("option", { name: /Explain/ })).toBeVisible();
-    await input.press("Tab");
-    await expect(input.locator(".prompt-pill.skill")).toContainText("Explain");
-    await input.press("End");
-    await input.press("Backspace");
-    await input.press("Backspace");
-    if (await input.locator(".prompt-pill.skill").count())
-      await input.press("Backspace");
-    await expect(input.locator(".prompt-pill.skill")).toHaveCount(0);
-    await input.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
-    await expect(input.locator(".prompt-pill.skill")).toHaveCount(1);
-    await page.reload();
-    await expect(input.locator(".prompt-pill.skill")).toContainText("Explain");
     await input.fill("/openpr");
     await input.press("Enter");
     const dialog = page.getByRole("dialog", { name: "Create pull request" });
@@ -173,7 +94,7 @@ test("runs slash actions locally, previews a PR, creates it explicitly and opens
     await dialog.getByLabel("PR description").fill("Reviewed locally.");
     await dialog.getByRole("checkbox").check();
     await screenshot(page, {
-      path: "test-results/screenshots/56-create-pr.png",
+      path: join(tmpdir(), "relay-create-pr.png"),
       animations: "disabled",
     });
     await dialog

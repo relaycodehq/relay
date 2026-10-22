@@ -9,18 +9,21 @@ import {
   FileDiff,
   Folder,
   FolderOpen,
+  GitCommitHorizontal,
   Redo2,
   Undo2,
 } from "lucide-react";
 import type { TurnFileChange } from "../../../shared/projects";
-import { buildTurnTree, sumStats, type TurnTreeNode } from "./turn-diff-tree";
+import { buildTurnTree, type TurnTreeNode } from "./turn-diff-tree";
 import { DiffStatLabel } from "./DiffStatLabel";
+import { DiffStatBreakdown } from "./DiffStatBreakdown";
 import { IconButton } from "../../ui/ui";
 import { revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { useFoldedTurn } from "./folded-turns";
 import "../../ui/tree.css";
 import "./changed-files.css";
+import { errorMessage } from "../../../shared/error-message";
 
 // Short lists read best open; longer ones start as folders, unless that
 // would fold everything into a single row.
@@ -52,6 +55,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   onOpen,
   onReveal,
   onRewind,
+  onCommit,
 }: {
   files: TurnFileChange[];
   /** The turn's thread and message, so the card stays folded when shown again. */
@@ -62,9 +66,10 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
   onReveal?: (path: string) => Promise<void>;
   /** Rolls files back, or redoes that; all of the turn when `paths` is null. */
   onRewind?: Rewind;
+  /** Opens the commit sheet with what this turn still has in place. */
+  onCommit?: () => void;
 }) {
   const tree = useMemo(() => buildTurnTree(files), [files]);
-  const total = useMemo(() => sumStats(files), [files]);
   const nested = tree.some((node) => node.kind === "directory");
   const [allOpen, setAllOpen] = useState(
     files.length <= EXPAND_UP_TO || tree.length < 2,
@@ -88,7 +93,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
     } catch (e) {
       setPrompt({
         kind: "error",
-        message: e instanceof Error ? e.message : String(e),
+        message: errorMessage(e),
       });
     } finally {
       setWorking(false);
@@ -191,7 +196,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
                   void onReveal(node.path).catch((e) =>
                     setPrompt({
                       kind: "error",
-                      message: e instanceof Error ? e.message : String(e),
+                      message: errorMessage(e),
                     }),
                   )
                 }
@@ -217,7 +222,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           type="button"
           className="changed-files-fold"
           aria-expanded={!folded}
-          title={folded ? "Show the files" : "Hide the files"}
+          aria-label={folded ? "Show the files" : "Hide the files"}
           onClick={() => setFolded(!folded)}
         >
           <span className="tree-twist">
@@ -226,9 +231,7 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           <strong>
             {files.length} changed file{files.length === 1 ? "" : "s"}
           </strong>
-          {(total.additions > 0 || total.deletions > 0) && (
-            <DiffStatLabel stat={total} />
-          )}
+          <DiffStatBreakdown files={files} />
           {reverted > 0 && (
             <span className="changed-files-note">
               {reverted === files.length
@@ -262,6 +265,17 @@ export const ChangedFilesCard = memo(function ChangedFilesCard({
           <FileDiff size={14} />
           <span className="changed-files-label">Open diff</span>
         </button>
+        {onCommit && reverted < files.length && (
+          <button
+            type="button"
+            className="changed-files-open"
+            title="Commit this turn's files"
+            onClick={onCommit}
+          >
+            <GitCommitHorizontal size={14} />
+            <span className="changed-files-label">Commit</span>
+          </button>
+        )}
         {onRewind && (
           <button
             type="button"

@@ -4,7 +4,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -13,20 +13,12 @@ import {
   rm,
   realpath,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { openSurface, panelToggle } from "../fixtures/navigation";
-
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const probe = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 /** Has the thread's agent call one of Relay's tools, and resolves to its answer. */
 async function callTool(page: Page, tool: string, input: unknown) {
@@ -91,13 +83,11 @@ test("an agent opens its thread's preview, pictures it unseen and reads its erro
       ),
     ) as Record<string, string>;
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
         RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_TEST_PREVIEW_UNLOAD_MS: "4000",
       },
     });

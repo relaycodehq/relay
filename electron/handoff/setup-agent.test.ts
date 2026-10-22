@@ -8,10 +8,7 @@ import type { ProjectChatSend } from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { SetupAgents } from "./setup-agent";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 const settings = {
   provider: "codex" as const,

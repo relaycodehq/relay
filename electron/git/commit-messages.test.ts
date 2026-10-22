@@ -1,5 +1,4 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +8,7 @@ import {
   defaultAISettings,
   type AISettings,
 } from "../../shared/settings";
+import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 
 const runs: (AgentOptions & { provider: string })[] = [];
 const plainReply = '{"subject":"Raise the limit","body":""}';
@@ -39,11 +39,8 @@ afterEach(async () => {
 
 async function changedRepo() {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-commit-")));
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
-  git("init", "-q");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  const git = (...args: string[]) => gitIn(root, ...args);
+  initRepo(root);
   await writeFile(join(root, "limit.ts"), "export const limit = 1;\n");
   git("add", ".");
   git("commit", "-qm", "Initial");

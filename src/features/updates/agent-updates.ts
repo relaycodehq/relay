@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import type { AgentVersions } from "../../../shared/agent-updates";
 import type { AgentProvider } from "../../../shared/agents";
+import { errorMessage } from "../../../shared/error-message";
 
 const listeners = new Set<() => void>();
 let versions: AgentVersions | undefined;
@@ -32,7 +33,7 @@ export function askAgentVersions() {
     // An event can overtake the first answer; the newer state wins.
     .then((state) => versions || change(state))
     .catch((e) => {
-      failure = e instanceof Error ? e.message : String(e);
+      failure = errorMessage(e);
       notify();
     })
     .finally(() => {

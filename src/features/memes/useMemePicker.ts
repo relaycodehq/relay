@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import type { RelayCommand } from "../../../shared/commands";
 import { memeToken, type MemeView } from "../../../shared/memes";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { useMemes } from "./useMemes";
 
 const typed = /^\s*\/meme\s([^\n]*)$/i;
@@ -19,7 +19,10 @@ export function matchingMemes(memes: MemeView[], query: string) {
     const all = `${title} ${m.meaning} ${m.find ?? ""}`.toLowerCase();
     if (!words.every((w) => all.includes(w))) return -1;
     if (!words.every((w) => title.includes(w))) return 2;
-    return m.name.toLowerCase().startsWith(words[0]!) || m.id.startsWith(words[0]!) ? 0 : 1;
+    return m.name.toLowerCase().startsWith(words[0]!) ||
+      m.id.startsWith(words[0]!)
+      ? 0
+      : 1;
   };
   return ready
     .map((m) => [rank(m), m] as const)
@@ -53,7 +56,8 @@ export function useMemePicker({
   const state = memes.data;
   const visible = query !== undefined && dismissed !== draft && !disabled;
   const items = useMemo(
-    () => (state && query !== undefined ? matchingMemes(state.memes, query) : []),
+    () =>
+      state && query !== undefined ? matchingMemes(state.memes, query) : [],
     [state, query],
   );
   useEffect(() => setActive(0), [query]);
@@ -98,7 +102,8 @@ export function useMemePicker({
   return {
     id,
     visible,
-    activeId: visible && mode === "row" && items.length ? `${id}-${at}` : undefined,
+    activeId:
+      visible && mode === "row" && items.length ? `${id}-${at}` : undefined,
     mode,
     state,
     /** Why the list couldn't be read, while `mode` is "loading". */
@@ -123,7 +128,8 @@ export function useMemePicker({
         return true;
       }
       const meme = matchingMemes(state.memes, args)[0];
-      if (!args.trim()) return "Pick a meme from the list, or type its name after /meme.";
+      if (!args.trim())
+        return "Pick a meme from the list, or type its name after /meme.";
       if (!meme) return `No meme matches "${args.trim()}".`;
       pick(meme);
       return true;

@@ -136,10 +136,12 @@ export interface ReviewScope {
 /** A worktree the review reads from and fixes in. */
 export interface ReviewCheckout {
   path: string;
-  /** Relay made it for this review, on the branch when no other folder had it, and removes it after; otherwise it already had the branch. */
+  /** Relay made it for this review, on the branch when it has one, and removes it after; otherwise it's the folder the branch was already checked out in. */
   made: boolean;
-  /** The local branch fixes go on, checked out there before the first fix; none for a pull request. */
+  /** The local branch fixes go on; the review moves to wherever it's checked out. A pull request gets one with its first fix when none holds it. */
   branch?: string;
+  /** A pull request's number, and its head branch when that's in the project's own repository, which names the branch a fix makes. */
+  pr?: { number: number; head?: string };
 }
 
 /** The review's topic, kept within the editable thread name's limit. */

@@ -1,10 +1,6 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-  flush,
-  harnessReact,
-  mount,
-  rerender,
-} from "../../../tests/unit/hook-harness";
+// @vitest-environment happy-dom
+import { beforeEach, expect, it, vi } from "vitest";
+import { flush, mount, update } from "../../../tests/unit/hook-harness";
 import type { CodeReference } from "../../../shared/code-references";
 import type { LineQuestion } from "../../../shared/questions";
 import type { WorkItem } from "../../../shared/devops";
@@ -14,26 +10,14 @@ import { useComposerAttachments } from "./useComposerAttachments";
 import { useThreadSend } from "./useThreadSend";
 import { writeGate } from "./write-gate";
 
-vi.mock("react", () => harnessReact);
 const api = vi.hoisted(() => ({ sendProjectChat: vi.fn() }));
 vi.mock("../../lib/api", () => ({ api }));
 
-const store = new Map<string, string>();
 beforeEach(() => {
-  store.clear();
+  localStorage.clear();
   vi.clearAllMocks();
   api.sendProjectChat.mockResolvedValue(undefined);
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-    removeItem: (key: string) => store.delete(key),
-    key: (i: number) => [...store.keys()][i] ?? null,
-    get length() {
-      return store.size;
-    },
-  });
 });
-afterEach(() => vi.unstubAllGlobals());
 
 const id = "thread";
 const message = buildSend(
@@ -111,23 +95,20 @@ it("clears only attachments sent, retaining code and other context added during 
     await new Promise<void>((resolve) => (finish = resolve));
   });
   const current = thread();
-  current().attachments.addCodeRefs([ref("first.ts")]);
-  current().attachments.setSelection(selection);
-  current().attachments.setWorkItem(workItem);
-  rerender();
+  update(() => current().attachments.addCodeRefs([ref("first.ts")]));
+  update(() => current().attachments.setSelection(selection));
+  update(() => current().attachments.setWorkItem(workItem));
   const sending = current().sending.send(message);
   await posting;
-  current().attachments.addCodeRefs([ref("next.ts")]);
+  update(() => current().attachments.addCodeRefs([ref("next.ts")]));
   const nextSelection = { ...selection, path: "next.ts" };
   const nextWorkItem = { ...workItem, id: 2, title: "Next issue" };
-  current().attachments.setSelection(nextSelection);
-  current().attachments.setWorkItem(nextWorkItem);
-  rerender();
+  update(() => current().attachments.setSelection(nextSelection));
+  update(() => current().attachments.setWorkItem(nextWorkItem));
   expect(api.sendProjectChat.mock.calls[0][1].body).not.toContain("next.ts");
   finish();
   expect(await sending).toBe(true);
   await flush();
-  rerender();
   expect(threadStorage(id).codeRefs.load()).toEqual([ref("next.ts")]);
   expect(threadStorage(id).selection.load()).toEqual(nextSelection);
   expect(threadStorage(id).workItem.load()).toEqual(nextWorkItem);
@@ -142,33 +123,30 @@ it("keeps a newer excerpt at the same location when a previous excerpt completes
     await new Promise<void>((resolve) => (finish = resolve));
   });
   const current = thread();
-  current().attachments.addCodeRefs([ref("first.ts")]);
-  rerender();
+  update(() => current().attachments.addCodeRefs([ref("first.ts")]));
   const sending = current().sending.send(message);
   await posting;
   const edited = { ...ref("first.ts"), code: "changed();" };
-  current().attachments.setCodeRefs([edited]);
-  rerender();
+  update(() => current().attachments.setCodeRefs([edited]));
   finish();
   expect(await sending).toBe(true);
-  rerender();
+  await flush();
   expect(threadStorage(id).codeRefs.load()).toEqual([edited]);
 });
 
 it("keeps attachments when a send fails and clears unchanged ones after success", async () => {
   const current = thread();
-  current().attachments.addCodeRefs([ref("first.ts")]);
-  current().attachments.setSelection(selection);
-  current().attachments.setWorkItem(workItem);
-  rerender();
+  update(() => current().attachments.addCodeRefs([ref("first.ts")]));
+  update(() => current().attachments.setSelection(selection));
+  update(() => current().attachments.setWorkItem(workItem));
   api.sendProjectChat.mockRejectedValueOnce(new Error("offline"));
   expect(await current().sending.send(message)).toBe(false);
-  rerender();
+  await flush();
   expect(current().attachments.codeRefs).toEqual([ref("first.ts")]);
   expect(current().attachments.selection).toEqual(selection);
   expect(current().attachments.workItem).toEqual(workItem);
   expect(await current().sending.send(message)).toBe(true);
-  rerender();
+  await flush();
   expect(current().attachments.codeRefs).toEqual([]);
   expect(current().attachments.selection).toBeUndefined();
   expect(current().attachments.workItem).toBeUndefined();

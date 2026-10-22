@@ -1,5 +1,5 @@
-// What fills an agent's context window, by category and by item: Claude
-// Code's /context report, counted live or read back from its markdown.
+// What fills an agent's context window, by category and by item: counted by
+// the provider, read from its /context answer, or estimated from visible text.
 import type { ChatMessage } from "./projects";
 
 /** 'used' fills the window, 'free' is what's left, 'buffer' is kept back for compaction, 'deferred' tools load only when asked for. */
@@ -19,6 +19,8 @@ export type RelayShare = {
 };
 
 export type ContextReport = {
+  /** Category counts inferred from visible content; the total is still provider-reported. */
+  estimated?: boolean;
   model: string;
   totalTokens: number;
   /** The window the report measures against. */

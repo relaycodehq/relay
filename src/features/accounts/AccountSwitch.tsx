@@ -7,35 +7,39 @@ import {
   type AccountProvider,
 } from "../../../shared/agent-accounts";
 import { creditsLabel } from "../../../shared/provider-usage";
-import { UsageMeters } from "../agents/UsageMeters";
+import { UsageStrip } from "../agents/UsageStrip";
 import { AccountBars, AccountDial, headroom } from "./AccountBars";
 import type { ThreadAccounts } from "./useThreadAccounts";
 import { useAccountsUsage } from "./useAccountUsage";
 import "./accounts.css";
 
-/**
- * The model picker's footer for an agent with several accounts: each one as
- * a tab with what it has left, and the meters of the one this thread runs on.
- * Null with one account, so the picker falls back to its own meters; a plain
- * function rather than a component, since an element is never null.
- */
+/** The picker's account selector and usage summary share one compact strip. */
 export function accountUsageFooter(
   provider: string,
   accounts: ThreadAccounts,
   now: number,
+  container?: HTMLElement,
 ) {
-  if (!hasAccounts(provider) || !accounts.several(provider)) return null;
-  return <AccountTabs provider={provider} accounts={accounts} now={now} />;
+  if (!hasAccounts(provider) || !accounts.state) return null;
+  return (
+    <AccountUsageStrip
+      provider={provider}
+      accounts={accounts}
+      now={now}
+      container={container}
+    />
+  );
 }
-
-function AccountTabs({
+function AccountUsageStrip({
   provider,
   accounts,
   now,
+  container,
 }: {
   provider: AccountProvider;
   accounts: ThreadAccounts;
   now: number;
+  container?: HTMLElement;
 }) {
   const list = accountsOf(accounts.state!, provider);
   const usage = useAccountsUsage(
@@ -43,41 +47,32 @@ function AccountTabs({
     list.map((a) => a.id),
   );
   const current = accounts.of(provider);
+  const selected = list.find((a) => a.id === current);
   return (
-    <>
-      <div
-        className="account-tabs"
-        role="radiogroup"
-        aria-label={`${agentName(provider)} account`}
-      >
-        {list.map((account) => {
-          const left = headroom(usage[account.id]);
-          const credits = usage[account.id]?.credits;
-          const detail = [
-            left !== null && `${left}% left`,
-            credits && creditsLabel(credits),
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          return (
-            <button
-              key={account.id}
-              type="button"
-              role="radio"
-              aria-checked={account.id === current}
-              onClick={() =>
-                account.id !== current && accounts.pick(provider, account.id)
-              }
-            >
-              <AccountDial usage={usage[account.id]} />
-              {account.label}
-              {detail && <small>{detail}</small>}
-            </button>
-          );
-        })}
-      </div>
-      <UsageMeters usage={current ? usage[current] : undefined} now={now} />
-    </>
+    <UsageStrip
+      usage={current ? usage[current] : undefined}
+      now={now}
+      accountId={current}
+      accountName={`${agentName(provider)} · ${selected?.label ?? "Default"}`}
+      container={container}
+      accountControl={
+        list.length > 1 ? (
+          <select
+            aria-label={`${agentName(provider)} account`}
+            value={current}
+            onChange={(e) => accounts.pick(provider, e.target.value)}
+          >
+            {list.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          (selected?.label ?? agentName(provider))
+        )
+      }
+    />
   );
 }
 

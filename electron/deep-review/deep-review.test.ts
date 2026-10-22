@@ -18,7 +18,11 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { ChatStorage } from "../project-chats/storage";
 import { WorktreeSetup } from "../project-chats/worktree-setup";
-import type { ChatMessage, ProjectChat } from "../../shared/projects";
+import type {
+  ChatMessage,
+  ProjectChat,
+  ProjectChatSend,
+} from "../../shared/projects";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { fixRequest } from "../../shared/findings";
@@ -30,14 +34,12 @@ import {
   type ReviewScope,
 } from "../../shared/deep-review";
 import { leadPrompt, reviewerTask } from "./prompts";
+import { DeepReviews, type DeepReviewHost } from "./index";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
 import { build } from "esbuild";
 import { configureCursor } from "../agents/cursor/sdk";
 import { forgetCursorModels } from "../agents/cursor/catalog";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 const choice = {
   ...defaultAISettings.questions,
@@ -223,14 +225,26 @@ describe("reviewer tasks", () => {
     );
     expect(opencode.body).not.toContain("git show");
     expect(lead(branch)).toContain(
-      "Relay checks device-panel out there, so your fixes land on it.",
+      "a worktree Relay made for this review on device-panel, so your fixes land on it.",
     );
+    // A folder the branch is worked on in may hold more than the reviewed
+    // range, so every agent is pointed at the range itself.
+    const found: ReviewScope = {
+      ...branch,
+      checkout: { path: "/src/panel", made: false, branch: "device-panel" },
+    };
+    expect(lead(found)).toContain(
+      "They go in /src/panel, where device-panel is checked out",
+    );
+    expect(reviewerTask(claude, found).body).toBe(
+      `@claude /code-review high ${scope.base}...${scope.head}`,
+    );
+    const instructions = reviewerTask(codex, found).codex;
     expect(
-      lead({
-        ...branch,
-        checkout: { path: "/src/panel", made: false, branch: "device-panel" },
-      }),
-    ).toContain("They go in /src/panel, where device-panel is checked out");
+      instructions?.type === "custom" && instructions.instructions,
+    ).toContain(
+      `those aren't part of this review. See the reviewed changes with \`git diff ${scope.base} ${scope.head}\``,
+    );
 
     const pr: ReviewScope = {
       ...scope,
@@ -882,6 +896,225 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(await chats.worktreeRoot(projectId, claude.id)).toBe(repo);
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
+});
+
+it("reviews a branch in the folder it's checked out in, edits and all, and follows it to another folder rather than refusing a fix", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  const there = join(root, "panel-here");
+  git(repo, "worktree", "add", "-q", "-b", "panel", there);
+  await writeFile(join(there, "src", "panel.ts"), "export const panel = 1;\n");
+  git(there, "add", ".");
+  git(there, "commit", "-q", "-m", "Add the panel");
+  // Another thread is at work there.
+  await writeFile(join(there, "wip.ts"), "export {};\n");
+
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "panel", base: main } }),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+  );
+  const reviewed = await chats.get(chat.id);
+  expect(reviewed.deepReview!.scope.checkout).toEqual({
+    path: there,
+    made: false,
+    branch: "panel",
+  });
+  for (const r of (await capture()).filter((r) => r.prompt || r.review))
+    expect(r.cwd).toBe(there);
+  // Codex's own review would take the edits there for the branch's.
+  expect((await capture()).find((r) => r.review).review.target.type).toBe(
+    "custom",
+  );
+  expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
+
+  // The branch moved to another folder since: the fix goes there.
+  git(there, "switch", "-q", "--detach");
+  const other = join(root, "panel-other");
+  git(repo, "worktree", "add", "-q", other, "panel");
+  // A message that's refused moves nothing.
+  await expect(
+    chats.send(chat.id, {
+      id: randomUUID(),
+      body: "@claude",
+      provider: "claude",
+      choice: { ...choice, model: "" },
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      fixes: ["F1"],
+    }),
+  ).rejects.toThrow("Add a question after the agent mention.");
+  const refused = await chats.get(chat.id);
+  expect(refused.deepReview!.scope.checkout!.path).toBe(there);
+  expect(refused.movedIn).toBeUndefined();
+  const body = fixRequest("claude", reviewed.findings!.reports[0]!.findings);
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    body,
+    provider: "claude",
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    fixes: ["F1"],
+  });
+  const moved = await chats.get(chat.id);
+  expect(moved.deepReview!.scope.checkout).toEqual({
+    path: other,
+    made: false,
+    branch: "panel",
+  });
+  expect(moved.workspaceMoves?.at(-1)).toMatchObject({
+    how: "switched",
+    to: other,
+    branch: "panel",
+  });
+  expect(
+    chats.list(projectId).find((c) => c.id === chat.id)?.reviewFolder,
+  ).toEqual({ path: other, branch: "panel" });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
+  );
+  const fix = (await capture()).find((r) =>
+    r.prompt?.includes("Fix this finding"),
+  );
+  expect(fix.cwd).toBe(other);
+  // Its session heard where it works now.
+  expect(fix.prompt).toContain("This thread now works in");
+  expect(fix.prompt).toContain(other);
+
+  // Neither folder is Relay's to clean up.
+  await chats.triage(chat.id, { kind: "settle" });
+  await chats.cleanUpWorktrees();
+  expect(git(there, "status", "--porcelain")).toBe("?? wip.ts");
+  expect(git(other, "branch", "--show-current")).toBe("panel");
+});
+
+it("answers a question when edits in the review's worktree keep the branch out, and fixes in a worktree beside it", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  git(repo, "switch", "-q", "-c", "panel");
+  await writeFile(join(repo, "src", "panel.ts"), "export const panel = 1;\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "Add the panel");
+  git(repo, "switch", "-q", main);
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "branch", head: "panel", base: main } }),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).deepReview?.status).toBe("done"),
+  );
+  const reviewed = await chats.get(chat.id);
+  const own = reviewed.deepReview!.scope.checkout!.path;
+  // The branch left the review's worktree and moved on; an edit there is
+  // in the way of switching back.
+  git(own, "switch", "-q", "--detach");
+  const elsewhere = join(root, "elsewhere");
+  git(repo, "worktree", "add", "-q", elsewhere, "panel");
+  await writeFile(
+    join(elsewhere, "src", "panel.ts"),
+    "export const panel = 2;\n",
+  );
+  git(elsewhere, "commit", "-q", "-am", "Panel 2");
+  git(repo, "worktree", "remove", elsewhere);
+  await writeFile(join(own, "src", "panel.ts"), "export const panel = 3;\n");
+  const idle = () =>
+    vi.waitFor(() =>
+      expect(
+        chats.list(projectId).find((c) => c.id === chat.id)?.running,
+      ).toBeFalsy(),
+    );
+
+  const question = {
+    id: randomUUID(),
+    body: "@claude Why is F1 a problem?",
+    provider: "claude" as const,
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access" as const,
+    interactionMode: "default" as const,
+  };
+  await chats.send(chat.id, question);
+  const asked = await chats.get(chat.id);
+  expect(asked.messages.some((m) => m.id === question.id)).toBe(true);
+  expect(asked.deepReview!.scope.checkout!.path).toBe(own);
+  await idle();
+
+  await chats.send(chat.id, {
+    ...question,
+    id: randomUUID(),
+    body: fixRequest("claude", reviewed.findings!.reports[0]!.findings),
+    fixes: ["F1"],
+  });
+  expect((await chats.get(chat.id)).deepReview!.scope.checkout).toEqual({
+    path: `${own}-2`,
+    made: true,
+    branch: "panel",
+  });
+  expect(git(own, "status", "--porcelain")).toBe("M src/panel.ts");
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
+  );
+  await idle();
+});
+
+it("keeps where a session not told of an earlier move yet started, when the review moves again", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const there = join(root, "panel-here");
+  git(repo, "worktree", "add", "-q", "-b", "panel", there);
+  const head = git(there, "rev-parse", "HEAD");
+  const reviews = new DeepReviews({
+    root: async () => repo,
+    worktrees: join(root, "worktrees"),
+    close: () => {},
+    touch: async () => {},
+  } as unknown as DeepReviewHost);
+  const chat = {
+    id: "review",
+    projectId,
+    messages: [],
+    scopeHeard: { "claude:main": "x" },
+    // Codex wasn't told it left the first folder yet.
+    movedIn: {
+      from: "/first",
+      to: "/second",
+      owed: ["codex:main"],
+      selected: true,
+    },
+    deepReview: {
+      status: "done",
+      lead: { provider: "claude" },
+      scope: {
+        head,
+        checkout: { path: "/second", made: false, branch: "panel" },
+      },
+    },
+  } as unknown as ProjectChat;
+  await reviews.fixing(chat, { provider: "claude" } as ProjectChatSend);
+  expect(chat.movedIn).toEqual({
+    from: "/first",
+    to: there,
+    owed: ["codex:main", "claude:main"],
+    selected: true,
+  });
 });
 
 it("leaves the thread and the disk as they were when a reviewer can't be created, so starting again works", async () => {

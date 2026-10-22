@@ -95,6 +95,14 @@ export function PaneTabs({
         <div
           key={tab.key}
           className={`pane-tab-host ${front === tab.key ? "active" : ""}`}
+          onMouseDown={(event) => {
+            if (event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (event.button !== 1) return;
+            event.preventDefault();
+            if (!tab.closeDisabled) onClose(tab.key);
+          }}
         >
           <button
             type="button"

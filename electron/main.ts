@@ -1,36 +1,23 @@
 import { app, dialog, net, powerMonitor, systemPreferences } from "electron";
-import { existsSync } from "node:fs";
+import { configureOpenCodeFetch } from "./agents/opencode";
 import { join } from "node:path";
 import { AgentHosts } from "./agent-host/client";
 import { AgentUpdates, machineIo } from "./agents/agent-updates";
-import {
-  hostAgents,
-  loadRegistryAgents,
-  setOpenCodeEnvRoot,
-  watchSavedSignIns,
-} from "./agents";
+import { watchSavedSignIns } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
-import { configureCursor } from "./agents/cursor/sdk";
-import {
-  AcpRegistry,
-  antigravityIo,
-  configureAcpRegistry,
-  configureAntigravity,
-  registryUpdatesIo,
-} from "./agents/acp";
+import { antigravityIo, registryUpdatesIo } from "./agents/acp";
 import { apiContext } from "./api/context";
-import { createDispatch, serveApi, type Dispatch } from "./api";
+import { createDispatch, serveApi } from "./api";
 import { serveSettingsFile } from "./api/settings-file";
 import { openSettingsFile, readPrefs, type SettingsFile } from "./settings";
 import { AppLinks } from "./app/links";
-import { GiteaLogin, seal, unseal } from "./app/login";
-import { GithubLogin } from "./pull-requests/github-login";
+import { GiteaLogin } from "./app/login";
+import { GithubLogin } from "./github";
 import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
 import { startLog } from "./app/log";
 import { Quit } from "./app/quit";
-import { rearmOnWake } from "./app/wake";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
@@ -49,12 +36,8 @@ import {
 import { BlameService } from "./git/blame";
 import { Ci } from "./ci";
 import { ProjectChecks } from "./checks/service";
-import { DevOps } from "./plugins/devops/service";
-import { ClockifyPlugin } from "./plugins/clockify/service";
-import { PluginSecrets } from "./plugins/secrets";
 import { Dictation } from "./dictation/service";
 import { ReadAloud } from "./read-aloud";
-import { gitExecutable, setGitPath } from "./git/git";
 import { registerAppImage } from "./platform/linux-desktop-entry";
 import { linuxPasswordStore } from "./platform/linux-password-store";
 import { ProjectChats } from "./project-chats";
@@ -65,50 +48,41 @@ import {
   registerRenderScheme,
   serveRenders,
 } from "./html-renders";
-import {
-  agentProjects,
-  answerRelayTools,
-  prepareRelayTools,
-  threadAgents,
-} from "./started-threads/serve";
-import { ChatSummaryFeed } from "./project-chats/chat-summaries";
-import { PullMerges } from "./project-chats/pull-merges";
-import { Projects, repositoryRoot } from "./projects/projects";
+import { repositoryRoot } from "./projects/projects";
 import { projectForFolder } from "./app/open-folder";
-import { pullRequestHosts } from "./pull-requests/setup";
 import { PullRequestCreation } from "./pull-requests/pull-request-create";
 import { PhoneRemote } from "./remote/phone-remote";
-import { DraftStore, Drafts, setPastesRoot, sweepPastes } from "./drafts";
+import { DraftStore, Drafts } from "./drafts";
 import { DraftPages } from "./drafts/pages";
 import { shrinkImage } from "./remote/shrink-image";
 import { Computers } from "./handoff/computers";
-import { HandoffReceiver } from "./handoff/receiver";
+import { RemoteProjects } from "./handoff/remote-projects";
 import { Handoffs } from "./handoff/sender";
+import { WslHolders } from "./handoff/wsl-holder";
 import { pathReady } from "./platform/shell-path";
-import { setLinkedAgents, setOwnAgentsDir } from "./platform/executables";
-import { applyLinkedTools, teaTokenFor } from "./source-control";
+import { teaTokenFor } from "./source-control";
 import { Store } from "./app/store";
-import { projectTasks } from "./terminal/tasks";
 import { threadTerminals } from "./terminal/thread-terminals";
 import { TriageService } from "./triage/service";
 import { Updater } from "./app/updater";
 import { DevBuild } from "./app/dev-build";
 import { listenDevSwitch } from "./app/dev-switch";
-import { keepUsageHistory } from "./agents/usage-history";
-import { keepUsageLog } from "./usage";
-import {
-  AgentAccounts,
-  accountHomes,
-  setProfilesRoot,
-} from "./agents/accounts";
 import { ProjectAdding } from "./project-add";
-import { TerminalSessions } from "./terminal-sessions";
 import { MenubarSounds } from "./sounds/menubar-sounds";
 import { flushWorkingFiles } from "./git/working-files";
 import { flushGitOperations } from "./git/working-tree";
-import { ThreadPreviews, PreviewProjects } from "./preview";
+import { ThreadPreviews, PreviewProjects, SavedPreviews } from "./preview";
 import { Devices } from "./devices";
 import { Presence } from "./remote/presence";
+import {
+  agentHost,
+  downloadedAgents,
+  followSummaries,
+  prepareData,
+  remoteServices,
+  resumeThreads,
+  threadServices,
+} from "./startup";
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -151,7 +125,9 @@ let drafts: { store: DraftStore; service: Drafts } | undefined;
 /** Thread sounds while the window is closed; headless Relay wires none. */
 let menubarSounds: MenubarSounds | undefined;
 /** Handing threads to other computers running Relay. */
-let handoffs: { computers: Computers; sender: Handoffs } | undefined;
+let handoffs:
+  | { computers: Computers; sender: Handoffs; remote: RemoteProjects }
+  | undefined;
 /** Where the agents' sessions run, so they outlive a restart of Relay. */
 let agentHosts: AgentHosts | undefined;
 /** Which working trees the windows show; unset until Relay has started. */
@@ -159,6 +135,9 @@ let treeWatch: TreeWatch | undefined;
 /** Which other repositories the windows' threads changed files in; unset until Relay has started. */
 let elsewhereWatch: ElsewhereWatch | undefined;
 const login = new GiteaLogin(teaTokenFor);
+configureOpenCodeFetch((url, options) =>
+  net.fetch(url instanceof Request ? url.url : url.toString(), options),
+);
 const github = new GithubLogin((url, options) => net.fetch(url, options));
 /** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({
@@ -210,7 +189,9 @@ const quit = new Quit({
   shutDown: async () => {
     const closed = await Promise.allSettled([
       Promise.resolve().then(() => phoneRemote?.close()),
-      Promise.resolve().then(() => handoffs?.computers.close()),
+      Promise.resolve().then(() =>
+        handoffs?.computers.close({ detach: quit.detaching }),
+      ),
     ]);
     for (const result of closed)
       if (result.status === "rejected")
@@ -279,27 +260,15 @@ const readAloud = new ReadAloud(
   },
   (state) => window.send("relay:read-aloud-state", state),
 );
-// Cursor's SDK isn't shipped: Relay downloads it into its data folder, and
-// runs it in a worker that, like the agent host, Node must read outside the asar.
-configureCursor({
-  worker: join(__dirname, "cursor-worker.mjs").replace(
+const acpAgents = downloadedAgents(
+  app.getPath("userData"),
+  (url, init) => net.fetch(url, init),
+  // A worker that, like the agent host, Node must read outside the asar.
+  join(__dirname, "cursor-worker.mjs").replace(
     /app\.asar([\\/])/,
     "app.asar.unpacked$1",
   ),
-  root: join(app.getPath("userData"), "cursor-sdk"),
-  store: join(app.getPath("userData"), "cursor-agents"),
-  fetch: (url, init) => net.fetch(url, init),
-});
-// Antigravity's ACP server isn't shipped either: Relay downloads Google's build.
-configureAntigravity({
-  root: join(app.getPath("userData"), "antigravity"),
-  fetch: (url, init) => net.fetch(url, init),
-});
-const acpAgents = new AcpRegistry(
-  join(app.getPath("userData"), "acp-agents"),
-  (url, init) => net.fetch(url, init),
 );
-configureAcpRegistry(acpAgents);
 const agentUpdates = new AgentUpdates(
   (state) => window.send("relay:agent-updates", state),
   {
@@ -322,7 +291,7 @@ const projectChecks = new ProjectChecks(
   ),
 );
 const blame = new BlameService();
-const ci = new Ci((url, init) => net.fetch(url, init));
+const ci = new Ci((url, init) => net.fetch(url, init), github.credentials);
 if (!app.requestSingleInstanceLock()) {
   // Opening Relay again only brings the running copy forward.
   console.info("Relay was opened again while already running");
@@ -383,45 +352,35 @@ app
       loaded,
       (chatId) => !window.win && window.threads.state().focused !== chatId,
     );
-    // The host runs from a plain file: Node can't start a module inside app.asar.
-    const hostScript = join(__dirname, "agent-host.mjs").replace(
-      /app\.asar([\\/])/,
-      "app.asar.unpacked$1",
+    const dataDir = app.getPath("userData");
+    const host = await agentHost(
+      dataDir,
+      // A plain file: Node can't start a module inside app.asar.
+      join(__dirname, "agent-host.mjs").replace(
+        /app\.asar([\\/])/,
+        "app.asar.unpacked$1",
+      ),
     );
-    if (existsSync(hostScript)) {
-      const hosts = new AgentHosts(
-        join(app.getPath("userData"), "agent-host"),
-        hostScript,
-      );
-      agentHosts = hosts;
-      hostAgents(hosts);
-      projectTasks.hosts = () => hosts.pids();
-    }
-    // Before any agent session starts, so each gets the tools.
-    const relayTools = await prepareRelayTools(
-      join(app.getPath("userData"), "agent-host"),
-    );
-    setGitPath(loaded.get().gitPath ?? null);
-    setLinkedAgents(loaded.get().agentPaths ?? {});
-    setOwnAgentsDir(join(app.getPath("userData"), "agent-clis"));
-    setProfilesRoot(join(app.getPath("userData"), "agent-accounts"));
-    setOpenCodeEnvRoot(join(app.getPath("userData"), "opencode"));
-    setPastesRoot(join(app.getPath("userData"), "pastes"));
-    void sweepPastes([
-      join(app.getPath("userData"), "project-chats"),
-      join(app.getPath("userData"), "drafts.json"),
-      join(app.getPath("userData"), "state.json"),
-    ]).catch((e) => console.warn("Could not sweep old pastes:", e));
-    // Before anything starts an agent: runs ask it which account they use.
-    const agentAccounts = new AgentAccounts(loaded, (state) => {
+    agentHosts = host.hosts;
+    const agentAccounts = await prepareData(dataDir, loaded, (state) => {
       window.send("relay:agent-accounts", state);
       watchSavedSignIns();
     });
-    watchSavedSignIns();
-    applyLinkedTools(loaded);
-    // Found once up front, every Git call after starts right away.
-    void gitExecutable().catch(() => {});
-    const projects = new Projects(loaded);
+    const { projects, pullHosts, devops, chats, pullMerges, clockify } =
+      threadServices({
+        dir: dataDir,
+        store: loaded,
+        fetch: (url, init) => net.fetch(url, init),
+        login,
+        github,
+        online: () => net.isOnline(),
+        chatEvent: (event) => {
+          window.send("relay:project-chat", event);
+          phoneRemote?.chatEvent(event);
+        },
+        prefs: () => readPrefs(file.state().values),
+      });
+    projectChats = chats;
     links.onFolder((folder) => {
       void projectForFolder(folder, {
         list: () => projects.list(login.client),
@@ -443,36 +402,6 @@ app
       if (chat) window.openThread({ projectId: chat.projectId, chatId });
       else window.open();
     });
-    const pullHosts = pullRequestHosts({
-      store: loaded,
-      login,
-      github,
-      projects,
-      fetch: (url, init) => net.fetch(url, init),
-    });
-    const { hosts, azureTokens } = pullHosts;
-    const devops = new DevOps(
-      loaded,
-      (url, init) => net.fetch(url, init),
-      seal,
-      unseal,
-      join(app.getPath("userData"), "devops-relevance.json"),
-      azureTokens,
-    );
-    keepUsageHistory(join(app.getPath("userData"), "usage-history.json"));
-    keepUsageLog(join(app.getPath("userData"), "usage.jsonl"));
-    const chats = new ProjectChats(
-      loaded,
-      projects,
-      join(app.getPath("userData"), "project-chats"),
-      (event) => {
-        window.send("relay:project-chat", event);
-        phoneRemote?.chatEvent(event);
-      },
-      pullHosts.evidence,
-      () => readPrefs(file.state().values),
-    );
-    projectChats = chats;
     // Apart, so one that fails doesn't keep the news from the others.
     chats.onNews((item) => window.send("relay:thread-news", item));
     chats.onNews((item) => phoneRemote?.news(item));
@@ -481,29 +410,6 @@ app
     serveRenders((chatId, renderId, page) =>
       chats.renderPage(chatId, renderId, page),
     );
-    const pullMerges = new PullMerges({
-      chats: () => loaded.get().chats ?? [],
-      ...pullHosts.merges,
-      record: (id) => chats.pullMerged(id),
-      online: () => net.isOnline(),
-    });
-    const clockify = new ClockifyPlugin({
-      store: loaded,
-      secrets: new PluginSecrets(loaded, seal, unseal),
-      fetch: (url, init) => net.fetch(url, init),
-      chats: {
-        summaries: () => loaded.get().chats ?? [],
-        get: (id) => chats.get(id),
-      },
-      projectName: (id) => {
-        try {
-          return projects.get(id).name;
-        } catch {
-          return "Removed project";
-        }
-      },
-      aiSettings: () => loaded.aiSettings(),
-    });
     const triageService = new TriageService(loaded, app.getPath("userData"));
     triage = triageService;
     const previewProjects = new PreviewProjects(
@@ -516,8 +422,12 @@ app
       join(app.getPath("userData"), "device-hub"),
       (url, init) => net.fetch(url, init),
     );
-    previews = new ThreadPreviews(window, (projectId, chatId, url, folder) =>
-      previewProjects.target(projectId, chatId, url, folder),
+    previews = new ThreadPreviews(
+      window,
+      (projectId, chatId, url, folder, saved) =>
+        previewProjects.target(projectId, chatId, url, folder, saved),
+      Date.now,
+      new SavedPreviews(loaded),
     );
     void previews.servers.reattach();
     const draftStore = new DraftStore(
@@ -543,8 +453,6 @@ app
       store: loaded,
       projects,
       client: () => login.client,
-      sessions: new TerminalSessions(async () => accountHomes()),
-      appData: app.getPath("appData"),
       send: (job) => window.send("relay:project-adding", job),
     });
     const api = apiContext({
@@ -558,7 +466,7 @@ app
       phoneRemote: () => phoneRemote,
       handoffs: () => handoffs,
       login,
-      hosts,
+      hosts: pullHosts.hosts,
       window,
       menubar,
       links,
@@ -582,63 +490,40 @@ app
       elsewhereWatch,
       settingsFile: file,
     });
-    const dispatch: Dispatch = createDispatch(api);
-    const summaries = new ChatSummaryFeed(api.listChats, (event) => {
-      window.send("relay:project-chats", event);
-      phoneRemote?.chatsEvent(event);
+    const dispatch = createDispatch(api);
+    followSummaries({
+      chats,
+      listChats: api.listChats,
+      pullMerges,
+      login,
+      keepAwake,
+      send: (event) => {
+        window.send("relay:project-chats", event);
+        phoneRemote?.chatsEvent(event);
+      },
+      changed: () => menubar.refresh(),
     });
-    chats.onSummaries((projectId) => {
-      summaries.changed(projectId);
-      menubar.refresh();
-      void keepAwake.refresh();
-    });
-    // Settings, phone access and the power source change without a thread noticing.
-    setInterval(() => void keepAwake.refresh(), 15_000).unref();
-    // Whether a PR thread's review began reads with the account.
-    login.changed = () => {
-      chats.summariesChanged();
-      void pullMerges.sweep();
-    };
-    // A quiet thread settles itself as days pass, and one whose PR merged when
-    // the host says so; the feed sends only what changed.
-    setInterval(() => {
-      chats.summariesChanged();
-      void pullMerges.sweep();
-      void chats.cleanUpWorktrees();
-    }, 5 * 60_000).unref();
-    // Not right at launch: the thread the window opens on first says it's shown.
-    setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
-    const handoffDir = join(app.getPath("userData"), "handoffs");
-    const computers = new Computers(loaded, seal, unseal);
-    handoffs = {
-      computers,
-      sender: new Handoffs(
-        loaded,
-        computers,
-        chats,
-        projects,
-        join(handoffDir, "out"),
-      ),
-    };
     const presence = new Presence();
-    phoneRemote = new PhoneRemote(
-      loaded,
-      seal,
-      unseal,
-      {
-        projects: () => projects.list(login.client),
-        projectPath: (id) => projects.get(id).path,
-        chats: api.listChats,
-        chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
-        cost: (id) => chats.cost(id),
-        version: () => app.getVersion(),
+    const remote = remoteServices({
+      dir: dataDir,
+      store: loaded,
+      projects,
+      chats,
+      login,
+      listChats: api.listChats,
+      dispatch,
+      adding: projectAdding,
+      version: () => app.getVersion(),
+      updates: {
+        state: () => updater.current,
+        check: () => updater.check(),
+        download: () => updater.download(),
+        install: () => updater.installAndRestart(),
+      },
+      computers: { holders: new WslHolders() },
+      host: {
         present: () => presence.present(),
-        // The bridge forwards only its allowlist; see shared/remote.ts.
-        dispatch,
         shrinkImage,
-        renderPage: (chatId, renderId, page) =>
-          chats.renderPage(chatId, renderId, page),
-        news: (cursor) => chats.newsSince(cursor),
         drafts: sharedDrafts,
         dictation: {
           status: () => dictation.current.status,
@@ -648,58 +533,40 @@ app
           ready: () => readAloud.ready(),
           speak: (markdown, sink) => readAloud.speak(markdown, sink),
         },
-        handoffs: new HandoffReceiver({
-          projects: () => projects.list(login.client),
-          root: (id) => projects.root(id),
-          chats,
-          worktrees: join(app.getPath("userData"), "worktrees"),
-          dir: join(handoffDir, "in"),
-          version: () => app.getVersion(),
-          dispatch,
-          adding: projectAdding,
-          updates: {
-            state: () => updater.current,
-            check: () => updater.check(),
-            download: () => updater.download(),
-            install: () => updater.installAndRestart(),
-          },
-        }),
       },
-      Number(process.env.RELAY_REMOTE_PORT) || undefined,
-    );
+      port: Number(process.env.RELAY_REMOTE_PORT) || undefined,
+    });
+    handoffs = remote.handoffs;
+    phoneRemote = remote.phoneRemote;
     presence.watch(() => phoneRemote?.presenceChanged());
     void phoneRemote.start();
-    void computers.start();
+    void handoffs.computers.start();
     threadTerminals.connect((event) => window.send("relay:terminal", event));
     serveApi(window, dispatch);
-    // Agent sessions that kept running through a restart come back before the window does.
-    await loadRegistryAgents();
-    await chats.reattach();
-    if (relayTools)
-      void answerRelayTools(
-        relayTools,
-        chats,
-        agentHosts,
-        agentProjects(projects, () => login.client, app.getPath("userData")),
-        {
-          previews,
-          look: (html, options, signal) =>
-            appRenderTheme(window.win).then((theme) =>
-              lookAtPage(html, { ...options, theme }, signal),
-            ),
-          handoffs: handoffs.sender,
-          agents: threadAgents(agentUpdates, () => store?.aiSettings()),
-          reportProblem: draftBugReport,
-          ...(process.env.RELAY_DEV_STALE
-            ? { restart: () => devBuild.restart() }
-            : {}),
-        },
-      );
-    chats.armWakeups();
-    void chats
-      .reconcileSummaries()
-      .catch((e) => console.warn("Could not reconcile thread summaries:", e));
-    rearmOnWake(powerMonitor, () => chats.armWakeups());
+    // Before the window comes back.
+    await resumeThreads({
+      dir: dataDir,
+      chats,
+      projects,
+      login,
+      agentHosts,
+      relayTools: host.tools,
+      agentUpdates,
+      aiSettings: () => loaded.aiSettings(),
+      tools: {
+        previews,
+        look: (html, options, signal) =>
+          appRenderTheme(window.win).then((theme) =>
+            lookAtPage(html, { ...options, theme }, signal),
+          ),
+        handoffs: handoffs.sender,
+        reportProblem: draftBugReport,
+        ...(process.env.RELAY_DEV_STALE
+          ? { restart: () => devBuild.restart() }
+          : {}),
+      },
+      powerMonitor,
+    });
     updater.start();
     devBuild.start();
     listenDevSwitch(quit);

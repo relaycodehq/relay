@@ -13,6 +13,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "../pull-requests/host";
 import type { SystemInfo } from "./report";
 import { BugReports, type BugReportDeps, type DesktopActions } from "./service";
+import type { BugReportFields } from "../../shared/bug-report";
 import type { CreatedIssue, Exec, IssueHost } from "./submit";
 
 let root = "";
@@ -99,6 +100,24 @@ function service(
   return new BugReports(deps, desktop);
 }
 
+async function save(reports: BugReports, fields: BugReportFields) {
+  return reports.save((await reports.preview()).draft.id, fields);
+}
+
+async function addScreenshot(
+  reports: BugReports,
+  name: string,
+  bytes: Uint8Array,
+  replacing?: string,
+) {
+  return reports.addScreenshot(
+    (await reports.preview()).draft.id,
+    name,
+    bytes,
+    replacing,
+  );
+}
+
 /** A 1×1 PNG with a text chunk holding something private. */
 function png() {
   const chunk = (type: string, data: Buffer) => {
@@ -129,8 +148,8 @@ const fields = {
 
 it("keeps the draft and its cleaned screenshot across a restart", async () => {
   const first = service(fakeHost().host);
-  await first.save(fields);
-  const added = await first.addScreenshot("Blank pane", png());
+  await save(first, fields);
+  const added = await addScreenshot(first, "Blank pane", png());
   const [shot] = added.draft.screenshots;
   expect(shot).toMatchObject({ name: "Blank pane", width: 1, height: 1 });
 
@@ -147,7 +166,7 @@ it("keeps the draft and its cleaned screenshot across a restart", async () => {
 it("posts exactly the previewed text, anonymized, and only when asked", async () => {
   const { host, posted } = fakeHost();
   const reports = service(host);
-  const preview = await reports.save(fields);
+  const preview = await save(reports, fields);
   expect(host.createIssue).not.toHaveBeenCalled();
   expect(preview.body).toContain("<project-1>/x.ts");
   expect(preview.body).toContain("[redacted GitHub token]");
@@ -172,8 +191,8 @@ it("posts exactly the previewed text, anonymized, and only when asked", async ()
 it("refuses a send whose preview is stale, and drops what the user took out", async () => {
   const { host } = fakeHost();
   const reports = service(host);
-  const old = await reports.save(fields);
-  const trimmed = await reports.save({
+  const old = await save(reports, fields);
+  const trimmed = await save(reports, {
     ...fields,
     includeLog: false,
     removedFacts: ["agent:claude"],
@@ -201,7 +220,7 @@ it("without a gh login, Send opens GitHub's form with exactly the preview", asyn
     {},
     desktop,
   );
-  const shown = await signedOut.save({ ...fields, includeLog: false });
+  const shown = await save(signedOut, { ...fields, includeLog: false });
   expect(shown.account).toBeNull();
   expect(shown.via).toBe("browser");
   const sent = await signedOut.send(shown.digest);
@@ -214,7 +233,7 @@ it("without a gh login, Send opens GitHub's form with exactly the preview", asyn
   expect(sent.preview.draft.submission?.status).toBe("browser");
 
   // Too long for a link: the report goes on the clipboard, the form says paste.
-  const long = await signedOut.save({
+  const long = await save(signedOut, {
     ...fields,
     description: "It went white. ".repeat(400),
   });
@@ -261,7 +280,7 @@ it("records performance and floats the files GitHub only takes dragged in", asyn
     "Blender 310% in ~/render",
   );
   expect(opened.body).toContain("<summary>Performance</summary>");
-  await reports.save({ ...fields, attachPerfLog: true });
+  await save(reports, { ...fields, attachPerfLog: true });
   const recorded = await reports.record(30);
   expect(recorded.draft.recording).toMatchObject({ seconds: 30 });
   expect(recorded.dragFiles).toEqual([
@@ -312,7 +331,7 @@ it("discards a report only once its recording has stopped saving", async () => {
   const reports = service(fakeHost().host, {
     performance: stoppableRecording(saved),
   });
-  await reports.save(fields);
+  await save(reports, fields);
   const recording = reports.record(30);
   await vi.waitFor(async () =>
     expect((await reports.preview()).recordingNow).toBeDefined(),
@@ -331,7 +350,7 @@ it("tells a page opened during a recording once it's saved", async () => {
   const reports = service(fakeHost().host, {
     performance: stoppableRecording(saved),
   });
-  await reports.save(fields);
+  await save(reports, fields);
   const recording = reports.record(30);
   await vi.waitFor(async () =>
     expect((await reports.preview()).recordingNow).toBeDefined(),
@@ -361,7 +380,7 @@ it("keeps nothing, and says nothing, when stopped before it recorded", async () 
       },
     },
   });
-  await reports.save(fields);
+  await save(reports, fields);
   const recording = reports.record(30);
   await vi.waitFor(async () =>
     expect((await reports.preview()).recordingNow).toBeDefined(),
@@ -380,7 +399,7 @@ it("keeps the draft when GitHub refuses", async () => {
     }),
   });
   const limited = service(host);
-  await limited.save(fields);
+  await save(limited, fields);
   const preview = await limited.open();
   await expect(limited.send(preview.digest)).rejects.toThrow(/rate limiting/);
   const after = await limited.open();
@@ -402,7 +421,7 @@ it("looks for an issue a dropped send may have made instead of posting twice", a
     }),
   });
   const reports = service(host);
-  const preview = await reports.save(fields);
+  const preview = await save(reports, fields);
   await expect(reports.send(preview.digest)).rejects.toThrow(
     /may have been created/,
   );
@@ -428,7 +447,7 @@ it("won't send again when it can't tell whether the last send landed", async () 
     }),
   });
   const reports = service(host);
-  const preview = await reports.save(fields);
+  const preview = await save(reports, fields);
   await expect(reports.send(preview.digest)).rejects.toThrow();
   await expect(reports.send(preview.digest)).rejects.toThrow(
     /didn't send again/,
@@ -460,8 +479,8 @@ it("treats gh's issue link as sent even when an upload failed", async () => {
   };
   const { host } = fakeHost();
   const reports = service(host, { gh: async () => "/usr/bin/gh", exec });
-  await reports.save(fields);
-  const preview = await reports.addScreenshot("Shot", png());
+  await save(reports, fields);
+  const preview = await addScreenshot(reports, "Shot", png());
   expect(preview.via).toBe("gh");
   const sent = await reports.send(preview.digest);
   expect(host.createIssue).not.toHaveBeenCalled();
@@ -476,8 +495,8 @@ it("treats gh's issue link as sent even when an upload failed", async () => {
 it("says screenshots need adding by hand when only the API can post", async () => {
   const { host, posted } = fakeHost();
   const reports = service(host);
-  await reports.save(fields);
-  const preview = await reports.addScreenshot("Shot", png());
+  await save(reports, fields);
+  const preview = await addScreenshot(reports, "Shot", png());
   expect(preview.via).toBe("api");
   expect(preview.body).toContain("A screenshot follows in a comment");
   const sent = await reports.send(preview.digest);
@@ -519,7 +538,7 @@ it("has the picked agent tidy up the description alone", async () => {
       reasoningEffort: "low" as const,
     },
   };
-  await reports.save({
+  await save(reports, {
     ...fields,
     description: "changes pane white again?? had to reload",
     writer,
@@ -542,7 +561,7 @@ it("has the picked agent tidy up the description alone", async () => {
 it("doesn't spend an agent run on an empty description", async () => {
   const writeUp = vi.fn<BugReportDeps["writeUp"]>();
   const reports = service(fakeHost().host, { writeUp });
-  await reports.save({ ...fields, description: "  " });
+  await save(reports, { ...fields, description: "  " });
   await expect(reports.writeWithAgent()).rejects.toThrow(/own words/);
   expect(writeUp).not.toHaveBeenCalled();
 });
@@ -553,7 +572,7 @@ it("keeps what the user wrote, so a tidy-up can be undone", async () => {
     description: "**What happened**\n\nThe pane goes white.",
   }));
   const reports = service(fakeHost().host, { writeUp });
-  await reports.save({
+  await save(reports, {
     ...fields,
     title: "pane broke",
     description: "changes pane white again??",
@@ -564,7 +583,7 @@ it("keeps what the user wrote, so a tidy-up can be undone", async () => {
     description: "changes pane white again??",
   });
   // Edits after the tidy-up don't lose the original; undo puts it back.
-  await reports.save({
+  await save(reports, {
     ...fields,
     description: tidied.draft.description,
     title: "Changes pane goes white",
@@ -591,4 +610,75 @@ it("fills a new report from an agent but never over one being written", async ()
     reports.prefill({ kind: "feature", title: "Other", description: "x" }),
   ).rejects.toThrow(/already writing a report/);
   expect((await reports.open()).title).toBe("Diff pane goes blank");
+});
+
+it("refuses old autosaves after discard and keeps the replacement writable", async () => {
+  const reports = service(fakeHost().host);
+  const old = await save(reports, fields);
+  const fresh = await reports.discard();
+  await expect(
+    reports.save(old.draft.id, { ...fields, title: "late old save" }),
+  ).rejects.toThrow(/no longer open/);
+  const next = await reports.save(fresh.draft.id, {
+    ...fields,
+    title: "replacement",
+  });
+  expect(next.draft.id).toBe(fresh.draft.id);
+  expect((await service(fakeHost().host).open()).draft.title).toBe(
+    "replacement",
+  );
+});
+
+it("serializes discard with saves without letting an old draft write the new one", async () => {
+  const reports = service(fakeHost().host);
+  const old = await save(reports, fields);
+  const discarding = reports.discard();
+  // Let discard reserve the queue before the delayed IPC save arrives.
+  await Promise.resolve();
+  const late = reports.save(old.draft.id, { ...fields, title: "late" });
+  await expect(late).rejects.toThrow(/no longer open/);
+  const fresh = await discarding;
+  expect(fresh.draft.title).toBe("");
+  await reports.save(fresh.draft.id, { ...fields, title: "new" });
+  expect((await service(fakeHost().host).open()).draft.title).toBe("new");
+});
+
+it("does not write a delayed agent tidy-up into a replacement draft", async () => {
+  let finish!: (fields: { title: string; description: string }) => void;
+  const written = new Promise<{ title: string; description: string }>(
+    (resolve) => {
+      finish = resolve;
+    },
+  );
+  const reports = service(fakeHost().host, { writeUp: () => written });
+  await save(reports, fields);
+  const tidying = reports.writeWithAgent();
+  await Promise.resolve();
+  const fresh = await reports.discard();
+  await reports.save(fresh.draft.id, { ...fields, title: "replacement" });
+  finish({ title: "old tidy-up", description: "old rewritten text" });
+  await expect(tidying).rejects.toThrow(/no longer open/);
+  expect((await reports.open()).draft).toMatchObject({
+    id: fresh.draft.id,
+    title: "replacement",
+    description: fields.description,
+  });
+  expect((await service(fakeHost().host).open()).draft.title).toBe(
+    "replacement",
+  );
+});
+
+it("refuses screenshots converted for the old draft while discard was pending", async () => {
+  const reports = service(fakeHost().host);
+  const old = await save(reports, fields);
+  const discarding = reports.discard();
+  await Promise.resolve();
+  const lateImage = reports.addScreenshot(old.draft.id, "old image", png());
+  await expect(lateImage).rejects.toThrow(/no longer open/);
+  const fresh = await discarding;
+  expect((await reports.open()).draft.screenshots).toEqual([]);
+  await reports.addScreenshot(fresh.draft.id, "new image", png());
+  expect(
+    (await reports.open()).draft.screenshots.map((shot) => shot.name),
+  ).toEqual(["new image"]);
 });

@@ -17,6 +17,7 @@ import { Projects } from "./projects";
 import { Gitea } from "../pull-requests/gitea";
 import { fixtureServer } from "../../tests/fixtures/gitea";
 import { folderGoneMessage, projectTitle } from "../../shared/projects";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 it("titles a folder name by its words, leaving one with none as it is", () => {
   expect(projectTitle("relay-releases")).toBe("Relay Releases");
@@ -29,8 +30,7 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
   const fixture = await fixtureServer();
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   const root = join(dir, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     execFileSync("git", ["init", "-q", root]);
     // Git lists remotes alphabetically, so the deleted one is tried first.
@@ -63,8 +63,7 @@ it("links through a remote Gitea knows when another remote is gone", async () =>
 it("links a github.com remote without any account, preferring origin over an older fork", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   const root = join(dir, "repo");
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     execFileSync("git", ["init", "-q", root]);
     // `old` sorts before `origin`, the way Git lists them.
@@ -233,6 +232,63 @@ it("opens and saves files in a folder without Git", async () => {
   }
 });
 
+it("edits an unborn checkout and refuses a stale save after its first commit", async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
+  const root = join(dir, "repo");
+  const git = (...args: string[]) => gitIn(root, ...args);
+  try {
+    execFileSync("git", ["init", "-q", "-b", "main", root]);
+    git("config", "user.email", "test@example.com");
+    git("config", "user.name", "Test");
+    await writeFile(join(root, "notes.txt"), "first\n");
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const project = await projects.add(root, null);
+    const place = await projects.inspect(project.id);
+    expect(place.plain).not.toBe(true);
+    const file = await projects.file(place, "notes.txt");
+    expect(file).toMatchObject({
+      contents: "first\n",
+      original: "",
+      head: "",
+      branch: "main",
+    });
+    await projects.save(
+      place,
+      "notes.txt",
+      file.head,
+      file.version,
+      "second\n",
+    );
+    const saved = await projects.file(place, "notes.txt");
+    expect(saved.contents).toBe("second\n");
+    git("add", "notes.txt");
+    git("commit", "-qm", "first commit");
+    await expect(
+      projects.save(place, "notes.txt", saved.head, saved.version, "unsaved\n"),
+    ).rejects.toThrow("The checkout moved to another commit.");
+    expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("second\n");
+    const committed = await projects.file(place, "notes.txt");
+    expect(committed).toMatchObject({
+      contents: "second\n",
+      original: "second\n",
+      branch: "main",
+    });
+    expect(committed.head).toBe(git("rev-parse", "HEAD").toString().trim());
+    await projects.save(
+      place,
+      "notes.txt",
+      committed.head,
+      committed.version,
+      "third\n",
+    );
+    expect(await readFile(join(root, "notes.txt"), "utf8")).toBe("third\n");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("reuses the Scratchpad folder no thread has used before making another", async () => {
   const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-")));
   try {
@@ -388,6 +444,36 @@ it("changes links against current queued settings without replacing other prefer
         { path: join(dir, "backend"), access: "read" },
         { path: join(dir, "shared"), access: "write" },
       ],
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+it("re-adding a project on another computer takes what that computer says of it now", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-project-remote-"));
+  try {
+    const store = new Store(join(dir, "state"));
+    await store.load();
+    const projects = new Projects(store);
+    const box = { id: "box", name: "box" };
+    const first = await projects.addRemote(box, {
+      id: "p1",
+      name: "notes",
+      path: "/srv/notes",
+      plain: true,
+    });
+    await projects.remove(first.id);
+    const again = await projects.addRemote(
+      { id: "box", name: "server" },
+      { id: "p1", name: "notes", path: "/srv/notes" },
+    );
+    expect(again.id).toBe(first.id);
+    expect(again.removed).toBeUndefined();
+    expect(again.computer).toEqual({
+      id: "box",
+      name: "server",
+      projectId: "p1",
     });
   } finally {
     await rm(dir, { recursive: true, force: true });

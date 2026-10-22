@@ -1,5 +1,5 @@
+import { GithubCredentials } from "../github/credentials";
 import { it, expect } from "vitest";
-import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,7 @@ import {
 } from "./github";
 import { statusRuns } from "./statuses";
 import { remoteRepo } from "./index";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 const run = (workflow: string, state: CiRun["state"], at: number): CiRun => ({
   workflow,
@@ -82,7 +83,7 @@ it("shows commit statuses from CI outside Actions next to Actions runs", async (
           ? new Response("{}", { status: 404 })
           : Response.json(body);
       },
-      async () => null,
+      new GithubCredentials(async () => null),
     );
   const actions = "/repos/o/r/actions/runs";
   const tip = "/repos/o/r/commits/heads/feature/x/status";
@@ -204,7 +205,7 @@ it("walks back past commits CI never saw to the last one it reported on", async 
         },
       });
     },
-    async () => "token",
+    new GithubCredentials(async () => "token"),
   );
   const reading = await github.read({ owner: "o", name: "r" }, "main");
   expect(asked).toEqual([null, "cursor"]);
@@ -273,8 +274,7 @@ it("groups Gitea Actions job statuses under their workflow", () => {
 
 it("reads host and repository off origin, scp-style and under a subpath", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-ci-")));
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   try {
     git("init", "-q");
     git("remote", "add", "upstream", "https://github.com/else/where.git");

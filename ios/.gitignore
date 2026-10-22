@@ -5,3 +5,6 @@ build/
 DerivedData/
 xcuserdata/
 .swiftpm/
+
+# Local Swift package resolution (Simulator hot reload can add extra pins)
+/RelayKit/Package.resolved

@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { X, AlertCircle } from "lucide-react";
 import { useReturnFocus } from "../lib/focus-return";
 import { useBackdropClose } from "../lib/backdrop-close";
+import { errorMessage } from "../../shared/error-message";
 /**
  * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
  * or in a menu they open, bubble up here and are left to them.
@@ -118,7 +119,7 @@ export function ErrorBox({
     <div className="error-box" role="alert">
       <AlertCircle size={17} />
       <div>
-        {error instanceof Error ? error.message : String(error)}
+        {errorMessage(error)}
         {retry && <button onClick={retry}>Try again</button>}
       </div>
     </div>

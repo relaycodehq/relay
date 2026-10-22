@@ -174,6 +174,7 @@ function SummaryPopover({
       ref={box}
       className="compact-summary"
       role="dialog"
+      data-shortcut-passive
       aria-label="Compacted context"
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}

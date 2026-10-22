@@ -10,6 +10,7 @@ import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { keys } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
+import { useStoredFlag } from "../../lib/useStoredFlag";
 import { CommitFileList } from "./CommitFileList";
 import { CommitModel, useCommitModel } from "./CommitModel";
 import { useAISettings } from "../agents/useAISettings";
@@ -27,6 +28,8 @@ export function CommitSheet({
   where,
   tree,
   push,
+  only,
+  onSettleThread,
   onClose,
 }: {
   project: Project;
@@ -34,17 +37,30 @@ export function CommitSheet({
   /** Kept current by the poll, so the commit checks the latest revision. */
   tree: WorkingTree;
   push: boolean;
+  /** Ticks just these files at first, like the files of one agent turn. */
+  only?: readonly string[];
+  /** Present when committing from a turn's changes, bound to its thread. */
+  onSettleThread?: () => void;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const key = workingTreeKey(where);
-  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
+  const [settleThread, setSettleThread] = useStoredFlag(
+    "relay-settle-thread-after-commit",
+  );
+  // Every change goes in unless left out; with `only`, just the picked ones,
+  // so a file that changes while the sheet is open stays out.
+  const [leftOut, setLeftOut] = useState<ReadonlySet<string>>(new Set());
+  const [picked, setPicked] = useState(() => only && new Set(only));
   const [message, setMessage] = useState("");
   const [writing, setWriting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const typed = useRef(false);
   const files = tree.changes.filter((c) => !c.conflict);
+  const excluded = picked
+    ? new Set(files.map((c) => c.path).filter((p) => !picked.has(p)))
+    : leftOut;
   const selected = files
     .filter((c) => !excluded.has(c.path))
     .map((c) => c.path);
@@ -62,8 +78,10 @@ export function CommitSheet({
   const headSubject = tree.outgoing.find((c) => c.sha === tree.head)?.subject;
   const model = useCommitModel(project);
   const generation = useRef(0);
+  const draftPaths = useRef<readonly string[]>([]);
   async function write(paths: string[], pick = model.own) {
     if (!paths.length) return;
+    draftPaths.current = paths;
     const id = ++generation.current;
     setWriting(true);
     setError(undefined);
@@ -85,9 +103,15 @@ export function CommitSheet({
     drafted.current = true;
     if (drafts) void write(selected);
   }, [ai]);
-  // The drafted message still describes the files that left.
+  // Redraft only when files the message describes were committed elsewhere.
+  // Committing excluded files doesn't change what the message is about.
   useEffect(() => {
-    if (drafts && committed.length && selected.length && !typed.current)
+    if (
+      drafts &&
+      selected.length &&
+      !typed.current &&
+      draftPaths.current.some((p) => committed.includes(p))
+    )
       void write(selected);
   }, [committed.length]);
   async function submit() {
@@ -136,6 +160,7 @@ export function CommitSheet({
         });
         qc.setQueryData(key, next);
       }
+      if (settleThread) onSettleThread?.();
       onClose();
     } catch (e) {
       setError(e);
@@ -156,6 +181,7 @@ export function CommitSheet({
           revision: tree.revision,
         }),
       );
+      if (settleThread) onSettleThread?.();
       onClose();
     } catch (e) {
       setError(e);
@@ -166,17 +192,31 @@ export function CommitSheet({
   }
   const canPush =
     push && !!tree.pushTarget && (tree.ahead > 0 || !tree.upstream);
-  const toggle = (paths: string[]) =>
-    setExcluded((s) => {
+  const toggle = (paths: string[]) => {
+    const out = paths.every((p) => !excluded.has(p));
+    const flip = (s: ReadonlySet<string>, add: boolean) => {
       const next = new Set(s);
-      const allIn = paths.every((p) => !s.has(p));
       for (const p of paths) {
-        if (allIn) next.add(p);
+        if (add) next.add(p);
         else next.delete(p);
       }
       return next;
-    });
+    };
+    if (picked) setPicked(flip(picked, !out));
+    else setLeftOut(flip(leftOut, out));
+  };
   const subject = message.split("\n", 1)[0].trim().length;
+  const settleOption = onSettleThread && (
+    <label className="commit-settle-thread">
+      <input
+        type="checkbox"
+        checked={settleThread}
+        onChange={(e) => setSettleThread(e.target.checked)}
+        disabled={busy}
+      />
+      Settle thread after commit
+    </label>
+  );
   return (
     <Modal
       title={push ? "Commit & push" : "Commit"}
@@ -207,6 +247,7 @@ export function CommitSheet({
         {allCommitted ? (
           <>
             {!!error && <ErrorBox error={error} />}
+            {settleOption}
             <button
               type="button"
               className="primary commit-submit"
@@ -286,6 +327,7 @@ export function CommitSheet({
             {!!(error ?? model.error) && (
               <ErrorBox error={error ?? model.error} />
             )}
+            {settleOption}
             <button
               className="primary commit-submit"
               aria-keyshortcuts={keys("Meta+Enter", "Control+Enter")}

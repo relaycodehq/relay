@@ -10,6 +10,7 @@ import type {
   ChatSentTo,
 } from "../handoff";
 import type { FromTerminal } from "../terminal-sessions";
+import type { ImportApp } from "../project-import";
 import { refSchema } from "../validation";
 import type { LinkedFolder } from "./links";
 import type {
@@ -134,6 +135,8 @@ export interface ChatSummary {
   drivesThreads?: true;
   /** Continues a Claude Code or Codex session started in a terminal. */
   fromTerminal?: FromTerminal;
+  /** Opened to import this app's history with an agent; its agent gets the import tools. */
+  importFrom?: ImportApp;
   /** An async question is still open: neither answered nor dismissed. It needs the user even while the agent continues. */
   asking?: true;
   /** Live state added by list(); never persisted. */
@@ -217,7 +220,13 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
   z.object({ kind: z.literal("wake") }).strict(),
-  z.object({ kind: z.literal("archive") }).strict(),
+  z
+    .object({
+      kind: z.literal("archive"),
+      /** Its worktree's folder goes too, its branch kept for an unarchive. */
+      dropWorktree: z.literal(true).optional(),
+    })
+    .strict(),
   z.object({ kind: z.literal("unread") }).strict(),
   z.object({ kind: z.literal("auto-settle"), enabled: z.boolean() }).strict(),
   z.object({ kind: z.literal("pin"), pinned: z.boolean() }).strict(),

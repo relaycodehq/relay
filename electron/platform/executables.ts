@@ -107,8 +107,6 @@ export function shimTarget(text: string) {
 /** No program by that name is installed or on PATH, as opposed to one that's there but failed. */
 export class NotInstalledError extends Error {}
 
-export const findExecutable = (name: string) => locate(name);
-
 /**
  * Which install a path from `findExecutable` runs: its file and when that was
  * last written. Updating a CLI rewrites it or points its link at another version.
@@ -120,7 +118,7 @@ export async function installStamp(found: string) {
 }
 
 /** Git's own lookup, apart from the agent CLIs `findExecutable` finds. */
-export const findGit = () => locate("git");
+export const findGit = () => findExecutable("git");
 
 const isAgent = (name: string): name is AgentProvider =>
   (agentProviders as readonly string[]).includes(name);
@@ -205,7 +203,7 @@ async function* candidates(name: string) {
   }
 }
 
-async function locate(name: string) {
+export async function findExecutable(name: string) {
   const chosen = isAgent(name) ? linked[name] : tools[name];
   if (chosen) {
     await access(chosen).catch(() => {
@@ -294,6 +292,7 @@ const outputLimit = 10_000;
  * Runs a path from `findExecutable` and collects what it says; cancellation
  * rejects after exit. With `ownTree` (on by default for a signal) the process
  * gets its own group, so a timeout or cancel stops its children too.
+ * `onOutput` hears the end of what it printed so far, as it prints.
  */
 export const runExecutable = (
   file: string,
@@ -301,6 +300,7 @@ export const runExecutable = (
   timeout: number,
   signal?: AbortSignal,
   ownTree = !!signal,
+  onOutput?: (output: string) => void,
 ): Promise<Exec> =>
   new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(new Error("Cancelled."));
@@ -333,6 +333,7 @@ export const runExecutable = (
       const text = chunk.toString();
       if (isStdout && stdout.length < 1_000_000) stdout += text;
       output = (output + text).slice(-outputLimit);
+      onOutput?.(output);
     };
     child.stdout?.on("data", (chunk: Buffer) => collect(chunk, true));
     child.stderr?.on("data", (chunk: Buffer) => collect(chunk, false));

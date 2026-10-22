@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { builtInMemes } from "../../shared/memes";
 
 vi.mock("../media", () => ({
-  mediaUrl: (full: string) => `relay-media://file/t/${basename(full)}`,
+  mediaUrl: async (full: string) => `relay-media://file/t/${basename(full)}`,
 }));
 import { Memes } from ".";
 

@@ -3,7 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FolderX } from "lucide-react";
 import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { errorMessage } from "../../lib/error-message";
+import { errorMessage } from "../../../shared/error-message";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import "./projects.css";
 

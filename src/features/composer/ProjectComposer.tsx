@@ -3,6 +3,7 @@ import {
   useImperativeHandle,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
   type Ref,
 } from "react";
@@ -20,11 +21,8 @@ import type {
 } from "../../../shared/projects";
 import type { InheritedSettings } from "../agents/composer-settings";
 import { useComposerToolbar } from "./composer-toolbar";
-import { effortStep, quickStep } from "../quick-switch/effort-shortcut";
 import { quickItems } from "../quick-switch/quick-switch";
 import {
-  altSends,
-  sendAction,
   sendKeyLabel,
   useRunningSendAction,
   useSendKey,
@@ -32,13 +30,14 @@ import {
 import { mac } from "../../lib/mod-key";
 import { useAutoCompactSaved } from "../agents/auto-compact";
 import { formatTokens } from "../../../shared/tokens";
-import { matches } from "../../lib/shortcuts";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
+import { useNextGuess, type NextGuess } from "./useNextGuess";
 import { draftRecipient } from "../../../shared/recipient";
 import { AgentMissingNotice } from "./AgentMissingNotice";
 import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
+import { composerKeys, type ComposerSubmitOptions } from "./composer-keys";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
 import { usePromptHistory } from "./usePromptHistory";
@@ -72,7 +71,6 @@ import type { ThreadCost } from "../../../shared/thread-cost";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
 import { AccountControl, accountUsageFooter } from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
-import { noteUsed } from "../../lib/used";
 import "./composer.css";
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
@@ -115,10 +113,13 @@ export interface ComposerConversation {
    */
   cold?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
+  /** The message the agent guessed comes next, offered while the draft is empty. */
+  prediction?: NextGuess;
 }
 export function ProjectComposer({
   ref,
   projectId,
+  computer,
   files = projectId,
   keys,
   conversation,
@@ -139,6 +140,8 @@ export function ProjectComposer({
 }: {
   ref?: Ref<ComposerHandle>;
   projectId: string;
+  /** The paired computer the project lives on, whose agents its threads run. */
+  computer?: { id: string; name: string };
   /** Whose files `@` offers: the project, or the thread's own worktree. */
   files?: string;
   /**
@@ -193,9 +196,23 @@ export function ProjectComposer({
     agent,
     lastSent: conversation.lastSent,
   });
-  const catalogs = useModelCatalogs(projectId);
+  const catalogs = useModelCatalogs(projectId, computer?.id);
   const promptInput = useRef<PromptInputHandle>(null);
   const draft = useComposerDraft(keys.draft, promptInput);
+  // Typing only hides it until the draft is empty again. A note isn't
+  // what the agent guessed: it was guessing what it would be asked.
+  const guess = useNextGuess(
+    conversation.chatId,
+    conversation.prediction,
+    composer.provider !== "message" &&
+      !draft.text.trim() &&
+      !draft.attached.length,
+  );
+  const ghost = guess.text;
+  const takeGhost = () => {
+    if (!ghost) return;
+    promptInput.current?.replace(ghost);
+  };
   const recall = usePromptHistory(promptInput, sent);
   const mounted = useRef(false);
   useEffect(() => {
@@ -295,11 +312,7 @@ export function ProjectComposer({
     onFill: (range) => promptInput.current?.insertText(range),
   });
   // One menu at a time; the files' wins where both could open.
-  const menu = memes.visible
-    ? memes
-    : mentions.visible
-      ? mentions
-      : commands;
+  const menu = memes.visible ? memes : mentions.visible ? mentions : commands;
   const composerSend = useComposerSend({
     draft,
     state: composer,
@@ -332,21 +345,51 @@ export function ProjectComposer({
   // Every send carries the box's pick on a cold cache, ⌥ the opposite of it.
   const sending = {
     ...composerSend,
-    send(steer = false, sendAt?: number, after?: () => void, flip = false) {
+    send({
+      steer,
+      sendAt,
+      after,
+      flipCompact = false,
+    }: ComposerSubmitOptions = {}) {
       const pick =
         cold && !running && compactFirst !== undefined
-          ? compactFirst !== flip
+          ? compactFirst !== flipCompact
           : undefined;
-      return composerSend.send(
+      return composerSend.send({
         steer,
         sendAt,
-        () => {
+        after: () => {
           setCompactPick(undefined);
           after?.();
         },
-        pick === sendCompacts ? undefined : pick,
-      );
+        compact: pick === sendCompacts ? undefined : pick,
+      });
     },
+  };
+  const onPromptKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    // The guess's own button keeps its keys.
+    if ((event.target as Element).closest(".composer-ghost")) return;
+    composerKeys(event, {
+      recall: (event) => recall.keyDown(event, draft.text),
+      ghost: ghost ? { take: takeGhost, dismiss: guess.dismiss } : undefined,
+      menus: [memes.onKeyDown, mentions.onKeyDown, commands.onKeyDown],
+      editQueued: onEditQueued
+        ? () => {
+            const at = promptInput.current?.caret();
+            return !!at && at.start === 0 && at.end === 0 && onEditQueued();
+          }
+        : undefined,
+      alternateCompact: !!cold && !running,
+      sendKey,
+      runningAction,
+      send: sending.send,
+      nextThread: () => {
+        // Not if the thread was left while it sent.
+        if (mounted.current) onNextThread?.();
+      },
+      stepEffort: (step) => runs.stepEffort(to, step),
+      stepQuick: quick.presets.length ? quick.step : undefined,
+    });
   };
   return (
     <div className="thread-compose-wrap">
@@ -355,7 +398,7 @@ export function ProjectComposer({
           <button
             type="button"
             className="primary"
-            disabled={busy || running || !runs.codex}
+            disabled={busy || running || !runs.sendSettings(planner)}
             onClick={() => sending.implementPlan(planner)}
           >
             Implement plan
@@ -383,7 +426,12 @@ export function ProjectComposer({
       {typeof notice === "function"
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
-      <AgentMissingNotice provider={to} />
+      <AgentMissingNotice
+        provider={to}
+        computer={computer}
+        projectId={projectId}
+        chatId={conversation.chatId}
+      />
       <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}
@@ -402,7 +450,7 @@ export function ProjectComposer({
         className="project-composer"
         onSubmit={(e) => {
           e.preventDefault();
-          sending.send(runningAction === "steer");
+          void sending.send({ steer: runningAction === "steer" });
         }}
       >
         <div className="composer-body">
@@ -444,6 +492,12 @@ export function ProjectComposer({
             }}
             onOpenPaste={setViewingPaste}
             onPasteRefused={draft.pasteRefused}
+            ghost={ghost}
+            onGhostSeen={guess.seen}
+            onGhost={() => {
+              takeGhost();
+              promptInput.current?.focusEnd();
+            }}
             images={draft.chips}
             onOpenImage={(n) =>
               draft.sketch(draft.images.find((image) => image.n === n)?.id)
@@ -454,60 +508,7 @@ export function ProjectComposer({
                 : (placeholder ??
                   "Ask about the code, plan a change, or build something…")
             }
-            onKeyDownCapture={(e) => {
-              // A recalled message takes ↑/↓ even from a menu it opened.
-              if (recall.keyDown(e, draft.text)) return;
-              if (
-                memes.onKeyDown(e) ||
-                mentions.onKeyDown(e) ||
-                commands.onKeyDown(e)
-              )
-                return;
-              if (e.nativeEvent.isComposing) return;
-              if (onEditQueued && !e.repeat && matches("edit-queued", e)) {
-                const at = promptInput.current?.caret();
-                if (at?.start === 0 && at.end === 0 && onEditQueued()) {
-                  e.preventDefault();
-                  noteUsed("shortcut:edit-queued");
-                  return;
-                }
-              }
-              // With ⌘/Ctrl+Enter sending, ⌥ plus it is also Send-then-new-thread's
-              // default; the button by Send is the one on screen, so it wins.
-              if (cold && !running && altSends(e, sendKey)) {
-                e.preventDefault();
-                sending.send(false, undefined, undefined, true);
-                return;
-              }
-              if (!e.repeat && matches("send-new-thread", e)) {
-                e.preventDefault();
-                noteUsed("shortcut:send-new-thread");
-                void sending.send(runningAction === "steer", undefined, () => {
-                  // Not if the thread was left while it sent.
-                  if (mounted.current) onNextThread?.();
-                });
-                return;
-              }
-              const step = effortStep(e);
-              if (step) {
-                e.preventDefault();
-                noteUsed(`shortcut:effort-${step < 0 ? "down" : "up"}`);
-                runs.stepEffort(to, step);
-                return;
-              }
-              const quickDir = quick.presets.length ? quickStep(e) : 0;
-              if (quickDir) {
-                e.preventDefault();
-                noteUsed(`shortcut:quick-${quickDir < 0 ? "prev" : "next"}`);
-                quick.step(quickDir);
-                return;
-              }
-              const action = sendAction(e, sendKey, runningAction);
-              if (action) {
-                e.preventDefault();
-                sending.send(action === "steer");
-              }
-            }}
+            onKeyDownCapture={onPromptKeyDown}
             onPasteCapture={draft.paste}
             onDrop={draft.drop}
             onDragOver={(event) => {
@@ -545,16 +546,16 @@ export function ProjectComposer({
               model: (
                 <ComposerModelPicker
                   provider={to}
-                  ready={!!runs.codex}
                   catalogs={runs.picker}
                   onOpen={catalogs.refresh}
                   openSignal={settingCommands.pickerSignal}
                   onSelect={runs.select}
                   defaultNames={catalogs.defaultNames}
+                  computer={computer}
                   account={{
                     of: accounts.of,
-                    footer: (provider, now) =>
-                      accountUsageFooter(provider, accounts, now),
+                    footer: (provider, now, container) =>
+                      accountUsageFooter(provider, accounts, now, container),
                   }}
                 />
               ),
@@ -639,7 +640,7 @@ export function ProjectComposer({
                     running={running}
                     sendKey={sendKey}
                     runningAction={runningAction}
-                    onSendLater={(at) => void sending.send(false, at)}
+                    onSendLater={(sendAt) => void sending.send({ sendAt })}
                   />
                 )}
               </>

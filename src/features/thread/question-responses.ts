@@ -18,7 +18,10 @@ const isAnswer = (m: ChatMessage) =>
   !m.worktreeCommand;
 
 /** A saved question reply can start another backend turn in the same visible response. */
-export function questionResponses(messages: ChatMessage[]) {
+export function questionResponses(
+  messages: ChatMessage[],
+  previous?: ReadonlyMap<string, QuestionResponse>,
+) {
   const owners = new Map(
     messages.flatMap((m) =>
       (m.questions ?? []).flatMap((q) =>
@@ -65,6 +68,20 @@ export function questionResponses(messages: ChatMessage[]) {
   for (const parts of groups) {
     if (!parts.some((m) => m.questions?.length)) continue;
     const last = parts.at(-1)!;
+    const waiting =
+      parts === current &&
+      last.status === "complete" &&
+      !!last.questions?.some((q) => !q.answers && !q.dismissed);
+    const held = previous?.get(parts[0]!.id);
+    if (
+      held &&
+      held.waiting === waiting &&
+      held.parts.length === parts.length &&
+      parts.every((part, index) => part === held.parts[index])
+    ) {
+      for (const part of parts) result.set(part.id, held);
+      continue;
+    }
     const traceDropped: ChatMessage["traceDropped"] = {};
     for (const part of parts)
       for (const [kind, count] of Object.entries(part.traceDropped ?? {})) {
@@ -98,10 +115,7 @@ export function questionResponses(messages: ChatMessage[]) {
           ),
         0,
       ),
-      waiting:
-        parts === current &&
-        last.status === "complete" &&
-        !!last.questions?.some((q) => !q.answers && !q.dismissed),
+      waiting,
     };
     for (const part of parts) result.set(part.id, response);
   }

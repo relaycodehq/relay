@@ -52,7 +52,7 @@ it("explains an invalid RELAY_NODE before downloading or changing anything", asy
     }),
   ).rejects.toMatchObject({
     code: 1,
-    stderr: expect.stringContaining("Node.js 22 or newer"),
+    stderr: expect.stringContaining("Node.js 22.13 or newer"),
   });
 });
 

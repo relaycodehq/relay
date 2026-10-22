@@ -249,3 +249,38 @@ it("searches beyond your own PRs only when the search names where", () => {
     "is:pr archived:false repo:o/r flaky",
   );
 });
+
+it.each([
+  [{ raw: true }, "application/vnd.github.raw+json"],
+  [{ accept: "application/vnd.github.diff" }, "application/vnd.github.diff"],
+] as const)(
+  "keeps GitHub media responses as text with %j",
+  async (options, accept) => {
+    const client = new GitHub(
+      {
+        id: "https://github.com",
+        server: "https://github.com",
+        user: { id: 1, login: "me" },
+        persistent: true,
+      },
+      "token",
+      async (url, init) => {
+        expect(url).toBe("https://api.github.com/repos/o/r/contents/a");
+        expect(new Headers(init.headers).get("accept")).toBe(accept);
+        expect(new Headers(init.headers).get("authorization")).toBe(
+          "Bearer token",
+        );
+        expect(new Headers(init.headers).get("X-GitHub-Api-Version")).toBe(
+          "2022-11-28",
+        );
+        expect(init.redirect).toBe("error");
+        expect(init.credentials).toBe("omit");
+        return new Response("raw file or diff");
+      },
+      () => {},
+    );
+    expect((await client.request("/repos/o/r/contents/a", options)).data).toBe(
+      "raw file or diff",
+    );
+  },
+);

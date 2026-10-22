@@ -18,6 +18,7 @@ type Run = {
   brief?: string;
   parentId?: string;
   status: SubagentStatus;
+  canStop?: boolean;
   started: number;
   ended?: number;
   summary?: string;
@@ -31,7 +32,7 @@ type Run = {
 
 export type SubagentStart = Pick<
   Run,
-  "description" | "type" | "model" | "brief" | "parentId" | "stop"
+  "description" | "type" | "model" | "brief" | "parentId" | "stop" | "canStop"
 >;
 
 const limits = {
@@ -63,6 +64,17 @@ export class SubagentBook implements SubagentSource {
       if (this.runs.size <= limits.runs) break;
       if (this.runs.get(old)!.status !== "running") this.runs.delete(old);
     }
+  }
+
+  /** A follow-up starts another run on a child session that already finished. */
+  resume(id: string) {
+    const run = this.runs.get(id);
+    if (!run || run.status === "running") return;
+    run.status = "running";
+    run.started = this.now();
+    run.ended = undefined;
+    run.report = undefined;
+    run.stopping = false;
   }
 
   /** What names it, once the agent says more. */
@@ -124,6 +136,13 @@ export class SubagentBook implements SubagentSource {
     for (const entry of run.trace)
       if (entry.kind === "activity" && entry.activity.status === "running")
         entry.activity = { ...entry.activity, status: "stopped" };
+  }
+
+  /** A batch can report its result after the start call itself has finished. */
+  report(id: string, text: string) {
+    const run = this.runs.get(id);
+    if (run && !run.stopping && text.trim())
+      run.report = text.trim().slice(0, limits.text);
   }
 
   /** The session ended, and its agents with it. */
@@ -188,6 +207,7 @@ export class SubagentBook implements SubagentSource {
       model: run.model,
       brief: run.brief,
       status: run.status,
+      canStop: run.canStop,
       started: run.started,
       ended: run.ended,
       summary: run.summary,

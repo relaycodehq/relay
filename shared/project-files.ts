@@ -17,6 +17,16 @@ export interface DirListing {
 
 export const maxDirEntries = 5000;
 
+/** A bounded text excerpt, with the full file's line count (including its final empty line). */
+export interface FilePreview {
+  contents: string;
+  lines: number;
+  truncated: boolean;
+}
+
+export const filePreviewLines = 60;
+export const filePreviewCharacters = 32 * 1024;
+
 /** How the pane opens a file: the editor, a picture, or a card with the way out. */
 export interface FileInfo {
   path: string;

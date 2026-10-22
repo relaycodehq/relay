@@ -68,10 +68,16 @@ export function useSessionCommands({
   // Session commands need this thread; the rest belong to the workspace.
   function runCommand(command: RelayCommand, args: string): boolean | string {
     if (command === "compact") {
-      if (!chat || !context) return "There is no agent session to compact yet.";
+      // A native session can exist without token telemetry. The service validates
+      // its saved ID; usage counts are only needed to draw the context meter.
+      const provider = [...shown]
+        .reverse()
+        .find((m) => m.role === "assistant")?.provider;
+      if (!chat || !provider)
+        return "There is no agent session to compact yet.";
       if (compacting) return "The session is already compacting.";
-      if (args && !agentInfo(context.provider).compactInstructions)
-        return `${agentName(context.provider)} compacts without custom instructions.`;
+      if (args && !agentInfo(provider).compactInstructions)
+        return `${agentName(provider)} compacts without custom instructions.`;
       compact(args || undefined);
       return true;
     }

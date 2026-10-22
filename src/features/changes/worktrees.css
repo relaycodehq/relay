@@ -58,20 +58,27 @@
   left: 6px;
   white-space: nowrap;
 }
-/* Where a new thread works, said as one phrase: "Worktree on relay/…". */
+/* Where a new thread works; the branch control beside it says which branch. */
 .thread-context-controls .workspace-trigger.workspace-where {
   flex: 0 1 auto;
   min-width: 0;
 }
-.workspace-where-label {
+/* A new worktree's branch and what it starts off, read as one phrase:
+   "⑂ named after your message off main". */
+.thread-context-controls .new-thread-branch {
   display: flex;
-  gap: 4px;
+  flex: 0 1 auto;
+  align-items: center;
   min-width: 0;
 }
-.workspace-where-off {
-  display: flex;
-  gap: 4px;
-  min-width: 0;
+.new-thread-branch .composer-branch-trigger {
+  margin-left: 0;
+  max-width: none;
+}
+/* "off main": a new worktree's base, the word quieter than the branch. */
+.composer-branch-trigger .new-thread-branch-off {
+  flex: none;
+  margin-right: -3px;
   opacity: 0.7;
 }
 .workspace-item-note {

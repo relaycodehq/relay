@@ -69,11 +69,17 @@ export function accountHomes() {
   ].sort(
     (a, b) => Number(b.id === SYSTEM_ACCOUNT) - Number(a.id === SYSTEM_ACCOUNT),
   );
-  return accounts.map(({ provider, id }) => ({
-    provider,
-    account: id,
-    home: accountHome(provider, id),
-  }));
+  // Terminal import supports Claude and Codex only. Google accounts must not be scanned as Codex.
+  return accounts
+    .filter(
+      (a): a is typeof a & { provider: "claude" | "codex" } =>
+        a.provider !== "antigravity",
+    )
+    .map(({ provider, id }) => ({
+      provider,
+      account: id,
+      home: accountHome(provider, id),
+    }));
 }
 
 /** The config folder the CLI reads when run as this account. */
@@ -107,6 +113,7 @@ export class AgentAccounts {
     const inUse: Record<AccountProvider, string> = {
       claude: SYSTEM_ACCOUNT,
       codex: SYSTEM_ACCOUNT,
+      antigravity: SYSTEM_ACCOUNT,
     };
     for (const provider of accountProviders) {
       const id = saved?.inUse?.[provider];

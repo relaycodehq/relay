@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, realpath, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -79,12 +79,9 @@ test("thread windows follow preferences, keep their zoom, and preserve a 13 px p
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {

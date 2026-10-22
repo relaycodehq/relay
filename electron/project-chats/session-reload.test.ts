@@ -1,50 +1,21 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import {
+  root,
+  chats,
+  projectId,
+  events,
+  useProjectChats,
+} from "../../tests/fixtures/project-chats-harness";
+import { agentRuntime } from "../agents";
+import { readFile } from "node:fs/promises";
+import { expect, it, vi } from "vitest";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { tmpdir } from "node:os";
-import { Store } from "../app/store";
-import { Projects } from "../projects/projects";
-import { ProjectChats } from "./index";
-import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
-import type { ChatMessage, ProjectChat } from "../../shared/projects";
-import { fakeCli } from "../../tests/fixtures/fake-cli";
+import type { ProjectChat } from "../../shared/projects";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
-let root: string, store: Store, projects: Projects, chats: ProjectChats;
-let projectId: string;
-let events: { chatId: string; message: ChatMessage }[];
-beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-reload-")));
-  const repo = join(root, "repo");
-  await mkdir(repo);
-  execFileSync("git", ["init", "--quiet", repo]);
-  const cli = await fakeCli(
-    join(root, "codex"),
-    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
-  );
-  vi.mocked(findExecutable).mockResolvedValue(cli);
-  vi.stubEnv("RELAY_AGENT_CAPTURE", join(root, "capture.jsonl"));
-  store = new Store(join(root, "state"));
-  await store.load();
-  projects = new Projects(store);
-  projectId = (await projects.add(repo, null)).id;
-  events = [];
-  chats = new ProjectChats(store, projects, join(root, "chats"), (event) =>
-    events.push(structuredClone(event)),
-  );
-});
-afterEach(async () => {
-  await chats?.dispose();
-  vi.unstubAllEnvs();
-  await rm(root, { recursive: true, force: true, maxRetries: 20 });
-});
+useProjectChats();
 
 const input = (body: string) => ({
   id: randomUUID(),
@@ -108,7 +79,7 @@ it("restarts Codex on the same thread and notes it quietly", async () => {
   expect(calls[1].thread.threadId).toBe("fixture-thread");
 });
 
-it("refuses while an answer runs, and for agents it can't reload", async () => {
+it("refuses while an answer runs and reports OpenCode’s shared reload scope", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await expect(chats.reloadSessions(chat.id)).rejects.toThrow(
     "no agent session",
@@ -140,6 +111,16 @@ it("refuses while an answer runs, and for agents it can't reload", async () => {
     version: 1,
   });
   await internals.storage.save(saved);
-  await expect(chats.reloadSessions(other.id)).rejects.toThrow("OpenCode");
-  expect((await chats.get(other.id)).messages).toHaveLength(1);
+  const reload = vi
+    .spyOn(agentRuntime("opencode"), "reloadSession")
+    .mockResolvedValue({ scope: "service" });
+  try {
+    await chats.reloadSessions(other.id);
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect((await chats.get(other.id)).messages.at(-1)?.reload).toEqual({
+      scope: "service",
+    });
+  } finally {
+    reload.mockRestore();
+  }
 });

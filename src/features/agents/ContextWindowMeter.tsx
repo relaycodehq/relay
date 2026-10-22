@@ -1,3 +1,5 @@
+import { useNow } from "../../lib/useNow";
+import { useWindowFocused } from "../../lib/window-focus";
 import { useEffect, useId, useReducer, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { usePinOnClick } from "../../lib/usePinOnClick";
@@ -66,27 +68,21 @@ export function formatDuration(ms: number) {
  * while `live` (the popover's countdown is showing).
  */
 function useCacheClock(cache: PromptCache | undefined, live: boolean) {
+  const focused = useWindowFocused();
+  const now = useNow(1000, live && cache?.at !== undefined);
   const [tick, wake] = useReducer((n: number) => n + 1, 0);
   const at = cache?.at,
     ttlMs = cache?.ttlMs;
   useEffect(() => {
-    if (at === undefined || ttlMs === undefined) return;
+    if (!focused || at === undefined || ttlMs === undefined) return;
     const next = nextCacheChange({ at, ttlMs }, Date.now());
     const timer =
       next === undefined ? undefined : setTimeout(wake, next - Date.now() + 50);
-    // Timers stall while the machine sleeps; look again when the window returns.
-    window.addEventListener("focus", wake);
     return () => {
       clearTimeout(timer);
-      window.removeEventListener("focus", wake);
     };
-  }, [at, ttlMs, tick]);
-  useEffect(() => {
-    if (!live || at === undefined) return;
-    const timer = setInterval(wake, 1000);
-    return () => clearInterval(timer);
-  }, [live, at]);
-  return Date.now();
+  }, [at, ttlMs, tick, focused]);
+  return live ? now : Date.now();
 }
 
 type Decoration = "fire" | "ice";
@@ -335,7 +331,7 @@ export function ContextWindowMeter({
   onCompact: () => void;
   /** Opens the details whenever this changes, e.g. from a /context command. */
   openSignal?: number;
-  /** Asked on opening the details, for Claude's breakdown of its window. */
+  /** Asked on opening the details, for the provider's context breakdown. */
   counter?: ContextCounter;
   /** Claude's latest /context answer in the thread, shown when its session can't count. */
   savedReport?: DatedReport;
@@ -377,12 +373,12 @@ export function ContextWindowMeter({
   const shown = decoration(worn);
   const heatLabel =
     heat === "fire" ? "fresh" : heat === "warm" ? "warm" : "cold";
-  // Only Claude reports what fills its window.
+  // Claude counts its categories; Codex estimates the content it exposes.
   const claude = provider === "claude";
   const auto = useAutoCompact();
   const breakdown = useContextReport({
-    counter: claude ? counter : undefined,
-    version: usage.usedTokens,
+    counter: claude || provider === "codex" ? counter : undefined,
+    version: `${usage.usedTokens}:${usage.maxTokens}:${usage.totalTokens}`,
     open,
     saved: claude ? savedReport : undefined,
   });
@@ -440,7 +436,10 @@ export function ContextWindowMeter({
           align="end"
           sideOffset={6}
         >
-          <Popover.Popup className="composer-select-popup context-meter-popup">
+          <Popover.Popup
+            data-shortcut-passive
+            className="composer-select-popup context-meter-popup"
+          >
             <div className="usage-meter" data-pace={pace}>
               <div className="usage-meter-top">
                 <span>Context window</span>

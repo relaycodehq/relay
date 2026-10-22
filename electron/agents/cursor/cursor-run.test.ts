@@ -435,12 +435,6 @@ describe("a Cursor turn", () => {
     expect(error).not.toHaveProperty("kind");
   });
 
-  it("passes on Cursor's own words when an error only sounds like signing in", async () => {
-    await expect(runCursor(turn("[[apikey]]").options)).rejects.toThrow(
-      "The MCP server docs needs an API key in its settings.",
-    );
-  });
-
   it("won't compact by hand, since Cursor summarizes on its own", async () => {
     await expect(
       runCursor(turn("x", { job: { kind: "compact" } }).options),

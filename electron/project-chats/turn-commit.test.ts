@@ -4,6 +4,7 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { commitWatch } from "./turn-commit";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 let root: string, other: string;
 const git = (dir: string, ...args: string[]) =>
@@ -18,9 +19,7 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-turn-commit-")));
   other = await realpath(await mkdtemp(join(tmpdir(), "relay-turn-other-")));
   for (const dir of [root, other]) {
-    git(dir, "init", "-q", "-b", "main");
-    git(dir, "config", "user.name", "Test");
-    git(dir, "config", "user.email", "test@example.invalid");
+    initRepo(dir);
     await commit(dir, "start");
   }
 });

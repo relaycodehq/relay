@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { GitCommitHorizontal } from "lucide-react";
 import type { CommitSummary, HistoryScope } from "../../../shared/history";
 import { api } from "../../lib/api";
+import { useStoredChoice } from "../../lib/persisted-store";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { layoutGraph, type GraphRow } from "./commit-graph";
 import { CommitChanges } from "./CommitChanges";
@@ -29,17 +30,18 @@ export function ProjectHistory({
   slots: PaneSlots;
   onOpenFile: (path: string) => void;
 }) {
-  const [scope, setScope] = useState<HistoryScope>(() =>
-    localStorage.getItem(SCOPE_KEY) === "all" ? "all" : "head",
+  const [scope, setScope] = useStoredChoice<HistoryScope>(
+    SCOPE_KEY,
+    ["head", "all"],
+    "head",
   );
   const [limit, setLimit] = useState(PAGE);
   const [selected, setSelected] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
-  // New commits and branch switches move HEAD; the log follows it.
+  // The shell watches and refreshes the tree; follow its HEAD without another poll.
   const tree = useQuery({
     queryKey: workingTreeKey(projectId),
     queryFn: () => api.projectWorkingTree(projectId),
-    refetchInterval: 5000,
   });
   const head = tree.data?.head;
   const log = useQuery({
@@ -63,7 +65,6 @@ export function ProjectHistory({
   function changeScope(next: HistoryScope) {
     setScope(next);
     setLimit(PAGE);
-    localStorage.setItem(SCOPE_KEY, next);
   }
   return (
     <section className="project-history" aria-label="Commit history">

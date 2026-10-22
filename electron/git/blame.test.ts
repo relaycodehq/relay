@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { BlameService } from "./blame";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 const server = "https://git.example.test/gitea",
   repo = { owner: "Web", name: "portal" };
@@ -20,8 +21,7 @@ const original =
   context;
 const updated =
   "export const retained = 1;\nexport const changed = 2;\n" + context;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-blame-"));
   roots.push(root);

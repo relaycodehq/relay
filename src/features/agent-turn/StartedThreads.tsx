@@ -154,6 +154,7 @@ export function StartedChip({
           collisionPadding={12}
         >
           <Popover.Popup
+            data-shortcut-passive
             className="subagents-card"
             aria-label="Started threads"
           >

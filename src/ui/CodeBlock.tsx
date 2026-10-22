@@ -23,6 +23,7 @@ import { api } from "../lib/api";
 import { blockCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { useFlash } from "../lib/useFlash";
 
 // Tokenizing a block from scratch runs on the main thread; past this it stays plain.
 const MAX_HIGHLIGHT_LENGTH = 40_000;
@@ -44,7 +45,7 @@ export interface Highlighted {
 
 // Read from the attributes applyToDocument sets on <html>, so the markdown
 // renderer doesn't depend on the appearance store (or localStorage).
-function syntaxTheme() {
+export function syntaxTheme() {
   const { theme, syntax } = document.documentElement.dataset;
   return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
 }
@@ -130,12 +131,8 @@ function RunCommandButton({
   className: string;
 }) {
   const run = useContext(RunCommand);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 2500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  // Long enough to read why it was copied instead.
+  const [copied, setCopied] = useFlash(2500);
   if (!run) return null;
   const label = copied
     ? "The terminal couldn't take it, so it's copied instead"

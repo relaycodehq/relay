@@ -1,13 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, realpath, stat } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  extname,
-  isAbsolute,
-  join,
-  relative,
-} from "node:path";
+import { basename, dirname, extname, join } from "node:path";
+import { within } from "../util/paths";
 
 /**
  * Finds the icon a project already chose for itself: the IDE icon, the app
@@ -284,8 +278,7 @@ class Search {
       return null;
     try {
       const real = await realpath(path);
-      const rel = relative(this.root, real);
-      if (!rel || rel.startsWith("..") || isAbsolute(rel)) return null;
+      if (!within(this.root, real)) return null;
       const info = await stat(real);
       const large = info.size > MAX_BYTES;
       if (

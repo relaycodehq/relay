@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
 import type { CodeViewItem } from "@pierre/diffs";
 import type {
   EditState,
@@ -161,6 +167,7 @@ export function useEditorView({
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const live = useRef(true);
+  const host = useRef<HTMLElement>(null);
   useEffect(() => {
     live.current = true;
     return () => {
@@ -242,8 +249,31 @@ export function useEditorView({
     editable,
     startEditing,
     /** Once the worker has coloured the read-only file, the editor takes over. */
-    onPostRender: (_node: HTMLElement, rendered: unknown) => {
+    onPostRender: (node: HTMLElement, rendered: unknown) => {
+      host.current = node;
       if (!editable && coloured(rendered)) startEditing();
+    },
+    /** A click in the blank space under the last line puts the caret at the end, as in VS Code. */
+    onPointerDown: (event: PointerEvent) => {
+      const node = host.current;
+      if (event.button !== 0 || !node?.isConnected) return;
+      if (node.contains(event.target as Node)) return;
+      if (event.clientY <= node.getBoundingClientRect().bottom) return;
+      const editor = viewer.current?.getEditor(id);
+      if (!editor) return;
+      event.preventDefault();
+      const lines = editor.getText().split("\n");
+      const end = { line: lines.length - 1, character: lines.at(-1)!.length };
+      const held = editor.getViewState().selections?.at(-1);
+      editor.focus({
+        lineNumber: end.line + 1,
+        character: end.character,
+        preventScroll: true,
+      });
+      if (event.shiftKey && held) {
+        const anchor = held.direction === -1 ? held.end : held.start;
+        editor.setSelections([{ start: anchor, end, direction: "forward" }]);
+      }
     },
     editor: (): FileEditor | undefined => viewer.current?.getEditor(id),
   };

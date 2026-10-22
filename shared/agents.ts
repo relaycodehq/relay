@@ -68,6 +68,8 @@ export interface AgentInfo {
    * same conversation loads skills, plugins and instructions changed since.
    */
   reload: boolean;
+  /** Its reload restarts configuration in a service every project shares, not one thread's session. */
+  reloadsService?: true;
   /** Reports plan usage windows for the usage ring. */
   usage: boolean;
   /** Lists models from many upstream providers, so the picker groups them. */
@@ -119,14 +121,15 @@ export const agents = {
     name: "OpenCode",
     cli: "OpenCode",
     defaultModel: "OpenCode default",
-    helper: false,
+    helper: true,
     reviewCommand: "Relay's review prompt",
     fast: false,
     skills: false,
     commandsAlone: true,
     compactInstructions: false,
     side: true,
-    reload: false,
+    reload: true,
+    reloadsService: true,
     usage: false,
     modelGroups: true,
   },
@@ -189,7 +192,7 @@ export const agents = {
     name: "Antigravity",
     cli: "Antigravity",
     defaultModel: "Antigravity default",
-    helper: false,
+    helper: true,
     reviewCommand: "Relay's review prompt",
     fast: false,
     skills: false,
@@ -197,7 +200,7 @@ export const agents = {
     compactInstructions: false,
     side: false,
     reload: true,
-    usage: false,
+    usage: true,
     modelGroups: false,
     sdk: true,
   },

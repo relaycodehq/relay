@@ -17,10 +17,7 @@ import { runClaudeProject } from "./index";
 // A Claude turn keeps running in the agent host while Relay restarts, and the
 // next Relay shows the rest of it.
 
-vi.mock("../../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../../platform/executables");
 
 // Claude Code answering one prompt, cut short by a "now" steer the way 2.1.302
 // writes it, then answering the steer once the release file exists.

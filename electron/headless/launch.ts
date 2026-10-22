@@ -15,8 +15,11 @@ import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
 import { headlessPaths, privateDirectory } from "./paths";
 import { lockPath } from "./lock";
+import { recordedAlive, recordProcess } from "./process-identity";
 import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
+import { sleep } from "../util/sleep";
+import { pidAlive as alive } from "../util/pid";
 
 /** What a Relay run as a service exits with to be started again. */
 export const restartCode = 75;
@@ -94,8 +97,6 @@ export async function running(home: string): Promise<DaemonStatus | null> {
     throw e;
   }
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Waits for Relay to answer, or for `exited` to say it never will. */
 async function answering(home: string, exited?: () => number | null) {
@@ -218,7 +219,7 @@ export async function claimHome(pidFile: string) {
   try {
     if (await holding(pidFile))
       throw new AlreadyRunning("Relay is already running here.");
-    await writeFile(pidFile, `${process.pid}\n`, { mode: 0o600 });
+    await writeFile(pidFile, `${recordProcess()}\n`, { mode: 0o600 });
   } catch (e) {
     await release();
     throw e;
@@ -236,18 +237,10 @@ export async function stopForService(home: string) {
   await stopped(home);
 }
 
-function alive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    // Someone else's process: alive, just not ours to signal.
-    return (e as NodeJS.ErrnoException).code === "EPERM";
-  }
-}
-
 /** The live process a pid file names, if any. */
 async function holding(pidFile: string) {
-  const pid = Number((await readFile(pidFile, "utf8").catch(() => "")).trim());
-  return pid && alive(pid) ? pid : undefined;
+  const record = await readFile(pidFile, "utf8").catch(() => "");
+  return recordedAlive(record, alive)
+    ? Number(record.split(" ")[0])
+    : undefined;
 }

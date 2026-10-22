@@ -10,11 +10,10 @@ import type {
   Repo,
   Review,
 } from "../../../shared/types";
-import { readBounded } from "../../../shared/http";
 import { parseAzurePullUrl } from "../../../shared/validation";
 import type { AzureCliToken } from "../../azure-devops/cli-token";
-import { networkError } from "../../util/network-errors";
 import { filePair } from "../file-pair";
+import { HostRequests, responseMessage, type RequestOptions } from "../request";
 import {
   ApiError,
   type FetchRequest,
@@ -51,8 +50,7 @@ import {
 const VERSION = "api-version=7.1";
 /** File diffs are only served as a preview; without the flag Azure refuses them. */
 const FILE_DIFFS_VERSION = "api-version=7.1-preview.1";
-const MAX_JSON = 8 * 1024 * 1024,
-  MAX_FILE = 2 * 1024 * 1024;
+const MAX_FILE = 2 * 1024 * 1024;
 const PAGE = 50;
 
 /** `value`, or a cancellation as soon as `signal` aborts, leaving `value` running. */
@@ -93,7 +91,7 @@ interface ConnectionData {
  * client gives, so the review doesn't care which host it is.
  */
 export class AzureDevOps implements PullHost {
-  private controllers = new Set<AbortController>();
+  private requests: HostRequests;
   /** A PR's threads, briefly: the review asks for each one's comments in turn. */
   private threadCache = new Map<
     string,
@@ -109,10 +107,12 @@ export class AzureDevOps implements PullHost {
     /** The signed-in identity, for votes and "is it mine". */
     private me: string,
     private token: () => Promise<AzureCliToken>,
-    private fetchRequest: FetchRequest,
+    fetchRequest: FetchRequest,
     /** Tells the sign-in this client was refused, so the next one starts over. */
     private refused: () => void,
-  ) {}
+  ) {
+    this.requests = new HostRequests(fetchRequest);
+  }
 
   static async connect(
     server: string,
@@ -141,98 +141,62 @@ export class AzureDevOps implements PullHost {
   }
 
   dispose() {
-    for (const c of this.controllers) c.abort();
-    this.controllers.clear();
+    this.requests.dispose();
   }
 
-  async request<T>(
+  request<T>(
     url: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      raw?: boolean;
-      limit?: number;
-      signal?: AbortSignal;
-    } = {},
+    options: RequestOptions = {},
   ): Promise<{ data: T; headers: Headers }> {
-    const controller = new AbortController();
-    this.controllers.add(controller);
-    const timer = setTimeout(() => controller.abort(), 30000);
-    try {
-      const credential = await this.token();
-      const response = await this.fetchRequest(url, {
-        method: options.method ?? "GET",
-        headers: {
-          Authorization: credential.header,
-          Accept: options.raw ? "application/octet-stream" : "application/json",
-          ...(options.body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: options.body ? JSON.stringify(options.body) : undefined,
-        redirect: "error",
-        credentials: "omit",
-        signal: options.signal
-          ? AbortSignal.any([controller.signal, options.signal])
-          : controller.signal,
-      }).catch((error: unknown) => {
-        throw networkError(error, this.account.server);
-      });
-      const json = response.headers
-        .get("content-type")
-        ?.includes("application/json");
-      // A refused sign-in can come as a 203 sign-in page instead of a 401.
-      if (
-        response.status === 401 ||
-        response.status === 203 ||
-        (response.ok && !options.raw && !json)
-      ) {
-        await response.body?.cancel();
-        if (credential.rejected()) this.refused();
-        throw new ApiError(
-          401,
-          "Azure DevOps rejected the Azure CLI sign-in. Run `az login` in a terminal, then try again.",
-        );
-      }
-      if (!response.ok) {
-        const detail = await response.text().catch(() => "");
-        const message = (() => {
-          try {
-            return (JSON.parse(detail) as { message?: string }).message;
-          } catch {
-            return undefined;
-          }
-        })();
-        throw new ApiError(
-          response.status,
-          response.status === 404
-            ? "Not found, or your Azure DevOps sign-in can't see this repository."
-            : response.status === 429
-              ? "Azure DevOps is rate limiting requests. Wait a moment, then retry."
-              : response.status === 403
-                ? `Azure DevOps denied this${message ? `: ${message}` : "."}`
-                : message
-                  ? `Azure DevOps refused this: ${message}`
-                  : `Azure DevOps returned HTTP ${response.status}. Please retry.`,
-        );
-      }
-      const body = await readBounded(
-        response,
-        options.limit ?? MAX_JSON,
-        options.raw
+    return this.requests.request<T>(
+      url,
+      {
+        ...options,
+        text: options.raw,
+        tooLarge: options.raw
           ? "This file is too large for the inline viewer. Open it in Azure DevOps or your local editor."
           : "Azure DevOps returned more data than Relay can safely handle. Please retry.",
-      );
-      return {
-        data: (options.raw ? body : body ? JSON.parse(body) : null) as T,
-        headers: response.headers,
-      };
-    } catch (e) {
-      if (controller.signal.aborted || options.signal?.aborted)
-        throw new Error("Request cancelled or timed out. Please retry.");
-      throw e;
-    } finally {
-      clearTimeout(timer);
-      this.controllers.delete(controller);
-    }
+      },
+      async (send) => {
+        const credential = await this.token();
+        const response = await send({
+          Authorization: credential.header,
+          Accept: options.raw ? "application/octet-stream" : "application/json",
+        });
+        const json = response.headers
+          .get("content-type")
+          ?.includes("application/json");
+        // A refused sign-in can come as a 203 sign-in page instead of a 401.
+        if (
+          response.status === 401 ||
+          response.status === 203 ||
+          (response.ok && !options.raw && !json)
+        ) {
+          await response.body?.cancel();
+          if (credential.rejected()) this.refused();
+          throw new ApiError(
+            401,
+            "Azure DevOps rejected the Azure CLI sign-in. Run `az login` in a terminal, then try again.",
+          );
+        }
+        if (!response.ok) {
+          const message = await responseMessage(response);
+          throw new ApiError(
+            response.status,
+            response.status === 404
+              ? "Not found, or your Azure DevOps sign-in can't see this repository."
+              : response.status === 429
+                ? "Azure DevOps is rate limiting requests. Wait a moment, then retry."
+                : response.status === 403
+                  ? `Azure DevOps denied this${message ? `: ${message}` : "."}`
+                  : message
+                    ? `Azure DevOps refused this: ${message}`
+                    : `Azure DevOps returned HTTP ${response.status}. Please retry.`,
+          );
+        }
+        return response;
+      },
+    );
   }
 
   private repoPath(r: Repo) {

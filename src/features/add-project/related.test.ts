@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Project } from "../../../shared/projects";
-import { relatedFolders } from "./related";
+import { localProjectAt, relatedFolders } from "./related";
 
 it("offers the repos beside a project that share its name's first word", () => {
   const project = { id: "w", path: "/Users/you/work/acme-web" } as Project;
@@ -21,4 +21,16 @@ it("offers the repos beside a project that share its name's first word", () => {
     "acme-api",
     "Acme_docs",
   ]);
+});
+
+it("matches a folder here to a project here, not one on a paired computer at the same path", () => {
+  const path = "/Users/you/code/relay";
+  const there = {
+    id: "r",
+    path,
+    computer: { id: "wsl", name: "Ubuntu", projectId: "x" },
+  } as Project;
+  expect(localProjectAt([there], path)).toBeUndefined();
+  const here = { id: "h", path } as Project;
+  expect(localProjectAt([there, here], path)).toBe(here);
 });

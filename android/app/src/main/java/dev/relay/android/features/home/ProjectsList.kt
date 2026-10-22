@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import dev.relay.android.remote.model.RemoteChatSummary
 import dev.relay.android.remote.model.RemoteOverview
 import dev.relay.android.remote.model.RemoteProject
+import dev.relay.android.remote.model.RemoteProjectComputer
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.ListRow
 import dev.relay.android.ui.Text
@@ -52,12 +53,28 @@ fun projectFolders(projects: List<RemoteProject>): List<Pair<String, List<Remote
             }
         }
 
-/** "2 working · 5 threads · 3h ago", or "No threads yet". */
-fun projectLine(chats: List<RemoteChatSummary>, now: Long): String {
-    if (chats.isEmpty()) return "No threads yet"
+/** Where a project on another computer lives: "On thinkcenter", or that it can't be reached. */
+fun computerLine(computer: RemoteProjectComputer?): String? = computer?.let {
+    if (it.gone == true) "${it.name} isn't paired anymore" else "On ${it.name}"
+}
+
+/** "1 running", or "1 running on thinkcenter" for a project on another computer. */
+fun tasksLine(running: Int?, computer: RemoteProjectComputer? = null): String? = running?.let {
+    (if (it > 0) "$it running" else "Nothing running") + computer?.let { c -> " on ${c.name}" }.orEmpty()
+}
+
+/** A project on another computer's sites: the ports its tasks opened there, which a phone's tunnel to this one can't reach. */
+fun remoteSitesLine(ports: List<Int>, computer: RemoteProjectComputer): String =
+    (if (ports.isEmpty()) "On ${computer.name}" else "${ports.joinToString(", ") { "localhost:$it" }} on ${computer.name}") +
+        " · can't open from here"
+
+/** "2 working · 5 threads · 3h ago", or "No threads yet"; "On thinkcenter · …" for one on another computer. */
+fun projectLine(chats: List<RemoteChatSummary>, now: Long, computer: RemoteProjectComputer? = null): String {
+    val where = computerLine(computer)?.let { "$it · " }.orEmpty()
+    if (chats.isEmpty()) return where + "No threads yet"
     val busy = chats.count { it.running == true || it.waiting == true }
     val count = "${chats.size} ${if (chats.size == 1) "thread" else "threads"}"
-    return (if (busy > 0) "$busy working · " else "") + "$count · ${ago(chats.maxOf { it.updated }, now)}"
+    return where + (if (busy > 0) "$busy working · " else "") + "$count · ${ago(chats.maxOf { it.updated }, now)}"
 }
 
 /** The Projects tab: the Scratchpad, then each folder's projects. */
@@ -107,7 +124,7 @@ fun ProjectsList(
             items(projects, key = { "project:${it.id}" }) { p ->
                 ListRow(
                     p.name,
-                    subtitle = projectLine(byProject[p.id].orEmpty(), now),
+                    subtitle = projectLine(byProject[p.id].orEmpty(), now, p.computer),
                     leading = { ProjectIcon(p, size = 16.dp) },
                     selected = p.id == selected,
                     subtitleLines = 1,

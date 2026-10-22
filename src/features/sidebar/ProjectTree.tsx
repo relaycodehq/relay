@@ -30,10 +30,15 @@ import {
 import { agentsSince } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { dropSide, type ProjectDrag } from "./useProjectDrag";
+import { ghostKey } from "../../../shared/import-offer";
 import type { ProjectGroups } from "./useProjectGroups";
 import { groupKey, type SidebarFolds } from "./useSidebarFolds";
 import { NameInput } from "../../ui/NameInput";
 import { useProjectIcon } from "../projects/ProjectBadge";
+import {
+  projectComputer,
+  usePairedComputers,
+} from "../handoff/usePairedComputers";
 import { MenuAction, MenuPopup } from "./SidebarMenu";
 import {
   firstThreads,
@@ -59,15 +64,20 @@ export interface ProjectTree {
   onNew: (p: Project) => void;
   /** Opens the project's page in Settings. */
   onProjectSettings: (p: Project) => void;
+  /** An import plan's chats coming into each project, its stand-ins' included. */
+  importing?: Map<string, number>;
 }
 
 /** A group's insides: a new group's name field, its groups, then its projects. */
 export function GroupContents({
   node,
   tree,
+  root = false,
 }: {
   node: ProjectFolderNode;
   tree: ProjectTree;
+  /** The top of the tree, whose projects are in no group. */
+  root?: boolean;
 }) {
   const { groups } = tree;
   return (
@@ -85,10 +95,64 @@ export function GroupContents({
       {node.folders.map((folder) => (
         <GroupSection key={folder.path} folder={folder} tree={tree} />
       ))}
-      {node.projects.map((p) => (
-        <ProjectSection key={p.id} project={p} tree={tree} />
-      ))}
+      {root && node.folders.length > 0 && node.projects.length > 0 ? (
+        <Ungrouped projects={node.projects} tree={tree} />
+      ) : (
+        node.projects.map((p) => (
+          <ProjectSection key={p.id} project={p} tree={tree} />
+        ))
+      )}
     </>
+  );
+}
+
+/** How many projects a group holds, its groups' included. */
+const projectCount = (node: ProjectFolderNode): number =>
+  node.projects.length +
+  node.folders.reduce((sum, f) => sum + projectCount(f), 0);
+
+/** Once there are groups, the projects in none get a label like theirs. */
+function Ungrouped({
+  projects,
+  tree,
+}: {
+  projects: Project[];
+  tree: ProjectTree;
+}) {
+  const { drag, folds } = tree;
+  const key = groupKey("");
+  const isOpen = folds.isOpen(key, true);
+  const into = drag.drop?.kind === "folder" && drag.drop.path === "";
+  return (
+    <section className="sb-folder" aria-label="Projects in no group">
+      <div
+        className={`sb-folder-row ${into ? "drop-into" : ""}`}
+        onDragOver={(e) => {
+          if (!drag.dragging) return;
+          drag.over(e, { kind: "folder", path: "" });
+          drag.openWhileDragging(key, isOpen);
+        }}
+        onDrop={(e) => drag.dropOn(e, { kind: "folder", path: "" })}
+      >
+        <button
+          className="sb-folder-toggle"
+          aria-label={`${isOpen ? "Collapse" : "Expand"} projects in no group`}
+          aria-expanded={isOpen}
+          onClick={() => folds.setOpen(key, !isOpen)}
+        >
+          <span>Other</span>
+          <ChevronRight size={11} />
+          <span className="sb-folder-count">{projects.length}</span>
+        </button>
+      </div>
+      {isOpen && (
+        <div className="sb-folder-body">
+          {projects.map((p) => (
+            <ProjectSection key={p.id} project={p} tree={tree} />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -107,6 +171,7 @@ function GroupSection({
     !folder.folders.length &&
     !folder.projects.length &&
     groups.adding?.parent !== folder.path;
+  const count = projectCount(folder);
   return (
     <section
       className={[
@@ -168,6 +233,7 @@ function GroupSection({
             >
               <span>{folder.name}</span>
               <ChevronRight size={11} />
+              {count > 0 && <span className="sb-folder-count">{count}</span>}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>
@@ -250,7 +316,68 @@ function ProjectFolderIcon({ id, open }: { id: string; open: boolean }) {
   return open ? <FolderOpen size={15} /> : <Folder size={15} />;
 }
 
+/** A project an import would add: dimmed, dragged into place, nothing else until it's imported. */
+function PlannedProject({
+  project: p,
+  tree,
+}: {
+  project: Project;
+  tree: ProjectTree;
+}) {
+  const { drag } = tree;
+  const chats = tree.importing?.get(p.id) ?? 0;
+  return (
+    <section
+      className={[
+        "sb-project",
+        "sb-planned",
+        drag.dragging === p.id && "dragging",
+        drag.drop?.kind === "project" &&
+          drag.drop.id === p.id &&
+          drag.dragging !== p.id &&
+          `drop-${drag.drop.where}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onDragOver={(e) =>
+        drag.over(e, { kind: "project", id: p.id, where: dropSide(e) })
+      }
+      onDrop={(e) => drag.drop?.kind === "project" && drag.dropOn(e, drag.drop)}
+    >
+      <div
+        className="sb-project-row"
+        draggable
+        title={`${p.path}\nNot imported yet. Drag to place it.`}
+        onDragStart={(e) => drag.startProject(e, p.id)}
+        onDragEnd={drag.end}
+      >
+        <span className="sb-project-expand">
+          <Folder size={15} />
+        </span>
+        <span className="sb-project-name">
+          <span>{p.name}</span>
+          {chats > 0 && <span className="sb-planned-chats">+{chats}</span>}
+        </span>
+      </div>
+    </section>
+  );
+}
+
 function ProjectSection({
+  project,
+  tree,
+}: {
+  project: Project;
+  tree: ProjectTree;
+}) {
+  return ghostKey(project.id) ? (
+    <PlannedProject project={project} tree={tree} />
+  ) : (
+    <RealProject project={project} tree={tree} />
+  );
+}
+
+function RealProject({
   project: p,
   tree: {
     groups,
@@ -261,12 +388,16 @@ function ProjectSection({
     current,
     onNew,
     onProjectSettings,
+    importing,
   },
 }: {
   project: Project;
   tree: ProjectTree;
 }) {
   const chats = threads.filter((c) => c.projectId === p.id);
+  const incoming = importing?.get(p.id) ?? 0;
+  const computers = usePairedComputers(!!p.computer);
+  const where = projectComputer(p, computers.data);
   const isOpen = folds.isOpen(p.id, p.id === current);
   const pages = folds.pages(p.id);
   const busy = chats.some((c) => c.running || agentsSince(c.pending));
@@ -324,12 +455,25 @@ function ProjectSection({
             </button>
             {/* Like a group label, the whole row toggles; only its actions don't. */}
             <button
-              className="sb-project-name"
-              title={p.path}
+              className={`sb-project-name${where && !where.online ? " offline" : ""}`}
+              title={
+                where
+                  ? `${p.path} on ${where.name}${where.online ? "" : ", offline"}`
+                  : p.path
+              }
               aria-expanded={isOpen}
               onClick={() => folds.setOpen(p.id, !isOpen)}
             >
               <span>{p.name}</span>
+              {where && <span className="sb-project-where">{where.name}</span>}
+              {incoming > 0 && (
+                <span
+                  className="sb-planned-chats"
+                  title={`${incoming} ${incoming === 1 ? "chat" : "chats"} to import`}
+                >
+                  +{incoming}
+                </span>
+              )}
             </button>
             <div className="sb-row-actions">
               <Menu.Root>

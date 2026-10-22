@@ -1,10 +1,8 @@
 package dev.relay.android.features.settings
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -12,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.relay.android.features.applock.AppLock
 import dev.relay.android.features.notifications.NotificationSwitchRow
 import dev.relay.android.features.notifications.ThreadNotifications
 import dev.relay.android.features.updates.LatestAppRows
@@ -47,6 +46,7 @@ fun SettingsScreen(
     remote: Remote,
     updates: Updates,
     notifications: ThreadNotifications,
+    lock: AppLock,
     themeMode: ThemeMode,
     setTheme: (ThemeMode) -> Unit,
     /** Outlives this screen, for a switch or unpair that navigates away. */
@@ -54,7 +54,7 @@ fun SettingsScreen(
 ) {
     val nav = LocalNavigator.current
     Screen("Settings", onBack = nav.backAction) {
-        SettingsList(remote, updates, notifications, themeMode, setTheme, scope)
+        SettingsList(remote, updates, notifications, lock, themeMode, setTheme, scope)
     }
 }
 
@@ -64,6 +64,7 @@ fun SettingsList(
     remote: Remote,
     updates: Updates,
     notifications: ThreadNotifications,
+    lock: AppLock,
     themeMode: ThemeMode,
     setTheme: (ThemeMode) -> Unit,
     scope: CoroutineScope,
@@ -72,49 +73,58 @@ fun SettingsList(
     val nav = LocalNavigator.current
     val name = computerName(remote)
     val overview by remote.overview.collectAsState()
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = ListInset).padding(bottom = bottom)) {
-        SectionHeader("Theme")
-        ListGroup {
-            val known = overview?.appearance != null
-            themeChoices(name, known).forEach { (mode, label, hint) ->
-                ChoiceRow(label, hint, themeMode == mode) { setTheme(mode) }
+    // Build only the sections in view. A scrolling Column also built and measured every
+    // computer, route and developer row on each tab visit, before drawing the first frame.
+    LazyColumn(contentPadding = PaddingValues(start = ListInset, end = ListInset, bottom = bottom)) {
+        item(key = "theme-title") { SectionHeader("Theme") }
+        item(key = "theme") {
+            ListGroup {
+                val known = overview?.appearance != null
+                themeChoices(name, known).forEach { (mode, label, hint) ->
+                    ChoiceRow(label, hint, themeMode == mode) { setTheme(mode) }
+                }
             }
         }
 
-        SectionHeader("Notifications")
-        ListGroup { NotificationSwitchRow(notifications, name) }
+        item(key = "notifications-title") { SectionHeader("Notifications") }
+        item(key = "notifications") { ListGroup { NotificationSwitchRow(notifications, name) } }
 
-        DictationSection(name)
+        item(key = "lock") { LockSection(lock) }
+        item(key = "dictation") { DictationSection(name) }
 
-        SectionHeader("App")
-        ListGroup {
-            ListRow(
-                "Relay ${updates.installed}",
-                subtitle = "As installed; new versions come from GitHub.",
-                leadingIcon = TablerIcons.Outline.DeviceMobile,
-                subtitleLines = 3,
-            )
-            LatestAppRows(updates)
-            ListRow(
-                "Open-source licences",
-                leadingIcon = TablerIcons.Outline.License,
-                chevron = true,
-                onClick = { nav.push(Route.Licences) },
-            )
+        item(key = "app-title") { SectionHeader("App") }
+        item(key = "app") {
+            ListGroup {
+                ListRow(
+                    "Relay ${updates.installed}",
+                    subtitle = "As installed; new versions come from GitHub.",
+                    leadingIcon = TablerIcons.Outline.DeviceMobile,
+                    subtitleLines = 3,
+                )
+                LatestAppRows(updates)
+                ListRow(
+                    "Open-source licences",
+                    leadingIcon = TablerIcons.Outline.License,
+                    chevron = true,
+                    onClick = { nav.push(Route.Licences) },
+                )
+            }
         }
 
-        ComputersSection(remote, updates, name, scope)
-        RouteSection(remote, name)
+        item(key = "computers") { ComputersSection(remote, updates, name, scope) }
+        item(key = "routes") { RouteSection(remote, name) }
 
-        SectionHeader("Developer")
-        ListGroup {
-            ListRow(
-                "Component gallery",
-                subtitle = "Every building block, light and dark",
-                leadingIcon = TablerIcons.Outline.Components,
-                chevron = true,
-                onClick = { nav.push(Route.Gallery) },
-            )
+        item(key = "developer-title") { SectionHeader("Developer") }
+        item(key = "developer") {
+            ListGroup {
+                ListRow(
+                    "Component gallery",
+                    subtitle = "Every building block, light and dark",
+                    leadingIcon = TablerIcons.Outline.Components,
+                    chevron = true,
+                    onClick = { nav.push(Route.Gallery) },
+                )
+            }
         }
     }
 }
@@ -147,7 +157,7 @@ private fun themeChoices(name: String, known: Boolean) = listOf(
 
 /** A row of a pick-one list: a check on the chosen one. */
 @Composable
-internal fun ChoiceRow(label: String, hint: String, chosen: Boolean, onClick: () -> Unit) {
+internal fun ChoiceRow(label: String, hint: String?, chosen: Boolean, onClick: () -> Unit) {
     ListRow(
         label,
         subtitle = hint,

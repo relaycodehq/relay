@@ -189,7 +189,7 @@ describe("Which agents a setting takes", () => {
     expect(parse({ splitProvider: "cursor" })).toBe(true);
     expect(parse({ splitProvider: "opencode" })).toBe(true);
     expect(parse({ groupingProvider: "cursor" })).toBe(false);
-    expect(parse({ questionsProvider: "opencode" })).toBe(false);
+    expect(parse({ questionsProvider: "cursor" })).toBe(false);
   });
   it("only limits Claude's efforts to the ones it lists", () => {
     const split = { model: "", fast: false, reasoningEffort: "minimal" };

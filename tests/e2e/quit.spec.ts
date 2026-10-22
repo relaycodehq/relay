@@ -1,9 +1,11 @@
 import {
+  relayEnv,
   test,
   expect,
   chromium,
   _electron as electron,
-} from "@playwright/test";
+} from "../fixtures/electron";
+import { providerEnv } from "../fixtures/provider-env";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -13,11 +15,7 @@ import { randomUUID } from "node:crypto";
 
 const electronPath = createRequire(import.meta.url)("electron") as string;
 
-const env = Object.fromEntries(
-  Object.entries(process.env).filter(
-    ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-  ),
-) as Record<string, string>;
+const env = relayEnv();
 
 test("keeping unsaved code edits cancels a quit without shutting Relay down", async () => {
   const data = await mkdtemp(join(tmpdir(), "relay-quit-data-"));
@@ -37,7 +35,6 @@ test("keeping unsaved code edits cancels a quit without shutting Relay down", as
     "Initial",
   ]);
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: data },
   });
   try {
@@ -125,11 +122,11 @@ test("dev IPC keeps unsaved edits on cancellation, then quits cleanly on retry",
   );
   const child = spawn(electronPath, ["--remote-debugging-port=0", launch], {
     stdio: ["ignore", "pipe", "pipe", "ipc"],
-    env: {
+    env: providerEnv({
       ...env,
       RELAY_TEST_DATA: data,
       RELAY_DEV_STALE: join(data, "stale.json"),
-    },
+    }),
   });
   const messages: string[] = [];
   let debugUrl = "";

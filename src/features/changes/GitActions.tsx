@@ -19,11 +19,14 @@ import { MergeSheet } from "./MergeSheet";
 import { Spinner } from "../../ui/ui";
 import { gitBlockedReason } from "./working-changes";
 import "./git-actions.css";
+import { usePoll } from "../../lib/poll";
 
 type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
 export type GitActionsHandle = {
   /** Opens the branch's PR, as the PR button does. */
   openPr: () => void;
+  /** Opens the commit sheet with just `paths` ticked, or says why it can't. */
+  commit: (paths: string[], chatId?: string) => Promise<void>;
 };
 const MAX_COMMIT_FILES = 1000;
 
@@ -54,6 +57,7 @@ export function GitActions({
   onChanges: () => void;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const key = workingTreeKey(where);
   const disabled = !!locked;
@@ -67,7 +71,7 @@ export function GitActions({
     queryFn: () => api.projectBranchPulls(where),
     enabled: connected && !!project.repository && !!tree.data?.branch,
     staleTime: 30000,
-    refetchInterval: 60000,
+    refetchInterval: poll(60000),
   });
   // Fails on the main branch itself, which has nothing to merge into.
   const plan = useQuery({
@@ -78,6 +82,8 @@ export function GitActions({
     retry: false,
   });
   const [committing, setCommitting] = useState<"commit" | "commit_push">();
+  const [only, setOnly] = useState<string[]>();
+  const [commitThread, setCommitThread] = useState<string>();
   const [merging, setMerging] = useState(false);
   const [creatingPr, setCreatingPr] = useState(false);
   const [pushing, setPushing] = useState(false);
@@ -155,11 +161,42 @@ export function GitActions({
     if (action === "pr") openPr();
     else if (action === "push") void push();
     else if (action === "merge") setMerging(true);
-    else setCommitting(action);
+    else {
+      setOnly(undefined);
+      setCommitThread(undefined);
+      setCommitting(action);
+    }
   }
   useImperativeHandle(ref, () => ({
     openPr() {
       if (!disabled && hasPr) openPr();
+    },
+    async commit(paths, chatId) {
+      if (locked) return onError(new Error(locked));
+      try {
+        // The poll can be 3s behind a turn that just ended.
+        const fresh = await qc.query({
+          queryKey: key,
+          queryFn: () => api.projectWorkingTree(where),
+          staleTime: 0,
+        });
+        const changed = new Set(fresh.changes.map((c) => c.path));
+        const left = paths.filter((p) => changed.has(p));
+        if (!left.length)
+          throw new Error("These changes are already committed.");
+        const why =
+          gitBlockedReason(fresh, "commit") ??
+          (fresh.changes.length > MAX_COMMIT_FILES
+            ? `Over ${MAX_COMMIT_FILES} changed files. Commit them in a terminal.`
+            : undefined);
+        if (why) throw new Error(why);
+        setOnly(left);
+        setCommitThread(chatId);
+        // Just a commit, as the card's button says; Push is the header's next step.
+        setCommitting("commit");
+      } catch (e) {
+        onError(e);
+      }
     },
   }));
   if (!t) return null;
@@ -259,6 +296,23 @@ export function GitActions({
           where={where}
           tree={t}
           push={committing === "commit_push"}
+          only={only}
+          onSettleThread={
+            commitThread
+              ? () => {
+                  void api
+                    .triageProjectChat(commitThread, { kind: "settle" })
+                    .catch((e) =>
+                      onError(
+                        new Error(
+                          "Committed successfully, but the thread couldn’t be settled.",
+                          { cause: e },
+                        ),
+                      ),
+                    );
+                }
+              : undefined
+          }
           onClose={() => setCommitting(undefined)}
         />
       )}

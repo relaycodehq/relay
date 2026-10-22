@@ -1,6 +1,6 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { Popover } from "@base-ui/react/popover";
-import { Check, ChevronDown, ChevronUp, Search } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Plus, Search } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -8,6 +8,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { listRows } from "./search-select-rows";
 import "./search-select.css";
 
 export interface SearchOption {
@@ -24,7 +25,12 @@ export interface SearchOption {
   group?: string;
   /** Hidden behind a row under the list until that's opened or something is searched. */
   folded?: boolean;
+  /** Listed but can't be picked. */
+  disabled?: boolean;
 }
+
+// The value of the row that makes what was searched for; no option's.
+const CREATE = "\0create";
 
 const fullLabel = (o: SearchOption) => (o.prefix ?? "") + o.label;
 
@@ -39,14 +45,18 @@ export function SearchSelect({
   unset,
   trigger,
   triggerLabel,
+  triggerTitle,
   triggerClassName = "composer-control",
   action,
+  create,
+  footer,
   empty = "Nothing matches.",
   disabled,
   onOpenChange,
   className = "",
   foldNoun = "more",
   checkStart,
+  limit,
   open: shown,
   anchor,
 }: {
@@ -64,9 +74,18 @@ export function SearchSelect({
   trigger?: ReactNode;
   /** Names a custom `trigger` whose content doesn't say what it picks. */
   triggerLabel?: string;
+  /** The trigger's tooltip; a plain trigger's is the picked option. */
+  triggerTitle?: string;
   triggerClassName?: string;
   /** A row under the list that does something else, e.g. open Finder. */
   action?: { label: string; icon?: ReactNode; onSelect: () => void };
+  /** A last row that makes what was searched for, when `label` names one for it. */
+  create?: {
+    label: (search: string) => string | undefined;
+    onSelect: (search: string) => void;
+  };
+  /** Under everything, e.g. a hint or an error. */
+  footer?: ReactNode;
   /** Said while there are no options at all, e.g. still loading. */
   empty?: string;
   disabled?: boolean;
@@ -76,6 +95,11 @@ export function SearchSelect({
   foldNoun?: string;
   /** The check goes in a column before the labels instead of at the row's end. */
   checkStart?: boolean;
+  /**
+   * Rows listed at most, the picked one aside; a search still reaches every
+   * option. Thousands of rows are slow to draw and no use to scroll.
+   */
+  limit?: number;
   /** Opened by something else, e.g. a menu item; `onOpenChange` hears when it closes. */
   open?: boolean;
   /** With `open`: where the list shows, in place of a trigger of its own. */
@@ -104,12 +128,17 @@ export function SearchSelect({
   const foldOpen = !!query || (unfolded ?? !!picked?.folded);
   const foldGroup = options.find((o) => o.folded)?.group;
   const folded = options.filter((o) => o.folded).length;
-  const groups = new Map<string | undefined, SearchOption[]>();
-  for (const o of matches)
-    if (foldOpen || !o.folded)
-      groups.set(o.group, [...(groups.get(o.group) ?? []), o]);
+  const { groups, listed, over } = listRows(matches, {
+    foldOpen,
+    limit,
+    value,
+  });
+  const creating = query ? create?.label(search.trim()) : undefined;
   // Keyboard order follows what's on screen, group by group.
-  const ordered = [...groups.values()].flat().map((o) => o.value);
+  const ordered = [
+    ...[...groups.values()].flat().map((o) => o.value),
+    ...(creating ? [CREATE] : []),
+  ];
   const isChecked = (option: SearchOption) =>
     checked
       ? checked.includes(option.value)
@@ -118,6 +147,7 @@ export function SearchSelect({
     <Combobox.Item
       key={option.value}
       value={option.value}
+      disabled={option.disabled}
       className="composer-select-item"
     >
       {checkStart && (
@@ -159,7 +189,7 @@ export function SearchSelect({
         <Popover.Trigger
           type="button"
           aria-label={trigger ? triggerLabel : label}
-          title={trigger ? undefined : selectedLabel}
+          title={triggerTitle ?? (trigger ? undefined : selectedLabel)}
           className={triggerClassName}
           disabled={disabled}
         >
@@ -195,7 +225,8 @@ export function SearchSelect({
               value={null}
               onValueChange={(next) => {
                 if (next === null) return;
-                onChange(next);
+                if (next === CREATE) create?.onSelect(search.trim());
+                else onChange(next);
                 if (checked) return;
                 setOpen(false);
                 onOpenChange?.(false);
@@ -235,10 +266,27 @@ export function SearchSelect({
                       </Combobox.Group>
                     ),
                   )}
+                  {creating && (
+                    <Combobox.Item
+                      value={CREATE}
+                      className="composer-select-item"
+                    >
+                      {checkStart && (
+                        <span className="search-select-check-start" />
+                      )}
+                      <Plus size={13} />
+                      <span className="search-select-label">{creating}</span>
+                    </Combobox.Item>
+                  )}
                 </Combobox.List>
-                {!matches.length && (
+                {!matches.length && !creating && (
                   <p className="search-select-empty">
                     {options.length ? "Nothing matches." : empty}
+                  </p>
+                )}
+                {over > 0 && (
+                  <p className="search-select-empty">
+                    Type to narrow down {listed + over} {label.toLowerCase()}.
                   </p>
                 )}
               </div>
@@ -277,6 +325,7 @@ export function SearchSelect({
                   <span>{action.label}</span>
                 </Popover.Close>
               )}
+              {footer}
             </Combobox.Root>
           </Popover.Popup>
         </Popover.Positioner>

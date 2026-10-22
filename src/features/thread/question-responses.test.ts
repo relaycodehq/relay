@@ -135,3 +135,25 @@ it("leaves a late answer to an older, separate response separate", () => {
     questionResponses([first, other, reply, next]).get(next.id),
   ).toBeUndefined();
 });
+
+it("reuses unchanged groups while rebuilding changed parts and waiting state", () => {
+  const completed = { ...next, status: "complete" as const, ended: 95000 };
+  const typed = message("typed", { role: "user" });
+  const live = message("live", { status: "streaming" });
+  const previous = questionResponses([first, reply, completed, typed, live]);
+  const updated = questionResponses(
+    [first, reply, completed, typed, { ...live, body: "More" }],
+    previous,
+  );
+  expect(updated.get(first.id)).toBe(previous.get(first.id));
+  const changed = questionResponses(
+    [first, reply, { ...completed, body: "Edited" }],
+    updated,
+  );
+  expect(changed.get(first.id)).not.toBe(updated.get(first.id));
+  const asking = message("asking", { questions: [question()] });
+  const waiting = questionResponses([asking]);
+  const superseded = questionResponses([asking, typed], waiting);
+  expect(superseded.get(asking.id)).not.toBe(waiting.get(asking.id));
+  expect(superseded.get(asking.id)?.waiting).toBe(false);
+});

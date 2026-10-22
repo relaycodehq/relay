@@ -1,9 +1,20 @@
 import { useMemo } from "react";
-import { useInfiniteQuery, useQueries } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQueries,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
 import type { Account, Progress, Review } from "../../../shared/types";
 import { api } from "../../lib/api";
-import { accountKey } from "./usePullHosts";
+import { accountKey, accountOn } from "./usePullHosts";
+import {
+  PULL_BOARD,
+  projectPullPage,
+  refreshProjectPulls,
+  type PullState,
+} from "./project-pulls";
+export { PULL_BOARD, type PullState } from "./project-pulls";
 import {
   buildBoard,
   linkedProjects,
@@ -17,11 +28,6 @@ import {
   type Verdict,
 } from "./pull-board";
 
-export type PullState = "open" | "closed" | "all";
-
-/** Every query here starts with this, so one refresh reloads the page. */
-export const PULL_BOARD = "pull-board";
-
 const FILTERS = ["review_requested", "assigned", "created"] as const;
 
 /**
@@ -34,6 +40,7 @@ export function usePullBoard(
   projects: Project[],
   state: PullState,
 ) {
+  const client = useQueryClient();
   const searches = useQueries({
     queries: accounts.flatMap((account) =>
       FILTERS.map((filter) => ({
@@ -47,10 +54,9 @@ export function usePullBoard(
     accounts.map((a) => a.server),
   );
   const lists = useQueries({
-    queries: linked.map((p) => ({
-      queryKey: [PULL_BOARD, "project", p.id, state],
-      queryFn: () => api.projectPulls(p.id, state, 1),
-    })),
+    queries: linked.map((p) =>
+      projectPullPage(p, accountOn(accounts, p.repository?.server), state),
+    ),
   });
   // The number of lists and searches follows the projects and hosts, so
   // each keys the memo as one string.
@@ -64,12 +70,12 @@ export function usePullBoard(
     const input: BoardInput["lists"] = {};
     linked.forEach((p, i) => {
       const { data, error } = lists[i];
-      if (error) input[p.id] = { error };
-      else if (data)
+      if (data)
         input[p.id] = {
           items: data.items as ListedPull[],
           total: data.total ?? data.items.length,
         };
+      else if (error) input[p.id] = { error };
     });
     const hosts = accounts.map((account, i): BoardHost => {
       const [review, assigned, created] = searches
@@ -93,15 +99,49 @@ export function usePullBoard(
   const started = useStarted(
     board.pulls.filter((p) => p.relation === "review" && p.state === "open"),
   );
+  const pending = accounts
+    .filter(
+      (account, i) =>
+        searches.slice(i * 3, i * 3 + 3).some((q) => q.isPending) ||
+        lists.some(
+          (q, j) =>
+            q.isPending && linked[j].repository?.server === account.server,
+        ),
+    )
+    .map((account) => account.server);
+  const failures = accounts.flatMap((account, i) => {
+    const error =
+      searches.slice(i * 3, i * 3 + 3).find((q) => q.error)?.error ??
+      lists.find(
+        (q, j) => q.error && linked[j].repository?.server === account.server,
+      )?.error;
+    return error ? [{ server: account.server, error }] : [];
+  });
   return {
     board,
     verdicts,
     started,
-    loading: searches.some((s) => s.isPending),
-    error: searches.find((s) => s.error)?.error,
+    // A slow host mustn't hide the PRs another search or project already found.
+    loading: !!pending.length && !board.pulls.length && !board.groups.length,
+    pending,
+    failures,
     fetching:
       searches.some((s) => s.isFetching) || lists.some((l) => l.isFetching),
-    retry: () => searches.forEach((s) => s.error && void s.refetch()),
+    retry: (server: string) => {
+      searches.forEach((s, i) => {
+        if (s.error && accounts[Math.floor(i / 3)].server === server)
+          void s.refetch();
+      });
+      lists.forEach((q, i) => {
+        if (q.error && linked[i].repository?.server === server)
+          void refreshProjectPulls(
+            client,
+            linked[i],
+            accountOn(accounts, server),
+            state,
+          );
+      });
+    },
   };
 }
 

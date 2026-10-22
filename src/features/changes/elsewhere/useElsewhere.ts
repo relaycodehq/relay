@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { usePoll } from "../../../lib/poll";
 
 export const elsewhereKey = (chatId: string) => ["elsewhere", chatId];
 
@@ -11,12 +12,13 @@ export const elsewhereKey = (chatId: string) => ["elsewhere", chatId];
  * misses, and stands in for it where Relay can't watch.
  */
 export function useElsewhere(chatId: string | undefined) {
+  const poll = usePoll();
   const watched = useElsewhereWatch(chatId ?? null);
   return useQuery({
     queryKey: elsewhereKey(chatId ?? ""),
     queryFn: () => api.threadElsewhere(chatId!),
     enabled: !!chatId,
-    refetchInterval: watched ? 60_000 : 30_000,
+    refetchInterval: poll(watched ? 60_000 : 30_000),
   });
 }
 
@@ -25,11 +27,12 @@ export function useElsewhere(chatId: string | undefined) {
  * one. The Changes pane's `useElsewhere` keeps it fresh while it shows.
  */
 export function useElsewhereListed(chatId: string | undefined) {
+  const poll = usePoll();
   return useQuery({
     queryKey: elsewhereKey(chatId ?? ""),
     queryFn: () => api.threadElsewhere(chatId!),
     enabled: !!chatId,
-    refetchInterval: 60_000,
+    refetchInterval: poll(60_000),
   });
 }
 

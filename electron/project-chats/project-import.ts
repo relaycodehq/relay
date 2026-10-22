@@ -10,11 +10,10 @@ import type {
 import type { TerminalSessions } from "../terminal-sessions";
 import type { ChatCore } from "./core";
 import type { TerminalContinue } from "./terminal-continue";
+import { errorMessage } from "../../shared/error-message";
 
 const keyOf = (app: ImportApp, path: string) =>
   createHash("sha256").update(`${app}:${path}`).digest("hex");
-const message = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
 
 /** One-time project imports. Discovery only reads; selections are revalidated before writes. */
 export class ProjectImports {
@@ -67,6 +66,15 @@ export class ProjectImports {
     folder?: string,
   ): Promise<ImportChat[]> {
     const source = await this.source(app, key);
+    return this.sourceChats(app, source, folder);
+  }
+
+  /** A listed source's chats, without listing the sources again to find it. */
+  async sourceChats(
+    app: ImportApp,
+    source: ImportProject,
+    folder?: string,
+  ): Promise<ImportChat[]> {
     const path = await realpath(folder ?? source.path).catch(
       () => folder ?? source.path,
     );
@@ -76,8 +84,8 @@ export class ProjectImports {
     const imported = (this.core.store.get().chats ?? []).filter(
       (c) => c.projectId === project?.id,
     );
-    return (await this.sessions.list(source.path, Infinity))
-      .filter((s) => s.provider === app && s.turns > 0)
+    return (await this.sessions.list(source.path, Infinity, app))
+      .filter((s) => s.turns > 0)
       .map((s) => {
         const chatId = imported.find(
           (c) =>
@@ -117,7 +125,7 @@ export class ProjectImports {
         try {
           const available = new Set(
             selection.chats.length
-              ? (await this.chats(app, source.key, selection.folder)).map(
+              ? (await this.sourceChats(app, source, selection.folder)).map(
                   (c) => c.id,
                 )
               : [],
@@ -170,12 +178,15 @@ export class ProjectImports {
               result.failures.push({
                 key: source.key,
                 chatId: id,
-                message: message(error),
+                message: errorMessage(error),
               });
             }
           }
         } catch (error) {
-          result.failures.push({ key: source.key, message: message(error) });
+          result.failures.push({
+            key: source.key,
+            message: errorMessage(error),
+          });
         }
       }
       return result;

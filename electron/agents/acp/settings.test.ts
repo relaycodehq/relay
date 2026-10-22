@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import type { ModelChoice, ReasoningEffort } from "../../../shared/settings";
 import type { AcpConnection } from "./connection";
 import type { AcpSettings } from "./sessions";
-import { applySettings, modelsOf } from "./settings";
+import { applySettings, currentOf, modelsOf } from "./settings";
 
 const select = (id: string, category: string, currentValue: string, values: string[]) => ({
   id,
@@ -88,6 +88,41 @@ it("offers efforts only when every level is one Relay knows", () => {
 
   expect(known[0]).toMatchObject({ id: "a", name: "A", efforts: ["low", "high"] });
   expect(odd[0].efforts).toEqual([]);
+});
+
+it("offers OpenCode's levels alongside its explicit default without duplicating Default", () => {
+  const settings = {
+    configOptions: [
+      select("model", "model", "openai/gpt", ["openai/gpt"]),
+      select("effort", "thought_level", "default", ["low", "medium", "high", "default"]),
+    ],
+  } as AcpSettings;
+
+  expect(modelsOf(settings)[0].efforts).toEqual(["low", "medium", "high"]);
+  expect(currentOf(settings)).toEqual({ model: "openai/gpt", effort: "" });
+  settings.configOptions![1].options = [{ value: "default", name: "Default" }];
+  expect(modelsOf(settings)[0].efforts).toEqual([]);
+});
+
+it("sends the explicit default when resetting effort, even if the session started at another level", async () => {
+  const { connection, request } = recording();
+  const session = {
+    id: "s",
+    settings: {
+      configOptions: [
+        select("effort", "thought_level", "medium", ["low", "medium", "high", "default"]),
+      ],
+    } as AcpSettings,
+  };
+
+  await applySettings(connection, session, [], choice("", "high"));
+  await applySettings(connection, session, [], choice());
+  await applySettings(connection, session, [], choice());
+
+  expect(request.mock.calls).toEqual([
+    ["session/set_config_option", { sessionId: "s", configId: "effort", value: "high" }],
+    ["session/set_config_option", { sessionId: "s", configId: "effort", value: "default" }],
+  ]);
 });
 
 it("takes the first of a wish's names the agent offers, as config option or mode", async () => {

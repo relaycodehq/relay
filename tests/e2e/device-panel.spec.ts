@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -28,14 +28,12 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       // The test can't wait out the real quarter of an hour.
       RELAY_DEVICE_UNLOAD_MS: "20000",
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   /** The hub's page, when it's laid over Relay's window. */
@@ -67,9 +65,15 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page
-      .getByRole("dialog", { name: "Add a project", exact: true })
-      .getByRole("option", { name: "Choose in Finder…", exact: true })
+    const adding = page.getByRole("dialog", {
+      name: "Add a project",
+      exact: true,
+    });
+    await adding
+      .getByRole("button", { name: "Open a folder", exact: true })
+      .click();
+    await adding
+      .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
 
     await openSurface(page, "Device");
@@ -205,14 +209,12 @@ test("closing the Device tab in one window keeps it live in another", async () =
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       // The test can't wait out the real quarter of an hour.
       RELAY_DEVICE_UNLOAD_MS: "20000",
       RELAY_TEST_DATA: data,
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   /** Which window the hub's page lies over: "main", "popped" or null. */

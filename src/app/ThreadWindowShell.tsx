@@ -27,6 +27,7 @@ import {
   useThreadTools,
 } from "./ThreadWorkspace";
 import "./shell.css";
+import { bootstrapQuery, projectsQuery } from "../lib/workspace-queries";
 
 const NO_PROJECTS: Project[] = [];
 
@@ -39,14 +40,9 @@ export default function ThreadWindowShell({
 }: {
   thread: ThreadWindow;
 }) {
-  const boot = useQuery({
-    queryKey: ["bootstrap"],
-    queryFn: () => api.bootstrap(),
-    staleTime: Infinity,
-  });
+  const boot = useQuery(bootstrapQuery);
   const projects = useQuery({
-    queryKey: ["projects", boot.data?.account?.id],
-    queryFn: () => api.projects(),
+    ...projectsQuery(boot.data?.account?.id),
     enabled: !!boot.data,
   });
   const gitActions = useRef<GitActionsHandle>(null);
@@ -66,9 +62,7 @@ export default function ThreadWindowShell({
   useEffect(
     () =>
       onOpenSettings((settings, projectId, entryId) =>
-        api
-          .runInMainWindow({ settings, projectId, entryId })
-          .catch(setError),
+        api.runInMainWindow({ settings, projectId, entryId }).catch(setError),
       ),
     [],
   );
@@ -124,6 +118,7 @@ export default function ThreadWindowShell({
           allProjects={projects.data ?? NO_PROJECTS}
           everyThread={everyThread}
           composer={composer}
+          gitActions={gitActions}
           onCommand={runCommand}
           onStartThread={async () => toMain()}
           onCreated={async () => {}}

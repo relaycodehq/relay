@@ -121,6 +121,46 @@ const run = (patch: Partial<Parameters<typeof runClaudeProject>[0]> = {}) =>
     ...patch,
   });
 
+it.each([false, true])(
+  "keeps API error notices out of the answer (partial output: %s)",
+  async (partial) => {
+    const diagnostic =
+      "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
+    claude(async function* ({ next }) {
+      const sent = await next();
+      yield lifecycle(sent.uuid, "started");
+      if (partial) {
+        yield event({ type: "message_start", message: { id: "real" } });
+        yield event({
+          type: "content_block_delta",
+          delta: { type: "text_delta", text: "The answer so far." },
+        });
+        yield says("real", "The answer so far.");
+      }
+      yield { ...says("failure", diagnostic), error: "unknown" };
+      yield { ...result(""), is_error: true };
+    });
+    const onText = vi.fn();
+    await expect(run({ onText })).rejects.toThrow(diagnostic);
+    expect(onText.mock.calls.flat()).not.toContain(diagnostic);
+    if (partial) expect(onText).toHaveBeenLastCalledWith("The answer so far.");
+    else expect(onText).not.toHaveBeenCalled();
+  },
+);
+
+it("can recover from a synthetic API error without losing the next real answer", async () => {
+  claude(async function* ({ next }) {
+    const sent = await next();
+    yield lifecycle(sent.uuid, "started");
+    yield { ...says("failure", "API Error: overloaded"), error: "overloaded" };
+    yield says("real", "Recovered.");
+    yield result("Recovered.");
+  });
+  const onText = vi.fn();
+  await expect(run({ onText })).resolves.toBe("Recovered.");
+  expect(onText.mock.calls.flat()).toEqual(["Recovered.", "Recovered."]);
+});
+
 it("keeps commentary out of the answer and appends the findings Claude reported", async () => {
   claude(async function* ({ next }) {
     const sent = await next();

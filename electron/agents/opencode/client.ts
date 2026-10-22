@@ -1,245 +1,112 @@
-import { request, type IncomingMessage } from "node:http";
-import {
-  detachOpenCodeServer,
-  openCodeServer,
-  stopOpenCodeServer,
-} from "./server";
+import { OpenCode } from "@opencode/client";
+import { openCodeEndpoint } from "./native-api";
 
-/**
- * A request to Relay's own OpenCode child on 127.0.0.1. Plain `node:http`,
- * not `fetch` or Electron's `net`: no system proxy may sit in between.
- */
-function local(
-  url: URL,
-  options: {
-    method: string;
-    auth: string;
-    body?: string;
-    accept?: string;
-    signal?: AbortSignal;
-  },
-): Promise<IncomingMessage> {
-  return new Promise((resolve, reject) => {
-    const req = request(
-      url,
-      {
-        method: options.method,
-        headers: {
-          authorization: options.auth,
-          ...(options.accept ? { accept: options.accept } : {}),
-          ...(options.body !== undefined
-            ? {
-                "content-type": "application/json",
-                "content-length": Buffer.byteLength(options.body),
-              }
-            : {}),
-        },
-        signal: options.signal,
-      },
-      resolve,
-    );
-    req.on("error", reject);
-    req.end(options.body);
-  });
-}
-async function text(response: IncomingMessage) {
-  let body = "";
-  response.setEncoding("utf8");
-  for await (const chunk of response) body += chunk;
-  return body;
+let nativeFetch: typeof globalThis.fetch = (url, init) =>
+  globalThis.fetch(url, init);
+
+/** Desktop networking goes through Chromium; plain Node keeps its own fetch. */
+export function configureOpenCodeFetch(fetcher: typeof globalThis.fetch) {
+  nativeFetch = fetcher;
 }
 
-/** An event from OpenCode's bus, e.g. `message.part.updated`; `events.ts` says what is in one. */
-export interface OpenCodeEvent {
-  type: string;
-  properties: unknown;
-}
-type Listener = (event: OpenCodeEvent) => void;
-
-export class OpenCodeError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-/** Calls OpenCode's HTTP API for work in `directory`. */
-export async function openCode<T = unknown>(
-  method: "GET" | "POST" | "PATCH" | "DELETE",
-  path: string,
-  options: { directory?: string; body?: unknown; signal?: AbortSignal } = {},
-): Promise<T> {
-  const server = await openCodeServer();
-  const url = new URL(path, server.url);
-  if (options.directory) url.searchParams.set("directory", options.directory);
-  const response = await local(url, {
-    method,
-    auth: server.auth,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    signal: options.signal,
-  });
-  const body = await text(response);
-  const status = response.statusCode ?? 0;
-  if (status < 200 || status >= 300) {
-    let message = body.slice(0, 500);
-    try {
-      const parsed = JSON.parse(body);
-      message = parsed?.data?.message ?? parsed?.message ?? message;
-    } catch {}
-    throw new OpenCodeError(
-      `OpenCode ${method} ${url.pathname} failed (${status}): ${message}`,
-      status,
+/** HTTP failures are deliberately free of bodies, tokens and submitted prompts. */
+export class OpenCodeHttpError extends Error {
+  constructor(readonly status: number) {
+    super(
+      `OpenCode couldn't complete this request (HTTP ${status}). Try again.`,
     );
   }
-  return (body ? JSON.parse(body) : undefined) as T;
 }
 
-/** A request to OpenCode for the directory a turn works in. */
-export type SessionCall = (
-  method: "GET" | "POST" | "PATCH" | "DELETE",
-  path: string,
-  body?: unknown,
-) => Promise<unknown>;
+/** The SDK wraps whatever its fetch throws in a ClientError("Transport"), with ours as `cause`. */
+export function httpStatus(error: unknown) {
+  for (let e = error; e instanceof Error; e = e.cause)
+    if (e instanceof OpenCodeHttpError) return e.status;
+}
 
-const listeners = new Map<string, Set<Listener>>();
-let stream: Promise<void> | undefined;
+type Endpoint = Awaited<ReturnType<typeof openCodeEndpoint>>;
+let endpoint: { at: number; value: Promise<Endpoint> } | undefined;
+
+/** A burst of requests (recovery reads every subagent) shares one lookup, which spawns the CLI twice. */
+function lookup() {
+  if (!endpoint || Date.now() - endpoint.at > 10_000) {
+    const entry = { at: Date.now(), value: openCodeEndpoint() };
+    endpoint = entry;
+    entry.value.catch(() => forget(entry));
+  }
+  return endpoint;
+}
+
+/** Only the lookup that failed; a newer one may already have the restarted service. */
+function forget(entry: NonNullable<typeof endpoint>) {
+  if (endpoint === entry) endpoint = undefined;
+}
+
+/** Node's fetch says ECONNREFUSED in its cause; Chromium's net.fetch says ERR_CONNECTION_REFUSED. */
+function refusedConnection(error: unknown) {
+  for (let e = error; e instanceof Error; e = e.cause)
+    if (
+      (e as NodeJS.ErrnoException).code === "ECONNREFUSED" ||
+      e.message.includes("ERR_CONNECTION_REFUSED")
+    )
+      return true;
+  return false;
+}
 
 /**
- * Hears every event about `sessionID` until the returned function is called.
- * All sessions share one connection to the server's global event stream.
+ * One shared event connection. A refused credential or connection drops the
+ * cached lookup and is retried once with a fresh one, since neither applied
+ * anything, so an external restart or password rotation needs no Relay
+ * restart. There are no other automatic retries: a lost reply may already
+ * have applied.
  */
-export async function subscribe(
-  sessionID: string,
-  listener: Listener,
-): Promise<() => void> {
-  let set = listeners.get(sessionID);
-  if (!set) listeners.set(sessionID, (set = new Set()));
-  set.add(listener);
-  try {
-    await connect();
-  } catch (error) {
-    unsubscribe(sessionID, listener);
-    throw error;
-  }
-  return () => unsubscribe(sessionID, listener);
-}
-function unsubscribe(sessionID: string, listener: Listener) {
-  const set = listeners.get(sessionID);
-  set?.delete(listener);
-  if (set && !set.size) listeners.delete(sessionID);
-}
-
-/** Resolves once the stream is connected; it reconnects while anyone listens. */
-function connect(): Promise<void> {
-  if (stream) return stream;
-  const connected = (async () => {
-    const server = await openCodeServer();
-    const response = await local(new URL("/global/event", server.url), {
-      method: "GET",
-      auth: server.auth,
-      accept: "text/event-stream",
-    });
-    if (response.statusCode !== 200) {
-      response.resume();
-      throw new Error(
-        `OpenCode's event stream did not open (${response.statusCode}).`,
+export const openCodeClient = OpenCode.make({
+  baseUrl: "http://opencode.invalid",
+  fetch: async (input, init) => {
+    const path = new URL(input instanceof Request ? input.url : String(input));
+    // Waiting for execution can outlast an ordinary request; the caller owns cancellation.
+    const longLived =
+      path.pathname === "/api/event" ||
+      path.pathname.endsWith("/log") ||
+      path.pathname.endsWith("/wait");
+    for (let retried = false; ; retried = true) {
+      const entry = lookup();
+      const { url, password } = await entry.value;
+      const headers = new Headers(init?.headers);
+      headers.set(
+        "authorization",
+        `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`,
       );
-    }
-    void read(response).finally(() => {
-      stream = undefined;
-      // Anyone still waiting on a turn needs the stream back.
-      if (listeners.size)
-        setTimeout(() => {
-          if (listeners.size && !stream)
-            connect().catch(() => lost("OpenCode's event stream closed."));
-        }, 500);
-    });
-  })();
-  stream = connected.catch((error) => {
-    stream = undefined;
-    throw error;
-  });
-  return stream;
-}
-
-async function read(body: IncomingMessage) {
-  body.setEncoding("utf8");
-  let buffer = "";
-  try {
-    for await (const chunk of body as AsyncIterable<string>) {
-      buffer += chunk;
-      let end: number;
-      while ((end = buffer.indexOf("\n\n")) >= 0) {
-        const frame = buffer.slice(0, end);
-        buffer = buffer.slice(end + 2);
-        const data = frame
-          .split("\n")
-          .filter((line) => line.startsWith("data:"))
-          .map((line) => line.slice(5).trimStart())
-          .join("\n");
-        if (data) dispatch(data);
-      }
-      if (buffer.length > 8_000_000) buffer = "";
-    }
-  } catch {}
-}
-
-const field = (value: unknown, key: string): unknown =>
-  typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)[key]
-    : undefined;
-/** The session an event is about, wherever its type keeps that. */
-function sessionOf(properties: unknown) {
-  const id = [
-    field(properties, "sessionID"),
-    field(field(properties, "info"), "sessionID"),
-    field(field(properties, "part"), "sessionID"),
-  ].find((value) => typeof value === "string");
-  return id as string | undefined;
-}
-
-function dispatch(data: string) {
-  let event: OpenCodeEvent;
-  try {
-    const parsed = JSON.parse(data);
-    event = parsed?.payload ?? parsed;
-  } catch {
-    return;
-  }
-  if (typeof event?.type !== "string") return;
-  const sessionID = sessionOf(event.properties);
-  if (!sessionID) return;
-  for (const listener of [...(listeners.get(sessionID) ?? [])]) {
-    try {
-      listener(event);
-    } catch (error) {
-      console.warn("OpenCode event listener failed:", error);
-    }
-  }
-}
-
-/** Tells every waiting turn the connection is gone, so none waits forever. */
-function lost(message: string) {
-  for (const [sessionID, set] of listeners)
-    for (const listener of [...set])
-      listener({
-        type: "relay.stream.lost",
-        properties: { sessionID, message },
+      const signal = longLived
+        ? init?.signal
+        : AbortSignal.any([
+            ...(init?.signal ? [init.signal] : []),
+            AbortSignal.timeout(
+              path.pathname.endsWith("/generate") ? 120_000 : 30_000,
+            ),
+          ]);
+      const response = await nativeFetch(
+        new URL(path.pathname + path.search, url),
+        {
+          ...init,
+          headers,
+          signal,
+          redirect: "error",
+        },
+      ).catch((error: unknown) => {
+        forget(entry);
+        if (retried || !refusedConnection(error)) throw error;
       });
-}
+      if (!response) continue;
+      if (response.ok) return response;
+      await response.body?.cancel();
+      if (response.status === 401) {
+        forget(entry);
+        if (!retried) continue;
+      }
+      throw new OpenCodeHttpError(response.status);
+    }
+  },
+});
 
-export function disposeOpenCode(reason = "Relay is closing.") {
-  lost(reason);
-  listeners.clear();
-  stream = undefined;
-  stopOpenCodeServer();
-}
-
-/** Relay is restarting: turns stay waiting, and the hosted server carries on. */
-export function detachOpenCode() {
-  listeners.clear();
-  stream = undefined;
-  detachOpenCodeServer();
-}
+export type NativeClient = typeof openCodeClient;

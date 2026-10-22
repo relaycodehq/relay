@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   ChatScope,
+  ChatWorktree,
   ChatWorkspace,
   LinkedFolder,
   ProjectChat,
@@ -8,15 +9,19 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import { branchNameProblem } from "../../shared/branch-names";
-import { threadOnBranch } from "../../shared/projects";
+import { joinedWorktree } from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
+import { joinableOn, type ThreadWorktrees } from "./worktrees";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";
 
 /** New threads: empty ones, and forks of an existing one up to an answer. */
 export class ThreadCreate {
-  constructor(private core: ChatCore) {}
+  constructor(
+    private core: ChatCore,
+    private worktrees: Pick<ThreadWorktrees, "inRepoSettled">,
+  ) {}
   async create(
     projectId: string,
     scope: ChatScope,
@@ -26,55 +31,115 @@ export class ThreadCreate {
     links?: LinkedFolder[],
     start?: WorktreeStart,
   ) {
-    const { plain } = await this.core.projects.inspect(projectId);
+    const project = this.core.projects.get(projectId);
+    if (project.computer) {
+      if (scope.kind !== "project")
+        throw new Error(
+          `PRs and deep reviews of ${project.name} run on ${project.computer.name}; open them there.`,
+        );
+      // It works in the project's folder there; worktrees there come later.
+      workspace = "checkout";
+    }
+    const { plain } = project.computer
+      ? { plain: !!project.computer.plain }
+      : await this.core.projects.inspect(projectId);
     if (plain && (workspace === "worktree" || scope.kind !== "project"))
       throw new Error("Worktrees, PRs and deep reviews need a Git repository.");
     if (workspace === "worktree" && scope.kind !== "project")
       throw new Error("Only repository threads can work in a worktree.");
+    const projectChats = (this.core.store.get().chats ?? []).filter(
+      (c) => c.projectId === projectId,
+    );
+    // Joining a thread by itself is no longer offered, but a draft from
+    // before can still ask: it carries on that thread's branch, and with
+    // the thread gone it's a plain new worktree.
+    const asked =
+      start && "thread" in start
+        ? projectChats.find((c) => c.id === start.thread)?.worktree?.branch
+        : undefined;
+    const picked: WorktreeStart | undefined =
+      start && "thread" in start ? (asked ? { on: asked } : undefined) : start;
     // A carried-on branch keeps its own name.
     const named =
-      workspace === "worktree" && !(start && "on" in start)
+      workspace === "worktree" && !(picked && "on" in picked)
         ? branch
         : undefined;
-    const startFrom = workspace === "worktree" ? start : undefined;
+    const startFrom = workspace === "worktree" ? picked : undefined;
     // A name git can't take is a typo to fix; one that's taken by the time
     // the first message sends falls back to `relay/…`, and the thread says so.
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
-    // So is a branch to start from that isn't there or is held elsewhere;
-    // one that goes by the first message falls back the same way.
-    const startProblem =
-      startFrom &&
-      (await worktreeStartProblem(
-        await this.core.projects.root(projectId),
-        startFrom,
-        (branch) => {
-          const other = threadOnBranch(
-            (this.core.store.get().chats ?? []).filter(
-              (c) => c.projectId === projectId,
-            ),
-            branch,
-          );
-          return other
-            ? `${branch} is kept for the thread “${other.title}”; carry it on there.`
-            : undefined;
-        },
-      ));
-    if (startProblem) throw new Error(startProblem);
+    if (!startFrom)
+      return this.add(projectId, scope, workspace, { startedBy, named, links });
+    const root = await this.core.projects.root(projectId);
+    // In the repository's queue, where a worktree's removal asks again
+    // whether anyone works in it: whichever comes second sees the other. One
+    // being torn down is waited out.
+    return this.worktrees.inRepoSettled(root, async () => {
+      // On a branch another thread's worktree is on: the same folder, both
+      // threads working in it, as T3 shares one.
+      const joining =
+        "on" in startFrom
+          ? await joinableOn(
+              root,
+              (this.core.store.get().chats ?? []).filter(
+                (c) => c.projectId === projectId,
+              ),
+              startFrom.on,
+            )
+          : undefined;
+      const joined =
+        joining &&
+        joinedWorktree((await this.core.storage.load(joining.id)).worktree!);
+      // So is a branch to start from that isn't there; anywhere else it
+      // is, the first message finds it a folder. One that goes by then
+      // falls back the same way.
+      const startProblem =
+        !joined && (await worktreeStartProblem(root, startFrom));
+      if (startProblem) throw new Error(startProblem);
+      return this.add(projectId, scope, workspace, {
+        startedBy,
+        named,
+        links,
+        ...(joined ? { worktree: joined } : { startFrom }),
+      });
+    });
+  }
+
+  private async add(
+    projectId: string,
+    scope: ChatScope,
+    workspace: ChatWorkspace,
+    {
+      startedBy,
+      named,
+      links,
+      startFrom,
+      worktree,
+    }: {
+      startedBy?: StartedBy;
+      named?: string;
+      links?: LinkedFolder[];
+      startFrom?: WorktreeStart;
+      worktree?: ChatWorktree;
+    },
+  ) {
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
       scope,
       // The worktree itself is made with the first message, named after it
       // unless the user named its branch.
-      ...(workspace === "worktree"
-        ? {
-            worktree: {
-              ...(named ? { named } : {}),
-              ...(startFrom ? { startFrom } : {}),
-            },
-          }
-        : {}),
+      ...(worktree
+        ? { worktree }
+        : workspace === "worktree"
+          ? {
+              worktree: {
+                ...(named ? { named } : {}),
+                ...(startFrom ? { startFrom } : {}),
+              },
+            }
+          : {}),
       title:
         scope.kind === "pr"
           ? `PR #${scope.ref.number}`

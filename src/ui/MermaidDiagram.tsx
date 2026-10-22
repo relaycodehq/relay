@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { errorMessage } from "../../shared/error-message";
 
 type Mermaid = (typeof import("mermaid"))["default"];
 
@@ -124,7 +125,7 @@ function draw(code: string, look: string): Promise<string> {
 
 /** Mermaid's first line says what's wrong; the rest points at it in ASCII. */
 const complaint = (error: unknown) =>
-  (error instanceof Error ? error.message : String(error))
+  errorMessage(error)
     .split("\n")[0]!
     .replace(/:?\s*$/, "");
 

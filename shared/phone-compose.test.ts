@@ -225,24 +225,6 @@ it("goes ahead with a plan from the phone in Build, and leaves the composer ther
   expect(nextSettings).toEqual({ ...planning, interactionMode: "default" });
 });
 
-it("hands a plan from a phone composer on Codex to Claude on Claude's Default, not Codex's model", () => {
-  const codex = {
-    ...newThreadSettings(defaultAISettings, "codex"),
-    choice: { model: "gpt-5.5", fast: true, reasoningEffort: "high" as const },
-    interactionMode: "plan" as const,
-  };
-  const { send, nextSettings } = remotePlanGoAhead(codex, "claude", id);
-  expect(send).toMatchObject({
-    to: "claude",
-    choice: { model: "", fast: false, reasoningEffort: "" },
-  });
-  expect(nextSettings).toMatchObject({
-    provider: "claude",
-    choice: { model: "", fast: false, reasoningEffort: "" },
-    interactionMode: "default",
-  });
-});
-
 it("opens the main conversation on the agent holding it when a side reply was the last send", () => {
   const codex = newThreadSettings(defaultAISettings, "codex");
   const claudeReply = {

@@ -2,6 +2,19 @@
 // new one, as the add-project palette asks for them.
 import { z } from "zod";
 
+/** A folder on the selected computer: absolute, or relative to its home. */
+export const folderInputSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(4096)
+  .refine(
+    (value) =>
+      /^(~(?:[\\/]|$)|\/|[a-zA-Z]:[\\/]|\\\\)/.test(value) &&
+      !value.includes("\0"),
+    "Use an absolute folder path or ~/.",
+  );
+
 /** A repository the `gh` login can see, newest push first. */
 export interface GithubRepo {
   /** owner/name */
@@ -17,19 +30,10 @@ export interface GithubRepo {
 export type GithubRepos =
   { login: string; repos: GithubRepo[] } | { problem: string };
 
-/** A folder an agent in a terminal worked in lately that isn't a project. */
-export interface RecentFolder {
-  path: string;
-  repository: boolean;
-  /** Epoch ms of the newest session there. */
-  when: number;
-}
-
-/** Where the palette opens: the folder clones go to, and recent folders. */
+/** Where the palette opens: the folder clones go to, and that computer's home. */
 export interface AddingStart {
   cloneFolder: string;
   home: string;
-  recent: RecentFolder[];
 }
 
 /** A clone or a new project under way, or null once it is over. */

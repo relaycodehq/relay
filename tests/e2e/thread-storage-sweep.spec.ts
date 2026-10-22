@@ -1,4 +1,9 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -16,18 +21,11 @@ test("drops what's kept for threads that are gone, after the thread lists load",
   await writeFile(join(repo, "README.md"), "Example");
   git("add", ".");
   git("commit", "-qm", "Initial");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {
@@ -67,7 +65,7 @@ test("drops what's kept for threads that are gone, after the thread lists load",
         );
       // A screenshot pasted into the gone thread's draft.
       await new Promise<void>((resolve, reject) => {
-        const open = indexedDB.open("relay-draft-images", 1);
+        const open = indexedDB.open("relay-draft-images");
         open.onupgradeneeded = () => open.result.createObjectStore("drafts");
         open.onsuccess = () => {
           const tx = open.result.transaction("drafts", "readwrite");
@@ -93,7 +91,7 @@ test("drops what's kept for threads that are gone, after the thread lists load",
         page.evaluate(
           () =>
             new Promise((resolve) => {
-              const open = indexedDB.open("relay-draft-images", 1);
+              const open = indexedDB.open("relay-draft-images");
               open.onsuccess = () => {
                 const keys = open.result
                   .transaction("drafts")

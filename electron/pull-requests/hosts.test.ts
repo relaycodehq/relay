@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SourceControlSettings } from "../../shared/source-control";
 import type { GiteaLogin } from "../app/login";
 import type { AzureLogin } from "./azure-devops/login";
-import type { GithubLogin } from "./github-login";
+import type { GithubLogin } from "../github/login";
 import { PullHosts } from "./hosts";
 
 const org = "https://dev.azure.com/sample-org";

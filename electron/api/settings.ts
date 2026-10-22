@@ -20,6 +20,7 @@ import { defaultAutoCompact } from "../../shared/context-usage";
 import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
 import { saveNewThreadModel } from "../agents/new-thread-models";
+import { agentSignedIn } from "../agents/sign-in";
 import { parseVersion } from "../../shared/agent-updates";
 import { agentRuntime, forgetRegistryRuntime } from "../agents";
 import { acpRegistry } from "../agents/acp";
@@ -42,7 +43,13 @@ import { fetchReleaseNotes } from "../app/release-notes";
 import { devSwitchState, devSwitchTo } from "../app/dev-switch";
 import { releaseGitea } from "./account";
 import { prefSchema, readPrefs, savePref } from "../settings";
-import { takes, type ApiContext, type Handlers } from "./context";
+import {
+  computerIdSchema,
+  remoteProjects,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 const sourceControlKindSchema = z.enum(sourceControlKinds);
 const typedPathSchema = z.string().trim().min(1).max(4096).optional();
@@ -51,7 +58,10 @@ const registryIdSchema = z.string().max(100).regex(registryIdPattern);
 /** What Settings configures: AI, Azure DevOps, the Git program, updates, agents, dictation, the phone. */
 export function settingsHandlers(ctx: ApiContext) {
   const { store, projects, devops, updater, dictation, agentUpdates } = ctx;
-  const sourceControl = () => sourceControlStatus(store, ctx.login);
+  const sourceControl = () => {
+    ctx.hosts.github.refresh();
+    return sourceControlStatus(store, ctx.login);
+  };
   const prefs = () => readPrefs(ctx.settingsFile.state().values);
   /** A program picked in a file dialog; null when cancelled. */
   async function chooseProgram(
@@ -109,6 +119,13 @@ export function settingsHandlers(ctx: ApiContext) {
     saveWatchThreads: takes([prefSchema("watchThreads")], async (scope) => {
       await savePref(ctx.settingsFile, "watchThreads", scope);
       return scope;
+    }),
+    composerPredictions: () => store.get().composerPredictions ?? false,
+    saveComposerPredictions: takes([z.boolean()], async (enabled) => {
+      await store.update((s) => {
+        s.composerPredictions = enabled;
+      });
+      return enabled;
     }),
     renderMode: () => store.get().renderMode ?? "auto",
     saveRenderMode: takes([z.enum(renderModes)], async (mode) => {
@@ -214,7 +231,11 @@ export function settingsHandlers(ctx: ApiContext) {
     devSwitch: takes([z.string().min(1).max(4096)], (path) =>
       devSwitchTo(path),
     ),
-    agentVersions: () => agentUpdates.current,
+    agentVersions: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "agentVersions")
+        : agentUpdates.current,
+    ),
     agentUpdateChecks: () => store.get().agentUpdateChecks ?? true,
     saveAgentUpdateChecks: takes([z.boolean()], async (enabled) => {
       await store.update((s) => {
@@ -240,9 +261,30 @@ export function settingsHandlers(ctx: ApiContext) {
         return saved;
       },
     ),
-    checkAgentVersions: () => agentUpdates.check(true),
+    checkAgentVersions: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "checkAgentVersions")
+        : agentUpdates.check(true),
+    ),
+    agentSignedIn: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) =>
+        computerId
+          ? remoteProjects(ctx).ask(computerId, "agentSignedIn", provider)
+          : agentSignedIn(provider),
+    ),
     updateAgent: takes([agentProviderSchema], (provider) =>
       agentUpdates.update(provider),
+    ),
+    installAgent: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) => {
+        if (computerId)
+          return remoteProjects(ctx).ask(computerId, "installAgent", provider);
+        // How it went lands in the agent's own `update`.
+        void agentUpdates.update(provider).catch(() => {});
+        return agentUpdates.current;
+      },
     ),
     linkAgent: takes(
       [agentProviderSchema, typedPathSchema],

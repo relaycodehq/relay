@@ -1,12 +1,13 @@
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -56,13 +57,8 @@ test.beforeAll(async () => {
   head = git("rev-parse", "HEAD");
   fixture.setBase(base);
   fixture.setHead(head);
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: data },
   });
   page = await app.firstWindow();

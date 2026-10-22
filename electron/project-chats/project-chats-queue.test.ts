@@ -1,3 +1,5 @@
+import { UncertainSteerError } from "../agents/errors";
+import type { ActiveTurns } from "./active";
 import { it, expect, vi } from "vitest";
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -21,10 +23,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 useProjectChats();
 
@@ -920,7 +919,7 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   vi.mocked(findExecutable).mockRejectedValue(
     new Error("Codex isn't installed"),
   );
-  const { id } = await chats.adopt(
+  const { id } = await chats.handoffs.adopt(
     projectId,
     {
       from: "Laptop",
@@ -961,4 +960,27 @@ it("keeps a handed-over thread's briefing for the retry when its first turn fail
   expect((await prompts()).at(-1)).not.toContain(
     "handed over from another computer",
   );
+});
+
+it("keeps an ambiguous steer visible and never queues an automatic duplicate", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  const active = (chats as unknown as { active: ActiveTurns }).active;
+  await vi.waitFor(() => expect(active.get(chat.id)?.steer).toBeDefined());
+  active.get(chat.id)!.steer = vi.fn(async () => {
+    throw new UncertainSteerError();
+  });
+  const followup = {
+    ...input("@codex A correction"),
+    delivery: "steer" as const,
+  };
+  await chats.send(chat.id, followup);
+  const saved = await chats.get(chat.id);
+  expect(saved.queue ?? []).toHaveLength(0);
+  expect(saved.messages.find((m) => m.id === followup.id)).toMatchObject({
+    status: "failed",
+    unread: false,
+    error: expect.stringContaining("may have received"),
+  });
+  expect(active.get(chat.id)!.steer).toHaveBeenCalledTimes(1);
 });

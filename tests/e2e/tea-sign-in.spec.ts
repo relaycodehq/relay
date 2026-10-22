@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -13,11 +13,7 @@ test("Gitea is off until switched on in Integrations: off, nothing offers it; on
     bin = join(root, "bin"),
     logins = join(root, "tea-logins.json"),
     fixture = await fixtureServer();
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await (async () => {
     await mkdir(repo, { recursive: true });
     await mkdir(bin);
@@ -61,13 +57,10 @@ else if (cmd === "logins" && sub === "helper") {
       "Version: 0.16.0",
     );
     return electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
   })();

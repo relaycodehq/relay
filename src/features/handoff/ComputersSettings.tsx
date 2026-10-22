@@ -6,6 +6,7 @@ import { AddComputer } from "./AddComputer";
 import { ComputerCard } from "./ComputerCard";
 import { MapDiagram } from "./MapDiagram";
 import "./computers.css";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Settings → Computers: this computer, a wire out to each paired one with a
@@ -17,13 +18,14 @@ export function ComputersMap({
 }: {
   onOpenChat?: (projectId: string, chatId: string) => void;
 }) {
+  const poll = usePoll();
   const overview = useQuery({
     queryKey: ["computers-overview"],
     queryFn: () => api.computersOverview(),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const [picked, setPicked] = useState<string>();
-  // Bumped by the Add box, so it lands in the link field even when it shows.
+  // Bumped by the Add box, so it lands in the field even when it shows.
   const [addFocus, setAddFocus] = useState(0);
   const data = overview.data;
   const computers = data?.computers ?? [];
@@ -45,16 +47,21 @@ export function ComputersMap({
       )}
       {data && (
         <div className="cm-detail">
-          {current ? (
+          {current && (
             <ComputerCard
               key={current.id}
               computer={current}
               onOpenChat={onOpenChat}
               onForgot={() => setPicked(undefined)}
             />
-          ) : (
-            <AddComputer onPaired={setPicked} focusRequest={addFocus} />
           )}
+          {/* Kept while another computer shows, so a checkup or install carries on. */}
+          <div hidden={!!current}>
+            <AddComputer
+              focusRequest={addFocus}
+              onStart={() => setPicked("add")}
+            />
+          </div>
         </div>
       )}
       {!!overview.error && <ErrorBox error={overview.error} />}

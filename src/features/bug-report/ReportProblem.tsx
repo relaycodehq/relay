@@ -47,44 +47,69 @@ export function ReportProblem() {
   const [fields, setFields] = useState<BugReportFields>();
   const [error, setError] = useState<unknown>();
   const [notice, setNotice] = useState<string>();
-  const [busy, setBusy] = useState<"send" | "files" | "tidy">();
+  const [busy, setBusy] = useState<"send" | "files" | "tidy" | "discard">();
   const [previewing, setPreviewing] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   // Edits not yet saved, so the preview may not show them yet.
   const rev = useRef({ typed: 0, saved: 0 });
+  const mounted = useRef(false);
+  const opening = useRef(0);
+  const discarding = useRef(false);
+  const reopen = useRef(false);
+  const draftId = useRef<string>(undefined);
+  const action = useRef<object>(undefined);
   const [dirty, setDirty] = useState(false);
   const latest = useRef(fields);
   latest.current = fields;
 
   function show(next: BugReportPreview) {
+    if (!mounted.current || next.draft.id !== draftId.current) return;
     setPreview(next);
     if (!rev.current.typed || rev.current.typed === rev.current.saved)
       setFields(fieldsOf(next));
   }
 
+  function replace(next: BugReportPreview) {
+    if (!mounted.current) return;
+    draftId.current = next.draft.id;
+    rev.current = { typed: 0, saved: 0 };
+    latest.current = fieldsOf(next);
+    setDirty(false);
+    setPreviewing(false);
+    setConfirmDiscard(false);
+    setError(undefined);
+    setNotice(undefined);
+    action.current = undefined;
+    setBusy(undefined);
+    setPreview(next);
+    setFields(latest.current);
+  }
+
+  async function open(replacing: boolean) {
+    if (discarding.current) {
+      reopen.current = true;
+      return;
+    }
+    const request = ++opening.current;
+    try {
+      const next = await api.openBugReport();
+      if (!mounted.current || request !== opening.current) return;
+      if (replacing || next.draft.id !== draftId.current) replace(next);
+    } catch (error) {
+      if (mounted.current && request === opening.current) setError(error);
+    }
+  }
+
   useEffect(() => {
-    api.openBugReport().then((p) => {
-      setPreview(p);
-      setFields(fieldsOf(p));
-    }, setError);
+    mounted.current = true;
+    void open(true);
+    return () => {
+      mounted.current = false;
+      opening.current++;
+    };
   }, []);
-  const draftId = useRef<string>(undefined);
-  draftId.current = preview?.draft.id;
   // An agent filled in a new report while this page was open.
-  useEffect(
-    () =>
-      api.onBugReport(() =>
-        api.openBugReport().then((p) => {
-          if (p.draft.id === draftId.current) return;
-          rev.current = { typed: 0, saved: 0 };
-          setDirty(false);
-          setPreviewing(false);
-          setPreview(p);
-          setFields(fieldsOf(p));
-        }, setError),
-      ),
-    [],
-  );
+  useEffect(() => api.onBugReport(() => void open(false)), []);
 
   function update(change: Partial<BugReportFields>) {
     rev.current.typed++;
@@ -93,50 +118,71 @@ export function ReportProblem() {
   }
 
   async function save() {
-    const at = rev.current.typed;
+    const revision = rev.current;
+    const at = revision.typed;
+    const id = draftId.current;
     const now = latest.current;
-    if (!now || at === rev.current.saved) return;
+    if (!id || !now || discarding.current || at === revision.saved) return;
     try {
-      const next = await api.saveBugReport(now);
-      if (at < rev.current.saved) return;
-      rev.current.saved = at;
+      const next = await api.saveBugReport(id, now);
+      if (!mounted.current || rev.current !== revision || next.draft.id !== id)
+        return;
+      if (at < revision.saved) return;
+      revision.saved = at;
       setPreview(next);
-      if (at === rev.current.typed) setDirty(false);
+      if (at === revision.typed) setDirty(false);
     } catch (e) {
-      setError(e);
+      if (mounted.current && rev.current === revision) setError(e);
     }
   }
 
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty || discarding.current) return;
     const timer = setTimeout(() => void save(), 350);
     return () => clearTimeout(timer);
-  }, [fields, dirty]);
+  }, [fields, dirty, busy]);
   // Leaving the page keeps the last few keystrokes too.
   useEffect(() => () => void save(), []);
 
   async function act(kind: typeof busy, work: () => Promise<void>) {
+    const id = draftId.current;
+    const current = {};
+    action.current = current;
     setBusy(kind);
     setError(undefined);
     setNotice(undefined);
     try {
       await work();
     } catch (e) {
+      if (
+        !mounted.current ||
+        action.current !== current ||
+        id !== draftId.current
+      )
+        return;
       setError(e);
       // A refused or unconfirmed send changed the draft's state.
       await api.openBugReport().then(show, () => {});
     } finally {
-      setBusy(undefined);
+      if (mounted.current && action.current === current) setBusy(undefined);
     }
   }
 
   async function startOver() {
     setConfirmDiscard(false);
-    const fresh = await api.discardBugReport();
-    rev.current = { typed: 0, saved: 0 };
-    setDirty(false);
-    setPreviewing(false);
-    show(fresh);
+    // Detach in-flight saves before the replacement request begins.
+    rev.current = { ...rev.current };
+    opening.current++;
+    discarding.current = true;
+    try {
+      replace(await api.discardBugReport());
+    } finally {
+      discarding.current = false;
+      if (reopen.current) {
+        reopen.current = false;
+        void open(false);
+      }
+    }
   }
 
   if (!preview || !fields)
@@ -149,7 +195,7 @@ export function ReportProblem() {
   const { draft } = preview;
   const submission = draft.submission;
   const sent = submission?.status === "sent";
-  const locked = sent || submission?.status === "sending";
+  const locked = sent || submission?.status === "sending" || busy === "discard";
   const browser = preview.via === "browser";
   const text = describe[fields.kind];
   // A crash suggests its own title; otherwise one is needed, as on GitHub.
@@ -177,7 +223,7 @@ export function ReportProblem() {
             >
               Open issue
             </button>
-            <button type="button" onClick={() => act(undefined, startOver)}>
+            <button type="button" onClick={() => act("discard", startOver)}>
               Report something else
             </button>
           </div>
@@ -214,7 +260,7 @@ export function ReportProblem() {
           <button
             type="button"
             className="text-button"
-            onClick={() => act(undefined, startOver)}
+            onClick={() => act("discard", startOver)}
           >
             start a new report
           </button>
@@ -288,6 +334,7 @@ export function ReportProblem() {
           onTidy={() =>
             act("tidy", async () => {
               await save();
+              if (!mounted.current || draftId.current !== draft.id) return;
               show(await api.writeBugReport());
             })
           }
@@ -296,6 +343,8 @@ export function ReportProblem() {
               ? () =>
                   act("tidy", async () => {
                     await save();
+                    if (!mounted.current || draftId.current !== draft.id)
+                      return;
                     show(await api.undoBugReportTidy());
                   })
               : undefined
@@ -304,17 +353,24 @@ export function ReportProblem() {
       </div>
 
       <ReportScreenshots
+        key={`screenshots:${draft.id}`}
+        draftId={draft.id}
         screenshots={draft.screenshots}
         locked={locked}
         onChange={show}
-        onError={setError}
+        onError={(error) => {
+          if (mounted.current && draftId.current === draft.id) setError(error);
+        }}
       />
 
       <ReportRecording
+        key={`recording:${draft.id}`}
         preview={preview}
         locked={locked}
         onChange={show}
-        onError={setError}
+        onError={(error) => {
+          if (mounted.current && draftId.current === draft.id) setError(error);
+        }}
       />
 
       <ReportIncluded
@@ -368,7 +424,8 @@ export function ReportProblem() {
             onClick={() =>
               act("files", async () => {
                 const folder = await api.saveBugReportFiles();
-                setNotice(`Saved to ${folder}, with the whole log.`);
+                if (mounted.current && draftId.current === draft.id)
+                  setNotice(`Saved to ${folder}, with the whole log.`);
               })
             }
           >
@@ -380,7 +437,7 @@ export function ReportProblem() {
               <button
                 type="button"
                 className="text-button report-danger"
-                onClick={() => act(undefined, startOver)}
+                onClick={() => act("discard", startOver)}
               >
                 Discard
               </button>
@@ -414,7 +471,11 @@ export function ReportProblem() {
               act("send", async () => {
                 const result = await api.sendBugReport(preview.digest);
                 show(result.preview);
-                if (result.opened === "clipboard")
+                if (
+                  result.opened === "clipboard" &&
+                  mounted.current &&
+                  draftId.current === draft.id
+                )
                   setNotice(
                     "The report is too long for a link, so it's on your clipboard: paste it into the form GitHub opened.",
                   );

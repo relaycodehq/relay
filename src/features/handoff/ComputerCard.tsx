@@ -6,7 +6,14 @@ import { useNow } from "../../lib/useNow";
 import { ErrorBox } from "../../ui/ui";
 import { DeviceIcon } from "./DeviceIcon";
 import { RelayVersion } from "./RelayVersion";
-import { computerLine, threadLine, type Computer } from "./computer-status";
+import { retryHandoff } from "./retry-handoff";
+import {
+  computerLine,
+  reachable,
+  threadLine,
+  type Computer,
+} from "./computer-status";
+import { useWakeComputer } from "./usePairedComputers";
 
 /** The picked computer: its link and Relay, its threads to bring back, and forgetting it. */
 export function ComputerCard({
@@ -24,6 +31,9 @@ export function ComputerCard({
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState<unknown>();
   const online = c.status === "online";
+  // Asleep, it wakes for whatever asks; viewing this card alone doesn't.
+  const usable = reachable(c);
+  const { waking, wake } = useWakeComputer(setError);
   const run = (key: string, action: () => Promise<unknown>) => {
     setBusy(key);
     setError(undefined);
@@ -47,7 +57,7 @@ export function ComputerCard({
           <small>
             <i className={`cm-dot ${online ? "on" : ""}`} />
             {computerLine(c)}
-            {c.address && online && (
+            {c.address && usable && (
               <>
                 <span className="cm-sep">·</span>
                 <span className="cm-mono">{c.address}</span>
@@ -56,6 +66,18 @@ export function ComputerCard({
           </small>
         </div>
         {online && <RelayVersion computer={c} onError={setError} />}
+        {/* An ssh route waits longer and longer between tries; this tries now. */}
+        {(c.stopped || (c.route?.kind === "ssh" && c.status === "offline")) && (
+          <div className="cm-version">
+            <button
+              className="cm-text-button accent"
+              disabled={waking}
+              onClick={() => void wake(c.id)}
+            >
+              {waking ? (c.stopped ? "Starting…" : "Connecting…") : "Reconnect"}
+            </button>
+          </div>
+        )}
       </div>
       {c.threads.length ? (
         <ul className="cm-threads" aria-label={`Threads on ${c.name}`}>
@@ -67,7 +89,7 @@ export function ComputerCard({
                 <small>
                   {t.project}
                   <span className="cm-sep">·</span>
-                  <em className={t.state}>{threadLine(t, now)}</em>
+                  <em className={t.state}>{threadLine(t, now, c)}</em>
                 </small>
               </div>
               {onOpenChat && (
@@ -84,9 +106,9 @@ export function ComputerCard({
                 t.state === "stopped") && (
                 <button
                   className="cm-text-button accent"
-                  disabled={!online || !!busy}
+                  disabled={!usable || !!busy}
                   title={
-                    online
+                    usable
                       ? `Stop it on ${c.name} and carry on here`
                       : `${c.name} is offline`
                   }
@@ -100,12 +122,12 @@ export function ComputerCard({
               {t.retry && (
                 <button
                   className="cm-text-button accent"
-                  disabled={!online || !!busy}
-                  title={online ? t.error : `${c.name} is offline`}
+                  disabled={!usable || !!busy}
+                  title={usable ? t.error : `${c.name} is offline`}
                   onClick={() =>
                     run(t.chatId, () =>
                       t.retry === "send"
-                        ? api.retryHandoff(t.chatId)
+                        ? retryHandoff(qc, t.chatId)
                         : api.bringBackThread(t.chatId),
                     )
                   }
@@ -153,7 +175,7 @@ export function ComputerCard({
           </>
         ) : (
           <button
-            className="cm-text-button quiet"
+            className="cm-text-button quiet forget"
             onClick={() => setConfirming(true)}
           >
             Forget this computer

@@ -95,16 +95,18 @@ fun ThreadScreen(
     id: String,
     remote: Remote,
     rootId: String? = null,
+    /** Under the app's lock: in front, but nobody's reading it. */
+    locked: Boolean = false,
     /** Marks the thread read on this phone up to its `updated`, and puts away its notification. */
     onSeen: (id: String, updated: Long) -> Unit = { _, _ -> },
 ) {
     val active by remote.active.collectAsState()
     // A handed-over thread keeps its id on another computer; none of the old screen's state follows it.
-    key(active, id, rootId) { ThreadBody(id, rootId, remote, onSeen) }
+    key(active, id, rootId) { ThreadBody(id, rootId, remote, locked, onSeen) }
 }
 
 @Composable
-private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (String, Long) -> Unit) {
+private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Boolean, onSeen: (String, Long) -> Unit) {
     val context = LocalContext.current
     val nav = LocalNavigator.current
     val c = RelayTheme.colors
@@ -128,21 +130,22 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, onSeen: (Str
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
 
-    // Open on the phone counts as read, but only while the app is in front:
+    // Open on the phone counts as read, but only while the app is in front and unlocked:
     // answers that land in the background are marked when it comes back.
+    val reading = inFront && !locked
     var leavingUnread by remember { mutableStateOf(false) }
     val updated = summary?.updated
     val snoozedUntil = summary?.snoozedUntil
     // Read on past the wake time when it comes while you're looking.
     var woke by remember { mutableIntStateOf(0) }
-    LaunchedEffect(snoozedUntil, inFront, woke) {
+    LaunchedEffect(snoozedUntil, reading, woke) {
         val wait = (snoozedUntil ?: return@LaunchedEffect) + 1 - System.currentTimeMillis()
-        if (!inFront || wait <= 0) return@LaunchedEffect
+        if (!reading || wait <= 0) return@LaunchedEffect
         delay(wait)
         woke++
     }
-    LaunchedEffect(updated, snoozedUntil, woke, inFront, online, leavingUnread) {
-        if (updated == null || !inFront || leavingUnread) return@LaunchedEffect
+    LaunchedEffect(updated, snoozedUntil, woke, reading, online, leavingUnread) {
+        if (updated == null || !reading || leavingUnread) return@LaunchedEffect
         onSeen(id, updated)
         // The desktop keeps the shared mark; an older one just doesn't know the call.
         // Past a wake time it reads that too, so "Woke up" clears.

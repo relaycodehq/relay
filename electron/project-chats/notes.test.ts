@@ -10,10 +10,7 @@ import { ProjectChats } from "./index";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 let root: string, store: Store, projects: Projects, chats: ProjectChats;
 let projectId: string;

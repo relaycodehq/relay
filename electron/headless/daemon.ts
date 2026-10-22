@@ -2,97 +2,46 @@
 // electron/main.ts starts them, for a computer that's only ever reached from
 // a phone or another computer. The `relay` command talks to it through
 // ./control; phones and computers through the same bridge as the desktop's.
+import { execFile } from "node:child_process";
 import { homedir } from "node:os";
-import { openSettingsFile, readPrefs } from "../settings";
-import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import type { Server } from "node:net";
-import { join } from "node:path";
-import { AgentHosts } from "../agent-host/client";
-import {
-  hostAgents,
-  loadRegistryAgents,
-  setOpenCodeEnvRoot,
-  watchSavedSignIns,
-} from "../agents";
-import {
-  AgentAccounts,
-  accountHomes,
-  setProfilesRoot,
-} from "../agents/accounts";
+import { delimiter, dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { watchSavedSignIns } from "../agents";
 import { AgentUpdates, machineIo } from "../agents/agent-updates";
-import {
-  cursorSdkIo,
-  signInCursor,
-  signOutCursor,
-} from "../agents/cursor/account";
-import { configureCursor } from "../agents/cursor/sdk";
-import {
-  AcpRegistry,
-  antigravityIo,
-  configureAcpRegistry,
-  configureAntigravity,
-  registryUpdatesIo,
-} from "../agents/acp";
-import { keepUsageHistory } from "../agents/usage-history";
+import { cursorSdkIo } from "../agents/cursor/account";
+import { antigravityIo, registryUpdatesIo } from "../agents/acp";
 import { createDispatch, type Dispatch } from "../api";
 import { apiContext } from "../api/context";
 import { DevBuild } from "../app/dev-build";
 import { KeepAwake } from "../app/keep-awake";
 import { AppLinks } from "../app/links";
-import { GiteaLogin, seal, unseal } from "../app/login";
+import { GiteaLogin } from "../app/login";
 import { Menubar } from "../app/menubar";
 import { Store } from "../app/store";
 import { Updater } from "../app/updater";
-import { rearmOnWake } from "../app/wake";
 import { AppWindow } from "../app/window";
 import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
 import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
-import { gitExecutable, setGitPath } from "../git/git";
 import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
-import { Computers } from "../handoff/computers";
-import { HandoffReceiver } from "../handoff/receiver";
-import { Handoffs } from "../handoff/sender";
-import { setComputerName, computerName } from "../platform/computer-name";
-import { setLinkedAgents, setOwnAgentsDir } from "../platform/executables";
-import { pathReady } from "../platform/shell-path";
-import { ClockifyPlugin } from "../plugins/clockify/service";
-import { DevOps } from "../plugins/devops/service";
-import { PluginSecrets } from "../plugins/secrets";
-import { ProjectChats } from "../project-chats";
-import { ChatSummaryFeed } from "../project-chats/chat-summaries";
-import { PullMerges } from "../project-chats/pull-merges";
-import { Projects } from "../projects/projects";
+import { setComputerName } from "../platform/computer-name";
+import { finishPath, pathReady } from "../platform/shell-path";
 import { ProjectAdding } from "../project-add";
-import { TerminalSessions } from "../terminal-sessions";
-import { GithubLogin } from "../pull-requests/github-login";
-import { pullRequestHosts } from "../pull-requests/setup";
+import { GithubLogin } from "../github";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
 import { ReadAloud } from "../read-aloud";
 import { setOnnxRuntimeDir } from "../util/onnxruntime";
 import { PhoneRemote } from "../remote/phone-remote";
-import { DraftStore, Drafts, setPastesRoot, sweepPastes } from "../drafts";
-import { applyLinkedTools, teaTokenFor } from "../source-control";
-import {
-  agentProjects,
-  answerRelayTools,
-  prepareRelayTools,
-  threadAgents,
-} from "../started-threads/serve";
-import { projectTasks } from "../terminal/tasks";
+import { DraftStore, Drafts } from "../drafts";
+import { teaTokenFor } from "../source-control";
 import { TriageService } from "../triage/service";
-import { keepUsageLog } from "../usage";
-import type { ChatSummary } from "../../shared/projects";
-import {
-  serveControl,
-  type ControlApi,
-  type CursorLogin,
-  type ThreadRow,
-} from "./control";
+import { serveControl } from "./control";
 import { onAppQuit, powerMonitor } from "./electron-stand-in";
+import { openSettingsFile, readPrefs } from "../settings";
 import {
   autoUpdateEnabled,
   claimHome,
@@ -106,6 +55,16 @@ import { HeadlessSpeech, SpeechRuntime } from "./speech";
 import { keepUpdated } from "./auto-update";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
+import {
+  agentHost,
+  downloadedAgents,
+  followSummaries,
+  prepareData,
+  remoteServices,
+  resumeThreads,
+  threadServices,
+} from "../startup";
+import { controlApi } from "./control-api";
 
 export { logTo } from "./log";
 
@@ -120,8 +79,30 @@ export interface DaemonOptions {
 const fetcher = (url: string | URL | Request, init?: RequestInit) =>
   fetch(url, init);
 
+/**
+ * The Node the daemon runs on goes first on its PATH when the one there is
+ * missing or older than the agent CLIs take (Ubuntu 22.04's is 12): the npm
+ * that installs agents into agent-clis, and the `#!/usr/bin/env node` CLIs it
+ * puts there, run on it then. A Node the user has that is new enough, nvm's
+ * say, stays first, so their projects' tasks and terminals keep it.
+ */
+async function preferOwnNode(env: NodeJS.ProcessEnv) {
+  const version = await promisify(execFile)("node", ["--version"], {
+    env,
+    timeout: 5000,
+  }).then(
+    ({ stdout }) => stdout,
+    () => "",
+  );
+  if (Number(/^v(\d+)\./.exec(version.trim())?.[1] ?? 0) >= 18) return;
+  env.PATH = [dirname(process.execPath), env.PATH]
+    .filter(Boolean)
+    .join(delimiter);
+}
+
 /** Starts everything and resolves once Relay is answering; exits the process when stopped. */
 export async function runDaemon({ home, port, name }: DaemonOptions) {
+  finishPath(preferOwnNode);
   const paths = headlessPaths(home);
   const startedAt = Date.now();
   const releaseHome = await claimHome(paths.pid);
@@ -150,70 +131,33 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const drafts = new Drafts(draftStore, {
     changed: (change) => phoneRemote?.draftChanged(change),
   });
-  let handoffs: { computers: Computers; sender: Handoffs } | undefined;
-  let agentHosts: AgentHosts | undefined;
-  // The host runs from a plain file beside this one.
-  const hostScript = join(__dirname, "agent-host.mjs");
-  if (existsSync(hostScript)) {
-    const hosts = new AgentHosts(join(home, "agent-host"), hostScript);
-    agentHosts = hosts;
-    hostAgents(hosts);
-    projectTasks.hosts = () => hosts.pids();
-  }
-  // Before any agent session starts, so each gets the tools.
-  const relayTools = await prepareRelayTools(join(home, "agent-host"));
-  setGitPath(store.get().gitPath ?? null);
-  setLinkedAgents(store.get().agentPaths ?? {});
-  setOwnAgentsDir(join(home, "agent-clis"));
-  setProfilesRoot(join(home, "agent-accounts"));
-  setOpenCodeEnvRoot(join(home, "opencode"));
-  setPastesRoot(join(home, "pastes"));
-  void sweepPastes([
-    join(home, "project-chats"),
-    join(home, "drafts.json"),
-    join(home, "state.json"),
-  ]).catch((e) => console.warn("Could not sweep old pastes:", e));
-  configureCursor({
-    worker: join(__dirname, "cursor-worker.mjs"),
-    root: join(home, "cursor-sdk"),
-    store: join(home, "cursor-agents"),
-    fetch: fetcher,
-  });
-  configureAntigravity({ root: join(home, "antigravity"), fetch: fetcher });
-  const acpAgents = new AcpRegistry(join(home, "acp-agents"), fetcher);
-  configureAcpRegistry(acpAgents);
-  const agentAccounts = new AgentAccounts(store, () => watchSavedSignIns());
-  watchSavedSignIns();
-  applyLinkedTools(store);
-  void gitExecutable().catch(() => {});
-  const login = new GiteaLogin(teaTokenFor);
-  const projects = new Projects(store);
-  const github = new GithubLogin(fetcher);
-  const pullHosts = pullRequestHosts({
-    store,
-    login,
-    github,
-    projects,
-    fetch: fetcher,
-  });
-  const devops = new DevOps(
-    store,
+  let handoffs: ReturnType<typeof remoteServices>["handoffs"] | undefined;
+  const { hosts: agentHosts, tools: relayTools } = await agentHost(
+    home,
+    // The host runs from a plain file beside this one.
+    join(__dirname, "agent-host.mjs"),
+  );
+  const acpAgents = downloadedAgents(
+    home,
     fetcher,
-    seal,
-    unseal,
-    join(home, "devops-relevance.json"),
-    pullHosts.azureTokens,
+    join(__dirname, "cursor-worker.mjs"),
   );
-  keepUsageHistory(join(home, "usage-history.json"));
-  keepUsageLog(join(home, "usage.jsonl"));
-  const chats = new ProjectChats(
-    store,
-    projects,
-    join(home, "project-chats"),
-    (event) => phoneRemote?.chatEvent(event),
-    pullHosts.evidence,
-    () => readPrefs(settingsFile.state().values),
+  const agentAccounts = await prepareData(home, store, () =>
+    watchSavedSignIns(),
   );
+  const login = new GiteaLogin(teaTokenFor);
+  const github = new GithubLogin(fetcher);
+  const { projects, pullHosts, devops, chats, pullMerges, clockify } =
+    threadServices({
+      dir: home,
+      store,
+      fetch: fetcher,
+      login,
+      github,
+      online: () => true,
+      chatEvent: (event) => phoneRemote?.chatEvent(event),
+      prefs: () => readPrefs(settingsFile.state().values),
+    });
   chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
     {
@@ -224,29 +168,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   // What its changes reach exists from here.
   settingsFile.follow();
-  const pullMerges = new PullMerges({
-    chats: () => store.get().chats ?? [],
-    ...pullHosts.merges,
-    record: (id) => chats.pullMerged(id),
-    online: () => true,
-  });
-  const clockify = new ClockifyPlugin({
-    store,
-    secrets: new PluginSecrets(store, seal, unseal),
-    fetch: fetcher,
-    chats: {
-      summaries: () => store.get().chats ?? [],
-      get: (id) => chats.get(id),
-    },
-    projectName: (id) => {
-      try {
-        return projects.get(id).name;
-      } catch {
-        return "Removed project";
-      }
-    },
-    aiSettings: () => store.aiSettings(),
-  });
   // The window's services, built so the dispatch has them; with no window
   // they never open one, and what they'd show goes nowhere.
   // Speech for phones, its engines downloaded into the home folder when set up.
@@ -285,8 +206,6 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     store,
     projects,
     client: () => login.client,
-    sessions: new TerminalSessions(async () => accountHomes()),
-    appData: home,
     send: () => {},
   });
   const api = apiContext({
@@ -309,7 +228,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     links: new AppLinks(window, () => !!login.client),
     projectChecks: new ProjectChecks(join(__dirname, "checks-worker.mjs")),
     blame: new BlameService(),
-    ci: new Ci(fetcher),
+    ci: new Ci(fetcher, github.credentials),
     pullRequestCreation: new PullRequestCreation(),
     updater: new Updater(() => {}),
     devBuild: new DevBuild(() => {}, {
@@ -326,51 +245,29 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     settingsFile,
   });
   const dispatch: Dispatch = createDispatch(api);
-  const summaries = new ChatSummaryFeed(api.listChats, (event) =>
-    phoneRemote?.chatsEvent(event),
-  );
-  chats.onSummaries((projectId) => {
-    summaries.changed(projectId);
-    void keepAwake.refresh();
+  followSummaries({
+    chats,
+    listChats: api.listChats,
+    pullMerges,
+    login,
+    keepAwake,
+    send: (event) => phoneRemote?.chatsEvent(event),
   });
-  setInterval(() => void keepAwake.refresh(), 15_000).unref();
-  login.changed = () => {
-    chats.summariesChanged();
-    void pullMerges.sweep();
-  };
-  // A quiet thread settles itself as days pass; the feed sends only what changed.
-  setInterval(() => {
-    chats.summariesChanged();
-    void pullMerges.sweep();
-    void chats.cleanUpWorktrees();
-  }, 5 * 60_000).unref();
-  setTimeout(() => void chats.cleanUpWorktrees(), 60_000).unref();
   const updater = new HeadlessUpdater(installRoot(__dirname), headlessVersion, {
     restart: () => {
       setTimeout(() => void shutDown(true, { restart: true }), 50);
     },
   });
-  const handoffDir = join(home, "handoffs");
-  const computers = new Computers(store, seal, unseal);
-  handoffs = {
-    computers,
-    sender: new Handoffs(
-      store,
-      computers,
-      chats,
-      projects,
-      join(handoffDir, "out"),
-    ),
-  };
-  const receiver = new HandoffReceiver({
-    projects: () => projects.list(login.client),
-    root: (id) => projects.root(id),
+  const remoteSide = remoteServices({
+    dir: home,
+    store,
+    projects,
     chats,
-    worktrees: join(home, "worktrees"),
-    dir: join(handoffDir, "in"),
-    version: () => headlessVersion,
+    login,
+    listChats: api.listChats,
     dispatch,
     adding: projectAdding,
+    version: () => headlessVersion,
     // A paired computer or phone may update this one, as on the desktop.
     updates: {
       state: () => updater.now,
@@ -378,56 +275,35 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       download: () => updater.download(),
       install: () => updater.install(),
     },
-  });
-  const remote = new PhoneRemote(
-    store,
-    seal,
-    unseal,
-    {
-      projects: () => projects.list(login.client),
-      projectPath: (id) => projects.get(id).path,
-      chats: api.listChats,
-      chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
-      cost: (id) => chats.cost(id),
-      version: () => headlessVersion,
-      // The bridge forwards only its allowlist; see shared/remote.ts.
-      dispatch,
+    host: {
       // Images go to phones whole, re-encoded smaller where that's possible.
       shrinkImage: (dataUrl) => compressImage(dataUrl),
-      renderPage: (chatId, renderId, page) =>
-        chats.renderPage(chatId, renderId, page),
-      news: (cursor) => chats.newsSince(cursor),
       drafts,
       dictation: speech.forPhones.dictation,
       readAloud: speech.forPhones.readAloud,
-      handoffs: receiver,
     },
     port,
-  );
+  });
+  handoffs = remoteSide.handoffs;
+  const { receiver, phoneRemote: remote } = remoteSide;
+  const { computers } = handoffs;
   phoneRemote = remote;
   // Default phone access on once, even if Tailscale isn't available yet.
   // start() watches for it; an explicitly saved false remains false.
   await remote.start(true);
   void computers.start();
-  // Agent sessions that kept running through a restart come back first.
-  await loadRegistryAgents();
-  await chats.reattach();
-  if (relayTools)
-    void answerRelayTools(
-      relayTools,
-      chats,
-      agentHosts,
-      agentProjects(projects, () => login.client, home),
-      {
-        handoffs: handoffs.sender,
-        agents: threadAgents(agentUpdates, () => store.aiSettings()),
-      },
-    );
-  chats.armWakeups();
-  void chats
-    .reconcileSummaries()
-    .catch((e) => console.warn("Could not reconcile thread summaries:", e));
-  rearmOnWake(powerMonitor, () => chats.armWakeups());
+  await resumeThreads({
+    dir: home,
+    chats,
+    projects,
+    login,
+    agentHosts,
+    relayTools,
+    agentUpdates,
+    aiSettings: () => store.aiSettings(),
+    tools: { handoffs: handoffs.sender },
+    powerMonitor,
+  });
   if (!process.env.RELAY_TEST_DATA) {
     agentUpdates.start(store.get().agentUpdateChecks ?? true);
     keepUpdated(updater, {
@@ -457,7 +333,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       control?.close();
       try {
         await remote.close();
-        computers.close();
+        computers.close({ detach });
         if (detach) agentHosts?.detach();
         await chats.dispose({ detach });
         await Promise.all([
@@ -486,119 +362,22 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const)
     process.on(signal, () => void shutDown(true));
 
-  /** Cursor's sign-in, done on another device from the link it gives. */
-  let cursorLogin: CursorLogin | undefined;
-
-  const listThreads = async (): Promise<ThreadRow[]> => {
-    const list = await projects.list(login.client);
-    return list
-      .flatMap((project) =>
-        api
-          .listChats(project.id)
-          .filter((chat) => !chat.empty && !chat.archivedAt)
-          .map((chat) => threadRow(chat, project.name)),
-      )
-      .sort((a, b) => b.updated - a.updated);
-  };
-
-  const controlApi: ControlApi = {
-    async status() {
-      const known = agentUpdates.current;
-      const [state, list, versions] = await Promise.all([
-        remote.state(),
-        projects.list(login.client),
-        // Asked once; after that a stale answer goes out while a fresh one is found.
-        known.checkedAt ? known : agentUpdates.check(),
-      ]);
-      if (known.checkedAt && Date.now() - known.checkedAt > 5 * 60_000)
-        void agentUpdates.check().catch(() => {});
-      const rows = list.flatMap((p) => api.listChats(p.id));
-      return {
-        version: headlessVersion,
-        name: computerName(),
-        pid: process.pid,
-        startedAt,
-        home,
-        remote: state,
-        projects: list.length,
-        threads: {
-          working: rows.filter((c) => c.running).length,
-          waiting: rows.filter((c) => c.waiting).length,
-          total: rows.filter((c) => !c.empty && !c.archivedAt).length,
-        },
-        agents: versions.agents,
-        update: updater.now,
-      };
-    },
-    async pair() {
-      if (!remote.devices.settings.enabled || !(await remote.state()).listening)
-        await remote.setEnabled(true);
-      const pairing = await remote.pairing();
-      return { ...pairing, remote: await remote.state() };
-    },
-    update: (check) => (check ? updater.check() : updater.install()),
-    remote: (enabled) => remote.setEnabled(enabled),
-    removeDevice: (id) => remote.revoke(id),
-    projects: () => projects.list(login.client),
-    addProject: (path) => projects.add(path, login.client),
-    removeProject: async (id) => {
-      await dispatch("removeProject", [id]);
-    },
-    threads: listThreads,
-    async stop({ force, detach }) {
-      if (!force && !detach) {
-        const working = (await listThreads()).filter(
-          (t) => t.state === "working",
-        );
-        if (working.length)
-          throw new Error(
-            `${working.length === 1 ? "A thread is" : `${working.length} threads are`} still working: ${working
-              .map((t) => `“${t.title}”`)
-              .join(
-                ", ",
-              )}. Stop with --force to end them, or restart to keep them going.`,
-          );
-      }
-      // Answered first; the socket closes as Relay goes.
-      setTimeout(() => void shutDown(!!detach), 50);
-    },
-    async cursorSignIn() {
-      if (cursorLogin?.status === "waiting" && cursorLogin.url)
-        return { ...cursorLogin };
-      const login: CursorLogin = { status: "waiting" };
-      cursorLogin = login;
-      await new Promise<void>((resolve, reject) => {
-        signInCursor((url) => {
-          login.url = url;
-          resolve();
-        }).then(
-          () => {
-            login.status = "done";
-            void agentUpdates.check(true);
-            resolve();
-          },
-          (e) => {
-            login.status = "failed";
-            login.error = e instanceof Error ? e.message : String(e);
-            reject(e);
-          },
-        );
-      });
-      return { ...login };
-    },
-    cursorSignInState: async () => (cursorLogin ? { ...cursorLogin } : null),
-    async cursorSignOut() {
-      cursorLogin = undefined;
-      await signOutCursor();
-      await agentUpdates.check(true);
-    },
-    speech: async () => speech.state(),
-    installSpeech: async (engine, voice) => speech.install(engine, voice),
-    removeSpeech: (engine, voice) => speech.remove(engine, voice),
-    call: (method, args) =>
-      dispatch(method as Parameters<Dispatch>[0], args.slice(0, 10)),
-  };
-  control = await serveControl(paths.control, controlApi);
+  control = await serveControl(
+    paths.control,
+    controlApi({
+      home,
+      startedAt,
+      remote,
+      projects,
+      login,
+      listChats: api.listChats,
+      agentUpdates,
+      updater,
+      speech,
+      dispatch,
+      stop: (detach) => void shutDown(detach),
+    }),
+  );
   const state = await remote.state();
   console.log(
     `Relay ${headlessVersion} is running (pid ${process.pid}, data in ${home}).`,
@@ -608,31 +387,4 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       ? `Phones and computers reach it at ${state.hosts.join(", ")}:${state.port}.`
       : `Not reachable yet: ${state.error ?? "waiting for Tailscale."}`,
   );
-}
-
-function threadRow(chat: ChatSummary, project: string): ThreadRow {
-  const state: ThreadRow["state"] = chat.sentTo
-    ? "away"
-    : chat.running
-      ? "working"
-      : chat.waiting
-        ? "waiting"
-        : chat.settledAt || chat.archivedAt
-          ? "settled"
-          : "idle";
-  return {
-    id: chat.id,
-    projectId: chat.projectId,
-    project,
-    title: chat.title,
-    ...(chat.provider ? { provider: chat.provider } : {}),
-    state,
-    updated: chat.updated,
-    ...(chat.branch ? { branch: chat.branch } : {}),
-    ...(chat.sentTo
-      ? { computer: chat.sentTo.computer }
-      : chat.cameFrom && !chat.cameFrom.returnedAt
-        ? { computer: chat.cameFrom.computer }
-        : {}),
-  };
 }

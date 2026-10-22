@@ -28,3 +28,9 @@ export interface ReadAloudModel {
   ): Promise<void>;
   release(): Promise<void>;
 }
+
+/** A standard normal sample (Box–Muller), the starting noise of flow matching. */
+export function gaussian() {
+  const u = Math.max(1e-10, Math.random());
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+}

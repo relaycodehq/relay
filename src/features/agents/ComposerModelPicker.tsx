@@ -36,7 +36,7 @@ import {
 import { keys } from "../../lib/mod-key";
 import { CursorGlyph } from "./CursorGlyph";
 import { RegistryGlyph } from "./RegistryGlyph";
-import { UsageMeters } from "./UsageMeters";
+import { UsageStrip } from "./UsageStrip";
 import {
   isGrouped,
   modelKey,
@@ -51,7 +51,11 @@ import {
 import { ModelReload, reloadsModels } from "./ModelReload";
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
-import { useCustomModels, useFavoriteModels } from "./useStoredModels";
+import {
+  useCustomModels,
+  useFavoriteModels,
+  useModelPickerCategory,
+} from "./useStoredModels";
 import { useOfferedAgents } from "./registry-agents";
 import "./composer-model-picker.css";
 
@@ -84,6 +88,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   openSignal,
   defaultNames,
   account,
+  computer,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -109,8 +114,14 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
    */
   account?: {
     of: (provider: UsageProvider) => string | undefined;
-    footer: (provider: UsageProvider, now: number) => ReactNode;
+    footer: (
+      provider: UsageProvider,
+      now: number,
+      container?: HTMLElement,
+    ) => ReactNode;
   };
+  /** The paired computer the project lives on, whose agents list the models. */
+  computer?: { id: string; name: string };
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -119,6 +130,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   /** The section shown in a grouped agent's list; "" shows them all. */
   const [group, setGroup] = useState("");
   const [favorites, setFavorites] = useFavoriteModels();
+  const [savedCategory, saveCategory] = useModelPickerCategory();
   const { list, captureReorder } = useModelReorder(favorites, open);
   const [customs, setCustoms] = useCustomModels();
   const search = useRef<HTMLInputElement>(null);
@@ -127,6 +139,9 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     provider === "message" ? undefined : provider,
   );
   const offered = (providers ?? runnable).filter((p) => catalogs[p]);
+  // Opens on the agent in use, unless favorites was the last tab picked.
+  const openingCategory =
+    !providers && savedCategory === "favorites" ? "favorites" : provider;
   const selectedKey = JSON.stringify([
     provider,
     provider === "message" ? "" : (catalogs[provider]?.model ?? ""),
@@ -166,8 +181,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
     if (!openSignal) return;
     setOpen(true);
     onOpen?.();
-    setCategory(provider);
-    openGroup(provider);
+    setCategory(openingCategory);
+    openGroup(openingCategory);
     setQuery("");
     setLegacy(false);
     // Only a new signal opens the picker, not a changed provider.
@@ -196,6 +211,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   }
   function changeCategory(next: Category) {
     setCategory(next);
+    if (!providers) saveCategory(next);
     openGroup(next);
     setQuery("");
     setLegacy(false);
@@ -224,8 +240,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         setOpen(next);
         if (next) {
           onOpen?.();
-          setCategory(provider);
-          openGroup(provider);
+          setCategory(openingCategory);
+          openGroup(openingCategory);
           setQuery("");
           setLegacy(false);
         }
@@ -502,11 +518,20 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
               {category !== "favorites" &&
                 category !== "message" &&
                 reloadsModels(category) && (
-                  <ModelReload key={category} provider={category} />
+                  <ModelReload
+                    key={category}
+                    provider={category}
+                    computer={computer}
+                  />
                 )}
               {reportsUsage(category) &&
-                (account?.footer(category, now) ?? (
-                  <UsageMeters usage={usage[category]} now={now} />
+                (account?.footer(category, now, container) ?? (
+                  <UsageStrip
+                    usage={usage[category]}
+                    now={now}
+                    accountId={account?.of(category)}
+                    container={container}
+                  />
                 ))}
               {category === "message" && (
                 <p className="model-picker-note">

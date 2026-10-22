@@ -1,4 +1,5 @@
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
+import { within } from "../util/paths";
 import type {
   ChatSummary,
   ChatWorktree,
@@ -11,6 +12,7 @@ import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
 import type { ThreadWorktrees } from "./worktrees";
+import { errorMessage } from "../../shared/error-message";
 
 const DAY_MS = 86_400_000;
 /** A thread shown in a window asks for its worktree every few seconds; this long after the last ask it counts as closed. */
@@ -45,13 +47,12 @@ export interface CleanupScene {
   terminal(path: string): boolean;
 }
 
-/** Inside Relay's worktree folder, on a branch Relay named, and not holding the checkout. */
+/** Inside Relay's worktree folder, on a branch Relay named, not a folder it found, and not holding the checkout. */
 function relayMade(worktree: ChatWorktree, checkout: string, folder: string) {
+  if (worktree.adopted) return false;
   const path = resolve(worktree.path!);
-  const inside = (parent: string, child: string) => {
-    const rel = relative(parent, child);
-    return !rel.startsWith("..") && !isAbsolute(rel);
-  };
+  const inside = (parent: string, child: string) =>
+    within(parent, child) !== null;
   return (
     (!!worktree.branch?.startsWith("relay/") ||
       (!!worktree.named && worktree.branch === worktree.named)) &&
@@ -154,7 +155,7 @@ export class WorktreeCleanup {
         if (this.core.closing()) return;
         const why = await this.worktrees
           .cleanUp(chat.id, (loaded) => this.kept(loaded))
-          .catch((e: unknown) => (e instanceof Error ? e.message : String(e)));
+          .catch((e: unknown) => errorMessage(e));
         if (why) this.recheck.set(chat.id, this.now() + RECHECK_MS);
         else this.recheck.delete(chat.id);
       }

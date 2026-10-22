@@ -183,7 +183,7 @@ fun ColumnScope.Questions(
         if (index > 0 && writeOnly) runCatching { focus.requestFocus() }
     }
     val chosen = answers[question.id].orEmpty()
-    val labels = options.map { it.label }.toSet()
+    val labels = options.map { it.value ?: it.label }.toSet()
     val typed = chosen.filter { it !in labels }.joinToString(", ")
     fun advance() {
         if (index < questions.lastIndex) index++ else onAnswer(answers.toMap())
@@ -217,11 +217,11 @@ fun ColumnScope.Questions(
         }
         Text(question.question, style = RelayTheme.type.base)
         for (option in options) {
-            val on = option.label in chosen
+            val on = (option.value ?: option.label) in chosen
             Row(
                 Modifier.fillMaxWidth().border(1.dp, if (on) c.accent else c.border, Radii.mdShape)
                     .background(if (on) c.accentSoft else androidx.compose.ui.graphics.Color.Transparent, Radii.mdShape)
-                    .pressable(onClick = { select(option.label) }, enabled = !busy, scale = false).padding(11.dp),
+                    .pressable(onClick = { select(option.value ?: option.label) }, enabled = !busy, scale = false).padding(11.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 Box(
@@ -240,8 +240,10 @@ fun ColumnScope.Questions(
         timer?.cancel()
         answers[question.id] = listOf(text)
     }
-    if (question.isSecret == true) SecretField(typed, write, placeholder, !busy, focus)
-    else TextField(typed, write, placeholder = placeholder, enabled = !busy, singleLine = false, maxLines = 5, focusRequester = focus)
+    if (question.allowCustomAnswer != false) {
+        if (question.isSecret == true) SecretField(typed, write, placeholder, !busy, focus)
+        else TextField(typed, write, placeholder = placeholder, enabled = !busy, singleLine = false, maxLines = 5, focusRequester = focus)
+    }
     val answered = chosen.any { it.isNotBlank() }
     if (deferred || question.multiple == true || options.isEmpty() || typed.isNotEmpty()) Button(
         if (index < questions.lastIndex) "Next" else "Send answer",

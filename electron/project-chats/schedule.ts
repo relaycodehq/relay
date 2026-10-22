@@ -10,6 +10,7 @@ import { stopClaudeTask } from "../agents/claude/project";
 import type { ChatCore } from "./core";
 import { sessionInput } from "./sessions";
 import { nextSend } from "./storage";
+import { errorMessage } from "../../shared/error-message";
 
 export interface ScheduleHost {
   send(id: string, input: ProjectChatSend, fromRelay?: boolean): Promise<void>;
@@ -152,7 +153,7 @@ export class ChatSchedule {
         const chat = await this.core.storage.load(chatId);
         (chat.scheduled ??= []).push({
           ...item,
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage(e),
         });
         await this.save(chat);
       });

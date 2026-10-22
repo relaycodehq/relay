@@ -11,6 +11,7 @@ import { moveDraft, readDraft } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { threadDraftKey } from "../lib/thread-storage";
 import type { ShellNavigation } from "./useShellNavigation";
+import { projectChatsQuery } from "../lib/workspace-queries";
 
 /** A project's thread about PR `number`; a PR has one per project. */
 const threadOf = (chats: ChatSummary[] | undefined, number: number) =>
@@ -48,11 +49,7 @@ export function usePullThreads(
       number: ref.number,
     };
     const chatsOf = () =>
-      qc.query({
-        queryKey: ["project-chats", p.id],
-        queryFn: () => api.projectChats(p.id),
-        staleTime: 0,
-      });
+      qc.query({ ...projectChatsQuery(p.id), staleTime: 0 });
     try {
       let thread = threadOf(await chatsOf(), pr.number);
       if (!thread) {

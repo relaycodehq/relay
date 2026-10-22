@@ -1,6 +1,6 @@
 // The palette's smaller pieces: progress, what a picked folder turned out to
 // be, and a new project's fields.
-import type { AddingJob, NewProject, Project } from "../../../shared/projects";
+import type { AddingJob, NewProject } from "../../../shared/projects";
 import { linkName, tildePath } from "../../../shared/projects";
 import {
   Segmented,
@@ -39,28 +39,11 @@ export function JobProgress({
 /** Said under a picked folder that can't simply be added. */
 export function PickedNote({
   picked,
-  onOpen,
   onAdd,
 }: {
   picked: Picked;
-  onOpen: (project: Project) => void;
   onAdd: (path: string, setUpGit?: boolean) => void;
 }) {
-  if (picked.kind === "added")
-    return (
-      <p className="add-note">
-        <span>
-          Already in Relay as <strong>{picked.project.name}</strong>.
-        </span>
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => onOpen(picked.project)}
-        >
-          Open it
-        </button>
-      </p>
-    );
   if (picked.kind === "inside")
     return (
       <p className="add-note">
@@ -86,26 +69,28 @@ export function PickedNote({
       </p>
     );
   return (
-    <p className="add-note">
+    <div className="add-note add-plain-note">
       <span>
-        <strong>{linkName(picked.path)}</strong> isn't a git repository, so it
-        gets no branches, Changes or worktrees.
+        <strong>{linkName(picked.path)}</strong> has no Git history. Branches
+        and worktrees are unavailable.
       </span>
-      <button
-        type="button"
-        className="text-button"
-        onClick={() => onAdd(picked.path, true)}
-      >
-        Set up git
-      </button>
-      <button
-        type="button"
-        className="text-button"
-        onClick={() => onAdd(picked.path)}
-      >
-        Add it as it is
-      </button>
-    </p>
+      <div className="add-note-actions">
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => onAdd(picked.path, true)}
+        >
+          Set up git
+        </button>
+        <button
+          type="button"
+          className="text-button"
+          onClick={() => onAdd(picked.path)}
+        >
+          Add it as it is
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -117,29 +102,16 @@ export function NewProjectFields({
   spec,
   login,
   onSpec,
-  onLocation,
 }: {
   name: string;
   spec: Spec;
   /** The `gh` login, when known. */
   login?: string;
   onSpec: (next: Spec) => void;
-  onLocation: () => void;
 }) {
   return (
     <SettingsCard className="add-new-card">
-      <SettingsRow
-        label="Location"
-        hint={`${tildePath(spec.location)}/${name || "…"}`}
-      >
-        <button type="button" onClick={onLocation}>
-          Change…
-        </button>
-      </SettingsRow>
-      <SettingsRow
-        label="Set up git"
-        hint="git init, a .gitignore and a first commit"
-      >
+      <SettingsRow label="Set up git">
         <Switch
           label="Set up git"
           checked={spec.git}
@@ -152,11 +124,19 @@ export function NewProjectFields({
         label="Create it on GitHub"
         hint={
           spec.github
-            ? `github.com/${login ?? "you"}/${name || "…"}, through gh`
-            : "Pushes the first commit to a new repository"
+            ? `github.com/${login ?? "you"}/${name || "…"}`
+            : undefined
         }
       >
-        {spec.github && (
+        <Switch
+          label="Create it on GitHub"
+          checked={spec.github}
+          disabled={!spec.git}
+          onChange={(github) => onSpec({ ...spec, github })}
+        />
+      </SettingsRow>
+      {spec.github && (
+        <SettingsRow label="Visibility">
           <Segmented
             label="Visibility"
             value={spec.private ? "private" : "public"}
@@ -168,14 +148,8 @@ export function NewProjectFields({
             }
             onChange={(v) => onSpec({ ...spec, private: v === "private" })}
           />
-        )}
-        <Switch
-          label="Create it on GitHub"
-          checked={spec.github}
-          disabled={!spec.git}
-          onChange={(github) => onSpec({ ...spec, github })}
-        />
-      </SettingsRow>
+        </SettingsRow>
+      )}
     </SettingsCard>
   );
 }

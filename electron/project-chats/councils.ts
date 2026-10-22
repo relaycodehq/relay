@@ -84,7 +84,7 @@ export class Councils {
     return this.reviews.reviewing(chat);
   }
 
-  /** A message is about to go out in the thread; a fix request readies the review's folder or refuses. */
+  /** A message is about to go out in the thread; a review follows its branch to the folder it's checked out in. */
   fixing(chat: ProjectChat, input: ProjectChatSend) {
     return this.reviews.fixing(chat, input);
   }
@@ -115,10 +115,15 @@ export class Councils {
 
   /**
    * Removes the worktrees Relay made for reviews whose thread is gone,
-   * archived or settled, unless they hold work Git couldn't give back.
+   * archived or settled, unless they hold work Git couldn't give back or
+   * another thread works in them.
    */
   sweepCheckouts(done: (chatId: string) => boolean) {
-    return sweepReviewCheckouts(this.worktrees, done);
+    return sweepReviewCheckouts(
+      this.worktrees,
+      done,
+      this.core.store.get().chats,
+    );
   }
 
   /**

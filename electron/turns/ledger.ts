@@ -15,6 +15,7 @@ import {
   type OwnedTurn,
   type TurnStore,
 } from "./store";
+import { pidAlive } from "../util/pid";
 
 /** Ledgers open in this process; a turn whose owner is one of them isn't left over. */
 const liveOwners = new Set<string>();
@@ -28,13 +29,7 @@ function ownerAlive({ id, pid, boot }: Owner) {
   // From before the computer restarted: whatever has its pid now isn't that Relay.
   if (boot !== undefined && Math.abs(boot - bootedAt()) > SAME_BOOT_MS)
     return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    // Alive, only not ours to signal.
-    return (e as NodeJS.ErrnoException).code === "EPERM";
-  }
+  return pidAlive(pid);
 }
 
 export interface OpenTurnInput {

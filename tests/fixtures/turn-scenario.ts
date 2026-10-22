@@ -8,6 +8,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { vi, type Mock } from "vitest";
@@ -25,6 +26,7 @@ import type {
 } from "../../shared/projects";
 import type { NewsCursor, NewsItem } from "../../shared/thread-news";
 import { fakeCli } from "./fake-cli";
+import { openCodeReplayService } from "./opencode-replay";
 
 /**
  * A project with threads, driven the way a person or a phone drives them, for
@@ -102,9 +104,13 @@ export const recordedChoice = (provider: AgentProvider) => ({
     ? { model: "haiku", reasoningEffort: "" as const }
     : provider === "codex"
       ? { model: "", reasoningEffort: "low" as const }
-      : { model: "", reasoningEffort: "" as const }),
+      : provider === "opencode"
+        ? {
+            model: "opencode/deepseek-v4.1-flash-free",
+            reasoningEffort: "" as const,
+          }
+        : { model: "", reasoningEffort: "" as const }),
 });
-
 
 export async function startScenario(
   options: ScenarioOptions,
@@ -119,12 +125,18 @@ export async function startScenario(
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
   options.findExecutable.mockResolvedValue(cli);
+  /** OpenCode's service, played back beside its CLI. */
+  let service: Awaited<ReturnType<typeof openCodeReplayService>> | undefined;
   if (options.replay) {
     const { provider, scenario, fault } = options.replay;
     const dir = resolve("tests/fixtures/replays", provider, scenario);
     const first = (await readFile(join(dir, "01.jsonl"), "utf8")).split(
       "\n",
     )[0];
+    const state = join(root, "replay-state");
+    await mkdir(state);
+    if (existsSync(join(dir, "http.jsonl")))
+      service = await openCodeReplayService(join(dir, "http.jsonl"), repo);
     const player = await fakeCli(
       join(root, `${provider}-replay`),
       [
@@ -133,6 +145,10 @@ export async function startScenario(
         fault
           ? `process.env.RELAY_REPLAY_FAULT = ${JSON.stringify(fault)};`
           : "",
+        service
+          ? `process.env.RELAY_REPLAY_SERVICE = ${JSON.stringify(service.url)};`
+          : "",
+        `process.env.RELAY_REPLAY_STATE = ${JSON.stringify(state)};`,
         await readFile(resolve("tests/fixtures/replay-agent.cjs"), "utf8"),
       ].join("\n"),
       JSON.parse(first).meta.version,
@@ -281,6 +297,7 @@ export async function startScenario(
       unsubscribe();
       feed.dispose();
       await chats.dispose();
+      await service?.close();
       vi.unstubAllEnvs();
       await rm(root, { recursive: true, force: true, maxRetries: 20 });
     },

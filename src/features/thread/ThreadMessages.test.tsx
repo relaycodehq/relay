@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ChatMessage, ProjectChat } from "../../../shared/projects";
 import { ThreadMessages } from "./ThreadMessages";
+import * as trace from "../../../shared/agent-trace";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -55,10 +56,10 @@ const chat = {
   ],
 } as unknown as ProjectChat;
 
-function thread(messages: ChatMessage[]) {
+function thread(messages: ChatMessage[], lastInput?: ProjectChat["lastInput"]) {
   return {
     history: {
-      data: { ...chat, messages },
+      data: { ...chat, messages, lastInput },
       isPending: false,
       error: null,
       refetch: async () => undefined,
@@ -75,13 +76,22 @@ function thread(messages: ChatMessage[]) {
 }
 
 const noop = () => {};
-function view(messages: ChatMessage[]) {
+const rewind = async () => ({ conflicts: [] });
+const queryClient = new QueryClient();
+function view(
+  messages: ChatMessage[],
+  options: {
+    lastInput?: ProjectChat["lastInput"];
+    onResume?: () => void;
+    busy?: boolean;
+  } = {},
+) {
   return (
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <ThreadMessages
-        handle={{ chat, busy: false } as never}
+        handle={{ chat, busy: options.busy ?? false } as never}
         projectPath="/sample/relay"
-        thread={thread(messages)}
+        thread={thread(messages, options.lastInput)}
         view={
           {
             scroll: { current: null },
@@ -109,7 +119,9 @@ function view(messages: ChatMessage[]) {
             openChanges: noop,
             openFile: noop,
             openTurnDiff: noop,
-            rewindTurn: async () => ({ conflicts: [] }),
+            rewindTurn: rewind,
+            commitTurn: noop,
+            canCommitTurn: () => false,
           } as never
         }
         queue={
@@ -121,7 +133,7 @@ function view(messages: ChatMessage[]) {
           } as never
         }
         worktree={{ status: undefined, folder: "/sample/relay" } as never}
-        onResume={noop}
+        onResume={options.onResume ?? noop}
         onSteer={noop}
         onCompose={noop as never}
       />
@@ -135,6 +147,113 @@ afterEach(() => {
   root = undefined;
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  queryClient.clear();
+});
+
+const connectionFailure =
+  "Claude could not complete this turn: API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)";
+const lastInput = {
+  id: "u",
+  body: "Fix it",
+  to: "claude",
+} as NonNullable<ProjectChat["lastInput"]>;
+
+it.each<{ body: string; extra: Partial<ChatMessage>; label: string }>([
+  { body: "", extra: {}, label: "Try again" },
+  {
+    body: "API Error: Can't reach the API server — check your internet or DNS (ENOTFOUND)",
+    extra: {},
+    label: "Try again",
+  },
+  { body: "The answer so far.", extra: {}, label: "Resume answer" },
+  {
+    body: "",
+    extra: {
+      activity: [
+        { id: "read", kind: "read", label: "Read a file", status: "complete" },
+      ],
+    },
+    label: "Resume answer",
+  },
+])("offers one inline recovery action: $label", ({ body, extra, label }) => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const failed = message("failed", "assistant", body, {
+    status: "failed",
+    error: connectionFailure,
+    ...extra,
+  });
+  const onResume = vi.fn();
+  act(() => root!.render(view([failed], { lastInput, onResume })));
+  expect(host.querySelector(".agent-error-message")?.textContent).toBe(
+    label === "Resume answer"
+      ? "Connection to Claude interrupted."
+      : "Couldn’t connect to Claude.",
+  );
+  expect(
+    host.querySelector("details.agent-error-details")?.textContent,
+  ).toContain("ENOTFOUND");
+  expect(host.querySelector("details")?.open).toBe(false);
+  expect(host.querySelector(".resume-answer")).toBeNull();
+  const retry = host.querySelector<HTMLButtonElement>(".agent-error-retry")!;
+  expect(retry.textContent).toContain(label);
+  act(() => retry.click());
+  expect(onResume).toHaveBeenCalledOnce();
+  if (body && label === "Resume answer")
+    expect(host.querySelector(".markdown")?.textContent).toContain(body);
+  else expect(host.querySelector(".markdown")).toBeNull();
+  act(() => root!.render(view([failed], { lastInput, onResume, busy: true })));
+  expect(
+    host.querySelector<HTMLButtonElement>(".agent-error-retry")?.disabled,
+  ).toBe(true);
+  act(() =>
+    host.querySelector<HTMLButtonElement>(".agent-error-retry")!.click(),
+  );
+  expect(onResume).toHaveBeenCalledOnce();
+});
+
+it("only offers recovery for the latest stopped answer with input in this conversation", () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  const failed = message("failed", "assistant", "", {
+    status: "failed",
+    error: connectionFailure,
+  });
+  for (const [messages, input] of [
+    [[failed], undefined],
+    [[failed], { ...lastInput, parentId: "another-conversation" }],
+    [[failed, message("done", "assistant", "Recovered.")], lastInput],
+    [
+      [
+        failed,
+        message("running", "assistant", "Working", { status: "streaming" }),
+      ],
+      lastInput,
+    ],
+  ] as const) {
+    act(() => root!.render(view([...messages], { lastInput: input })));
+    expect(host.querySelector(".agent-error-retry")).toBeNull();
+    expect(host.querySelector(".resume-answer")).toBeNull();
+  }
+  act(() =>
+    root!.render(
+      view(
+        [
+          {
+            ...failed,
+            error: "Claude could not complete this turn: API Error: overloaded",
+          },
+        ],
+        { lastInput },
+      ),
+    ),
+  );
+  expect(host.querySelector(".agent-error-retry")).toBeNull();
+  expect(host.querySelector(".resume-answer")?.textContent).toContain(
+    "Resume answer",
+  );
 });
 
 it("keeps one header, timer and fold through a saved question and its follow-up", () => {
@@ -251,4 +370,43 @@ it("keeps every message and the lines under them as the thread grows, each row i
   );
   expect(ids).toEqual(["u1", "a1", "u2", "a2", "u3", "a3"]);
   expect(host.textContent?.match(/macmini/g)).toHaveLength(2);
+});
+
+it("does not rederive completed question responses while another answer streams", () => {
+  const readTurn = vi.spyOn(trace, "readTurn");
+  const asking = message("asking", "assistant", "", {
+    questions: [
+      {
+        id: "q",
+        questions: [{ id: "pick", question: "Which?" }],
+        answers: { pick: ["Private"] },
+        answerMessageId: "reply",
+      },
+    ],
+  });
+  const reply = message("reply", "user", "Private", {
+    asyncQuestionAnswer: true,
+  });
+  const completed = message("completed", "assistant", "Done.");
+  const typed = message("typed", "user", "Next task");
+  const live = message("live", "assistant", "Working", { status: "streaming" });
+  const host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  act(() => root!.render(view([asking, reply, completed, typed, live])));
+  readTurn.mockClear();
+  act(() =>
+    root!.render(
+      view([
+        asking,
+        reply,
+        completed,
+        typed,
+        { ...live, body: "Working more", version: 2 },
+      ]),
+    ),
+  );
+  expect(readTurn.mock.calls.map(([m]) => m.id)).not.toContain("asking");
+  expect(readTurn.mock.calls.map(([m]) => m.id)).not.toContain("completed");
+  expect(readTurn.mock.calls.map(([m]) => m.id)).toContain("live");
 });

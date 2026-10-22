@@ -68,3 +68,59 @@ describe("a refused Gitea token", () => {
     );
   });
 });
+
+it("retries a refused write once with the new credential and the same JSON body", async () => {
+  const sent: RequestInit[] = [];
+  const gitea = new Gitea(account, "expired", async (_url, init) => {
+    sent.push(init);
+    return new Headers(init.headers).get("authorization") === "token fresh"
+      ? Response.json({ id: 42 })
+      : new Response("", { status: 401 });
+  });
+  gitea.renewToken = async () => "fresh";
+  expect(
+    (
+      await gitea.request("/repos/o/r/issues/7/comments", {
+        method: "POST",
+        body: { body: "comment" },
+      })
+    ).data,
+  ).toEqual({ id: 42 });
+  expect(
+    sent.map((init) => ({
+      method: init.method,
+      body: init.body,
+      type: new Headers(init.headers).get("content-type"),
+      authorization: new Headers(init.headers).get("authorization"),
+    })),
+  ).toEqual(
+    ["expired", "fresh"].map((token) => ({
+      method: "POST",
+      body: '{"body":"comment"}',
+      type: "application/json",
+      authorization: `token ${token}`,
+    })),
+  );
+  expect(sent[0]!.signal).toBe(sent[1]!.signal);
+});
+
+it("doesn't renew more than once or retry a write after an ambiguous failure", async () => {
+  for (const failure of [401, 500, "network"] as const) {
+    let asked = 0;
+    let sent = 0;
+    const gitea = new Gitea(account, "expired", async () => {
+      sent++;
+      if (failure === "network") throw new Error("fetch failed");
+      return new Response("", { status: failure });
+    });
+    gitea.renewToken = async () => {
+      asked++;
+      return "fresh";
+    };
+    await expect(
+      gitea.comment({ owner: "o", name: "r", number: 7 }, "comment"),
+    ).rejects.toThrow();
+    expect(asked).toBe(failure === 401 ? 1 : 0);
+    expect(sent).toBe(failure === 401 ? 2 : 1);
+  }
+});

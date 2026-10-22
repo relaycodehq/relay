@@ -37,12 +37,6 @@ const addTo = (stat: DiffStat, change: DiffStat) => {
   stat.deletions += change.deletions;
 };
 
-export function sumStats(files: readonly TurnFileChange[]): DiffStat {
-  const total = { additions: 0, deletions: 0 };
-  for (const file of files) addTo(total, file);
-  return total;
-}
-
 const gathered = (name: string): Gathered => ({
   name,
   stat: { additions: 0, deletions: 0 },

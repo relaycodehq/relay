@@ -2,6 +2,9 @@
 // RELAY_REPLAY_REAL with the same arguments and environment, passes its stdio
 // through, and writes every line each way to a transcript in RELAY_REPLAY_OUT,
 // labelled with the agent in RELAY_REPLAY_AGENT.
+// With RELAY_REPLAY_PROXY, `opencode service status` points Relay at that
+// recording proxy instead of the service (tests/record/opencode-proxy.ts),
+// and `opencode service get password` is written down as a placeholder.
 // Only tests/record/record-replays.test.ts uses it.
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -53,11 +56,47 @@ process.stdin.on("end", () => {
   stdinEnded = true;
   child.stdin.end();
 });
-lines(child.stdout, "in", process.stdout);
+const proxy = process.env.RELAY_REPLAY_PROXY;
+const asked = args.filter((a) => !a.startsWith("-")).join(" ");
+if (proxy && asked === "service status") {
+  // Answered whole once it exits: the address goes to the proxy, Relay gets the proxy's.
+  let said = "";
+  child.stdout.on("data", (chunk) => (said += chunk));
+  child.stdout.on("end", async () => {
+    const address = said.match(/http:\/\/[^\s]+/)?.[0];
+    if (address)
+      await fetch(proxy + "/__relay_record_target", { method: "POST", body: address });
+    if (said.trim()) write({ dir: "in", line: address ? said.trim().replace(address, "{{service}}") : said.trim() });
+    process.stdout.write(address ? said.replace(address, proxy) : said);
+    ended();
+  });
+} else if (proxy && asked === "service get password") {
+  child.stdout.on("data", (chunk) => process.stdout.write(chunk));
+  child.stdout.on("end", () => {
+    write({ dir: "in", line: "{{password}}" });
+    ended();
+  });
+} else {
+  lines(child.stdout, "in", process.stdout);
+  child.stdout.on("end", () => ended());
+}
 child.stderr.pipe(process.stderr);
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => child.kill(signal));
-child.on("exit", (code, signal) => {
+// Exits once the child has, and all it said is passed on and written down.
+let exited;
+let outputDone = false;
+function ended() {
+  outputDone = true;
+  finish();
+}
+function finish() {
+  if (!exited || !outputDone) return;
+  const { code, signal } = exited;
   write({ exit: { code, signal, afterStdin: stdinEnded } });
   process.exit(code ?? 1);
+}
+child.on("exit", (code, signal) => {
+  exited = { code, signal };
+  finish();
 });

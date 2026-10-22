@@ -1,9 +1,6 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import {
-  harnessReact,
-  mount,
-  rerender,
-} from "../../../tests/unit/hook-harness";
+// @vitest-environment happy-dom
+import { beforeEach, expect, it, vi } from "vitest";
+import { mount, update } from "../../../tests/unit/hook-harness";
 import { defaultAISettings } from "../../../shared/settings";
 import type { SentComposerSettings } from "../../../shared/projects";
 import type { AgentProvider } from "../../../shared/agents";
@@ -18,7 +15,6 @@ import {
 } from "../agents/composer-settings";
 import { useComposerSettings } from "./useComposerSettings";
 
-vi.mock("react", () => harnessReact);
 vi.mock("../agents/useAISettings", () => ({
   useAISettings: () => ({ data: defaultAISettings }),
 }));
@@ -43,18 +39,12 @@ vi.mock("./useNewThreadAgent", () => ({
   },
 }));
 
-const store = new Map<string, string>();
 beforeEach(() => {
-  store.clear();
+  localStorage.clear();
   vi.clearAllMocks();
   follow.lastModels = undefined;
   follow.lastAgent = undefined;
-  vi.stubGlobal("localStorage", {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, value: string) => store.set(key, value),
-  });
 });
-afterEach(() => vi.unstubAllGlobals());
 const launch: SentComposerSettings = {
   id: "launch",
   provider: "claude",
@@ -75,18 +65,19 @@ it("restores a spawned thread after history loads without following shared draft
   expect(follow.models).toHaveBeenCalledWith(false);
   expect(follow.agent).toHaveBeenCalledWith(false);
   lastSent = launch;
-  rerender();
-  rerender();
+  current.rerender();
   expect(current().models.claude?.choice).toEqual(launch.choice);
   expect(loadComposerSettings("thread").sent).toBe(launch.id);
-  current().setModels((models) => ({
-    ...models,
-    claude: { choice: { ...launch.choice, reasoningEffort: "high" } },
-  }));
-  rerender();
+  update(() =>
+    current().setModels((models) => ({
+      ...models,
+      claude: { choice: { ...launch.choice, reasoningEffort: "high" } },
+    })),
+  );
   lastSent = { ...launch };
-  rerender();
+  current.rerender();
   expect(current().models.claude?.choice.reasoningEffort).toBe("high");
+  current.unmount();
   const reopened = mount(() =>
     useComposerSettings({ key: "thread", lastSent }),
   );
@@ -96,14 +87,15 @@ it("restores a spawned thread after history loads without following shared draft
 it("keeps picks made during a local send but adopts a genuinely new send from another device", () => {
   let lastSent = launch;
   const current = mount(() => useComposerSettings({ key: "thread", lastSent }));
-  current().noteSent("local");
-  current().setModels((models) => ({
-    ...models,
-    claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
-  }));
-  rerender();
+  update(() => current().noteSent("local"));
+  update(() =>
+    current().setModels((models) => ({
+      ...models,
+      claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
+    })),
+  );
   lastSent = { ...launch, id: "local" };
-  rerender();
+  current.rerender();
   expect(current().models.claude?.choice.reasoningEffort).toBe("low");
   lastSent = {
     ...launch,
@@ -111,8 +103,7 @@ it("keeps picks made during a local send but adopts a genuinely new send from an
     provider: "codex",
     choice: { model: "gpt-6-sol", fast: true, reasoningEffort: "high" },
   };
-  rerender();
-  rerender();
+  current.rerender();
   expect(current().provider).toBe("codex");
   expect(current().models.codex?.choice).toEqual(lastSent.choice);
   expect(current().models.claude?.choice.reasoningEffort).toBe("low");
@@ -138,35 +129,35 @@ it("rolling back a failed send acknowledges the old baseline without losing newe
     useComposerSettings({ key: "thread", lastSent: launch }),
   );
   const beforeRequest = current();
-  beforeRequest.noteSent("failed");
-  rerender();
-  current().setModels((models) => ({
-    ...models,
-    claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
-  }));
-  rerender();
+  update(() => beforeRequest.noteSent("failed"));
+  update(() =>
+    current().setModels((models) => ({
+      ...models,
+      claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
+    })),
+  );
   // The callback belongs to the render that dispatched the failed request.
-  beforeRequest.noteSent(launch.id);
+  update(() => beforeRequest.noteSent(launch.id));
   expect(
     loadComposerSettings("thread").models.claude?.choice.reasoningEffort,
   ).toBe("low");
 });
 
-it("keeps a pending queue or steer's baseline on reopen, and preserves picks when it goes out", () => {
+it("keeps a pending queue or steer's baseline, preserving picks when it goes out", () => {
   let lastSent = launch;
   const current = mount(() => useComposerSettings({ key: "thread", lastSent }));
-  current().noteSent("queued", true);
-  current().setModels((models) => ({
-    ...models,
-    claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
-  }));
-  rerender();
+  update(() => current().noteSent("queued", true));
+  update(() =>
+    current().setModels((models) => ({
+      ...models,
+      claude: { choice: { ...launch.choice, reasoningEffort: "low" } },
+    })),
+  );
   expect(loadComposerSettings("thread").sent).toBe(launch.id);
   const saved = loadComposerSettings("thread");
   expect(withSent(saved, launch)).toBe(saved);
   lastSent = { ...launch, id: "queued" };
-  rerender();
-  rerender();
+  current.rerender();
   expect(current().models.claude?.choice.reasoningEffort).toBe("low");
   expect(current().sent).toBe("queued");
 });
@@ -185,22 +176,19 @@ it("freezes a new draft once created: sends and picks elsewhere leave it be", ()
   follow.lastAgent = "claude";
   const draft = () => useComposerSettings({ key: "new:p" });
   let current = mount(draft);
-  rerender();
   expect(current().models.claude?.contextWindow).toBe("200k");
-  current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") }));
-  rerender();
-  rerender();
+  update(() =>
+    current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") })),
+  );
   // A 200k send to Codex in another thread.
   follow.lastModels = opus200k;
   follow.lastAgent = "codex";
-  rerender();
-  rerender();
+  current.rerender();
   expect(current().models.claude?.contextWindow).toBeUndefined();
   expect(current().provider).toBe("claude");
   cacheNewThreadModels(opus200k);
+  current.unmount();
   current = mount(draft);
-  rerender();
-  rerender();
   expect(current().models.claude?.contextWindow).toBeUndefined();
   expect(current().provider).toBe("claude");
   expect(follow.saveAgent).not.toHaveBeenCalled();
@@ -210,13 +198,13 @@ it("creates the next draft on the shared picks after one starts a thread", () =>
   follow.lastModels = opus200k;
   const draft = () => useComposerSettings({ key: "new:p" });
   let current = mount(draft);
-  rerender();
-  current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") }));
-  rerender();
+  update(() =>
+    current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") })),
+  );
   startThreadSettings("new:p", "thread", "claude");
   expect(loadComposerSettings("thread").frozen).toBeUndefined();
   cacheNewThreadModels(opus200k);
+  current.unmount();
   current = mount(draft);
-  rerender();
   expect(current().models.claude?.contextWindow).toBe("200k");
 });

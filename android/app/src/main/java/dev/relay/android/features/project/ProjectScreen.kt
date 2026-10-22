@@ -16,12 +16,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.home.HomeServices
 import dev.relay.android.features.home.LocalProjectIconPath
 import dev.relay.android.features.home.ThreadRow
+import dev.relay.android.features.home.computerLine
+import dev.relay.android.features.home.remoteSitesLine
+import dev.relay.android.features.home.tasksLine
 import dev.relay.android.features.home.projectIconPath
 import dev.relay.android.features.home.threadDraft
 import dev.relay.android.features.tunnel.rememberTunnels
@@ -123,7 +127,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
     LaunchedEffect(id, git, online, client) { load() }
 
     CompositionLocalProvider(LocalProjectIconPath provides { projectIconPath(iconIndex, active, it) }) {
-        Screen(project?.name ?: "Project", onBack = navigator.backAction) {
+        Screen(project?.name ?: "Project", subtitle = computerLine(project?.computer), onBack = navigator.backAction) {
             RibbonRefreshBox(refreshing, {
                 refreshing = true
                 scope.launch {
@@ -161,12 +165,14 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
                         Entry(
                             TablerIcons.Outline.Terminal2,
                             "Tasks",
-                            running?.let { if (it > 0) "$it running" else "Nothing running" },
+                            tasksLine(running, project?.computer),
                         ) { navigator.push(Route.Tasks(id)) }
                     }
                     if (tunnels) item(key = "sites") {
                         val ports = glance?.ports.orEmpty()
-                        Entry(
+                        val away = project?.computer
+                        if (away != null) Entry(TablerIcons.Outline.World, "Sites", remoteSitesLine(ports, away), Modifier.alpha(0.5f), onClick = null)
+                        else Entry(
                             TablerIcons.Outline.World,
                             "Sites",
                             if (ports.isEmpty()) "Open localhost on ${overview?.name ?: "the computer"}"
@@ -192,11 +198,19 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
 }
 
 @Composable
-private fun Entry(icon: ImageVector, title: String, subtitle: String? = null, tint: Color = RelayTheme.colors.mutedForeground, onClick: () -> Unit) =
+private fun Entry(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    modifier: Modifier = Modifier,
+    tint: Color = RelayTheme.colors.mutedForeground,
+    onClick: (() -> Unit)?,
+) =
     ListRow(
         title,
+        modifier,
         subtitle = subtitle,
         leading = { Icon(icon, null, tint = tint, size = 16.dp) },
-        chevron = true,
+        chevron = onClick != null,
         onClick = onClick,
     )

@@ -1,9 +1,8 @@
 import { compareVersions } from "../../shared/agent-updates";
+import { isRecord } from "../../shared/records";
 
 const day = 24 * 60 * 60 * 1000;
 const stable = /^\d+\.\d+\.\d+$/;
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** When each release a package may still install came out, by version. */
 export type ReleaseTimes = Record<string, number>;

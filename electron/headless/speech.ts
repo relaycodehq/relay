@@ -13,6 +13,7 @@ import type { ReadAloud } from "../read-aloud";
 import type { SpeechService } from "../remote/phone-dictation";
 import type { VoiceService } from "../remote/phone-read-aloud";
 import { download, extract, renameSoon } from "./archive";
+import { errorMessage } from "../../shared/error-message";
 
 export interface RuntimePackage {
   name: string;
@@ -286,7 +287,7 @@ export class HeadlessSpeech {
         setup.status = "done";
       } catch (e) {
         setup.status = "failed";
-        setup.error = e instanceof Error ? e.message : String(e);
+        setup.error = errorMessage(e);
       }
     })();
     return this.state();

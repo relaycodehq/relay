@@ -1,7 +1,7 @@
 import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
 import type { FetchRequest } from "../pull-requests/host";
-import { ghToken } from "../pull-requests/github";
+import { GithubCredentials } from "../github";
 import type { CiRun, CiState } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
 import {
@@ -174,7 +174,6 @@ export function rollupRuns(contexts: (RollupContext | null)[]): CiRun[] {
 }
 
 export class GitHub {
-  private token?: Promise<string | null>;
   /** Unchanged answers come back as 304s, which don't count against the rate limit. */
   private cache = new Map<string, { etag: string; data: unknown }>();
   /** The token the cache was filled under; a private repo's answer must not outlive its login. */
@@ -182,14 +181,15 @@ export class GitHub {
   private failedJobs = new Map<string, string | undefined>();
   constructor(
     private fetchRequest: FetchRequest,
-    private login: () => Promise<string | null> = ghToken,
+    private credentials = new GithubCredentials(),
   ) {}
 
   /** A GET, or a POST of `body` (never cached). */
   private async get<T>(path: string, body?: unknown): Promise<T> {
-    const credential = (this.token ??= this.login());
-    const token = await credential;
-    if (this.token === credential && token !== this.cacheToken) {
+    const credential = this.credentials.read();
+    const value = await credential;
+    const { token } = value;
+    if (this.credentials.isCurrent(credential) && token !== this.cacheToken) {
       this.cache.clear();
       this.failedJobs.clear();
       this.cacheToken = token;
@@ -219,11 +219,11 @@ export class GitHub {
       // Picks up a fresh `gh auth login` on the next poll, including one made
       // after a tokenless request hit a private repo or the anonymous limit.
       if (
-        this.token === credential &&
+        this.credentials.isCurrent(credential) &&
         (response.status === 401 ||
           (!token && [403, 404, 429].includes(response.status)))
       ) {
-        this.token = undefined;
+        value.rejected();
         this.cache.clear();
         this.failedJobs.clear();
         this.cacheToken = null;
@@ -250,7 +250,11 @@ export class GitHub {
       ),
     ) as T;
     const etag = body === undefined && response.headers.get("etag");
-    if (etag && this.token === credential && this.cacheToken === token) {
+    if (
+      etag &&
+      this.credentials.isCurrent(credential) &&
+      this.cacheToken === token
+    ) {
       this.cache.delete(path);
       this.cache.set(path, { etag, data });
       if (this.cache.size > MAX_CACHED)
@@ -292,7 +296,7 @@ export class GitHub {
    * statuses and the Actions runs count.
    */
   async read(repo: CiRepo, branch: string): Promise<CiReading | null> {
-    return (await (this.token ??= this.login()))
+    return (await this.credentials.read()).token
       ? this.readHistory(repo, branch)
       : this.readTip(repo, branch);
   }

@@ -15,13 +15,12 @@ import {
 import { useDictationModel } from "./audio/session";
 import { SettingsSelect } from "../../ui/SettingsCard";
 import "./dictation.css";
+import { errorMessage } from "../../../shared/error-message";
 
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`;
 
 /** The speech model's row: what it is and where its download stands. */
-export function dictationModelLine(
-  state: DictationModelState,
-) {
+export function dictationModelLine(state: DictationModelState) {
   switch (state.status) {
     case "ready":
       return `${dictationModel.name} is downloaded. Speech is turned into text on this computer and never leaves it.`;
@@ -55,7 +54,7 @@ export function DictationEngineSetting() {
           setError(undefined);
           api.setDictationEngine(next).catch((e: unknown) => {
             console.warn("Could not switch the speech engine:", e);
-            setError(e instanceof Error ? e.message : String(e));
+            setError(errorMessage(e));
           });
         }}
       />

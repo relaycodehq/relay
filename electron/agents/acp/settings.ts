@@ -19,11 +19,13 @@ const legacyModel = "\0model";
 const optionIn = (settings: AcpSettings, category: string) =>
   settings.configOptions?.find((o) => o.category === category);
 
-/** The efforts a `thought_level` option offers, when they're all efforts Relay knows. */
+/** Known efforts; an explicit `default` is represented by Relay's Default choice. */
 function effortsOf(settings: AcpSettings): ReasoningEffort[] {
   const option = optionIn(settings, "thought_level");
   if (!option) return [];
-  const values = choicesOf(option).map((c) => c.value);
+  const values = choicesOf(option)
+    .map((c) => c.value)
+    .filter((v) => v !== "default");
   const efforts = values.flatMap((v) => reasoningEffortSchema.safeParse(v).data ?? []);
   return efforts.length === values.length ? efforts : [];
 }
@@ -62,7 +64,8 @@ export function currentOf(settings: AcpSettings) {
 /**
  * Puts a session's settings where a turn wants them: its approval mode, then
  * its model and effort. Left on Default, a model or effort goes back to what
- * the session started with. Settings the agent doesn't offer are skipped.
+ * the session started with, or its explicit default effort when offered.
+ * Settings the agent doesn't offer are skipped.
  */
 export async function applySettings(
   connection: AcpConnection,
@@ -133,6 +136,11 @@ export async function applySettings(
 
   // Read again: a model change can bring other effort levels.
   const effortOption = optionIn(settings, "thought_level");
-  const effort = choice.reasoningEffort || (effortOption ? base[effortOption.id] : undefined);
+  const defaultEffort = effortOption
+    ? offers(effortOption, "default")
+      ? "default"
+      : base[effortOption.id]
+    : undefined;
+  const effort = choice.reasoningEffort || defaultEffort;
   if (effortOption && effort && offers(effortOption, effort)) await setOption(effortOption, effort);
 }

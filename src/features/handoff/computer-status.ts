@@ -4,6 +4,7 @@ import type {
   ComputersOverview,
   PairedComputer,
 } from "../../../shared/handoff";
+import type { Project } from "../../../shared/projects";
 
 export type Computer = ComputersOverview["computers"][number];
 
@@ -32,7 +33,15 @@ const firstLine = (error: string) => {
   return line.length > 120 ? line.slice(0, 119) + "…" : line;
 };
 
-export function threadLine(t: AwayThread, now: number) {
+/** `on`: the computer it's on, whose being asleep or stopped says why its state isn't known. */
+export function threadLine(
+  t: AwayThread,
+  now: number,
+  on?: Pick<PairedComputer, "asleep" | "stopped">,
+) {
+  if (t.state === "unknown" && on?.asleep) return "checks once it's woken";
+  if (t.state === "unknown" && on?.stopped)
+    return "can't check while WSL has it stopped";
   if (t.state === "failed")
     return t.error ? firstLine(t.error) : stateWord.failed;
   if (t.state === "stopped")
@@ -46,8 +55,17 @@ export function threadLine(t: AwayThread, now: number) {
   return stateWord[t.state];
 }
 
+/**
+ * Whether it can be picked or browsed: online, or a WSL distribution asleep,
+ * which the first thing that needs it wakes.
+ */
+export const reachable = (c: Pick<PairedComputer, "status" | "asleep">) =>
+  c.status === "online" || !!c.asleep;
+
 export function computerLine(c: PairedComputer) {
   if (c.status === "online") return "Connected";
+  if (c.asleep) return "Asleep · wakes when used";
+  if (c.stopped) return "WSL stopped it";
   if (c.status === "connecting") return "Connecting…";
   if (c.status === "denied")
     return "It no longer accepts this computer. Pair again.";
@@ -65,7 +83,17 @@ export function updating(c: Computer) {
     return `Updating to ${u.version} once its background work ends`;
 }
 
+/** What a slim row of the map has room for: why it's off, asleep, or how many threads are there. */
+export function slimLine(c: Computer) {
+  if (c.stopped) return "WSL stopped";
+  if (!reachable(c)) return "Offline";
+  if (c.asleep) return "Asleep";
+  const n = c.threads.length;
+  return n ? `${n} ${n === 1 ? "thread" : "threads"}` : "";
+}
+
 export function summary(c: Computer) {
+  if (c.asleep || c.stopped) return computerLine(c);
   if (c.status === "offline") return "Offline";
   if (c.status !== "online") return computerLine(c);
   const busy = updating(c);
@@ -74,3 +102,49 @@ export function summary(c: Computer) {
   if (!c.threads.length) return "Connected";
   return `Connected · ${c.threads.length} ${c.threads.length === 1 ? "thread" : "threads"}`;
 }
+
+/**
+ * Where a project on another computer lives, as that computer is known now.
+ * Until the paired computers have loaded it counts as online, rather than
+ * flashing offline.
+ */
+export function projectComputer(
+  project: Pick<Project, "computer"> | undefined,
+  computers: readonly PairedComputer[] | undefined,
+) {
+  const home = project?.computer;
+  if (!home) return undefined;
+  const paired = computers?.find((c) => c.id === home.id);
+  return {
+    id: home.id,
+    name: paired?.name ?? home.name,
+    online: computers ? !!paired && reachable(paired) : true,
+    stopped: !!paired?.stopped,
+  };
+}
+
+/**
+ * The ids a query about computer `id` carries in its key: the computer's
+ * own, its projects', and their threads'.
+ */
+export function computerQueryIds(
+  id: string,
+  projects: readonly Pick<Project, "id" | "computer">[],
+  threadsOf: (projectId: string) => readonly { id: string }[] | undefined,
+) {
+  const ids = new Set([id]);
+  for (const p of projects) {
+    if (p.computer?.id !== id) continue;
+    ids.add(p.id);
+    for (const t of threadsOf(p.id) ?? []) ids.add(t.id);
+  }
+  return ids;
+}
+
+/** Whether a query key names one of `ids`, a workspace id by its project. */
+export const keyNames = (key: readonly unknown[], ids: ReadonlySet<string>) =>
+  key.some(
+    (part) =>
+      typeof part === "string" &&
+      (ids.has(part) || ids.has(part.split("/")[0])),
+  );

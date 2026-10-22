@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { outsideEdits, uncommitted } from "./elsewhere";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 let base: string, home: string, clone: string;
 const git = (root: string, ...args: string[]) =>
@@ -11,9 +12,7 @@ const git = (root: string, ...args: string[]) =>
 async function repo(name: string) {
   const root = join(base, name);
   await mkdir(root, { recursive: true });
-  git(root, "init", "-q", "-b", "main");
-  git(root, "config", "user.name", "Test");
-  git(root, "config", "user.email", "test@example.invalid");
+  initRepo(root);
   await writeFile(join(root, "a.ts"), "one\ntwo\n");
   git(root, "add", ".");
   git(root, "commit", "-qm", "Initial");

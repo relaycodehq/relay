@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { userInfo } from "node:os";
 import { delimiter, win32 } from "node:path";
 import { promisify } from "node:util";
+import { errorMessage } from "../../shared/error-message";
 
 /** Runs a program and resolves with its stdout; rejects on failure or timeout. */
 export type Run = (file: string, args: string[]) => Promise<string>;
@@ -186,7 +187,7 @@ function failure(error: unknown) {
   if (killed) return `PowerShell took longer than ${REGISTRY_TIMEOUT / 1000} s`;
   if (typeof code === "number")
     return `PowerShell exited with ${code}${stderr?.trim() ? `: ${stderr.trim()}` : ""}`;
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }
 
 let lastWarning: string | undefined;
@@ -245,10 +246,19 @@ function accountShell() {
 }
 
 let hydration: Promise<void> | undefined;
+let afterHydration: ((env: NodeJS.ProcessEnv) => Promise<void>) | undefined;
+
+/** A last change to the filled PATH, made before any lookup goes on; set before the first `pathReady`. */
+export function finishPath(step: (env: NodeJS.ProcessEnv) => Promise<void>) {
+  afterHydration = step;
+}
 
 /** Fills the process PATH once; executable lookups wait for it. */
 export function pathReady(): Promise<void> {
-  return (hydration ??= hydratePath(process.env).catch(() => {}));
+  return (hydration ??= hydratePath(process.env)
+    .catch(() => {})
+    .then(() => afterHydration?.(process.env))
+    .catch(() => {}));
 }
 
 /**

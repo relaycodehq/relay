@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -31,19 +31,12 @@ test("an answer plays the local video it embeds, and seeks in it", async () => {
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {

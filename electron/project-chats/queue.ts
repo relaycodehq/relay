@@ -1,3 +1,4 @@
+import { UncertainSteerError } from "../agents/errors";
 import { rm } from "node:fs/promises";
 import type {
   ChatMessage,
@@ -12,6 +13,7 @@ import { mayMentionSkill } from "../../shared/skill-mentions";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
+import { errorMessage } from "../../shared/error-message";
 
 export interface QueueHost {
   /** Starts the message's turn now; the thread must be idle. */
@@ -149,7 +151,7 @@ export class ChatQueue {
       await this.core.storage.save(chat);
       if (!this.core.active.has(id)) await this.drain(id);
     } catch (e) {
-      next.error = e instanceof Error ? e.message : String(e);
+      next.error = errorMessage(e);
       chat.queuePaused = true;
       await this.core.storage.save(chat);
     }
@@ -221,7 +223,16 @@ export class ChatQueue {
         })),
         asked.question,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof UncertainSteerError) {
+        message.status = "failed";
+        message.error = error.message;
+        message.unread = false;
+        chat.queue = chat.queue!.filter((q) => q !== next);
+        await this.core.storage.save(chat);
+        this.core.emit({ chatId: chat.id, message });
+        return;
+      }
       chat.messages.splice(chat.messages.indexOf(message), 1);
       // Sent later as its own turn, which saves its images again.
       await Promise.all(

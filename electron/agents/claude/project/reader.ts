@@ -12,10 +12,11 @@ import type { ClaudeRunOptions } from "./config";
 import { answerLimitError } from "../../turn-kit";
 import { ContextMeter } from "./context";
 import type { SDKMessage } from "./sdk";
-import { watchOf, type ClaudeSession } from "./session";
+import { askMeasured, watchOf, type ClaudeSession } from "./session";
 import { ToolRows } from "./tool-rows";
 import { forkStart } from "../forks";
 import { TurnWatcher } from "../../watch/watcher";
+import { TurnPredictor } from "../../predict/predictor";
 import { ClaudeGoalWatch } from "./goal";
 
 /**
@@ -49,6 +50,7 @@ export class ClaudeTurnReader {
   private rows: ToolRows;
   private meter: ContextMeter;
   private watcher?: TurnWatcher;
+  private predictor?: TurnPredictor;
   private goal: ClaudeGoalWatch;
 
   constructor(
@@ -65,6 +67,12 @@ export class ClaudeTurnReader {
         watchOf(session).checks,
         options.signal,
         () => watchOf(session).subagents.take(),
+      );
+    if (options.predict)
+      this.predictor = new TurnPredictor(
+        options.predict,
+        (question, signal) => askMeasured(session, question, signal),
+        options.signal,
       );
   }
 
@@ -191,6 +199,9 @@ export class ClaudeTurnReader {
   }
 
   private said(message: SDKAssistantMessage) {
+    // The CLI writes API failures as synthetic assistant messages. The
+    // failure watcher keeps their diagnostic; they mustn't replace real output.
+    if (message.error) return;
     const parent = message.parent_tool_use_id;
     if (!parent) {
       // The newest entry of the main conversation is where a fork continues.
@@ -216,7 +227,11 @@ export class ClaudeTurnReader {
       this.rows.call(tool, parent);
     }
     // Subagents are the session's to watch: most outlive the turn.
-    if (!parent) this.watcher?.called(tools.map((tool) => tool.id));
+    if (!parent) {
+      const ids = tools.map((tool) => tool.id);
+      this.watcher?.called(ids);
+      this.predictor?.called(ids);
+    }
     if (
       text &&
       !tools.length &&
@@ -287,6 +302,8 @@ export class ClaudeTurnReader {
       return "follow-up";
     }
     // One look back, once the answer is in.
+    // The guess first: it's the one someone waits on, the check isn't.
+    this.predictor?.ended();
     this.watcher?.ended(this.text);
     return { answer: this.text };
   }

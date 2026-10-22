@@ -21,6 +21,8 @@ import { readConfig, saveConfig } from "./launch";
 import { headlessPaths } from "./paths";
 import { terminalQr } from "./qr";
 import type { SpeechEngine, SpeechState } from "./speech";
+import { errorMessage } from "../../shared/error-message";
+import { sleep } from "../util/sleep";
 
 export interface SettingsContext {
   home: string;
@@ -48,7 +50,6 @@ export interface Snapshot {
   speech: SpeechState;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const megabytes = (bytes: number) =>
   `${Math.round(bytes / 1_000_000).toLocaleString("en")} MB`;
 const cliName = (provider: string) =>
@@ -221,12 +222,14 @@ const rows: Row[] = [
         ? agentInfo(s.newThreadAgent).name
         : dim("the last one used"),
   },
-  ...(["claude", "codex", "opencode", "muse", "amp"] as const).map((provider): Row => ({
-    key: provider,
-    section: "Agents",
-    label: agentInfo(provider).cli,
-    value: (s) => agentValue(s.agents.find((a) => a.provider === provider)),
-  })),
+  ...(["claude", "codex", "opencode", "muse", "amp"] as const).map(
+    (provider): Row => ({
+      key: provider,
+      section: "Agents",
+      label: agentInfo(provider).cli,
+      value: (s) => agentValue(s.agents.find((a) => a.provider === provider)),
+    }),
+  ),
   {
     key: "cursor",
     section: "Agents",
@@ -676,7 +679,7 @@ async function menu(ctx: SettingsContext) {
       try {
         if ((await change(ctx, ask, row, s)) === "restart") restart = true;
       } catch (e) {
-        console.log(warn(e instanceof Error ? e.message : String(e)));
+        console.log(warn(errorMessage(e)));
       }
     }
     if (

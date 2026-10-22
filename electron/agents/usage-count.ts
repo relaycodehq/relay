@@ -8,6 +8,7 @@ import {
   type UsageModelSpend,
 } from "../../shared/usage";
 import type { WatchSpend } from "../../shared/watch";
+import type { PredictionAsked } from "../../shared/prediction";
 import { logUsage } from "../usage";
 import type { AgentOptions, AgentRuntime, UsageReport } from "./types";
 import { listCost } from "./watch/prices";
@@ -83,6 +84,19 @@ export class CountedRun {
     );
   }
 
+  /** So do the guesses at the person's next message. */
+  predicted(asked: PredictionAsked) {
+    if (!asked.cost) return;
+    const { model, tokens, usd } = asked.cost;
+    this.log(
+      Date.now(),
+      0,
+      false,
+      [[model, { tokens, usd, requests: 1 }]],
+      "prediction",
+    );
+  }
+
   end() {
     this.ended = true;
     if (!this.models.size) return;
@@ -154,10 +168,18 @@ export function counted(
           options.watch!.onSpend?.(spend);
         },
       };
+      const predict = options.predict && {
+        ...options.predict,
+        onAsked: (asked: PredictionAsked) => {
+          run.predicted(asked);
+          options.predict!.onAsked?.(asked);
+        },
+      };
       try {
         return await runtime.run({
           ...options,
           watch,
+          predict,
           onUsage: (usage) => {
             run.add(usage);
             options.onUsage?.(usage);

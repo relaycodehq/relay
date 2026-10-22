@@ -23,7 +23,8 @@ private const val ACCENT = 0xFF8B7FC0.toInt()
  * Keeps the app's process in the foreground while the phone follows a
  * computer or reads an answer aloud, so Android leaves its socket and its
  * audio alone with the screen off. It holds no wake lock: the computer's tick
- * every 15 seconds and the audio itself wake the phone.
+ * (every minute while the app is in the background) and the audio itself wake
+ * the phone.
  */
 class WatchService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null

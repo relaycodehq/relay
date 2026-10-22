@@ -13,6 +13,7 @@ import { join } from "node:path";
 import type { ProjectChat } from "../../shared/projects";
 import type { ApiContext } from "./context";
 import { elsewhereHandlers } from "./elsewhere";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 let base: string, home: string, clone: string;
 const git = (root: string, ...args: string[]) =>
@@ -20,9 +21,7 @@ const git = (root: string, ...args: string[]) =>
 async function repo(name: string) {
   const root = join(base, name);
   await mkdir(root, { recursive: true });
-  git(root, "init", "-q", "-b", "main");
-  git(root, "config", "user.name", "Test");
-  git(root, "config", "user.email", "test@example.invalid");
+  initRepo(root);
   for (const f of ["a.ts", "b.ts", "other.ts"])
     await writeFile(join(root, f), "one\n");
   git(root, "add", ".");

@@ -9,7 +9,9 @@ import type {
   UsageRange,
   UsageSummary,
 } from "../../../shared/usage";
+import { relayJobLabels, usageRanges } from "../../../shared/usage";
 import { api } from "../../lib/api";
+import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { columnsOf, dayLabel, hours, measured } from "./format";
 import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
@@ -75,25 +77,19 @@ function Segmented<T extends string>({
   );
 }
 
-function useStored<T extends string>(key: string, fallback: T) {
-  const [value, setValue] = useState<T>(
-    () => (localStorage.getItem(key) as T | null) ?? fallback,
-  );
-  const set = (v: T) => {
-    localStorage.setItem(key, v);
-    setValue(v);
-  };
-  return [value, set] as const;
-}
-
 export function UsagePage({
   onOpenChat,
 }: {
   onOpenChat: (projectId: string, chatId: string) => void;
 }) {
-  const [range, setRange] = useStored<UsageRange>("relay-usage-range", "30d");
-  const [measure, setMeasure] = useStored<UsageMeasure>(
+  const [range, setRange] = useStoredChoice(
+    "relay-usage-range",
+    usageRanges,
+    "30d",
+  );
+  const [measure, setMeasure] = useStoredChoice<UsageMeasure>(
     "relay-usage-measure",
+    ["usd", "fresh"],
     "usd",
   );
   const [sharing, setSharing] = useState(false);
@@ -200,6 +196,10 @@ function Block({
 const OTHERS_AFTER = 4;
 /** Accounts that fit beside the rhythm charts; more get a row of their own. */
 const ROOM_BESIDE = 4;
+
+/** A label as it reads mid-sentence: "Thread titles" to "thread titles", "PR triage" as is. */
+const midSentence = (label: string) =>
+  label.replace(/^[A-Z](?![A-Z])/, (c) => c.toLowerCase());
 
 function Rhythmic({
   summary,
@@ -386,13 +386,21 @@ function Rhythmic({
 
       {relay > 0 && (
         <p className="us-footnote">
-          Relay’s own work, titles, commit messages and watcher checks, came to{" "}
-          {measured(relay, m)}
+          Relay’s own work came to {measured(relay, m)}
           {m === "fresh" && " tokens"},{" "}
           {((relay / (m === "usd" ? totals.usd : totals.fresh)) * 100).toFixed(
             1,
           )}
-          % of it.
+          % of it:{" "}
+          {Object.entries(totals.relayJobs)
+            .filter(([, spent]) => spent[m] > 0)
+            .sort((a, b) => b[1][m] - a[1][m])
+            .map(
+              ([job, spent]) =>
+                `${midSentence(relayJobLabels[job as keyof typeof relayJobLabels])} ${measured(spent[m], m)}`,
+            )
+            .join(", ")}
+          .
         </p>
       )}
     </div>

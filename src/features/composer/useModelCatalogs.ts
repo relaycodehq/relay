@@ -10,12 +10,15 @@ import { useStableCallback } from "../../lib/useStableCallback";
 
 export type ModelCatalogs = ReturnType<typeof useModelCatalogs>;
 
-/** The models each agent lists, and what its Default runs in this project. */
-export function useModelCatalogs(projectId: string) {
-  const agentPicks = useAgentPicks();
-  const claudeCatalog = useClaudeModels();
+/**
+ * The models each agent lists, and what its Default runs in this project; for
+ * a project on a paired computer (`computerId`), as that computer's agents do.
+ */
+export function useModelCatalogs(projectId: string, computerId?: string) {
+  const agentPicks = useAgentPicks(computerId);
+  const claudeCatalog = useClaudeModels(true, computerId);
   const claude = claudeCatalog.models;
-  const codexCatalog = useCodexModels();
+  const codexCatalog = useCodexModels(computerId);
   const codex = codexCatalog.models;
   const defaults = useAgentDefaults(projectId);
   const agents = useRunnableAgents();

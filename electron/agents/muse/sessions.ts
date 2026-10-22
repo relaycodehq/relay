@@ -1,11 +1,11 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { z } from "zod";
 import { HostedChild } from "../../agent-host/child";
 import { executableCommand, findExecutable } from "../../platform/executables";
 import { withTimeout } from "../../util/timeout";
 import { signedOutError } from "../errors";
 import { highestRequestId, replayLines } from "../hosted-replay";
-import { HostedSessions, savedMeta, type Lease } from "../hosted-sessions";
+import { HostedAgent } from "../hosted-agent";
+import { HostedSessions, savedMeta } from "../hosted-sessions";
 import { withWorktreeEnv } from "../worktree-env";
 import { MuseConnection, MuseRequestError } from "./connection";
 import {
@@ -43,40 +43,30 @@ type MuseMeta = z.infer<typeof metaSchema>;
 const startTimeout = 60_000;
 
 /** One `muse serve` process and the session it runs for a thread. */
-export class MuseAgent implements Lease {
-  busy = false;
+export class MuseAgent extends HostedAgent<MuseConnection, { turnId: string }> {
   session?: { id: string } & MuseSettings;
-  /** The turn a restart cut off, for an `adopt` turn to show. */
-  inflight?: { turnId: string };
   /** Experimental MSP (permission profiles, sign-in) is on for this connection. */
   experimental = false;
 
   constructor(
-    readonly connection: MuseConnection,
+    connection: MuseConnection,
     /** Started without a session log; its sessions keep the profile Muse fixes for them. */
     readonly ephemeral = false,
-  ) {}
+  ) {
+    super(connection);
+  }
 
   /** Permission profiles can be picked: experimental MSP, and sessions with a log. */
   get profiles() {
     return this.experimental && !this.ephemeral;
   }
 
-  get closed() {
-    return this.connection.closed;
-  }
-
-  /** What the next Relay reads about this process. */
   keep() {
     this.connection.keep({
       provider: "muse",
       session: this.session,
       run: this.inflight,
     } satisfies MuseMeta);
-  }
-
-  close() {
-    this.connection.close();
   }
 }
 
@@ -105,19 +95,11 @@ async function launch(
     ...line,
     env: withWorktreeEnv(process.env as Record<string, string>, env),
   };
-  const child = await sessions.spawn(
+  const child = await sessions.spawnGroup(
     key,
     { provider: "muse" } satisfies MuseMeta,
-    { ...spec, cwd, group: true },
-    () =>
-      spawn(spec.command, spec.args, {
-        cwd,
-        env: spec.env,
-        stdio: ["pipe", "pipe", "pipe"],
-        // Its own group, so the commands it starts stop with it.
-        detached: process.platform !== "win32",
-        windowsHide: true,
-      }) as ChildProcessWithoutNullStreams,
+    spec,
+    cwd,
   );
   return new MuseConnection(child);
 }
@@ -156,17 +138,11 @@ export function acquireMuse(
   env?: Record<string, string>,
   ephemeral = false,
 ): Promise<MuseAgent> {
-  return sessions.acquire(key, async () => {
-    const agent = new MuseAgent(await launch(key, cwd, env, ephemeral), ephemeral);
-    try {
-      await initialize(agent);
-    } catch (error) {
-      agent.close();
-      throw error;
-    }
-    agent.keep();
-    return agent;
-  });
+  return sessions.acquire(key, async () =>
+    new MuseAgent(await launch(key, cwd, env, ephemeral), ephemeral).start(
+      initialize,
+    ),
+  );
 }
 
 /** Runs `call`, reading Muse's "sign in first" as Relay's signed out. */

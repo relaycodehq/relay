@@ -111,27 +111,33 @@ export async function answerPreviewTool(
   previews: ThreadPreviews,
   caller: Caller,
   name: PreviewToolName,
-  input: { url?: string; reload?: boolean; clear?: boolean },
+  input: { url?: string; reload?: boolean; clear?: boolean; command?: string },
   signal: AbortSignal,
 ): Promise<ToolResult> {
   const key = caller.chatId;
   switch (name) {
     case "open_preview": {
       const started = Date.now();
+      const absolute = input.url && URL.parse(input.url);
       let state = await previews.open(
         caller.projectId,
         caller.chatId,
-        input.url,
+        absolute ? previewTarget(input.url!, undefined) : undefined,
+        absolute ? input.command : undefined,
       );
       previews.reveal(caller.projectId, caller.chatId);
       const home = previews.home(key);
-      if (input.url)
+      if (!absolute && (input.url || input.command))
         await previews.navigate(
           caller.projectId,
           caller.chatId,
-          previewTarget(input.url, state.url || home),
+          previewTarget(
+            input.url ?? (state.url || home || ""),
+            state.url || home,
+          ),
+          input.command,
         );
-      else if (input.reload) previews.act(key, "reload");
+      else if (!input.url && input.reload) previews.act(key, "reload");
       else if (!state.url && !home)
         return toolText(
           "No single HTTP server or saved dev port is available to open by default. Pass an explicit localhost URL, or set the dev command and port in Project settings → Preview.",

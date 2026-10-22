@@ -18,6 +18,7 @@ export const relayCommands = [
   "restart",
   "status",
   "pair",
+  "pipe",
   "logs",
   "projects",
   "project",
@@ -76,7 +77,7 @@ export async function projectForFolder(
   if (!real) return { refused: `There's no folder at ${folder}.` };
   const canonical = await Promise.all(
     (await projects.list())
-      .filter((project) => !project.scratch)
+      .filter((project) => !project.scratch && !project.computer)
       .map(async (project) => ({
         project,
         root: await realpath(project.path).catch(() => undefined),

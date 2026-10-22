@@ -28,7 +28,13 @@ export function UsageDial({
       {(["weekly", "session"] as const).map((kind) => {
         const { radius } = RINGS[kind];
         const circumference = 2 * Math.PI * radius;
-        const meter = meters.find((m) => m.kind === kind);
+        const meter = meters
+          .filter((m) => m.kind === kind)
+          .reduce<(typeof meters)[number] | undefined>(
+            (worst, m) =>
+              !worst || m.leftPercent < worst.leftPercent ? m : worst,
+            undefined,
+          );
         // Full while the limit is untouched, draining as it's used.
         const left = meter?.leftPercent ?? 0;
         return (

@@ -82,6 +82,10 @@
   margin-left: 6px;
   color: light-dark(#c4323f, #f0707a);
 }
+.commit-lines-aside {
+  margin-left: 8px;
+  color: var(--muted);
+}
 .commit-files-list {
   min-height: 0;
   max-height: 232px;
@@ -205,6 +209,20 @@
   color: inherit;
   opacity: 0.7;
   font-size: 12px;
+}
+
+.create-pull-sheet .commit-settle-thread {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 400;
+}
+.commit-settle-thread input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .commit-sheet-note {

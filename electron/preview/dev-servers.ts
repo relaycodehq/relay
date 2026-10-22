@@ -10,6 +10,7 @@ import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";
 import { connectedPorts } from "./connected-ports";
+import { errorMessage } from "../../shared/error-message";
 
 const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
@@ -39,6 +40,7 @@ const savedServer = z.object({
   folder: z.string(),
   port: z.number().int(),
   command: z.string(),
+  env: z.record(z.string(), z.string()).optional(),
 });
 
 /** The output a server taken back after a restart printed last, as much as is kept. */
@@ -57,6 +59,12 @@ function lastLines(entries: Entry[]) {
 interface Server {
   folder: string;
   port: number;
+  command: string;
+  /** Only launch overrides, never a snapshot of inherited credentials. */
+  env?: Record<string, string>;
+  restarting?: Promise<void>;
+  /** Retained until the validated stop succeeds, including on stop failures. */
+  stopping?: ChildProcess | HostedChild;
   /** In the agent host when there is one, so it outlives a restart of Relay. */
   child?: ChildProcess | HostedChild;
   state: DevServerState;
@@ -106,7 +114,11 @@ export class DevServers {
     // A server the host kept through a restart is this folder's already.
     if (this.reattaching) await this.reattached;
     const had = this.servers.get(folder);
-    if (had) had.usedAt = this.now();
+    if (had) {
+      had.usedAt = this.now();
+      // Hosts from before launch overrides were saved learn them from the preview.
+      had.env ??= { ...env };
+    }
     if (had?.port === port && had.state.state === "starting")
       return this.waitFor(had);
     if (had?.port === port && had.state.state === "running" && had.child)
@@ -118,12 +130,16 @@ export class DevServers {
         : {
             folder,
             port,
+            command,
+            env: { ...env },
             watchers: 0,
             usedAt: this.now(),
             state: { state: "starting", port },
           };
     this.servers.set(folder, server);
     server.usedAt = this.now();
+    server.command = command;
+    server.env = { ...env };
     // Claim the restart before probing, so concurrent wakeups share this start.
     this.set(server, { state: "starting", port });
     const up = await listening(port);
@@ -140,7 +156,7 @@ export class DevServers {
       terminate(child, { group: true });
       return server.state;
     }
-    this.follow(server, child, command);
+    this.follow(server, child);
     return this.waitFor(server);
   }
 
@@ -168,6 +184,7 @@ export class DevServers {
           folder,
           port,
           command,
+          env,
         } satisfies z.infer<typeof savedServer>,
         process: {
           command: shell,
@@ -189,20 +206,18 @@ export class DevServers {
   }
 
   /** Keeps the server's output and state, until it listens or gives up. */
-  private follow(
-    server: Server,
-    child: ChildProcess | HostedChild,
-    command: string,
-  ) {
+  private follow(server: Server, child: ChildProcess | HostedChild) {
     const { folder, port } = server;
     server.child = child;
     const hosted = child instanceof HostedChild ? child : undefined;
-    if (child instanceof HostedChild)
-      void child.hosted.pid().then((pid) => {
-        if (pid && server.child === child)
-          projectTasks.trackServer(pid, command, folder);
-      });
-    else if (child.pid) projectTasks.trackServer(child.pid, command, folder);
+    const track = (pid: number | undefined) => {
+      if (pid && server.child === child)
+        projectTasks.trackServer(pid, server.command, folder, (stop) =>
+          this.restart(server, child, stop),
+        );
+    };
+    if (child instanceof HostedChild) void child.hosted.pid().then(track);
+    else track(child.pid);
     let output = "";
     const add = (chunk: Buffer | string) => {
       output = (output + stripVTControlCharacters(String(chunk))).slice(
@@ -212,7 +227,7 @@ export class DevServers {
     child.stdout?.on("data", add);
     child.stderr?.on("data", add);
     const failed = (why?: string) => {
-      if (server.child !== child) return;
+      if (server.child !== child || server.stopping === child) return;
       server.child = undefined;
       if (server.state.state === "asleep") return;
       this.set(server, {
@@ -237,9 +252,13 @@ export class DevServers {
     hosted?.release();
     const started = this.now();
     void (async () => {
-      while (server.child === child && server.state.state === "starting") {
+      while (
+        server.child === child &&
+        server.stopping !== child &&
+        server.state.state === "starting"
+      ) {
         const up = await listening(port);
-        if (server.child !== child) return;
+        if (server.child !== child || server.stopping === child) return;
         if (up) {
           this.set(server, { state: "running", port, ours: true });
           return;
@@ -278,17 +297,15 @@ export class DevServers {
         const server: Server = {
           folder: saved.folder,
           port: saved.port,
+          command: saved.command,
+          env: saved.env,
           watchers: 0,
           usedAt: this.now(),
           state: { state: "starting", port: saved.port },
         };
         this.servers.set(saved.folder, server);
         this.set(server, server.state);
-        this.follow(
-          server,
-          new HostedChild(found.attachProcess(), lastLines),
-          saved.command,
-        );
+        this.follow(server, new HostedChild(found.attachProcess(), lastLines));
       }
     })()
       .catch((error) =>
@@ -296,6 +313,77 @@ export class DevServers {
       )
       .finally(() => (this.reattaching = false));
     return this.reattached;
+  }
+
+  /** Running Tasks validates and stops the old process; this owner launches its replacement. */
+  private restart(
+    server: Server,
+    child: ChildProcess | HostedChild,
+    stop: () => Promise<void>,
+  ): Promise<void> {
+    if (server.restarting) return server.restarting;
+    if (this.servers.get(server.folder) !== server || server.child !== child)
+      return Promise.reject(new Error("This dev server is no longer running."));
+    if (!server.env)
+      return Promise.reject(
+        new Error("Open this server’s preview before restarting it."),
+      );
+    server.restarting = (async () => {
+      // Ignore the old child's exit, and let concurrent previews join this restart.
+      server.stopping = child;
+      server.usedAt = this.now();
+      this.set(server, { state: "starting", port: server.port });
+      try {
+        await stop();
+        if (
+          this.servers.get(server.folder) !== server ||
+          server.state.state !== "starting"
+        )
+          throw new Error(
+            "The dev server was stopped before it could restart.",
+          );
+        server.child = undefined;
+        server.stopping = undefined;
+        const next = await this.launch(
+          server.folder,
+          server.command,
+          server.port,
+          server.env!,
+        );
+        if (
+          this.servers.get(server.folder) !== server ||
+          server.state.state !== "starting"
+        ) {
+          terminate(next, { group: true });
+          throw new Error(
+            "The dev server was stopped before it could restart.",
+          );
+        }
+        this.follow(server, next);
+        const state = await this.waitFor(server);
+        if (state.state !== "running")
+          throw new Error(
+            state.state === "failed"
+              ? state.output || "The dev server couldn’t restart."
+              : "The dev server was stopped before it could restart.",
+          );
+      } catch (error) {
+        if (
+          this.servers.get(server.folder) === server &&
+          server.state.state === "starting"
+        )
+          this.set(server, {
+            state: "failed",
+            port: server.port,
+            output: errorMessage(error),
+          });
+        throw error;
+      }
+    })().finally(() => {
+      server.restarting = undefined;
+      server.stopping = undefined;
+    });
+    return server.restarting;
   }
 
   private waitFor(server: Server) {

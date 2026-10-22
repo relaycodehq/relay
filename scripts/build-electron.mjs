@@ -8,6 +8,8 @@ import { syncVersion } from "./sync-version.mjs";
 syncVersion();
 
 for (const { options } of bundles) await build(options);
+// What installs Relay on another computer over ssh or wsl.exe (handoff/install-over.ts).
+cpSync("packaging/headless/install.sh", "dist-electron/install-relay.sh");
 
 // Live checks fall back to TypeScript 5.9 for projects whose compiler has no
 // language service API. It has its own install so its tsc bin stays out of

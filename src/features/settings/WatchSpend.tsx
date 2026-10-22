@@ -2,14 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import type { WatchSpendSummary } from "../../../shared/watch";
 import { api } from "../../lib/api";
 
-const usd = (dollars: number) =>
+export const usd = (dollars: number) =>
   dollars < 0.01
     ? "under 1¢"
     : dollars < 1
       ? `${Math.round(dollars * 100)}¢`
       : `$${dollars.toFixed(2)}`;
 
-const share = (part: number, whole: number) => {
+export const share = (part: number, whole: number) => {
   if (!(whole > 0)) return undefined;
   const pct = (part / whole) * 100;
   return pct < 1 ? "under 1%" : `${Math.round(pct)}%`;

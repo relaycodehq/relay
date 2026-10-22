@@ -20,7 +20,9 @@ import {
 import { AgentTurn } from "./AgentTurn";
 import { RichText } from "../../ui/RichText";
 import { SubagentStatus } from "./Subagents";
-import { POPUPS } from "../../lib/shortcuts";
+import { keyboardPopups } from "../../lib/popup-keyboard";
+import { errorMessage } from "../../../shared/error-message";
+import { usePoll } from "../../lib/poll";
 
 export function SubagentThread({
   chatId,
@@ -41,13 +43,14 @@ export function SubagentThread({
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const self = useRef<HTMLDivElement>(null);
   const detail = useQuery({
     queryKey: ["project-chat-agent", chatId, openId],
     queryFn: () => api.projectChatAgent(chatId, openId),
     refetchInterval: (query) =>
-      query.state.data?.status === "running" ? 1000 : false,
+      poll(query.state.data?.status === "running" ? 1000 : false),
   });
   const run = detail.data;
   const tabs = batchOf(runs, openId).sort(bySubagentStanding);
@@ -62,7 +65,7 @@ export function SubagentThread({
     const key = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       // Escape then belongs to a popup open over the run, like an image preview.
-      const popups = [...document.querySelectorAll(POPUPS)];
+      const popups = keyboardPopups();
       if (popups.some((popup) => popup !== self.current)) return;
       event.preventDefault();
       close.current();
@@ -84,7 +87,7 @@ export function SubagentThread({
       ]);
     } catch (e) {
       setStopping(undefined);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   };
   return (
@@ -144,7 +147,7 @@ export function SubagentThread({
           {run ? leadName(run) : "the thread's agent"}, not from you.
         </span>
         {error && <span role="alert">{error}</span>}
-        {run?.status === "running" && (
+        {run?.status === "running" && run.canStop !== false && (
           <button
             type="button"
             disabled={stopping === openId}

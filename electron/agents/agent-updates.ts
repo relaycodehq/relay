@@ -30,6 +30,7 @@ import {
 } from "../platform/executables";
 import { acpAccount } from "./acp";
 import { releasedBy, releaseTimes, type ReleaseTimes } from "./npm-release-age";
+import { errorMessage } from "../../shared/error-message";
 
 export const checkEvery = 4 * 60 * 60 * 1000;
 /** How long after starting, or turning checks back on, the first one waits. */
@@ -75,7 +76,7 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     },
   },
   opencode: {
-    npm: "opencode-ai",
+    npm: "@opencode/cli",
     native: {
       args: ["upgrade"],
       owns: (path) =>
@@ -95,7 +96,8 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
     install: "curl -fsSL https://dev.meta.ai/install.sh | bash",
     native: {
       args: [],
-      owns: (path) => /\/\.local\/bin\/muse(-bin-[^/]*)?(\.exe)?$/.test(foldPath(path)),
+      owns: (path) =>
+        /\/\.local\/bin\/muse(-bin-[^/]*)?(\.exe)?$/.test(foldPath(path)),
     },
   },
 };
@@ -205,6 +207,9 @@ export function ownInstall(
       prefix,
       "--no-audit",
       "--no-fund",
+      // Each download and the install scripts' own output, for the install's log.
+      "--loglevel=http",
+      "--foreground-scripts",
       "--ignore-scripts=false",
       `--allow-scripts=${npm}`,
       `${npm}@${spec}`,
@@ -301,7 +306,7 @@ export type { Exec };
 
 /**
  * An agent Relay downloads itself: Cursor's SDK (electron/agents/cursor),
- * Google's Antigravity server (electron/agents/acp).
+ * Google's Antigravity server (electron/agents/antigravity).
  */
 export interface SdkIo {
   /** Where the download comes from, as the card says it. */
@@ -324,7 +329,12 @@ export interface AgentUpdatesIo {
   linked?(provider: AgentProvider): string | undefined;
   realpath(path: string): Promise<string>;
   exists(path: string): Promise<boolean>;
-  exec(file: string, args: string[], timeout: number): Promise<Exec>;
+  exec(
+    file: string,
+    args: string[],
+    timeout: number,
+    onOutput?: (output: string) => void,
+  ): Promise<Exec>;
   fetch(url: string, init?: RequestInit): Promise<Response>;
   /** Claude's update channel, `latest` or `stable`. */
   claudeChannel(): Promise<string>;
@@ -353,7 +363,8 @@ export const machineIo: AgentUpdatesIo = {
       () => true,
       () => false,
     ),
-  exec: runExecutable,
+  exec: (file, args, timeout, onOutput) =>
+    runExecutable(file, args, timeout, undefined, false, onOutput),
   fetch: (url, init) => fetch(url, init),
   account: acpAccount,
   ownAgents: ownAgentsDir,
@@ -558,7 +569,7 @@ export class AgentUpdates {
       this.io.exec(path, ["--version"], probeTimeout).catch((error): Exec => ({
         code: null,
         stdout: "",
-        output: error instanceof Error ? error.message : String(error),
+        output: errorMessage(error),
         timedOut: false,
       })),
       this.installAt(provider, path, tag),
@@ -859,7 +870,20 @@ export class AgentUpdates {
               );
             })
           : install.program;
-      const result = await this.io.exec(program, install.args, updateTimeout);
+      // What it prints shows while it runs, a few times a second at most.
+      let shown = 0;
+      const result = await this.io.exec(
+        program,
+        install.args,
+        updateTimeout,
+        (output) => {
+          const agent = this.agent(provider);
+          if (Date.now() - shown < 250 || agent.update?.status !== "running")
+            return;
+          shown = Date.now();
+          this.put({ ...agent, update: { status: "running", output } });
+        },
+      );
       const output = result.output.trim() || undefined;
       if (result.timedOut)
         return fail("The update took too long and was stopped.", output);

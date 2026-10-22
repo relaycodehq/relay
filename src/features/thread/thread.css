@@ -24,6 +24,10 @@
   contain-intrinsic-block-size: auto 400px;
   overflow-clip-margin: 8px;
 }
+/* The message being restored needs its real height before the first paint. */
+.project-message[data-reading-anchor] {
+  content-visibility: visible;
+}
 .project-message > header {
   display: flex;
   align-items: center;
@@ -300,7 +304,9 @@
   right: 6px;
   bottom: 0;
   z-index: 2;
-  padding: 28px 22px 22px 28px;
+  /* The bottom leaves room under the composer for the line a thread on
+     another computer shows there (`.composer-below`). */
+  padding: 28px 22px 30px 28px;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
@@ -364,6 +370,15 @@
   max-height: 44px;
   overflow: hidden;
   padding-top: 12px;
+}
+/* Folded, a suggested message waits until the composer opens again, and
+   the placeholder holds its place. */
+.thread-bottom-composer.collapsed:not(:focus-within) .composer-ghost {
+  display: none;
+}
+.thread-bottom-composer.collapsed:not(:focus-within)
+  .composer-prompt-input::before {
+  visibility: visible;
 }
 /* Folded, the corner is "+N lines"'s. */
 .thread-bottom-composer.collapsed:not(:focus-within) .composer-attach {

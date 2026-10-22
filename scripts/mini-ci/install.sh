@@ -10,7 +10,7 @@ host="${1:?usage: scripts/mini-ci/install.sh <user@host>}"
 here="$(cd "$(dirname "$0")" && pwd)"
 
 ssh "$host" 'mkdir -p ~/relay-ci.noindex/bin ~/relay-ci.noindex/logs'
-scp -q "$here/release.sh" "$here/poll.sh" "$host:relay-ci.noindex/bin/"
+scp -q "$here/common.sh" "$here/check.sh" "$here/release.sh" "$here/poll.sh" "$host:relay-ci.noindex/bin/"
 ssh "$host" 'chmod +x ~/relay-ci.noindex/bin/*.sh
   plist=~/Library/LaunchAgents/dev.relay.ci.plist
   sed "s|HOME_DIR|$HOME|g" >"$plist"

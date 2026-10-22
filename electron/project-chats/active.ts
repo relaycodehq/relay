@@ -1,5 +1,6 @@
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
+import type { ImportOffer } from "../../shared/import-offer";
 import type {
   AgentProvider,
   AsyncAgentQuestions,
@@ -30,6 +31,8 @@ export interface ActiveChat {
   /** Leaves the thread's preview under the answer; `answerId` names the answer it lands in. */
   preview?: (preview: TurnPreview) => void;
   answerId?: () => string;
+  /** Leaves what the agent offers to import under the answer; a later offer replaces it. */
+  importOffer?: (offer: ImportOffer) => void;
   /** Leaves a page the agent asks with in the answer, as an open question. */
   askPage?: (group: AsyncAgentQuestions) => void;
   /** Counts the rest of the answer's edits in the worktree the thread just moved to. */

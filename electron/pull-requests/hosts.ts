@@ -11,7 +11,7 @@ import type { Account } from "../../shared/types";
 import { parseAzurePullUrl, parseGithubPullUrl } from "../../shared/validation";
 import type { GiteaLogin } from "../app/login";
 import type { AzureLogin } from "./azure-devops/login";
-import type { GithubLogin } from "./github-login";
+import type { GithubLogin } from "../github/login";
 import type { PullHost } from "./host";
 
 /**

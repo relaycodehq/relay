@@ -1,30 +1,15 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronDown,
-  Folder,
-  FolderGit2,
-  GitBranch,
-  GitBranchPlus,
-} from "lucide-react";
-import {
-  threadOnBranch,
-  type ChatWorkspace,
-  type Project,
-} from "../../../shared/projects";
+import { ChevronDown, Folder, FolderGit, FolderGit2 } from "lucide-react";
+import type { ChatWorkspace, Project } from "../../../shared/projects";
 import type { HandoffTarget } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { DeviceIcon } from "../handoff/DeviceIcon";
 import { canPick, targetLine } from "../handoff/clone-there";
 import type { ThreadWorktree } from "./useThreadWorktree";
-import { SearchSelect } from "../../ui/SearchSelect";
-import { MiddleTruncate } from "../../ui/MiddleTruncate";
-import { branchOptions, branchSelect } from "../changes/branch-options";
-import { branchOffNames, carriedBranch, carryOnNames } from "./worktree-start";
 import "../changes/worktrees.css";
-import "../changes/branch-picker.css";
 import "../handoff/handoff.css";
 
 const workspaces: Record<
@@ -36,8 +21,9 @@ const workspaces: Record<
 };
 
 /**
- * Before a thread's first message: where it will work. A paired computer
- * is a third answer, the thread starting there in a worktree of its own.
+ * Before a thread's first message: where it will work. Which branch, and so
+ * whether an existing worktree, is the branch control's to say; a paired
+ * computer is a third answer, the thread starting there in a worktree of its own.
  */
 export function NewWorkspacePicker({
   project,
@@ -52,26 +38,7 @@ export function NewWorkspacePicker({
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  // The branch list a "…" item opens in the menu's place, never touching the checkout.
-  const [picking, setPicking] = useState<"on" | "off">();
-  const trigger = useRef<HTMLButtonElement>(null);
-  const { start, setStart } = worktree;
-  const branches = useQuery({
-    queryKey: ["project-branches", project.id],
-    queryFn: () => api.projectBranches(project.id),
-    enabled: !!picking || !!start,
-  });
-  // Branches kept for other threads' worktrees aren't free to carry on.
-  const chats = useQuery({
-    queryKey: ["project-chats", project.id],
-    queryFn: () => api.projectChats(project.id),
-    enabled: picking === "on",
-  });
-  const counts = useQuery({
-    queryKey: ["project-branch-counts", project.id],
-    queryFn: () => api.projectBranchCounts(project.id),
-    enabled: !!picking,
-  });
+  const { start, setStart, startOn, setStartOn } = worktree;
   const computers = useQuery({
     queryKey: ["paired-computers"],
     queryFn: () => api.pairedComputers(),
@@ -83,202 +50,113 @@ export function NewWorkspacePicker({
     enabled: open && !!computers.data?.length,
     staleTime: 5_000,
   });
-  const { startOn, setStartOn } = worktree;
-  const Icon = workspaces[worktree.workspace].icon;
-  const inWorktree = worktree.workspace === "worktree" && !startOn;
-  const carried = inWorktree ? carriedBranch(start, branches.data) : undefined;
-  const off = inWorktree && start && "off" in start ? start.off : undefined;
-  // The list as it is now, though the trigger's label makes do with a cached one.
-  const pickBranch = (kind: "on" | "off") => {
-    setPicking(kind);
-    void branches.refetch();
-  };
-  const pickStart = (next: typeof start) => {
-    setStartOn(undefined);
-    worktree.setWorkspace("worktree");
-    setStart(next);
-  };
+  // Working on a branch's worktree, joined or made, rather than a new branch's.
+  const onBranch =
+    worktree.workspace === "worktree" && !!start && "on" in start;
+  const Icon = onBranch ? FolderGit : workspaces[worktree.workspace].icon;
   return (
-    <>
-      <Menu.Root open={open} onOpenChange={setOpen}>
-        <Menu.Trigger
-          ref={trigger}
-          className="composer-branch-trigger workspace-trigger workspace-where"
-          disabled={disabled}
-          title="Where this thread works"
+    <Menu.Root open={open} onOpenChange={setOpen}>
+      <Menu.Trigger
+        className="composer-branch-trigger workspace-trigger workspace-where"
+        disabled={disabled}
+        title="Where this thread works"
+      >
+        {startOn ? (
+          <DeviceIcon name={startOn.name} size={13} />
+        ) : (
+          <Icon size={13} />
+        )}
+        <span>
+          {startOn
+            ? `On ${startOn.name}`
+            : onBranch
+              ? "Worktree"
+              : workspaces[worktree.workspace].label}
+        </span>
+        <ChevronDown size={12} />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner
+          className="composer-popup-positioner"
+          align="start"
+          sideOffset={6}
         >
-          {startOn ? (
-            <DeviceIcon name={startOn.name} size={13} />
-          ) : (
-            <Icon size={13} />
-          )}
-          {startOn ? (
-            <span>On {startOn.name}</span>
-          ) : carried ? (
-            <span className="workspace-where-label">
-              Worktree on <MiddleTruncate text={carried} kind="branch" />
-            </span>
-          ) : (
-            <span className="workspace-where-label">
-              {workspaces[worktree.workspace].label}
-              {off && (
-                <span className="workspace-where-off">
-                  off <MiddleTruncate text={off} kind="branch" />
-                </span>
-              )}
-            </span>
-          )}
-          <ChevronDown size={12} />
-        </Menu.Trigger>
-        <Menu.Portal>
-          <Menu.Positioner
-            className="composer-popup-positioner"
-            align="start"
-            sideOffset={6}
+          <Menu.Popup
+            className={`composer-select-popup${computers.data?.length ? " handoff-menu" : ""}`}
+            aria-label="Workspace"
           >
-            <Menu.Popup
-              className={`composer-select-popup${computers.data?.length ? " handoff-menu" : ""}`}
-              aria-label="Workspace"
-            >
-              <Menu.Group>
-                <Menu.GroupLabel className="composer-menu-label">
-                  Workspace
-                </Menu.GroupLabel>
-                {(Object.keys(workspaces) as ChatWorkspace[]).map((w) => {
-                  const ItemIcon = workspaces[w].icon;
-                  return (
-                    <Menu.Item
-                      key={w}
-                      className="composer-select-item workspace-item"
-                      onClick={() => {
-                        setStartOn(undefined);
-                        setStart(undefined);
-                        worktree.setWorkspace(w);
-                      }}
-                    >
-                      <ItemIcon size={14} />
-                      {workspaces[w].label}
-                      {checkoutBranch && (
-                        // Out of the item's name, so "New worktree" still names just one item.
-                        <small className="workspace-item-note" aria-hidden>
-                          {w === "checkout"
-                            ? checkoutBranch
-                            : `new branch off ${checkoutBranch}`}
-                        </small>
-                      )}
-                    </Menu.Item>
-                  );
-                })}
-              </Menu.Group>
-              <Menu.Separator className="handoff-menu-separator" />
-              <Menu.Item
-                className="composer-select-item workspace-item"
-                onClick={() => pickBranch("on")}
-              >
-                <GitBranch size={14} />
-                Worktree on a branch…
-              </Menu.Item>
-              <Menu.Item
-                className="composer-select-item workspace-item"
-                onClick={() => pickBranch("off")}
-              >
-                <GitBranchPlus size={14} />
-                New worktree off…
-              </Menu.Item>
-              {!!computers.data?.length && (
-                <>
-                  <Menu.Separator className="handoff-menu-separator" />
-                  <Menu.Group>
-                    <Menu.GroupLabel className="composer-menu-label">
-                      On another computer
-                    </Menu.GroupLabel>
-                    {(targets.data ?? computers.data).map((c) => {
-                      const target: Partial<HandoffTarget> = c;
-                      return (
-                        <Menu.Item
-                          key={c.id}
-                          className="composer-select-item handoff-target"
-                          disabled={!targets.data || !canPick(target)}
-                          onClick={() => {
-                            setStart(undefined);
-                            setStartOn({ id: c.id, name: c.name });
-                          }}
-                        >
-                          <DeviceIcon name={c.name} size={16} />
-                          <span className="handoff-target-text">
-                            <span>{c.name}</span>
-                            <small>
-                              {!targets.data
-                                ? "Checking…"
-                                : targetLine(target, "Starts")}
-                            </small>
-                          </span>
-                        </Menu.Item>
-                      );
-                    })}
-                  </Menu.Group>
-                  <p className="handoff-menu-note">
-                    It starts there in a worktree of its own, from this branch's
-                    last commit. You follow it here as usual.
-                  </p>
-                </>
-              )}
-            </Menu.Popup>
-          </Menu.Positioner>
-        </Menu.Portal>
-      </Menu.Root>
-      <SearchSelect
-        key={picking}
-        open={!!picking}
-        anchor={trigger}
-        onOpenChange={(next) => {
-          if (!next) setPicking(undefined);
-        }}
-        label={picking === "on" ? "Branch to carry on" : "Branch to start off"}
-        value={
-          picking === "on"
-            ? start && "on" in start
-              ? start.on
-              : undefined
-            : (off ?? checkoutBranch ?? undefined)
-        }
-        options={
-          picking && branches.data
-            ? branchOptions(
-                picking === "on"
-                  ? carryOnNames(
-                      branches.data,
-                      (b) => !!threadOnBranch(chats.data ?? [], b),
-                    )
-                  : branchOffNames(branches.data),
-                branches.data,
-                counts.data,
-                Date.now(),
-                // Picking origin/… fetches it first, which its local twin doesn't.
-                { keepRemotes: picking === "off" },
-              )
-            : []
-        }
-        onChange={(name) =>
-          pickStart(
-            picking === "on"
-              ? { on: name }
-              : name === checkoutBranch
-                ? undefined
-                : { off: name },
-          )
-        }
-        placeholder="Search branches…"
-        empty={
-          branches.isError
-            ? "Couldn't list the branches."
-            : branches.isPending
-              ? "Loading branches…"
-              : "No branches to pick."
-        }
-        {...branchSelect}
-      />
-    </>
+            <Menu.Group>
+              <Menu.GroupLabel className="composer-menu-label">
+                Workspace
+              </Menu.GroupLabel>
+              {(Object.keys(workspaces) as ChatWorkspace[]).map((w) => {
+                const ItemIcon = workspaces[w].icon;
+                return (
+                  <Menu.Item
+                    key={w}
+                    className="composer-select-item workspace-item"
+                    onClick={() => {
+                      setStartOn(undefined);
+                      setStart(undefined);
+                      worktree.setWorkspace(w);
+                    }}
+                  >
+                    <ItemIcon size={14} />
+                    {workspaces[w].label}
+                    {checkoutBranch && (
+                      // Out of the item's name, so "New worktree" still names just one item.
+                      <small className="workspace-item-note" aria-hidden>
+                        {w === "checkout"
+                          ? checkoutBranch
+                          : `new branch off ${checkoutBranch}`}
+                      </small>
+                    )}
+                  </Menu.Item>
+                );
+              })}
+            </Menu.Group>
+            {!!computers.data?.length && (
+              <>
+                <Menu.Separator className="handoff-menu-separator" />
+                <Menu.Group>
+                  <Menu.GroupLabel className="composer-menu-label">
+                    On another computer
+                  </Menu.GroupLabel>
+                  {(targets.data ?? computers.data).map((c) => {
+                    const target: Partial<HandoffTarget> = c;
+                    return (
+                      <Menu.Item
+                        key={c.id}
+                        className="composer-select-item handoff-target"
+                        disabled={!targets.data || !canPick(target)}
+                        onClick={() => {
+                          setStart(undefined);
+                          setStartOn({ id: c.id, name: c.name });
+                        }}
+                      >
+                        <DeviceIcon name={c.name} size={16} />
+                        <span className="handoff-target-text">
+                          <span>{c.name}</span>
+                          <small>
+                            {!targets.data
+                              ? "Checking…"
+                              : targetLine(target, "Starts")}
+                          </small>
+                        </span>
+                      </Menu.Item>
+                    );
+                  })}
+                </Menu.Group>
+                <p className="handoff-menu-note">
+                  It starts there in a worktree of its own, from this branch's
+                  last commit. You follow it here as usual.
+                </p>
+              </>
+            )}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }
 

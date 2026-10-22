@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { spawn } from "node:child_process";
 import type { ProcessRow } from "../platform/processes";
 import { agentName, liveCwd, netstatListening, projectTasks } from "./tasks";
 import {
@@ -29,6 +30,13 @@ vi.mock("../platform/processes", () => ({
     fake.usage.push(usage);
     return fake.rows.map((r) => ({ ...r }));
   },
+  CpuRates: class {
+    fill() {}
+  },
+}));
+vi.mock("node:os", async (actual) => ({
+  ...(await actual<typeof import("node:os")>()),
+  cpus: () => Array.from({ length: 12 }, () => ({})),
 }));
 vi.mock("node:fs/promises", () => ({
   readlink: async () => fake.cwd,
@@ -53,7 +61,7 @@ vi.mock("node:child_process", () => ({
     if (!args.includes("cwd")) return done(null, "");
     done(null, pids.map((pid) => `p${pid}\nn${fake.cwd}`).join("\n"));
   },
-  spawn: () => ({ pid: fake.spawned, on: () => {}, unref: () => {} }),
+  spawn: vi.fn(() => ({ pid: fake.spawned, on: () => {}, unref: () => {} })),
 }));
 
 describe("shellCommand", () => {
@@ -328,6 +336,29 @@ it("looks for listening ports once for lists asked for together", async () => {
     expect(tasks.map((t) => t.ports)).toEqual([[5173], [3000]]);
 });
 
+it("counts a task's CPU as a share of the whole computer, not of one core", async () => {
+  const root = "/projects/costly";
+  fake.cwd = root;
+  const started = Date.now() - 60000;
+  const host = 2_100_001;
+  const agent = 2_100_002;
+  const shell = 2_100_003;
+  fake.rows = [
+    { pid: process.pid, ppid: 2_100_000, pgid: 0, started: 1, line: "relay" },
+    { pid: host, ppid: process.pid, pgid: 0, started, line: "agent-host" },
+    { pid: agent, ppid: host, pgid: 0, started, line: "/usr/local/bin/claude" },
+    { pid: shell, ppid: agent, pgid: 0, started, line: "/bin/zsh -lc npm run dev", cpu: 0.5, mb: 3 },
+    // Six of the twelve cores busy, as `ps` counts it.
+    { pid: 2_100_004, ppid: shell, pgid: 0, started, line: "node vite", cpu: 599.5, mb: 400 },
+  ];
+  projectTasks.hosts = () => [host];
+  projectTasks.record(root, "thread-2", "npm run dev");
+  const [plain] = await projectTasks.list(root, [], { fresh: true });
+  expect(plain.cpu).toBeUndefined();
+  const [costed] = await projectTasks.list(root, [], { fresh: true, costed: true });
+  expect(costed).toMatchObject({ cpu: 50, mb: 403 });
+});
+
 it("reads costs again when a plain scan was under way or came since", async () => {
   fake.rows = [];
   fake.usage = [];
@@ -355,5 +386,117 @@ it.skipIf(process.platform === "win32")(
       agentName("/Applications/Codex.app/Contents/MacOS/Codex --type=gpu"),
     ).toBeUndefined();
     expect(agentName("/opt/homebrew/bin/claude --resume x")).toBe("claude");
+  },
+);
+
+it("delegates managed restarts only after validating the project and live process identity", async () => {
+  const root = "/projects/managed-restart";
+  fake.cwd = root;
+  const pid = 9_000_001;
+  const started = Date.now() - 60000;
+  fake.rows = [
+    { pid, ppid: process.pid, pgid: pid, started, line: "node server.js" },
+  ];
+  const restart = vi.fn(async (stop: () => Promise<void>) => {
+    await stop();
+  });
+  projectTasks.trackServer(pid, "node server.js", root, restart);
+  const [task] = await projectTasks.list(root, [], { fresh: true });
+  const kill = vi.spyOn(process, "kill").mockImplementation((target) => {
+    fake.rows = fake.rows.filter((p) => p.pid !== Math.abs(target));
+    return true;
+  });
+  vi.mocked(spawn).mockClear();
+  try {
+    await expect(
+      projectTasks.restart("/another-project", task!.id),
+    ).rejects.toThrow("no longer running");
+    expect(restart).not.toHaveBeenCalled();
+    expect(kill).not.toHaveBeenCalled();
+    await projectTasks.restart(root, task!.id);
+    expect(restart).toHaveBeenCalledOnce();
+    expect(kill).toHaveBeenCalledWith(-pid, "SIGTERM");
+    expect(spawn).not.toHaveBeenCalled();
+
+    fake.rows = [
+      {
+        pid,
+        ppid: process.pid,
+        pgid: pid,
+        started: started + 1,
+        line: "another process",
+      },
+    ];
+    await expect(projectTasks.restart(root, task!.id)).rejects.toThrow(
+      "no longer running",
+    );
+    expect(restart).toHaveBeenCalledOnce();
+  } finally {
+    kill.mockRestore();
+  }
+});
+
+it.each(["leader", "child"])(
+  "does not force-kill a reused %s PID or its new process group",
+  async (reused) => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const root = `/projects/reused-${reused}`;
+    fake.cwd = root;
+    const [leader, child] =
+      reused === "leader" ? [9_100_001, 9_100_002] : [9_200_001, 9_200_002];
+    const started = Date.now() - 60_000;
+    const replaced = reused === "leader" ? leader : child;
+    fake.rows = [
+      {
+        pid: leader,
+        ppid: process.pid,
+        pgid: leader,
+        started,
+        line: "node server.js",
+      },
+      {
+        pid: child,
+        ppid: leader,
+        pgid: child,
+        started,
+        line: "node worker.js",
+      },
+    ];
+    projectTasks.trackServer(leader, "node server.js", root, async (stop) =>
+      stop(),
+    );
+    const [task] = await projectTasks.list(root, [], { fresh: true });
+    const kill = vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
+      if (signal === "SIGKILL")
+        fake.rows = fake.rows.filter((row) => row.pid !== Math.abs(pid));
+      return true;
+    });
+    try {
+      const restarting = projectTasks.restart(root, task!.id);
+      await vi.waitFor(() =>
+        expect(kill).toHaveBeenCalledWith(leader, "SIGTERM"),
+      );
+      // One original process survives the grace period, but the other exits
+      // and its PID now belongs to an unrelated process and process group.
+      fake.rows = fake.rows.map((row) =>
+        row.pid === replaced
+          ? { ...row, ppid: 1, started: started + 1, line: "unrelated process" }
+          : { ...row, ppid: 1 },
+      );
+      await vi.advanceTimersByTimeAsync(4000);
+      await restarting;
+      expect(kill).not.toHaveBeenCalledWith(replaced, "SIGKILL");
+      expect(kill).not.toHaveBeenCalledWith(-replaced, "SIGKILL");
+      expect(kill).toHaveBeenCalledWith(
+        reused === "leader" ? child : leader,
+        "SIGKILL",
+      );
+      expect(fake.rows).toMatchObject([
+        { pid: replaced, started: started + 1 },
+      ]);
+    } finally {
+      kill.mockRestore();
+      vi.useRealTimers();
+    }
   },
 );

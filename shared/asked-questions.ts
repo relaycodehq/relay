@@ -20,7 +20,12 @@ export function questionAnswers(
     question: q.question,
     answer: q.isSecret
       ? "Hidden answer"
-      : (answers[q.id]?.join(", ") ?? "No answer provided"),
+      : (answers[q.id]
+          ?.map(
+            (value) =>
+              q.options?.find((o) => o.value === value)?.label ?? value,
+          )
+          .join(", ") ?? "No answer provided"),
   }));
 }
 

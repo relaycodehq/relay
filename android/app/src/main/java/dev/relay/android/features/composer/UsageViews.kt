@@ -157,7 +157,8 @@ fun UsageBar(provider: String, usage: ProviderUsage?, context: ContextUsage?, co
 fun UsageRings(provider: String, usage: ProviderUsage?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     if (!reportsUsage(provider)) return
     val c = RelayTheme.colors
-    val list = meters(usage).take(2)
+    val all = meters(usage)
+    val list = listOf("weekly", "session").mapNotNull { kind -> all.filter { it.kind == kind }.minByOrNull { it.leftPercent } }
     Box(
         modifier.size(36.dp).clip(CircleShape)
             .pressable(onClick = onClick, role = Role.Button)

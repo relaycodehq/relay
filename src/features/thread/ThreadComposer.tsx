@@ -1,12 +1,16 @@
 import { useCallback, useMemo, useRef, type ReactNode, type Ref } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { GitBranch, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { X } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
 import { openPlan } from "../../../shared/open-plan";
-import type { ChatScope, Project } from "../../../shared/projects";
+import type {
+  ChatMessage,
+  ChatScope,
+  Project,
+} from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
@@ -35,14 +39,14 @@ import { StartedChip } from "../agent-turn/StartedThreads";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
-import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { WorktreeBranch } from "../changes/WorktreeBranch";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
-import { LiveAwayLine } from "../handoff/LiveAwayLine";
+import { HomeComputerLine, LiveAwayLine } from "../handoff/LiveAwayLine";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
-import { WorktreeBranchField } from "./WorktreeBranchField";
+import { DetourNote, NewThreadBranch } from "./NewThreadBranch";
 import "../changes/branch-picker.css";
 import { threadCost } from "../../../shared/thread-cost";
 import { lastComposerSettings } from "../../../shared/projects";
@@ -103,26 +107,36 @@ export interface ProjectCheckout {
 
 /**
  * The branch the thread works on: the checkout's, to switch, or its own
- * worktree's, named before the first message.
+ * worktree's. Before the first message, picking one also says where.
  */
 function ThreadBranch({
   project,
   worktree,
   checkout,
-  newWorktree,
+  unsent,
   disabled,
   onStartThread,
 }: {
   project: Project;
   worktree: ThreadWorktree;
   checkout: ProjectCheckout;
-  /** An unsent thread that will work in a worktree of its own. */
-  newWorktree: boolean;
+  /** A thread of the project's own not started yet, which picks where it works. */
+  unsent: boolean;
   disabled: boolean;
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
   // A folder without Git has no branch to show or switch.
   if (project.plain) return null;
+  if (unsent)
+    return (
+      <NewThreadBranch
+        project={project}
+        worktree={worktree}
+        checkout={checkout}
+        disabled={disabled}
+        onStartThread={onStartThread}
+      />
+    );
   const picker = (
     <ProjectBranchPicker
       projectId={project.id}
@@ -131,35 +145,35 @@ function ThreadBranch({
       onStartThread={onStartThread}
     />
   );
-  // Where it starts is the Workspace menu's to say; a carried-on branch keeps its name.
-  if (newWorktree)
-    return worktree.start && "on" in worktree.start ? null : (
-      <WorktreeBranchField
-        projectId={project.id}
-        value={worktree.newBranch}
-        onChange={worktree.setNewBranch}
-        disabled={disabled}
-      />
-    );
   // The deleted worktree's row asks where to carry on; its branch name would be stale.
   if (worktree.unavailable) return null;
   // Its name comes with the thread's title, a moment after sending.
   if (worktree.naming) return null;
   if (worktree.inWorktree)
     return (
-      <span
-        className="composer-branch-trigger workspace-trigger static worktree-branch"
-        title="This thread's worktree branch"
-      >
-        <GitBranch size={13} />
-        {worktree.branch ? (
-          <MiddleTruncate text={worktree.branch} kind="branch" />
-        ) : (
-          <span>Detached HEAD</span>
-        )}
-      </span>
+      <WorktreeBranch
+        key={worktree.where}
+        where={worktree.where}
+        branch={worktree.branch}
+        held={disabled || worktree.selectionDisabled}
+      />
     );
   return picker;
+}
+
+/** The guess the last answer left, while it is the last word and wasn't put away. */
+function nextGuess(view: ChatMessage[]) {
+  const last = view.at(-1);
+  return last?.role === "assistant" &&
+    last.status === "complete" &&
+    last.prediction &&
+    last.predictionSeen !== "dismissed"
+    ? {
+        id: last.id,
+        text: last.prediction,
+        seen: last.predictionSeen === "shown",
+      }
+    : undefined;
 }
 
 /**
@@ -239,6 +253,11 @@ export function ThreadComposer({
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
 }) {
   const qc = useQueryClient();
+  // Off, a guess the last answer already has isn't offered either.
+  const predictions = useQuery({
+    queryKey: ["composer-predictions"],
+    queryFn: () => api.composerPredictions(),
+  });
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
   const cost = useMemo(() => threadCost(shown), [shown]);
   const cacheExpired = useCacheExpired(context?.usage.cache);
@@ -268,11 +287,11 @@ export function ThreadComposer({
     () =>
       chatId
         ? {
-            key: `${chatId}:${root?.id ?? ""}`,
+            key: `${chatId}:${root?.id ?? ""}:${context?.provider ?? ""}`,
             count: () => api.projectChatContext(chatId, root?.id ?? null),
           }
         : undefined,
-    [chatId, root?.id],
+    [chatId, root?.id, context?.provider],
   );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
@@ -299,9 +318,9 @@ export function ThreadComposer({
       ? `Ask ${agentName(root.provider)} a follow-up on the side…`
       : reviewing
         ? "Reviewers are at work. Messages wait for the lead…"
-        : pending?.some((p) => p.kind === "task")
+        : !running && pending?.some((p) => p.kind === "task")
           ? "Message Claude, its background work keeps going…"
-          : pending
+          : !running && pending
             ? "Message Claude now, or wait for it to check back…"
             : project.scratch
               ? "Ask anything…"
@@ -310,6 +329,7 @@ export function ThreadComposer({
     <ProjectComposer
       ref={ref}
       projectId={project.id}
+      computer={project.computer}
       files={worktree.where}
       keys={{
         draft: draftKey,
@@ -338,6 +358,8 @@ export function ThreadComposer({
             })) ??
           lastComposerSettings(history.data, root?.id),
         planner: running ? undefined : openPlan(messages, shown),
+        prediction:
+          running || root || !predictions.data ? undefined : nextGuess(shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
         cold,
@@ -369,7 +391,10 @@ export function ThreadComposer({
               }}
             />
           )}
-          {scope.kind !== "project" || project.plain ? undefined : !chat ? (
+          {scope.kind !== "project" ||
+          project.plain ||
+          // A project on another computer works in its folder there.
+          project.computer ? undefined : !chat ? (
             <NewWorkspacePicker
               project={project}
               worktree={worktree}
@@ -390,20 +415,18 @@ export function ThreadComposer({
             project={project}
             worktree={worktree}
             checkout={checkout}
-            newWorktree={
-              !chat &&
-              scope.kind === "project" &&
-              (worktree.workspace === "worktree" || !!worktree.startOn)
-            }
+            unsent={!chat && scope.kind === "project" && !project.computer}
             disabled={waiting || held}
             onStartThread={onStartThread}
           />
-          <LinksControl
-            links={links}
-            empty={!chat}
-            onProjectSettings={onProjectSettings}
-            onError={setError}
-          />
+          {!project.computer && (
+            <LinksControl
+              links={links}
+              empty={!chat}
+              onProjectSettings={onProjectSettings}
+              onError={setError}
+            />
+          )}
         </>
       }
       below={
@@ -411,6 +434,8 @@ export function ThreadComposer({
           <LiveAwayLine chat={chat} onError={setError} />
         ) : chat && inSetup(chat) ? (
           <SetupLine chat={chat} onError={setError} />
+        ) : !chat && project.computer ? (
+          <HomeComputerLine project={project} />
         ) : undefined
       }
       notice={({ sendGoal }) =>
@@ -423,7 +448,10 @@ export function ThreadComposer({
             onGoal={sendGoal}
           />
         ) : (
-          <StartOnNote project={project} worktree={worktree} />
+          <>
+            <StartOnNote project={project} worktree={worktree} />
+            <DetourNote project={project} worktree={worktree} />
+          </>
         )
       }
       meter={

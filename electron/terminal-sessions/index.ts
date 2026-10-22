@@ -35,7 +35,7 @@ export interface FoundSession extends TerminalSession {
 }
 
 const MOST_ROWS = 30;
-/** Session heads read at once while looking for the project's terminal sessions. */
+/** Session heads or summaries read at once while looking for terminal sessions. */
 const BATCH = 32;
 /** Codex files sessions by the day they started. */
 const CODEX_DAYS = 30;
@@ -50,6 +50,7 @@ type File = {
 };
 type Origin =
   { id: string; cwd: string; terminal: boolean; app?: true } | undefined;
+type SessionFilter = { provider: TerminalAgent; session?: string };
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
@@ -90,30 +91,41 @@ export class TerminalSessions {
   ) {}
 
   /** The project's terminal sessions, newest first. */
-  async list(root: string, most = MOST_ROWS): Promise<FoundSession[]> {
+  async list(
+    root: string,
+    most = MOST_ROWS,
+    provider?: TerminalAgent,
+  ): Promise<FoundSession[]> {
     const roots = new Set([root, (await real(root)) ?? root]);
+    const only = provider ? { provider } : undefined;
     const [found, stored] = await Promise.all([
-      this.candidates(roots, most),
-      this.stored(roots, most),
+      this.candidates(roots, most, only),
+      this.stored(roots, most, only),
     ]);
     const live = await this.live(found);
     const named = await this.appNames(found);
-    const legacy = await Promise.all(
-      found.map(async ({ file, origin }) => {
-        const { title, turns } = await this.summary(file, origin.id);
-        return {
-          provider: file.provider,
-          id: origin.id,
-          title: named.get(origin.id) || title || "Untitled session",
-          updated: file.mtime,
-          turns,
-          account: file.account,
-          live: live(file, origin.id),
-          ...(origin.app ? { app: true as const } : {}),
-          path: file.path,
-        } satisfies FoundSession;
-      }),
-    );
+    const legacy: FoundSession[] = [];
+    // Imports can ask for every session: summaries stream the whole files,
+    // so give them the same concurrency bound as the head reads.
+    for (let at = 0; at < found.length; at += BATCH)
+      legacy.push(
+        ...(await Promise.all(
+          found.slice(at, at + BATCH).map(async ({ file, origin }) => {
+            const { title, turns } = await this.summary(file, origin.id);
+            return {
+              provider: file.provider,
+              id: origin.id,
+              title: named.get(origin.id) || title || "Untitled session",
+              updated: file.mtime,
+              turns,
+              account: file.account,
+              live: live(file, origin.id),
+              ...(origin.app ? { app: true as const } : {}),
+              path: file.path,
+            } satisfies FoundSession;
+          }),
+        )),
+      );
     // A chat may still have its old rollout after migrating to SQLite.
     // Prefer its current database history, and keep the usual account when
     // another account links to the same Codex home.
@@ -146,6 +158,7 @@ export class TerminalSessions {
       id: found.origin.id,
       account: found.file.account,
       path: found.file.path,
+      updated: found.file.mtime,
       live: live(found.file, found.origin.id),
       ...(found.origin.app ? { app: true as const } : {}),
       title:
@@ -157,7 +170,7 @@ export class TerminalSessions {
   private async stored(
     roots: Set<string>,
     most: number,
-    pick?: TerminalSessionPick,
+    pick?: SessionFilter,
   ): Promise<FoundSession[]> {
     if (pick && pick.provider !== "codex") return [];
     const seen = new Set<string>();
@@ -184,109 +197,12 @@ export class TerminalSessions {
   }
 
   /** The Claude app's titles, looked up only when one of its sessions is listed. */
-  private async appNames(found: { origin: NonNullable<Origin> }[]) {
-    return found.some(({ origin }) => origin.app)
+  private async appNames(found: { file: File; origin: NonNullable<Origin> }[]) {
+    return found.some(
+      ({ file, origin }) => file.provider === "claude" && origin.app,
+    )
       ? this.appTitles.get()
       : new Map<string, string>();
-  }
-
-  /**
-   * Folders Claude and Codex ran in lately, newest first, from a terminal or
-   * not: Relay's own threads are mostly in its projects, which callers drop.
-   * Claude keeps a folder per working folder, so its newest session there
-   * says where; Codex's files are read newest first until enough are found.
-   */
-  async recentFolders(most: number) {
-    const found = new Map<string, number>();
-    const note = (cwd: string, mtime: number) =>
-      found.set(cwd, Math.max(found.get(cwd) ?? 0, mtime));
-    const seen = new Set<string>();
-    const codex: File[] = [];
-    for (const { provider, account, home } of await this.homes()) {
-      if (provider === "codex") {
-        const days = codexDays(join(home, "sessions"), this.now()).slice(0, 15);
-        for (const dir of days) {
-          const at = await real(dir);
-          if (!at || seen.has(at)) continue;
-          seen.add(at);
-          for (const path of await files(
-            dir,
-            (n) => n.startsWith("rollout-") && n.endsWith(".jsonl"),
-          )) {
-            const s = await stat(path).catch(() => undefined);
-            if (s?.isFile())
-              codex.push({
-                provider,
-                account,
-                home,
-                path,
-                mtime: s.mtimeMs,
-                size: s.size,
-              });
-          }
-        }
-        continue;
-      }
-      const projects = join(home, "projects");
-      const at = await real(projects);
-      if (!at || seen.has(at)) continue;
-      seen.add(at);
-      const dirs = await Promise.all(
-        (await files(projects, () => true)).map(async (dir) => ({
-          dir,
-          mtime: (await stat(dir).catch(() => undefined))?.mtimeMs ?? 0,
-        })),
-      );
-      dirs.sort((a, b) => b.mtime - a.mtime);
-      await Promise.all(
-        dirs.slice(0, most * 3).map(async ({ dir }) => {
-          const sessions = await Promise.all(
-            (await files(dir, (n) => n.endsWith(".jsonl"))).map(
-              async (path) => {
-                const s = await stat(path).catch(() => undefined);
-                return s?.isFile()
-                  ? { path, mtime: s.mtimeMs, size: s.size }
-                  : undefined;
-              },
-            ),
-          );
-          const newest = sessions
-            .filter((s) => !!s)
-            .sort((a, b) => b.mtime - a.mtime)
-            .slice(0, 3);
-          for (const s of newest) {
-            const file = { provider, account, home, ...s };
-            const origin = await this.origins
-              .get(file.path, () => this.origin(file), file)
-              .catch(() => undefined);
-            if (origin) return note(origin.cwd, s.mtime);
-          }
-        }),
-      );
-    }
-    codex.sort((a, b) => b.mtime - a.mtime);
-    const before = found.size;
-    for (
-      let at = 0;
-      at < Math.min(codex.length, BATCH * 4) && found.size - before < most;
-      at += BATCH
-    ) {
-      const batch = codex.slice(at, at + BATCH);
-      const origins = await Promise.all(
-        batch.map((file) =>
-          this.origins
-            .get(file.path, () => this.origin(file), file)
-            .catch(() => undefined),
-        ),
-      );
-      batch.forEach((file, i) => {
-        const origin = origins[i];
-        if (origin) note(origin.cwd, file.mtime);
-      });
-    }
-    return [...found]
-      .map(([cwd, mtime]) => ({ cwd, mtime }))
-      .sort((a, b) => b.mtime - a.mtime);
   }
 
   /** What the session holds, as thread messages. */
@@ -326,7 +242,7 @@ export class TerminalSessions {
   private async candidates(
     roots: Set<string>,
     most: number,
-    only?: TerminalSessionPick,
+    only?: SessionFilter,
   ) {
     const all = (await this.files(roots, only, most === Infinity)).sort(
       (a, b) => b.mtime - a.mtime,
@@ -381,11 +297,7 @@ export class TerminalSessions {
    * each folder read once: an account's folder that links to the usual home
    * counts as the usual home, so its sessions are the default account's.
    */
-  private async files(
-    roots: Set<string>,
-    only?: TerminalSessionPick,
-    all = false,
-  ) {
+  private async files(roots: Set<string>, only?: SessionFilter, all = false) {
     const seen = new Set<string>();
     const out: File[] = [];
     for (const { provider, account, home } of await this.homes()) {
@@ -410,10 +322,10 @@ export class TerminalSessions {
             const name = basename(relative);
             return provider === "claude"
               ? name.endsWith(".jsonl") &&
-                  (!only || name === `${only.session}.jsonl`)
+                  (!only?.session || name === `${only.session}.jsonl`)
               : name.startsWith("rollout-") &&
                   name.endsWith(".jsonl") &&
-                  (!only || name.endsWith(`-${only.session}.jsonl`));
+                  (!only?.session || name.endsWith(`-${only.session}.jsonl`));
           },
           provider === "codex" && all,
         );

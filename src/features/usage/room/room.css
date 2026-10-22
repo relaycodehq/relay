@@ -82,7 +82,20 @@
   margin-top: 4px;
   color: var(--muted);
   font-size: 10.5px;
+  text-decoration: none;
   white-space: nowrap;
+}
+.us-room-name:hover {
+  color: var(--text);
+}
+.us-room-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+.us-room-name .us-mark,
+.us-room-external {
+  flex-shrink: 0;
 }
 .us-room-name span {
   overflow: hidden;
@@ -123,68 +136,4 @@
 .us-room-saved-text small {
   color: var(--muted);
   font-size: 11px;
-}
-/* Quiet while there's room; the accent once the account is low. */
-.us-room-refill {
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.us-room-refill:hover {
-  background: var(--hover);
-  color: var(--text);
-}
-.us-room-refill[data-low] {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.us-room-refill[data-low]:hover {
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent);
-}
-
-.us-room-positioner {
-  z-index: 150;
-  max-width: calc(100vw - 24px);
-}
-.us-room-ask {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 280px;
-  padding: 11px 12px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 6px 20px #0000001f;
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.45;
-  outline: none;
-}
-.us-room-ask p {
-  margin: 0;
-}
-.us-room-ask small {
-  display: block;
-  margin-top: 3px;
-  color: var(--muted);
-  font-size: 11.5px;
-}
-.us-room-ask .us-room-note {
-  color: var(--muted);
-}
-.us-room-ask-actions {
-  display: flex;
-  gap: 6px;
-}
-.us-room-ask-actions button {
-  height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
 }

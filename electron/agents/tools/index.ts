@@ -2,9 +2,10 @@ import { homedir } from "node:os";
 import type { AgentProvider } from "../../../shared/agents";
 import type { AgentTools, AgentToolListing } from "../../../shared/agent-tools";
 import type { ProviderCommand } from "../../../shared/commands";
-import { accountFor, accountLabel, signedInAs } from "../accounts";
+import { hasAccounts } from "../../../shared/agent-accounts";
+import { accountFor, accountLabel, accountHome, signedInAs } from "../accounts";
 import { discoverCursorSkills } from "../cursor/skills";
-import { discoverAntigravitySkills } from "../acp/antigravity-skills";
+import { discoverAntigravitySkills } from "../antigravity";
 import { inspectCodex } from "./codex";
 import { inspectClaude, claudeFiles } from "./claude";
 import { skillItem, sourceOf } from "./presentation";
@@ -20,10 +21,7 @@ export async function inspectAgentTools(
   known: () => Promise<ProviderCommand[] | undefined>,
 ): Promise<AgentTools> {
   const cwd = root ?? homedir();
-  const account =
-    provider === "codex" || provider === "claude"
-      ? accountFor(provider)
-      : undefined;
+  const account = hasAccounts(provider) ? accountFor(provider) : undefined;
   let inventory: Pick<AgentTools, "skills" | "servers">;
   if (provider === "codex" || provider === "claude") {
     try {
@@ -56,7 +54,10 @@ export async function inspectAgentTools(
         const list =
           provider === "cursor"
             ? await discoverCursorSkills(root)
-            : await discoverAntigravitySkills(cwd);
+            : await discoverAntigravitySkills(
+                cwd,
+                accountHome("antigravity", account!),
+              );
         skills = {
           items: list.map(skillItem),
           note: "Read from this agent's skill folders. Session policies may further restrict availability.",
@@ -104,7 +105,8 @@ export async function inspectAgentTools(
         provider === "codex" ||
         provider === "claude" ||
         provider === "opencode" ||
-        provider === "muse"
+        provider === "muse" ||
+        provider === "antigravity"
           ? "enabled"
           : "unknown",
       transport: "HTTP",
@@ -116,7 +118,7 @@ export async function inspectAgentTools(
   return {
     ...inventory,
     checkedAt: Date.now(),
-    ...(provider === "codex" || provider === "claude"
+    ...(hasAccounts(provider)
       ? { account: accountLabel(provider, account!) }
       : {}),
   };

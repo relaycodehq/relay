@@ -1,28 +1,34 @@
 import { readFile } from "node:fs/promises";
 import { agentName } from "../../../shared/agents";
 import type { AgentDecision } from "../../../shared/agent-modes";
-import { TurnText } from "../cursor/activity";
 import { signedOutError } from "../errors";
-import { answerLimitError } from "../turn-kit";
+import { CANCEL_GRACE_MS, cancelledByYou, TurnText } from "../turn-kit";
 import type { AgentOptions } from "../types";
-import { acpActivity, acpEdits, editKinds, lookKinds, planText } from "./activity";
+import { editKinds, lookKinds } from "./activity";
 import { AcpRequestError } from "./connection";
 import type { AcpProfile } from "./profiles";
 import {
   cancelledPermission,
-  parseUpdate,
   permissionRequestSchema,
   picked,
   promptResultSchema,
+  AUTH_REQUIRED,
   type AcpPermissionRequest,
   type AcpPromptResult,
-  type AcpToolCall,
 } from "./protocol";
-import { acquireAcpAgent, openSession, type AcpAgent, type McpServer } from "./sessions";
+import {
+  acquireAcpAgent,
+  openSession,
+  type AcpAgent,
+  type McpServer,
+} from "./sessions";
 import { applySettings } from "./settings";
-
-/** How long a cancelled turn may take to say so before Relay stops waiting. */
-const cancelGrace = 5000;
+import {
+  answerAntigravityQuestion,
+  antigravityHelper,
+  compactAntigravity,
+} from "../antigravity";
+import { AcpTurnEvents } from "./turn-events";
 
 const decisionKinds: Record<Exclude<AgentDecision, "cancel">, string> = {
   accept: "allow_once",
@@ -41,7 +47,9 @@ function requestDetail(request: AcpPermissionRequest) {
   const raw = request.toolCall.rawInput as Record<string, unknown> | undefined;
   const command = typeof raw?.command === "string" ? raw.command : undefined;
   const paths = [
-    ...(request.toolCall.content ?? []).flatMap((c) => (c.type === "diff" && c.path ? [c.path] : [])),
+    ...(request.toolCall.content ?? []).flatMap((c) =>
+      c.type === "diff" && c.path ? [c.path] : [],
+    ),
     ...(request.toolCall.locations ?? []).map((l) => l.path),
   ];
   return command ?? ([...new Set(paths)].join("\n") || undefined);
@@ -56,45 +64,90 @@ async function permission(
   name: string,
   raw: unknown,
   signal: AbortSignal,
+  isAntigravity: boolean,
 ) {
   const request = permissionRequestSchema.parse(raw);
+  if (isAntigravity && request.toolCall.toolCallId?.startsWith("interaction_"))
+    return answerAntigravityQuestion(options, request, signal);
   const kind = request.toolCall.kind ?? "other";
   const allow = () => optionOf(request, "allow_once", "allow_always");
   const reject = () => optionOf(request, "reject_once", "reject_always");
   const answer = (option?: { optionId: string }) =>
     option ? picked(option.optionId) : cancelledPermission;
   if (signal.aborted) return cancelledPermission;
-  if (options.job.kind === "helper") return answer(reject());
+  if (
+    options.job.kind === "helper" ||
+    (isAntigravity && options.job.kind === "compact")
+  )
+    return answer(reject());
   if (options.readOnly && !lookKinds.has(kind)) return answer(reject());
   if (options.runtimeMode === "full-access") return answer(allow());
-  if (options.runtimeMode === "auto-accept-edits" && editKinds.has(kind)) return answer(allow());
+  if (options.runtimeMode === "auto-accept-edits" && editKinds.has(kind))
+    return answer(allow());
   if (!options.onRequest || options.readOnly) return answer(reject());
 
-  const decisions = (Object.keys(decisionKinds) as (keyof typeof decisionKinds)[]).filter(
-    (decision) => request.options.some((o) => o.kind === decisionKinds[decision]),
+  const decisions = (
+    Object.keys(decisionKinds) as (keyof typeof decisionKinds)[]
+  ).filter((decision) =>
+    request.options.some((o) => o.kind === decisionKinds[decision]),
   );
-  const response = await options.onRequest(
-    {
-      kind: "approval",
-      title: request.toolCall.title || `${name} wants to run a tool`,
-      detail: requestDetail(request),
-      decisions,
-    },
-    signal,
-  ).catch(() => undefined);
-  if (signal.aborted || response?.kind !== "approval") return cancelledPermission;
+  const response = await options
+    .onRequest(
+      {
+        kind: "approval",
+        title: request.toolCall.title || `${name} wants to run a tool`,
+        detail: requestDetail(request),
+        decisions,
+      },
+      signal,
+    )
+    .catch(() => undefined);
+  if (signal.aborted || response?.kind !== "approval")
+    return cancelledPermission;
   if (response.decision === "cancel") return answer(reject());
-  return answer(optionOf(request, decisionKinds[response.decision]) ?? reject());
+  return answer(
+    optionOf(request, decisionKinds[response.decision]) ?? reject(),
+  );
 }
 
 /** The turn's prompt as ACP content blocks. */
-async function promptBlocks(options: AgentOptions, agent: AcpAgent, name: string) {
+async function promptBlocks(
+  options: AgentOptions,
+  agent: AcpAgent,
+  name: string,
+  profile: AcpProfile,
+) {
   const { job } = options;
   const helper = job.kind === "helper" ? job : undefined;
-  const note = helper ? undefined : await options.context?.().catch(() => undefined);
-  const text = job.kind === "compact" ? agent.profile.compact! : options.prompt;
+  const note =
+    helper || job.kind === "compact"
+      ? undefined
+      : await options.context?.().catch(() => undefined);
+  const text = job.kind === "compact" ? profile.compact! : options.prompt;
+  const body = [
+    helper &&
+      "This is a text-only helper request. Do not use tools, ask questions, or invoke slash commands.",
+    helper?.instructions,
+    note,
+    text,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+  const planning =
+    job.kind === "prompt" &&
+    options.interactionMode === "plan" &&
+    agent.profile.plan;
+  const skills =
+    job.kind === "prompt"
+      ? ((await agent.profile.skillContext?.(options)) ?? [])
+      : [];
   const blocks: object[] = [
-    { type: "text", text: [helper?.instructions, note, text].filter(Boolean).join("\n\n") },
+    ...skills.map((text) => ({
+      type: "text",
+      text,
+      annotations: { audience: ["assistant"] },
+    })),
+    { type: "text", text: planning ? `${agent.profile.plan} ${body}` : body },
   ];
   if (options.images?.length) {
     if (!agent.caps?.image) throw new Error(`${name} can't read images.`);
@@ -116,20 +169,87 @@ const mcpServers = (options: AgentOptions, agent: AcpAgent): McpServer[] =>
           type: "http",
           name: "relay",
           url: options.relayTools.url,
-          headers: [{ name: "Authorization", value: `Bearer ${options.relayTools.token}` }],
+          headers: [
+            {
+              name: "Authorization",
+              value: `Bearer ${options.relayTools.token}`,
+            },
+          ],
         },
       ]
     : [];
 
-/** Runs one turn on an ACP agent, starting or picking up its session in the thread's process. */
-export async function runAcp(profile: AcpProfile, options: AgentOptions): Promise<string> {
+export type AcpRunObserver = {
+  /** Drains native events before the ACP turn settles, including steer acknowledgements. */
+  settle(): Promise<void>;
+  failure?: Promise<never>;
+};
+/** `steered` acknowledges a steer the native API saw read, so its answer goes below it. */
+type Observe = (
+  agent: AcpAgent,
+  steered: (id: string) => void,
+) => Promise<AcpRunObserver>;
+
+/**
+ * Runs one turn on an ACP agent, starting or picking up its session in the
+ * thread's process. Native APIs may augment ACP through `observe` without
+ * replacing its per-session MCP and approvals.
+ */
+export async function runAcp(
+  profile: AcpProfile,
+  options: AgentOptions,
+  observe?: Observe,
+): Promise<string> {
+  if (profile.provider === "antigravity" && options.job.kind === "compact")
+    return compactAntigravity(profile, options, runAcpTurn);
+  if (profile.provider !== "antigravity" || options.job.kind !== "helper")
+    return runAcpTurn(profile, options, observe);
+  options.signal.throwIfAborted();
+  const helper = await antigravityHelper(profile.home);
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), 180_000);
+  let sessionId: string | undefined;
+  try {
+    const answer = await runAcpTurn(profile, {
+      ...options,
+      cwd: helper.cwd,
+      signal: AbortSignal.any([options.signal, deadline.signal]),
+      session: {
+        onId: async (id) => {
+          sessionId = id;
+        },
+      },
+      relayTools: undefined,
+      readOnly: true,
+    });
+    await helper.check();
+    return answer;
+  } catch (error) {
+    if (deadline.signal.aborted && !options.signal.aborted)
+      throw new Error("Antigravity reached the three-minute helper limit.");
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    await helper.close(sessionId);
+  }
+}
+
+async function runAcpTurn(
+  profile: AcpProfile,
+  options: AgentOptions,
+  observe?: Observe,
+): Promise<string> {
   const { signal, job } = options;
   const name = agentName(profile.provider);
   signal.throwIfAborted();
   if (job.kind === "compact" && !profile.compact)
-    throw new Error(`${name} summarizes a long thread on its own; there is nothing to compact by hand.`);
+    throw new Error(
+      `${name} summarizes a long thread on its own; there is nothing to compact by hand.`,
+    );
   if (job.kind === "side" || options.session?.fork)
-    throw new Error(`${name} can't copy a conversation, so it can't answer beside the thread.`);
+    throw new Error(
+      `${name} can't copy a conversation, so it can't answer beside the thread.`,
+    );
   if (job.kind === "review" || job.kind === "goal")
     throw new Error(`${name} has no /${job.kind}.`);
 
@@ -140,8 +260,11 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
   // A helper job is one bare question in a process of its own, never the thread's.
   const key = job.kind === "helper" ? undefined : options.session?.key;
   // A thread is read-only from its start, so its process can be started that way.
-  const readOnly = options.readOnly ? await profile.readOnlyEnv?.(options.cwd) : undefined;
-  if (readOnly?.warning) options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
+  const readOnly = options.readOnly
+    ? await profile.readOnlyEnv?.(options.cwd)
+    : undefined;
+  if (readOnly?.warning)
+    options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
   const agent = await acquireAcpAgent(profile, key, options.cwd, {
     ...options.env,
     ...readOnly?.env,
@@ -153,14 +276,28 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     throw new Error(`There is no ${name} turn to pick up.`);
   }
 
-  const turn = new TurnText(options.onText, options.onCommentary, profile.provider);
-  const calls = new Map<string, Partial<AcpToolCall> & { toolCallId: string }>();
   let overflow!: (error: Error) => void;
   const overflowed = new Promise<never>((_, reject) => (overflow = reject));
   void overflowed.catch(() => {});
   const turnAbort = new AbortController();
   const stop = () => turnAbort.abort();
   signal.addEventListener("abort", stop, { once: true });
+  const events = new AcpTurnEvents(
+    profile,
+    options,
+    agent,
+    key,
+    (error) => {
+      overflow(error);
+      stop();
+    },
+    () => turnAbort.signal.aborted,
+  );
+  const { turn, calls, batches, hear } = events;
+  const steered = (id: string) => {
+    turn.below();
+    options.onSteered?.(id);
+  };
 
   let sessionId = agent.session?.id;
   const cancel = () => {
@@ -168,88 +305,31 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
   };
   turnAbort.signal.addEventListener("abort", cancel, { once: true });
 
-  const hear = (raw: unknown) => {
-    const update = parseUpdate(raw);
-    if (!update) return;
-    switch (update.sessionUpdate) {
-      case "agent_message_chunk": {
-        if (update.content.type !== "text") return;
-        turn.add(update.content.text ?? "");
-        const over = answerLimitError(turn.size);
-        if (over && !turnAbort.signal.aborted) {
-          overflow(over);
-          stop();
-        }
-        return;
-      }
-      case "agent_thought_chunk":
-        return;
-      case "tool_call":
-      case "tool_call_update": {
-        const { sessionUpdate: _, ...fields } = update;
-        const known = calls.get(update.toolCallId);
-        const call = { ...known, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v != null)) } as Partial<AcpToolCall> & { toolCallId: string };
-        calls.set(update.toolCallId, call);
-        if (!known) turn.toCommentary();
-        options.onActivity?.(acpActivity(call));
-        const edits = acpEdits(call);
-        if (edits.length) options.onEdit?.(edits);
-        return;
-      }
-      case "plan":
-        if (update.entries.length)
-          options.onActivity?.({
-            id: `${profile.provider}-plan`,
-            kind: "tool",
-            status: "complete",
-            label: "Updated the plan",
-            detail: planText(update.entries),
-          });
-        return;
-      case "current_mode_update": {
-        const modes = agent.session?.settings.modes;
-        if (modes) modes.currentModeId = update.currentModeId;
-        return;
-      }
-      case "config_option_update":
-        if (agent.session) agent.session.settings.configOptions = update.configOptions;
-        return;
-      case "session_info_update":
-        if (update.title) options.onTitle?.(update.title);
-        return;
-      case "usage_update":
-        options.onContext?.({
-          usedTokens: update.used,
-          ...(update.size ? { maxTokens: update.size } : {}),
-        });
-        // The session's cost so far, which OpenCode only reports once a
-        // turn ends; a turn counts what it added since the last report.
-        if (
-          agent.session &&
-          update.cost &&
-          (!update.cost.currency || update.cost.currency === "USD")
-        ) {
-          const before = agent.session.cost;
-          agent.session.cost = update.cost.amount;
-          const spent = before === undefined ? 0 : update.cost.amount - before;
-          if (spent > 0) options.onCost?.(spent);
-        }
-        return;
-    }
-  };
-
   connection.onRequest = async (method, params) => {
     if (method === "session/request_permission")
-      return permission(options, name, params, turnAbort.signal);
-    throw new AcpRequestError(-32601, `Relay doesn't offer ${method}.`, null, method);
+      return permission(
+        options,
+        name,
+        params,
+        turnAbort.signal,
+        profile.provider === "antigravity",
+      );
+    throw new AcpRequestError(
+      -32601,
+      `Relay doesn't offer ${method}.`,
+      null,
+      method,
+    );
   };
 
+  let observer: AcpRunObserver | undefined;
   let cancelTimer: NodeJS.Timeout | undefined;
   try {
     connection.mark("start");
     let reply: Promise<unknown>;
     if (adopted) {
       connection.listen(sessionId!, hear);
+      observer = await observe?.(agent, steered);
       reply = connection.wait(adopted.id, "session/prompt");
       // What it said while Relay was away comes now, with a listener in place.
       connection.resume();
@@ -260,7 +340,8 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
         mcpServers: mcpServers(options, agent),
       });
       sessionId = opened.id;
-      if (key && opened.id !== options.session?.id) await options.session?.onId(opened.id);
+      if (opened.id !== options.session?.id)
+        await options.session?.onId(opened.id);
       if (opened.lost)
         options.onCommentary?.(
           `${profile.provider}-lost`,
@@ -276,12 +357,23 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
         }),
         options.choice,
       );
-      const prompt = await promptBlocks(options, agent, name);
+      const prompt = await promptBlocks(options, agent, name, profile);
       signal.throwIfAborted();
       connection.listen(opened.id, hear);
+      observer = await observe?.(agent, steered);
+      signal.throwIfAborted();
       const id = connection.reserve();
-      agent.keep({ id });
-      reply = connection.request("session/prompt", { sessionId: opened.id, prompt }, id);
+      agent.keep({
+        id,
+        ...(profile.provider === "antigravity" && job.kind === "compact"
+          ? { compaction: true }
+          : {}),
+      });
+      reply = connection.request(
+        "session/prompt",
+        { sessionId: opened.id, prompt },
+        id,
+      );
     }
     void reply.catch(() => {});
     // The agent reports the cancel; if it doesn't, stop waiting anyway.
@@ -289,7 +381,10 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       turnAbort.signal.addEventListener(
         "abort",
         () => {
-          cancelTimer = setTimeout(() => reject(new Error("Cancelled by you.")), cancelGrace);
+          cancelTimer = setTimeout(
+            () => reject(cancelledByYou()),
+            CANCEL_GRACE_MS,
+          );
           cancelTimer.unref();
         },
         { once: true },
@@ -298,8 +393,14 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     void cancelled.catch(() => {});
     if (signal.aborted) stop();
     const result: AcpPromptResult = promptResultSchema.parse(
-      await Promise.race([reply, cancelled, overflowed]),
+      await Promise.race([
+        reply,
+        cancelled,
+        overflowed,
+        ...(observer?.failure ? [observer.failure] : []),
+      ]),
     );
+    await observer?.settle();
     finish(options, profile, result, turn, name);
     const answer = turn.answer();
     const failed = calls.size === 0 ? profile.failure?.(answer) : undefined;
@@ -307,9 +408,27 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
       options.onText("");
       throw new Error(`${name}: ${failed}`);
     }
-    if (options.interactionMode === "plan" && answer.trim()) options.onPlan?.(answer);
+    if (options.interactionMode === "plan" && answer.trim())
+      options.onPlan?.(answer);
     return answer;
+  } catch (error) {
+    if (observer) {
+      cancel();
+      await observer.settle().catch(() => {});
+    }
+    if (error instanceof AcpRequestError && error.code === AUTH_REQUIRED) {
+      // Its process owns cached credentials. A new login must get a fresh process.
+      agent.close();
+      throw signedOutError(
+        profile.provider,
+        profile.provider === "opencode"
+          ? "OpenCode's model provider needs you to sign in again. Reconnect the provider, then resume the answer."
+          : undefined,
+      );
+    }
+    throw error;
   } finally {
+    batches?.settle(signal.aborted || turnAbort.signal.aborted);
     clearTimeout(cancelTimer);
     signal.removeEventListener("abort", stop);
     // Answers whatever the agent still asks of a turn that's over, without cancelling it.
@@ -319,7 +438,7 @@ export async function runAcp(profile: AcpProfile, options: AgentOptions): Promis
     connection.onRequest = undefined;
     // What the last Relay's cancels were answered with, in the replay.
     if (adopted) connection.dropOrphans();
-    settle(agent, !!key);
+    agent.settle(!!key);
   }
 }
 
@@ -348,18 +467,11 @@ function finish(
     case "refusal":
       throw new Error(`${name} refused to go on.`);
     case "max_tokens":
-      if (!turn.answer()) throw new Error(`${name} ran out of tokens before it answered.`);
+      if (!turn.answer())
+        throw new Error(`${name} ran out of tokens before it answered.`);
       return;
     case "max_turn_requests":
-      if (!turn.answer()) throw new Error(`${name} reached its limit of steps for one turn.`);
+      if (!turn.answer())
+        throw new Error(`${name} reached its limit of steps for one turn.`);
   }
-}
-
-/** The turn is over: the process keeps its session for the next, unless it was a private one. */
-function settle(agent: AcpAgent, kept: boolean) {
-  agent.inflight = undefined;
-  agent.busy = false;
-  if (!kept) return agent.close();
-  agent.connection.mark("end");
-  agent.keep();
 }

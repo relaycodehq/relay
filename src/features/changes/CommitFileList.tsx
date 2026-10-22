@@ -1,4 +1,7 @@
-import type { WorkingChange } from "../../../shared/working-tree";
+import type {
+  WorkingChange,
+  WorkingTree,
+} from "../../../shared/working-tree";
 import { parentOf } from "../../lib/file-tree";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { changeKind } from "../../../shared/working-tree";
@@ -23,10 +26,10 @@ export function CommitFileList({
   /** Leaves all of `paths` out, or takes them all back when they already are. */
   onToggle: (paths: string[]) => void;
   /** Across every change, so only shown while every file is included. */
-  lines: { additions: number; deletions: number };
+  lines: WorkingTree["lines"];
 }) {
   const [flat, setFlat] = useStoredFlag("relay-commit-files-flat");
-  const selected = files.length - excluded.size;
+  const selected = files.filter((c) => !excluded.has(c.path)).length;
   const box = (paths: string[], label: string) => (
     <GroupBox
       paths={paths}
@@ -45,12 +48,22 @@ export function CommitFileList({
           )}
           {selected} of {files.length} {files.length === 1 ? "file" : "files"}
         </label>
-        {!excluded.size && (lines.additions > 0 || lines.deletions > 0) && (
-          <span className="commit-lines" aria-label="Lines changed">
-            <span className="added">+{lines.additions}</span>
-            <span className="deleted">−{lines.deletions}</span>
-          </span>
-        )}
+        {selected === files.length &&
+          (lines.additions > 0 || lines.deletions > 0) && (
+            <span className="commit-lines" aria-label="Lines changed">
+              <span className="added">+{lines.additions}</span>
+              <span className="deleted">−{lines.deletions}</span>
+              {lines.generated && (
+                <span
+                  className="commit-lines-aside"
+                  title="Lockfiles and generated files"
+                >
+                  +{lines.generated.additions} −{lines.generated.deletions} not
+                  counted
+                </span>
+              )}
+            </span>
+          )}
         <ListViewToggle grouped={!flat} onGrouped={(g) => setFlat(!g)} />
       </div>
       <div className="commit-files-list">

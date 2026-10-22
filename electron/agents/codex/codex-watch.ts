@@ -7,6 +7,7 @@ import type { AgentOptions, AgentWatch } from "../types";
 import { WatchChecks, type CheckCost } from "../watch/checks";
 import { listCost } from "../watch/prices";
 import { TurnWatcher } from "../watch/watcher";
+import { TurnPredictor } from "../predict/predictor";
 import type { CodexConnection } from "./codex-connection";
 import type { CodexTransport } from "./codex-transport";
 
@@ -66,7 +67,8 @@ export const FORK_NOTE = `You are reading a copy of this thread taken while it w
 /**
  * One check: fork the thread, ask, read the answer and what the fork's
  * requests used. A fork that starts any tool is stopped and its answer
- * dropped; it may not act, as the thread or otherwise.
+ * dropped; it may not act, as the thread or otherwise. `midTurn` when the
+ * thread may still be working, so the fork is told why its last call looks cut off.
  */
 export async function askCodexSide(
   wire: CodexSideWire,
@@ -74,6 +76,7 @@ export async function askCodexSide(
   settings: Record<string, unknown>,
   question: string,
   signal: AbortSignal,
+  midTurn = true,
 ): Promise<{ reply: string | null; cost?: CheckCost }> {
   signal.throwIfAborted();
   const fork = (await wire.request("thread/fork", {
@@ -122,7 +125,7 @@ export async function askCodexSide(
       input: [
         {
           type: "text",
-          text: `${FORK_NOTE}\n\n${question}`,
+          text: midTurn ? `${FORK_NOTE}\n\n${question}` : question,
           text_elements: [],
         },
       ],
@@ -193,35 +196,58 @@ export type CodexTurnWatch = {
   ended(answer: string): void;
 };
 
-/** The turn's link to its thread's checks; none when the turn isn't watched. */
+/** The turn's link to its thread's checks and next-message guess; none when it has neither. */
 export function codexTurnWatcher(
   connection: CodexConnection,
   transport: CodexTransport,
   options: AgentOptions,
 ): CodexTurnWatch | undefined {
-  if (!options.watch) return undefined;
-  const state = (connection.watch ??= new CodexWatch(
-    {
-      request: (method, params) => transport.request(method, params),
-      side: (threadId, listen) => connection.side(threadId, listen),
-    },
-    () => ({
-      id: connection.started?.thread.id ?? "",
-      settings: connection.threadSettings,
-    }),
-  ));
+  if (!options.watch && !options.predict) return undefined;
+  const wire: CodexSideWire = {
+    request: (method, params) => transport.request(method, params),
+    side: (threadId, listen) => connection.side(threadId, listen),
+  };
+  const thread = () => ({
+    id: connection.started?.thread.id ?? "",
+    settings: connection.threadSettings,
+  });
+  const state = options.watch
+    ? (connection.watch ??= new CodexWatch(wire, thread))
+    : undefined;
   // Kept past the turn: a check still running reports to the turn it came from.
-  state.watch = options.watch;
-  const turn = new TurnWatcher(options.watch, state.checks, options.signal);
+  if (state) state.watch = options.watch;
+  const turn =
+    state &&
+    options.watch &&
+    new TurnWatcher(options.watch, state.checks, options.signal);
+  const predictor =
+    options.predict &&
+    new TurnPredictor(
+      options.predict,
+      async (question, signal) => {
+        const { id, settings } = thread();
+        if (!id || !settings) return { reply: null };
+        // Asked once the turn is over: nothing is still running.
+        return askCodexSide(wire, id, settings, question, signal, false);
+      },
+      options.signal,
+    );
   return {
     item: (item) => {
-      if (item.id && item.type && TOOLS.has(item.type)) turn.called([item.id]);
+      if (!item.id || !item.type || !TOOLS.has(item.type)) return;
+      turn?.called([item.id]);
+      predictor?.called([item.id]);
     },
-    ended: (answer) => turn.ended(answer),
+    ended: (answer) => {
+      // The guess first: it's the one someone waits on, the check isn't.
+      predictor?.ended();
+      turn?.ended(answer);
+    },
     requested: (tokenUsage) => {
       const last = (tokenUsage as { last?: Usage } | null)?.last;
       const model = options.choice.model || connection.started?.model || "";
-      if (last && model) state.requested(model, last, options.choice.fast);
+      if (state && last && model)
+        state.requested(model, last, options.choice.fast);
     },
   };
 }

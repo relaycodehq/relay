@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   dismissIgnored,
@@ -11,22 +9,16 @@ import {
   recordIgnored,
 } from "./ignored-touches";
 import { workingTree } from "./working-tree";
+import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 
 let root: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 const write = async (path: string, text: string) => {
   await mkdir(join(root, path, ".."), { recursive: true });
   await writeFile(join(root, path), text);
 };
 beforeEach(async () => {
-  root = await realpath(await mkdtemp(join(tmpdir(), "relay-ignored-")));
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  root = await tempRepo("relay-ignored-");
   await write(".gitignore", ".env*.local\ngenerated/\nforced.txt\n");
   await write("a.ts", "one\n");
   await write("forced.txt", "tracked anyway\n");

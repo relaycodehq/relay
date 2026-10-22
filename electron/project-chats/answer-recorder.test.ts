@@ -1,7 +1,12 @@
 import { expect, it, vi } from "vitest";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
-import type { AgentActivity, ProjectChat } from "../../shared/projects";
+import type {
+  AgentActivity,
+  ChatMessage,
+  ProjectChat,
+} from "../../shared/projects";
 import { readTurn, turnHeading } from "../../shared/agent-trace";
+import { TurnText } from "../agents/turn-kit";
 
 const call = (id: string, parentId?: string): AgentActivity =>
   ({
@@ -84,7 +89,9 @@ it("marks the calls a Stop cut short as stopped, not failed", () => {
   answer.activity({ ...call("ls"), status: "complete" });
   answer.activity(call("rg"));
   answer.stop();
-  expect(message.trace!.map((e) => e.kind === "activity" && e.activity.status)).toEqual(["complete", "stopped"]);
+  expect(
+    message.trace!.map((e) => e.kind === "activity" && e.activity.status),
+  ).toEqual(["complete", "stopped"]);
   vi.useRealTimers();
 });
 
@@ -161,4 +168,76 @@ it("keeps a resumed answer whole when the taken-back session replays the steer i
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("moves the version of a change that came just before a checkpoint, so the checkpoint keeps it", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const saved: { body: string; version: number }[] = [];
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => saved.push({ body: message.body, version: message.version }),
+  );
+  answer.text("a");
+  vi.advanceTimersByTime(40);
+  const published = message.version;
+  // Lands inside the 40ms a change waits to be published, right before the 1s checkpoint.
+  vi.advanceTimersByTime(950);
+  answer.text("ab");
+  vi.advanceTimersByTime(10);
+  expect(saved).toEqual([{ body: "ab", version: published + 1 }]);
+  answer.end();
+  vi.useRealTimers();
+});
+
+it("leaves an import offer out of what streams, and under the answer once it ends", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const emitted: ChatMessage[] = [];
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    (m) => emitted.push(m),
+    () => {},
+  );
+  answer.importOffer({ id: "offer", app: "codex", projects: [] });
+  answer.text("Tick what you want.");
+  vi.advanceTimersByTime(1000);
+  expect(emitted.length).toBeGreaterThan(0);
+  expect(emitted.every((m) => !m.importOffer)).toBe(true);
+  answer.end();
+  expect(emitted.at(-1)!.importOffer?.id).toBe("offer");
+  vi.useRealTimers();
+});
+
+it("keeps a whole report the agent wrote before another call, however long", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("opencode");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => {},
+  );
+  const text = new TurnText(
+    (body) => answer.text(body),
+    (id, note) => answer.commentary(id, note),
+  );
+  const report = `## Findings\n${"A finding worth reading. ".repeat(1000)}\n### Honorable mentions`;
+  text.add(report);
+  text.toCommentary();
+  answer.activity(call("echo"));
+  text.add("The shorter answer.");
+  expect(message.trace![0]).toMatchObject({
+    kind: "commentary",
+    text: report,
+  });
+  expect(message.body).toBe("The shorter answer.");
+  answer.end();
+  vi.useRealTimers();
 });

@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -31,19 +31,12 @@ test("keeps several new-thread drafts in Activity and sends them from their card
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
     },
   });
@@ -88,6 +81,15 @@ test("keeps several new-thread drafts in Activity and sends them from their card
     await expect(card("First idea")).not.toHaveClass(/selected/);
     await prompt.fill("Second idea");
     await expect(drafts).toHaveCount(2);
+    const modifier = process.platform === "darwin" ? "Meta" : "Control";
+    // Numbers follow the visible drafts, including the one already open.
+    for (let index = 0; index < 2; index++) {
+      const draft = drafts.nth(index);
+      const text = await draft.locator(".sb-card-draft").innerText();
+      await page.keyboard.press(`${modifier}+${index + 1}`);
+      await expect(draft).toHaveClass(/selected/);
+      await expect(prompt).toHaveText(text);
+    }
     // Each card goes back to its own draft.
     await card("First idea").click();
     await expect(prompt).toHaveText("First idea");
@@ -101,6 +103,21 @@ test("keeps several new-thread drafts in Activity and sends them from their card
       .poll(prompts)
       .toEqual([expect.stringContaining("Second idea")]);
     await expect(page.locator(".sb-card:not(.draft)")).toHaveCount(1);
+    await expect(prompt).toHaveText("First idea");
+
+    // A thread below an unsent draft gets the next number and hint.
+    await page.keyboard.down(modifier);
+    await expect(card("First idea").locator("kbd")).toContainText("1");
+    await expect(page.locator(".sb-card:not(.draft) kbd")).toContainText("2");
+    await page.screenshot({
+      path: join(tmpdir(), "relay-activity-shortcuts.png"),
+    });
+    await page.keyboard.up(modifier);
+    await page.keyboard.press(`${modifier}+2`);
+    await expect(page.locator(".sb-card:not(.draft)")).toHaveClass(/selected/);
+    await expect(prompt).toHaveText("");
+    await page.keyboard.press(`${modifier}+1`);
+    await expect(card("First idea")).toHaveClass(/selected/);
     await expect(prompt).toHaveText("First idea");
 
     // The open one goes out through its composer, and its thread opens.

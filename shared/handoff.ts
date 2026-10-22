@@ -31,6 +31,8 @@ export function handoffBlocked(chat: ChatSummary) {
   if (chat.cameFrom)
     return `This thread came from ${chat.cameFrom.computer}; bring it back there.`;
   if (!chat.worktree) return worktreeFirst;
+  if (chat.worktree.adopted)
+    return "Relay didn't make this thread's worktree, so it stays on this computer.";
   if (chat.empty) return "Send a first message, then hand it off.";
 }
 
@@ -77,6 +79,11 @@ export interface ChatSentTo {
    * handoff goes on. See `ThreadSetup`.
    */
   setup?: string;
+  /**
+   * Its project lives on that computer (`Project.computer`): the thread was
+   * started there, in the project's folder, and never comes back here.
+   */
+  home?: true;
 }
 
 /**
@@ -128,11 +135,11 @@ export type HandoffLive = Pick<
     queuePaused?: true;
   };
 
-/** A live handoff's thread as written on the other computer since it arrived. */
 /** The thread runs on the computer it was handed to and is followed live from here. */
 export const liveAway = (chat: Pick<ChatSummary, "sentTo">) =>
   !!chat.sentTo?.live && chat.sentTo.state === "away";
 
+/** A live handoff's thread as written on the other computer since it arrived. */
 export interface HandoffChat {
   /** Those the caller holds at the same version come as their ids. */
   messages: (ChatMessage | string)[];
@@ -165,6 +172,7 @@ export const handoffChatMethods = [
   "projectChatQueuedImages",
   "projectChatReadImage",
   "closeWatchNote",
+  "seePrediction",
 ] as const satisfies readonly ApiMethod[];
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];
 
@@ -188,6 +196,7 @@ export const handoffFolderMethods = [
   "projectMergeBranch",
   "projectDeleteBranch",
   "projectCatchUp",
+  "projectRebase",
   "projectPreparePull",
   "projectCreatePull",
   "projectHistory",
@@ -196,9 +205,9 @@ export const handoffFolderMethods = [
   "projectFiles",
   "projectFileInfo",
   "projectDirectory",
-  "projectThumbnail",
   "projectImage",
   "projectFile",
+  "projectFilePreview",
   "saveProjectFile",
   "createProjectEntry",
   "renameProjectEntry",
@@ -206,6 +215,25 @@ export const handoffFolderMethods = [
   "localBlame",
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
+/**
+ * Calls about a project that lives on another computer (`Project.computer`),
+ * its id first, that run on that computer (`projectCall`): its checkout's
+ * folder calls, and its branches, commands, agents' defaults, icon and tasks.
+ */
+export const remoteProjectMethods = [
+  ...handoffFolderMethods,
+  "projectBranches",
+  "projectBranchCounts",
+  "projectBranchChanges",
+  "projectChangeBranch",
+  "projectCommands",
+  "agentDefaults",
+  "projectIcon",
+  "projectTasks",
+  "stopProjectTask",
+  "restartProjectTask",
+] as const satisfies readonly ApiMethod[];
+export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];
 /**
  * Calls on a live handoff's worktree, the thread's id first, that run there
  * from `folderHandoffBridge` too; so do the files its agents changed in
@@ -267,6 +295,11 @@ export interface ChatCameFrom {
   backNote?: string;
   /** The computer it came from took the thread back without this one; its work here stays here. */
   abandonedAt?: number;
+  /**
+   * Started here, in a project the other computer shows as its own
+   * (`ChatSentTo.home`): it works in this project's folder and never goes back.
+   */
+  home?: true;
   /** A setup's thread: its agent stops once the computer it came from lets it go. */
   setup?: true;
 }
@@ -407,6 +440,54 @@ export const handoffChunk = 1536 * 1024;
 export const maxHandoffBundle = 1024 * 1024 * 1024;
 export const maxHandoffThread = 64 * 1024 * 1024;
 
+/** A `Host` in an SSH config, with where it goes when the config says. */
+export interface SshHost {
+  host: string;
+  hostName?: string;
+  user?: string;
+}
+/** What reaching a computer over its route found: how fast, and which Relay is there. */
+export interface RouteCheck {
+  ms: number;
+  /** Its version; null when there's no Relay there. */
+  relay: string | null;
+  /** Why the Relay there doesn't start, as with a Node.js too old for it. */
+  broken?: string;
+}
+/**
+ * How a computer is reached that isn't over the network: a pipe its own
+ * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
+ * into a WSL distribution, running `relay pipe` there.
+ */
+export type ComputerRoute =
+  { kind: "ssh"; host: string } | { kind: "wsl"; distro: string };
+/**
+ * What `relay pipe` prints before the bridge's bytes, so whatever the login
+ * shell's startup files print ahead of it can be told apart and dropped.
+ */
+export const pipeReady = "\0relay-pipe-ready\n";
+export const computerRouteSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("ssh"),
+    // A host or `user@host`, or an alias from ~/.ssh/config; never an option.
+    host: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9_.@:[\]%-]{1,255}$/, "That isn't an SSH host.")
+      .refine((host) => !host.startsWith("-"), "That isn't an SSH host."),
+  }),
+  z.object({
+    kind: z.literal("wsl"),
+    distro: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]{1,64}$/, "That isn't a WSL distribution."),
+  }),
+]);
+
+/** The useful part of a tailnet name: `box.tail0a1b2c.ts.net` is box. */
+export const shortHost = (name: string) =>
+  name.replace(/\.[a-z0-9-]+\.ts\.net$/i, "");
+
 /** A computer this one hands work to. */
 export interface PairedComputer {
   id: string;
@@ -415,6 +496,12 @@ export interface PairedComputer {
   detail?: string;
   /** Where it's reached on the tailnet. */
   address?: string;
+  /** Reached through a pipe instead of the network. */
+  route?: ComputerRoute;
+  /** A WSL distribution nothing needed yet: it wakes on first use. */
+  asleep?: true;
+  /** A WSL distribution WSL stopped (`wsl --shutdown`): offline until `wakeComputer`. */
+  stopped?: true;
   /** Its Relay, as it last said; unknown while it's offline. */
   version?: string;
   /** Its bridge is older than this computer's: threads can't go there until it updates. */
@@ -482,10 +569,48 @@ export interface HandoffView {
 export interface ComputersApi {
   pairedComputers(): Promise<PairedComputer[]>;
   computersOverview(): Promise<ComputersOverview>;
-  /** Pairs with the link another computer shows under Settings → Computers. */
+  /**
+   * Pairs with the link another computer shows under Settings → Computers.
+   * The list ends with the computer just paired, also when it was paired before.
+   */
   pairComputer(link: string): Promise<PairedComputer[]>;
+  /** Reaches the computer a route goes to and says which Relay is there. */
+  checkComputer(route: ComputerRoute): Promise<RouteCheck>;
+  /** Pairs with the Relay a route reaches, over SSH or into WSL. */
+  connectComputer(route: ComputerRoute): Promise<PairedComputer[]>;
+  /** Ends the check or pairing under way over that route. */
+  stopComputerCheck(route: ComputerRoute): Promise<void>;
+  /** The WSL distributions on this computer; none off Windows. */
+  wslDistros(): Promise<string[]>;
+  /** Installs Relay where the route goes, over it; resolves once it's in. */
+  installRelayOver(route: ComputerRoute): Promise<void>;
+  /** What that install has printed so far, the end of it. */
+  relayInstallOutput(route: ComputerRoute): Promise<string>;
+  /** The hosts this computer's ~/.ssh/config names, to suggest for Over SSH. */
+  sshHosts(): Promise<SshHost[]>;
+  /** Starts a WSL distribution WSL stopped again, and connects to it. */
+  wakeComputer(id: string): Promise<PairedComputer[]>;
   forgetComputer(id: string): Promise<PairedComputer[]>;
   handoffTargets(chatId: string): Promise<HandoffTarget[]>;
+  /** The folders in `dir` on a paired computer, `~` its home folder. */
+  computerFolders(
+    computerId: string,
+    dir: string,
+  ): Promise<import("./remote").ComputerFolders>;
+  /** Adds a folder on a paired computer as a project that lives there. */
+  addRemoteProject(
+    computerId: string,
+    path: string,
+  ): Promise<import("./projects").Project>;
+  /** Starts or polls a clone on a paired computer, then adds its project here. */
+  cloneRemoteProject(
+    computerId: string,
+    url: string,
+    into: string,
+  ): Promise<
+    | { done: false; step: string; progress: number | null }
+    | { done: true; project: import("./projects").Project }
+  >;
   /** The paired computers a new thread in the project can start on, or why each can't. */
   startTargets(projectId: string): Promise<HandoffTarget[]>;
   /**

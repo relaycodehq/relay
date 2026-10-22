@@ -69,6 +69,8 @@ interface Connection {
   /** The bridge the device said it speaks; 0 for ones from before it said. */
   bridge?: number;
   tunnel?: TunnelEnd;
+  /** The phone said it's in the background (`backgroundBridge`). */
+  background?: boolean;
 }
 
 /** Unauthenticated sockets get this long to finish the handshake. */
@@ -76,6 +78,8 @@ const handshakeMs = 10_000;
 export const maxConnections = 24;
 /** A phone has one in the handshake, two while a dead one times out. */
 export const handshakesPerAddress = 4;
+/** A phone in the background is ticked and pinged only every this many ticks: a minute, with the usual 15s. */
+export const backgroundTickEvery = 4;
 
 interface Place {
   from: string;
@@ -123,6 +127,7 @@ export class RemoteServer {
   private lan = false;
   private connections = new Set<Connection>();
   private timer?: NodeJS.Timeout;
+  private ticks = 0;
   constructor(private options: RemoteServerOptions) {}
   get port() {
     const address = this.server?.address();
@@ -233,6 +238,7 @@ export class RemoteServer {
     socket.on("close", () => {
       clearTimeout(unauthenticated);
       c.tunnel?.close();
+      c.link?.close();
       this.connections.delete(c);
       if (c.deviceId) this.options.onPresence?.();
     });
@@ -328,6 +334,13 @@ export class RemoteServer {
     }
     if (!this.stillPaired(c)) return;
     if (frame.t === "got") return c.link?.got(Number(frame.s));
+    if (frame.t === "background") {
+      c.background = frame.on === true;
+      c.link?.setBackground(c.background);
+      // Back, a tick at once tells the phone the link survived its time away.
+      if (!c.background) this.send(c, { t: "tick", hosts: this.options.hosts?.() });
+      return;
+    }
     if (frame.t !== "call" || !Number.isSafeInteger(frame.id)) return;
     const { id, method, args } = frame;
     try {
@@ -365,7 +378,9 @@ export class RemoteServer {
       });
   }
   private tick() {
+    const slow = ++this.ticks % backgroundTickEvery !== 0;
     for (const c of this.connections) {
+      if (c.background && slow) continue;
       if (!c.alive) {
         c.socket.terminate();
         continue;

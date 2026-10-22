@@ -74,7 +74,10 @@ it("allows only one concurrent claimant even with an empty or stale PID file", a
         expect(result.reason).toBeInstanceOf(AlreadyRunning);
     const winner = acquired[0]!;
     if (winner.status === "fulfilled") cleanup.push(winner.value);
-    expect((await readFile(pid, "utf8")).trim()).toBe(String(process.pid));
+    // The pid, then where Linux says so, when the process started.
+    expect((await readFile(pid, "utf8")).trim().split(" ")[0]).toBe(
+      String(process.pid),
+    );
   }
 });
 

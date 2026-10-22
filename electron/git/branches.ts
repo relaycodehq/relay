@@ -1,14 +1,30 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { git, worktreeList } from "./git";
-import { gitOperation, serializeRepo } from "./working-tree";
+import { gitOperation, serializeRepo, workingTree } from "./working-tree";
 import { localTwin, remoteOfBranch } from "../../shared/branches";
 import type {
   BranchAction,
+  BranchChanges,
   BranchCount,
   BranchCounts,
   BranchList,
 } from "../../shared/branches";
+
+/** Reads a branch's existing checkout without switching branches or making a worktree. */
+export async function branchChanges(
+  root: string,
+  branch: string,
+): Promise<BranchChanges | null> {
+  const checkout = (await worktreeList(root)).find(
+    (w) => w.branch === branch && !w.prunable,
+  );
+  if (!checkout) return null;
+  const tree = await workingTree(checkout.path);
+  // The user may have switched that folder since the worktree list was read.
+  if (tree.branch !== branch) return null;
+  return { branch, files: tree.changes.length, lines: tree.lines };
+}
 /** The branches work usually merges into: origin's HEAD, then the usual names. */
 export async function baseCandidates(root: string) {
   const originHead = (

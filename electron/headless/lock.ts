@@ -3,6 +3,7 @@ import { rmSync, rmdirSync } from "node:fs";
 import {
   lstat,
   mkdir,
+  readFile,
   readdir,
   rename,
   rm,
@@ -10,6 +11,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { recordedAlive, recordProcess } from "./process-identity";
+import { pidAlive as alive } from "../util/pid";
 
 const owned = new Map<string, string>();
 process.once("exit", () => {
@@ -22,15 +25,6 @@ process.once("exit", () => {
     }
   }
 });
-
-function alive(pid: number) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code !== "ESRCH";
-  }
-}
 
 function occupied(path: string) {
   return Object.assign(new Error(`Another Relay process holds ${path}.`), {
@@ -49,7 +43,7 @@ export async function lockPath(path: string) {
   const candidate = `${directory}-${randomUUID()}`;
   await mkdir(candidate, { mode: 0o700 });
   try {
-    await writeFile(join(candidate, marker), "", { mode: 0o600 });
+    await writeFile(join(candidate, marker), recordProcess(), { mode: 0o600 });
     for (let attempt = 0; ; attempt++) {
       try {
         await rename(candidate, directory);
@@ -78,7 +72,12 @@ export async function lockPath(path: string) {
       }
       for (const entry of entries) {
         const pid = /^(\d+)-[0-9a-f-]{36}$/.exec(entry)?.[1];
-        if (!pid || alive(Number(pid))) throw occupied(directory);
+        // Markers from before process starts were recorded are empty.
+        const record = await readFile(join(directory, entry), "utf8").catch(
+          () => "",
+        );
+        if (!pid || recordedAlive(record || pid, alive))
+          throw occupied(directory);
       }
       // Never recursively delete a lock: another owner may have replaced it.
       for (const entry of entries)

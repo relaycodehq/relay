@@ -138,6 +138,62 @@
   color: var(--muted);
   font-size: 10px;
 }
+/* host:path for a project on another computer; the host's icon says how it is. */
+.headline-project-address {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  font-size: 10px;
+}
+.headline-project-host {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 45%;
+  min-width: 0;
+  color: var(--text);
+  font-weight: 500;
+}
+.headline-project-host span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.headline-project-host svg {
+  flex: none;
+  color: var(--muted);
+}
+.headline-project-host.connecting svg {
+  color: light-dark(#9a6700, #d29922);
+}
+.headline-project-host.offline {
+  color: var(--muted);
+}
+.headline-project-host.offline svg {
+  opacity: 0.6;
+}
+.headline-project-host.gone span {
+  text-decoration: line-through;
+}
+.headline-project-colon {
+  flex: none;
+  color: var(--muted);
+}
+.headline-project-address .headline-project-path {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Its computer isn't paired anymore: it can't run, so it steps back. */
+.headline-project-row.gone {
+  opacity: 0.55;
+}
+.headline-project-note {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
 .headline-project-empty {
   padding: 13px 10px;
   margin: 0;

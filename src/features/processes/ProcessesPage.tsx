@@ -1,6 +1,6 @@
 // What Relay and its agents have running, across every project and worktree,
 // and what each costs. Read from this computer every few seconds while open.
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AppWindow,
@@ -26,9 +26,12 @@ import {
 } from "../../../shared/processes";
 import type { TaskKind } from "../../../shared/tasks";
 import { api } from "../../lib/api";
+import { useStoredChoice } from "../../lib/persisted-store";
+import { useWindowFocused } from "../../lib/window-focus";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import "./processes.css";
+import { errorMessage } from "../../../shared/error-message";
 
 export function ProcessesTitle({ onBack }: { onBack: () => void }) {
   return (
@@ -74,19 +77,26 @@ export function ProcessesPage({
   onOpenChat: (projectId: string, chatId: string) => void;
 }) {
   const qc = useQueryClient();
-  const [order, setOrder] = useState<Order>(
-    () => (localStorage.getItem("relay-processes-order") as Order) ?? "mb",
+  const [order, changeOrder] = useStoredChoice<Order>(
+    "relay-processes-order",
+    ["mb", "cpu"],
+    "mb",
   );
   const [stopping, setStopping] = useState<Set<string>>(new Set());
   // "Nothing that started it" can be a tmux server or a tunnel the user
   // started in the folder, so stopping them all asks first.
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
+  const focused = useWindowFocused();
   const query = useQuery({
     queryKey: ["process-overview"],
     queryFn: () => api.processOverview(),
-    refetchInterval: 3000,
+    refetchInterval: focused ? 3000 : 30_000,
   });
+  const { refetch } = query;
+  useEffect(() => {
+    if (focused) void refetch();
+  }, [focused, refetch]);
   const overview = query.data;
   const leftBehind = (overview?.projects ?? []).flatMap((p) =>
     p.folders.flatMap((f) =>
@@ -110,7 +120,7 @@ export function ProcessesPage({
     ).filter((f) => !!f);
     if (failed.length) {
       const first = failed[0]!.e;
-      setError(first instanceof Error ? first.message : String(first));
+      setError(errorMessage(first));
       setStopping((s) => {
         const next = new Set(s);
         for (const f of failed) next.delete(f!.id);
@@ -121,10 +131,6 @@ export function ProcessesPage({
       () => void qc.invalidateQueries({ queryKey: ["process-overview"] }),
       800,
     );
-  };
-  const changeOrder = (next: Order) => {
-    localStorage.setItem("relay-processes-order", next);
-    setOrder(next);
   };
   return (
     <div className="pr-page">
@@ -380,9 +386,7 @@ function Row({
             />
           )}
           {detail.length > 0 && (
-            <span
-              className={`pr-detail${e.leftBehind ? " left-behind" : ""}`}
-            >
+            <span className={`pr-detail${e.leftBehind ? " left-behind" : ""}`}>
               {detail.join(" · ")}
             </span>
           )}

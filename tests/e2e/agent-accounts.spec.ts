@@ -1,11 +1,17 @@
 import { screenshot } from "../fixtures/screenshot";
-import { test, expect, _electron as electron } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
   writeFile,
   readFile,
   realpath,
+  rm,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -65,19 +71,12 @@ test("picks the account in Settings, switches it from the model picker, and runs
       },
     }),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
       // Never the real ~/.claude and ~/.codex.
       CLAUDE_CONFIG_DIR: claudeHome,
@@ -86,6 +85,14 @@ test("picks the account in Settings, switches it from the model picker, and runs
   });
   try {
     const page = await app.firstWindow();
+    await expect(
+      page.getByRole("button", { name: "Open settings", exact: true }),
+    ).toBeVisible();
+    // Version checks expose account controls. Their update catalogs are not
+    // part of this scenario, and must not depend on an external registry.
+    await app.evaluate(({ net }) => {
+      net.fetch = async () => new Response(null, { status: 503 });
+    });
     await app.evaluate(({ dialog }, repo) => {
       dialog.showOpenDialog = async () => ({
         canceled: false,
@@ -98,8 +105,13 @@ test("picks the account in Settings, switches it from the model picker, and runs
     await page
       .getByRole("button", { name: "Open settings", exact: true })
       .click();
-    await page.getByRole("button", { name: "AI & agents", exact: true }).click();
+    await page
+      .getByRole("button", { name: "AI & agents", exact: true })
+      .click();
     const accounts = page.getByRole("region", { name: "Your agents" });
+    await accounts
+      .getByRole("button", { name: "Check now", exact: true })
+      .click();
     await accounts.getByRole("option", { name: /^Claude Code/ }).click();
     await expect(accounts.getByText("you@personal.dev")).toBeVisible();
     await expect(accounts.getByText("Team · you@company.dev")).toBeVisible();
@@ -109,7 +121,7 @@ test("picks the account in Settings, switches it from the model picker, and runs
     await accounts.getByText("Team · you@company.dev").click();
     await expect(inUse).toContainText("Work");
     await screenshot(page, {
-      path: "test-results/agent-accounts-settings.png",
+      path: join(tmpdir(), "relay-agent-accounts-settings.png"),
     });
     await page.getByRole("button", { name: "Back to app" }).click();
 
@@ -123,7 +135,9 @@ test("picks the account in Settings, switches it from the model picker, and runs
       "aria-checked",
       "true",
     );
-    await screenshot(page, { path: "test-results/agent-accounts-picker.png" });
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-agent-accounts-picker.png"),
+    });
     await page.keyboard.press("Escape");
     // Hidden from the bar until the toolbar shows it.
     await expect(
@@ -158,5 +172,6 @@ test("picks the account in Settings, switches it from the model picker, and runs
       .toEqual({ claude: "work" });
   } finally {
     await app.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 20 });
   }
 });

@@ -1,4 +1,4 @@
-import { app, type BrowserWindow } from "electron";
+import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -26,4 +26,25 @@ export function loadPage(win: BrowserWindow, search?: string) {
     return win.loadURL(search ? `${dev}/?${search}` : dev);
   }
   return win.loadFile(root, search ? { search } : undefined);
+}
+
+/** An invisible window for work done in a page, such as playing a sound; it can't navigate. */
+export function hiddenPage() {
+  const win = new BrowserWindow({
+    show: false,
+    width: 1,
+    height: 1,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: join(__dirname, "preload.cjs"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      // Hidden pages are throttled; what it does waits on nothing.
+      backgroundThrottling: false,
+    },
+  });
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  return win;
 }

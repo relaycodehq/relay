@@ -1,5 +1,6 @@
 import { openPath } from "./open-path";
 import { existsSync } from "node:fs";
+import { dirname } from "node:path";
 import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
@@ -253,8 +254,10 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     projectChatVideo: takes(
       [idSchema, idSchema, imagePathSchema],
-      async (id, messageId, path) =>
-        mediaUrl(await projectChats.videoPath(id, messageId, path)),
+      async (id, messageId, path) => {
+        const full = await projectChats.videoPath(id, messageId, path);
+        return mediaUrl(full, dirname(full));
+      },
     ),
     projectChatPreviewShot: takes(
       [idSchema, messageIdSchema],
@@ -319,17 +322,18 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     revealAgentWorktree: takes(
       [idSchema, z.string().max(4096)],
-      (chatId, path) => openPath(projectChats.agentWorktreePath(chatId, path)),
+      (chatId, path) =>
+        openPath(projectChats.agentWorkspaces.path(chatId, path)),
     ),
     selectAgentWorktree: takes(
       [idSchema, z.string().min(1).max(4096).nullable()],
-      (chatId, path) => projectChats.selectAgentWorktree(chatId, path),
+      (chatId, path) => projectChats.agentWorkspaces.select(chatId, path),
     ),
     agentWorktreeRecreatable: takes([idSchema], (chatId) =>
-      projectChats.agentWorktreeRecreatable(chatId),
+      projectChats.agentWorkspaces.recreatable(chatId),
     ),
     recreateAgentWorktree: takes([idSchema], (chatId) =>
-      projectChats.recreateAgentWorktree(chatId),
+      projectChats.agentWorkspaces.recreate(chatId),
     ),
     startDeepReview: takes(
       [idSchema, deepReviewStartSchema],
@@ -352,6 +356,11 @@ export function chatHandlers(ctx: ApiContext) {
               title: pull.title,
               base: pull.base.ref,
               headRef: host.headRef(pull),
+              ...(pull.head.ref &&
+              pull.head.repo &&
+              pull.head.repo.full_name === pull.base.repo?.full_name
+                ? { headBranch: pull.head.ref }
+                : {}),
             },
         );
       },
@@ -389,6 +398,11 @@ export function chatHandlers(ctx: ApiContext) {
         projectChats.closeWatchNote(id, messageId, noteId, how, read),
     ),
     watchSpend: () => projectChats.watchSpend(7),
+    predictionSpend: () => projectChats.predictionSpend(7),
+    seePrediction: takes(
+      [idSchema, idSchema, z.enum(["shown", "dismissed"])],
+      (id, messageId, how) => projectChats.seePrediction(id, messageId, how),
+    ),
     watchReview: () => projectChats.watchReview(7),
     judgeWatchNotes: () => projectChats.judgeWatchNotes(7),
   } satisfies Handlers;

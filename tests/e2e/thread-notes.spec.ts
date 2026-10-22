@@ -1,11 +1,12 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, readFile, rm, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -39,20 +40,13 @@ async function start() {
   const bin = join(root, "bin"),
     repo = join(root, "app"),
     data = join(root, "data");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
   await mkdir(bin);

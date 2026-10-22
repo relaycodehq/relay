@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { Project } from "../../shared/projects";
+import { importAppNames, type ImportApp } from "../../shared/project-import";
 import { api } from "../lib/api";
 import { sendDraft } from "../features/composer/draft-send";
 import {
@@ -11,6 +12,7 @@ import {
   writeDraft,
 } from "../features/composer/drafts";
 import type { NavigationLock } from "../lib/navigation-lock";
+import { SCRATCH_CHATS } from "../lib/chat-events";
 import { threadDraftKey, threadStorage } from "../lib/thread-storage";
 import {
   loadComposerSettings,
@@ -49,9 +51,12 @@ export function useNewThreads(
   const [picking, setPicking] = useState(false);
   /** The add-project palette shows, on this page. */
   const [adding, setAdding] = useState<AddProjectPage | false>(false);
-  function addProject(page: AddProjectPage = "root") {
+  /** The paired computer the palette opens on, when asked for one. */
+  const [addingOn, setAddingOn] = useState<string>();
+  function addProject(page: AddProjectPage = "root", computerId?: string) {
     if (lock.blocked()) return;
     setPicking(false);
+    setAddingOn(computerId);
     setAdding(page);
   }
   /** The palette added a project, or picked one there already: a new thread in it. */
@@ -106,10 +111,33 @@ export function useNewThreads(
       saveComposerSettings(id, {
         ...settings,
         provider: draft.provider,
-        models: { ...settings.models, [draft.provider]: { choice: draft.choice } },
+        models: {
+          ...settings.models,
+          [draft.provider]: { choice: draft.choice },
+        },
         frozen: true,
       });
       if (nav.navigate(p, undefined, id))
+        requestAnimationFrame(() => requestAnimationFrame(() => focus()));
+    } catch (e) {
+      onError(e);
+    }
+  }
+  /** A Scratchpad thread whose agent imports `app`'s history, its request started for the user to finish. */
+  async function importThread(app: ImportApp) {
+    if (lock.blocked()) return;
+    try {
+      const { project: p, chat } = await api.startImportThread(app);
+      setAdding(false);
+      writeDraft(
+        threadDraftKey(chat.id),
+        `Import my ${importAppNames[app]} history into Relay. `,
+      );
+      await Promise.all([
+        projects.refetch(),
+        qc.invalidateQueries({ queryKey: SCRATCH_CHATS }),
+      ]);
+      if (nav.navigate(p, chat))
         requestAnimationFrame(() => requestAnimationFrame(() => focus()));
     } catch (e) {
       onError(e);
@@ -154,12 +182,14 @@ export function useNewThreads(
     picking,
     setPicking,
     adding,
+    addingOn,
     setAdding,
     addProject,
     added,
     pick,
     scratch,
     scratchDraft,
+    importThread,
     open,
     start,
   };

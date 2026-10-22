@@ -46,7 +46,7 @@ export function exitedError(
   );
 }
 
-export type AgentErrorKind = "signedOut" | "usageLimit";
+export type AgentErrorKind = "signedOut" | "usageLimit" | "missingHistory";
 
 /**
  * A turn failed in a way the thread can do something about, whichever agent
@@ -86,3 +86,13 @@ export const usageLimitError = (
   message: string,
   resetsAt?: number,
 ) => new AgentError(provider, "usageLimit", message, resetsAt);
+
+/** A steer may have been admitted. Automatic fallback would risk sending it twice. */
+export class UncertainSteerError extends Error {
+  constructor() {
+    super(
+      "OpenCode may have received this message. Check its response before sending it again.",
+    );
+    this.name = "UncertainSteerError";
+  }
+}

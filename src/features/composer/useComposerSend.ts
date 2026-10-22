@@ -17,6 +17,16 @@ import type { ComposerState } from "./useComposerSettings";
 import { noteUsed } from "../../lib/used";
 import { parseGoalCommand } from "../../../shared/goal";
 
+export interface ComposerSendOptions {
+  steer?: boolean;
+  /** Holds the message until then (Send later). */
+  sendAt?: number;
+  /** Runs once the message is accepted. */
+  after?: () => void;
+  /** Overrides Settings on a cold cache. */
+  compact?: boolean;
+}
+
 /**
  * Sending the draft to `to`: as a message, queued or steering while an
  * answer runs, as a `/btw` on the side, or as the go-ahead for a proposed
@@ -46,36 +56,28 @@ export function useComposerSend({
 }) {
   const sending = useRef(false);
   const [dictation] = useState(() => ({}));
+  const settings = runs.sendSettings(to);
   const disabled =
     busy ||
     (!draft.text.trim() && !draft.attached.length && !complete) ||
     // A note to the thread has no agent to show a screenshot to.
     (to === "message" && !draft.text.trim()) ||
     draft.preparing ||
-    !runs.codex;
+    !settings;
   // Sending mid-dictation waits for the last words to land in the draft.
-  const [sendAfterDictation, setSendAfterDictation] = useState<{
-    steer: boolean;
-    sendAt?: number;
-    after?: () => void;
-    compact?: boolean;
-  } | null>(null);
+  const [sendAfterDictation, setSendAfterDictation] =
+    useState<ComposerSendOptions | null>(null);
   useEffect(() => {
     if (!sendAfterDictation) return;
     setSendAfterDictation(null);
-    const { steer, sendAt, after, compact } = sendAfterDictation;
-    void send(steer, sendAt, after, compact);
+    void send(sendAfterDictation);
   }, [sendAfterDictation]);
-  /**
-   * `sendAt` holds the message until then (Send later); `after` runs once it
-   * is in; `compact` overrides Settings on a cold cache.
-   */
-  async function send(
+  async function send({
     steer = false,
-    sendAt?: number,
-    after?: () => void,
-    compact?: boolean,
-  ) {
+    sendAt,
+    after,
+    compact,
+  }: ComposerSendOptions = {}) {
     if (draft.isPreparing()) return;
     const now = dictationSnapshot();
     if (now.owner === dictation && now.phase !== "idle") {
@@ -93,12 +95,12 @@ export function useComposerSend({
       to !== "message" &&
       agentInfo(to).side
     ) {
-      if (busy || sending.current || !runs.codex) return;
+      if (busy || sending.current || !settings) return;
       sending.current = true;
       const outgoing = draft.take(false);
       try {
         const sent = await onSend(
-          buildSend(runs.sendSettings(to)!, `@${to} ${btw.args}`, {
+          buildSend(settings, `@${to} ${btw.args}`, {
             side: true,
             sendAt,
           }),
@@ -112,7 +114,7 @@ export function useComposerSend({
       return;
     }
     if (busy || intercept()) return;
-    if (disabled || sending.current) return;
+    if (disabled || sending.current || !settings) return;
     const outgoingImages = numberImages(draft.text.trim(), draft.images);
     const body = outgoingImages.text;
     sending.current = true;
@@ -126,7 +128,7 @@ export function useComposerSend({
       }
       const outgoing = draft.take(true);
       const sent = await onSend(
-        buildSend(runs.sendSettings(to)!, body, {
+        buildSend(settings, body, {
           ...(running ? { running: { steer } } : {}),
           sendAt,
           skills: draft.skills(body),
@@ -163,13 +165,11 @@ export function useComposerSend({
     dictation,
     /** Tells `planner` to build the plan it proposed, in Build. */
     async implementPlan(planner: AgentProvider) {
-      if (!runs.codex || sending.current) return;
+      const settings = runs.sendSettings(planner);
+      if (!settings || sending.current) return;
       sending.current = true;
       try {
-        const { send, nextSettings } = planGoAhead(
-          runs.sendSettings(planner)!,
-          planner,
-        );
+        const { send, nextSettings } = planGoAhead(settings, planner);
         const accepted = await onSend(send);
         if (accepted) {
           state.setProvider(nextSettings.to);
@@ -185,12 +185,12 @@ export function useComposerSend({
      */
     async sendLine(text: string) {
       // A held Enter or a second click mustn't send it twice.
-      if (busy || !runs.codex || sending.current) return false;
+      if (busy || !settings || sending.current) return false;
       sending.current = true;
       try {
         return await onSend(
           buildSend(
-            runs.sendSettings(to)!,
+            settings,
             text,
             running ? { running: { steer: false } } : {},
           ),
@@ -205,10 +205,11 @@ export function useComposerSend({
      * The draft stays.
      */
     sendGoal(provider: AgentProvider, action: "pause" | "resume" | "clear") {
-      if (!runs.codex) return Promise.resolve(false);
+      const settings = runs.sendSettings(provider);
+      if (!settings) return Promise.resolve(false);
       return onSend(
         buildSend(
-          runs.sendSettings(provider)!,
+          settings,
           `/goal ${action}`,
           running ? { running: { steer: false } } : {},
         ),

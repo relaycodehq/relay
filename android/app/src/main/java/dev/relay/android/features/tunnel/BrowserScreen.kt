@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -344,6 +345,9 @@ private interface BrowserEvents {
 private fun browserView(context: Context, computer: String, tunnels: TunnelListeners, on: BrowserEvents) = WebView(context).apply {
     // Before anything else touches it.
     BrowserProfiles.use(this, computer)
+    // AndroidView's default is WRAP_CONTENT, which makes WebView lay pages out at zero
+    // height: 100vh is 0px and a full-height app shell shows nothing.
+    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
     settings.apply {
         javaScriptEnabled = true
         domStorageEnabled = true

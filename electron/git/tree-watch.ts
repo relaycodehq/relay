@@ -1,6 +1,7 @@
 import { existsSync, watch as watchFolder } from "node:fs";
 import { lstat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { within } from "../util/paths";
 import {
   folderBudget,
   watchEachFolder,
@@ -121,10 +122,12 @@ export const watchesWholeTrees = (
   platform: NodeJS.Platform = process.platform,
 ) => platform === "darwin" || platform === "win32";
 
-const within = (dir: string, path: string) => {
-  const rel = relative(dir, path);
-  return !rel.startsWith("..") && !isAbsolute(rel);
-};
+/** A native recursive watch, or Linux's budgeted folder-at-a-time backend. */
+export const supportsTreeWatch = (
+  platform: NodeJS.Platform = process.platform,
+) => watchesWholeTrees(platform) || platform === "linux";
+
+const inside = (dir: string, path: string) => within(dir, path) !== null;
 
 interface Watch {
   owners: Set<object>;
@@ -156,6 +159,8 @@ export interface TreeWatchDeps {
   /** Git's own folder and the one its worktrees share. */
   gitDirs?(root: string): Promise<string[]>;
   isFolder?(path: string): Promise<boolean>;
+  /** How long a change settles and the least time between two; tests go faster. */
+  pace?: { settleMs: number; gapMs: number };
 }
 
 /**
@@ -172,7 +177,7 @@ export class TreeWatch {
   /** `owner` now shows `where`, or nothing. False when it should poll instead. */
   async show(owner: object, where: string | null): Promise<boolean> {
     const platform = this.deps.platform ?? process.platform;
-    if (!watchesWholeTrees(platform) && platform !== "linux") return false;
+    if (!supportsTreeWatch(platform)) return false;
     const was = this.shown.get(owner);
     if (was !== where) {
       if (was !== undefined) this.leave(owner, was);
@@ -221,8 +226,10 @@ export class TreeWatch {
       // outside its folder.
       const gitDirs = (await (this.deps.gitDirs ?? gitDirsOf)(root)).filter(
         (dir, i, all) =>
-          !within(root, dir) &&
-          !all.some((d, j) => j !== i && within(d, dir) && (d !== dir || j < i)),
+          !inside(root, dir) &&
+          !all.some(
+            (d, j) => j !== i && inside(d, dir) && (d !== dir || j < i),
+          ),
       );
       if (overtaken()) return false;
       const eachFolder =
@@ -355,7 +362,11 @@ export class TreeWatch {
 
   private soon(where: string, w: Watch) {
     if (w.closed || w.timer) return;
-    const wait = Math.max(SETTLE_MS, w.last + GAP_MS - Date.now());
+    const { settleMs, gapMs } = this.deps.pace ?? {
+      settleMs: SETTLE_MS,
+      gapMs: GAP_MS,
+    };
+    const wait = Math.max(settleMs, w.last + gapMs - Date.now());
     w.timer = setTimeout(() => {
       w.timer = undefined;
       w.last = Date.now();

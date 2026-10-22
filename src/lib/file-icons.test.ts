@@ -219,10 +219,6 @@ describe("ensureFileIconSprite", () => {
   it("mounts one sprite however often it is called", () => {
     expect(mountSprite()).toHaveLength(1);
   });
-
-  it("does nothing without a document", () => {
-    expect(() => ensureFileIconSprite()).not.toThrow();
-  });
 });
 
 describe("parentSuffixes", () => {

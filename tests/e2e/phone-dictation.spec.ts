@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdir,
   mkdtemp,
@@ -13,24 +14,16 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dictationModel } from "../../shared/dictation";
 import { parsePairingUrl, type PhoneDictationHeard } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
+import { freePort } from "../fixtures/free-port";
 
 // The real speech model is a 670 MB download, so this runs only when pointed
 // at one: RELAY_DICTATION_MODEL=<folder with the files in shared/dictation.ts>.
 const modelDir = process.env.RELAY_DICTATION_MODEL;
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
 
 test("a phone dictates with the desktop's speech engine", async () => {
   test.skip(
@@ -53,18 +46,11 @@ test("a phone dictates with the desktop's speech engine", async () => {
       join(model, "verified.json"),
       JSON.stringify(dictationModel.files.map((file) => file.sha256)),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         // No Tailscale here: loopback stands in for the tailnet.
         RELAY_REMOTE_TAILNET: "127.0.0.1",

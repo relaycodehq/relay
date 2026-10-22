@@ -1,7 +1,8 @@
 // Packs the headless Relay into release/Relay-<version>-headless.tar.gz, one
-// archive for every platform since nothing in it is native, and copies the
-// installers beside it: release/install-relay.sh and, for Windows,
-// release/install-relay.ps1.
+// archive for every platform (node-pty's binaries for each are inside, the
+// Linux ones only when RELAY_PTY_LINUX gives them; see build-headless.mjs),
+// and copies the installers beside it: release/install-relay.sh and, for
+// Windows, release/install-relay.ps1.
 //
 //   node scripts/package-headless.mjs [version]
 import { execFileSync } from "node:child_process";
@@ -40,7 +41,11 @@ try {
   writeFileSync(join(folder, "VERSION"), `${version}\n`);
   mkdirSync("release", { recursive: true });
   const archive = resolve(`release/Relay-${version}-headless.tar.gz`);
-  execFileSync("tar", ["-czf", archive, "-C", staging, name]);
+  // macOS tar packs extended attributes (com.apple.provenance) that Linux
+  // tar warns about, line by line, on every install.
+  execFileSync("tar", ["--no-xattrs", "-czf", archive, "-C", staging, name], {
+    env: { ...process.env, COPYFILE_DISABLE: "1" },
+  });
   const digest = createHash("sha256")
     .update(readFileSync(archive))
     .digest("hex");

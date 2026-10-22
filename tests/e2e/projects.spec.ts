@@ -1,10 +1,11 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -56,19 +57,12 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       join(bin, "codex"),
       await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_AGENT_CAPTURE: capture,
       },
     });
@@ -128,8 +122,11 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
       .getByRole("button", { name: "Close file", exact: true })
       .click();
     await panelToggle(page).click();
+    // Under 800px the review shows an inline diff instead of side by side.
     await page
-      .locator('.diff-wrapper [data-additions] [data-line="13"]')
+      .locator(
+        '.diff-wrapper :is([data-additions], [data-unified]) [data-line="13"]',
+      )
       .click({ position: { x: 60, y: 8 } });
     await page
       .getByRole("button", { name: "Discuss in thread", exact: true })
@@ -228,22 +225,15 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     join(bin, "claude"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   let app: ElectronApplication | undefined;
   try {
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
         RELAY_AGENT_CAPTURE: join(root, "capture.jsonl"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     let page = await app.firstWindow();
@@ -358,9 +348,12 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add GPT-5.6-Luna to favorites" })
       .click();
-    await expect(
-      page.getByLabel("Search models", { exact: true }),
-    ).toBeVisible();
+    // A search covers every agent, so the provider rail steps aside until it's cleared.
+    await expect(page.locator(".model-picker-rail")).toHaveAttribute("inert");
+    await page.getByLabel("Search models", { exact: true }).fill("");
+    await expect(page.locator(".model-picker-rail")).not.toHaveAttribute(
+      "inert",
+    );
     await page.getByRole("button", { name: "Favorites", exact: true }).click();
     await expect(
       page.getByRole("option", { name: "GPT-5.6-Luna", exact: true }),
@@ -524,6 +517,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     );
     await expect(composerInput).toBeFocused();
     await expect(quoteOffer).toHaveCount(0);
+    // A quote's pill leaves a space after it, so typing on doesn't stick to it.
     await page.keyboard.type("Why is it needed?");
     await expect
       .poll(() =>
@@ -534,7 +528,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         ),
       )
       .toContain(
-        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?",
+        "> The cache guard prevents duplicate requests.\n\n Why is it needed?",
       );
     // A later quote lands at the caret, after what was typed.
     await page
@@ -558,7 +552,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
         ),
       )
       .toContain(
-        "> The cache guard prevents duplicate requests.\n\nWhy is it needed?\n> The cache guard prevents duplicate requests.\n\n",
+        "> The cache guard prevents duplicate requests.\n\n Why is it needed?\n> The cache guard prevents duplicate requests.\n\n ",
       );
     const laterPill = composerInput.locator(".prompt-pill.quote").last();
     await laterPill.hover();
@@ -694,7 +688,10 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page
       .getByRole("button", { name: "Add project", exact: true })
       .click();
-    await page.getByRole("option", { name: "Choose in Finder…" }).click();
+    await page
+      .getByRole("button", { name: "Open a folder", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Choose in Finder…" }).click();
     await expect(
       page.getByRole("heading", {
         name: /What should we work on in Another Project/,
@@ -760,7 +757,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       "reasoning",
     );
     const branchPicker = page.locator(
-      ".composer-branch-trigger:not(.workspace-trigger)",
+      ".composer-branch-trigger:not(.workspace-trigger, .linked-trigger)",
     );
     await branchPicker.click();
     await page
@@ -783,7 +780,8 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/54-switch-branch.png",
       animations: "disabled",
     });
-    await page.getByRole("option", { name: "feature", exact: true }).click();
+    // A row reads its age and counts after the name.
+    await page.getByRole("option", { name: /^feature(?!\/)/ }).click();
     await expect(branchPicker).toHaveText("feature");
     expect(git("branch", "--show-current")).toBe("feature");
 

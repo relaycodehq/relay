@@ -6,6 +6,7 @@ import type {
   ResumeSettings,
 } from "../../../shared/projects";
 import {
+  onComputerMessage,
   replyRoot,
   sentBy,
   sentSettingsOf,
@@ -32,6 +33,7 @@ import type { TurnEndings } from "./end";
 import type { TurnHandoffs } from "./handoff-notes";
 import { forkFor, type TurnRunner } from "../turn-run";
 import type { ThreadWorktrees } from "../worktrees";
+import { errorMessage } from "../../../shared/error-message";
 
 /** How long a new worktree's first turn waits for the title it's named after. */
 const TITLE_WAIT_MS = 8000;
@@ -87,23 +89,25 @@ export class TurnSends {
    * stopped, as any stop does.
    */
   resumeMissed(id: string) {
-    return this.core.control(id, async () => {
-      await this.core.active.finished(id);
-      const chat = await this.core.storage.load(id);
-      const last = chat.lastInput;
-      if (
-        this.core.active.has(id) ||
-        !last ||
-        !chat.messages.some(
-          (m) =>
-            m.missed &&
-            m.provider === sentAgent(last) &&
-            (m.parentId ?? null) === (last.parentId ?? null),
-        )
+    return this.core.control(id, () => this.resumeMissedHeld(id));
+  }
+  /** resumeMissed for a job that already holds the thread's control. */
+  async resumeMissedHeld(id: string) {
+    await this.core.active.finished(id);
+    const chat = await this.core.storage.load(id);
+    const last = chat.lastInput;
+    if (
+      this.core.active.has(id) ||
+      !last ||
+      !chat.messages.some(
+        (m) =>
+          m.missed &&
+          m.provider === sentAgent(last) &&
+          (m.parentId ?? null) === (last.parentId ?? null),
       )
-        return;
-      await this.resumeHeld(id);
-    });
+    )
+      return;
+    await this.resumeHeld(id);
   }
   /** Resume for a job that already holds the thread's control. */
   async resumeHeld(id: string, settings?: ResumeSettings) {
@@ -136,7 +140,7 @@ export class TurnSends {
         id: randomUUID(),
         to: provider,
         body: missed
-          ? `@${provider} Your previous response was stopped before you read what I wrote above. Check what has already been done before repeating any actions.`
+          ? `@${provider} Your previous response ended before you read what I wrote above. Check what has already been done before repeating any actions.`
           : `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
         asyncQuestionAnswer: undefined,
         questionMessageId: undefined,
@@ -159,14 +163,15 @@ export class TurnSends {
     try {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
-      await this.worktrees.refreshAgentWorktrees(chat);
-      if (!chat.worktree && !threadWorktree(chat))
+      // A project on another computer only keeps the message here, for that
+      // computer to answer; its folder isn't on this one.
+      const project = this.core.projects.get(chat.projectId);
+      if (project.computer && answer)
+        throw new Error(onComputerMessage(project));
+      await this.worktrees.agents.refresh(chat);
+      if (!chat.worktree && !threadWorktree(chat) && !project.computer)
         this.core.projects.assertCheckoutAvailable(chat.projectId);
-      const root = await this.worktrees.root(
-        chat,
-        input.body,
-        active.abort.signal,
-      );
+      // Sent again after it went in: nothing to check, move or start.
       if (chat.messages.some((m) => m.id === input.id)) {
         this.core.active.release(id, active);
         return;
@@ -204,7 +209,12 @@ export class TurnSends {
           );
         evidence = await this.evidence(chat, input.selection);
       }
-      await this.councils.fixing(chat, input);
+      // Once the message is sure to go in, a review follows its branch to
+      // wherever it's checked out, so the turn runs there.
+      if (!project.computer) await this.councils.fixing(chat, input);
+      const root = project.computer
+        ? ""
+        : await this.worktrees.root(chat, input.body, active.abort.signal);
       const user: ChatMessage = {
         id: input.id,
         role: "user",
@@ -241,10 +251,11 @@ export class TurnSends {
       // A fix request marks its findings as being fixed.
       startFixing(chat.findings, input);
       chat.updated = Date.now();
-      ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
-        root,
-        chat,
-      ));
+      if (!project.computer)
+        ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
+          root,
+          chat,
+        ));
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       if (!answer) chat.lastInput = { ...input, images: undefined };
@@ -392,7 +403,7 @@ export class TurnSends {
       chat.messages.push(answer);
       await this.core.storage.save(chat);
       this.core.emit({ chatId: id, message: structuredClone(answer) });
-      const { prompt, request, caughtUp, briefed, carried } = turnPrompt({
+      const promptInput = {
         chat,
         input,
         provider: asked.provider,
@@ -407,10 +418,18 @@ export class TurnSends {
         command,
         note,
         evidence,
-      });
+        historyPath: this.core.storage.historyPath(chat.id),
+      };
+      const { prompt, request, caughtUp, briefed, carried } =
+        turnPrompt(promptInput);
+      const importedPrompt =
+        chat.fromTerminal && !parent && !command
+          ? turnPrompt({ ...promptInput, session: {}, fork: undefined }).prompt
+          : undefined;
       this.reply(chat, active, answer, root, prompt, input, {
         kind: "reply",
         request,
+        importedPrompt,
         caughtUp,
         briefed,
         carried,
@@ -419,7 +438,7 @@ export class TurnSends {
     } catch (e) {
       // The send already went through, so the thread shows the failure, in
       // the answer it began if it got that far.
-      const error = e instanceof Error ? e.message : String(e);
+      const error = errorMessage(e);
       let failed: ChatMessage;
       if (begun?.status === "streaming") {
         failed = begun;
@@ -498,7 +517,7 @@ export class TurnSends {
       // Pushed but never run: it mustn't read as streaming.
       if (chat.messages.includes(message)) {
         message.status = "failed";
-        message.error = e instanceof Error ? e.message : String(e);
+        message.error = errorMessage(e);
         message.version++;
         this.core.emit({ chatId: chat.id, message: structuredClone(message) });
       }

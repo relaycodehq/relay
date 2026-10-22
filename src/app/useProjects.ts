@@ -4,13 +4,15 @@ import type { Bootstrap } from "../../shared/types";
 import { api } from "../lib/api";
 import { sweepThreadStorage } from "../features/composer/thread-storage-sweep";
 import { forgetSeen, seenThreads } from "../features/sidebar/useUnread";
+import { projectsQuery } from "../lib/workspace-queries";
+import { usePoll } from "../lib/poll";
 
 /** The projects, kept fresh; once they're in, a sweep of what deleted threads left in storage. */
 export function useProjects(boot: Bootstrap | undefined) {
+  const poll = usePoll();
   const projects = useQuery({
-    queryKey: ["projects", boot?.account?.id],
-    queryFn: () => api.projects(),
-    refetchInterval: 5000,
+    ...projectsQuery(boot?.account?.id),
+    refetchInterval: poll(5000),
     enabled: !!boot,
   });
   // Off the startup path; it asks for every thread list itself.

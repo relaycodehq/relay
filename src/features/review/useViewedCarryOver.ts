@@ -5,6 +5,7 @@ import type { ReviewProgressController } from "./useReviewProgress";
 import { api } from "../../lib/api";
 
 const headOf = (revision: string) => revision.split(":")[1] ?? "";
+const baseOf = (revision: string) => revision.split(":")[0];
 
 /**
  * Works like Gitea: a push unmarks only the viewed files it changed. Unchanged
@@ -18,30 +19,35 @@ export function useViewedCarryOver(
 ): Set<string> {
   const revision = pull ? revisionOf(pull) : "",
     head = pull?.head.sha ?? "";
-  const heads = useMemo(
+  const revisions = useMemo(
     () =>
       [
         ...new Set(
           Object.values(progress.read)
-            .filter((r) => r !== revision)
-            .map(headOf)
-            .filter((h) => /^[a-f0-9]{40,64}$/.test(h)),
+            // Comparing heads only proves that a diff stayed the same when
+            // both reviews have the same merge base.
+            .filter(
+              (r) =>
+                r !== revision &&
+                baseOf(r) === pull?.merge_base &&
+                /^[a-f0-9]{40,64}:[a-f0-9]{40,64}$/.test(r),
+            ),
         ),
       ].sort(),
-    [progress.read, revision],
+    [progress.read, revision, pull?.merge_base],
   );
   const changes = useQueries({
-    queries: heads.map((from) => ({
+    queries: revisions.map((from) => ({
       queryKey: [
         "changed-between",
         ref?.server,
         ref?.owner,
         ref?.name,
         ref?.number,
-        from,
+        headOf(from),
         head,
       ],
-      queryFn: () => api.changedBetween(ref!, from, head),
+      queryFn: () => api.changedBetween(ref!, headOf(from), head),
       enabled: !!ref && !!head && initial.isSuccess,
       staleTime: Infinity,
       retry: false,
@@ -51,33 +57,31 @@ export function useViewedCarryOver(
   const changedSince = useMemo(
     () =>
       new Map(
-        heads.flatMap((h, i) => {
+        revisions.flatMap((r, i) => {
           const data = changes[i]?.data;
-          return data ? [[h, new Set(data)] as const] : [];
+          return data ? [[r, new Set(data)] as const] : [];
         }),
       ),
     // `changes` is a new array every render; `settled` changes with its data.
-    [heads, settled],
+    [revisions, settled],
   );
   const stale = Object.entries(progress.read).filter(
-    ([, r]) => r !== revision && changedSince.has(headOf(r)),
+    ([, r]) => r !== revision && changedSince.has(r),
   );
-  const carry = stale.some(
-    ([path, r]) => !changedSince.get(headOf(r))!.has(path),
-  );
+  const carry = stale.some(([path, r]) => !changedSince.get(r)!.has(path));
   useEffect(() => {
     if (!carry || !initial.isSuccess) return;
     update((p) => {
       const read = { ...p.read };
       for (const [path, r] of Object.entries(p.read))
-        if (r !== revision && changedSince.get(headOf(r))?.has(path) === false)
+        if (r !== revision && changedSince.get(r)?.has(path) === false)
           read[path] = revision;
       return { ...p, read };
     });
   }, [carry, changedSince, revision, initial.isSuccess, update]);
   return new Set(
     stale
-      .filter(([path, r]) => changedSince.get(headOf(r))!.has(path))
+      .filter(([path, r]) => changedSince.get(r)!.has(path))
       .map(([path]) => path),
   );
 }

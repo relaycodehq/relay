@@ -31,6 +31,7 @@ import {
 import { mergeBranch, mergePlan } from "./branch-merge";
 import { worktreeStartSchema } from "../../shared/projects";
 import type { ChatWorktree } from "../../shared/projects";
+import { initRepo } from "../../tests/fixtures/git-repo";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
@@ -49,9 +50,7 @@ beforeEach(async () => {
   const temp = await realpath(await mkdtemp(join(tmpdir(), "relay-wt-")));
   root = join(temp, "project");
   dir = join(temp, "worktrees");
-  execFileSync("git", ["init", "-q", "-b", "main", root]);
-  git(root, "config", "user.name", "Test");
-  git(root, "config", "user.email", "test@example.invalid");
+  initRepo(root);
   await writeFile(join(root, "a.ts"), "one\ntwo\nthree\nfour\nfive\n");
   await writeFile(join(root, "b.ts"), "bee\n");
   git(root, "add", ".");
@@ -247,9 +246,10 @@ it("carries on a branch only the remote has, on a local branch tracking it", asy
   ).toBe("origin/relay/remote-only");
 });
 
-it("won't carry on a remote branch through a local twin that's behind it", async () => {
-  await remoteAhead("release");
+it("starts off a remote branch whose local twin is behind it, leaving the twin alone", async () => {
+  const pushed = await remoteAhead("release");
   git(root, "branch", "release", "origin/release");
+  const twin = git(root, "rev-parse", "release");
   // Caught up with what was fetched; the first message's fetch finds more.
   expect(
     await worktreeStartProblem(root, { on: "origin/release" }),
@@ -257,39 +257,77 @@ it("won't carry on a remote branch through a local twin that's behind it", async
   const worktree = await createWorktree(root, dir, "Carry on", {
     startFrom: { on: "origin/release" },
   });
-  expect(worktree.branch).toBe("relay/carry-on");
-  expect(worktree.wanted?.problem).toBe(
-    "release here is behind origin/release; carry on release or bring it up to date first.",
-  );
-  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
-    worktree.wanted?.problem,
-  );
+  expect(worktree).toMatchObject({
+    branch: "relay/carry-on",
+    head: pushed,
+    startedOff: "origin/release",
+    wanted: {
+      branch: "origin/release",
+      problem:
+        "release here is behind it, so the thread is on a new branch off origin/release.",
+    },
+  });
+  expect(git(root, "rev-parse", "release")).toBe(twin);
 });
 
-it("says before the thread starts when its branch can't be used", async () => {
-  expect(await worktreeStartProblem(root, { on: "main" })).toMatch(
-    /^main is checked out in /,
+it("refuses only a branch that's nowhere, before the thread starts", async () => {
+  expect(await worktreeStartProblem(root, { on: "gone" })).toBe(
+    "There's no branch gone.",
   );
   expect(await worktreeStartProblem(root, { off: "gone" })).toBe(
     "There's no branch gone.",
   );
+  // Checked out in the project folder, it starts a branch off it instead.
+  expect(await worktreeStartProblem(root, { on: "main" })).toBeUndefined();
   branchAhead("feature");
   expect(await worktreeStartProblem(root, { on: "feature" })).toBeUndefined();
   expect(await worktreeStartProblem(root, { off: "feature" })).toBeUndefined();
 });
 
-it("refuses a remote branch whose local name clashes, and one another thread keeps", async () => {
-  await remoteAhead("release");
+it("starts off a remote branch whose local name can't be made", async () => {
+  const pushed = await remoteAhead("release");
   git(root, "branch", "release/1.0");
-  expect(await worktreeStartProblem(root, { on: "origin/release" })).toBe(
-    "There's a branch called release/1.0, so release can't be made.",
-  );
-  branchAhead("feature");
   expect(
-    await worktreeStartProblem(root, { on: "feature" }, (branch) =>
-      branch === "feature" ? "kept" : undefined,
-    ),
-  ).toBe("kept");
+    await worktreeStartProblem(root, { on: "origin/release" }),
+  ).toBeUndefined();
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "origin/release" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/carry-on",
+    head: pushed,
+    startedOff: "origin/release",
+  });
+  expect(worktree.wanted?.problem).toBe(
+    "There's a branch called release/1.0, so release can't be made, so the thread is on a new branch off origin/release.",
+  );
+});
+
+it("works in the folder a branch is checked out in already, and never removes it or its branch", async () => {
+  const tip = branchAhead("feature");
+  const theirs = join(root, "..", "their-checkout");
+  git(root, "worktree", "add", "-q", theirs, "feature");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "feature" },
+  });
+  expect(worktree).toEqual({
+    path: theirs,
+    branch: "feature",
+    head: tip,
+    start: git(root, "rev-parse", "main"),
+    base: git(root, "rev-parse", "main"),
+    from: "main",
+    named: "feature",
+    existing: true,
+    adopted: true,
+    setup: "done",
+  });
+  expect(await paths(worktree)).toEqual(["feature.ts"]);
+
+  await removeWorktree(root, randomUUID(), worktree);
+  expect(existsSync(join(theirs, "feature.ts"))).toBe(true);
+  expect(git(theirs, "branch", "--show-current")).toBe("feature");
+  expect(git(root, "rev-parse", "feature")).toBe(tip);
 });
 
 it("leaves a cleaned-up thread's folder to it when carrying on a branch of that name", async () => {
@@ -321,14 +359,37 @@ it("brings a thread made off another branch back on it, not on the checkout's co
   expect(git(back!.path!, "rev-parse", "HEAD")).toBe(at);
 });
 
+it("starts a branch off the project folder's own branch rather than checking it out twice", async () => {
+  await writeFile(join(root, "b.ts"), "uncommitted\n");
+  const worktree = await createWorktree(root, dir, "Carry on", {
+    startFrom: { on: "main" },
+  });
+  expect(worktree).toMatchObject({
+    branch: "relay/carry-on",
+    head: git(root, "rev-parse", "main"),
+    from: "main",
+    startedOff: "main",
+    wanted: {
+      branch: "main",
+      problem:
+        "The project folder has it checked out, so the thread is on a new branch off main.",
+    },
+  });
+  expect(worktree.existing).toBeUndefined();
+  expect(await read(join(worktree.path, "b.ts"))).toBe("bee\n");
+  expect(git(root, "branch", "--show-current")).toBe("main");
+});
+
 it("goes off the checkout, and says why, when the picked branch went before the first message", async () => {
   const held = await createWorktree(root, dir, "Carry on", {
-    startFrom: { on: "main" },
+    startFrom: { on: "gone" },
   });
   expect(held.branch).toBe("relay/carry-on");
   expect(held.existing).toBeUndefined();
-  expect(held.wanted).toMatchObject({ branch: "main" });
-  expect(held.wanted?.problem).toMatch(/Couldn't open main in a worktree/);
+  expect(held.wanted).toEqual({
+    branch: "gone",
+    problem: "There's no branch gone anymore.",
+  });
 
   const gone = await createWorktree(root, dir, "Build on it", {
     startFrom: { off: "gone" },
@@ -472,9 +533,7 @@ it("moves every uncommitted edit into a new worktree, leaving the checkout at it
 
 it("leaves a nested repository where it is and moves the rest", async () => {
   const inner = join(root, "inner");
-  execFileSync("git", ["init", "-q", "-b", "main", inner]);
-  git(inner, "config", "user.name", "Test");
-  git(inner, "config", "user.email", "test@example.invalid");
+  initRepo(inner);
   await writeFile(join(inner, "x.ts"), "x\n");
   git(inner, "add", ".");
   git(inner, "commit", "-qm", "Inner");

@@ -31,6 +31,19 @@ public struct RemoteProject: Codable, Sendable, Equatable, Identifiable {
     public var plain: Bool?
     /// "checkout" | "worktree"
     public var workspace: String?
+    /// Its folder is on another paired computer; missing before bridge 28.
+    public var computer: RemoteProjectComputer?
+}
+
+/// The computer a project lives on, by its name now.
+public struct RemoteProjectComputer: Codable, Sendable, Equatable {
+    public var name: String
+    public var gone: Bool?
+
+    public init(name: String, gone: Bool? = nil) {
+        self.name = name
+        self.gone = gone
+    }
 }
 
 /// `{hash, dataUrl}`, or `{hash: null}` for a project without one.

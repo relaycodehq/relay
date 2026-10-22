@@ -27,6 +27,7 @@ import {
   serveAppleSpeech,
 } from "./apple";
 import type { WorkerCommand, WorkerNotice } from "./worker";
+import { errorMessage } from "../../shared/error-message";
 
 /** The model's memory goes back to the system this long after the last use. */
 const idleUnload = 3 * 60_000;
@@ -135,7 +136,7 @@ export class Dictation {
       else
         this.set({
           status: "failed",
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
           received: await modelReceived(this.dir, dictationModel.files),
           total,
         });

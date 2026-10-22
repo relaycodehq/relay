@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CodexRequestError } from "./codex-transport";
-import { signedOutError, usageLimitError } from "../errors";
+import { AgentError, signedOutError, usageLimitError } from "../errors";
 import { latestReset, resetMs } from "../usage-limit";
 
 const windowSchema = z
@@ -54,6 +54,15 @@ export function codexFailure(
  */
 export function codexRequestFailure(error: unknown) {
   if (!(error instanceof CodexRequestError)) return error;
+  // Only opening a session: no model turn or tool could have run yet.
+  if (
+    error.code === -32600 &&
+    (error.method === "thread/fork" || error.method === "thread/resume") &&
+    /^invalid paginated history lineage for [\w-]+: missing source rollout$/.test(
+      error.errorMessage,
+    )
+  )
+    return new AgentError("codex", "missingHistory", error.errorMessage);
   const data = turnErrorSchema.safeParse(error.data);
   if (
     (data.success && data.data.codexErrorInfo === "unauthorized") ||

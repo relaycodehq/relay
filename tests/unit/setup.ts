@@ -1,5 +1,9 @@
 import { afterEach, vi } from "vitest";
 
+// Every checkpoint checks the messages it leaves out: see
+// electron/project-chats/live-turn.ts.
+process.env.RELAY_CHECK_CHECKPOINTS = "1";
+
 // Releases build on a Mac mini that runs the suite niced on two workers, where
 // a condition that holds within 100 ms here can take seconds. A wait returns as
 // soon as its condition holds, so a generous cap costs nothing when it passes;

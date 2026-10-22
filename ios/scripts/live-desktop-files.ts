@@ -49,6 +49,10 @@ export function filesFixture(ctx: {
   // and a terminal's type checker.
   const swift = [...threads.entries()].find(([, t]) => t.summary.title === "Port the bridge to Swift")?.[0];
   const tasks: Record<string, any[]> = {
+    // The "api" project on thinkcenter: a dev server there, which no tunnel to here reaches.
+    "88888888-8888-4888-8888-888888888881": [
+      { id: "api-dev", command: "npm run dev", kind: "server", title: "Vite dev server", origin: "detached", started: now - 12 * min, ports: [5173], pids: 1 },
+    ],
     [relay]: [
       ctx.devTask,
       {

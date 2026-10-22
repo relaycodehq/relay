@@ -1,9 +1,10 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
@@ -28,19 +29,12 @@ test("an answer shows its embedded images and lets failed images be retried", as
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {
@@ -244,19 +238,12 @@ test("inspected images start folded and remember the thread's choice after reope
         chats: chats.map((chat) => ({ ...chat, messages: undefined })),
       }),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();

@@ -5,7 +5,7 @@ import {
   type AgentProvider,
 } from "../../../shared/agents";
 import type { RegistryAgentsState } from "../../../shared/acp-registry";
-import { inAgentOrder, offeredAgents } from "../../../shared/agent-prefs";
+import { offeredAgents } from "../../../shared/agent-prefs";
 import { api } from "../../lib/api";
 import { useAISettings } from "./useAISettings";
 
@@ -48,13 +48,6 @@ export const useRegistryAgents = () =>
 /** Every agent a thread can run: Relay's own, then the installed registry ones. */
 export const useRunnableAgents = () =>
   useSyncExternalStore(subscribe, runnableAgents, runnableAgents);
-
-/** Every agent, in the order Settings → Agents lists them. */
-export function useOrderedAgents() {
-  const runnable = useRunnableAgents();
-  const order = useAISettings().data?.agentOrder;
-  return useMemo(() => inAgentOrder(runnable, order), [runnable, order]);
-}
 
 /**
  * The agents a picker offers: in Settings' order, without the ones switched

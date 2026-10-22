@@ -22,8 +22,10 @@ import { ComposerSelect } from "../../ui/ComposerSelect";
 import { SettingsCard, SettingsSelect } from "../../ui/SettingsCard";
 import { ErrorBox, Spinner } from "../../ui/ui";
 import { useAgentAccounts } from "../accounts/agent-accounts";
+import { computerLine } from "../handoff/computer-status";
 import { filterAgentTools } from "./filter";
 import "./agent-tools.css";
+import { useProjectList } from "../../lib/workspace-queries";
 
 type Tab = "skills" | "servers";
 
@@ -87,10 +89,7 @@ export function AgentTools({
   const [tab, setTab] = useState<Tab>("skills");
   const [query, setQuery] = useState("");
   const [state, setState] = useState<AgentToolState | "all">("all");
-  const projects = useQuery({
-    queryKey: ["projects"],
-    queryFn: () => api.projects(),
-  });
+  const projects = useProjectList();
   const computers = useQuery({
     queryKey: ["paired-computers"],
     queryFn: () => api.pairedComputers(),
@@ -148,7 +147,12 @@ export function AgentTools({
               ...(computers.data ?? []).map((c) => ({
                 value: c.id,
                 label: c.name,
-                description: c.status !== "online" ? "Offline" : undefined,
+                description:
+                  c.status === "online"
+                    ? undefined
+                    : c.asleep || c.stopped
+                      ? computerLine(c)
+                      : "Offline",
               })),
             ]}
           />

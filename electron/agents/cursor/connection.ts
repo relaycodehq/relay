@@ -2,13 +2,13 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { HostedChild } from "../../agent-host/child";
 import type { Entry } from "../../agent-host/protocol";
 import { terminate } from "../../platform/terminate";
 import { withTimeout } from "../../util/timeout";
 import { z } from "zod";
 import { HostedSessions, savedMeta } from "../hosted-sessions";
+import { LineConnection } from "../line-connection";
 import { cursorSetup } from "./sdk";
 import type { InstalledSdk } from "./sdk-install";
 import {
@@ -40,80 +40,38 @@ export class CursorError extends Error {
 }
 
 /** One worker process, and the requests and turn updates that go through it. */
-export class CursorConnection {
+export class CursorConnection extends LineConnection {
   busy = false;
-  closed = false;
-  private closing = false;
   /** The turn a restart cut off, for an `adopt` turn to show. */
   inflight?: { run: string; id: number };
-  private nextRequest = 1;
-  private waiting = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
-  >();
-  /** Replies nobody asked for yet: a turn that finished while Relay was away. */
-  private orphans = new Map<number, { result?: unknown; error?: Error }>();
   private listeners = new Map<string, (update: CursorUpdate) => void>();
   /** Hears the sign-in page of an `auth.login` asked not to open a browser. */
   onLoginUrl?: (url: string) => void;
 
   constructor(
-    readonly child: ChildProcessWithoutNullStreams | HostedChild,
+    child: ChildProcessWithoutNullStreams | HostedChild,
     /** Runs once the worker is gone, e.g. to delete what it kept for a one-off job. */
     private readonly cleanup?: () => Promise<void>,
   ) {
-    child.stderr.resume();
-    // The stream's end, not the exit, so a reply that came just before it is read first.
-    createInterface({ input: child.stdout })
-      .on("line", (line) => this.read(line))
-      .on("close", () => this.end("Cursor's worker stopped."));
-    child.stdin.on("error", () => this.end("Cursor's worker closed."));
+    super(child, "Cursor's worker");
   }
 
-  private read(line: string) {
+  protected read(line: string) {
     let said: unknown;
     try {
       said = JSON.parse(line);
     } catch {
       return;
     }
-    if (isEvent(said)) {
-      this.listeners.get(said.run)?.(said.update);
-    } else if (isLoginUrl(said)) {
-      this.onLoginUrl?.(said.url);
-    } else if (isReply(said)) {
-      const settled =
+    if (isEvent(said)) this.listeners.get(said.run)?.(said.update);
+    else if (isLoginUrl(said)) this.onLoginUrl?.(said.url);
+    else if (isReply(said))
+      this.settle(
+        said.id,
         "error" in said
           ? { error: new CursorError(said.error.name, said.error.message) }
-          : { result: said.result };
-      const waiter = this.waiting.get(said.id);
-      if (!waiter) return void this.orphans.set(said.id, settled);
-      this.waiting.delete(said.id);
-      if (settled.error) waiter.reject(settled.error);
-      else waiter.resolve(settled.result);
-    }
-  }
-
-  private end(reason: string) {
-    this.closed = true;
-    for (const waiter of this.waiting.values())
-      waiter.reject(new Error(reason));
-    this.waiting.clear();
-  }
-
-  /** A worker picked up again was numbered by the last Relay: carry on above its ids. */
-  continueAfter(id: number) {
-    this.nextRequest = Math.max(this.nextRequest, id + 1);
-  }
-
-  /** Forgets replies nobody will ask for, e.g. to the last Relay's steers. */
-  dropOrphans() {
-    this.orphans.clear();
-  }
-
-  /** The id the next request gets, for keeping with the worker before it goes out. */
-  reserve() {
-    return this.nextRequest++;
+          : { result: said.result },
+      );
   }
 
   request<M extends CursorMethod>(
@@ -121,25 +79,10 @@ export class CursorConnection {
     params: CursorMethods[M]["params"],
     id = this.reserve(),
   ): Promise<CursorMethods[M]["result"]> {
-    const reply = this.wait(id) as Promise<CursorMethods[M]["result"]>;
-    if (this.closed)
-      return Promise.reject(new Error("Cursor's worker stopped."));
-    this.child.stdin.write(JSON.stringify({ id, method, params }) + "\n");
+    if (this.closed) return Promise.reject(this.stopped());
+    const reply = this.wait(id, method) as Promise<CursorMethods[M]["result"]>;
+    this.send(JSON.stringify({ id, method, params }));
     return reply;
-  }
-
-  /** The reply to request `id`, which may already be in. */
-  wait(id: number): Promise<unknown> {
-    const early = this.orphans.get(id);
-    if (early) {
-      this.orphans.delete(id);
-      return early.error
-        ? Promise.reject(early.error)
-        : Promise.resolve(early.result);
-    }
-    return new Promise((resolve, reject) =>
-      this.waiting.set(id, { resolve, reject }),
-    );
   }
 
   listen(run: string, handler: (update: CursorUpdate) => void) {
@@ -149,32 +92,23 @@ export class CursorConnection {
     this.listeners.delete(run);
   }
 
-  private get hosted() {
-    return this.child instanceof HostedChild ? this.child.hosted : undefined;
-  }
   /** What the next Relay reads about this worker, replacing what it had. */
-  keep(meta: Omit<CursorMeta, "provider">) {
-    this.hosted?.keep({ provider: "cursor", ...meta } satisfies CursorMeta);
-  }
-  /** Marks a turn in the host's log, so a restart knows one was running. */
-  mark(mark: "start" | "end") {
-    this.hosted?.mark(mark);
-  }
-  /** Lets through what a worker said while Relay was away, once someone listens. */
-  resume() {
-    if (this.child instanceof HostedChild) this.child.release();
+  override keep(meta: Omit<CursorMeta, "provider">) {
+    super.keep({ provider: "cursor", ...meta } satisfies CursorMeta);
   }
 
-  close() {
-    if (this.closing) return;
-    this.closing = true;
-    this.closed = true;
-    const { child } = this;
-    child.once("exit", () => void this.cleanup?.());
-    // Closing its input is how a worker is told to stop; the kill is for one
-    // that doesn't. The host does the same with one it runs.
-    if (child instanceof HostedChild) child.kill();
-    else terminate(child, { byInput: true });
+  private cleaning = false;
+  override close() {
+    if (!this.cleaning) {
+      this.cleaning = true;
+      this.child.once("exit", () => void this.cleanup?.());
+    }
+    super.close();
+  }
+
+  protected stop(child: ChildProcessWithoutNullStreams) {
+    // Closing its input is how a worker is told to stop; the kill is for one that doesn't.
+    terminate(child, { byInput: true });
   }
 }
 

@@ -76,8 +76,8 @@ export function useDiffFind<L>({
   const owner = useMemo(() => Symbol("diff find"), []);
 
   const lines = useMemo(
-    () => (diff ? diffLines(diff, wholeFile) : []),
-    [diff, wholeFile],
+    () => (open && diff ? diffLines(diff, wholeFile) : []),
+    [open, diff, wholeFile],
   );
   const found = useMemo(() => {
     const matches = open ? findMatches(lines, query) : [];

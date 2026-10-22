@@ -1,27 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Popover } from "@base-ui/react/popover";
 import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import {
-  inSetup,
-  liveAway,
-  type HandoffView,
-} from "../../../shared/handoff";
-import { liveLabel } from "../../../shared/activity-labels";
+import { inSetup, liveAway, type HandoffView } from "../../../shared/handoff";
 import { api } from "../../lib/api";
 import { readDraft, writeDraft } from "../composer/drafts";
 import { threadDraftKey } from "../../lib/thread-storage";
 import { AbandonDialog } from "./AbandonDialog";
-import { canPeek, remoteCall, RemotePeek } from "./RemotePeek";
 import "./waiting-strip.css";
+import { retryHandoff } from "./retry-handoff";
 import "./handoff.css";
+import { usePoll } from "../../lib/poll";
 
 /** The composer's placeholder while the thread is elsewhere, or on its way. */
 export function awayPlaceholder(chat: ChatSummary) {
   const { sentTo, cameFrom } = chat;
-  if (inSetup(chat))
-    return `Answer the setup on ${sentTo!.computer}…`;
+  if (inSetup(chat)) return `Answer the setup on ${sentTo!.computer}…`;
+  if (sentTo?.state === "sending" && sentTo.home)
+    return sentTo.error
+      ? `It didn't start on ${sentTo.computer}. Try again.`
+      : `Starting it on ${sentTo.computer}…`;
   if (sentTo?.state === "sending")
     return sentTo.error
       ? "The handoff didn't finish. Try again, or keep the thread here."
@@ -52,7 +50,7 @@ function handoffLine(view: HandoffView): {
   detail?: string;
   failed?: boolean;
 } {
-  const { sentTo, online, remote } = view;
+  const { sentTo, online } = view;
   const where = sentTo.computer;
   if (sentTo.conflicts?.length)
     return {
@@ -65,7 +63,9 @@ function handoffLine(view: HandoffView): {
       title:
         sentTo.state === "returning"
           ? `Couldn't bring it back from ${where}`
-          : `Couldn't hand off to ${where}`,
+          : sentTo.home
+            ? `Couldn't start it on ${where}`
+            : `Couldn't hand off to ${where}`,
       detail: sentTo.error,
       failed: true,
     };
@@ -78,6 +78,11 @@ function handoffLine(view: HandoffView): {
           : ` ${Math.round(view.cloning.progress * 100)}%`
       }`,
     };
+  if (sentTo.state === "sending" && sentTo.home)
+    return {
+      title: `Starting it on ${where}`,
+      detail: "in the project's folder there…",
+    };
   if (sentTo.state === "sending")
     return {
       title: `Handing off to ${where}`,
@@ -88,26 +93,10 @@ function handoffLine(view: HandoffView): {
       title: `Bringing it back from ${where}`,
       detail: "the agent there stops and writes a note first…",
     };
-  if (!online || !remote)
-    return { title: `On ${where}`, detail: "can't reach it right now" };
-  if (remote.waiting)
-    return { title: `On ${where}`, detail: "waiting for an answer there" };
-  if (remote.running) {
-    const call = remoteCall(view);
-    return {
-      title: `Working on ${where}`,
-      ...(call ? { detail: liveLabel(call) } : {}),
-    };
-  }
-  if (remote.failed)
-    return {
-      title: `Stopped on ${where}`,
-      detail: remote.failed.split("\n")[0],
-      failed: true,
-    };
+  // Left with a Relay from before live handoffs: it waits there to come back.
   return {
-    title: `${where} finished`,
-    ...(remote.latest ? { detail: remote.latest.split("\n")[0] } : {}),
+    title: `On ${where}`,
+    detail: online ? "bring it back to carry on" : "can't reach it right now",
   };
 }
 
@@ -122,13 +111,14 @@ export function HandoffStrip({
   chat: ChatSummary;
   onError: (error: unknown) => void;
 }) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
   const view = useQuery({
     queryKey: ["handoff-view", chat.id],
     queryFn: () => api.handoffView(chat.id),
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   const data = view.data;
   // The summary catches up once the handoff settles, or ends.
@@ -155,7 +145,9 @@ export function HandoffStrip({
   };
   const { sentTo } = data;
   // Mid-way back, the job there ends itself or fails, and then it can be taken back.
-  const canAbandon = sentTo.state !== "returning" || !!sentTo.error;
+  // A thread of a project there has nowhere here to come back to.
+  const canAbandon =
+    !sentTo.home && (sentTo.state !== "returning" || !!sentTo.error);
   return (
     <>
       <div
@@ -163,46 +155,11 @@ export function HandoffStrip({
         role="status"
       >
         <div className="waiting-strip-head">
-          {line.failed ? (
-            <CircleAlert size={15} />
-          ) : sentTo.state === "away" && !data.remote?.running ? (
-            <MonitorCheck size={15} />
-          ) : (
-            <MonitorUp size={15} />
-          )}
-          {canPeek(data) ? (
-            <Popover.Root>
-              <Popover.Trigger
-                openOnHover
-                delay={150}
-                closeDelay={250}
-                className="waiting-strip-text handoff-strip-peek"
-              >
-                <b>{line.title}</b>
-                {line.detail && <span> · {line.detail}</span>}
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Positioner
-                  side="top"
-                  align="start"
-                  sideOffset={10}
-                  collisionPadding={12}
-                >
-                  <Popover.Popup
-                    className="subagents-card remote-peek-card"
-                    aria-label={`What ${sentTo.computer} is doing`}
-                  >
-                    <RemotePeek view={data} />
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
-          ) : (
-            <span className="waiting-strip-text" title={line.detail}>
-              <b>{line.title}</b>
-              {line.detail && <span> · {line.detail}</span>}
-            </span>
-          )}
+          {line.failed ? <CircleAlert size={15} /> : <MonitorUp size={15} />}
+          <span className="waiting-strip-text" title={line.detail}>
+            <b>{line.title}</b>
+            {line.detail && <span> · {line.detail}</span>}
+          </span>
           {canAbandon && (
             <button
               type="button"
@@ -215,46 +172,49 @@ export function HandoffStrip({
           )}
           {sentTo.state === "sending" && sentTo.error && (
             <>
-              <button
-                type="button"
-                disabled={busy || !data.online}
-                title={
-                  data.online
-                    ? "Only works if the handoff never arrived"
-                    : `${sentTo.computer} has to be reachable to tell whether it got the thread`
-                }
-                onClick={() => act(() => api.keepThreadHere(chat.id))}
-              >
-                Keep it here
-              </button>
+              {!sentTo.home && (
+                <button
+                  type="button"
+                  disabled={busy || !data.online}
+                  title={
+                    data.online
+                      ? "Only works if the handoff never arrived"
+                      : `${sentTo.computer} has to be reachable to tell whether it got the thread`
+                  }
+                  onClick={() => act(() => api.keepThreadHere(chat.id))}
+                >
+                  Keep it here
+                </button>
+              )}
               <button
                 type="button"
                 className="primary-action"
                 disabled={busy}
-                onClick={() => act(() => api.retryHandoff(chat.id))}
+                onClick={() => act(() => retryHandoff(qc, chat.id))}
               >
                 Try again
               </button>
             </>
           )}
-          {(sentTo.state === "away" ||
-            (sentTo.state === "returning" && sentTo.error)) && (
-            <button
-              type="button"
-              className={
-                sentTo.conflicts?.length ? undefined : "primary-action"
-              }
-              disabled={busy || !data.online}
-              title={
-                data.online
-                  ? `Stop the work on ${sentTo.computer} and carry on here`
-                  : `${sentTo.computer} has to be reachable to bring it back`
-              }
-              onClick={() => act(() => api.bringBackThread(chat.id))}
-            >
-              {sentTo.error ? "Try again" : "Bring back"}
-            </button>
-          )}
+          {!sentTo.home &&
+            (sentTo.state === "away" ||
+              (sentTo.state === "returning" && sentTo.error)) && (
+              <button
+                type="button"
+                className={
+                  sentTo.conflicts?.length ? undefined : "primary-action"
+                }
+                disabled={busy || !data.online}
+                title={
+                  data.online
+                    ? `Stop the work on ${sentTo.computer} and carry on here`
+                    : `${sentTo.computer} has to be reachable to bring it back`
+                }
+                onClick={() => act(() => api.bringBackThread(chat.id))}
+              >
+                {sentTo.error ? "Try again" : "Bring back"}
+              </button>
+            )}
           {sentTo.state === "returning" && !!sentTo.conflicts?.length && (
             <button
               type="button"

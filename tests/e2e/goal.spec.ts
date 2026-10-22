@@ -1,10 +1,11 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, readFile, rm, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -34,19 +35,13 @@ test("shows a Codex goal above the composer and on its card, and pauses, resumes
       join(bin, "codex"),
       await readFile(resolve("tests/fixtures/codex-goal.cjs"), "utf8"),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
+
         // Long enough to look at each state.
         RELAY_GOAL_TURNS: "40",
         RELAY_GOAL_TURN_MS: "700",

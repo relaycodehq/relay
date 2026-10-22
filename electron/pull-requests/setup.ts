@@ -6,7 +6,7 @@ import type { Store } from "../app/store";
 import type { PullMergeSource } from "../project-chats/pull-merges";
 import type { Projects } from "../projects/projects";
 import { AzureLogin } from "./azure-devops/login";
-import type { GithubLogin } from "./github-login";
+import type { GithubLogin } from "../github/login";
 import type { FetchRequest } from "./host";
 import { PullHosts } from "./hosts";
 import { questionContext } from "./questions";

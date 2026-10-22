@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ClockifyStatus } from "../../../shared/clockify";
 import type { PluginId, PluginToggles } from "../../../shared/plugins";
 import { api } from "../../lib/api";
+import { useProjectList } from "../../lib/workspace-queries";
+import { usePoll } from "../../lib/poll";
 
 const usePlugins = () =>
   useQuery({ queryKey: ["plugins"], queryFn: () => api.plugins() });
@@ -57,16 +59,20 @@ export const useDevOpsConnection = (enabled: boolean) =>
 export const clockifyKey = ["clockify-status"];
 
 /** Polls while Luna is writing the descriptions, so they appear when ready. */
-export const useClockifyStatus = (enabled = true) =>
-  useQuery({
+export function useClockifyStatus(enabled = true) {
+  const poll = usePoll();
+  return useQuery({
     queryKey: clockifyKey,
     queryFn: () => api.clockifyStatus(),
     enabled,
     refetchInterval: (q) =>
-      (q.state.data as ClockifyStatus | undefined)?.review?.describing
-        ? 1500
-        : false,
+      poll(
+        (q.state.data as ClockifyStatus | undefined)?.review?.describing
+          ? 1500
+          : false,
+      ),
   });
+}
 
 /** The Clockify workspaces the saved key can see. */
 export const useClockifyWorkspaces = (host: string, enabled: boolean) =>
@@ -78,10 +84,7 @@ export const useClockifyWorkspaces = (host: string, enabled: boolean) =>
 
 /** Relay projects that can be tracked: every one but the scratch pad. */
 export const useTrackableProjects = () =>
-  useQuery({
-    queryKey: ["clockify-relay-projects"],
-    queryFn: async () => (await api.projects()).filter((p) => !p.scratch),
-  });
+  useProjectList((projects) => projects.filter((p) => !p.scratch));
 
 /** The workspace's Clockify projects, for names and colours. */
 export const useClockifyProjects = (enabled = true) =>

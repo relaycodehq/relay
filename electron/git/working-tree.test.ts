@@ -8,17 +8,18 @@ import {
   rm,
   rename,
   mkdir,
+  chmod,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { workingTree, workingDiff, performGitAction } from "./working-tree";
+import { performGitAction } from "./git-actions";
+import { workingDiff } from "./working-diff";
+import { workingTree } from "./working-tree";
 import { revisionDiff } from "./turn-changes";
+import { setGitPath } from "./git";
+import { gitIn } from "../../tests/fixtures/git-repo";
 let root: string, remote: string;
-const git = (...args: string[]) =>
-  execFileSync("git", ["-C", root, ...args], {
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  }).trim();
+const git = (...args: string[]) => gitIn(root, ...args);
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-git-")));
   remote = await mkdtemp(join(tmpdir(), "relay-origin-"));
@@ -71,7 +72,10 @@ it("counts a never-pushed branch's commits as ahead, and pushing sets its upstre
     behind: 0,
   });
   expect(tree.outgoing.map((c) => c.subject)).toEqual(["Two", "One"]);
-  tree = await performGitAction(root, { kind: "push", revision: tree.revision });
+  tree = await performGitAction(root, {
+    kind: "push",
+    revision: tree.revision,
+  });
   expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
 });
 it("commits only the chosen files and leaves the rest of the checkout alone", async () => {
@@ -143,6 +147,24 @@ it("counts lines the way the commit will: renames by their edits, every untracke
   expect((await workingTree(root)).lines).toEqual({
     additions: 1 + 600,
     deletions: 1,
+  });
+});
+it("leaves lockfiles out of the lines unless they are all that changed", async () => {
+  await writeFile(join(root, "app.ts"), "a\n");
+  await writeFile(join(root, "package-lock.json"), "{\n}\n");
+  git("add", ".");
+  git("commit", "-qm", "Start");
+  await writeFile(join(root, "package-lock.json"), '{\n  "x": 1\n}\n');
+  await writeFile(join(root, "yarn.lock"), "a\nb\nc\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 4,
+    deletions: 0,
+  });
+  await writeFile(join(root, "app.ts"), "a\nb\n");
+  expect((await workingTree(root)).lines).toEqual({
+    additions: 1,
+    deletions: 0,
+    generated: { additions: 4, deletions: 0 },
   });
 });
 it("works in a repository with no commits yet, first commit included", async () => {
@@ -342,7 +364,10 @@ it("lists changes after a tracked folder is replaced by a file of its name", asy
   await rm(join(root, "foo"), { recursive: true });
   await writeFile(join(root, "foo"), "now a file\n");
   const tree = await workingTree(root);
-  expect(tree.changes.map((c) => c.path).sort()).toEqual(["foo", "foo/bar.txt"]);
+  expect(tree.changes.map((c) => c.path).sort()).toEqual([
+    "foo",
+    "foo/bar.txt",
+  ]);
 });
 it("reads the index side of a file named like an index stage", async () => {
   await writeFile(join(root, "1:notes.txt"), "old\n");
@@ -631,7 +656,10 @@ it("pushes a branch tracking another name under its own name, as git push would"
   const review = onRemote("review");
   let tree = await workingTree(root);
   expect(tree.pushTarget).toBe("origin/feature");
-  tree = await performGitAction(root, { kind: "push", revision: tree.revision });
+  tree = await performGitAction(root, {
+    kind: "push",
+    revision: tree.revision,
+  });
   expect(onRemote("review")).toBe(review);
   expect(onRemote("feature")).toBe(git("rev-parse", "HEAD"));
   expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
@@ -681,8 +709,11 @@ it("changes its revision when only the staged part of a changed file moves", asy
   // Same status line (MM) and the same working file; only the index differs.
   stage("export const a = 4;\n");
   const after = await workingTree(root);
-  expect(after.changes).toEqual(before.changes);
+  const plain = (t: typeof before) => t.changes.map(({ stamp, ...c }) => c);
+  expect(plain(after)).toEqual(plain(before));
   expect(after.revision).not.toBe(before.revision);
+  // So does the staged diff on screen.
+  expect(after.changes[0]!.stamp).not.toBe(before.changes[0]!.stamp);
   // Refreshing unchanged files' index stat data is not a change.
   git("update-index", "-q", "--really-refresh");
   expect((await workingTree(root)).revision).toBe(after.revision);
@@ -719,4 +750,82 @@ it("shows Latin-1 files and Git LFS pointers as binary in diffs instead of faili
       true,
     );
   }
+});
+
+/** Runs `read` with Git counting its runs; returns each run's first argument. */
+async function gitRuns(read: () => Promise<unknown>) {
+  const log = join(root, "..", `${basename(root)}-runs.log`);
+  const shim = join(root, "..", `${basename(root)}-git`);
+  const real = execFileSync("sh", ["-c", "command -v git"], {
+    encoding: "utf8",
+  }).trim();
+  await writeFile(log, "");
+  await writeFile(
+    shim,
+    `#!/bin/sh\necho "$3" >> '${log}'\nexec '${real}' "$@"\n`,
+  );
+  await chmod(shim, 0o755);
+  setGitPath(shim);
+  try {
+    await read();
+  } finally {
+    setGitPath(null);
+  }
+  const runs = (await readFile(log, "utf8")).split("\n").filter(Boolean);
+  await rm(log);
+  await rm(shim);
+  return runs;
+}
+
+// The Changes pane refreshes on every edit an agent makes; each Git run is a
+// process start, ~10ms on Windows before Git does anything.
+it.skipIf(process.platform === "win32")(
+  "refreshes with one Git run while nothing but the files changes",
+  async () => {
+    await writeFile(join(root, "code.ts"), "export const a = 2;\n");
+    await workingTree(root);
+    expect(await gitRuns(() => workingTree(root))).toEqual(["status"]);
+    await writeFile(join(root, "code.ts"), "export const a = 3;\n");
+    expect(await gitRuns(() => workingTree(root))).toEqual(["status", "diff"]);
+    expect(
+      await gitRuns(() => workingDiff(root, "code.ts", "unstaged")),
+    ).toEqual(["status", "show"]);
+  },
+);
+
+it("sees what changed behind what the refresh keeps", async () => {
+  await writeFile(join(root, "code.ts"), "export const a = 2;\n");
+  const first = await workingTree(root);
+  expect(first.lines).toMatchObject({ additions: 1, deletions: 1 });
+  // Staging changes no file on disk.
+  git("add", "code.ts");
+  const staged = await workingTree(root);
+  expect(staged.revision).not.toBe(first.revision);
+  expect(staged.changes[0]).toMatchObject({ index: "M", worktree: " " });
+  // A push setting changes where a push goes.
+  git("config", "branch.review.pushRemote", "fork");
+  git("remote", "add", "fork", remote);
+  expect((await workingTree(root)).pushTarget).toBe("fork/review");
+  git("config", "--unset", "branch.review.pushRemote");
+  // A branch never pushed, with a "/" in its name, then pushed without -u.
+  git("commit", "-qm", "Two");
+  git("switch", "-qc", "topic/one");
+  expect((await workingTree(root)).ahead).toBe(1);
+  git("push", "-q", "origin", "topic/one");
+  expect(await workingTree(root)).toMatchObject({ upstream: null, ahead: 0 });
+  // Pushed again, only the ref's own folder changes.
+  git("commit", "-q", "--allow-empty", "-m", "Again");
+  expect((await workingTree(root)).ahead).toBe(1);
+  git("push", "-q", "origin", "topic/one");
+  expect(await workingTree(root)).toMatchObject({ ahead: 0, outgoing: [] });
+  // Commits made and the upstream moving on.
+  git("switch", "-q", "review");
+  await writeFile(join(root, "code.ts"), "export const a = 4;\n");
+  git("commit", "-qam", "Three");
+  expect((await workingTree(root)).outgoing.map((c) => c.subject)).toEqual([
+    "Three",
+    "Two",
+  ]);
+  git("push", "-q");
+  expect(await workingTree(root)).toMatchObject({ ahead: 0, outgoing: [] });
 });

@@ -1,8 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  agentName,
-  agentInfo,
-} from "../../shared/agents";
+import { agentName, agentInfo } from "../../shared/agents";
 import type { ChatMessage } from "../../shared/projects";
 import { contextAgent } from "../../shared/recipient";
 import type { ChatCore } from "./core";
@@ -43,14 +40,14 @@ export function reloadSessions(core: ChatCore, id: string) {
       provider,
       created: Date.now(),
       version: 1,
-      reload: {},
+      reload: agentInfo(provider).reloadsService ? { scope: "service" } : {},
     };
     chat.messages.push(message);
     await core.storage.save(chat);
     core.emit({ chatId: id, message: structuredClone(message) });
     let changes: Awaited<ReturnType<typeof core.sessions.reload>>;
     try {
-      changes = await core.sessions.reload(id);
+      changes = await core.sessions.reload(id, provider);
     } catch (error) {
       chat.messages.splice(chat.messages.indexOf(message), 1);
       await core.storage.save(chat);

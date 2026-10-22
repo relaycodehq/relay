@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -105,6 +107,7 @@ fun PairScreen(remote: Remote, link: String?) {
     var error by remember { mutableStateOf<String?>(null) }
     /** The camera read a code that isn't Relay's. */
     var notOurs by remember { mutableStateOf(0) }
+    var pasting by remember { mutableStateOf(false) }
 
     fun pair(target: PairingLink) {
         pairing = true
@@ -172,7 +175,8 @@ fun PairScreen(remote: Remote, link: String?) {
             )
         }
 
-        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+        // Not the keyboard's: only the link dialog types, in its own window, and this screen resizing under it jumped as the dialog closed.
+        Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
             Welcome(face == PairingScan.Face.Idle)
             val closeShown = face == PairingScan.Face.Scan || (face == PairingScan.Face.Idle && !firstRun)
             if (closeShown) IconButton(
@@ -222,7 +226,7 @@ fun PairScreen(remote: Remote, link: String?) {
                                     "Paste a pairing link",
                                     {
                                         val parsed = parsePairingUrl(clipboardText(context))
-                                        if (parsed != null) pair(parsed) else error = NOT_A_CODE
+                                        if (parsed != null) pair(parsed) else pasting = true
                                     },
                                     Modifier.fillMaxWidth(),
                                     variant = ButtonVariant.Outline,
@@ -250,6 +254,7 @@ fun PairScreen(remote: Remote, link: String?) {
             }
         }
     }
+    if (pasting) PasteLinkDialog(::pair) { pasting = false }
 }
 
 /** Who's asking, above the field, before a scan starts. */

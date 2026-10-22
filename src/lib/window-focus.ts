@@ -26,5 +26,9 @@ function subscribe(change: () => void) {
 
 /** Whether Relay is the frontmost window. */
 export function useWindowFocused() {
-  return useSyncExternalStore(subscribe, () => document.hasFocus());
+  return useSyncExternalStore(
+    subscribe,
+    () => document.hasFocus(),
+    () => true,
+  );
 }

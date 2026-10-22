@@ -54,25 +54,26 @@ interface Clone {
 const answerMs = 1500;
 
 /**
- * Clones by URL, one job per URL however often it's asked about; the caller
+ * Clones by URL and destination, one job however often it's asked about; the caller
  * polls until one answer says done or throws the clone's error.
  */
 export class CloneRequests {
   private clones = new Map<string, Clone>();
   constructor(private host: CloneHost) {}
 
-  async ask(url: string, from: string): Promise<CloneProgress> {
-    let clone = this.clones.get(url);
+  async ask(url: string, from: string, into?: string): Promise<CloneProgress> {
+    const key = JSON.stringify([url, into]);
+    let clone = this.clones.get(key);
     if (!clone) {
       const started: Clone = (clone = {
         step: "Starting",
         progress: null,
-        job: this.start(url, (job) => {
+        job: this.start(url, into, (job) => {
           started.step = job.step;
           started.progress = job.progress;
         }),
       });
-      this.clones.set(url, started);
+      this.clones.set(key, started);
       const begun = Date.now();
       started.job.then(
         (p) =>
@@ -91,21 +92,22 @@ export class CloneRequests {
       current.job,
       new Promise<null>((r) => setTimeout(() => r(null), answerMs)),
     ]).catch((e: unknown) => {
-      this.clones.delete(url);
+      this.clones.delete(key);
       throw e;
     });
     if (!project)
       return { done: false, step: current.step, progress: current.progress };
-    this.clones.delete(url);
+    this.clones.delete(key);
     return { done: true, project };
   }
 
-  private async start(url: string, onStep: (job: AddingJob) => void) {
-    const project = await this.host.clone(
-      url,
-      await this.host.defaultFolder(),
-      onStep,
-    );
+  private async start(
+    url: string,
+    into: string | undefined,
+    onStep: (job: AddingJob) => void,
+  ) {
+    const destination = await (into ?? this.host.defaultFolder());
+    const project = await this.host.clone(url, destination, onStep);
     return {
       id: project.id,
       name: project.name,

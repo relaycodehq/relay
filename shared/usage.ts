@@ -20,6 +20,7 @@ export const usageJobs = [
   "title",
   "commit",
   "watch",
+  "prediction",
   "triage",
   "plugin",
   "helper",
@@ -31,6 +32,7 @@ export const relayJobLabels: Record<Exclude<UsageJob, "thread">, string> = {
   title: "Thread titles",
   commit: "Commit messages",
   watch: "Watcher checks",
+  prediction: "Next-message guesses",
   triage: "PR triage",
   plugin: "Plugins",
   helper: "Other helpers",
@@ -141,6 +143,10 @@ export type UsageSummary = {
     /** Relay's own jobs: titles, commit messages, watcher checks. */
     relayFresh: number;
     relayUsd: number;
+    /** The same, job by job. */
+    relayJobs: Partial<
+      Record<Exclude<UsageJob, "thread">, { fresh: number; usd: number }>
+    >;
   };
   models: {
     model: string;
@@ -323,6 +329,7 @@ export function summarizeUsage(
     agentMs: 0,
     relayFresh: 0,
     relayUsd: 0,
+    relayJobs: {},
   };
 
   for (const e of entries) {
@@ -375,6 +382,12 @@ export function summarizeUsage(
     if (e.job !== "thread" && Object.hasOwn(relayJobLabels, e.job)) {
       totals.relayFresh += fresh;
       totals.relayUsd += usd;
+      const job = (totals.relayJobs[e.job as Exclude<UsageJob, "thread">] ??= {
+        fresh: 0,
+        usd: 0,
+      });
+      job.fresh += fresh;
+      job.usd += usd;
     }
     if (e.chat && e.job === "thread") {
       const t = threads.get(e.chat) ?? { fresh: 0, usd: 0, by: perProvider() };

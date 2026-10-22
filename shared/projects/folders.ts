@@ -12,6 +12,12 @@ export interface FolderEntry {
   repository: boolean;
 }
 
+/** A small, non-recursive sample of a folder's visible contents. */
+export interface FolderPreview {
+  entries: { name: string; directory: boolean }[];
+  remaining: number;
+}
+
 /** A folder offered for linking. */
 export interface LinkSuggestion {
   path: string;

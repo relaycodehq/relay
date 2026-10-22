@@ -1,294 +1,73 @@
-import { z } from "zod";
-import { lenient, named } from "../schema-kit";
-import type { SessionCall } from "./client";
+import type { OpenCodeEvent } from "@opencode/client";
+import { setTimeout as delay } from "node:timers/promises";
+import { TurnEnd } from "../turn-kit";
+import { withTimeout } from "../../util/timeout";
+import type { NativeClient } from "./client";
 
-/** OpenCode sent something Relay reads, without a field the turn can't go on without. */
-export class OpenCodeShapeError extends Error {}
+/** The client shares its event socket across subscribers. Reconnects recover from saved messages. */
+export class NativeEvents {
+  private abort = new AbortController();
+  private ready = new TurnEnd<void>();
+  readonly failed = new TurnEnd<never>();
 
-const text = lenient(z.string());
-const flag = lenient(z.boolean());
-const count = lenient(z.number());
-const record = lenient(z.record(z.string(), z.unknown()));
+  constructor(
+    private client: NativeClient,
+    private hear: (event: OpenCodeEvent) => void,
+    private recover: () => Promise<void>,
+  ) {}
 
-/** Only the fields Relay reads are listed; whatever else OpenCode adds passes through. */
-const failureSchema = z
-  .object({
-    name: text,
-    data: lenient(
-      z
-        .object({
-          message: text,
-          providerID: text,
-          statusCode: count,
-          responseHeaders: lenient(z.record(z.string(), z.string())),
-        })
-        .loose(),
-    ),
-  })
-  .loose();
-/** A failure as OpenCode names it, or undefined for something that isn't one. */
-export const readFailure = (value: unknown) =>
-  failureSchema.safeParse(value).data;
-
-const tokensSchema = lenient(
-  z
-    .object({
-      total: count,
-      input: count,
-      output: count,
-      reasoning: count,
-      cache: lenient(z.object({ read: count, write: count }).loose()),
-    })
-    .loose(),
-);
-
-const messageInfoSchema = z
-  .object({
-    id: z.string(),
-    role: z.string(),
-    providerID: text,
-    modelID: text,
-    time: lenient(z.object({ created: count, completed: count }).loose()),
-    /** An assistant message's request, which is one step. */
-    tokens: tokensSchema,
-    // Whether it is one is up to `readFailure`: a message that failed must not pass as one that didn't.
-    error: z.unknown().optional(),
-  })
-  .loose();
-
-const partBaseSchema = z
-  .object({ id: z.string(), messageID: z.string(), type: z.string() })
-  .loose();
-export type OpenCodePartBase = z.infer<typeof partBaseSchema>;
-
-/** A `tool` part of an OpenCode message, as `message.part.updated` carries it. */
-const toolPartSchema = partBaseSchema.extend({
-  type: z.literal("tool"),
-  callID: z.string(),
-  tool: z.string(),
-  state: z
-    .object({
-      status: z.string(),
-      input: record,
-      output: text,
-      error: text,
-      title: text,
-      metadata: record,
-    })
-    .loose(),
-});
-export type ToolPart = z.infer<typeof toolPartSchema>;
-
-const partSchema = z.discriminatedUnion("type", [
-  partBaseSchema.extend({
-    type: z.enum(["text", "reasoning"]),
-    text,
-    synthetic: flag,
-    ignored: flag,
-  }),
-  toolPartSchema,
-  partBaseSchema.extend({
-    type: z.literal("patch"),
-    files: lenient(z.array(z.unknown())),
-  }),
-  partBaseSchema.extend({
-    type: z.literal("step-finish"),
-    cost: count,
-    tokens: tokensSchema,
-  }),
-]);
-export type OpenCodePart = z.infer<typeof partSchema>;
-const detailed = new Set<string>(
-  partSchema.options.flatMap((option) => {
-    const type = option.shape.type;
-    return "options" in type ? type.options : [type.value];
-  }),
-);
-
-/**
- * The fields of a part Relay reads for its type, checked; undefined for a
- * type it doesn't read, which stays ignored.
- */
-export function parseOpenCodePart(part: OpenCodePartBase) {
-  if (!detailed.has(part.type)) return;
-  const parsed = partSchema.safeParse(part);
-  if (parsed.success) return parsed.data;
-  throw new OpenCodeShapeError(
-    `OpenCode sent an unexpected ${part.type} part (${named(parsed.error.issues[0]!)}).`,
-  );
-}
-
-const event = <T extends string, S extends z.ZodRawShape>(
-  type: T,
-  properties: S,
-) =>
-  z.object({
-    type: z.literal(type),
-    properties: z.object(properties).loose(),
-  });
-
-/** What OpenCode asks before running a tool; see its `PermissionRequest`. */
-const permissionRequest = {
-  id: z.string(),
-  sessionID: text,
-  permission: z.string(),
-  patterns: lenient(z.array(z.string())),
-  /** What saying yes for good would cover. */
-  always: lenient(z.array(z.string())),
-  metadata: record,
-};
-/** A question from OpenCode's `question` tool; see its `QuestionRequest`. */
-const questionRequest = {
-  id: z.string(),
-  sessionID: text,
-  questions: z.array(
-    z
-      .object({
-        question: z.string(),
-        header: text,
-        options: z.array(
-          z.object({ label: z.string(), description: text }).loose(),
-        ),
-        multiple: flag,
+  async start(signal: AbortSignal) {
+    const abort = () => {
+      this.close();
+      this.ready.fail(new Error("Cancelled by you."));
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    void this.read();
+    await withTimeout(
+      this.ready.promise,
+      30_000,
+      "OpenCode's event connection didn't open in time.",
+    )
+      .catch((error) => {
+        this.close();
+        throw error;
       })
-      .loose(),
-  ),
-};
-export const permissionRequestSchema = z.object(permissionRequest).loose();
-export const questionRequestSchema = z.object(questionRequest).loose();
-export type PermissionRequest = z.infer<typeof permissionRequestSchema>;
-export type QuestionRequest = z.infer<typeof questionRequestSchema>;
+      .finally(() => signal.removeEventListener("abort", abort));
+  }
 
-const eventSchema = z.discriminatedUnion("type", [
-  event("relay.stream.lost", { message: text }),
-  event("session.status", {
-    status: z
-      .object({ type: z.string(), attempt: count, message: text })
-      .loose(),
-  }),
-  event("session.idle", {}),
-  event("session.error", { error: z.unknown().optional() }),
-  event("message.updated", { info: messageInfoSchema }),
-  event("message.part.updated", { part: partBaseSchema }),
-  event("message.part.delta", {
-    partID: z.string(),
-    field: z.string(),
-    delta: z.string(),
-  }),
-  event("permission.asked", permissionRequest),
-  event("question.asked", questionRequest),
-]);
-export type ParsedOpenCodeEvent = z.infer<typeof eventSchema>;
-const read = new Set<string>(
-  eventSchema.options.map((option) => option.shape.type.value),
-);
+  close() {
+    this.abort.abort();
+  }
 
-/**
- * An event Relay reads, checked; undefined for a type it doesn't, which stays
- * ignored. One it reads that arrives malformed throws.
- */
-export function parseOpenCodeEvent(event: {
-  type: string;
-  properties: unknown;
-}): ParsedOpenCodeEvent | undefined {
-  if (!read.has(event.type)) return;
-  const parsed = eventSchema.safeParse(event);
-  if (parsed.success) return parsed.data;
-  throw new OpenCodeShapeError(
-    `OpenCode sent an unexpected ${event.type} event (${named(parsed.error.issues[0]!, 1)}).`,
-  );
+  private async read() {
+    const { signal } = this.abort;
+    let connected = false;
+    for (let attempt = 0; !signal.aborted; attempt++) {
+      try {
+        for await (const event of this.client.event.subscribe({ signal })) {
+          if (event.type === "server.connected") {
+            if (connected) await this.recover();
+            connected = true;
+            // The budget is per outage; a retained session outlives many.
+            attempt = 0;
+            this.ready.succeed();
+          } else this.hear(event);
+        }
+        if (signal.aborted) return;
+        throw new Error("OpenCode closed its event connection.");
+      } catch {
+        if (signal.aborted) return;
+        if (attempt >= 3) {
+          const error = new Error(
+            "Lost OpenCode's event connection. Resume the answer to reconnect.",
+          );
+          this.ready.fail(error);
+          this.failed.fail(error);
+          return;
+        }
+        await delay(250 * 2 ** attempt, undefined, { signal }).catch(() => {});
+      }
+    }
+  }
 }
-
-/** OpenCode's answer to a request for `what`, or an error naming what's wrong with it. */
-export function parseOpenCodeResponse<T>(
-  what: string,
-  schema: z.ZodType<T>,
-  value: unknown,
-): T {
-  const parsed = schema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  throw new OpenCodeShapeError(
-    `OpenCode sent an unexpected ${what} response (${named(parsed.error.issues[0]!)}).`,
-  );
-}
-
-/** Asks OpenCode for `path` and checks the answer against `schema`. */
-export const fetched = <T>(
-  call: SessionCall,
-  what: string,
-  schema: z.ZodType<T>,
-  path: string,
-) =>
-  call("GET", path).then((value) => parseOpenCodeResponse(what, schema, value));
-
-/** The session's messages, oldest first; a message's `parts` are its own. */
-export const messageListSchema = z.array(
-  z
-    .object({
-      info: messageInfoSchema,
-      parts: z.array(partBaseSchema).nullish(),
-    })
-    .loose(),
-);
-export const sessionStatusSchema = z.record(
-  z.string(),
-  z.object({ type: z.string() }).loose(),
-);
-export const permissionListSchema = z.array(permissionRequestSchema);
-export const questionListSchema = z.array(questionRequestSchema);
-export const commandListSchema = z.array(
-  z
-    .object({
-      name: z.string(),
-      description: text,
-      hints: lenient(z.array(z.string())),
-      /** `skill` for a skill OpenCode also lists as a command. */
-      source: text,
-    })
-    .loose(),
-);
-
-/** `GET /skill`: the skills OpenCode loads for a folder. */
-export const skillListSchema = z.array(
-  z
-    .object({ name: z.string(), description: text, location: z.string() })
-    .loose(),
-);
-
-/** `GET /provider`: every provider OpenCode knows and which of them are signed in. */
-export const providerListSchema = z
-  .object({
-    all: z.array(z.object({ id: z.string() }).loose()),
-    connected: z.array(z.string()),
-  })
-  .loose();
-/** One provider of that list; only a signed-in one is read, since the rest are never offered. */
-export const providerSchema = z
-  .object({
-    id: z.string(),
-    name: text,
-    models: z.record(
-      z.string(),
-      z
-        .object({
-          id: z.string(),
-          name: text,
-          status: text,
-          capabilities: lenient(z.object({ toolcall: flag }).loose()),
-          limit: lenient(z.object({ context: count }).loose()),
-          variants: record,
-        })
-        .loose(),
-    ),
-  })
-  .loose();
-
-/** `GET /config`: what the project's config picks. */
-export const configSchema = z.object({ model: text }).loose();
-/** Answers creating and forking a session. */
-export const sessionCreatedSchema = z.object({ id: z.string() }).loose();
-export const sessionSchema = z
-  .object({
-    model: lenient(z.object({ providerID: text, id: text }).loose()),
-  })
-  .loose();

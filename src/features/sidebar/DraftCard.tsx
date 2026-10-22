@@ -20,17 +20,24 @@ import { useAISettings } from "../agents/useAISettings";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
+import type { KeyCombo } from "../../../shared/shortcuts";
+import { CardShortcut } from "./CardShortcut";
+import { errorMessage } from "../../../shared/error-message";
 
 /** An unsent new thread: a card like a thread's, with no title or branch yet. */
 export function DraftCard({
   draft,
   selected,
+  jump,
+  index,
   onOpen,
   onSendOpen,
 }: {
   draft: ActivityDraft;
   /** It's the one open. */
   selected: boolean;
+  jump: KeyCombo | undefined;
+  index: number;
   onOpen: () => void;
   /** Sends it from the open composer. */
   onSendOpen: () => void;
@@ -56,6 +63,7 @@ export function DraftCard({
         <ProjectBadge project={project} />
         <span className="sb-card-name">
           <span className="sb-card-project">{project.name}</span>
+          <CardShortcut binding={jump} index={index} />
         </span>
         {send.sendable && (
           <div className="sb-card-actions">
@@ -134,7 +142,9 @@ function ReviewLine({ id }: { id: string }) {
     <>
       <span className="sb-card-draft">
         <ScanSearch size={11} aria-label="Deep review" />
-        <span>{focus || (reviewers.length ? count : "Set up, not started")}</span>
+        <span>
+          {focus || (reviewers.length ? count : "Set up, not started")}
+        </span>
       </span>
       {!!agents.length && (
         <span
@@ -197,7 +207,7 @@ export function useDraftSend(
     try {
       if (!(await sendDraft(qc, draft))) onOpen();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setSending(false);
     }

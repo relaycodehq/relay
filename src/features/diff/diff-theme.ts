@@ -11,7 +11,9 @@ export const DIFF_THEME_CSS = String.raw`
   --relay-band: color-mix(in srgb, var(--code-background) 90%, var(--diffs-modified-base));
   --relay-band-rule: color-mix(in srgb, var(--diffs-modified-base) 22%, transparent);
   --relay-hover: color-mix(in srgb, var(--code-background) 90%, var(--code-foreground));
-}
+  /* The code under a change gets under a third of the theme's tint; the gutter keeps all of it. */
+  --relay-line-addition: color-mix(in srgb, var(--diff-addition) 30%, var(--code-background));
+  --relay-line-deletion: color-mix(in srgb, var(--diff-deletion) 30%, var(--code-background));}
 
 pre, code, [data-error-wrapper] {
   background-color: var(--code-background);
@@ -30,8 +32,8 @@ pre, code, [data-error-wrapper] {
 }
 
 [data-line], [data-no-newline] {
-  &[data-line-type="change-addition"] { --diffs-computed-diff-line-bg: var(--diff-addition); }
-  &[data-line-type="change-deletion"] { --diffs-computed-diff-line-bg: var(--diff-deletion); }
+  &[data-line-type="change-addition"] { --diffs-computed-diff-line-bg: var(--relay-line-addition); }
+  &[data-line-type="change-deletion"] { --diffs-computed-diff-line-bg: var(--relay-line-deletion); }
 }
 [data-column-number], [data-gutter-buffer] {
   &[data-line-type="change-addition"] {
@@ -40,6 +42,16 @@ pre, code, [data-error-wrapper] {
   &[data-line-type="change-deletion"] {
     --diffs-computed-diff-line-bg: color-mix(in srgb, var(--diff-deletion) 78%, var(--diffs-deletion-base));
   }
+}
+
+/* The library draws the added bar as a ::before of each row's number, which
+   rounds apart from the row at fractional line heights and leaves a hairline
+   between rows. Painted as the cell's own background, it tiles like the cell. */
+[data-indicators="bars"] [data-column-number][data-line-type="change-addition"] {
+  background-image: linear-gradient(var(--diffs-addition-base), var(--diffs-addition-base));
+  background-size: 4px 100%;
+  background-repeat: no-repeat;
+  &::before { background-color: transparent; }
 }
 
 :is([data-line], [data-line-annotation], [data-no-newline], [data-merge-conflict])[data-selected-line] {

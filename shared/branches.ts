@@ -43,6 +43,12 @@ export interface BranchCounts {
   /** By branch name, as in `BranchRef.name`. */
   branches: Record<string, BranchCount>;
 }
+/** Uncommitted changes in the folder a local branch is checked out in. */
+export interface BranchChanges {
+  branch: string;
+  files: number;
+  lines: { additions: number; deletions: number };
+}
 export const branchActionSchema = z
   .object({
     kind: z.enum(["switch", "create"]),
@@ -52,10 +58,13 @@ export const branchActionSchema = z
   })
   .strict();
 export type BranchAction = z.infer<typeof branchActionSchema>;
+/** The name of the local branch checking out remote `b` would land on. */
+export const localTwinName = (b: BranchRef) =>
+  b.local ?? b.name.slice(b.name.indexOf("/") + 1);
 /** The local branch checking out remote `b` would land on, if it exists. */
 export function localTwin(list: BranchRef[], b: BranchRef) {
   if (!b.remote) return undefined;
-  const name = b.local ?? b.name.slice(b.name.indexOf("/") + 1);
+  const name = localTwinName(b);
   return list.find((l) => !l.remote && l.name === name);
 }
 /** Which of `remotes` remote branch `name` (`origin/…`) is on; the longest, as remotes can hold a `/`. */

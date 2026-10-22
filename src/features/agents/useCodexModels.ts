@@ -37,21 +37,43 @@ const codexModelsQuery = {
   staleTime: Infinity,
   retry: false,
 };
+/** A paired computer's Codex, for a project there; its list isn't kept here. */
+const remoteCodexModelsQuery = (computerId: string) => ({
+  queryKey: ["codex-models", computerId],
+  queryFn: () => api.agentModels("codex", computerId),
+  staleTime: 5 * 60_000,
+  retry: false,
+});
 /**
  * The models the signed-in Codex offers. The last list shows at once while
  * Codex is asked again; the built-in list stands in until it has answered.
+ * With `computerId`, the Codex on that paired computer.
  */
-export function useCodexModels() {
+export function useCodexModels(computerId?: string) {
   const [saved] = useState(readSaved);
-  const query = useQuery(codexModelsQuery);
+  const query = useQuery(
+    computerId ? remoteCodexModelsQuery(computerId) : codexModelsQuery,
+  );
+  const fallback = computerId
+    ? fallbackCodexModels
+    : (saved ?? fallbackCodexModels);
   return {
-    models: query.data?.length ? query.data : (saved ?? fallbackCodexModels),
+    models: query.data?.length ? query.data : fallback,
     /** Asks again: after signing in, or once Codex was updated. */
     refresh: () => void query.refetch(),
   };
 }
 /** The same list outside React, asking Codex only when nothing has yet. */
-export async function codexModels(qc: QueryClient): Promise<CodexModel[]> {
+export async function codexModels(
+  qc: QueryClient,
+  computerId?: string,
+): Promise<CodexModel[]> {
+  if (computerId) {
+    const models = await qc
+      .query(remoteCodexModelsQuery(computerId))
+      .catch(() => []);
+    return models.length ? models : fallbackCodexModels;
+  }
   const models = await qc.query(codexModelsQuery).catch(() => []);
   return models.length ? models : (readSaved() ?? fallbackCodexModels);
 }

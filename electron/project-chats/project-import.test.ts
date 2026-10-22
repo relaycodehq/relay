@@ -6,6 +6,7 @@ import {
   realpath,
   rename,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
@@ -14,6 +15,8 @@ import { Store } from "../app/store";
 import { Projects } from "../projects/projects";
 import { ProjectChats } from "./index";
 import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
+import { chatSettled } from "../../shared/chat-activity";
+import { TerminalSessions } from "../terminal-sessions";
 import {
   writeClaudeSession,
   claudeTurns,
@@ -73,7 +76,14 @@ it("discovers without adding, lists every readable chat, imports a selection onc
   ]);
   expect(first.failures).toEqual([]);
   expect(first.projects[0]?.chats.map((c) => c.created)).toEqual([true, true]);
+  for (const { chat } of first.projects[0]!.chats) {
+    expect(chatSettled(chat)).toBe(true);
+    expect(chat.updated).toBeLessThan(Date.now() - 59 * 86_400_000);
+    expect(chat.seenAt).toBe(chat.updated);
+  }
   const project = first.projects[0]!.project;
+  const kept = first.projects[0]!.chats[0]!.chat;
+  await chats.triage(kept.id, { kind: "unsettle" });
   await projects.rename(project.id, "My Onboarding");
   const again = await chats.imports.run("codex", [
     { key: source!.key, chats: ids },
@@ -84,6 +94,9 @@ it("discovers without adding, lists every readable chat, imports a selection onc
     false,
   ]);
   expect(chats.list(project.id)).toHaveLength(2);
+  expect(
+    chatSettled(chats.list(project.id).find((c) => c.id === kept.id)!),
+  ).toBe(false);
   expect(
     (await chats.imports.chats("codex", source!.key)).filter((c) => c.chatId),
   ).toHaveLength(2);
@@ -123,10 +136,43 @@ it("imports an older JSONL session and a Claude session as copies through the sa
     expect(chat.messages.map((m) => m.body)).toEqual(
       turns.flatMap((t) => [t.prompt, t.answer]),
     );
-    expect(chat.fromTerminal).toMatchObject({ provider: app, how: "forked" });
+    expect(chat.fromTerminal).toMatchObject({ provider: app, how: "text" });
+    expect(chat.messages.some((m) => m.forkPoint)).toBe(false);
+    expect(chat.forkedAt).toBeUndefined();
+    expect(chatSettled(chat)).toBe(true);
     expect(chat.sessions).toBeUndefined();
   }
   expect(await projects.list(null)).toHaveLength(1);
+});
+
+it("imports Claude without reading an unrelated corrupt Codex database", async () => {
+  await writeClaudeSession(
+    join(dir, "claude"),
+    repo,
+    "claude-chat-01",
+    claudeTurns(turns),
+  );
+  const { statePath } = await writeStoredCodexSession(
+    home,
+    repo,
+    "codex-chat-01",
+    turns,
+  );
+  await writeFile(statePath, "corrupt database");
+  const [source] = await chats.imports.list("claude");
+  expect(
+    (await chats.imports.chats("claude", source!.key)).map((c) => c.id),
+  ).toEqual(["claude-chat-01"]);
+  const result = await chats.imports.run("claude", [
+    { key: source!.key, chats: ["claude-chat-01"] },
+  ]);
+  expect(result.failures).toEqual([]);
+  expect(result.projects[0]?.chats).toHaveLength(1);
+  // A requested provider's error still reaches its own import and the combined /resume list.
+  await expect(chats.imports.list("codex")).rejects.toThrow();
+  await expect(
+    chats.terminalSessions(result.projects[0]!.project.id),
+  ).rejects.toThrow();
 });
 
 it("requires an explicit destination for missing folders and keeps an unfinished tail", async () => {
@@ -217,6 +263,36 @@ it("rejects forged project keys and chats from other projects before adding anyt
   expect(await projects.list(null)).toHaveLength(0);
 });
 
+it("discovers sources once while validating each project's selected chats", async () => {
+  const other = join(dir, "other");
+  await mkdir(other);
+  await writeStoredCodexSession(home, repo, "first-chat-01", turns);
+  await writeStoredCodexSession(home, other, "other-chat-01", turns);
+  const sources = await chats.imports.list("codex");
+  const discovery = vi.spyOn(TerminalSessions.prototype, "projectFolders");
+  try {
+    const result = await chats.imports.run(
+      "codex",
+      sources.map((source) => ({
+        key: source.key,
+        chats: [source.path === repo ? "first-chat-01" : "other-chat-01"],
+      })),
+    );
+    expect(discovery).toHaveBeenCalledExactlyOnceWith("codex");
+    expect(result.failures).toEqual([]);
+    expect(result.projects).toHaveLength(2);
+    for (const imported of result.projects) {
+      expect(imported.chats).toHaveLength(1);
+      const chat = await chats.get(imported.chats[0]!.chat.id);
+      expect(chat.messages.map((m) => m.body)).toEqual(
+        turns.flatMap((turn) => [turn.prompt, turn.answer]),
+      );
+    }
+  } finally {
+    discovery.mockRestore();
+  }
+});
+
 it("imports a project's app name without reading chat history when chats are not selected", async () => {
   const { statePath, path } = await writeStoredCodexSession(
     home,
@@ -239,4 +315,24 @@ it("imports a project's app name without reading chat history when chats are not
   expect(result.failures).toEqual([]);
   expect(result.projects[0]?.project.name).toBe("My app project");
   expect(result.projects[0]?.chats).toEqual([]);
+});
+
+it("preserves imported message bodies beyond the old display limits", async () => {
+  const history = [
+    {
+      prompt: "p".repeat(110_000) + "prompt end",
+      answer: "a".repeat(210_000) + "answer end",
+    },
+  ];
+  await writeStoredCodexSession(home, repo, "long-conversation-01", history);
+  const [source] = await chats.imports.list("codex");
+  const result = await chats.imports.run("codex", [
+    { key: source!.key, chats: ["long-conversation-01"] },
+  ]);
+  expect(result.failures).toEqual([]);
+  const chat = await chats.get(result.projects[0]!.chats[0]!.chat.id);
+  expect(chat.messages.map((m) => m.body)).toEqual([
+    history[0]!.prompt,
+    history[0]!.answer,
+  ]);
 });

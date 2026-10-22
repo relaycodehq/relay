@@ -7,10 +7,7 @@ import type { ThreadGoal } from "../../../shared/goal";
 import type { AgentJob, AgentOptions } from "../types";
 import { runCodex } from "./codex";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 afterEach(() => void vi.unstubAllEnvs());
 
 async function run(

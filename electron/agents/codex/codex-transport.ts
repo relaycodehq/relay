@@ -2,6 +2,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import type { z } from "zod";
 import { parseCodexResponse } from "./codex-schemas";
+import { errorMessage } from "../../../shared/error-message";
 
 export interface CodexTransport {
   request(method: string, params: unknown): Promise<unknown>;
@@ -110,7 +111,7 @@ export async function withCodexTransport<T>(
           error: { code: -32601, message: `Method not found: ${method}` },
         };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       reply = { id, error: { code: -32603, message } };
     } finally {
       active--;
@@ -169,7 +170,7 @@ export async function withCodexTransport<T>(
     try {
       route(message as Record<string, unknown>);
     } catch (error) {
-      terminate(error instanceof Error ? error.message : String(error));
+      terminate(errorMessage(error));
     }
   };
 

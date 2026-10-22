@@ -7,6 +7,7 @@ import type { ThreadControl } from "./control";
 import type { ProviderSessions } from "./sessions";
 import type { ChatStorage } from "./storage";
 import type { WatchSpendLog } from "./watch-spend";
+import type { PredictionLog } from "./prediction-log";
 import type { HandoffLive } from "../../shared/handoff";
 
 /** A live handoff's state as the other computer last said it, its running turn's start on this clock. */
@@ -31,4 +32,6 @@ export interface ChatCore {
   away?: Map<string, AwayLive>;
   /** What "Flag what I'd miss" spent; absent in tests. */
   watchSpend?: WatchSpendLog;
+  /** The composer's guesses at the next message and how they fared; absent in tests. */
+  predictions?: PredictionLog;
 }

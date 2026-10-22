@@ -8,6 +8,20 @@ When several HTTP servers run in the same folder, use an explicit localhost URL
 or save the intended dev port instead of letting Relay guess. Windows currently
 needs an explicit URL or saved dev port.
 
+Relay remembers each thread's last address, including its path, query and
+fragment, and the checkout or worktree it belonged to. Opening Browser after
+quitting restores that page. When a launch command is known, Relay starts the
+server first and waits for it to listen before loading the page. It does this
+when the preview is opened, rather than starting every old preview on launch.
+
+Agents can pass `command` with `open_preview` to save the server's dev command
+for that thread. Use a foreground command that listens on the URL's port;
+Relay also supplies that port as `PORT`. Relay does not reconstruct commands
+from a discovered process's display name. If an old localhost preview has no
+known command and its connection is refused, its pane offers **Dev command →
+Start preview** to save one and start it. Startup errors show the command's
+output and **Try again** retries it.
+
 Project settings → Preview can also save a **Dev command** and **Dev port**.
 When no existing server can be selected, Relay starts that command on demand.
 Worktrees add their `RELAY_PORT_OFFSET` to the saved port. Commands receive `PORT`

@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -50,19 +50,12 @@ test("/resume chatgpt imports a saved desktop chat, forks on send and reopens th
     { prompt: "Another project", answer: "Other answer" },
   ]);
   const original = await readFile(history);
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_AGENT_CAPTURE: capture,
       CODEX_HOME: home,
       CLAUDE_CONFIG_DIR: join(root, "claude"),

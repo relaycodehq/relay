@@ -186,7 +186,8 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         scope.launch {
             // The list and whether someone sits at the computer come as one, so
             // news is judged by the presence its own list came with.
-            remote.overview.map { it?.chats to (it?.present == true) }.distinctUntilChanged().collect { (chats, present) ->
+            // Every list, not the newest: one that came and went at once still started a thread.
+            remote.overviews.map { it?.chats to (it?.present == true) }.distinctUntilChanged().collect { (chats, present) ->
                 if (chats == null) return@collect
                 val was = before
                 before = chats.associateBy { it.id }

@@ -1,7 +1,14 @@
+import type { RunImportOffer } from "../import-offer";
+import type { PredictionSummary } from "../prediction";
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
-import type { BranchAction, BranchCounts, BranchList } from "../branches";
+import type {
+  BranchAction,
+  BranchChanges,
+  BranchCounts,
+  BranchList,
+} from "../branches";
 import type {
   ProjectCheckInfo,
   ProjectCheckState,
@@ -25,7 +32,7 @@ import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
-import type { DirListing, FileInfo } from "../project-files";
+import type { DirListing, FileInfo, FilePreview } from "../project-files";
 import type {
   BranchPull,
   CreatedPullRequest,
@@ -59,7 +66,12 @@ import type {
   ImportSelection,
   ProjectImportResult,
 } from "../project-import";
-import type { FolderEntry, FolderInfo, LinkSuggestion } from "./folders";
+import type {
+  FolderEntry,
+  FolderInfo,
+  FolderPreview,
+  LinkSuggestion,
+} from "./folders";
 import type { LinkedFolder } from "./links";
 import type { WorktreeStart } from "./worktrees";
 import type { Project, ProjectSettings } from "./project";
@@ -130,25 +142,36 @@ export interface ProjectFoldersApi {
     app: ImportApp,
     selections: ImportSelection[],
   ): Promise<ProjectImportResult>;
+  /** A Scratchpad thread opened to import `app`'s history with an agent, which gets the import tools. */
+  startImportThread(
+    app: ImportApp,
+  ): Promise<{ project: Project; chat: ChatSummary }>;
+  /** Imports what the user ticked in the list an agent offered (offer_import), and places the new projects. */
+  runImportOffer(
+    chatId: string,
+    messageId: string,
+    input: RunImportOffer,
+  ): Promise<ProjectImportResult>;
   inspectFolder(path: string): Promise<FolderInfo>;
   /** The folders inside `dir`, for typing a path; `~` stands for home. */
   listFolders(dir: string): Promise<FolderEntry[]>;
+  folderPreview(dir: string, computerId?: string): Promise<FolderPreview>;
   /** Finder's folder picker; null when cancelled. Adds nothing. */
   chooseFolder(title: string): Promise<string | null>;
   /** Folders worth linking to the project: the repositories beside it, then the other projects. */
   linkSuggestions(projectId: string): Promise<LinkSuggestion[]>;
   /** What the add-project palette opens on. */
-  addingStart(): Promise<AddingStart>;
+  addingStart(computerId?: string): Promise<AddingStart>;
   /** Adds the folder at `path`; `setUpGit` runs `git init` in a plain one first. */
   addProjectAt(path: string, setUpGit?: boolean): Promise<Project>;
   /** Clones `remote` into a folder of its name inside `into`, then adds it. */
   cloneProject(remote: string, into: string): Promise<Project>;
   /** Makes the folder, with git and a GitHub repository when asked, then adds it. */
-  createProject(spec: NewProject): Promise<Project>;
+  createProject(spec: NewProject, computerId?: string): Promise<Project>;
   /** Stops the clone or creation under way; it rejects. */
-  cancelProjectAdding(): Promise<void>;
+  cancelProjectAdding(computerId?: string): Promise<void>;
   /** The repositories the `gh` login can see. */
-  githubRepos(): Promise<GithubRepos>;
+  githubRepos(computerId?: string): Promise<GithubRepos>;
   onProjectAdding(callback: (job: AddingJob | null) => void): () => void;
 }
 
@@ -275,7 +298,7 @@ export interface ProjectChatApi {
   stopProjectChatPending(id: string, pendingId: string): Promise<void>;
   /** The subagents Claude started in the thread's live sessions. */
   projectChatAgents(id: string): Promise<SubagentRun[]>;
-  /** What fills the window of Claude's live session, counted as /context does; null without one. */
+  /** What fills the live session's window, counted or estimated; null without one. */
   projectChatContext(
     id: string,
     parentId?: string | null,
@@ -370,6 +393,14 @@ export interface ProjectCouncilApi {
   ): Promise<void>;
   /** What "Flag what I'd miss" spent this past week, by thread. */
   watchSpend(): Promise<WatchSpendSummary | undefined>;
+  /** What the composer's next-message guesses cost this past week, and how often they were sent. */
+  predictionSpend(): Promise<PredictionSummary | undefined>;
+  /** The composer showed an answer's guess at the next message, or Escape put it away. */
+  seePrediction(
+    id: string,
+    messageId: string,
+    how: "shown" | "dismissed",
+  ): Promise<void>;
   /** This past week's notes with what was done with each; development builds. */
   watchReview(): Promise<WatchReview>;
   /** Has a helper model grade the notes not graded yet; spends on the helper's account. */
@@ -404,6 +435,8 @@ export interface ProjectWorktreeApi {
 export interface ProjectFilesApi {
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;
+  /** A bounded text excerpt for a file mention, without editor or Git metadata. */
+  projectFilePreview(where: string, path: string): Promise<FilePreview>;
   /** One level of a folder from disk ("" is the root), ignored files included. */
   projectDirectory(where: string, dir: string): Promise<DirListing>;
   projectFileInfo(where: string, path: string): Promise<FileInfo>;
@@ -411,8 +444,6 @@ export interface ProjectFilesApi {
   projectImage(where: string, path: string): Promise<string>;
   /** Where the player streams a video file from. */
   projectVideo(where: string, path: string): Promise<string>;
-  /** An image scaled down for a grid; small ones and vector ones as they are. */
-  projectThumbnail(where: string, path: string): Promise<string>;
   /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */
   revealProjectPath(where: string, path: string): Promise<void>;
   /** Where a file sits on disk, whether or not it's there now. */
@@ -515,6 +546,11 @@ export interface ProjectGitApi {
   projectBranches(id: string): Promise<BranchList>;
   /** Where each branch stands against the bases; slow on a big repository, so apart. */
   projectBranchCounts(id: string): Promise<BranchCounts>;
+  /** Uncommitted changes on this local branch; null when it isn't checked out here. */
+  projectBranchChanges(
+    id: string,
+    branch: string,
+  ): Promise<BranchChanges | null>;
   projectChangeBranch(id: string, action: BranchAction): Promise<BranchList>;
   projectBranchPulls(where: string): Promise<BranchPull[]>;
   /** CI on the thread's branch (its worktree's, with `chatId`); null when there's none to show. */

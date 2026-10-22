@@ -74,6 +74,9 @@ const projects = seeded
       { id: relay, name: "relay", path: "/tmp/relay", repository: null, added: 1 },
       { id: site, name: "relaycode.io", path: "/tmp/site", repository: null, added: 2 },
       { id: dotfiles, name: "dotfiles", path: "/tmp/dotfiles", repository: null, added: 3, folder: "Side projects", plain: true },
+      // On other computers: one paired, one whose computer was forgotten.
+      { id: "88888888-8888-4888-8888-888888888881", name: "api", path: "/home/me/api", repository: null, added: 6, computer: { id: "box", name: "thinkcenter", projectId: "p1" } },
+      { id: "88888888-8888-4888-8888-888888888882", name: "old-site", path: "/srv/old-site", repository: null, added: 7, computer: { id: "gone", name: "nas", projectId: "p2" } },
       { id: scratchA, name: "Scratchpad", path: "/tmp/scratch-1", repository: null, added: 4, scratch: true },
       { id: scratchB, name: "Scratchpad", path: "/tmp/scratch-2", repository: null, added: 5, scratch: true },
     ]
@@ -610,6 +613,7 @@ const host = {
     return html;
   },
   projects: async () => projects,
+  pairedComputers: () => [{ id: "box", name: "thinkcenter.tail0a1b2c.ts.net" }],
   projectPath: (pid: string) => (pid === site ? "/tmp/site" : "/tmp/relay"),
   chats: (pid: string) => summaries().filter((c) => c.projectId === pid),
   chat: async (chatId: string) => {

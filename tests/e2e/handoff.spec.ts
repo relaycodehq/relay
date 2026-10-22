@@ -1,26 +1,19 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { freePort } from "../fixtures/free-port";
 
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
-
-test("a worktree thread goes to another computer from its header and comes back from its strip", async () => {
+test("a worktree thread goes to another computer from its header, comes back, and carries on here once that computer is gone", async () => {
   test.setTimeout(180_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-handoff-"))),
     bin = join(root, "bin");
@@ -49,21 +42,14 @@ test("a worktree thread goes to another computer from its header and comes back 
       join(bin, cli),
       await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const apps: ElectronApplication[] = [];
   const launch = async (name: string) => {
     const app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, `data-${name}`),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         // No Tailscale here: loopback stands in for the tailnet.
         RELAY_REMOTE_TAILNET: "127.0.0.1",
@@ -110,7 +96,8 @@ test("a worktree thread goes to another computer from its header and comes back 
     const link = await accept
       .getByLabel("This computer's pairing link")
       .inputValue();
-    expect(link).toMatch(/^relay-remote:\/\/pair\?h=127\.0\.0\.1/);
+    // Its tailnet stand-in, after any address on the local network.
+    expect(link).toMatch(/^relay-remote:\/\/pair\?h=(?:[^&]*%2C)?127\.0\.0\.1/);
 
     // A worktree thread on the laptop; the fixture agent edits a file there.
     await laptop.page.getByRole("button", { name: /Current checkout/ }).click();
@@ -123,25 +110,22 @@ test("a worktree thread goes to another computer from its header and comes back 
       .click();
     await expect(laptop.page.getByText("needed no change")).toBeVisible();
 
-    // Not paired yet: the header button opens Settings → Computers.
+    // Not paired yet: the header button asks for a computer, and Add a
+    // computer pairs one from the link the mini showed.
     await laptop.page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
-    const pair = laptop.page.getByRole("region", {
-      name: "Settings",
-      exact: true,
-    });
-    await pair.getByLabel("Pairing link").fill(link);
-    await pair.getByRole("button", { name: "Pair", exact: true }).click();
-    // The map draws the paired computer, and its card opens below.
-    await expect(
-      pair.getByRole("group", { name: "Your computers" }).getByRole("button", {
-        name: /Connected/,
-      }),
-    ).toBeVisible({ timeout: 20_000 });
-    await screenshot(pair, { path: "test-results/handoff-paired.png" });
+    const pick = laptop.page.getByRole("dialog", { name: "Choose a computer" });
+    await pick.getByLabel("Computer", { exact: true }).fill(link);
+    await pick.getByRole("button", { name: "Check", exact: true }).click();
+    // Named after the machine running the test.
+    const use = pick.getByRole("button", { name: /^Use / });
+    await expect(use).toBeVisible({ timeout: 20_000 });
+    await screenshot(pick, { path: "test-results/handoff-paired.png" });
+    await use.click();
+    await expect(pick).toBeHidden();
+    // Picking it opens the hand-off menu; it opens again from the header.
     await laptop.page.keyboard.press("Escape");
-    await expect(pair).toBeHidden();
 
     // Now it lists the mini, which has the same repository.
     await laptop.page
@@ -154,10 +138,9 @@ test("a worktree thread goes to another computer from its header and comes back 
     await screenshot(laptop.page, { path: "test-results/handoff-menu.png" });
     await target.click();
 
-    const strip = laptop.page.locator(".handoff-strip");
-    await expect(strip).toContainText(/finished|Working on/, {
-      timeout: 60_000,
-    });
+    // Away, the thread follows along live under its composer.
+    const live = laptop.page.locator(".handoff-live");
+    await expect(live).toContainText("Running on ", { timeout: 60_000 });
     // Settings lists it under the computer it went to.
     await laptop.page
       .getByRole("button", { name: "Open settings" })
@@ -176,10 +159,6 @@ test("a worktree thread goes to another computer from its header and comes back 
     await screenshot(listed, { path: "test-results/handoff-settings.png" });
     await laptop.page.keyboard.press("Escape");
     await expect(listed).toBeHidden();
-    await expect(laptop.page.getByLabel("Message project")).toHaveAttribute(
-      "data-placeholder",
-      /This thread is on /,
-    );
     await screenshot(laptop.page, { path: "test-results/handoff-away.png" });
 
     // The mini has the thread, its agent carried on in a worktree of its own.
@@ -187,7 +166,7 @@ test("a worktree thread goes to another computer from its header and comes back 
     await mini.page.reload();
     // Titled by the fixture agent's first answer, as on the laptop.
     await expect(
-      mini.page.getByRole("button", { name: "Cache guard behavior" }),
+      mini.page.getByRole("button", { name: "Cache guard behavior" }).first(),
     ).toBeVisible({ timeout: 20_000 });
     const miniThread = await mini.page.evaluate(async () => {
       const [project] = await window.relay.projects();
@@ -199,57 +178,29 @@ test("a worktree thread goes to another computer from its header and comes back 
       await readFile(join(miniThread!.worktree!.path!, "src/guard.ts"), "utf8"),
     ).toBe("export const guard = true;\n");
 
-    // Back again: the strip goes and the composer opens.
-    await expect(strip).toContainText("finished", { timeout: 60_000 });
-    await strip.getByRole("button", { name: "Bring back" }).click();
-    await expect(strip).toBeHidden({ timeout: 60_000 });
-    await expect(laptop.page.getByLabel("Message project")).not.toHaveAttribute(
-      "data-placeholder",
-      /This thread is on /,
-    );
-    await expect(
-      laptop.page.getByText(/Continued on /).first(),
-    ).toBeVisible();
+    // Back again: the line goes and the thread says where it was.
+    await live.getByRole("button", { name: "Bring back" }).click();
+    await expect(live).toBeHidden({ timeout: 60_000 });
+    await expect(laptop.page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(laptop.page, { path: "test-results/handoff-back.png" });
 
-    // Away again, but this time the mini can't hand it back: take it back without it.
+    // Away again, and then the mini is gone: the thread carries on here.
     await laptop.page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
     await laptop.page
       .getByRole("menuitem", { name: /Continues in Mini/ })
       .click();
-    await expect(strip).toContainText(/finished|Working on/, {
-      timeout: 60_000,
-    });
-    await strip.getByRole("button", { name: /^Take it back without / }).click();
-    const confirm = laptop.page.getByRole("dialog", {
-      name: /^Take it back without .+\?$/,
-    });
-    await expect(confirm).toContainText("stays there, on its branch");
+    await expect(live).toContainText("Running on ", { timeout: 60_000 });
+    await mini.app.close();
+    await expect(live).toContainText(" is offline", { timeout: 60_000 });
     await screenshot(laptop.page, {
-      path: "test-results/handoff-abandon-confirm.png",
+      path: "test-results/handoff-offline.png",
     });
-    await confirm.getByRole("button", { name: "Take it back" }).click();
-    await expect(strip).toBeHidden({ timeout: 30_000 });
-    await expect(laptop.page.getByLabel("Message project")).not.toHaveAttribute(
-      "data-placeholder",
-      /This thread is on /,
-    );
+    await live.getByRole("button", { name: "Run here instead" }).click();
+    await expect(live).toBeHidden({ timeout: 30_000 });
     await screenshot(laptop.page, {
-      path: "test-results/handoff-abandoned.png",
-    });
-
-    // The mini hears it and stops owing the thread: its newest copy says so.
-    await mini.page.reload();
-    await mini.page
-      .getByRole("button", { name: "Cache guard behavior" })
-      .first()
-      .click();
-    const released = mini.page.getByText(/took the thread back/);
-    await expect(released).toBeVisible({ timeout: 30_000 });
-    await screenshot(mini.page, {
-      path: "test-results/handoff-abandoned-there.png",
+      path: "test-results/handoff-run-here.png",
     });
   } finally {
     for (const app of apps) await app.close().catch(() => {});

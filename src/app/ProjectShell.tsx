@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Settings2 } from "lucide-react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { pullHostName } from "../../shared/source-control";
@@ -19,6 +18,7 @@ import {
   type SettingsCategory,
 } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
+import { onAddProjectRequest } from "../lib/add-project-request";
 import { useShortcut } from "../lib/shortcuts";
 import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
@@ -75,17 +75,16 @@ import {
 } from "../../shared/thread-windows";
 import { askJump } from "../features/sidebar/useActivityKeys";
 import { SignInDialog } from "../features/settings/SignInDialog";
-import { ErrorBox, IconButton, Loading } from "../ui/ui";
+import { ErrorBox, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
+import { bootstrapQuery, projectChatsQuery } from "../lib/workspace-queries";
 const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {
   const qc = useQueryClient();
   const boot = useQuery({
-    queryKey: ["bootstrap"],
-    queryFn: () => api.bootstrap(),
-    staleTime: Infinity,
+    ...bootstrapQuery,
     refetchInterval: (q) =>
       q.state.data?.loginRestore === "unlocking" ? 500 : false,
     refetchIntervalInBackground: true,
@@ -171,6 +170,10 @@ export default function ProjectShell() {
     setError,
   );
   useOpenedFolders(boot.data, projects, lock, starts.open);
+  const addProjectOn = useStableCallback((computerId?: string) =>
+    starts.addProject("root", computerId),
+  );
+  useEffect(() => onAddProjectRequest(addProjectOn), [addProjectOn]);
   useShortcut("settings", true, () => settings.show());
   useShortcut("new-thread", !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
@@ -218,10 +221,7 @@ export default function ProjectShell() {
     const p = projects.data?.find((p) => p.id === projectId);
     if (!p) return;
     void qc
-      .query({
-        queryKey: ["project-chats", projectId],
-        queryFn: () => api.projectChats(projectId),
-      })
+      .query(projectChatsQuery(projectId))
       .then((list) => {
         const next = list.find((c) => c.id === chatId);
         if (!next) return;
@@ -311,11 +311,6 @@ export default function ProjectShell() {
               onConnectHost={() => setChoosePR(true)}
               onSettings={settings.show}
             />
-          )}
-          {sidebar.hidden && !settings.open && (
-            <IconButton label="Open settings" onClick={() => settings.show()}>
-              <Settings2 size={16} />
-            </IconButton>
           )}
         </div>
       </header>
@@ -436,6 +431,7 @@ export default function ProjectShell() {
             allProjects={projects.data ?? NO_PROJECTS}
             everyThread={everyThread}
             composer={composer}
+            gitActions={gitActions}
             hidden={settings.open}
             onChoosePR={
               project.repository || account
@@ -532,9 +528,11 @@ export default function ProjectShell() {
       {starts.adding && (
         <AddProjectPalette
           projects={realProjects}
+          computerId={starts.addingOn}
           initialPage={starts.adding}
           onClose={() => starts.setAdding(false)}
           onDone={(p) => void starts.added(p)}
+          onImportWithAgent={(app) => void starts.importThread(app)}
         />
       )}
       {signIn.open && (

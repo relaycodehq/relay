@@ -395,9 +395,10 @@ function bareMachine(options: {
     },
     realpath: async (path) => path,
     exists: async () => false,
-    exec: async (file, args) => {
+    exec: async (file, args, _timeout, onOutput) => {
       if (args[0] === "--version") return done("cli 1.0.0");
       runs.push([file, ...args]);
+      onOutput?.("npm http fetch GET 200 https://registry.npmjs.org/x 80ms");
       // npm -g --prefix puts each package's commands in <prefix>/bin.
       const prefix = args[args.indexOf("--prefix") + 1];
       for (const spec of args.slice(args.indexOf("--no-fund") + 1)) {
@@ -423,13 +424,30 @@ function bareMachine(options: {
     npmReleaseAge: async () => options.releaseAge ?? 0,
     ownAgents: () => "/relay/clis",
   };
-  const updates = new AgentUpdates(() => {}, io);
+  const seen: AgentVersions[] = [];
+  const updates = new AgentUpdates((state) => seen.push(state), io);
   const agent = (provider: string) =>
     updates.current.agents.find((a) => a.provider === provider)!;
-  return { updates, runs, agent, on };
+  return { updates, runs, agent, on, seen };
 }
 
 describe("AgentUpdates installing what's missing", () => {
+  it("shows what the install prints while it runs", async () => {
+    const { updates, seen } = bareMachine({
+      installed: {},
+      tags: { latest: "1.0.0" },
+    });
+    await updates.check();
+    await updates.update("codex");
+    const printed = seen
+      .map((s) => s.agents.find((a) => a.provider === "codex")?.update)
+      .find((run) => run?.status === "running" && run.output);
+    expect(printed).toEqual({
+      status: "running",
+      output: "npm http fetch GET 200 https://registry.npmjs.org/x 80ms",
+    });
+  });
+
   it("installs a missing CLI into Relay's folder and then updates it there", async () => {
     const { updates, runs, agent } = bareMachine({
       installed: {},
@@ -451,6 +469,8 @@ describe("AgentUpdates installing what's missing", () => {
         "/relay/clis/codex",
         "--no-audit",
         "--no-fund",
+        "--loglevel=http",
+        "--foreground-scripts",
         "--ignore-scripts=false",
         "--allow-scripts=@openai/codex",
         "@openai/codex@latest",
@@ -500,6 +520,8 @@ describe("AgentUpdates installing what's missing", () => {
       "/relay/clis/amp",
       "--no-audit",
       "--no-fund",
+      "--loglevel=http",
+      "--foreground-scripts",
       "--ignore-scripts=false",
       "--allow-scripts=@ampcode/cli",
       "@ampcode/cli@latest",

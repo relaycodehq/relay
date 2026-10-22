@@ -34,7 +34,10 @@ export const ThreadCostButton = memo(function ThreadCostButton({
           align="end"
           sideOffset={6}
         >
-          <Popover.Popup className="composer-select-popup usage-ring-popup credit-popup">
+          <Popover.Popup
+            data-shortcut-passive
+            className="composer-select-popup usage-ring-popup credit-popup"
+          >
             <div className="credit-thread">
               <span>This thread</span>
               <span>{total}</span>

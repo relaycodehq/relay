@@ -30,6 +30,34 @@ export function useStoredState<T>(key: string, parse: (saved: unknown) => T) {
 }
 
 /**
+ * One of `choices` kept per device under `key` as plain text, `fallback`
+ * until one is picked or when what was saved isn't among them.
+ */
+export function useStoredChoice<T extends string>(
+  key: string,
+  choices: readonly T[],
+  fallback: T,
+) {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const saved = localStorage.getItem(key);
+      return choices.find((choice) => choice === saved) ?? fallback;
+    } catch {
+      return fallback;
+    }
+  });
+  const choose = (next: T) => {
+    setValue(next);
+    try {
+      localStorage.setItem(key, next);
+    } catch {
+      // Still applies until the screen closes.
+    }
+  };
+  return [value, choose] as const;
+}
+
+/**
  * A per-device preference kept in localStorage, like the theme. `parse` turns
  * what was saved (null when nothing was) into the value, and is the place to
  * reject anything malformed; `serialize` gives what to save, or null to clear.

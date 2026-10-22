@@ -6,6 +6,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
 import type { HostedProcess } from "./client";
 import type { Entry } from "./protocol";
+import { LineBuffer } from "../util/line-buffer";
 
 export class HostedChild extends EventEmitter {
   readonly stdin: Writable;
@@ -23,15 +24,10 @@ export class HostedChild extends EventEmitter {
     replay: (entries: Entry[]) => string[] = () => [],
   ) {
     super();
-    let partial = "";
+    const lines = new LineBuffer((line) => hosted.write(line));
     this.stdin = new Writable({
       write: (chunk: Buffer | string, _encoding, done) => {
-        partial += chunk.toString();
-        let at: number;
-        while ((at = partial.indexOf("\n")) >= 0) {
-          hosted.write(partial.slice(0, at));
-          partial = partial.slice(at + 1);
-        }
+        lines.push(chunk.toString());
         done();
       },
     });

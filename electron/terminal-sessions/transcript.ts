@@ -42,7 +42,7 @@ export class Transcript {
     this.messages.push({
       id: randomUUID(),
       role: "user",
-      body: text.slice(0, 100_000),
+      body: text,
       status: "complete",
       created: this.after(at),
       provider: this.provider,
@@ -143,10 +143,7 @@ export class Transcript {
   private close() {
     const answer = this.answer;
     if (!answer) return;
-    answer.body = this.said
-      .map((p) => p.text.trim())
-      .join("\n\n")
-      .slice(0, 200_000);
+    answer.body = this.said.map((p) => p.text.trim()).join("\n\n");
     this.said = [];
     this.point = undefined;
     // A call the session never answered ended with the turn.

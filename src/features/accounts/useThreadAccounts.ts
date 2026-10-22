@@ -7,6 +7,7 @@ import {
   type AccountProvider,
 } from "../../../shared/agent-accounts";
 import { useAgentAccounts } from "./agent-accounts";
+import { errorMessage } from "../../../shared/error-message";
 
 type Pinned = Partial<Record<AccountProvider, string>>;
 
@@ -50,9 +51,7 @@ export function useThreadAccounts(chatId?: string, pinned?: Pinned) {
         void api.setThreadAccount(chatId, provider, id).catch((e) => {
           if (latest.current[provider] !== request) return;
           setPicked(({ [provider]: _, ...rest }) => rest);
-          setError(
-            `Couldn't switch the account: ${e instanceof Error ? e.message : String(e)}`,
-          );
+          setError(`Couldn't switch the account: ${errorMessage(e)}`);
         });
     },
   };

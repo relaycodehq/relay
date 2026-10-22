@@ -28,7 +28,6 @@ export function DeepReviewCouncil({
   onOpenFile,
   onResume,
   onStop,
-  resumedBy,
   onStopMember,
   onResumeMember,
   onLead,
@@ -46,8 +45,6 @@ export function DeepReviewCouncil({
   onResume: () => void;
   /** Stops the reviewers at work, as the composer's Stop does. */
   onStop?: () => void;
-  /** The thread that last resumed the review, when another thread did. */
-  resumedBy?: string;
   onStopMember?: (slot: number) => void;
   onResumeMember?: (slot: number) => void;
   /** Hands over to the lead with the reports that are in. */
@@ -73,7 +70,7 @@ export function DeepReviewCouncil({
         <span>
           {count} {count === 1 ? "reviewer" : "reviewers"}
           {state.status === "reviewing"
-            ? ` at work${resumedBy ? ` · resumed from “${resumedBy}”` : ""}`
+            ? " at work"
             : kept !== undefined
               ? ` · ${kept} ${kept === 1 ? "finding" : "findings"} kept`
               : ""}

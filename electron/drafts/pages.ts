@@ -1,7 +1,6 @@
-import { BrowserWindow } from "electron";
-import { join } from "node:path";
+import type { BrowserWindow } from "electron";
 import type { HeldSend } from "../../shared/drafts";
-import { loadPage } from "../app/page";
+import { hiddenPage, loadPage } from "../app/page";
 import type { AppWindow } from "../app/window";
 
 /** How long the hidden page lingers after a send, for the next to go quickly. */
@@ -44,22 +43,7 @@ export class DraftPages {
 
   private open() {
     if (this.helper && !this.helper.win.isDestroyed()) return this.helper;
-    const win = new BrowserWindow({
-      show: false,
-      width: 1,
-      height: 1,
-      skipTaskbar: true,
-      webPreferences: {
-        preload: join(__dirname, "preload.cjs"),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-        // Hidden pages are throttled; a send waits on nothing.
-        backgroundThrottling: false,
-      },
-    });
-    win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    win.webContents.on("will-navigate", (e) => e.preventDefault());
+    const win = hiddenPage();
     win.on("closed", () => {
       if (this.helper?.win === win) this.helper = undefined;
     });

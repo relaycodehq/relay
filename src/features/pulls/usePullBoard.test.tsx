@@ -11,7 +11,8 @@ import {
 } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { useReviewProgress } from "../review/useReviewProgress";
-import { usePullBoard } from "./usePullBoard";
+import { PULL_BOARD, usePullBoard } from "./usePullBoard";
+import type { Project } from "../../../shared/projects";
 
 vi.mock("../../lib/api", () => ({
   api: {
@@ -19,6 +20,7 @@ vi.mock("../../lib/api", () => ({
     reviews: vi.fn(),
     progress: vi.fn(),
     saveProgress: vi.fn(),
+    projectPulls: vi.fn(),
   },
 }));
 (
@@ -46,6 +48,171 @@ const issue = (author: string): Issue => ({
   updated_at: "2026-10-13T10:00:00Z",
   labels: [],
   pull_request: { merged: false },
+});
+
+async function observe(hosts: Account[], projects: Project[] = []) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const root = createRoot(document.createElement("div"));
+  let current!: ReturnType<typeof usePullBoard>;
+  function Probe() {
+    current = usePullBoard(hosts, projects, "open");
+    return null;
+  }
+  await act(async () =>
+    root.render(
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>,
+    ),
+  );
+  return {
+    client,
+    get current() {
+      return current;
+    },
+    async close() {
+      await act(async () => root.unmount());
+      client.clear();
+    },
+  };
+}
+
+it("shows a healthy host while another is pending, then retries only the failed host", async () => {
+  const github: Account = {
+    ...account,
+    id: "github",
+    server: "https://github.com",
+  };
+  let refuse!: (error: Error) => void;
+  const held = new Promise<never>((_, reject) => {
+    refuse = reject;
+  });
+  let recovered = false;
+  vi.mocked(api.search).mockImplementation(
+    async (filter, _q, _state, _page, server) => {
+      if (server === account.server && !recovered) return held;
+      return {
+        items:
+          filter === "assigned"
+            ? [
+                {
+                  ...issue("someone"),
+                  number: server === github.server ? 7 : 8,
+                },
+              ]
+            : [],
+        nextPage: null,
+      };
+    },
+  );
+  const view = await observe([account, github]);
+  try {
+    await vi.waitFor(async () => {
+      await tick();
+      expect(view.current.board.pulls).toHaveLength(1);
+    });
+    expect(view.current.loading).toBe(false);
+    expect(view.current.pending).toEqual([account.server]);
+    await act(async () => refuse(new Error("Network unavailable")));
+    await vi.waitFor(async () => {
+      await tick();
+      expect(view.current.failures).toEqual([
+        { server: account.server, error: expect.any(Error) },
+      ]);
+    });
+    expect(view.current.board.pulls).toHaveLength(1);
+    recovered = true;
+    await act(async () => view.current.retry(account.server));
+    await vi.waitFor(async () => {
+      await tick();
+      expect(view.current.board.pulls).toHaveLength(2);
+      expect(view.current.pending).toEqual([]);
+      expect(view.current.failures).toEqual([]);
+    });
+    expect(
+      vi
+        .mocked(api.search)
+        .mock.calls.filter((call) => call[4] === github.server),
+    ).toHaveLength(3);
+  } finally {
+    await view.close();
+  }
+});
+
+it("doesn't treat an empty healthy host as an empty board while another is pending", async () => {
+  const github: Account = {
+    ...account,
+    id: "github",
+    server: "https://github.com",
+  };
+  vi.mocked(api.search).mockImplementation(
+    async (_filter, _q, _state, _page, server) =>
+      server === github.server
+        ? { items: [], nextPage: null }
+        : new Promise(() => {}),
+  );
+  const view = await observe([account, github]);
+  try {
+    await tick();
+    expect(view.current.pending).toEqual([account.server]);
+    expect(view.current.loading).toBe(true);
+  } finally {
+    await view.close();
+  }
+});
+
+it("keeps a project's listing visible while searches or a failed refresh leave it incomplete", async () => {
+  vi.mocked(api.search).mockImplementation(() => new Promise(() => {}));
+  const branch = { ref: "main", sha: "a".repeat(40), repo: null };
+  vi.mocked(api.projectPulls).mockResolvedValue({
+    items: [
+      {
+        ...issue("someone"),
+        owner: "team",
+        name: "repo",
+        server: account.server,
+        draft: false,
+        merged: false,
+        pull_request: { merged: false },
+        head: branch,
+        base: branch,
+        merge_base: branch.sha,
+      },
+    ],
+    nextPage: null,
+  });
+  const project: Project = {
+    id: "project",
+    name: "Project",
+    path: "/sample",
+    added: 0,
+    repository: { server: account.server, owner: "team", name: "repo" },
+  };
+  const view = await observe(accounts, [project]);
+  try {
+    await vi.waitFor(async () => {
+      await tick();
+      expect(view.current.board.pulls).toHaveLength(1);
+    });
+    expect(view.current.loading).toBe(false);
+    expect(view.current.pending).toEqual([account.server]);
+    vi.mocked(api.projectPulls).mockRejectedValue(new Error("Offline"));
+    await act(async () => {
+      await view.client.invalidateQueries({
+        queryKey: [PULL_BOARD, "project", project.id],
+      });
+    });
+    await vi.waitFor(async () => {
+      await tick();
+      expect(view.current.failures).toHaveLength(1);
+    });
+    expect(view.current.board.pulls).toHaveLength(1);
+    expect(view.current.loading).toBe(false);
+  } finally {
+    await view.close();
+  }
 });
 const tick = async () =>
   act(async () => {

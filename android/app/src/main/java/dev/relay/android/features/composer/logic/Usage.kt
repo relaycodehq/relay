@@ -16,7 +16,7 @@ import kotlin.math.roundToLong
 // (shared/usage-history.ts); the phone only paces the week by them.
 
 @Serializable
-data class UsageWindow(val kind: String, val usedPercent: Double, val resetsAt: Long? = null, val periodMs: Long)
+data class UsageWindow(val kind: String, val usedPercent: Double, val resetsAt: Long? = null, val periodMs: Long, val id: String? = null, val label: String? = null)
 
 @Serializable
 data class UsageCredits(val balance: Double, val unlimited: Boolean, val messages: List<Double>? = null)
@@ -110,7 +110,7 @@ private fun paceLeft(clock: Clock, start: Long, end: Long, now: Long): Double? {
 fun presentWindow(window: UsageWindow, now: Long, activeHours: List<Double>? = null): UsageMeter {
     val used = clamp(window.usedPercent, 0.0, 100.0)
     val left = clamp((100 - used).roundToInt().toDouble(), 0.0, 100.0).toInt()
-    val label = if (window.kind == "session") "Session" else "Weekly"
+    val label = window.label ?: if (window.kind == "session") "Session" else "Weekly"
     val fresh = window.kind == "session" && window.resetsAt == null && used <= 0
     val resetLabel = when {
         fresh -> "Not started"

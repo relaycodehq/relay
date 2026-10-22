@@ -1,3 +1,4 @@
+import { useNow } from "../../lib/useNow";
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
@@ -20,6 +21,7 @@ import {
   Switch,
 } from "../../ui/SettingsCard";
 import { QrCode } from "./qr/QrCode";
+import { usePoll } from "../../lib/poll";
 
 /**
  * Phone access runs over Tailscale, and over the local network when that's
@@ -28,12 +30,13 @@ import { QrCode } from "./qr/QrCode";
  * phone is paired the steps fold away.
  */
 export function PhoneRemoteSettings() {
+  const poll = usePoll();
   const qc = useQueryClient();
   const state = useQuery({
     queryKey: ["phone-remote"],
     queryFn: () => api.phoneRemoteState(),
     // Notices Tailscale coming up and phones coming and going while Settings is open.
-    refetchInterval: 3000,
+    refetchInterval: poll(3000),
   });
   // `before`: phones paired when the code was made. A new one used the code up.
   const [pairing, setPairing] = useState<
@@ -46,7 +49,7 @@ export function PhoneRemoteSettings() {
   const [copied, copy] = useCopy();
   const [code, setCode] = useState<"tailscale" | "app">();
   const [another, setAnother] = useState(false);
-  const now = useNow(!!pairing);
+  const now = useNow(15000, !!pairing);
   const data = state.data;
   const tailnet = data?.tailnet;
   // Computers that paired to hand threads over have their own list, under Computers.
@@ -379,15 +382,4 @@ function CodePanel({
       <div>{children}</div>
     </div>
   );
-}
-
-function useNow(ticking: boolean) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    if (!ticking) return;
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 15000);
-    return () => clearInterval(timer);
-  }, [ticking]);
-  return now;
 }

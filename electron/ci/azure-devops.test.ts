@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AzureDevOps } from "../pull-requests/azure-devops/client";
 import { azureBuildState, latestAzureBuilds } from "./azure-devops";
 import { Ci, remoteRepo } from "./index";
+import { gitIn } from "../../tests/fixtures/git-repo";
 
 type AzBuild = Parameters<typeof latestAzureBuilds>[0][number];
 
@@ -82,8 +82,7 @@ it("reads a build's status and result as a CI state", () => {
 
 async function clone(remote: string, branch: string) {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-ci-azure-")));
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", root, ...args], { stdio: "pipe" });
+  const git = (...args: string[]) => gitIn(root, ...args);
   git("init", "-q", "-b", branch);
   git("remote", "add", "origin", remote);
   return { root, done: () => rm(root, { recursive: true, force: true }) };

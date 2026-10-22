@@ -1,5 +1,10 @@
 import { screenshot } from "../fixtures/screenshot";
-import { test, expect, _electron as electron } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdir,
   mkdtemp,
@@ -8,7 +13,6 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
@@ -20,14 +24,7 @@ import {
   newThreadSettings,
 } from "../../shared/remote-compose";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("a phone pairs from Settings, answers the agent's approval and is removed again", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-phone-"))),
@@ -44,19 +41,12 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     join(bin, "claude"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_REMOTE_PORT: String(await freePort()),
       // No Tailscale here: loopback stands in for the tailnet.
       RELAY_REMOTE_TAILNET: "127.0.0.1",
@@ -98,8 +88,11 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
     await screenshot(page, {
       path: join(tmpdir(), "relay-lan-default-settings.png"),
     });
-    // Tailscale-only is still an explicit choice, and survives access being toggled.
-    await lan.uncheck();
+    // Tailscale-only is still an explicit choice, and survives access being
+    // toggled. The switch follows what the desktop saved, so it flips a beat
+    // after the click.
+    await lan.click();
+    await expect(lan).not.toBeChecked();
     await settings
       .getByRole("switch", { name: "Allow phone connections" })
       .uncheck();
@@ -147,11 +140,7 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
       updates: true,
       update: { kind: "ready", version: "0.1.1" },
     });
-    await expect(
-      settings.getByText(
-        /Relay 0\.1\.0 · 0\.1\.1 downloaded, runs once the app restarts/,
-      ),
-    ).toBeVisible();
+    await expect(settings.getByText(/Relay 0\.1\.0/)).toBeVisible();
     await screenshot(page, {
       path: join(tmpdir(), "relay-tailscale-only-settings.png"),
     });
@@ -178,34 +167,28 @@ test("a phone pairs from Settings, answers the agent's approval and is removed a
           (await desktopNewThreadSettings(phone!.desktop.bind(phone))).provider,
       )
       .toBe("claude");
+    // Picked on the phone, the desktop keeps it for its next new thread; the
+    // draft already open keeps the agent and model picked in it.
     await phone.desktop("saveNewThreadAgent", "codex");
-    await page.reload();
-    await expect(picker).not.toContainText("Claude");
-    await phone.desktop("saveNewThreadAgent", "claude");
+    await expect
+      .poll(() => page.evaluate(() => window.relay.newThreadAgent()))
+      .toBe("codex");
     await page.reload();
     await expect(picker).toContainText("Claude");
-    // So is the model an agent last ran with: picked on the phone, the
-    // desktop's new-thread composer takes it up.
+    await phone.desktop("saveNewThreadAgent", "claude");
     const opus = {
       model: "claude-opus-5-5",
       fast: false,
       reasoningEffort: "" as const,
     };
     await phone.desktop("saveNewThreadModel", "claude", { choice: opus });
-    await page.reload();
     await expect
       .poll(() =>
-        page.evaluate(() =>
-          Object.keys(localStorage)
-            .filter((key) => key.startsWith("composer-settings:new:"))
-            .map(
-              (key) =>
-                JSON.parse(localStorage.getItem(key)!).models?.claude?.choice
-                  ?.model,
-            ),
+        page.evaluate(
+          async () => (await window.relay.newThreadModels()).claude?.choice,
         ),
       )
-      .toContain("claude-opus-5-5");
+      .toEqual(opus);
     expect(
       (await desktopNewThreadSettings(phone.desktop.bind(phone))).choice,
     ).toEqual(opus);

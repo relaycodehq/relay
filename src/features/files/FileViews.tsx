@@ -1,24 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Copy,
-  ExternalLink,
-  FileQuestion,
-  FolderOpen,
-  ImageOff,
-  LayoutGrid,
-  List,
-} from "lucide-react";
-import {
-  imageMime,
-  type DirEntry,
-  type FileInfo,
-} from "../../../shared/project-files";
+import { Copy, ExternalLink, FileQuestion, FolderOpen } from "lucide-react";
+import { type FileInfo } from "../../../shared/project-files";
 import { api } from "../../lib/api";
-import { formatSize, joinPath } from "../../lib/file-tree";
-import { directoryKey, listingPoll } from "./useFileTree";
+import { formatSize } from "../../lib/file-tree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { EditorPath } from "./EditorPath";
 import { revealLabel } from "../../lib/mod-key";
 import "./file-browser.css";
@@ -79,197 +65,15 @@ export function RevealButtons({
   );
 }
 
-const modified = (mtime: number) =>
-  new Date(mtime).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
-const viewKey = "relay-folder-view";
-
-/** What a folder holds, as a list, or as thumbnails when it's mostly pictures. */
-export function FolderView({
-  where,
-  dir,
-  title,
-  lead,
-  watched,
-  onOpen,
-}: {
-  where: string;
-  dir: string;
-  /** The project's name, for the root. */
-  title: string;
-  lead?: ReactNode;
-  /** The shell refreshes the folder when it changes (see `listingPoll`). */
-  watched: boolean;
-  onOpen: (path: string, kind: "file" | "dir") => void;
-}) {
-  const [error, setError] = useState<unknown>();
-  const [chosen, setChosen] = useState<"grid" | "list" | null>(() => {
-    const saved = localStorage.getItem(viewKey);
-    return saved === "grid" || saved === "list" ? saved : null;
-  });
-  const listing = useQuery({
-    queryKey: directoryKey(where, dir),
-    queryFn: () => api.projectDirectory(where, dir),
-    refetchInterval: listingPoll(watched),
-    retry: false,
-  });
-  const entries = listing.data?.entries ?? [];
-  const pictures = entries.filter(
-    (e) => e.kind === "file" && imageMime(e.name),
-  );
-  // Without a choice of its own, a folder of screenshots reads better as a grid.
-  const grid =
-    (chosen ??
-      (pictures.length * 2 >= entries.length && pictures.length
-        ? "grid"
-        : "list")) === "grid";
-  const choose = (view: "grid" | "list") => {
-    setChosen(view);
-    localStorage.setItem(viewKey, view);
-  };
-  return (
-    <section className="folder-view" aria-label="Folder">
-      <FileBar
-        lead={lead}
-        path={dir || title}
-        detail={listing.data ? `${entries.length} items` : undefined}
-      >
-        <IconButton label="List" active={!grid} onClick={() => choose("list")}>
-          <List size={15} />
-        </IconButton>
-        <IconButton
-          label="Thumbnails"
-          active={grid}
-          onClick={() => choose("grid")}
-        >
-          <LayoutGrid size={15} />
-        </IconButton>
-        <span className="divider" />
-        <RevealButtons where={where} path={dir} onError={setError} />
-      </FileBar>
-      {!!(error || listing.error) && (
-        <ErrorBox error={error || listing.error} />
-      )}
-      {listing.isLoading ? (
-        <Loading text="Reading the folder…" />
-      ) : entries.length === 0 ? (
-        <div className="empty project-editor-empty">
-          <FolderOpen size={28} />
-          <h2>Empty folder</h2>
-          <p>Create a file from the tree, or drop something into it.</p>
-        </div>
-      ) : grid ? (
-        <div className="folder-grid">
-          {entries.map((entry) => (
-            <GridCard
-              key={entry.name}
-              where={where}
-              dir={dir}
-              entry={entry}
-              onOpen={onOpen}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="folder-list" role="list">
-          {entries.map((entry) => {
-            const path = joinPath(dir, entry.name);
-            return (
-              <button
-                key={entry.name}
-                role="listitem"
-                disabled={entry.kind === "link"}
-                onClick={() =>
-                  onOpen(path, entry.kind === "dir" ? "dir" : "file")
-                }
-              >
-                <FileEntryIcon
-                  path={entry.name}
-                  directory={entry.kind === "dir"}
-                />
-                <span className={entry.ignored ? "ignored" : ""}>
-                  {entry.name}
-                </span>
-                <small>
-                  {entry.kind === "file" ? formatSize(entry.size) : ""}
-                </small>
-                <small>{modified(entry.mtime)}</small>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </section>
-  );
-}
-
-function GridCard({
-  where,
-  dir,
-  entry,
-  onOpen,
-}: {
-  where: string;
-  dir: string;
-  entry: DirEntry;
-  onOpen: (path: string, kind: "file" | "dir") => void;
-}) {
-  const path = joinPath(dir, entry.name);
-  const picture = entry.kind === "file" && !!imageMime(entry.name);
-  const card = useRef<HTMLButtonElement>(null);
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    if (!picture || !card.current) return;
-    const observer = new IntersectionObserver(
-      (seen) => {
-        if (!seen[0]?.isIntersecting) return;
-        observer.disconnect();
-        setNear(true);
-      },
-      { rootMargin: "200px" },
-    );
-    observer.observe(card.current);
-    return () => observer.disconnect();
-  }, [picture]);
-  const thumbnail = useQuery({
-    queryKey: ["project-thumbnail", where, path, entry.mtime],
-    queryFn: () => api.projectThumbnail(where, path),
-    enabled: near,
-    staleTime: Infinity,
-    retry: false,
-  });
-  return (
-    <button
-      ref={card}
-      className={`folder-card ${entry.ignored ? "ignored" : ""}`}
-      disabled={entry.kind === "link"}
-      title={entry.name}
-      onClick={() => onOpen(path, entry.kind === "dir" ? "dir" : "file")}
-    >
-      <span className="folder-card-preview">
-        {thumbnail.data ? (
-          <img src={thumbnail.data} alt="" loading="lazy" />
-        ) : thumbnail.isError ? (
-          <ImageOff size={22} />
-        ) : (
-          <FileEntryIcon path={entry.name} directory={entry.kind === "dir"} />
-        )}
-      </span>
-      <span className="folder-card-name">{entry.name}</span>
-    </button>
-  );
-}
-
 /** A picture in the file's own place, on a checkerboard so transparency shows. */
 export function ImageFile({
+  active,
   where,
   info,
   lead,
   shownPath = info.path,
 }: {
+  active: boolean;
   where: string;
   info: FileInfo;
   lead?: ReactNode;
@@ -282,6 +86,7 @@ export function ImageFile({
   const image = useQuery({
     queryKey: ["project-image", where, info.path, info.mtime],
     queryFn: () => api.projectImage(where, info.path),
+    enabled: active,
     staleTime: Infinity,
     retry: false,
   });
@@ -339,11 +144,13 @@ export function ImageFile({
 
 /** A video in the file's own place, played as it streams from disk. */
 export function VideoFile({
+  active,
   where,
   info,
   lead,
   shownPath = info.path,
 }: {
+  active: boolean;
   where: string;
   info: FileInfo;
   lead?: ReactNode;
@@ -355,6 +162,7 @@ export function VideoFile({
   const video = useQuery({
     queryKey: ["project-video", where, info.path, info.mtime],
     queryFn: () => api.projectVideo(where, info.path),
+    enabled: active,
     staleTime: Infinity,
     retry: false,
   });

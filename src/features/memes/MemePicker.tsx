@@ -1,13 +1,11 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type RefObject,
-} from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { builtInMemes, memeAgents, memeSetupAgent } from "../../../shared/memes";
+import { usePopupBounds } from "../../lib/usePopupBounds";
+import {
+  builtInMemes,
+  memeAgents,
+  memeSetupAgent,
+} from "../../../shared/memes";
 import { api } from "../../lib/api";
 import { useAgentAccounts } from "../accounts/agent-accounts";
 import { MemePicture } from "./MemePicture";
@@ -148,37 +146,13 @@ export function MemePicker({
   picker: MemePickerState;
   input: RefObject<HTMLElement | null>;
 }) {
-  const [style, setStyle] = useState<CSSProperties>({});
   const { visible } = picker;
   const height = picker.mode === "setup" ? OFFER_HEIGHT : HEIGHT;
-  useLayoutEffect(() => {
-    if (!visible) return;
-    function measure() {
-      const form = (
-        input.current?.closest("form") ?? input.current
-      )?.getBoundingClientRect();
-      if (!form) return;
-      const width = Math.min(form.width, innerWidth - 24);
-      const above = form.top > height + 16;
-      setStyle({
-        left: Math.max(12, Math.min(form.left, innerWidth - width - 12)),
-        width,
-        ...(above
-          ? { bottom: innerHeight - form.top + 6 }
-          : { top: form.bottom + 6 }),
-        maxHeight: above
-          ? Math.min(HEIGHT, form.top - 20)
-          : Math.min(HEIGHT, innerHeight - form.bottom - 18),
-      });
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [visible, input, height]);
+  const style = usePopupBounds(
+    visible,
+    () => input.current?.closest("form") ?? input.current,
+    height,
+  );
   if (!visible) return null;
   return createPortal(
     <div

@@ -9,7 +9,6 @@ import {
 } from "./project";
 import {
   modelName,
-  runningBatch,
   subagentFanOuts,
   type SubagentRun,
 } from "../../../shared/subagents";
@@ -237,7 +236,7 @@ it("ignores background commands and ends what's left when the session does", () 
   expect(agents.list()[0]!.status).toBe("stopped");
 });
 
-it("counts every agent since the first of a fan-out, and resets after it", () => {
+it("keeps the latest fan-out and groups earlier overlapping agents", () => {
   const run = (id: string, started: number, ended?: number): SubagentRun => ({
     id,
     description: id,
@@ -247,15 +246,6 @@ it("counts every agent since the first of a fan-out, and resets after it", () =>
     calls: 0,
     recent: [],
   });
-  // One back, one still going, one started while it went: all one fan-out.
-  const runs = [run("a", 0, 50), run("b", 10), run("c", 60)];
-  expect(runningBatch(runs, 100).map((r) => r.id)).toEqual(["a", "b", "c"]);
-  // All back: nothing to show.
-  expect(runningBatch([run("a", 0, 50), run("b", 10, 90)], 100)).toEqual([]);
-  // A later fan-out starts from nothing.
-  expect(
-    runningBatch([run("a", 0, 50), run("b", 70)], 100).map((r) => r.id),
-  ).toEqual(["b"]);
   // The desktop keeps the latest fan-out once it's back; older ones fold away.
   const fanOuts = subagentFanOuts(
     [run("a", 0, 50), run("b", 60, 70), run("c", 65, 80), run("d", 90, 95)],

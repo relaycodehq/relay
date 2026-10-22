@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, readFile, rename, rm, utimes } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rename,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setFlagsFromString } from "node:v8";
@@ -341,4 +349,118 @@ it("derives open questions from messages, clearing the flag after answers or dis
   delete chat.messages[0].questions![0].dismissed;
   chat.messages[0].questions![0].answers = { q: ["This"] };
   expect(chatSummary(chat).asking).toBeUndefined();
+});
+
+const chatsFile = (chat: ProjectChat, live = false) =>
+  join(root, "chats", chat.id + (live ? ".live.json" : ".json"));
+const exists = (path: string) =>
+  readFile(path).then(
+    () => true,
+    () => false,
+  );
+
+it("checkpoints a streaming answer beside the thread, and a restart reads it back over the thread", async () => {
+  const chat = thread();
+  const earlier = {
+    ...answer("x".repeat(50_000)),
+    status: "complete" as const,
+  };
+  const streaming = answer("Start");
+  chat.messages = [earlier, streaming];
+  await storage.add(chat);
+  const full = await readFile(chatsFile(chat), "utf8");
+
+  streaming.body = "Start, then more";
+  streaming.version++;
+  chat.updated = 2;
+  await storage.checkpoint(chat);
+
+  expect(await readFile(chatsFile(chat), "utf8")).toBe(full);
+  const live = JSON.parse(await readFile(chatsFile(chat, true), "utf8"));
+  expect(live.messages.map((m: ChatMessage) => m.id)).toEqual([streaming.id]);
+  expect(live.chat.updated).toBe(2);
+
+  await store.flush();
+  await open();
+  const back = await storage.load(chat.id);
+  expect(back.messages.map((m) => m.body)).toEqual([
+    earlier.body,
+    "Start, then more",
+  ]);
+  expect(back.updated).toBe(2);
+  expect("rev" in back).toBe(false);
+});
+
+it("keeps a steer's move of the answer: the new answer below it, the read steer, and the one above dropped", async () => {
+  const chat = thread();
+  const prompt = { ...answer("Do it"), role: "user" as const };
+  const above = answer("");
+  const steer = { ...answer("Actually, this"), role: "user" as const };
+  steer.unread = true;
+  chat.messages = [prompt, above, steer];
+  await storage.add(chat);
+
+  delete steer.unread;
+  steer.version++;
+  chat.messages.splice(chat.messages.indexOf(above), 1);
+  const below = answer("On it");
+  chat.messages.push(below);
+  await storage.checkpoint(chat);
+
+  await open();
+  const back = await storage.load(chat.id);
+  expect(back.messages.map((m) => m.id)).toEqual([
+    prompt.id,
+    steer.id,
+    below.id,
+  ]);
+  expect(back.messages[1]!.unread).toBeUndefined();
+});
+
+it("drops the checkpoint once the thread is saved whole, and ignores one written over an older save", async () => {
+  const chat = thread();
+  const streaming = answer("Start");
+  const earlier = { ...answer("x".repeat(50_000)), status: "complete" as const };
+  chat.messages = [earlier, streaming];
+  await storage.add(chat);
+  streaming.body = "Checkpointed";
+  streaming.version++;
+  await storage.checkpoint(chat);
+  const stale = await readFile(chatsFile(chat, true), "utf8");
+
+  streaming.body = "Finished";
+  streaming.status = "complete";
+  streaming.version++;
+  await storage.save(chat);
+  expect(await exists(chatsFile(chat, true))).toBe(false);
+
+  // A crash between the full write and removing the checkpoint leaves it behind.
+  await writeFile(chatsFile(chat, true), stale);
+  await open();
+  expect((await storage.load(chat.id)).messages[1]!.body).toBe("Finished");
+});
+
+it("saves the thread whole when there's no saved file to build on, or the turn changed most of it", async () => {
+  const chat = thread();
+  const streaming = answer("Start");
+  chat.messages = [streaming];
+  await storage.add(chat);
+  // A file from before checkpoints has no mark to build on.
+  const file = JSON.parse(await readFile(chatsFile(chat), "utf8"));
+  delete file.rev;
+  await writeFile(chatsFile(chat), JSON.stringify(file));
+  await open();
+  const loaded = await storage.load(chat.id);
+  loaded.messages[0]!.body = "Whole";
+  loaded.messages[0]!.version++;
+  await storage.checkpoint(loaded);
+  expect(await exists(chatsFile(chat, true))).toBe(false);
+  expect(await readFile(chatsFile(chat), "utf8")).toContain("Whole");
+
+  // The answer is most of this thread: a checkpoint would be as big as the file.
+  loaded.messages[0]!.body = "y".repeat(10_000);
+  loaded.messages[0]!.version++;
+  await storage.checkpoint(loaded);
+  expect(await exists(chatsFile(chat, true))).toBe(false);
+  expect(await readFile(chatsFile(chat), "utf8")).toContain("y".repeat(10_000));
 });

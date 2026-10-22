@@ -1,6 +1,6 @@
 import { currentFilePicker } from "../fixtures/current-file";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,13 +9,8 @@ import { fixtureServer } from "../fixtures/gitea";
 test("Gitea single line comments read in the conversation, in order", async () => {
   const fixture = await fixtureServer({ singleComments: true });
   const dataDir = await mkdtemp(join(tmpdir(), "relay-conversation-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: dataDir },
   });
   try {

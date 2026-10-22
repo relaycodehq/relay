@@ -1,4 +1,4 @@
-import { appendFile, readFile, writeFile } from "node:fs/promises";
+import { JsonLines } from "../util/json-lines";
 import type {
   WatchSpend,
   WatchSpendSummary,
@@ -16,20 +16,20 @@ const KEEP_DAYS = 30;
  * so Settings can say what it costs next to what the threads cost.
  */
 export class WatchSpendLog {
-  private entries?: Promise<Entry[]>;
+  private initialized?: Promise<void>;
+  private records: JsonLines<Entry>;
   private writing = Promise.resolve();
 
-  constructor(private path: string) {}
+  constructor(path: string) {
+    this.records = new JsonLines(path);
+  }
 
   add(chatId: string, spend: WatchSpend) {
     const entry: Entry = { ...spend, at: Date.now(), chatId };
     // After the first load, which may rewrite the file without old entries.
     this.writing = this.writing
       .then(() => this.load())
-      .then((all) => {
-        all.push(entry);
-        return appendFile(this.path, `${JSON.stringify(entry)}\n`);
-      })
+      .then(() => this.records.append(entry))
       .catch((e) => console.warn("Could not log what a side check spent:", e));
   }
 
@@ -37,6 +37,7 @@ export class WatchSpendLog {
     days: number,
     titleOf: (chatId: string) => string | undefined,
   ): Promise<WatchSpendSummary> {
+    await this.writing;
     const since = Date.now() - days * DAY;
     const recent = (await this.load()).filter((e) => e.at >= since);
     const threads = new Map<string, WatchSpendThread>();
@@ -87,31 +88,14 @@ export class WatchSpendLog {
     };
   }
 
-  private load() {
-    this.entries ??= readFile(this.path, "utf8")
-      .then(async (text) => {
-        const since = Date.now() - KEEP_DAYS * DAY;
-        const lines = text.split("\n").filter(Boolean);
-        const kept = lines.flatMap((line) => {
-          try {
-            const entry = JSON.parse(line) as Entry;
-            return entry.at >= since ? [entry] : [];
-          } catch {
-            return [];
-          }
-        });
-        if (kept.length < lines.length)
-          await writeFile(
-            this.path,
-            kept.map((e) => `${JSON.stringify(e)}\n`).join(""),
-          );
-        return kept;
-      })
-      .catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== "ENOENT")
-          console.warn("Could not read what side checks spent:", error);
-        return [];
+  private async load() {
+    this.initialized ??= this.records
+      .retain((entry) => entry.at >= Date.now() - KEEP_DAYS * DAY)
+      .catch((error) => {
+        this.initialized = undefined;
+        throw error;
       });
-    return this.entries;
+    await this.initialized;
+    return this.records.read();
   }
 }

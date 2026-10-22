@@ -370,3 +370,30 @@ it("shows only a submodule's missing contents as binary, not any 404", async () 
     azure.contentsAt(p, { ...changed, submodule: true }),
   ).resolves.toMatchObject({ old: { contents: "" }, next: { contents: "" } });
 });
+
+it("accepts a raw text success without treating it as a sign-in page", async () => {
+  const rejected = vi.fn(() => true);
+  const refused = vi.fn();
+  const azure = new AzureDevOps(
+    { id: server, server, user: { id: 1, login: "me" }, persistent: true },
+    "me-id",
+    async () => ({ header: "Bearer sample", rejected }),
+    async (_url, init) => {
+      expect(new Headers(init.headers).get("authorization")).toBe(
+        "Bearer sample",
+      );
+      expect(new Headers(init.headers).get("accept")).toBe(
+        "application/octet-stream",
+      );
+      return new Response("raw source", {
+        headers: { "content-type": "text/plain" },
+      });
+    },
+    refused,
+  );
+  expect((await azure.request(`${server}/file`, { raw: true })).data).toBe(
+    "raw source",
+  );
+  expect(rejected).not.toHaveBeenCalled();
+  expect(refused).not.toHaveBeenCalled();
+});

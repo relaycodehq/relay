@@ -12,6 +12,8 @@ import {
   localVideoPath,
 } from "../../../shared/answer-images";
 import { stoppedNote } from "../../../shared/agent-trace";
+import { agentError } from "../../../shared/agent-error";
+import { OpenCodeSignIn } from "../agent-settings/OpenCodeSignIn";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { parseContextReport } from "../../../shared/context-report";
 import { WatchNotes } from "../watch/WatchNotes";
@@ -25,6 +27,7 @@ import { api } from "../../lib/api";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import { AgentTurn, type TurnPresentation } from "../agent-turn/AgentTurn";
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
+import { ImportOfferCard } from "../import-offer/ImportOfferCard";
 import { HtmlRenders, type RenderCompose } from "../html-render/HtmlRenders";
 import { TurnPreview } from "../browser/TurnPreview";
 import { AgentError } from "../agents/AgentError";
@@ -54,6 +57,7 @@ import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { signInOffer } from "./sign-in-offer";
 import { TipPeek } from "../tips/TipPeek";
 import { LineDivider } from "../../ui/LineDivider";
+import type { QuestionResponse } from "./question-responses";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -151,12 +155,15 @@ export const Message = memo(function Message({
   onChanges,
   onTurnDiff,
   onRewind,
+  onCommit,
   projectRoot,
   onOpenFile,
   replyCount = 0,
   inlineCode,
   after,
   onSignIn,
+  onResume,
+  resumeDisabled,
   onSteer,
   onCompose,
   onRerunSetup,
@@ -164,7 +171,9 @@ export const Message = memo(function Message({
   answerMessages,
   continuation,
   continues,
-  activity,
+  response,
+  responseExpanded,
+  onToggleResponse,
 }: {
   message: ChatMessage;
   chatId: string;
@@ -179,6 +188,8 @@ export const Message = memo(function Message({
     mode: "revert" | "redo",
     force: boolean,
   ) => Promise<{ conflicts: string[] }>;
+  /** Commits what the turn changed; absent where there's no Git to commit to. */
+  onCommit?: (m: ChatMessage) => void;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   replyCount?: number;
@@ -188,6 +199,9 @@ export const Message = memo(function Message({
   after?: ReactNode;
   /** Offered when this turn failed on its agent's missing or expired login. */
   onSignIn?: (provider: AgentProvider) => Promise<boolean>;
+  /** Manual recovery for the thread's latest resumable connection failure. */
+  onResume?: () => void;
+  resumeDisabled?: boolean;
   /** Puts a message for the agent in the composer, from a watch note. */
   onSteer?: (text: string) => void;
   /** Puts what a page in the answer composed in the composer that shows. */
@@ -201,8 +215,24 @@ export const Message = memo(function Message({
   /** A question-linked follow-up shares the first part's header and activity heading. */
   continuation?: boolean;
   continues?: boolean;
-  activity?: TurnPresentation;
+  response?: QuestionResponse;
+  responseExpanded?: boolean;
+  onToggleResponse?: (id: string, expanded: boolean) => void;
 }) {
+  const activity = useMemo<TurnPresentation | undefined>(
+    () =>
+      response && {
+        summary: continuation ? undefined : response.summary,
+        elapsed: response.elapsed,
+        waiting: response.waiting,
+        expanded:
+          responseExpanded ??
+          (response.waiting || response.summary.status === "streaming"),
+        onToggle: (expanded) =>
+          onToggleResponse?.(response.parts[0]!.id, expanded),
+      },
+    [response, continuation, responseExpanded, onToggleResponse],
+  );
   /** The key of the image open in the viewer. */
   const [viewing, setViewing] = useState<string>();
   // The answer's own images show in its text; the strip keeps the rest.
@@ -243,10 +273,19 @@ export const Message = memo(function Message({
   }, [m.role, m.body]);
   // A message of only attachments leaves just the agent mention, or its
   // screenshots' tokens, behind; the images below say it all.
+  const failure = m.error ? agentError(m.error) : undefined;
+  // A saved synthetic API notice belongs in the error's details. Only an
+  // exact duplicate is hidden; real answer text and the saved body stay intact.
+  const errorBody =
+    m.status === "failed" &&
+    failure?.connectionFailed &&
+    parsed.body?.trim() === failure.details;
   const said =
     m.role === "user"
       ? parsed.body?.replace(agentMentionPattern, "")
-      : parsed.body;
+      : errorBody
+        ? ""
+        : parsed.body;
   const text = m.role === "user" && said && onlyImageTokens(said) ? "" : said;
   const memes = useSentMemes(m.role === "user" ? text : undefined);
   const images = useWorkingImages(allImages, viewing);
@@ -480,6 +519,14 @@ export const Message = memo(function Message({
           answer
         )
       ) : null}
+      {chatId && m.importOffer && (
+        <ImportOfferCard
+          chatId={chatId}
+          messageId={m.id}
+          offer={m.importOffer}
+          running={m.status === "streaming"}
+        />
+      )}
       {chatId && m.preview && m.status !== "streaming" && (
         <TurnPreview chatId={chatId} messageId={m.id} preview={m.preview} />
       )}
@@ -517,6 +564,7 @@ export const Message = memo(function Message({
               ? (paths, mode, force) => onRewind(m, paths, mode, force)
               : undefined
           }
+          onCommit={chatId && onCommit ? () => onCommit(m) : undefined}
         />
       )}
       {m.role === "assistant" && strip}
@@ -542,9 +590,23 @@ export const Message = memo(function Message({
           {stoppedNote(m)}
         </p>
       )}
-      {m.error && m.status !== "cancelled" && <AgentError error={m.error} />}
-      {onSignIn && m.signIn && (
-        <SignIn provider={m.signIn} onSignIn={onSignIn} />
+      {m.error && m.status !== "cancelled" && (
+        <AgentError
+          error={m.error}
+          interrupted={
+            !!(
+              text?.trim() ||
+              m.activity?.length ||
+              m.trace?.length ||
+              m.changes?.length
+            )
+          }
+          onRetry={onResume}
+          retryDisabled={resumeDisabled}
+        />
+      )}
+      {onSignIn && (m.signIn || (m.provider === "opencode" && m.error && agentError(m.error).authenticationRequired)) && (
+        <SignIn provider={m.signIn ?? m.provider} directory={projectRoot} onSignIn={onSignIn} />
       )}
       {m.role === "assistant" && !continues && (
         <MessageActions
@@ -564,16 +626,20 @@ export const Message = memo(function Message({
 });
 function SignIn({
   provider,
+  directory,
   onSignIn,
 }: {
   provider: AgentProvider;
+  directory?: string;
   onSignIn: (provider: AgentProvider) => Promise<boolean>;
 }) {
   const offer = signInOffer(provider);
+  const [openCode, setOpenCode] = useState(false);
   const [state, setState] = useState<"idle" | "waiting" | "busy" | "failed">(
     "idle",
   );
   const start = () => {
+    if (provider === "opencode") { setOpenCode(true); return; }
     setState("waiting");
     onSignIn(provider).then(
       (typed) => setState(typed ? "idle" : "busy"),
@@ -582,6 +648,7 @@ function SignIn({
   };
   return (
     <div className="agent-sign-in">
+      {openCode && <OpenCodeSignIn directory={directory} onClose={() => setOpenCode(false)} />}
       <button
         className="text-button"
         disabled={state === "waiting" && offer.via === "relay"}

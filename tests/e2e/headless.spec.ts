@@ -1,28 +1,21 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { composeSend, newThreadSettings } from "../../shared/remote-compose";
 import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
-
-const freePort = () =>
-  new Promise<number>((done) => {
-    const server = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = server.address() as { port: number };
-      server.close(() => done(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("a headless Relay pairs from the terminal, works for a phone and takes a thread from the desktop and back", async () => {
   test.setTimeout(240_000);
@@ -55,11 +48,7 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
       join(bin, cli),
       await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
     );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const headlessEnv = {
     ...env,
     ...pathWith(env, bin),
@@ -93,7 +82,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     expect(status.status).toMatchObject({
       name: "Mini",
       version: "9.9.9",
-      remote: { listening: true, hosts: ["127.0.0.1"] },
+      // Its tailnet stand-in, after any address on the local network.
+      remote: { listening: true, hosts: expect.arrayContaining(["127.0.0.1"]) },
     });
 
     // A phone pairs with the code `relay pair` shows, and starts a thread there.
@@ -148,13 +138,10 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
 
     // The laptop runs the desktop app and pairs with a second code.
     const laptop = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: join(root, "data-laptop"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
         RELAY_REMOTE_PORT: String(await freePort()),
         RELAY_REMOTE_TAILNET: "127.0.0.1",
       },
@@ -187,17 +174,14 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     await page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
-    const settings = page.getByRole("region", {
-      name: "Settings",
-      exact: true,
-    });
-    await settings.getByLabel("Pairing link").fill(forLaptop.url);
-    await settings.getByRole("button", { name: "Pair", exact: true }).click();
-    await expect(
-      settings
-        .getByRole("group", { name: "Your computers" })
-        .getByRole("button", { name: /Connected/ }),
-    ).toBeVisible({ timeout: 20_000 });
+    const pick = page.getByRole("dialog", { name: "Choose a computer" });
+    await pick.getByLabel("Computer", { exact: true }).fill(forLaptop.url);
+    await pick.getByRole("button", { name: "Check", exact: true }).click();
+    await pick
+      .getByRole("button", { name: "Use Mini", exact: true })
+      .click({ timeout: 20_000 });
+    await expect(pick).toBeHidden();
+    // Picking it opens the hand-off menu; it opens again below.
     await page.keyboard.press("Escape");
     expect(relay("devices")).toMatch(/Test phone[\s\S]*computer/);
 
@@ -206,10 +190,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
     await page.getByRole("menuitem", { name: /Continues in Mini/ }).click();
-    const strip = page.locator(".handoff-strip");
-    await expect(strip).toContainText(/finished|Working on/, {
-      timeout: 60_000,
-    });
+    const live = page.locator(".handoff-live");
+    await expect(live).toContainText("Running on Mini", { timeout: 60_000 });
     await screenshot(page, { path: "test-results/headless-handoff-away.png" });
     type Row = { id: string; title: string; computer?: string };
     let arrived: Row | undefined;
@@ -231,9 +213,8 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     ).toBe("export const guard = true;\n");
 
     // And back again, with the headless Relay's handoff note.
-    await expect(strip).toContainText("finished", { timeout: 60_000 });
-    await strip.getByRole("button", { name: "Bring back" }).click();
-    await expect(strip).toBeHidden({ timeout: 60_000 });
+    await live.getByRole("button", { name: "Bring back" }).click();
+    await expect(live).toBeHidden({ timeout: 60_000 });
     await expect(page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(page, { path: "test-results/headless-handoff-back.png" });
 

@@ -1,0 +1,3 @@
+{"t":0,"meta":{"agent":"opencode","version":"opencode v2.0.32","args":["api","GET","/api/info"],"cwd":"/tmp/replay/relay"}}
+{"t":224,"dir":"in","line":"{\"version\":\"2.0.32\",\"pid\":82156,\"urls\":[\"http://127.0.0.1:58931\"],\"paths\":{\"tmp\":\"/tmp/replay-temp\"},\"capabilities\":{\"persistentPty\":true}}"}
+{"t":230,"exit":{"code":0,"signal":null,"afterStdin":false}}

@@ -7,7 +7,6 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { execFileSync } from "node:child_process";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -18,14 +17,17 @@ import { ProjectChats } from "./index";
 import { findExecutable } from "../platform/executables";
 import { defaultAISettings } from "../../shared/settings";
 import { shellQuote } from "../../shared/validation";
-import type { ChatMessage, ProjectSettings } from "../../shared/projects";
+import type {
+  ChatMessage,
+  ProjectChat,
+  ProjectSettings,
+} from "../../shared/projects";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
-import { freePortOffset } from "./worktree-setup";
+import type { ChatCore } from "./core";
+import { WorktreeSetup, freePortOffset } from "./worktree-setup";
+import { gitIn, initRepo } from "../../tests/fixtures/git-repo";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];
@@ -54,11 +56,8 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-setup-")));
   repo = join(root, "repo");
   await mkdir(repo);
-  const git = (...args: string[]) =>
-    execFileSync("git", ["-C", repo, ...args], { stdio: "pipe" });
-  git("init", "-q", "-b", "main");
-  git("config", "user.name", "Test");
-  git("config", "user.email", "test@example.invalid");
+  const git = (...args: string[]) => gitIn(repo, ...args);
+  initRepo(repo);
   await writeFile(join(repo, ".gitignore"), ".env\n");
   await writeFile(join(repo, ".worktreeinclude"), ".env\n");
   git("add", ".");
@@ -102,6 +101,7 @@ const answered = (id: string, count: number) =>
     expect(messages).toHaveLength(count);
     expect(messages.at(-1)?.status).toBe("complete");
     expect(messages.at(-1)?.worktreeCommand).toBeUndefined();
+    expect(chats.list(projectId).find((c) => c.id === id)?.running).toBeFalsy();
   });
 const turns = async () =>
   (await readFile(join(root, "capture.jsonl"), "utf8"))
@@ -173,8 +173,11 @@ it("runs a failed setup again in its row, and the agent hears it passed", async 
   );
   // Same row, no new one.
   expect((await chats.get(chat.id)).messages).toHaveLength(3);
-  await expect(chats.rerunWorktreeSetup(chat.id, setup.id)).rejects.toThrow(
-    "already went through",
+  // The row ends a moment before the run lets go of the folder.
+  await vi.waitFor(() =>
+    expect(chats.rerunWorktreeSetup(chat.id, setup.id)).rejects.toThrow(
+      "already went through",
+    ),
   );
 
   await chats.send(chat.id, input("@codex Try again"));
@@ -285,4 +288,67 @@ it("stopping the turn during setup stops setup, and no answer starts", async () 
   const { messages } = await chats.get(chat.id);
   expect(messages).toHaveLength(2);
   expect(messages[1]!.worktreeCommand!.stopped).toBe("cancelled");
+});
+
+it("runs a shared folder's setup once, and the other thread's turn waits for it", async () => {
+  const folder = join(root, "shared");
+  await mkdir(folder);
+  const thread = (id: string, setup: "pending" | "done"): ProjectChat => ({
+    id,
+    projectId,
+    title: id,
+    scope: { kind: "project" },
+    created: 1,
+    updated: 1,
+    messages: [],
+    worktree: { path: folder, branch: "feature", setup },
+  });
+  let threads: ProjectChat[] = [];
+  const setup = new WorktreeSetup({
+    projects: {
+      get: () => ({
+        settings: {
+          worktreeSetup:
+            "echo run >> runs; while [ ! -e gate ]; do sleep 0.02; done",
+        },
+      }),
+      root: async () => repo,
+    },
+    store: { get: () => ({ chats: threads }) },
+    storage: {
+      load: async (id: string) => threads.find((c) => c.id === id)!,
+      save: async () => {},
+    },
+    emit: () => {},
+  } as unknown as ChatCore);
+  const runs = async () =>
+    (await readFile(join(folder, "runs"), "utf8")).trim().split("\n").length;
+  const both = async (first: ProjectChat, second: ProjectChat) => {
+    let secondDone = false;
+    const one = setup.prepare(first, "codex");
+    await fileSignal(join(folder, "runs"));
+    const two = setup.prepare(second, "codex").then(() => (secondDone = true));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(secondDone).toBe(false);
+    await writeFile(join(folder, "gate"), "");
+    await Promise.all([one, two]);
+    expect(await runs()).toBe(1);
+  };
+
+  // The thread that made it is setting it up; the one that joined waits.
+  const owner = thread("owner", "pending");
+  const joiner = thread("joiner", "done");
+  threads = [owner, joiner];
+  await both(owner, joiner);
+
+  // The one that joined sends first: it runs the setup for both.
+  await rm(join(folder, "runs"));
+  await rm(join(folder, "gate"));
+  const late = thread("late", "pending");
+  const early = thread("early", "done");
+  threads = [late, early];
+  await both(early, late);
+  expect(late.worktree?.setup).toBe("done");
+  expect(late.messages).toEqual([]);
+  expect(early.messages).toHaveLength(1);
 });

@@ -1,28 +1,22 @@
 // The rhythm row's third chart: what's left on each account right now, in the
 // page's own columns, and Codex's saved resets with a way to spend one.
 import { useState } from "react";
-import { Popover } from "@base-ui/react/popover";
-import { RefreshCw, RotateCcw } from "lucide-react";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { api } from "../../../lib/api";
-import { errorMessage } from "../../../lib/error-message";
+import { errorMessage } from "../../../../shared/error-message";
 import { HarnessMark } from "../usage-charts";
-import { dayLabel } from "../format";
+import { usagePage } from "../../accounts/usage-page";
 import {
-  attemptAfter,
-  canRefill,
-  expiryWords,
-  firstToLapse,
   isLow,
-  outcomeWords,
-  resetCount,
   roomiest,
   tankWords,
   windowName,
   windowTitle,
-  type RefillAttempt,
   type RoomAccount,
   type RoomTank,
 } from "./room";
+import { expiryWords, resetCount } from "../../agents/saved-resets/saved-resets";
+import { ResetUsage } from "../../agents/saved-resets/ResetUsage";
 import type { Room } from "./useRoom";
 import "./room.css";
 
@@ -68,31 +62,50 @@ export function RoomLeft({ room }: { room: Room }) {
 /** One account's limits, full when nothing's used; the roomiest in the accent. */
 function Tanks({ account: a, lit }: { account: RoomAccount; lit: boolean }) {
   const [hover, setHover] = useState<RoomTank | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const words = hover && tankWords(hover, Date.now());
   return (
     <div className="us-room-account" onMouseLeave={() => setHover(null)}>
       <div className="us-room-tanks">
         {a.tanks.map((t) => (
           <span
-            key={t.window.kind}
+            key={t.window.id ?? t.window.kind}
             className={lit ? "us-room-tank on" : "us-room-tank"}
             role="img"
-            aria-label={`${a.name}, ${windowTitle(t.window.periodMs)}: ${t.meter.leftPercent}% left`}
+            aria-label={`${a.name}, ${t.window.label ?? windowTitle(t.window.periodMs)}: ${t.meter.leftPercent}% left`}
             onMouseEnter={() => setHover(t)}
           >
-            <span style={{ transform: `scaleY(${t.meter.leftPercent / 100})` }} />
+            <span
+              style={{ transform: `scaleY(${t.meter.leftPercent / 100})` }}
+            />
           </span>
         ))}
       </div>
       <div className="us-room-ticks">
         {a.tanks.map((t) => (
-          <span key={t.window.kind}>{windowName(t.window.periodMs)}</span>
+          <span key={t.window.id ?? t.window.kind} title={t.window.label}>
+            {windowName(t.window.periodMs)}
+          </span>
         ))}
       </div>
-      <div className="us-room-name" title={a.name}>
+      <a
+        className="us-room-name"
+        href={usagePage[a.provider]}
+        title={`Open usage page for ${a.name}`}
+        aria-label={`Open usage page for ${a.name}`}
+        onClick={(event) => {
+          event.preventDefault();
+          setError(null);
+          void api.openExternal(usagePage[a.provider]).catch((error) => {
+            setError(errorMessage(error));
+          });
+        }}
+      >
         <HarnessMark id={a.provider} size={11} />
         <span>{a.name}</span>
-      </div>
+        <ExternalLink size={10} className="us-room-external" />
+      </a>
+      {error && <small role="alert">{error}</small>}
       {words && (
         <div className="us-tip us-room-tip" role="status">
           <strong>
@@ -119,110 +132,14 @@ function SavedRow({ account: a, room }: { account: RoomAccount; room: Room }) {
         </span>
         {expiry && <small>{expiry}</small>}
       </span>
-      {canRefill(a) && <Refill account={a} room={room} />}
+      <ResetUsage
+        key={a.id}
+        accountId={a.id}
+        accountName={a.name}
+        resets={resets}
+        low={isLow(a)}
+        onUsage={(usage) => room.put(a.provider, a.id, usage)}
+      />
     </div>
-  );
-}
-
-/** "Refill": quiet while there's room, in the accent once the account is low. */
-function Refill({ account: a, room }: { account: RoomAccount; room: Room }) {
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  // Kept until Codex gives a clear answer: after a failure or an answer Relay
-  // doesn't know, trying again sends the same attempt, which can't spend a
-  // second reset.
-  const [attempt, setAttempt] = useState<RefillAttempt | null>(null);
-  const resets = a.resets!;
-  const credit = firstToLapse(resets);
-  const stays = resets.count - 1;
-  const refill = async () => {
-    const sent = attempt ?? {
-      key: crypto.randomUUID(),
-      creditId: credit?.id ?? null,
-    };
-    setAttempt(sent);
-    setBusy(true);
-    setNote(null);
-    try {
-      const { outcome, usage } = await api.redeemCodexReset(
-        a.id,
-        sent.creditId,
-        sent.key,
-      );
-      setAttempt(attemptAfter(sent, outcome));
-      room.put(a.provider, a.id, usage);
-      const words = outcomeWords(outcome);
-      if (words) setNote(words);
-      else setOpen(false);
-    } catch (error) {
-      setNote(
-        `${errorMessage(error)} Trying again can’t spend a second reset.`,
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <Popover.Root
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (next) setNote(null);
-      }}
-    >
-      <Popover.Trigger
-        type="button"
-        className="us-room-refill"
-        data-low={isLow(a) || undefined}
-      >
-        <RotateCcw size={12} />
-        Refill
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          className="us-room-positioner"
-          side="bottom"
-          align="end"
-          sideOffset={6}
-        >
-          <Popover.Popup
-            className="us-room-ask"
-            aria-label="Use a saved reset"
-            aria-busy={busy || undefined}
-          >
-            <p>
-              Refill {a.name} now? Its limits start fresh
-              {stays > 0
-                ? `, and ${resetCount(stays)} ${stays === 1 ? "stays" : "stay"}.`
-                : "; it’s the last saved one."}
-              {credit?.expiresAt != null && (
-                <small>
-                  Spends the one that runs out {dayLabel(credit.expiresAt)}.
-                </small>
-              )}
-            </p>
-            {note && (
-              <p className="us-room-note" role="alert">
-                {note}
-              </p>
-            )}
-            <div className="us-room-ask-actions">
-              <button
-                type="button"
-                className="primary"
-                disabled={busy}
-                onClick={() => void refill()}
-              >
-                {busy ? "Refilling…" : "Refill now"}
-              </button>
-              <button type="button" onClick={() => setOpen(false)}>
-                Not now
-              </button>
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
   );
 }

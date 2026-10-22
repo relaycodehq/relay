@@ -81,6 +81,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A project on another computer says which, quieter than its name. */
+.project-window-title > .project-window-where {
+  flex-shrink: 2;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .project-titlebar-main > .project-window-title {
   overflow: clip;
   overflow-clip-margin: 6px;

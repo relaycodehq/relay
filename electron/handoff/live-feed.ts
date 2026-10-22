@@ -13,10 +13,13 @@ export interface FeedLink {
   send(deviceId: string, event: RemoteEvent): void;
 }
 
-type FeedChats = Pick<
-  ProjectChats,
-  "handoffOutgoing" | "handoffWritten" | "handoffLive" | "handedOver"
->;
+type FeedChats = {
+  liveHandoff: Pick<
+    ProjectChats["liveHandoff"],
+    "outgoing" | "writtenHere" | "live"
+  >;
+  handoffs: Pick<ProjectChats["handoffs"], "handedOver">;
+};
 
 interface Followed {
   handoffId: string;
@@ -55,8 +58,8 @@ export class LiveFeed {
   /** The computer the thread came from follows it from now on; what it lacks comes back. */
   async follow(chat: ChatSummary, known?: KnownMessages): Promise<HandoffChat> {
     const [messages, live] = await Promise.all([
-      this.chats.handoffWritten(chat.id, known),
-      this.chats.handoffLive(chat.id),
+      this.chats.liveHandoff.writtenHere(chat.id, known),
+      this.chats.liveHandoff.live(chat.id),
     ]);
     // Only from here, or pushes could reach it ahead of the older answer.
     this.followed.set(chat.id, {
@@ -70,8 +73,8 @@ export class LiveFeed {
   message(chatId: string, message: ChatMessage) {
     const entry = this.followed.get(chatId);
     if (!entry || !this.link) return;
-    void this.chats
-      .handoffOutgoing(chatId, message)
+    void this.chats.liveHandoff
+      .outgoing(chatId, message)
       .then((out) => {
         if (out)
           this.push(out.deviceId, {
@@ -108,12 +111,12 @@ export class LiveFeed {
   private async update(chatId: string) {
     const entry = this.followed.get(chatId);
     if (!entry) return;
-    const chat = this.chats.handedOver(entry.handoffId);
+    const chat = this.chats.handoffs.handedOver(entry.handoffId);
     if (!chat || chat.cameFrom?.returnedAt || chat.cameFrom?.abandonedAt) {
       this.followed.delete(chatId);
       return;
     }
-    const live = await this.chats.handoffLive(chatId);
+    const live = await this.chats.liveHandoff.live(chatId);
     const key = liveKey(live);
     if (key === entry.sent) return;
     entry.sent = key;

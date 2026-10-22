@@ -1,18 +1,13 @@
-import { useEffect, useState } from "react";
 import { api } from "./api";
+import { useFlash } from "./useFlash";
 
 /** Copies text, and any HTML version of it, to the clipboard; `copied` says so for a moment afterwards. */
 export function useCopy() {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = window.setTimeout(() => setCopied(false), 1500);
-    return () => window.clearTimeout(timer);
-  }, [copied]);
+  const [copied, setCopied] = useFlash(1500);
   const copy = (text: string, html?: string) =>
     void api.writeClipboard(text, html).then(
       () => setCopied(true),
-      () => setCopied(false),
+      () => setCopied(undefined),
     );
-  return [copied, copy] as const;
+  return [!!copied, copy] as const;
 }

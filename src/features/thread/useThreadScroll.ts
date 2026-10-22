@@ -53,15 +53,36 @@ function placeInView(view: HTMLElement): ReadingPlace | undefined {
       return { id: m.dataset.messageId!, offset: box.top - top };
   }
 }
+/** Lay out the message being positioned before reading its geometry. */
+function layoutAnchor(view: HTMLElement, message: Element) {
+  // A skipped message still has its estimated height. Restoring inside a
+  // tall answer can clamp to it; pinning below a short last answer can leave
+  // it too high. Both need the target's real size before the first paint.
+  const previous = view.querySelector("[data-reading-anchor]");
+  if (previous !== message) {
+    previous?.removeAttribute("data-reading-anchor");
+    message.setAttribute("data-reading-anchor", "");
+  }
+  return message.getBoundingClientRect();
+}
 /** Scrolls a message back to its place in the view; false if it isn't shown. */
 function scrollToPlace(view: HTMLElement, { id, offset }: ReadingPlace) {
   const message = view.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
   if (!message) return false;
-  view.scrollTop +=
-    message.getBoundingClientRect().top -
-    view.getBoundingClientRect().top -
-    offset;
+  const delta =
+    layoutAnchor(view, message).top - view.getBoundingClientRect().top - offset;
+  view.scrollTop += delta;
   return true;
+}
+function pinToBottom(view: HTMLElement) {
+  // Dividers after the answer already have their real height; the last
+  // ordinary message is the one whose skipped layout can move its text.
+  const messages = view.querySelectorAll(
+    ".thread-message-column > .project-message",
+  );
+  const last = messages[messages.length - 1];
+  if (last) layoutAnchor(view, last);
+  view.scrollTop = view.scrollHeight;
 }
 
 export type ThreadScroll = ReturnType<typeof useThreadScroll>;
@@ -131,7 +152,7 @@ export function useThreadScroll({
       follow.current = true;
     }
     returning.current = undefined;
-    if (follow.current) el.scrollTop = el.scrollHeight;
+    if (follow.current) pinToBottom(el);
   }, [messages, rootId, visible]);
   // Up the thread, new messages would push the oldest ones shown out from
   // under the reader: keep showing from the same message until they follow.
@@ -158,7 +179,7 @@ export function useThreadScroll({
     );
     return () => cancelIdleCallback(idle);
   }, [filling, visible]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dock = composerDock.current;
     if (!dock) return;
     // Messages scroll underneath the composer, so they need bottom padding as
@@ -180,6 +201,10 @@ export function useThreadScroll({
         scrolledUp || folding ? Math.max(h, height) : height,
       );
     };
+    // The first paint needs the composer's full space too. Waiting for the
+    // observer would paint the thread at the bottom with no padding, then
+    // move it up a frame later when the measured height reaches React.
+    measure();
     const observer = new ResizeObserver(measure);
     observer.observe(dock);
     dock.addEventListener("transitionend", measure);
@@ -206,8 +231,7 @@ export function useThreadScroll({
   // none, so re-pin once it has. Pinning before it would leave the end of the
   // thread under the composer, and the next scroll event would stop following.
   useLayoutEffect(() => {
-    if (follow.current && scroll.current)
-      scroll.current.scrollTop = scroll.current.scrollHeight;
+    if (follow.current && scroll.current) pinToBottom(scroll.current);
   }, [dockHeight]);
   useEffect(() => {
     const content = column.current;
@@ -230,16 +254,22 @@ export function useThreadScroll({
         changed = true;
       }
       if (!changed) return;
-      if (follow.current) el.scrollTop = el.scrollHeight;
-      else if (returning.current && scrollToPlace(el, returning.current))
-        placed.current = el.scrollTop;
+      if (follow.current) pinToBottom(el);
+      else if (returning.current) {
+        if (scrollToPlace(el, returning.current)) placed.current = el.scrollTop;
+      } else {
+        // Lazy layout can move the messages without another scroll event.
+        // Save where the reader is now, rather than where that event left them.
+        const top = placeInView(el);
+        if (top) readingPlaces.set(place, top);
+      }
     });
     observer.observe(content);
     // Resizing the terminal or window changes the view without changing the
     // messages. Keep following now, before another answer snaps it back.
     if (scroll.current) observer.observe(scroll.current);
     return () => observer.disconnect();
-  }, [isEmpty]);
+  }, [isEmpty, place]);
   function onScroll() {
     const e = scroll.current!;
     const distance = e.scrollHeight - e.scrollTop - e.clientHeight;
@@ -263,6 +293,12 @@ export function useThreadScroll({
     if (held) return;
     // The reader scrolling anywhere else lets the held message go.
     returning.current = undefined;
+    // A programmatic scroll at the bottom must keep its last message laid
+    // out; removing the marker before paint brings its estimate back.
+    if (!follow.current)
+      e.querySelector("[data-reading-anchor]")?.removeAttribute(
+        "data-reading-anchor",
+      );
     if (follow.current) {
       readingPlaces.delete(place);
       return;

@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { fitCase, placeDictation } from "./dictation";
+import { fitCase, fitEnd } from "./dictation";
 
 it("fits the model's capital letter to where the words land", () => {
   expect(fitCase("Fix the test.", "Please ")).toBe("fix the test.");
@@ -11,30 +11,10 @@ it("fits the model's capital letter to where the words land", () => {
   expect(fitCase("CI is red.", "the ")).toBe("CI is red.");
 });
 
-it("spaces words dictated into plain text from what's around them", () => {
-  expect(placeDictation("Please", 6, 6, "Fix the test")).toEqual({
-    text: "Please fix the test",
-    start: 7,
-    end: 19,
-  });
-  expect(placeDictation("Done.then", 5, 5, "check it").text).toBe(
-    "Done. Check it then",
-  );
-  expect(placeDictation("fix it.", 3, 3, "the test").text).toBe(
-    "fix the test it.",
-  );
-  expect(placeDictation("fix\n.", 4, 4, "Tests").text).toBe("fix\nTests.");
-  expect(placeDictation("a  b", 1, 3, "").text).toBe("ab");
-});
-
-it("drops the model's sentence ending in the middle of one", () => {
-  expect(placeDictation("Hello  world", 6, 6, "Shiny.").text).toBe(
-    "Hello shiny world",
-  );
-  expect(placeDictation("Hello new .", 10, 10, "World.").text).toBe(
-    "Hello new world.",
-  );
-  expect(placeDictation("Done.  Ship it", 6, 6, "Test it.").text).toBe(
-    "Done. Test it. Ship it",
-  );
+it("drops sentence endings before the rest of the sentence or existing punctuation", () => {
+  expect(fitEnd("shiny.", " world")).toBe("shiny");
+  expect(fitEnd("world.", " .")).toBe("world");
+  expect(fitEnd("really?!", "! Next")).toBe("really");
+  expect(fitEnd("Test it.", " Ship it")).toBe("Test it.");
+  expect(fitEnd("Done.", "")).toBe("Done.");
 });

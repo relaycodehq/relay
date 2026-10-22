@@ -35,6 +35,7 @@ import { imageQuery, useImageSource, type PreviewImage } from "./ImagePreview";
 import { Spinner } from "../../ui/ui";
 import "./image-viewer.css";
 import { mac, revealLabel } from "../../lib/mod-key";
+import { useFlash } from "../../lib/useFlash";
 
 const mod = mac ? "⌘" : "Ctrl+";
 
@@ -51,17 +52,6 @@ function fileFacts(source: string) {
         ? `${Math.round(bytes / 1024)} KB`
         : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return `${type.toUpperCase()} · ${size}`;
-}
-
-/** Briefly swaps an action's icon for a check once it's done. */
-function useDone() {
-  const [done, setDone] = useState<string>();
-  useEffect(() => {
-    if (!done) return;
-    const timer = setTimeout(() => setDone(undefined), 1200);
-    return () => clearTimeout(timer);
-  }, [done]);
-  return [done, setDone] as const;
 }
 
 /**
@@ -105,7 +95,8 @@ export function ImageViewer({
     /** Pressed beside the picture rather than on it. */
     backdrop: boolean;
   }>(undefined);
-  const [done, setDone] = useDone();
+  // Briefly swaps an action's icon for a check once it's done.
+  const [done, setDone] = useFlash<string>(1200);
   const [failure, setFailure] = useState<string>();
 
   const natural = loaded?.key === image.key ? loaded.size : undefined;

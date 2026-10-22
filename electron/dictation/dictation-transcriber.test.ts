@@ -3,7 +3,9 @@ import {
   joinText,
   quietest,
   Transcriber,
+  withoutRepeat,
   type SpeechEngine,
+  type Word,
 } from "./transcriber";
 
 const rate = 16000;
@@ -17,12 +19,12 @@ function fakeEngine() {
   const engine: SpeechEngine = {
     async decode(samples) {
       decoded.push(samples);
-      const words: string[] = [];
+      const words: Word[] = [];
       for (let at = 0; at + rate / 10 <= samples.length; at += rate / 10) {
         const value = samples[at];
-        if (value > 0.5) words.push(`w${Math.round(value * 10)}`);
+        if (value > 0.5) words.push({ text: `w${Math.round(value * 10)}`, at });
       }
-      return words.join(" ");
+      return { text: words.map((w) => w.text).join(" "), words };
     },
   };
   return { engine, decoded };
@@ -104,7 +106,8 @@ it("settles phrases in order and only ever grows the settled text", async () => 
     await new Promise((resolve) => setTimeout(resolve));
   }
   const text = await transcriber.stop();
-  expect(text).toBe("w7 w7 w7 w7 w8 w8 w8 w8 w9 w9 w9 w9");
+  // Each word said four times in a row comes out once.
+  expect(text).toBe("w7 w8 w9");
   for (let i = 1; i < seen.length; i++)
     expect(seen[i].startsWith(seen[i - 1])).toBe(true);
 });
@@ -169,4 +172,86 @@ it("waits for as much new audio as a slow decode took before decoding again", as
   } finally {
     vi.restoreAllMocks();
   }
+});
+
+/** Speech that never pauses, a new word every 0.1 s: w1, w2… w9 and round again. */
+async function talkNonstop(transcriber: Transcriber, seconds: number) {
+  for (let tenth = 0; tenth < seconds * 10; tenth++) {
+    feed(transcriber, chunk(0.1, 0.51 + (tenth % 9) * 0.05));
+    await new Promise((resolve) => setTimeout(resolve));
+  }
+}
+
+it("settles words two decodes agreed on so a long phrase stops being guessed again", async () => {
+  // Every 0.1 s its own word, named after the sample value.
+  const decoded: Float32Array[] = [];
+  const engine: SpeechEngine = {
+    async decode(samples) {
+      decoded.push(samples);
+      const words: Word[] = [];
+      for (let at = 0; at + rate / 10 <= samples.length; at += rate / 10)
+        if (samples[at + rate / 20] > 0.5)
+          words.push({
+            text: `w${Math.round(samples[at + rate / 20] * 1000)}`,
+            at,
+          });
+      return { text: words.map((w) => w.text).join(" "), words };
+    },
+  };
+  const settled: string[] = [];
+  const transcriber = new Transcriber(engine, (text) => settled.push(text));
+  for (let tenth = 0; tenth < 100; tenth++) {
+    feed(transcriber, chunk(0.1, 0.51 + tenth * 0.004));
+    await new Promise((resolve) => setTimeout(resolve));
+  }
+  // Settled while still talking, and only the unsettled end is decoded again.
+  expect(settled.at(-1)!.split(" ").length).toBeGreaterThan(50);
+  expect(
+    Math.max(...decoded.slice(-5).map((d) => d.length)) / rate,
+  ).toBeLessThan(6);
+  const words = (await transcriber.stop()).split(" ");
+  expect(new Set(words).size).toBe(words.length);
+  expect(words.length).toBeGreaterThanOrEqual(98);
+});
+
+it("keeps a split phrase's words on screen until both halves are decoded again", async () => {
+  const { engine } = fakeEngine();
+  const counts: number[] = [];
+  const transcriber = new Transcriber(
+    engine,
+    (settled, tentative) =>
+      counts.push([settled, tentative].join(" ").trim().split(/\s+/).length),
+    { maxPhrase: 3, settleBehind: 100 },
+  );
+  await talkNonstop(transcriber, 7);
+  for (let i = 1; i < counts.length; i++)
+    expect(counts[i]).toBeGreaterThanOrEqual(counts[i - 1]!);
+  await transcriber.stop();
+});
+
+it("drops the settled words the next phrase hears again, even with its first word clipped", () => {
+  const words = (text: string) =>
+    text.split(" ").map((t, i) => ({ text: t, at: i * rate * 0.2 }));
+  const settled = ["it", "like", "jumps", "between", "the", "whole"];
+  expect(
+    withoutRepeat(words("Ole the whole sentences and"), settled).text,
+  ).toBe("sentences and");
+  expect(withoutRepeat(words("Whole, sentences and"), settled).text).toBe(
+    "sentences and",
+  );
+});
+
+it("keeps the last guess when a decode suddenly hears most of the phrase as nothing", async () => {
+  const { engine } = fakeEngine();
+  const decode = engine.decode;
+  let calls = 0;
+  engine.decode = async (samples) =>
+    ++calls === 4 ? { text: "", words: [] } : decode(samples);
+  const shown: string[] = [];
+  const transcriber = new Transcriber(engine, (_, tentative) =>
+    shown.push(tentative),
+  );
+  await talkNonstop(transcriber, 2);
+  expect(shown.slice(1).every((text) => text.length > 0)).toBe(true);
+  await transcriber.stop();
 });

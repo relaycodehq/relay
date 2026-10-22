@@ -90,3 +90,53 @@ it("refuses folder names that aren't account ids", () => {
   expect(() => profileDir("claude", "../../x")).toThrow();
   expect(() => profileDir("claude", "default")).toThrow();
 });
+
+it("isolates Google credentials while sharing conversations and skills without copying Gemini CLI credentials", async () => {
+  const google = join(dir, "gemini");
+  const native = join(google, "antigravity-acp");
+  await mkdir(native, { recursive: true });
+  await mkdir(join(google, "config", "skills"), { recursive: true });
+  await writeFile(
+    join(native, "settings.json"),
+    JSON.stringify({ auth: { type: "gemini-api-key" }, apiKey: "private" }),
+  );
+  await writeFile(join(native, "acp_token.json"), "private");
+  await writeFile(join(google, "oauth_creds.json"), "Gemini CLI secret");
+  process.env.GEMINI_HOME = google;
+  process.env.GEMINI_API_KEY = "ambient-key";
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = "/ambient/credential";
+  const profile = await prepareProfile("antigravity", "work");
+  expect(
+    JSON.parse(
+      await readFile(join(profile, "antigravity-acp", "settings.json"), "utf8"),
+    ),
+  ).toEqual({ auth: { type: "oauth-personal" } });
+  await expect(
+    lstat(join(profile, "antigravity-acp", "acp_token.json")),
+  ).rejects.toThrow();
+  await expect(lstat(join(profile, "oauth_creds.json"))).rejects.toThrow();
+  expect((await lstat(join(profile, "config"))).isSymbolicLink()).toBe(true);
+  expect(
+    (
+      await lstat(join(profile, "antigravity-acp", "conversations"))
+    ).isSymbolicLink(),
+  ).toBe(true);
+  const env = accountEnv("antigravity", "work");
+  expect(env.GEMINI_HOME).toBe(profile);
+  expect(env.AGY_ACP_FORCE_FILE_STORAGE).toBe("1");
+  expect(env.GEMINI_API_KEY).toBeUndefined();
+  expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBeUndefined();
+  await writeFile(
+    join(profile, "antigravity-acp", "acp_token.json"),
+    "work-token",
+  );
+  await prepareProfile("antigravity", "work");
+  expect(
+    await readFile(join(profile, "antigravity-acp", "acp_token.json"), "utf8"),
+  ).toBe("work-token");
+  await removeProfile("antigravity", "work");
+  expect(await readFile(join(native, "acp_token.json"), "utf8")).toBe(
+    "private",
+  );
+  expect((await lstat(join(native, "conversations"))).isDirectory()).toBe(true);
+});

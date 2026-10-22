@@ -1,7 +1,7 @@
 import { currentFilePicker } from "../fixtures/current-file";
 import { screenshot } from "../fixtures/screenshot";
 import { openSignIn, openInbox, openPull } from "../fixtures/navigation";
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -12,13 +12,8 @@ import { TRIAGE_MODEL, TRIAGE_VERSION } from "../../shared/triage";
 test("group actions keep the sidebar position while explicit file navigation reveals its target", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-group-scroll-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: dataDir },
   });
   try {

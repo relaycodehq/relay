@@ -26,7 +26,10 @@ export function useThreadTerminal({
 >) {
   const key = project ? terminalKey(project.id, chat?.id ?? null) : "";
   const open = useTerminalOpen(key);
-  const blocked = terminalBlocked(chat, scope, draftWorkspace);
+  // A project on another computer opens its shells there, in its folder.
+  const blocked = project?.computer
+    ? undefined
+    : terminalBlocked(chat, scope, draftWorkspace);
   function toggle() {
     if (!project || inbox || blocked) return;
     if (!open)

@@ -18,6 +18,7 @@ import {
   type ModelChoice,
   type ReasoningEffort,
 } from "../../../shared/settings";
+import { isRecord } from "../../../shared/records";
 
 /**
  * The model a composer runs each agent on, one entry per agent in the shape
@@ -147,8 +148,8 @@ export function agentChoice(
 }
 
 /**
- * What a message to `to` runs on, from Codex's `selected` choice, which a
- * message to people takes too. Every agent keeps its own model and effort.
+ * What a message to `to` runs on. Only Codex needs its resolved `selected`
+ * choice; notes have no agent model, and every other agent keeps its own.
  */
 export function messageChoice(
   to: string,
@@ -156,7 +157,8 @@ export function messageChoice(
   selected: ModelChoice | undefined,
   pick: Pick<ReturnType<typeof livePick>, "model" | "reasoningEffort">,
 ): ModelChoice | undefined {
-  if (!selected || !isAgentProvider(to)) return selected;
+  if (!isAgentProvider(to)) return blankChoice;
+  if (to === "codex") return selected;
   return agentChoice(to, models, pick, selected);
 }
 
@@ -164,9 +166,6 @@ export const messageContext = (to: string, models: ComposerModels) => {
   const { contextWindow } = modelOf(models, "claude");
   return to === "claude" && contextWindow ? { contextWindow } : {};
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === "object" && !Array.isArray(value);
 
 function readEffort(provider: AgentProvider, value: unknown): ReasoningEffort {
   // Claude only takes its own levels; the rest are Codex's.

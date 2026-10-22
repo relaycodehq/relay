@@ -12,7 +12,7 @@ import {
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";

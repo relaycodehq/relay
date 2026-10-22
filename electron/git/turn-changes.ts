@@ -14,7 +14,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
+import { within } from "../util/paths";
 import { NotText, decodeText, textLimit } from "./working-files";
 import { digest } from "../util/hash";
 import { imageSides, type FileSource } from "./image-pair";
@@ -22,6 +23,7 @@ import { videoSides } from "./video-pair";
 import { git, gitBytes } from "./git";
 import type { FilePair } from "../../shared/types";
 import type { TurnFileChange } from "../../shared/projects";
+import { errorMessage } from "../../shared/error-message";
 
 // Each agent turn snapshots the whole worktree before and after; its card
 // lists the changes the agent made itself.
@@ -222,9 +224,8 @@ export function ownFiles(
 ) {
   const edited = new Set<string>();
   for (const path of claim.edited) {
-    const rel = relative(root, resolve(root, path));
-    if (rel && !rel.startsWith("..") && !isAbsolute(rel))
-      edited.add(gitPath(rel));
+    const rel = within(root, resolve(root, path));
+    if (rel) edited.add(gitPath(rel));
   }
   // A command can name a file from a folder it moves into: `cd sub && sed -i … file.ts`.
   const commands = claim.commands.map((command) => ({
@@ -242,8 +243,8 @@ export function ownFiles(
     return commands.some(({ command, folders }) => {
       const forms = new Set([absolute]);
       for (const folder of folders) {
-        const from = relative(folder, absolute);
-        if (from && !from.startsWith("..")) forms.add(from).add(`./${from}`);
+        const from = within(folder, absolute);
+        if (from) forms.add(from).add(`./${from}`);
       }
       // A command on Windows may write a path with either slash.
       for (const form of [...forms]) forms.add(gitPath(form));
@@ -590,7 +591,7 @@ export async function apply(
       await applySteps(root, before, recovery.steps, permissions);
     } catch (recoveryError) {
       throw new Error(
-        `${error instanceof Error ? error.message : String(error)}. Recovery also failed: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}. The original files are kept at Git ref ${recoveryRef}.`,
+        `${errorMessage(error)}. Recovery also failed: ${errorMessage(recoveryError)}. The original files are kept at Git ref ${recoveryRef}.`,
         { cause: error },
       );
     }

@@ -3,7 +3,7 @@ import type { AgentOptions } from "./types";
 import type { ChatMessage } from "../../shared/projects";
 import { replacePastedTexts } from "../../shared/pasted-texts";
 import { agentRuntime } from "./index";
-import { emptyCwd, unfence } from "./helper-output";
+import { emptyCwd, excerpt, unfence } from "./helper-output";
 import type { AgentProvider } from "../../shared/agents";
 import { agentMentionPattern } from "../../shared/agents";
 
@@ -98,15 +98,6 @@ const CONTEXT_BUDGET = 8000;
 const MESSAGE_BUDGET = 2000;
 /** User messages say what the thread is about; answers can't crowd them out. */
 const ANSWER_RESERVE = 2000;
-const CUT = "\n[…]\n";
-
-/** The start and the end of a long message: the ask, and its final constraints. */
-function excerpt(text: string, budget: number): string {
-  if (text.length <= budget) return text;
-  const half = Math.floor((budget - CUT.length) / 2);
-  return text.slice(0, half) + CUT + text.slice(-half);
-}
-
 /**
  * What the title helper reads: the first ask, then the latest asks, then the
  * latest answers, within a budget and back in conversation order. Side conversations, handoff notes and compactions aren't

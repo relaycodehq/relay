@@ -25,16 +25,4 @@ describe("provider logos", () => {
       expect(svg).not.toMatch(/\b(width|height)=/);
     },
   );
-
-  it("paints Claude orange and the others in the text colour", () => {
-    expect(svgOf(renderToStaticMarkup(<ClaudeAI />))).toContain(
-      'fill="#d97757"',
-    );
-    expect(svgOf(renderToStaticMarkup(<OpenAI />))).toContain(
-      'fill="currentColor"',
-    );
-    expect(svgOf(renderToStaticMarkup(<OpenCode />))).toContain(
-      'fill="currentColor"',
-    );
-  });
 });

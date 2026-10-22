@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import {
   mkdir,
   mkdtemp,
@@ -42,19 +42,12 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {
@@ -87,8 +80,9 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
     const output = tree.getByRole("treeitem", { name: "output", exact: true });
     await expect(output).toBeVisible();
     await expect(tree.locator(".file-tree-row.ignored")).toHaveCount(1);
+    // A folder only opens in the tree; the pane beside it is for files.
     await openInFileTree(page, "output/redesign");
-    await expect(page.locator(".folder-card img")).toBeVisible();
+    await expect(page.getByText("No file open")).toBeVisible();
     await openInFileTree(page, "output/redesign/shot.png");
     await expect(page.locator(".image-file-stage img")).toBeVisible();
     await expect(page.locator(".editor-bar-state")).toContainText("1 × 1");
@@ -163,8 +157,7 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
         ),
       )
       .toBe(false);
-    // With nothing open, the pane shows the root again.
-    await expect(page.locator(".folder-view")).toBeVisible();
+    await expect(page.getByText("No file open")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await app.close();

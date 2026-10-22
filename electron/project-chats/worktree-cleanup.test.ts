@@ -19,10 +19,7 @@ import {
   type CleanupScene,
 } from "./worktree-cleanup";
 
-vi.mock("../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../platform/executables");
 // A Git run from inside another repository's hook or bisect would act on that one.
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];

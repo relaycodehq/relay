@@ -1,20 +1,13 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, realpath, rename } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { once } from "node:events";
-import { createServer, connect } from "node:net";
+import { connect } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { openSurface } from "../fixtures/navigation";
-
-const freePort = () =>
-  new Promise<number>((resolve) => {
-    const probe = createServer().listen(0, "127.0.0.1", () => {
-      const { port } = probe.address() as { port: number };
-      probe.close(() => resolve(port));
-    });
-  });
+import { freePort } from "../fixtures/free-port";
 
 test("the Browser surface starts the project's dev server and shows its page over the panel", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-preview-"))),
@@ -49,12 +42,10 @@ test("the Browser surface starts the project's dev server and shows its page ove
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: join(root, "data"),
       RELAY_TEST_HEADED: process.env.RELAY_TEST_HEADED ?? "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       RELAY_TEST_PREVIEW_UNLOAD_MS: "4000",
     },
   });
@@ -90,9 +81,15 @@ test("the Browser surface starts the project's dev server and shows its page ove
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page
-      .getByRole("dialog", { name: "Add a project", exact: true })
-      .getByRole("option", { name: "Choose in Finder…", exact: true })
+    const adding = page.getByRole("dialog", {
+      name: "Add a project",
+      exact: true,
+    });
+    await adding
+      .getByRole("button", { name: "Open a folder", exact: true })
+      .click();
+    await adding
+      .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
     await expect
       .poll(() =>

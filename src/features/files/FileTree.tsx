@@ -41,6 +41,7 @@ type Editing =
   | { mode: "create"; dir: string; kind: "file" | "dir" };
 
 export function FileTree({
+  active,
   where,
   title,
   selected,
@@ -52,6 +53,7 @@ export function FileTree({
   onTrashed,
   onCreated,
 }: {
+  active: boolean;
   where: string;
   title: string;
   selected: string | null;
@@ -70,10 +72,11 @@ export function FileTree({
     where,
     expansion.expanded,
     watched,
+    active,
   );
   const rows = useMemo(
-    () => treeRows(directories.listing, expansion.expanded),
-    [directories.listing, expansion.expanded],
+    () => treeRows(directories.listings, expansion.expanded),
+    [directories.listings, expansion.expanded],
   );
   const [editing, setEditing] = useState<Editing | null>(null);
   const [error, setError] = useState<unknown>();
@@ -275,7 +278,7 @@ export function FileTree({
             )}
             {row.open &&
               !row.loading &&
-              directories.listing(row.path)?.entries.length === 0 &&
+              directories.listings[row.path]?.entries.length === 0 &&
               !(editing?.mode === "create" && editing.dir === row.path) && (
                 <div
                   className="file-tree-hint"
@@ -292,7 +295,7 @@ export function FileTree({
         {rows.length === 0 && !directories.error && !editing && (
           <div className="file-tree-hint">This folder is empty.</div>
         )}
-        {directories.listing("")?.truncated && (
+        {directories.listings[""]?.truncated && (
           <div className="file-tree-hint">Showing the first 5,000 entries.</div>
         )}
       </div>
@@ -397,7 +400,7 @@ function Row({
           disabled={link || (blocked && !dir)}
           onClick={() => {
             if (!blocked) onSelect(row.path, dir ? "dir" : "file");
-            if (dir && !row.open) expansion.expand([row.path]);
+            if (dir && !frozen) expansion.toggle(row.path);
           }}
         >
           <FileEntryIcon path={row.path} directory={dir} />

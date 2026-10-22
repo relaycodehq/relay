@@ -5,16 +5,18 @@ import type { GitAction, WorkingTree } from "../../../shared/working-tree";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import type { SelectedChange } from "./working-changes";
+import { usePoll } from "../../lib/poll";
 
 /**
  * A checkout's working tree, a project's or a PR's linked folder, and the Git
  * actions on it, with what the last one said.
  */
 export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
+  const poll = usePoll();
   const qc = useQueryClient(),
     key = projectId
       ? workingTreeKey(projectId)
-      : ["working-tree", pull!.owner, pull!.name];
+      : ["working-tree", "checkout", pull!.server, pull!.owner, pull!.name];
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>(),
     [notice, setNotice] = useState("");
@@ -23,7 +25,7 @@ export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
     queryFn: () =>
       projectId ? api.projectWorkingTree(projectId) : api.workingTree(pull!),
     // A project's tree is polled by the shell; a PR checkout polls here.
-    refetchInterval: busy || projectId ? false : 3000,
+    refetchInterval: poll(busy || projectId ? false : 3000),
   });
   /** Runs `action`; `done` follows a commit or push once its tree is in. */
   async function act(action: GitAction, done?: () => void) {
@@ -71,15 +73,25 @@ export function useWorkingTree(pull: Pull | undefined, projectId?: string) {
   };
 }
 
-/** The selected file's diff in its list, read again whenever the tree moves. */
+/** The selected file's diff in its list, read again whenever that file's change moves. */
 export function useWorkingDiff(
   { key, tree }: { key: readonly unknown[]; tree?: WorkingTree },
   pull: Pull | undefined,
   projectId: string | undefined,
   selected: SelectedChange | null,
 ) {
+  const change =
+    selected?.area !== "ignored" &&
+    tree?.changes.find((c) => c.path === selected?.path);
   return useQuery({
-    queryKey: [...key, "diff", selected?.path, selected?.area, tree?.revision],
+    queryKey: [
+      ...key,
+      "diff",
+      selected?.path,
+      selected?.area,
+      // An ignored file, or an older Relay's tree, has no stamp of its own.
+      (change && change.stamp) || tree?.revision,
+    ],
     queryFn: () => {
       const { path, area } = selected!;
       if (area === "ignored") return api.projectIgnoredDiff(projectId!, path);

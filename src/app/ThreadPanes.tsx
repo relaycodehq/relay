@@ -13,22 +13,16 @@ import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
 import type { ThreadFolder } from "./useThreadFolder";
-import type {
-  ThreadView,
-  Viewing,
-} from "../features/thread/useThreadView";
+import type { ThreadView, Viewing } from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
-import { ProjectChanges, ProjectFiles } from "./ProjectViews";
+import { ProjectChanges } from "./ProjectViews";
+import { ProjectFiles } from "../features/files/ProjectFiles";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
 import { ElsewhereOnly } from "../features/changes/elsewhere/ElsewhereOnly";
 import { WORKTREE_DELETED } from "./thread-folder";
-import {
-  NO_SLOTS,
-  PaneHeader,
-  type PaneSlots,
-} from "../ui/WorkspacePanes";
+import { NO_SLOTS, PaneHeader, type PaneSlots } from "../ui/WorkspacePanes";
 import { PaneTabs } from "../ui/PaneTabs";
 import { IconButton } from "../ui/ui";
 import type { PanelTabs } from "../features/panel/panel-tabs";
@@ -97,8 +91,11 @@ export function ThreadChanges({
   agentRunning?: boolean;
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
-  const editFile = (path: string, line?: number) =>
-    opens.openInEditor({ path, line, directory: false });
+  // Editing takes over from the diff, so Changes steps aside for Files.
+  const editFile = (path: string, line?: number) => {
+    if (opens.openInEditor({ path, line, directory: false }))
+      opens.togglePane("changes");
+  };
   const reviewFile = pull
     ? `relay-project-review-file:${project.id}:${pull.number}`
     : "";
@@ -323,7 +320,13 @@ export function ThreadPanel({
           <X size={15} />
         </IconButton>
       </header>
-      {!front && <SurfacePicker plain={project.plain} onPick={panel.show} />}
+      {!front && (
+        <SurfacePicker
+          plain={project.plain}
+          elsewhere={!!project.computer}
+          onPick={panel.show}
+        />
+      )}
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
           {/* An unsaved edit stays on screen, to copy out before it goes. */}
@@ -332,6 +335,7 @@ export function ThreadPanel({
           ) : (
             <ProjectFiles
               key={where}
+              active={front?.surface === "files"}
               project={project}
               where={where}
               watched={watched}

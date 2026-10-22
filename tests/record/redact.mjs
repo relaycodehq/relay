@@ -10,7 +10,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { execFileSync } from "node:child_process";
 import { homedir, userInfo } from "node:os";
 import { join, resolve } from "node:path";
-import { accountKeys, idKeys, secretKeys } from "./redact-keys.mjs";
+import { accountKeys, accountTier, idKeys, secretKeys } from "./redact-keys.mjs";
 
 const raw = resolve(process.argv[2] ?? "/tmp/relay-replays-raw");
 const only = process.argv.slice(3);
@@ -60,6 +60,7 @@ function scrubValue(key, value, names) {
   if (value === null || value === undefined || value === "") return value;
   if (secretKeys.test(key) && typeof value === "string") return "REDACTED";
   if (idKeys.test(key) && typeof value === "string") return "replay-id";
+  if (accountTier(key, value)) return typeof value === "string" ? "replay" : null;
   if (accountKeys.test(key)) return typeof value === "string" ? "replay" : null;
   if (Array.isArray(value))
     return value.filter((v) => !fromAccount(v, names)).map((v) => scrubValue("", v, names));
@@ -113,12 +114,35 @@ function redactFile(lines, where) {
   });
 }
 
+/** A JSON text with its keys scrubbed, or the text as it was. */
+function scrubJson(text, names) {
+  try {
+    return JSON.stringify(scrubValue("", JSON.parse(text), names));
+  } catch {
+    return text;
+  }
+}
+
+/** OpenCode's service as the proxy recorded it: bodies and events hold JSON. */
+function redactHttp(lines, where) {
+  const names = new Set();
+  return lines.map((line) => {
+    const entry = JSON.parse(redactText(line, where));
+    if (typeof entry.body === "string") entry.body = scrubJson(entry.body, names);
+    if (typeof entry.data === "string")
+      entry.data = entry.data.replace(/^data: (.*)$/gm, (_, json) => `data: ${scrubJson(json, names)}`);
+    return JSON.stringify(entry);
+  });
+}
+
 for (const agent of readdirSync(raw).filter((d) => !d.startsWith("."))) {
   for (const scenario of readdirSync(join(raw, agent))) {
     if (only.length && !only.includes(`${agent}/${scenario}`) && !only.includes(agent)) continue;
     const from = join(raw, agent, scenario);
     if (!statSync(from).isDirectory()) continue;
-    const files = readdirSync(from).filter((f) => f.endsWith(".jsonl")).sort();
+    const files = readdirSync(from)
+      .filter((f) => f.endsWith(".jsonl") && f !== "http.jsonl")
+      .sort();
     if (!files.length) continue;
     const to = join(fixtures, agent, scenario);
     rmSync(to, { recursive: true, force: true });
@@ -139,6 +163,12 @@ for (const agent of readdirSync(raw).filter((d) => !d.startsWith("."))) {
         redactFile(lines, where).join("\n") + "\n",
       ),
     );
+    const http = join(from, "http.jsonl");
+    if (statSync(http, { throwIfNoEntry: false }))
+      writeFileSync(
+        join(to, "http.jsonl"),
+        redactHttp(readFileSync(http, "utf8").split("\n").filter(Boolean), where).join("\n") + "\n",
+      );
     console.log(`${agent}/${scenario}: ${files.length} transcript(s)`);
   }
 }

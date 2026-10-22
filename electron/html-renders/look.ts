@@ -11,6 +11,7 @@ import {
 } from "../../shared/html-render";
 import { renderDrafts, shotSession } from "./protocol";
 import { PageHung } from "./agent-tools";
+import { sleep } from "../util/sleep";
 
 const LOAD_MS = 15_000;
 /** All of a look, its load included. */
@@ -35,8 +36,6 @@ export interface PageLook {
   shotHeight?: number;
   loadError?: string;
 }
-
-const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // In the running app, a canvas drawn once (a chart without animation) went
 // missing from capturePage after the resizes, while one redrawn every frame
@@ -129,7 +128,7 @@ export async function lookAtPage(
     let loadError: string | undefined;
     await Promise.race([
       win.loadURL(`${RENDER_SCHEME}://${scale === 1 ? "draft" : `shot-${token}`}/${token}#theme=${encodeURIComponent(JSON.stringify(theme))}`),
-      pause(LOAD_MS).then(() => {
+      sleep(LOAD_MS).then(() => {
         throw new Error(`The page didn't finish loading in ${LOAD_MS / 1000}s.`);
       }),
     ]).catch((error: Error) => {
@@ -141,7 +140,7 @@ export async function lookAtPage(
     wc.setZoomFactor(scale);
     const size = (width: number, height: number) =>
       win.setContentSize(Math.round(width * scale), Math.round(height * scale));
-    await pause(SETTLE_MS);
+    await sleep(SETTLE_MS);
     const heights: number[] = [];
     const measure = () =>
       wc.executeJavaScript(

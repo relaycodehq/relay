@@ -11,11 +11,20 @@ const signInTimeout = 5 * 60_000;
  * its own: Antigravity opens Google's page in the browser and answers once the
  * user is through. Rejects when it can't, or the sign-in didn't finish.
  */
-export async function signInAcp(profile: AcpProfile) {
+export async function signInAcp(profile: AcpProfile, signal?: AbortSignal) {
+  const check = () => {
+    if (signal?.aborted) throw new Error("Sign-in cancelled.");
+  };
+  check();
   await profile.setUp?.();
+  check();
   const wanted = await profile.authMethod?.();
+  check();
   const agent = await acquireAcpAgent(profile, undefined, homedir());
+  const cancel = () => agent.close();
+  signal?.addEventListener("abort", cancel, { once: true });
   try {
+    if (signal?.aborted) throw new Error("Sign-in cancelled.");
     // Without a choice of Relay's, the first sign-in the agent offers.
     const method = wanted ?? agent.caps?.auth[0];
     if (!method || !agent.caps?.auth.includes(method))
@@ -27,7 +36,11 @@ export async function signInAcp(profile: AcpProfile) {
       signInTimeout,
       `Signing in to ${profile.name} didn't finish in time.`,
     );
+  } catch (error) {
+    if (signal?.aborted) throw new Error("Sign-in cancelled.");
+    throw error;
   } finally {
+    signal?.removeEventListener("abort", cancel);
     agent.close();
   }
 }

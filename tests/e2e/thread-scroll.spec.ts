@@ -1,10 +1,11 @@
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -175,19 +176,12 @@ test("holds an opened handoff note in view instead of following the bottom", asy
         chats: [{ ...chat, messages: undefined }],
       }),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();
@@ -332,19 +326,12 @@ test("reopens a long thread where the reader left it, before or after paging bac
         chats: [long, short].map(({ messages: _, ...summary }) => summary),
       }),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();
@@ -387,6 +374,168 @@ test("reopens a long thread where the reader left it, before or after paging bac
     await open("Short");
     await open("Long");
     expectSamePlace(await topOfView(page), earlier);
+  } finally {
+    await app?.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("restores mixed-height messages without a jump during the first paints", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-mixed-scroll-")),
+  );
+  const repo = join(root, "project"),
+    data = join(root, "data"),
+    bin = join(root, "bin");
+  let app: ElectronApplication | undefined;
+  try {
+    await mkdir(repo);
+    await mkdir(bin);
+    const agent = await readFile(
+      resolve("tests/fixtures/room-agent.cjs"),
+      "utf8",
+    );
+    for (const name of ["codex", "claude"])
+      await fakeCli(join(bin, name), agent);
+    await mkdir(join(data, "project-chats"), { recursive: true });
+    execFileSync("git", ["init", "-q", "-b", "main", repo]);
+    const projectId = randomUUID();
+    const mixed = thread(projectId, "Mixed", 40),
+      short = thread(projectId, "Short", 4);
+    // Compact turns among answers much taller than the off-screen estimate.
+    // A short scroll leaves the reader deep inside the last tall answer;
+    // a fast scroll crosses skipped rows whose real layout arrives later.
+    for (const [i, message] of mixed.messages.entries()) {
+      message.body =
+        i % 4 === 1
+          ? Array.from(
+              { length: 35 },
+              (_, j) =>
+                `${j + 1}. **Finding ${j + 1}.** A paragraph about the shared service callers and the code that changes under the reader.\n   More detail about the changes, the call sites, and how this part is used.`,
+            ).join("\n")
+          : i % 2
+            ? "Done."
+            : `Question ${i}.`;
+    }
+    // A divider after the answer must not hide that answer's estimated size.
+    const last = mixed.messages.at(-1)!;
+    mixed.messages.push({
+      ...last,
+      id: "mixed-footer",
+      body: "",
+      compaction: true,
+      created: last.created + 60_000,
+      ended: last.ended! + 60_000,
+    });
+    for (const chat of [mixed, short])
+      await writeFile(
+        join(data, "project-chats", chat.id + ".json"),
+        JSON.stringify(chat),
+      );
+    await writeFile(
+      join(data, "state.json"),
+      JSON.stringify({
+        version: 1,
+        folders: {},
+        progress: {},
+        projects: [
+          {
+            id: projectId,
+            path: repo,
+            name: "project",
+            repository: null,
+            added: 1,
+          },
+        ],
+        chats: [mixed, short].map(({ messages: _, ...summary }) => summary),
+      }),
+    );
+    const env = relayEnv();
+    app = await electron.launch({
+      env: { ...env, ...pathWith(env, bin), RELAY_TEST_DATA: data },
+    });
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 900 });
+    const open = (title: string) =>
+      page.locator(".sb-thread", { hasText: title }).click();
+    const rows = page.locator(".project-messages [data-message-id]");
+    await open("Mixed");
+    await expect(rows).toHaveCount(mixed.messages.length);
+    await settled(page);
+    const checkReturn = async (reason: string, pinned = false) => {
+      const before = (await topOfView(page))!;
+      // At the bottom, observe the visible last message. The start of a tall
+      // answer above it can still be skipped before this frame's layout.
+      const anchor = pinned
+        ? await page
+            .locator(".thread-message-column > .project-message")
+            .last()
+            .evaluate((message) => ({
+              id: (message as HTMLElement).dataset.messageId!,
+              offset: Math.round(
+                message.getBoundingClientRect().top -
+                  document
+                    .querySelector(".project-messages")!
+                    .getBoundingClientRect().top,
+              ),
+            }))
+        : before;
+      await open("Short");
+      await expect(rows).toHaveCount(4);
+      // Observe every frame, rather than letting a wrong first paint settle
+      // into the right position and pass an eventual-position assertion.
+      await page.evaluate((id) => {
+        const frames = { offsets: [] as number[], frame: 0 };
+        Object.assign(window, { restorationFrames: frames });
+        const sample = () => {
+          const view = document.querySelector(".project-messages")!;
+          const message = view.querySelector(`[data-message-id="${id}"]`);
+          if (message)
+            frames.offsets.push(
+              message.getBoundingClientRect().top -
+                view.getBoundingClientRect().top,
+            );
+          frames.frame = requestAnimationFrame(sample);
+        };
+        frames.frame = requestAnimationFrame(sample);
+      }, anchor.id!);
+      await open("Mixed");
+      await expect(rows).toHaveCount(mixed.messages.length);
+      await settled(page);
+      const offsets = await page.evaluate(() => {
+        const frames = (
+          window as unknown as {
+            restorationFrames: { offsets: number[]; frame: number };
+          }
+        ).restorationFrames;
+        cancelAnimationFrame(frames.frame);
+        return frames.offsets;
+      });
+      expectSamePlace(await topOfView(page), before);
+      expect(offsets.length).toBeGreaterThan(1);
+      expect(
+        Math.max(...offsets.map((offset) => Math.abs(offset - anchor.offset))),
+        `message ${anchor.id} ${reason}`,
+      ).toBeLessThanOrEqual(1);
+    };
+    await checkReturn("while following the bottom", true);
+    for (const pixels of [300, 600, 1400, 3000, 4000]) {
+      const box = (await page.locator(".project-messages").boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + 200);
+      await page.mouse.wheel(0, -pixels);
+      await settled(page);
+      await expect(page.locator("[data-reading-anchor]")).toHaveCount(0);
+      if (pixels === 4000) {
+        // Reflow while reading, without relying on another wheel event to
+        // refresh the saved position before switching away.
+        await page.setViewportSize({ width: 1000, height: 900 });
+        await settled(page);
+      }
+      await checkReturn(`after a ${pixels}px scroll`);
+    }
+    await screenshot(page, {
+      path: join(tmpdir(), "relay-mixed-scroll-restored.png"),
+    });
   } finally {
     await app?.close();
     await rm(root, { recursive: true, force: true });
@@ -436,19 +585,12 @@ test("lets the reader scroll up while an answer streams", async () => {
         chats: [chat].map(({ messages: _, ...summary }) => summary),
       }),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();
@@ -484,7 +626,6 @@ test("lets the reader scroll up while an answer streams", async () => {
     }
     await page.waitForTimeout(200);
     const afterSmall = await fromBottom();
-    console.log("distance from bottom after 240px of small steps:", afterSmall);
 
     // Once up, what the reader looks at must stay put while the answer grows.
     for (let i = 0; i < 5; i++) {
@@ -498,7 +639,6 @@ test("lets the reader scroll up while an answer streams", async () => {
       await page.waitForTimeout(25);
       drift.push((await offsetOf(page, anchor!.id!)) - anchor!.offset);
     }
-    console.log("anchor", anchor, "drift", JSON.stringify(drift));
     // Back down to the end: the thread follows the answer again.
     await page.mouse.wheel(0, 20000);
     await page.waitForTimeout(300);
@@ -510,7 +650,6 @@ test("lets the reader scroll up while an answer streams", async () => {
       await page.waitForTimeout(50);
       trailing.push(await fromBottom());
     }
-    console.log("following again", JSON.stringify(trailing));
     expect(Math.max(...trailing)).toBeLessThan(2);
     expect(afterSmall).toBeGreaterThan(150);
     expect(Math.max(...drift.map(Math.abs))).toBeLessThan(2);
@@ -563,19 +702,12 @@ test("folding the composer away and back doesn't move the thread", async () => {
         chats: [chat].map(({ messages: _, ...summary }) => summary),
       }),
     );
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();

@@ -31,6 +31,9 @@ Catalogs use the same boundary: `electron/api/projects.ts` calls `models()`,
 `defaults(root)` and `commands(root)`. The desktop's
 `src/features/agents/useAgentPicks.ts` already loads catalogs for new providers.
 
+Antigravity's provider-specific account, helper and compaction rules are
+documented in [Antigravity in Relay](./antigravity.md).
+
 ## The runtime contract
 
 Required methods are `run(options): Promise<string>`, `closeSession(key)`,
@@ -106,7 +109,7 @@ desktop UI in its feature folder.
 Read these with `git show <commit>`; historical paths may predate today's layout.
 
 Test with a fake peer like `tests/fixtures/acp-agent.cjs`,
-`tests/fixtures/opencode-server.cjs` or `tests/fixtures/cursor-sdk.mjs`. Cover
+or `tests/fixtures/cursor-sdk.mjs`. Cover
 streaming, session resume, cancellation, denied tools, malformed events and
 supported jobs. For hosted work, check restart/reattach without duplicate
 prompts. Add a composer flow like `tests/e2e/opencode.spec.ts` or

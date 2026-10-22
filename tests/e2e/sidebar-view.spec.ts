@@ -3,7 +3,7 @@ import {
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,12 +18,9 @@ const env = Object.fromEntries(
 
 const launch = (data: string) =>
   electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: data,
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
 
@@ -84,7 +81,7 @@ test("sidebar choice survives reloads, browser storage loss and app restarts", a
     await expect(
       page
         .locator(".sb-top")
-        .getByRole("heading", { name: "Projects", exact: true }),
+        .getByRole("heading", { name: "Threads", exact: true }),
     ).toBeVisible();
     await screenshot(page, {
       path: "test-results/screenshots/sidebar-view-projects.png",

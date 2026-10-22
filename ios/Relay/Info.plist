@@ -56,6 +56,8 @@
 	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan the pairing code Relay shows on your computer, and take photos to send with a message.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Unlock Relay without typing its PIN, when you turn on the app lock.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Relay connects to Relay on your computer over your network.</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -29,6 +29,7 @@ import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.filled.PlayerStop
 import io.github.lyxnx.compose.ui.tablericons.outline.ArrowUp
 import io.github.lyxnx.compose.ui.tablericons.outline.Bolt
+import io.github.lyxnx.compose.ui.tablericons.outline.Edit
 import io.github.lyxnx.compose.ui.tablericons.outline.PlaylistAdd
 
 /** A small control in the composer's toolbar. */
@@ -58,6 +59,7 @@ internal fun SendButtons(
     onSteer: () -> Unit,
     onSend: () -> Unit,
     onLater: () -> Unit,
+    newThread: Modifier? = null,
 ) {
     val c = RelayTheme.colors
     val haptics = rememberHaptics()
@@ -76,18 +78,20 @@ internal fun SendButtons(
     val label = if (stop) "Stop" else if (retryingScheduled) "Retry scheduled send" else if (running) "Queue" else "Send"
     Box(
         Modifier.padding(start = 4.dp)
+            .then(newThread ?: Modifier)
             .pressable(
                 onClick = onSend,
                 enabled = enabled && (stop || !empty),
                 onLongClick = if (empty) null else onLater,
             )
             .size(SEND_SIZE).alpha(if (enabled) 1f else 0.5f)
-            .background(if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
+            .background(if (newThread != null) c.primary else if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         val tint = if (stop) Color.White else if (!empty) c.onSend else c.faint
         when {
+            newThread != null -> Icon(TablerIcons.Outline.Edit, null, size = 16.dp, tint = c.onPrimary)
             stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 14.dp, tint = tint)
             running -> Icon(TablerIcons.Outline.PlaylistAdd, null, size = 16.dp, tint = tint)
             else -> Icon(TablerIcons.Outline.ArrowUp, null, size = 18.dp, tint = tint)

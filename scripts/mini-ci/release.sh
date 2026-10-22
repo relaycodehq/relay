@@ -9,8 +9,7 @@
 # --dry-run builds everything and stops before touching the releases repo.
 set -euo pipefail
 
-ROOT="$HOME/relay-ci.noindex"
-REPO_URL="git@github.com:relaycodehq/relay.git"
+. "$(dirname "$0")/common.sh"
 RELEASES_REPO="relaycodehq/relay"
 SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
@@ -32,12 +31,6 @@ tag="${args[0]:?Usage: release.sh <vX.Y.Z> [--dry-run]}"
 version="${tag#v}"
 major="${BASH_REMATCH[1]}" minor="${BASH_REMATCH[2]}" patch="${BASH_REMATCH[3]}"
 
-export PATH="/opt/homebrew/opt/node@22/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-export JAVA_HOME="$ROOT/jdk21/Contents/Home"
-export ANDROID_HOME="$ROOT/android-sdk"
-export GRADLE_USER_HOME="$ROOT/gradle"
-export NODE_OPTIONS="--max-old-space-size=3072"
-export npm_config_fund=false npm_config_audit=false npm_config_update_notifier=false
 if [[ -f "$TOKEN_FILE" ]]; then
   GH_TOKEN="$(<"$TOKEN_FILE")"
   export GH_TOKEN
@@ -46,19 +39,10 @@ elif ((!dry_run)); then
   exit 1
 fi
 
-step() { printf '\n==> %s  %s\n' "$(date '+%H:%M:%S')" "$*"; }
-
-src="$ROOT/src"
 out="$ROOT/out"
 
 step "Checking out $tag"
-[[ -d "$src/.git" ]] || git clone --quiet "$REPO_URL" "$src"
-cd "$src"
-# --force: a tag moved to another commit on GitHub moves here too.
-git fetch --quiet --force --tags origin
-git checkout --quiet --force --detach "$tag"
-# node_modules survive between builds; installs below redo them when the lockfile changes.
-git clean -ffdxq -e node_modules -e packaging/checks-typescript/node_modules
+checkout "$tag"
 rm -rf "$out" && mkdir -p "$out"
 
 # The mini is short on disk: drop what a build leaves beyond its installers.
@@ -88,44 +72,41 @@ fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
 
-# Linux builds in Docker; boot it now so it's up by the time that starts.
+# Set once the Linux build boots Docker, so cleanup quits it again.
 docker_was_running=1
-if ! docker info >/dev/null 2>&1; then
-  docker_was_running=0
-  open -a Docker
-fi
 linux_pid=""
 cleanup() {
   if [[ -n "$linux_pid" ]] && kill -0 "$linux_pid" 2>/dev/null; then
     kill "$linux_pid" 2>/dev/null || true
-    docker rm -f relay-ci-linux >/dev/null 2>&1 || true
+    docker rm -f relay-ci-linux relay-ci-pty-arm64 >/dev/null 2>&1 || true
   fi
   ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-install() { # <dir>: npm ci, skipped while the lockfile is unchanged
-  local stamp="$1/node_modules/.relay-ci-lock" hash
-  hash="$(shasum -a 256 "$1/package-lock.json" | cut -d' ' -f1)"
-  [[ -f "$stamp" && "$(<"$stamp")" == "$hash" ]] && return
-  (cd "$1" && npm ci)
-  echo "$hash" >"$stamp"
-}
 step "Installing dependencies"
-install .
-# Electron 44 fetches its binary on first use instead of at install. Fetch it
-# here, or two test workers race to unpack it into the same folder.
-node -e 'require("electron")' >/dev/null
+install_deps
 
 node scripts/sync-version.mjs "$version"
 
 step "Building"
 npm run build
 
+# Alone, before any build runs beside them: a loaded mini is where races show.
+# Skipped when check.sh already passed this very commit (the "Tests" status).
+tested="$(gh api "repos/$RELEASES_REPO/commits/$(git rev-parse HEAD)/statuses" \
+  --jq '[.[] | select(.context == "Tests")][0].state' 2>/dev/null || true)"
+if [[ "$tested" == success ]]; then
+  step "Testing: passed on this commit before it was tagged"
+else
+  step "Testing"
+  run_tests
+fi
+
 # In an x64 container under Rosetta. Sources go in and installers come out as
 # tar streams: a shared mount drops executable bits and breaks the AppImage.
-# Runs alongside the tests and the other platforms; it only reads dist and
-# tracked files, which nothing after this point changes.
+# Runs alongside the other platforms; it only reads dist and tracked files,
+# which nothing after this point changes.
 build_linux() {
   for _ in $(seq 1 60); do docker info >/dev/null 2>&1 && break; sleep 3; done
   # dist/ is the same on every platform, so only the Electron side is rebuilt.
@@ -143,25 +124,37 @@ build_linux() {
         node scripts/build-electron.mjs
         npx electron-builder --linux AppImage dir --x64 --publish never
         python3 scripts/package-omarchy.py
-        tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" >&3
+        # node-pty built from source here, for the headless Relay too.
+        mkdir -p node-pty-linux/linux-x64
+        cp node_modules/node-pty/build/Release/pty.node node-pty-linux/linux-x64/
+        tar -C release -cf - "Relay-$VERSION-linux-x86_64.AppImage" "Relay-$VERSION-omarchy-x86_64.tar.gz" \
+          -C /work node-pty-linux >&3
       ' | tar -xf - -C "$out"
+  # The headless Relay's node-pty for arm64 Linux, natively on the mini's arm64.
+  # Bullseye's older glibc, so it loads on older distributions too.
+  mkdir -p "$out/node-pty-linux/linux-arm64"
+  docker run --rm -i --name relay-ci-pty-arm64 --platform linux/arm64 \
+    -v relay-ci-npm:/root/.npm -e PTY="$pty_version" \
+    -e npm_config_fund=false -e npm_config_audit=false \
+    node:22-bullseye bash -c '
+      set -euo pipefail
+      exec 3>&1 1>&2
+      mkdir /work && cd /work && npm init -y >/dev/null
+      npm install --no-save "node-pty@$PTY"
+      tar -C node_modules/node-pty/build/Release -cf - pty.node >&3
+    ' | tar -xf - -C "$out/node-pty-linux/linux-arm64"
 }
+pty_version="$(node -p 'require("./node_modules/node-pty/package.json").version')"
+# Moved out of what's published once the Linux build is done.
+pty_linux="$ROOT/node-pty-linux"
 linux_log="$ROOT/linux.log"
 step "Linux, in the background"
+if ! docker info >/dev/null 2>&1; then
+  docker_was_running=0
+  open -a Docker
+fi
 build_linux >"$linux_log" 2>&1 &
 linux_pid=$!
-
-step "Testing"
-# Flagged, not blocking, as on GitHub: a formatting slip shouldn't hold back a release.
-npm run format:check || echo "Formatting check failed (not blocking)."
-npm run test:setup
-npx vitest run --maxWorkers=2
-python3 -m unittest discover -s tests/packaging
-
-step "Headless"
-# One archive for every platform.
-node scripts/package-headless.mjs "$version"
-cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
 
 step "Mac"
 npx electron-builder --mac --publish never
@@ -184,6 +177,12 @@ wait "$linux_pid" || linux_ok=0
 linux_pid=""
 cat "$linux_log" && rm -f "$linux_log"
 ((linux_ok)) || { echo "The Linux build failed." >&2; exit 1; }
+rm -rf "$pty_linux" && mv "$out/node-pty-linux" "$pty_linux"
+
+step "Headless"
+# One archive for every platform, with node-pty for each, Linux's from above.
+RELAY_PTY_LINUX="$pty_linux" node scripts/package-headless.mjs "$version"
+cp "release/Relay-$version-headless.tar.gz" release/install-relay.sh release/install-relay.ps1 "$out/"
 # Docker's VM would sit on 4 GB through the Android build.
 ((docker_was_running)) || osascript -e 'quit app "Docker Desktop"' >/dev/null 2>&1 || true
 docker_was_running=1

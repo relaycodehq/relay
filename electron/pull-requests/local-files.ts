@@ -70,10 +70,8 @@ export async function saveLocalFile(
   version: string,
   contents: string,
 ) {
-  await writeWorkingFile(root, path, version, { contents }, async () => {
-    const { local } = await validate(root, server, ref, head, path);
-    if (!(await readWorkingFile(local.path, path)))
-      throw new Error("This file was deleted locally.");
-  });
+  await writeWorkingFile(root, path, version, { contents }, () =>
+    validate(root, server, ref, head, path),
+  );
   return { version: digest(contents) };
 }

@@ -72,6 +72,9 @@ class RemoteClient(
     private var retryTimer: Job? = null
     private var watchdog: Job? = null
     private var heard = 0L
+    private var background = false
+    /** When the app last came back from the background. */
+    private var backAt = 0L
     private var attempt = 0
     private var betterTimer: Job? = null
     private val worse = HashMap<String, Long>()
@@ -94,7 +97,7 @@ class RemoteClient(
     private val racer = RouteRacer(owner, options.staggerMs)
 
     /** Raw TCP to the desktop's own loopback over this link, from Bridge.TUNNEL. */
-    val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name })
+    val tunnel = TunnelStreams(::post, ::sendTunnel, { channel != null && supports(Bridge.TUNNEL) }, { name }, warn = { warn(it, null) })
 
     /** The desktop's name, from the link or the saved credentials. */
     val name: String
@@ -152,7 +155,9 @@ class RemoteClient(
     fun wake() = post {
         val state = _status.value.state
         if (closed || state == LinkState.Denied) return@post
-        val quiet = state == LinkState.Online && now() - heard > options.staleMs / 2
+        // Back from the background, a desktop that ticked once a minute is asked for a tick instead.
+        val probing = supports(Bridge.BACKGROUND) && heard < backAt
+        val quiet = state == LinkState.Online && !probing && now() - heard > options.staleMs / 2
         if (state == LinkState.Offline || quiet) {
             if (quiet) drop("Connection lost.")
             retryTimer?.cancel()
@@ -161,6 +166,27 @@ class RemoteClient(
         } else if (state == LinkState.Online) {
             worse.clear()
             tryBetter()
+        }
+    }
+
+    /**
+     * The app went to the background or came back. A desktop from Bridge.BACKGROUND then batches
+     * its events and ticks once a minute, so the radio sleeps between; back, it ticks at once.
+     */
+    fun setBackground(on: Boolean) = post {
+        if (background == on) return@post
+        background = on
+        sendBackground()
+        // A dial still connecting gets its watchdog once it's online.
+        val dial = current?.takeIf { _status.value.state == LinkState.Online } ?: return@post
+        if (on) {
+            betterTimer?.cancel()
+            betterTimer = null
+            watch(dial, options.backgroundStaleMs - (now() - heard))
+        } else {
+            backAt = now()
+            watchRoutes()
+            watch(dial, if (supports(Bridge.BACKGROUND)) options.backProbeMs else options.staleMs - (now() - heard))
         }
     }
 
@@ -247,7 +273,7 @@ class RemoteClient(
 
     private fun scheduleRetry() {
         retryTimer?.cancel()
-        val wait = minOf(15_000L, 1000L shl minOf(retry++, 14))
+        val wait = minOf(if (background) options.backgroundRetryMs else 15_000L, 1000L shl minOf(retry++, 14))
         retryTimer = scope.launch {
             delay(wait)
             connect()
@@ -286,6 +312,7 @@ class RemoteClient(
             if (changed) listener.onCredentials(next)
         }
         retry = 0
+        if (background) sendBackground()
         keepAlive(link.dial)
         watchRoutes()
         setStatus(LinkState.Online)
@@ -295,7 +322,7 @@ class RemoteClient(
     private fun watchRoutes() {
         betterTimer?.cancel()
         betterTimer = null
-        if (better().isEmpty()) return
+        if (background || better().isEmpty()) return
         betterTimer = scope.launch {
             while (true) {
                 delay(options.betterRouteMs)
@@ -389,11 +416,23 @@ class RemoteClient(
 
     private fun keepAlive(dial: Dial) {
         heard = now()
+        watch(dial, if (background) options.backgroundStaleMs else options.staleMs)
+    }
+
+    /** The link counts as dead after `ms` more of silence. */
+    private fun watch(dial: Dial, ms: Long) {
         watchdog?.cancel()
         watchdog = scope.launch {
-            delay(options.staleMs)
+            delay(ms)
             if (current === dial) lost()
         }
+    }
+
+    private fun sendBackground() {
+        if (supports(Bridge.BACKGROUND)) sendFrame(buildJsonObject {
+            put("t", "background")
+            put("on", background)
+        })
     }
 
     private fun sendFrame(frame: JsonObject) {

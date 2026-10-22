@@ -99,7 +99,7 @@ describe("setting memes up", () => {
     system: true,
     signedIn,
   });
-  const inUse = { claude: "default", codex: "default" };
+  const inUse = { claude: "default", codex: "default", antigravity: "default" };
 
   it("picks Codex's Luna when it's signed in, else Claude's Sonnet", () => {
     const both = { accounts: [account("claude", true), account("codex", true)], inUse };
@@ -123,11 +123,4 @@ describe("setting memes up", () => {
     expect(prompt).toContain("The meme folder is /data/memes.");
     expect(prompt).toContain("Memes to get (2): perhaps, sad-cat");
   });
-});
-
-it("names a thread that starts with a meme after what it means", async () => {
-  const { promptTitle } = await import("./prompt-title");
-  expect(promptTitle(memeToken({ id: "dew-it", meaning: "Yes, go ahead and do it." }))).toBe(
-    "Yes, go ahead and do it.",
-  );
 });

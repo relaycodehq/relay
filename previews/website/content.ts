@@ -241,7 +241,7 @@ export const faq: { q: string; a: string }[] = [
   },
   {
     q: "How does the phone connect?",
-    a: "The phone app is for Android only. The computer and the phone must be on the same Tailscale network. You scan a pairing code from Settings → Phone. Relay encrypts each connection.",
+    a: "The phone app is for Android only. The computer and the phone must be on the same Tailscale network, or the same local network once Local network is on in Settings → Phone. You scan a pairing code from Settings → Phone. Relay encrypts each connection.",
   },
   {
     q: "Do I need GitHub, Gitea or Azure DevOps?",

@@ -1,17 +1,15 @@
 import { mkdtemp, readFile, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it, vi } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
+import { readCodexContext, closeCodexConnection } from "./codex-connection";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { agentError } from "../../../shared/agent-error";
 import type { AgentActivity } from "../../../shared/projects";
 import type { AgentOptions } from "../types";
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 type Wire = Record<string, unknown>;
 // Answers like `codex app-server` whose config.toml sets `model_reasoning_effort = "xhigh"`.
@@ -46,6 +44,7 @@ const fakeCodex = (
     refusing,
     crash,
     stops,
+    items = [],
   }: {
     thread?: Wire;
     turn?: Wire;
@@ -57,6 +56,7 @@ const fakeCodex = (
     crash?: boolean;
     /** Takes turn/interrupt, logging it in place of the turn, and ends the turn as interrupted. */
     stops?: boolean;
+    items?: Wire[];
   } = {},
 ) => `
 const send = (v) => process.stdout.write(JSON.stringify(v) + "\\n");
@@ -73,6 +73,8 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
   else if (m.method === "config/read") send({ id: m.id, result: { config: {} } });
   else if (m.method === "thread/start")
     send({ id: m.id, result: ${JSON.stringify(thread)} });
+  else if (m.method === "thread/items/list")
+    send({ id: m.id, result: { data: ${JSON.stringify(items)}, nextCursor: null } });
   else if (m.method === "turn/start" || m.method === "review/start") {
     if (${JSON.stringify(!!crash)}) {
       process.stderr.write("dyld: Library not loaded: libfixture.dylib\\n");
@@ -119,6 +121,49 @@ it("runs a turn at Codex's own effort when the default is chosen", async () => {
     model: "gpt-6-astra",
     reasoning_effort: "xhigh",
   });
+});
+
+it("estimates context through the existing live connection without another turn or process", async () => {
+  const key = "codex-estimated-context";
+  const usage = { usedTokens: 5_000, maxTokens: 20_000 };
+  expect(await readCodexContext(key, usage)).toBeNull();
+  const run = await ask(
+    {
+      items: [
+        {
+          turnId: "turn",
+          item: { id: "a", type: "agentMessage", text: "Done." },
+        },
+      ],
+    },
+    { session: { key, onId: async () => {} } },
+  );
+  try {
+    expect(await run.answer).toBe("Done.");
+    const starts = vi.mocked(findExecutable).mock.calls.length;
+    const turn = await readFile(run.log, "utf8");
+    const report = await readCodexContext(key, usage);
+    expect(report).toMatchObject({
+      estimated: true,
+      totalTokens: 5_000,
+      maxTokens: 20_000,
+    });
+    expect(report!.categories).toContainEqual({
+      name: "Messages",
+      tokens: 2,
+      kind: "used",
+    });
+    expect(
+      report!.categories.some(
+        (c) => c.name === "Relay instructions" && c.tokens > 0,
+      ),
+    ).toBe(true);
+    expect(vi.mocked(findExecutable).mock.calls.length).toBe(starts);
+    expect(await readFile(run.log, "utf8")).toBe(turn);
+  } finally {
+    await closeCodexConnection(key);
+  }
+  expect(await readCodexContext(key, usage)).toBeNull();
 });
 
 it("says what is missing when Codex's answer to starting the thread or the turn lacks it", async () => {
@@ -227,6 +272,9 @@ it("ends a /review when Codex completes it, past the turn it starts for the revi
 });
 
 it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one", async () => {
+  // A busy machine can't run Codex's 3s to acknowledge out before the fake has the interrupt.
+  vi.stubEnv("RELAY_TEST_CODEX_INTERRUPT_MS", "60000");
+  onTestFinished(() => void vi.unstubAllEnvs());
   const stop = new AbortController();
   const { answer, log } = await ask(
     {
@@ -246,13 +294,11 @@ it("stops a /review in the turn Codex runs it in, as Codex refuses the outer one
   );
   await expect(answer).rejects.toThrow();
   // The answer ends at Stop, before the fake has written the interrupt down.
-  await vi.waitFor(
-    async () =>
-      expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
-        threadId: "thread",
-        turnId: "inner",
-      }),
-    { timeout: 10_000 },
+  await vi.waitFor(async () =>
+    expect(JSON.parse(await readFile(log, "utf8"))).toEqual({
+      threadId: "thread",
+      turnId: "inner",
+    }),
   );
 });
 

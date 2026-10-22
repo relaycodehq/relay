@@ -14,10 +14,7 @@ import { closeMuseSession, detachMuse, reattachMuse } from "./sessions";
 // A Muse turn keeps running in the agent host while Relay restarts, and the
 // next Relay picks it up without sending it again.
 
-vi.mock("../../platform/executables", async (actual) => ({
-  ...(await actual<typeof import("../../platform/executables")>()),
-  findExecutable: vi.fn(),
-}));
+vi.mock("../../platform/executables");
 
 const alive = (pid: number) => {
   try {

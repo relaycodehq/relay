@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { keyboardPopups } from "../../lib/popup-keyboard";
 
 /**
  * Escape calls `leave`. Popups and fields that handle it themselves keep it;
@@ -13,7 +14,7 @@ export function useLeaveOnEscape(leave: () => void) {
       counts =
         e.key === "Escape" &&
         !e.isComposing &&
-        !document.querySelector('dialog[open], [role="dialog"], [role="menu"]');
+        keyboardPopups(false).length === 0;
     };
     const bubble = (e: KeyboardEvent) => {
       if (counts && !e.defaultPrevented) latest.current();

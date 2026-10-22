@@ -16,6 +16,7 @@ import { timeAgo } from "../../lib/relative-date";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import { pullHostName } from "../../../shared/source-control";
+import { PullStatBreakdown } from "../changes/DiffStatBreakdown";
 
 interface Actions {
   pull: Pull;
@@ -141,8 +142,13 @@ function PullHeading({ pull }: { pull: Pull }) {
           <MiddleTruncate text={pull.base.ref} kind="branch" />
         </code>
         <span className="branch-divider" />
-        <span className="additions">+{pull.additions ?? 0}</span>
-        <span className="deletions">−{pull.deletions ?? 0}</span>
+        <PullStatBreakdown
+          pull={pull}
+          stat={{
+            additions: pull.additions ?? 0,
+            deletions: pull.deletions ?? 0,
+          }}
+        />
         <span className="push-date">Updated {timeAgo(pull.updated_at)}</span>
       </div>
     </section>

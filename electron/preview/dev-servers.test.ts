@@ -3,7 +3,15 @@ import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { build } from "esbuild";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import type { DevServerState } from "../../shared/preview";
 import { AgentHosts } from "../agent-host/client";
 import { hostAgents } from "../agents/hosted-sessions";
@@ -205,6 +213,85 @@ describe("DevServers", () => {
     await expect.poll(() => listening(port)).toBe(false);
   });
 
+  it("restarts a managed worktree server through its owner with its port and environment", async () => {
+    let now = Date.now();
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async () => new Set(),
+    );
+    cleanup.push(() => servers.dispose());
+    const root = await realpath(
+      await mkdtemp(join(tmpdir(), "relay-dev-restart-")),
+    );
+    const folder = await realpath(await mkdtemp(join(root, "worktree-")));
+    const port = await freePort();
+    const command = `node -e "require('fs').appendFileSync('launches', process.env.RELAY_PORT_OFFSET + ':' + process.env.PORT + '\\n'); require('http').createServer((q,s)=>s.end('ok')).listen(+process.env.PORT, '127.0.0.1')"`;
+    const env = { RELAY_PORT_OFFSET: "40", RELAY_WORKTREE: folder };
+    await servers.ensure(folder, command, port, env);
+    const worktrees = [{ path: folder, chatId: "thread" }];
+    const [task] = await projectTasks.list(root, worktrees, { fresh: true });
+    expect(task).toMatchObject({ origin: "relay", worktree: "thread", folder });
+    const restarted = projectTasks.restart(root, task!.id, worktrees);
+    await expect.poll(() => servers.state(folder)?.state).toBe("starting");
+    const waking = servers.ensure(folder, command, port, env);
+    await restarted;
+    expect(await waking).toEqual({ state: "running", port, ours: true });
+    expect(await readFile(join(folder, "launches"), "utf8")).toBe(
+      `40:${port}\n40:${port}\n`,
+    );
+    const [next] = await projectTasks.list(root, worktrees, { fresh: true });
+    expect(next!.id).not.toBe(task!.id);
+    expect(next).toMatchObject({
+      origin: "relay",
+      worktree: "thread",
+      ports: [port],
+    });
+    now += IDLE_MS + 1;
+    await servers.sleepIdle();
+    expect(servers.state(folder)?.state).toBe("asleep");
+    await expect.poll(() => listening(port)).toBe(false);
+  });
+
+  it("keeps ownership when the validated stop fails, and cancels an in-flight restart on disposal", async () => {
+    const track = vi.spyOn(projectTasks, "trackServer");
+    cleanup.push(() => track.mockRestore());
+    const servers = new DevServers(() => {});
+    cleanup.push(() => servers.dispose());
+    const folder = await realpath(
+      await mkdtemp(join(tmpdir(), "relay-dev-stop-fail-")),
+    );
+    const port = await freePort();
+    await servers.ensure(
+      folder,
+      `echo started >> launches; ${serve}`,
+      port,
+      {},
+    );
+    const restart = track.mock.calls.find((args) => args[2] === folder)![3];
+    await expect(
+      restart(async () => {
+        throw new Error("Could not validate stop");
+      }),
+    ).rejects.toThrow("Could not validate stop");
+    expect(servers.state(folder)?.state).toBe("failed");
+    expect(await listening(port)).toBe(true);
+    expect(await readFile(join(folder, "launches"), "utf8")).toBe("started\n");
+    // A failed stop must retain the original child so shutdown can still stop it.
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const pending = restart(() => gate);
+    expect(servers.state(folder)?.state).toBe("starting");
+    servers.dispose();
+    finish();
+    await expect(pending).rejects.toThrow("stopped before it could restart");
+    await expect.poll(() => listening(port)).toBe(false);
+    expect(servers.state(folder)).toBeUndefined();
+    expect(await readFile(join(folder, "launches"), "utf8")).toBe("started\n");
+  });
+
   it("cancels startup before the initial port probe finishes", async () => {
     const seen: DevServerState[] = [];
     const servers = new DevServers((_folder, state) => seen.push(state));
@@ -370,9 +457,13 @@ describe.skipIf(process.platform === "win32")(
     it("keeps a server running through a restart, and the next Relay takes it back instead of starting another", async () => {
       const folder = await folderWith("kept-");
       const port = await freePort();
-      const command = `echo started >> launches; ${serve}`;
+      const command = `echo "$RELAY_PORT_OFFSET:$PORT" >> launches; ${serve}`;
       const first = relay();
-      expect(await first.servers.ensure(folder, command, port, {})).toEqual({
+      expect(
+        await first.servers.ensure(folder, command, port, {
+          RELAY_PORT_OFFSET: "25",
+        }),
+      ).toEqual({
         state: "running",
         port,
         ours: true,
@@ -404,6 +495,19 @@ describe.skipIf(process.platform === "win32")(
           ),
         )
         .toEqual([port]);
+
+      // Restart directly from Running Tasks, without a new preview supplying env.
+      const [task] = await projectTasks.list(folder, [], { fresh: true });
+      await projectTasks.restart(folder, task!.id);
+      expect(next.servers.state(folder)).toEqual({
+        state: "running",
+        port,
+        ours: true,
+      });
+      expect(await launches(folder)).toBe(2);
+      expect(await readFile(join(folder, "launches"), "utf8")).toBe(
+        `25:${port}\n25:${port}\n`,
+      );
 
       // Quitting for real stops it.
       next.servers.dispose();

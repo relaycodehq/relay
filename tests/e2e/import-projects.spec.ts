@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { test, expect, _electron as electron } from "../fixtures/electron";
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -58,13 +58,10 @@ test("imports selected projects and chats from the Add project menu, reusing pro
     ),
   ) as Record<string, string>;
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
       CODEX_HOME: home,
       CLAUDE_CONFIG_DIR: join(root, "claude"),
     },
@@ -81,7 +78,16 @@ test("imports selected projects and chats from the Add project menu, reusing pro
     await page
       .getByRole("button", { name: "Add project", exact: true })
       .click();
-    const entry = page.getByRole("menuitem", {
+    await expect(
+      page.getByRole("dialog", { name: "Add a project", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "This computer", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.screenshot({
+      path: join(tmpdir(), "relay-sidebar-add-project-dialog.png"),
+    });
+    const entry = page.getByRole("button", {
       name: "Import from another app…",
       exact: true,
     });
@@ -94,6 +100,17 @@ test("imports selected projects and chats from the Add project menu, reusing pro
       name: "Add a project",
       exact: true,
     });
+    await expect(
+      dialog.getByRole("heading", {
+        name: "Import from another app",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await screenshot(dialog, {
+      path: join(tmpdir(), "relay-project-import-apps.png"),
+    });
+    await dialog.getByRole("button", { name: /Codex \/ ChatGPT/ }).click();
+    await page.keyboard.press("Escape");
     await expect(
       dialog.getByRole("heading", {
         name: "Import from another app",
@@ -195,7 +212,7 @@ test("imports selected projects and chats from the Add project menu, reusing pro
       .getByRole("button", { name: "Add project", exact: true })
       .click();
     await page
-      .getByRole("menuitem", { name: "Import from another app…", exact: true })
+      .getByRole("button", { name: "Import from another app…", exact: true })
       .click();
     await dialog.getByRole("button", { name: /Codex \/ ChatGPT/ }).click();
     await dialog

@@ -28,6 +28,8 @@ it("answers the ranges a player asks for while seeking", () => {
 });
 
 it("refuses ranges past the end or that it can't read", () => {
+  expect(byteRange(null, 0)).toBeNull();
+  expect(byteRange("bytes=0-", 0)).toBeNull();
   expect(byteRange("bytes=100-", 100)).toBeNull();
   expect(byteRange("bytes=20-10", 100)).toBeNull();
   expect(byteRange("bytes=0-1,5-6", 100)).toBeNull();

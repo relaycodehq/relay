@@ -11,6 +11,7 @@ import type { ThreadActions } from "./useThreadActions";
 import { NameInput } from "../../ui/NameInput";
 import { ThreadMenu } from "./ThreadMenu";
 import { StatusMark } from "./ThreadStatus";
+import { ThreadRef } from "./ThreadRef";
 
 const THREADS_PER_PROJECT = 5;
 
@@ -174,6 +175,8 @@ export function ThreadRow({
   highlighted?: boolean;
 }) {
   const { chatId, now, unread, projects, actions } = rows;
+  const hasRef =
+    !!(c.branch || c.commit) && !projects.get(c.projectId)?.scratch;
   const stale =
     now - c.updated > STALE_AFTER &&
     chatId !== c.id &&
@@ -199,11 +202,14 @@ export function ThreadRow({
           title={c.title}
           onClick={() => actions.open(c)}
         >
-          <ThreadTitle
-            className="sb-thread-title"
-            title={c.title}
-            regenerating={actions.regenerating.has(c.id)}
-          />
+          <span className="sb-thread-content">
+            <ThreadTitle
+              className="sb-thread-title"
+              title={c.title}
+              regenerating={actions.regenerating.has(c.id)}
+            />
+            {hasRef && <ThreadRef chat={c} branchIcon />}
+          </span>
           {withProject && (
             <small className="sb-thread-project">
               {projects.get(c.projectId)?.name}

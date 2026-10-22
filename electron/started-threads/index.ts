@@ -4,10 +4,13 @@
 // thread may read any other; a lead drives its own, and any other once the
 // user lets it, and a started thread only reads, so nothing starts threads of
 // threads.
-import { inputBlocksThread } from "../../shared/thread-state";
 import { sliceWhole } from "../../shared/truncate";
 import { randomUUID } from "node:crypto";
-import { basename, resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { ThreadReads } from "./thread-reads";
+import { ProjectAccess, type AgentProjects } from "./project-access";
+import { ThreadPages } from "./thread-pages";
+import { json, localTime } from "./tool-output";
 import {
   agentName,
   usageProviders,
@@ -22,7 +25,6 @@ import {
   projectChatSendSchema,
   type ChatMessage,
   type ChatSummary,
-  type Project,
   type ProjectChat,
   type ProjectChatSend,
 } from "../../shared/projects";
@@ -35,52 +37,27 @@ import {
 } from "../../shared/handoff";
 import { noteForAgent } from "../../shared/thread-notes";
 import type { ModelChoice } from "../../shared/settings";
-import type { HtmlRender } from "../../shared/html-render";
 import type { ToolHandler } from "../agent-host/client";
 import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
-import type { ProjectChats } from "../project-chats";
-import {
-  answerPreviewTool,
-  type PreviewToolName,
-  type ThreadPreviews,
-} from "../preview";
-import {
-  answerRenderTool,
-  hungPage,
-  PageHung,
-  type RenderToolName,
-  type RenderTools,
-} from "../html-renders";
+import { chatStatus, type ProjectChats } from "../project-chats";
+import type { ThreadPreviews } from "../preview";
+import type { RenderTools } from "../html-renders";
 import {
   relayToolSchemas,
   toolText,
-  MESSAGE_CHARS,
   STARTED_LIMIT,
   startedTools,
   type RelayToolArgs,
   type RelayToolName,
 } from "../relay-mcp";
-import { folderVerdict, realFolder, type FolderRules } from "./project-folder";
+import { errorMessage } from "../../shared/error-message";
 
-/** What a thread looks like to the agent that started it. */
-export type StartedStatus =
-  "working" | "needs-input" | "done" | "stopped" | "failed" | "idle";
-const settled = new Set<StartedStatus>([
-  "needs-input",
-  "done",
-  "stopped",
-  "failed",
-  "idle",
-]);
+export { localTime } from "./tool-output";
+export type { AgentProjects } from "./project-access";
 
-/** Where a read stops adding messages, under what the agent's harness cuts from a tool's result. */
-const PAGE_CHARS = 80_000;
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
-const POLL_MS = 1000;
-/** The preview's frame under an answer: sharp at the card's 720 px on a 2x screen. */
-const PREVIEW_SHOT_WIDTH = 1440;
 /** How long start_threads watches new threads for one that fails as it starts, as Relay serves it. */
 export const EARLY_FAILURE_MS = 10_000;
 const EARLY_POLL_MS = 250;
@@ -97,6 +74,7 @@ type Chats = Pick<
   | "startedThreads"
   | "allowDriving"
   | "get"
+  | "statuses"
   | "create"
   | "send"
   | "cancel"
@@ -109,8 +87,10 @@ type Chats = Pick<
   | "askWithPage"
   | "enterWorktree"
   | "notes"
-  | "handoffOutbox"
->;
+> & {
+  liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
+  importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
+};
 
 /** Moving threads to the user's other computers, as the thread header does. */
 export interface ThreadHandoffs {
@@ -140,105 +120,20 @@ const fallbackInput = {
 const answers = (chat: ProjectChat) =>
   chat.messages.filter((m) => m.role === "assistant" && !m.parentId);
 
-export function startedStatus(
-  summary: ChatSummary,
-  chat: ProjectChat,
-): StartedStatus {
-  if (inputBlocksThread(summary)) return "needs-input";
-  if (summary.running || summary.pending?.length) return "working";
-  if (chat.queue?.length && !chat.queuePaused) return "working";
-  const last = answers(chat).at(-1);
-  if (!last) return chat.messages.length ? "working" : "idle";
-  return {
-    streaming: "working",
-    complete: "done",
-    cancelled: "stopped",
-    failed: "failed",
-  }[last.status] as StartedStatus;
-}
-
-/** Where a thread is when that's another computer, as the tools say it. */
-function away({ sentTo }: Pick<ChatSummary, "sentTo">) {
-  if (!sentTo) return {};
-  return {
-    on: sentTo.computer,
-    ...(sentTo.state === "away"
-      ? sentTo.live
-        ? {}
-        : {
-            note: `Bring it back with hand_off_thread to "here" before messaging it.`,
-          }
-      : {
-          handoff:
-            sentTo.state === "sending"
-              ? `on its way to ${sentTo.computer}`
-              : `coming back from ${sentTo.computer}`,
-        }),
-    ...(sentTo.error ? { handoffError: sentTo.error } : {}),
-  };
-}
-
 /** The start of what the user is asked about. */
 const head = (text: string, limit = 600) =>
   text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
 
-const tail = (text: string, limit: number) =>
-  text.length > limit ? `…${sliceWhole(text, -limit)}` : text;
-
-/** A message's text from `offset`, and where to read on when there's more. */
-function bodyFrom(body: string, offset = 0) {
-  const part = sliceWhole(body, offset, offset + MESSAGE_CHARS);
-  const end = offset + part.length;
-  return end < body.length ? { body: part, nextOffset: end } : { body: part };
-}
-
-const json = (value: unknown) => toolText(JSON.stringify(value, null, 1));
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-/**
- * The user's wall-clock time with its offset, like 2026-10-08T16:00:00+02:00.
- * Agents read a UTC `Z` stamp's hours out to the user as if they were local.
- */
-export function localTime(at: number) {
-  const d = new Date(at);
-  const offset = -d.getTimezoneOffset();
-  const sign = offset < 0 ? "-" : "+";
-  const abs = Math.abs(offset);
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
-    `${sign}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`
-  );
-}
-
-const sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((resolve) => {
-    const timer = setTimeout(done, ms);
-    signal.addEventListener("abort", done, { once: true });
-    function done() {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", done);
-      resolve();
-    }
-  });
+/** Keeps each validated tool name paired with its own schema output. */
+type ToolCall = {
+  [N in RelayToolName]: { name: N; input: RelayToolArgs<N> };
+}[RelayToolName];
 
 type ReadUsage = (
   provider: UsageProvider,
   force: boolean,
   account?: string,
 ) => Promise<ProviderUsage>;
-
-/** The user's projects as the tools see and add them. */
-export interface AgentProjects {
-  list(): Promise<Project[]>;
-  /** Adds the real folder the user approved, as the user's + does; refuses it once it resolves elsewhere. */
-  add(folder: string): Promise<Project>;
-  /** The root of the Git repository `dir` is in; null when it's in none. */
-  repositoryRoot(dir: string): Promise<string | null>;
-  /** Where home, Relay's data and the system's folders are, for the refusals. */
-  rules(): Promise<Omit<FolderRules, "projects">>;
-}
 
 export type ReportProblem = (
   fields: Required<RelayToolArgs<"report_relay_problem">>,
@@ -249,9 +144,9 @@ const RESTART_DELAY_MS = 1000;
 
 export class StartedThreads {
   private readUsage: ReadUsage;
-  private projects: AgentProjects | undefined;
-  private previews: ThreadPreviews | undefined;
-  private look: RenderTools["look"];
+  private projects: ProjectAccess;
+  private reads: ThreadReads;
+  private pages: ThreadPages;
   private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
   private reportProblem: ReportProblem | undefined;
@@ -277,9 +172,9 @@ export class StartedThreads {
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
-    this.projects = options.projects;
-    this.previews = options.previews;
-    this.look = options.look;
+    this.projects = new ProjectAccess(options.projects);
+    this.reads = new ThreadReads(chats, this.projects);
+    this.pages = new ThreadPages(chats, options);
     this.handoffs = options.handoffs;
     this.restart = options.restart;
     this.reportProblem = options.reportProblem;
@@ -290,7 +185,7 @@ export class StartedThreads {
   /** Answers one tool call made by the agent in `chatId`. */
   handle: ToolHandler = (chatId, name, args, signal) =>
     this.answer(chatId, name, args, signal).catch((error: unknown) =>
-      toolText(error instanceof Error ? error.message : String(error), true),
+      toolText(errorMessage(error), true),
     );
 
   private async answer(
@@ -299,8 +194,9 @@ export class StartedThreads {
     args: unknown,
     signal: AbortSignal,
   ) {
+    if (!Object.hasOwn(relayToolSchemas, name))
+      return toolText(`There is no tool ${name}.`, true);
     const schema = relayToolSchemas[name as RelayToolName];
-    if (!schema) return toolText(`There is no tool ${name}.`, true);
     const parsed = schema.safeParse(args);
     if (!parsed.success)
       return toolText(
@@ -315,20 +211,22 @@ export class StartedThreads {
         "A thread started by another thread can't start or drive threads of its own.",
         true,
       );
-    const input = parsed.data as any;
-    switch (name as RelayToolName) {
+    // The lookup and parse above establish this pairing; keep it together so
+    // narrowing the tool name also narrows its arguments in every branch.
+    const { name: tool, input } = { name, input: parsed.data } as ToolCall;
+    switch (tool) {
       case "start_threads":
         return this.start(lead, input, signal);
       case "list_threads":
-        return json(await this.list(lead));
+        return json(await this.reads.list(lead));
       case "find_threads":
-        return this.find(lead, input);
+        return this.reads.find(lead, input);
       case "read_thread":
-        return this.read(lead, input);
+        return this.reads.read(input);
       case "send_to_thread":
         return this.sendTo(lead, input, signal);
       case "wait_for_threads":
-        return this.wait(lead, input, signal);
+        return this.reads.wait(lead, input, signal);
       case "stop_thread":
         return this.stop(lead, input.id, signal);
       case "hand_off_thread":
@@ -353,11 +251,27 @@ export class StartedThreads {
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
       case "list_projects":
-        return json(await this.listProjects(lead));
+        return json(await this.projects.list(lead.projectId));
       case "add_project":
-        return this.addProject(lead, input, signal);
+        return this.projects.add(input, (title, detail) =>
+          this.approve(lead, title, detail, signal, true),
+        );
       case "restart_relay":
         return this.restartRelay(lead, input, signal);
+      case "import_sources":
+      case "offer_import": {
+        const offers = this.chats.importOffers;
+        if (!lead.importFrom || !offers)
+          return toolText(
+            "Only a thread opened to import another app's history can.",
+            true,
+          );
+        return toolText(
+          tool === "import_sources"
+            ? await offers.sources(lead.importFrom, input.project)
+            : await offers.offer(lead.id, lead.importFrom, input),
+        );
+      }
       case "report_relay_problem":
         if (!this.reportProblem)
           return toolText("This Relay has no window to report from.", true);
@@ -368,92 +282,17 @@ export class StartedThreads {
       case "open_preview":
       case "screenshot":
       case "console_errors":
-        if (!this.previews)
-          return toolText("Previews aren't available in this Relay.", true);
-        {
-          const result = await answerPreviewTool(
-            this.previews,
-            { projectId: lead.projectId, chatId: lead.id },
-            name as PreviewToolName,
-            input,
-            signal,
-          );
-          if (name !== "console_errors" && !result.isError)
-            await this.keepPreview(lead.id);
-          return result;
-        }
+        return this.pages.preview(lead, tool, input, signal);
       case "ask_html":
-        return this.askPage(lead, input, signal);
+        return this.pages.ask(lead.id, input, signal);
       case "show_html":
       case "preview_html":
-        return answerRenderTool(
-          {
-            look: this.look,
-            show: (id, render, pages) =>
-              this.chats.showRender(id, render, pages),
-          },
-          lead.id,
-          name as RenderToolName,
-          input,
-          signal,
-        );
+        return this.pages.render(lead.id, tool, input, signal);
+      default: {
+        const unhandled: never = tool;
+        throw new Error(`There is no handler for tool ${unhandled}.`);
+      }
     }
-  }
-
-  /**
-   * Leaves the thread's preview under the answer, with the page as it looks
-   * now: drawn off screen when the panel is closed, which is when the user
-   * most needs to see it's there.
-   */
-  private async keepPreview(chatId: string) {
-    const previews = this.previews!;
-    const state = previews.current(chatId);
-    if (!state?.url || state.error) return;
-    const frame = await previews.capture(chatId).catch((e) => {
-      console.warn("Could not draw the preview for its answer:", e);
-      return null;
-    });
-    const scaled =
-      frame && frame.getSize().width > PREVIEW_SHOT_WIDTH
-        ? frame.resize({ width: PREVIEW_SHOT_WIDTH })
-        : frame;
-    await this.chats
-      .showPreview(
-        chatId,
-        { url: state.url, title: state.title, at: Date.now() },
-        scaled && !scaled.isEmpty() ? scaled.toJPEG(80) : null,
-      )
-      .catch((e) =>
-        console.warn("Could not leave the preview in the answer:", e),
-      );
-  }
-
-  /**
-   * Leaves the agent's page in its answer for the user to answer whenever
-   * they like; the answer comes as their next message, so nothing waits on a
-   * tool call that a client would time out.
-   */
-  private async askPage(
-    lead: ProjectChat,
-    { title, html, detail }: RelayToolArgs<"ask_html">,
-    signal: AbortSignal,
-  ) {
-    const look =
-      this.look &&
-      (await this.look(html, {}, signal).catch((error) =>
-        error instanceof PageHung ? error : undefined,
-      ));
-    if (look instanceof PageHung) return hungPage(look);
-    const page: HtmlRender = {
-      id: randomUUID(),
-      title,
-      created: Date.now(),
-      pages: [look ? { heights: look.heights } : {}],
-    };
-    await this.chats.askWithPage(lead.id, page, html, detail ?? title);
-    return toolText(
-      `Shown to the user as "${title}". Their answer comes as their next message, as the JSON the page handed back, or word that they skipped it. If you can't go on without it, end your turn now and wait.`,
-    );
   }
 
   /**
@@ -516,32 +355,6 @@ export class StartedThreads {
     return this.leadSide(lead).last.runtimeMode === "full-access";
   }
 
-  /** The threads the lead started, in whichever project. */
-  private children(lead: ProjectChat) {
-    return this.chats.startedThreads(lead.id).filter((c) => !c.archivedAt);
-  }
-
-  private reachProjects() {
-    if (!this.projects)
-      throw new Error("Relay's projects can't be reached from here.");
-    return this.projects;
-  }
-
-  /** The user's projects an agent may start threads in: all but Scratchpad's. */
-  private async realProjects() {
-    return (await this.reachProjects().list()).filter((p) => !p.scratch);
-  }
-
-  private async listProjects(lead: ProjectChat) {
-    return (await this.realProjects()).map((p) => ({
-      id: p.id,
-      name: p.name,
-      folder: p.path,
-      git: !p.plain,
-      ...(p.id === lead.projectId ? { current: true } : {}),
-    }));
-  }
-
   private async restartRelay(
     lead: ProjectChat,
     { reason }: RelayToolArgs<"restart_relay">,
@@ -573,92 +386,6 @@ export class StartedThreads {
     );
   }
 
-  private async addProject(
-    lead: ProjectChat,
-    { folder }: RelayToolArgs<"add_project">,
-    signal: AbortSignal,
-  ) {
-    const projects = this.reachProjects();
-    const rules = await projects.rules();
-    const found = await realFolder(folder, rules.platform);
-    if ("refused" in found) return toolText(found.refused, true);
-    const { real } = found;
-    const listed = await projects.list();
-    const verdict = folderVerdict(real, { ...rules, projects: listed });
-    if (verdict.kind === "refused") return toolText(verdict.reason, true);
-    if (verdict.kind === "existing") {
-      const p = listed.find((p) => p.id === verdict.id)!;
-      return json({
-        id: p.id,
-        name: p.name,
-        folder: p.path,
-        git: !p.plain,
-        alreadyAdded: true,
-      });
-    }
-    const repository = await projects.repositoryRoot(real);
-    if (repository && repository !== real) {
-      const outer = folderVerdict(repository, { ...rules, projects: listed });
-      return toolText(
-        outer.kind === "ok"
-          ? `That's inside the Git repository at ${repository}; add that folder instead.`
-          : `That's inside the Git repository at ${repository}, which can't be added: ${outer.kind === "refused" ? outer.reason : "it's a project already."}`,
-        true,
-      );
-    }
-    const linked = resolve(folder) !== real;
-    const approved = await this.approve(
-      lead,
-      `Add “${basename(real)}” to Relay as a project?`,
-      [
-        real,
-        `${repository ? "Git repository." : "Plain folder, no Git."} Agents in its threads can read and change everything in this folder.`,
-        ...(linked
-          ? [`(Asked for ${JSON.stringify(folder)}, a link to this folder.)`]
-          : []),
-      ].join("\n"),
-      signal,
-      true,
-    );
-    if (!approved)
-      return toolText(
-        "The user didn't add this folder. Ask them what they want instead.",
-        true,
-      );
-    // The card can wait for minutes; meanwhile the agent may swap the folder
-    // for a link to home, or the user may add it or a folder around it.
-    const now = await realFolder(real, rules.platform);
-    if (!("real" in now) || now.real !== real)
-      return toolText(
-        `${real} changed while the user was asked; nothing was added.`,
-        true,
-      );
-    const recheck = folderVerdict(real, {
-      ...rules,
-      projects: await projects.list(),
-    });
-    if (recheck.kind === "refused") return toolText(recheck.reason, true);
-    const project = await projects.add(real);
-    return json({
-      id: project.id,
-      name: project.name,
-      folder: project.path,
-      git: !project.plain,
-    });
-  }
-
-  /** Any listed thread, as list() shows it. */
-  private async thread(id: string) {
-    const chat = await this.chats.get(id).catch(() => {
-      throw new Error("There's no such thread; see find_threads.");
-    });
-    const summary = this.chats
-      .list(chat.projectId)
-      .find((c) => c.id === id && !c.archivedAt);
-    if (!summary) throw new Error("There's no such thread; see find_threads.");
-    return { summary, chat };
-  }
-
   /**
    * A thread the lead may drive. `mine`: it started it. `sends`: it may
    * message it as freely as one in its own project.
@@ -666,11 +393,11 @@ export class StartedThreads {
   private async target(lead: ProjectChat, id: string) {
     if (id === lead.id)
       throw new Error("That's this thread; these tools drive other threads.");
-    const mine = this.children(lead).some((c) => c.id === id);
-    const found = await this.thread(id);
+    const mine = this.reads.children(lead).some((c) => c.id === id);
+    const found = await this.reads.thread(id);
     const elsewhere =
       found.chat.projectId !== lead.projectId
-        ? ((await this.realProjects()).find(
+        ? ((await this.projects.real()).find(
             (p) => p.id === found.chat.projectId,
           )?.name ?? "another project")
         : undefined;
@@ -769,7 +496,7 @@ export class StartedThreads {
     if (!approved) return this.refused("hand it off");
     await handoffs.handOff(id, target.id);
     await handoffs.finished(id);
-    const sentTo = (await this.thread(id)).summary.sentTo;
+    const sentTo = (await this.reads.thread(id)).summary.sentTo;
     if (!sentTo || sentTo.error)
       return toolText(
         `It didn't go to ${target.name}${sentTo?.error ? `: ${sentTo.error}` : "."}`,
@@ -802,7 +529,7 @@ export class StartedThreads {
     if (!approved) return this.refused("bring it back");
     await handoffs.bringBack(chat.id);
     await handoffs.finished(chat.id);
-    const after = (await this.thread(chat.id)).summary.sentTo;
+    const after = (await this.reads.thread(chat.id)).summary.sentTo;
     if (after)
       return toolText(
         `It didn't come back from ${sentTo.computer}${after.error ? `: ${after.error}` : "."}`,
@@ -813,7 +540,7 @@ export class StartedThreads {
 
   private async settle(lead: ProjectChat, id: string, signal: AbortSignal) {
     const { summary, chat, mine, where } = await this.target(lead, id);
-    const status = startedStatus(summary, chat);
+    const { status } = chatStatus(summary, chat);
     if (status === "working" || status === "needs-input")
       return toolText(
         status === "working"
@@ -863,7 +590,7 @@ export class StartedThreads {
   ) {
     const elsewhere =
       project && project !== lead.projectId
-        ? (await this.realProjects()).find((p) => p.id === project)
+        ? (await this.projects.real()).find((p) => p.id === project)
         : undefined;
     if (project && project !== lead.projectId && !elsewhere)
       return toolText("There's no such project; see list_projects.", true);
@@ -884,7 +611,7 @@ export class StartedThreads {
       caller,
     );
     if (refused) return toolText(refused, true);
-    const working = this.children(lead).filter((c) => c.running).length;
+    const working = this.reads.children(lead).filter((c) => c.running).length;
     if (!detached && working + threads.length > STARTED_LIMIT)
       return toolText(
         `${working} of your threads are working; at most ${STARTED_LIMIT} may at once. Wait for some to finish first.`,
@@ -990,7 +717,7 @@ export class StartedThreads {
         });
       } catch (error) {
         started.push({
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         });
       }
     }
@@ -1022,18 +749,20 @@ export class StartedThreads {
     const until = Date.now() + this.failureWatchMs;
     let open = ids;
     while (open.length && !signal.aborted && Date.now() < until) {
-      await sleep(Math.min(EARLY_POLL_MS, until - Date.now()), signal);
+      await delay(Math.min(EARLY_POLL_MS, until - Date.now()), undefined, {
+        signal,
+      }).catch(() => {});
       const still: string[] = [];
       for (const id of open) {
         // Gone already, as the user may delete it: nothing to report.
-        const found = await this.thread(id).catch(() => undefined);
+        const found = await this.reads.thread(id).catch(() => undefined);
         if (!found) continue;
         const { summary, chat } = found;
         const last = answers(chat).at(-1);
         if (last?.status === "failed") {
           // Settling waits for its run to let go of it.
           const settled =
-            startedStatus(summary, chat) === "failed" &&
+            chatStatus(summary, chat).status === "failed" &&
             (await this.chats.triage(id, { kind: "settle" }).then(
               () => true,
               () => false,
@@ -1060,8 +789,9 @@ export class StartedThreads {
           ...(account ? { account } : {}),
           ...Object.fromEntries(
             usage.windows.map((w) => [
-              w.kind,
+              w.id ?? w.kind,
               {
+                ...(w.label ? { label: w.label } : {}),
                 usedPercent: Math.round(w.usedPercent),
                 ...(w.resetsAt
                   ? {
@@ -1098,162 +828,6 @@ export class StartedThreads {
       if (worktree === true) throw error;
       return this.chats.create(projectId, scope, "checkout", startedBy);
     }
-  }
-
-  private async list(lead: ProjectChat, ids?: string[]) {
-    const listed = ids
-      ? await Promise.all(
-          ids.map(async (id) => (await this.thread(id)).summary),
-        )
-      : this.children(lead);
-    const names = listed.some((c) => c.projectId !== lead.projectId)
-      ? new Map((await this.realProjects()).map((p) => [p.id, p.name]))
-      : undefined;
-    return Promise.all(
-      listed.map(async (summary) => {
-        const chat = await this.chats.get(summary.id);
-        const last = answers(chat).at(-1);
-        const asks = [
-          ...(chat.requests?.map((r) => r.title) ?? []),
-          ...chat.messages.flatMap((m) =>
-            (m.questions ?? []).flatMap((group) =>
-              !group.answers && !group.dismissed
-                ? group.questions.map((q) => q.question)
-                : [],
-            ),
-          ),
-        ];
-        return {
-          id: summary.id,
-          title: summary.title,
-          status: startedStatus(summary, chat),
-          ...(summary.projectId !== lead.projectId
-            ? { project: names?.get(summary.projectId) ?? summary.projectId }
-            : {}),
-          ...(asks.length ? { asks } : {}),
-          ...(summary.branch ? { branch: summary.branch } : {}),
-          // Away, the folder here lacks what's done there.
-          ...(chat.worktree?.path && !summary.sentTo
-            ? { folder: chat.worktree.path }
-            : {}),
-          ...away(summary),
-          ...(last?.body ? { latest: tail(last.body, 600) } : {}),
-          ...(last?.error ? { error: last.error } : {}),
-        };
-      }),
-    );
-  }
-
-  private async find(
-    lead: ProjectChat,
-    { project, query, limit = 20 }: RelayToolArgs<"find_threads">,
-  ) {
-    const projects = (await this.reachProjects().list()).filter(
-      (p) => !project || p.id === project,
-    );
-    if (!projects.length)
-      return toolText("There's no such project; see list_projects.", true);
-    const words = query?.toLowerCase().split(/\s+/) ?? [];
-    const found = projects
-      .flatMap((p) => this.chats.list(p.id).map((summary) => ({ summary, p })))
-      .filter(
-        ({ summary: c }) =>
-          !c.archivedAt &&
-          !c.empty &&
-          words.every((w) =>
-            `${c.title} ${c.branch ?? ""}`.toLowerCase().includes(w),
-          ),
-      )
-      .sort((a, b) => b.summary.updated - a.summary.updated)
-      .slice(0, limit);
-    return json(
-      found.map(({ summary: c, p }) => ({
-        id: c.id,
-        title: c.title,
-        project: p.scratch ? "Scratchpad" : p.name,
-        ...(c.id === lead.id ? { you: true } : {}),
-        status: inputBlocksThread(c)
-          ? "needs-input"
-          : c.running
-            ? "working"
-            : c.settledAt || c.autoSettled
-              ? "settled"
-              : "idle",
-        updated: localTime(c.updated),
-        ...(c.contextAgent || c.provider
-          ? { agent: agentName(c.contextAgent ?? c.provider!) }
-          : {}),
-        ...(c.branch ? { branch: c.branch } : {}),
-        ...(c.startedBy ? { startedBy: c.startedBy.chatId } : {}),
-        ...away(c),
-      })),
-    );
-  }
-
-  private async read(
-    _lead: ProjectChat,
-    { id, after, before, message, offset, limit = 50 }: RelayToolArgs<"read_thread">,
-  ) {
-    const chat = await this.chats.get(id).catch(() => {
-      throw new Error("There's no such thread; see find_threads.");
-    });
-    const main = chat.messages.filter((m) => !m.parentId);
-    const said = (m: ProjectChat["messages"][number], from?: number) => ({
-      id: m.id,
-      from: m.role === "user" ? (m.author ?? "user") : agentName(m.provider),
-      ...(m.status === "complete" ? {} : { status: m.status }),
-      ...bodyFrom(m.body, from),
-      ...(m.error ? { error: m.error } : {}),
-      ...(m.changes?.length ? { changed: m.changes.map((c) => c.path) } : {}),
-    });
-    if (message) {
-      const m = main.find((m) => m.id === message);
-      if (!m) throw new Error("There's no such message in this thread.");
-      return json(said(m, offset));
-    }
-    const where = (key: "after" | "before", value?: string) => {
-      if (!value) return undefined;
-      const at = main.findIndex((m) => m.id === value);
-      if (at < 0)
-        throw new Error(
-          `That \`${key}\` isn't a message in this thread; read it again without it.`,
-        );
-      return at;
-    };
-    const from = (where("after", after) ?? -1) + 1;
-    const to = where("before", before) ?? main.length;
-    const range = main.slice(from, to);
-    // On from `after` the page fills oldest first; otherwise newest first,
-    // since what a reader comes for is usually the latest answer.
-    const forward = after !== undefined;
-    const shown: typeof main = [];
-    let chars = 0;
-    for (const m of forward ? range : [...range].reverse()) {
-      const size = Math.min(m.body.length, MESSAGE_CHARS);
-      if (shown.length === limit || (shown.length && chars + size > PAGE_CHARS))
-        break;
-      shown.push(m);
-      chars += size;
-    }
-    if (!forward) shown.reverse();
-    const cut = shown.length < range.length;
-    // `next` stops before an answer still streaming, so the next read
-    // returns it again, finished.
-    const unfinished = shown.findIndex((m) => m.status === "streaming");
-    const next =
-      (unfinished < 0 ? shown.at(-1) : shown[unfinished - 1])?.id ??
-      after ??
-      null;
-    // The notes come first: what the user keeps at hand there.
-    const notes = after || before ? [] : (chat.notes ?? []).map(noteForAgent);
-    return json({
-      ...away(chat),
-      ...(notes.length ? { notes } : {}),
-      messages: shown.map((m) => said(m)),
-      next,
-      ...(cut && forward ? { more: true } : {}),
-      ...(cut && !forward ? { earlier: shown[0]!.id } : {}),
-    });
   }
 
   /** The thread whose notes a call means: the one named, or the caller's own. */
@@ -1384,7 +958,7 @@ export class StartedThreads {
     if (this.handoffs?.forwards("sendProjectChat", [id, send])) {
       const computer = chat.sentTo!.computer;
       await this.handoffs.forward("sendProjectChat", [id, send]);
-      const held = (await this.chats.handoffOutbox(id)).some(
+      const held = (await this.chats.liveHandoff.outbox(id)).some(
         (h) => h.input.id === send.id,
       );
       return toolText(
@@ -1397,28 +971,5 @@ export class StartedThreads {
     return toolText(
       steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
     );
-  }
-
-  private async wait(
-    lead: ProjectChat,
-    { ids, timeoutSeconds = 300 }: RelayToolArgs<"wait_for_threads">,
-    signal: AbortSignal,
-  ) {
-    const until = Date.now() + timeoutSeconds * 1000;
-    for (;;) {
-      const threads = await this.list(lead, ids);
-      const done = threads.every((t) => settled.has(t.status));
-      if (done || signal.aborted || Date.now() >= until)
-        return json({
-          ...(done
-            ? {}
-            : {
-                timedOut: !signal.aborted,
-                note: "Still working; wait again or read them.",
-              }),
-          threads,
-        });
-      await sleep(Math.min(POLL_MS, until - Date.now()), signal);
-    }
   }
 }

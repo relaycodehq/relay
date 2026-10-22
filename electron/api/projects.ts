@@ -3,6 +3,7 @@ import {
   importAppSchema,
   importSelectionSchema,
 } from "../../shared/project-import";
+import { runImportOfferSchema } from "../../shared/import-offer";
 import { app, dialog, nativeImage, shell } from "electron";
 import { lstat, realpath } from "node:fs/promises";
 import { join } from "node:path";
@@ -20,11 +21,12 @@ import {
 import {
   checkNewLinks,
   expandHome,
+  folderPreview,
   inspectFolder,
   linkSuggestions,
   listFolders,
 } from "../projects/folder-inspect";
-import { newProjectSchema } from "../../shared/projects";
+import { folderInputSchema, newProjectSchema } from "../../shared/projects";
 import { githubRepos } from "../project-add";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { isSourceControlOn } from "../../shared/source-control";
@@ -36,7 +38,7 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
-import { imageMime, videoMime } from "../../shared/project-files";
+import { videoMime } from "../../shared/project-files";
 import { mediaUrl } from "../media";
 import { agentRuntime } from "../agents";
 import {
@@ -49,17 +51,17 @@ import {
 } from "../projects/project-files";
 import { projectIcon } from "../projects/project-icon";
 import { branchPulls } from "../pull-requests/pull-request-create";
-import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
+import {
+  computerIdSchema,
+  pageSchema,
+  remoteProjects,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 /** The project list and its folders, files, agents, and pull requests. */
 const folderPathSchema = workingPathSchema.or(z.literal(""));
-/** A folder on disk as typed: absolute, or from `~`. */
-const folderInputSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(4096)
-  .refine((v) => /^(~|\/|[a-zA-Z]:[\\/])/.test(v) && !v.includes("\0"));
 /** Where a file call works: a workspace, or the folder of a file outside every project. */
 const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
 
@@ -109,6 +111,22 @@ export function projectHandlers(ctx: ApiContext) {
     importSelectedProjects: takes(
       [importAppSchema, z.array(importSelectionSchema).min(1).max(1000)],
       (app, selections) => projectChats.imports.run(app, selections),
+    ),
+    startImportThread: takes([importAppSchema], async (source) => {
+      const project = await projects.scratch(
+        join(app.getPath("userData"), "Scratchpad"),
+        (id) => projectChats.list(id).some((c) => !chatIsEmpty(c)),
+      );
+      const made = await projectChats.create(project.id, { kind: "project" });
+      return {
+        project,
+        chat: await projectChats.importOffers.open(made.id, source),
+      };
+    }),
+    runImportOffer: takes(
+      [idSchema, z.string().min(1).max(200), runImportOfferSchema],
+      (chatId, messageId, input) =>
+        projectChats.importOffers.run(chatId, messageId, input),
     ),
     projectIcon: takes([idSchema], async (id) =>
       projectIcon(await projects.root(id), (path) => {
@@ -206,8 +224,13 @@ export function projectHandlers(ctx: ApiContext) {
         : projects.add(result.filePaths[0], ctx.login.client);
     },
     inspectFolder: takes([folderInputSchema], inspectFolder),
-    listFolders: takes([folderInputSchema], (dir) =>
-      listFolders(dir).catch(() => []),
+    listFolders: takes([folderInputSchema], (dir) => listFolders(dir)),
+    folderPreview: takes(
+      [folderInputSchema, computerIdSchema],
+      (dir, computerId) =>
+        computerId
+          ? remoteProjects(ctx).ask(computerId, "folderPreview", dir)
+          : folderPreview(dir),
     ),
     chooseFolder: takes([z.string().max(200)], async (title) => {
       const result = await dialog.showOpenDialog(ctx.window.caller()!, {
@@ -219,7 +242,11 @@ export function projectHandlers(ctx: ApiContext) {
     linkSuggestions: takes([idSchema], async (id) =>
       linkSuggestions(projects.get(id), await projects.list(ctx.login.client)),
     ),
-    addingStart: () => ctx.projectAdding.start(),
+    addingStart: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "addingStart")
+        : ctx.projectAdding.start(),
+    ),
     addProjectAt: takes(
       [folderInputSchema, z.boolean().optional()],
       (path, setUpGit) => ctx.projectAdding.addAt(path, setUpGit),
@@ -229,11 +256,28 @@ export function projectHandlers(ctx: ApiContext) {
       (remote, into) => ctx.projectAdding.clone(remote, into),
     ),
     createProject: takes(
-      [newProjectSchema.extend({ location: folderInputSchema })],
-      (spec) => ctx.projectAdding.create(spec),
+      [
+        newProjectSchema.extend({ location: folderInputSchema }),
+        computerIdSchema,
+      ],
+      async (spec, computerId) =>
+        computerId
+          ? remoteProjects(ctx).adopt(
+              computerId,
+              await remoteProjects(ctx).ask(computerId, "createProject", spec),
+            )
+          : ctx.projectAdding.create(spec),
     ),
-    cancelProjectAdding: () => ctx.projectAdding.cancel(),
-    githubRepos: () => githubRepos(),
+    cancelProjectAdding: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "cancelProjectAdding")
+        : ctx.projectAdding.cancel(),
+    ),
+    githubRepos: takes([computerIdSchema], (computerId) =>
+      computerId
+        ? remoteProjects(ctx).ask(computerId, "githubRepos")
+        : githubRepos(),
+    ),
     createScratch: () =>
       projects.scratch(join(app.getPath("userData"), "Scratchpad"), (id) =>
         projectChats.list(id).some((c) => !chatIsEmpty(c)),
@@ -249,12 +293,24 @@ export function projectHandlers(ctx: ApiContext) {
       async (id, provider) =>
         agentRuntime(provider).commands(await projects.root(id)),
     ),
-    agentModels: takes([agentProviderSchema], (provider) =>
-      agentRuntime(provider).models(),
+    agentModels: takes(
+      [agentProviderSchema, computerIdSchema],
+      (provider, computerId) =>
+        // A project on a paired computer runs that computer's own copy.
+        computerId
+          ? remoteProjects(ctx).agentModels(computerId, provider)
+          : agentRuntime(provider).models(),
     ),
     reloadAgentModels: takes(
-      [agentProviderSchema, z.boolean()],
-      async (provider, stopRunning) => {
+      [agentProviderSchema, z.boolean(), computerIdSchema],
+      async (provider, stopRunning, computerId) => {
+        if (computerId)
+          return remoteProjects(ctx).ask(
+            computerId,
+            "reloadAgentModels",
+            provider,
+            stopRunning,
+          );
         const running = projectChats.runningOn(provider);
         if (running.length && !stopRunning) return { running };
         let stopped: string[] = [];
@@ -294,23 +350,10 @@ export function projectHandlers(ctx: ApiContext) {
     projectVideo: takes(
       [fileRootSchema, workingPathSchema],
       async (where, path) => {
-        const full = await entryPath((await fileRoot(where)).root, path);
+        const { root } = await fileRoot(where);
+        const full = await entryPath(root, path);
         if (!videoMime(full)) throw new Error("That is not a video.");
-        return mediaUrl(full);
-      },
-    ),
-    projectThumbnail: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => {
-        const { root } = await place(where);
-        const image = imageMime(path)
-          ? nativeImage.createFromPath(await entryPath(root, path))
-          : null;
-        // What the system can't decode (SVG, say) goes as it is.
-        if (!image || image.isEmpty()) return readImage(root, path);
-        return image.getSize().width <= 320
-          ? readImage(root, path)
-          : image.resize({ width: 320, quality: "good" }).toDataURL();
+        return mediaUrl(full, root);
       },
     ),
     revealProjectPath: takes(
@@ -350,6 +393,10 @@ export function projectHandlers(ctx: ApiContext) {
     projectFile: takes(
       [fileRootSchema, workingPathSchema],
       async (where, path) => projects.file(await fileRoot(where), path),
+    ),
+    projectFilePreview: takes(
+      [fileRootSchema, workingPathSchema],
+      async (where, path) => projects.filePreview(await fileRoot(where), path),
     ),
     saveProjectFile: takes(
       [

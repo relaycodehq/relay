@@ -13,6 +13,8 @@ export interface PullInfo {
   base: string;
   /** The ref its head commit is fetched from, as its host serves it, or the commit itself. */
   headRef: string;
+  /** The branch it comes from, when that's in the project's own repository rather than a fork. */
+  headBranch?: string;
 }
 
 function parseShortstat(text: string) {

@@ -79,9 +79,11 @@ export function desktopHandlers(ctx: ApiContext) {
     setInterfaceScale: takes([z.number().min(0.5).max(2)], (scale) => {
       const contents = window.caller()?.webContents;
       if (!contents) return;
-      // Keep whatever ⌘+ and ⌘− added on top of the old size.
-      const own =
-        contents.getZoomFactor() / (interfaceScales.get(contents) ?? 1);
+      // Keep whatever ⌘+ and ⌘− added on top of the old size. A fresh page
+      // starts from 1: Chromium restores the last session's zoom, which
+      // already has the scale in it and would compound on every launch.
+      const previous = interfaceScales.get(contents);
+      const own = previous ? contents.getZoomFactor() / previous : 1;
       interfaceScales.set(contents, scale);
       window.interfaceScale = scale;
       contents.setZoomFactor(own * scale);

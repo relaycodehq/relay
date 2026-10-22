@@ -1,6 +1,6 @@
 // The sessions agents keep between turns. With an agent host they run there,
 // so they outlive a restart of Relay, and the next Relay takes them back.
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { HostedChild } from "../agent-host/child";
 import type { AgentHosts, FoundSession } from "../agent-host/client";
 import type { ProcessSpec } from "../agent-host/protocol";
@@ -154,6 +154,31 @@ export class HostedSessions<Session> {
     const child = new HostedChild(running);
     child.release();
     return child;
+  }
+
+  /**
+   * Like `spawn`, for a process in its own group, so the tools it starts
+   * stop with it.
+   */
+  spawnGroup(
+    key: string | undefined,
+    meta: unknown,
+    spec: Pick<ProcessSpec, "command" | "args" | "env">,
+    cwd: string,
+  ) {
+    return this.spawn(
+      key,
+      meta,
+      { ...spec, cwd, group: true },
+      () =>
+        spawn(spec.command, spec.args, {
+          cwd,
+          env: spec.env,
+          stdio: ["pipe", "pipe", "pipe"],
+          detached: process.platform !== "win32",
+          windowsHide: true,
+        }) as ChildProcessWithoutNullStreams,
+    );
   }
 
   /** Lets go of the session kept under `key`, ending it. */

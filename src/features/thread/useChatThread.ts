@@ -7,6 +7,7 @@ import {
 } from "../../../shared/projects";
 import { chatKey, fetchChat } from "../../lib/chat-events";
 import { conversation, replyCounts, sideThreads } from "./chat-thread";
+import { usePoll } from "../../lib/poll";
 
 export type ChatThread = ReturnType<typeof useChatThread>;
 
@@ -16,6 +17,7 @@ export function useChatThread(
   chat: ChatSummary | undefined,
   rootId: string | null,
 ) {
+  const poll = usePoll();
   const qc = useQueryClient();
   const history = useQuery({
     queryKey: chatKey(chat?.id),
@@ -26,17 +28,21 @@ export function useChatThread(
     refetchOnMount: "always",
     // A setup's approvals come with the thread, not with its messages' events.
     refetchInterval: (query) =>
-      query.state.data?.queue?.length ||
-      (chat?.sentTo && query.state.data?.outbox?.length) ||
-      query.state.data?.messages.some((m) => m.status === "streaming") ||
-      (query.state.data?.setup?.state === "agent" &&
-        query.state.data.setup.messages.some((m) => m.status === "streaming"))
-        ? 1000
-        : false,
+      poll(
+        query.state.data?.queue?.length ||
+          (chat?.sentTo && query.state.data?.outbox?.length) ||
+          query.state.data?.messages.some((m) => m.status === "streaming") ||
+          (query.state.data?.setup?.state === "agent" &&
+            query.state.data.setup.messages.some(
+              (m) => m.status === "streaming",
+            ))
+          ? 1000
+          : false,
+      ),
   });
   const messages = useMemo(
     () => [...(history.data?.messages ?? [])].sort(threadOrder),
-    [history.data],
+    [history.data?.messages],
   );
   const root = messages.find((m) => m.id === rootId);
   const roots = useMemo(() => replyRoots(messages), [messages]);

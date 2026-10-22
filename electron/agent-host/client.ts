@@ -25,6 +25,8 @@ import {
 } from "./protocol";
 import { AsyncQueue } from "../util/async-queue";
 import { toolText, type ToolResult } from "../relay-mcp/tools";
+import { errorMessage } from "../../shared/error-message";
+import { pidAlive as alive } from "../util/pid";
 
 /**
  * How long a session's control call may take. Claude Code answers them at
@@ -64,15 +66,6 @@ export interface HostedProcessOpen {
   meta: unknown;
   process: ProcessSpec;
 }
-
-const alive = (pid: number) => {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
-  }
-};
 
 /** Answers a call an agent made to Relay's tools; see electron/relay-mcp. */
 export type ToolHandler = (
@@ -468,10 +461,7 @@ class HostConnection {
           )
         : toolText("Relay is still starting. Try again in a moment.", true);
     } catch (error) {
-      result = toolText(
-        error instanceof Error ? error.message : String(error),
-        true,
-      );
+      result = toolText(errorMessage(error), true);
     } finally {
       this.toolCalls.delete(message.id);
     }
@@ -577,7 +567,7 @@ export class HostedQuery {
       (value) => this.answer(message.id, { value }),
       (error) =>
         this.answer(message.id, {
-          error: error instanceof Error ? error.message : String(error),
+          error: errorMessage(error),
         }),
     );
   }

@@ -12,6 +12,8 @@ import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
 import type { ThreadGoal } from "../../../shared/goal";
 import { codexGoal } from "./codex-goal";
 import { exitedError, stderrTail } from "../errors";
+import type { ContextUsage } from "../../../shared/projects";
+import { estimateCodexContext } from "./codex-context";
 
 type ProcessEnd = { code: number | null; signal: NodeJS.Signals | null };
 
@@ -247,6 +249,18 @@ export async function acquireCodexConnection(
 }
 export function closeCodexConnection(key: string) {
   return sessions.close(key);
+}
+/** Reads this session only, without starting another process or inference turn. */
+export async function readCodexContext(key: string, usage: ContextUsage) {
+  const connection = sessions.get(key);
+  if (!connection?.started || connection.closed) return null;
+  return estimateCodexContext(
+    await connection.ready,
+    connection.started.thread.id,
+    usage,
+    connection.threadSettings?.developerInstructions,
+    connection.started.model ?? "",
+  );
 }
 /** Relay is restarting: let go of the app servers the agent host keeps running. */
 export function detachCodex() {

@@ -6,7 +6,7 @@ import {
   type DraftWrite,
   type SharedDraft,
 } from "../../../shared/drafts";
-import type { DraftImage } from "../images/draft-images";
+import type { DraftImage, DraftImageMetadata } from "../images/draft-images";
 
 // The main process, as far as this window sees it: the real merge rules over a map.
 const main = new Map<string, SharedDraft>();
@@ -15,7 +15,12 @@ const writes: DraftWrite[] = [];
 let hear: ((change: DraftChange) => void) | undefined;
 let readShared = async () => [...main.values()];
 function take(write: DraftWrite, by: DraftDevice) {
-  const { draft, changed } = applyDraftWrite(main.get(write.key), write, by, () => ++rev);
+  const { draft, changed } = applyDraftWrite(
+    main.get(write.key),
+    write,
+    by,
+    () => ++rev,
+  );
   if (draft) main.set(write.key, draft);
   else main.delete(write.key);
   return { draft, changed };
@@ -27,18 +32,44 @@ function phone(write: Omit<DraftWrite, "base" | "at"> & { at?: number }) {
     "phone:p1",
   );
   if (changed)
-    hear?.({ key: write.key, draft, ...(write.sent !== undefined && !draft ? { sent: true as const } : {}) });
+    hear?.({
+      key: write.key,
+      draft,
+      ...(write.sent !== undefined && !draft ? { sent: true as const } : {}),
+    });
 }
 
 const images = new Map<string, DraftImage[]>();
 const saved = new Set<(key: string, list: DraftImage[]) => void>();
+const metadataListeners = new Set<
+  (key: string, value: DraftImageMetadata | undefined) => void
+>();
+const metadataOf = (list: DraftImage[]): DraftImageMetadata => ({
+  numbers: list.map((i) => i.n),
+  loose: list.filter((i) => i.n === undefined).length,
+});
+const loadImages = vi.fn(async (key: string) => images.get(key) ?? []);
+const readMetadata = vi.fn(
+  async () =>
+    new Map([...images].map(([key, list]) => [key, metadataOf(list)])),
+);
 vi.mock("../images/draft-images", () => ({
-  loadDraftImages: async (key: string) => images.get(key) ?? [],
+  loadDraftImages: (key: string) => loadImages(key),
   saveDraftImages: async (key: string, list: DraftImage[]) => {
     images.set(key, list);
+    metadataListeners.forEach((listener) =>
+      listener(key, list.length ? metadataOf(list) : undefined),
+    );
     saved.forEach((listener) => listener(key, list));
   },
   draftImageKeys: async () => [...images.keys()],
+  readDraftImageMetadata: () => readMetadata(),
+  onDraftImageMetadata: (
+    listener: (key: string, value: DraftImageMetadata | undefined) => void,
+  ) => {
+    metadataListeners.add(listener);
+    return () => metadataListeners.delete(listener);
+  },
   onDraftImagesSaved: (listener: (key: string, list: DraftImage[]) => void) => {
     saved.add(listener);
     return () => saved.delete(listener);
@@ -77,6 +108,14 @@ beforeEach(async () => {
   store.clear();
   images.clear();
   saved.clear();
+  metadataListeners.clear();
+  loadImages.mockClear();
+  readMetadata
+    .mockReset()
+    .mockImplementation(
+      async () =>
+        new Map([...images].map(([key, list]) => [key, metadataOf(list)])),
+    );
   main.clear();
   writes.length = 0;
   rev = 0;
@@ -109,7 +148,9 @@ const pause = () => vi.advanceTimersByTimeAsync(400);
 
 function delaySnapshot() {
   let finish!: (drafts: SharedDraft[]) => void;
-  const pending = new Promise<SharedDraft[]>((resolve) => { finish = resolve; });
+  const pending = new Promise<SharedDraft[]>((resolve) => {
+    finish = resolve;
+  });
   readShared = () => pending;
   return async (list: SharedDraft[]) => {
     finish(list);
@@ -208,11 +249,17 @@ it("tells the computer a send from here went, not that it was cleared", async ()
 });
 
 it("lines up on start: pushes a draft from before sharing, takes a phone's", async () => {
-  store.set(`relay-draft:${chat}`, JSON.stringify({ v: 1, main: { text: "Only here" } }));
+  store.set(
+    `relay-draft:${chat}`,
+    JSON.stringify({ v: 1, main: { text: "Only here" } }),
+  );
   take({ key: "chat-2", text: "From the phone", base: 0, at: 1 }, "phone:p1");
   await start();
   await pause();
-  expect(main.get(chat)).toMatchObject({ text: "Only here", origin: "desktop" });
+  expect(main.get(chat)).toMatchObject({
+    text: "Only here",
+    origin: "desktop",
+  });
   expect(drafts.readDraft("chat-draft:chat-2")).toBe("From the phone");
 });
 
@@ -235,7 +282,84 @@ it("counts a screenshot as the desktop's part of a draft", async () => {
     { id: "s1", name: "shot.png", mimeType: "image/png", dataUrl: "data:," },
   ]);
   await pause();
-  expect(main.get(chat)).toMatchObject({ text: "", extras: { screenshots: [0] } });
+  expect(main.get(chat)).toMatchObject({
+    text: "",
+    extras: { screenshots: [0] },
+  });
+});
+
+it("starts from screenshot metadata and follows other windows without loading payloads", async () => {
+  images.set(key, [
+    {
+      id: "loose",
+      name: "loose.png",
+      mimeType: "image/png",
+      dataUrl: "data:,",
+    },
+    {
+      id: "undo",
+      name: "undo.png",
+      mimeType: "image/png",
+      dataUrl: "data:,",
+      n: 7,
+    },
+  ]);
+  await start();
+  await pause();
+  expect(main.get(chat)?.extras?.screenshots).toEqual([0]);
+  // Another window already pushed its save; this one only needs its numbers
+  // to accompany a later text edit here.
+  metadataListeners.forEach((listener) =>
+    listener(key, { numbers: [2], loose: 0 }),
+  );
+  drafts.writeDraft(key, "Compare [Image #2]");
+  await pause();
+  expect(main.get(chat)?.extras?.screenshots).toEqual([2]);
+  expect(loadImages).not.toHaveBeenCalled();
+});
+
+it("retries failed startup metadata once without treating screenshots as missing", async () => {
+  images.set(key, [
+    {
+      id: "shot",
+      name: "shot.png",
+      mimeType: "image/png",
+      dataUrl: "data:,",
+      n: 7,
+    },
+  ]);
+  drafts.writeDraft(key, "Keep [Image #7]");
+  readMetadata.mockRejectedValueOnce(
+    new Error("Storage temporarily unavailable"),
+  );
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await start();
+    expect(writes).toEqual([]);
+    expect(drafts.readDraft(key)).toBe("Keep [Image #7]");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(readMetadata).toHaveBeenCalledTimes(2);
+    expect(main.get(chat)).toMatchObject({
+      text: "Keep [Image #7]",
+      extras: { screenshots: [7] },
+    });
+    expect(loadImages).not.toHaveBeenCalled();
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+it("bounds startup retries when screenshot storage remains unavailable", async () => {
+  readMetadata.mockRejectedValue(new Error("Storage unavailable"));
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    await start();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(readMetadata).toHaveBeenCalledTimes(2);
+    expect(writes).toEqual([]);
+  } finally {
+    warn.mockRestore();
+  }
 });
 
 it("counts a new thread's picked worktree start as the desktop's part", async () => {

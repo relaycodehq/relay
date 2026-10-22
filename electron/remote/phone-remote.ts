@@ -28,6 +28,7 @@ import { RemoteServer } from "./server";
 import { tailnetProbe, type TailnetProbe } from "./tailscale";
 import { computerName } from "../platform/computer-name";
 import { listSites, Tunnel, TunnelPorts } from "../tunnel";
+import { errorMessage } from "../../shared/error-message";
 
 const version = z.string().regex(/^\d+\.\d+\.\d+(?:\.\d+)?$/);
 const appReportSchema = z
@@ -116,6 +117,8 @@ export const phoneAppearanceSchema = z
  */
 const portSchema = z.number().int().min(1).max(65535);
 
+const loopback = "127.0.0.1";
+
 export class PhoneRemote {
   readonly devices: RemoteDevices;
   private bridge: RemoteBridge;
@@ -138,7 +141,9 @@ export class PhoneRemote {
     private lan: () => string[] = () => lanAddresses(networkInterfaces()),
   ) {
     this.devices = new RemoteDevices(store, seal, unseal);
-    this.tunnelPorts = new TunnelPorts(() => listSites(host, [this.server.port]));
+    this.tunnelPorts = new TunnelPorts(() =>
+      listSites(host, [this.server.port]),
+    );
     const name = computerName;
     this.bridge = new RemoteBridge(
       { ...host, name, appearance: () => this.devices.settings.appearance },
@@ -243,7 +248,9 @@ export class PhoneRemote {
       (id, bridge) => !this.isComputer(id) && bridge >= draftsBridge,
     );
   }
-  chatEvent(event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true }) {
+  chatEvent(
+    event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true },
+  ) {
     // Phones don't show a thread's setup on another computer yet.
     if (!this.server.listening || event.setup) return;
     this.bridge.chatEvent(event);
@@ -274,9 +281,10 @@ export class PhoneRemote {
     return {
       enabled: !!this.devices.settings.enabled,
       lan: !!this.devices.settings.lan,
-      listening: this.server.listening,
+      listening: this.server.listening && this.hosts.length > 0,
       ...(this.error ? { error: this.error } : {}),
       port: this.server.port,
+      ...(this.server.host ? { bound: this.server.host } : {}),
       tailnet,
       hosts: this.server.listening ? this.hosts : [],
       devices: this.devices.list().map((d) => ({
@@ -310,15 +318,18 @@ export class PhoneRemote {
   expectsCalls() {
     return this.server.listening && this.devices.list().length > 0;
   }
-  async pairing(): Promise<PhonePairing> {
+  /** `pipe`: for a computer that reaches this one over SSH or wsl.exe, which needs no network. */
+  async pairing({ pipe = false } = {}): Promise<PhonePairing> {
     if (!this.server.listening) throw new Error("Turn on phone access first.");
-    if (!this.hosts.length)
+    if (!this.hosts.length && !pipe)
       throw new Error("This computer isn't on a network a phone can reach.");
+    // Listening on its loopback alone, it pairs over the pipe.
+    const hosts = this.hosts.length ? this.hosts : [this.server.host!];
     const key = await this.devices.key();
     const { code, expiresAt } = this.devices.newPairing();
     return {
       url: pairingUrl({
-        hosts: this.hosts,
+        hosts,
         port: this.server.port,
         key: toBase64Url(key.public),
         code,
@@ -330,6 +341,7 @@ export class PhoneRemote {
   async revoke(deviceId: string) {
     const computer = this.isComputer(deviceId);
     await this.devices.revoke(deviceId);
+    this.host.handoffs?.closeShells?.(deviceId);
     this.server.disconnect(
       deviceId,
       computer ? `${computerName()} removed this computer.` : undefined,
@@ -342,6 +354,7 @@ export class PhoneRemote {
     this.bridge.dispose();
     this.dictations?.dispose();
     this.readings?.dispose();
+    this.host.handoffs?.closeShells?.();
     await this.server.close();
   }
   /** Listens now, and keeps up as Tailscale or the local network goes off, comes back or moves. */
@@ -361,12 +374,20 @@ export class PhoneRemote {
       const { enabled, lan } = this.devices.settings;
       const tailnet = enabled ? await this.tailnet() : undefined;
       const tail = tailnet?.status === "connected" ? tailnet.addresses : [];
-      const host = !enabled ? undefined : lan ? "0.0.0.0" : tail[0];
-      this.hosts = !host
-        ? []
+      // Without Tailscale, only a pipe (`relay pipe`, over SSH or wsl.exe)
+      // reaches it, through its loopback; no device can by an address.
+      const pipesOnly = enabled && !lan && !tail.length;
+      const host = !enabled
+        ? undefined
         : lan
-          ? [...this.lan(), ...tail].slice(0, maxHosts)
-          : [host];
+          ? "0.0.0.0"
+          : (tail[0] ?? loopback);
+      this.hosts =
+        !host || pipesOnly
+          ? []
+          : lan
+            ? [...this.lan(), ...tail].slice(0, maxHosts)
+            : [host];
       if (host === this.server.host) return;
       await this.server.close();
       this.error = undefined;
@@ -374,7 +395,7 @@ export class PhoneRemote {
       try {
         await this.server.listen(host, !!lan);
       } catch (e) {
-        this.error = e instanceof Error ? e.message : String(e);
+        this.error = errorMessage(e);
       }
     });
     return this.syncing;

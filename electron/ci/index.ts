@@ -6,6 +6,7 @@ import type { FetchRequest } from "../pull-requests/host";
 import type { CiRun, CiStatus } from "../../shared/ci";
 import type { SourceControlKind } from "../../shared/source-control";
 import { GitHub } from "./github";
+import { GithubCredentials } from "../github";
 import { giteaDefaultBranch, readGitea } from "./gitea";
 import { azureDefaultBranch, readAzure } from "./azure-devops";
 
@@ -69,8 +70,11 @@ export interface CiHosts {
  */
 export class Ci {
   private github: GitHub;
-  constructor(fetchRequest: FetchRequest) {
-    this.github = new GitHub(fetchRequest);
+  constructor(
+    fetchRequest: FetchRequest,
+    credentials = new GithubCredentials(),
+  ) {
+    this.github = new GitHub(fetchRequest, credentials);
   }
 
   private sources({ gitea, azure }: CiHosts): CiSource[] {

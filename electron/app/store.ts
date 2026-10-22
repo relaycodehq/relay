@@ -9,15 +9,6 @@ import {
 } from "../../shared/settings";
 import type { RemoteSettings, SavedComputer } from "./store-types";
 
-/** What pull request rooms saved, sealed room tokens among them; dropped on load. */
-const roomKeys = [
-  "roomAccessConsents",
-  "roomHosting",
-  "roomConnections",
-  "roomJoins",
-  "roomDeliveries",
-];
-
 interface State {
   projects?: import("../../shared/projects").Project[];
   /** Where the last clone or new project went; the add-project palette starts there. */
@@ -34,6 +25,8 @@ interface State {
   sounds?: import("../../shared/sounds").SoundSettings;
   /** Sound files added in Settings → Sounds, kept in `sounds/` under app data. */
   customSounds?: import("../sounds").StoredCustomSound[];
+  /** Draft the message you'd likely send next once a Claude or Codex turn ends; unset is off. */
+  composerPredictions?: boolean;
   /** When agents show pages in answers; unset is auto. */
   renderMode?: import("../../shared/html-render").RenderMode;
   /** Topics the watcher was told are already known, newest last. */
@@ -50,6 +43,8 @@ interface State {
   /** Frosted glass, on unless the page last said off; windows then start clear. */
   glass?: boolean;
   chats?: import("../../shared/projects").ChatSummary[];
+  /** This computer's last page and known server command for each thread. */
+  previews?: Record<string, import("../preview/saved-previews").SavedPreview>;
   aiSettings?: StoredAISettings;
   /** The agent last picked for a new thread, on the desktop or the phone. */
   newThreadAgent?: import("../../shared/agents").AgentProvider;
@@ -112,15 +107,6 @@ export class Store {
       );
       if (parsed.version !== 1)
         throw new Error("Unsupported saved data version.");
-      // Gone from disk with the next write.
-      for (const key of roomKeys) delete parsed[key];
-      // Gitea "off" used to hide only its CI; now it signs out. Saves from
-      // before `on` existed keep their Gitea account connected.
-      const sc = parsed.sourceControl;
-      if (sc && !sc.on) {
-        sc.off = sc.off?.filter((kind: string) => kind !== "gitea");
-        sc.on = [];
-      }
       this.state = parsed;
       this.savedAtLoad = (await stat(join(this.dir, "state.json"))).mtimeMs;
     } catch (e) {

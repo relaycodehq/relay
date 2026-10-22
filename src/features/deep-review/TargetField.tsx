@@ -11,6 +11,7 @@ import type { TargetPick } from "./useDeepReviewSetup";
 import { SearchSelect } from "../../ui/SearchSelect";
 import { ProjectPullPicker } from "../pulls/ProjectPullPicker";
 import { branchOptions, branchSelect } from "../changes/branch-options";
+import { DiffStatLabel } from "../changes/DiffStatLabel";
 
 const targets: {
   kind: ReviewTarget["kind"];
@@ -81,37 +82,46 @@ export function TargetField({
           )}
           {kind === "branch" &&
             (pick.heads.length ? (
-              <div className="deep-review-branches">
-                <SearchSelect
-                  label="Branch to review"
-                  value={pick.head ?? ""}
-                  unset="Choose a branch"
-                  onChange={pick.setHead}
-                  options={branchOptions(
-                    pick.heads,
-                    pick.branchList,
-                    pick.branchCounts,
-                  )}
-                  {...branchSelect}
-                  placeholder="Search branches…"
-                />
-                <span className="deep-review-target-detail muted">into</span>
-                {pick.base ? (
+              <div className="deep-review-branch-scope">
+                <div className="deep-review-branches">
                   <SearchSelect
-                    label="Base branch"
-                    value={pick.base}
-                    onChange={pick.setBase}
+                    label="Branch to review"
+                    value={pick.head ?? ""}
+                    unset="Choose a branch"
+                    onChange={pick.setHead}
                     options={branchOptions(
-                      pick.bases,
+                      pick.heads,
                       pick.branchList,
                       pick.branchCounts,
                     )}
                     {...branchSelect}
                     placeholder="Search branches…"
                   />
-                ) : (
-                  <span className="muted">no other branch</span>
-                )}
+                  <span className="deep-review-target-detail muted">into</span>
+                  {pick.base ? (
+                    <SearchSelect
+                      label="Base branch"
+                      value={pick.base}
+                      onChange={pick.setBase}
+                      options={branchOptions(
+                        pick.bases,
+                        pick.branchList,
+                        pick.branchCounts,
+                      )}
+                      {...branchSelect}
+                      placeholder="Search branches…"
+                    />
+                  ) : (
+                    <span className="muted">no other branch</span>
+                  )}
+                </div>
+                {!!pick.baseChanges?.files &&
+                  pick.baseChanges.branch === pick.base && (
+                    <span className="deep-review-excluded" aria-live="polite">
+                      <span>Excluding uncommitted changes on {pick.base}</span>
+                      <DiffStatLabel stat={pick.baseChanges.lines} />
+                    </span>
+                  )}
               </div>
             ) : (
               <span className="deep-review-target-detail">

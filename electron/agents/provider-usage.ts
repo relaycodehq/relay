@@ -19,12 +19,14 @@ import {
   type UsageWindow,
 } from "../../shared/provider-usage";
 import { readClaudeUsage } from "./claude/project";
+import { readAntigravityUsage } from "./antigravity";
 import { readMuseUsage } from "./muse";
 import type { UsageProvider } from "../../shared/agents";
 import { SYSTEM_ACCOUNT } from "../../shared/agent-accounts";
 import { recordUsage } from "./usage-history";
 import { profileDir } from "./accounts/profiles";
 import { withTimeout } from "../util/timeout";
+import { asRecord } from "../../shared/records";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -67,6 +69,7 @@ const readers: Record<
 > = {
   claude: { load: loadClaude, ttl: CLAUDE_TTL },
   codex: { load: loadCodex },
+  antigravity: { load: readAntigravityUsage },
   // Only one Muse sign-in: its accounts aren't Relay's to switch.
   muse: { load: () => readMuseUsage() },
 };
@@ -499,12 +502,6 @@ function parseJson(text: string): unknown {
   } catch {
     return null;
   }
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function stringField(

@@ -1,5 +1,5 @@
 import type { AgentOptions } from "../types";
-import { ANSWER_LIMIT, guardSteer, TurnEnd } from "../turn-kit";
+import { ANSWER_LIMIT, cancelledByYou, guardSteer, TurnEnd } from "../turn-kit";
 import { CodexPlanRows, codexActivity, codexEditedPaths } from "../activity";
 import { withTimeout } from "../../util/timeout";
 import { skillMentionPattern } from "../../../shared/skill-mentions";
@@ -19,8 +19,6 @@ import { CodexRequestSpeed } from "./codex-speed";
 import { CodexSubagents, codexSubagentBooks } from "./codex-subagents";
 import type { CodexTransport } from "./codex-transport";
 import { codexTokens, type CodexTurnWatch } from "./codex-watch";
-
-const cancelled = () => new Error("Cancelled by you.");
 
 /**
  * A report that carried tokens. At a compaction boundary Codex reports the
@@ -306,7 +304,7 @@ export class CodexTurn {
     // Between a goal's turns there is nothing to interrupt.
     if (this.goals.waiting) {
       this.goals.dispose();
-      void this.pauseGoal().finally(() => this.finish(cancelled()));
+      void this.pauseGoal().finally(() => this.finish(cancelledByYou()));
       return;
     }
     if (this.goals.active)
@@ -460,10 +458,13 @@ export class CodexTurn {
     const turnId = this.reviewTurnId || this.turnId;
     if (wire && threadId && turnId) {
       // Keep the transport alive until Codex acknowledges the interruption.
-      this.interruptTimeout = setTimeout(() => this.finish(cancelled()), 3000);
+      this.interruptTimeout = setTimeout(
+        () => this.finish(cancelledByYou()),
+        Number(process.env.RELAY_TEST_CODEX_INTERRUPT_MS) || 3000,
+      );
       void wire
         .request("turn/interrupt", { threadId, turnId })
-        .catch(() => this.finish(cancelled()));
-    } else this.finish(cancelled());
+        .catch(() => this.finish(cancelledByYou()));
+    } else this.finish(cancelledByYou());
   }
 }

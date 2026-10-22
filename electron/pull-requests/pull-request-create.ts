@@ -11,6 +11,7 @@ import type {
   CreatePullRequest,
   CreatedPullRequest,
 } from "../../shared/pull-request-create";
+import { errorMessage } from "../../shared/error-message";
 type RepositoryInfo = Awaited<ReturnType<PullHost["repository"]>>;
 interface SavedPlan {
   plan: PullRequestPlan;
@@ -274,7 +275,7 @@ export class PullRequestCreation {
         });
       } catch (e) {
         throw new Error(
-          `${pushed ? "The branch was pushed. " : ""}Could not confirm PR creation. Retry to check for an existing PR before creating another. ${e instanceof Error ? e.message : String(e)}`,
+          `${pushed ? "The branch was pushed. " : ""}Could not confirm PR creation. Retry to check for an existing PR before creating another. ${errorMessage(e)}`,
         );
       }
     });

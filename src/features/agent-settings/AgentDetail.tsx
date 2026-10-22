@@ -22,6 +22,7 @@ import {
 import { api } from "../../lib/api";
 import { SettingsCard, SettingsRow } from "../../ui/SettingsCard";
 import { ErrorBox, IconButton, Spinner } from "../../ui/ui";
+import { OpenCodeSignIn } from "./OpenCodeSignIn";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import {
   linkAgent,
@@ -32,7 +33,7 @@ import {
 } from "../updates/agent-updates";
 import {
   agentNote,
-  isDeprecated,
+  needsUpgrade,
   isInstallable,
   isSdk,
   versionLine,
@@ -63,6 +64,7 @@ export function AgentDetail({
   const { cli } = agentInfo(agent.provider);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [openCodeSignIn, setOpenCodeSignIn] = useState(false);
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
     setError(undefined);
@@ -159,7 +161,7 @@ export function AgentDetail({
           )}
         </span>
       </div>
-      {(off || isDeprecated(agent) || note || output || !!error) && (
+      {(off || needsUpgrade(agent) || note || output || !!error) && (
         <div className="agent-detail-notes">
           {off && (
             <p>
@@ -167,10 +169,9 @@ export function AgentDetail({
               already on it carry on.
             </p>
           )}
-          {isDeprecated(agent) && (
+          {needsUpgrade(agent) && (
             <p data-attention>
-              OpenCode 1 is deprecated in Relay and stops working in a coming
-              release. Update to OpenCode 2:
+              OpenCode 1 is no longer supported in Relay. Update to OpenCode 2:
               <code>curl -fsSL https://opencode.ai/v2/install | bash</code>
             </p>
           )}
@@ -187,6 +188,17 @@ export function AgentDetail({
         </div>
       )}
 
+      {openCodeSignIn && <OpenCodeSignIn onClose={() => setOpenCodeSignIn(false)} />}
+      {agent.provider === "opencode" && !needsUpgrade(agent) && (
+        <>
+          <h5 className="agent-detail-section">Provider connections</h5>
+          <SettingsCard>
+            <SettingsRow label="OpenCode providers" hint="Sign in through your browser or connect an API key.">
+              <button type="button" onClick={() => setOpenCodeSignIn(true)}><LogIn size={14} />Connect provider…</button>
+            </SettingsRow>
+          </SettingsCard>
+        </>
+      )}
       {!unknown && (accounts || sdk || agent.account) && (
         <>
           <h5 className="agent-detail-section">Accounts</h5>

@@ -7,6 +7,7 @@ import type {
 import { api } from "../../../lib/api";
 import { startCapture, type Capture } from "./capture";
 import { dictationMicrophone } from "./microphones";
+import { errorMessage } from "../../../../shared/error-message";
 
 /** Where the words go: the composer's editor. */
 export interface DictationTarget {
@@ -223,7 +224,7 @@ function describe(error: unknown) {
     if (error.name === "NotReadableError")
       return "The microphone is busy in another app.";
   }
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }
 
 // The speech model, as the main process reports it.

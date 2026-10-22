@@ -19,6 +19,8 @@ import type {
 import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
 import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
+import { chatStatus } from "../project-chats";
+import { chatSummary } from "../project-chats/storage";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -77,6 +79,25 @@ function fakeChats() {
         const chat = chats.get(id);
         if (!chat) throw new Error("No such thread.");
         return structuredClone(chat);
+      },
+      statuses: async (
+        selection: { ids: string[] } | { startedBy: string },
+      ) => {
+        const ids =
+          "ids" in selection
+            ? selection.ids
+            : [...chats.values()]
+                .filter(
+                  (c) =>
+                    c.startedBy?.chatId === selection.startedBy &&
+                    !c.archivedAt,
+                )
+                .map((c) => c.id);
+        return ids.map((id) => {
+          const chat = chats.get(id);
+          if (!chat || chat.archivedAt) throw new Error("No such thread.");
+          return chatStatus(chatSummary(chat), chat);
+        });
       },
       create: async (
         projectId: string,
@@ -158,6 +179,30 @@ const call = (
 const parse = (result: ToolResult) => JSON.parse(resultText(result));
 const ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
+
+test.each(["missing_tool", "constructor", "__proto__"])(
+  "rejects unknown tool %s before reading the caller's thread",
+  async (name) => {
+    const { lead, api } = fakeChats();
+    api.get = vi.fn(api.get);
+    const result = await call(new StartedThreads(api), lead.id, name, {});
+    expect(result.isError).toBe(true);
+    expect(resultText(result)).toBe(`There is no tool ${name}.`);
+    expect(api.get).not.toHaveBeenCalled();
+  },
+);
+
+test("rejects invalid tool arguments before reading the caller or sending", async () => {
+  const { lead, api, sent } = fakeChats();
+  api.get = vi.fn(api.get);
+  const result = await call(new StartedThreads(api), lead.id, "start_threads", {
+    threads: [{ prompt: "   " }],
+  });
+  expect(result.isError).toBe(true);
+  expect(resultText(result)).toContain("threads.0.prompt:");
+  expect(api.get).not.toHaveBeenCalled();
+  expect(sent).toEqual([]);
+});
 
 test("starts threads on the lead's agent and settings, each saying who sent it", async () => {
   const { lead, sent, chats, api } = fakeChats();
@@ -347,6 +392,59 @@ test("waiting ends once every thread is done or needs the user", async () => {
   expect(result.threads.find((t: any) => t.id === a.id).latest).toBe(
     "Done, tests pass.",
   );
+});
+
+test("listing and waiting batch progress without fetching target histories", async () => {
+  const { lead, chats, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const [child] = parse(
+    await call(threads, lead.id, "start_threads", {
+      threads: [{ prompt: "A" }],
+    }),
+  );
+  chats.get(child.id)!.messages.push(
+    {
+      id: "answer",
+      role: "assistant",
+      body: "x".repeat(605) + "Done.",
+      status: "complete",
+      created: 4,
+      provider: "claude",
+      version: 1,
+    },
+    {
+      id: "side-answer",
+      parentId: "side",
+      role: "assistant",
+      body: "Side conversations do not replace the main answer.",
+      status: "failed",
+      error: "Side failure",
+      provider: "claude",
+      created: 5,
+      version: 1,
+    },
+  );
+  const get = vi.spyOn(api, "get");
+  const status = vi.spyOn(api, "statuses");
+  for (const [name, args] of [
+    ["list_threads", {}],
+    ["wait_for_threads", { ids: [child.id], timeoutSeconds: 1 }],
+  ] as const) {
+    get.mockClear();
+    status.mockClear();
+    const result = parse(await call(threads, lead.id, name, args));
+    expect(name === "list_threads" ? result : result.threads).toMatchObject([
+      { id: child.id, status: "done", latest: "…" + "x".repeat(595) + "Done." },
+    ]);
+    expect(
+      name === "list_threads" ? result[0] : result.threads[0],
+    ).not.toHaveProperty("error");
+    expect(status).toHaveBeenCalledExactlyOnceWith(
+      name === "list_threads" ? { startedBy: lead.id } : { ids: [child.id] },
+    );
+    // The calling thread is read once for authorization; targets need no full read.
+    expect(get.mock.calls).toEqual([[lead.id]]);
+  }
 });
 
 test("a message to a started thread goes on its own settings, from the lead", async () => {
@@ -679,9 +777,9 @@ test("a read starts at the newest page that fits, pages back with `before` and o
     page = await read({ before: page.earlier });
     back = [...ids(page), ...back];
   }
-  expect(back.filter((id) => id.startsWith("a"))).toEqual(
-    answers.map((a) => a.id),
-  );
+  // The thread's own first messages have random ids, so pick the answers by theirs.
+  const answerIds = answers.map((a) => a.id);
+  expect(back.filter((id) => answerIds.includes(id))).toEqual(answerIds);
   page = await read({ after: back[0] });
   let on = ids(page);
   while (page.more) {
@@ -824,11 +922,13 @@ test("usage limits read each agent on the account the thread pinned for it", asy
       weekly: { usedPercent: 12 },
     },
     { agent: "muse", note: "Sign in with muse" },
+    { agent: "antigravity", note: "Sign in with antigravity" },
   ]);
   expect(reads).toEqual([
     ["codex", false, "work"],
     ["claude", false, undefined],
     ["muse", false, undefined],
+    ["antigravity", false, undefined],
   ]);
 });
 
@@ -1414,7 +1514,7 @@ test("handing off always asks; the thread then says where it runs, and sends and
   const forwarded: { method: string; args: unknown[] }[] = [];
   const held: { input: ProjectChatSend }[] = [];
   let online = true;
-  api.handoffOutbox = async () => held;
+  api.liveHandoff = { outbox: async () => held };
   const handoffs = {
     forwards: (_method: string, args: unknown[]) =>
       chats.get(args[0] as string)?.sentTo?.live === true,

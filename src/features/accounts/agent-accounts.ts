@@ -23,6 +23,6 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-/** The Claude Code and Codex accounts as the main process last saw them. */
+/** The agents' accounts as the main process last saw them. */
 export const useAgentAccounts = () =>
   useSyncExternalStore(subscribe, () => state);

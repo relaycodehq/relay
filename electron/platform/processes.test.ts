@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePs, parseWindows } from "./processes";
+import { CpuRates, parsePs, parseWindows, type ProcessRow } from "./processes";
 
 describe("process tables", () => {
   it("reads ps's columns, a command line with spaces included", () => {
@@ -38,5 +38,30 @@ describe("process tables", () => {
       },
       { pid: 4, ppid: 0, pgid: 0, started: 0, line: "System", name: "System" },
     ]);
+  });
+});
+
+describe("CpuRates", () => {
+  it("turns Linux's CPU time into a rate between two looks", () => {
+    const rates = new CpuRates();
+    const row = (cpuMs: number, started = 5): ProcessRow => ({
+      pid: 7,
+      ppid: 1,
+      pgid: 7,
+      started,
+      line: "node",
+      cpuMs,
+    });
+    const first = [row(1000)];
+    rates.fill(first, 10_000);
+    expect(first[0].cpu).toBeUndefined();
+    // 1.5 s of CPU in 1 s: one and a half cores.
+    const second = [row(2500)];
+    rates.fill(second, 11_000);
+    expect(second[0].cpu).toBe(150);
+    // A new process under a reused pid starts over.
+    const reused = [row(100, 9)];
+    rates.fill(reused, 12_000);
+    expect(reused[0].cpu).toBeUndefined();
   });
 });

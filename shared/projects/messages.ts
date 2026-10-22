@@ -10,6 +10,7 @@ import type { TurnPreview } from "../preview";
 import type { Streamed } from "../usage";
 import type { ResumeSettings } from "./send";
 import type { ElsewhereEdits } from "../elsewhere";
+import type { ImportOffer } from "../import-offer";
 
 export interface PageAnswer {
   title: string;
@@ -66,6 +67,8 @@ export interface NameChanges {
 }
 /** Local marker: the agent's process was restarted on the same session. Each list is left out when the agent couldn't say. */
 export interface SessionReload {
+  /** The agent rebuilt configuration across all projects in its shared service. */
+  scope?: "service";
   skills?: NameChanges;
   agents?: NameChanges;
 }
@@ -124,8 +127,9 @@ export interface ChatMessage {
   /** Local: a steer sent into the running answer that the agent hasn't picked up yet. */
   unread?: boolean;
   /**
-   * Local: a steer whose turn stopped or failed before the agent read it, so
-   * its session never got it. The agent's next turn carries it as the request.
+   * Local: a steer whose turn stopped, failed or ended before the agent read
+   * it, so its session never got it. The agent's next turn carries it as the
+   * request.
    */
   missed?: boolean;
   /**
@@ -143,12 +147,18 @@ export interface ChatMessage {
   traceDropped?: TraceDropped;
   /** Questions stay answerable after the turn ends or Relay restarts. */
   questions?: AsyncAgentQuestions[];
+  /** Local: the message the person would likely send next, which the composer offers as a draft. */
+  prediction?: string;
+  /** Local: the composer showed `prediction`, or Escape put it away, which hides it for good. */
+  predictionSeen?: "shown" | "dismissed";
   /** Local: what the side check flagged during this turn; see shared/watch. */
   notes?: WatchNote[];
   /** Local: pages the agent showed in its answer with show_html, above its reply. */
   renders?: HtmlRender[];
   /** Local: the thread's preview as this turn's agent left it, under its reply; the latest open wins. */
   preview?: TurnPreview;
+  /** Local: what the agent offered to import with offer_import, under its reply. */
+  importOffer?: ImportOffer;
   /** Local: files this turn's agent changed in the checkout, from snapshots before and after it. */
   changes?: TurnFileChange[];
   /** Local: files its file tools wrote in other repositories, which `changes` can't see. */

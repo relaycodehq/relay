@@ -6,6 +6,7 @@ import type { Gitea } from "../pull-requests/gitea";
 import type { PullHost } from "../pull-requests/host";
 import {
   folderGoneMessage,
+  onComputerMessage,
   projectTitle,
   linkedFoldersSchema,
   type LinkedFolder,
@@ -22,6 +23,7 @@ import {
 import { git, gitBytes } from "../git/git";
 import { isGitMissing } from "../../shared/working-tree";
 import { folderFiles } from "./folder-files";
+import { filePreview } from "./file-preview";
 import { digest } from "../util/hash";
 import {
   inspectRepository,
@@ -73,14 +75,35 @@ export async function repositoryRoot(dir: string) {
     throw e;
   }
 }
+const knownRoots = new Map<string, { key: string; repository: string }>();
+/**
+ * `repositoryRoot` for a folder asked about on every project call: kept while
+ * its `.git` stays the same. A plain folder is asked each time, since a
+ * repository can be made around it.
+ */
+async function knownRepositoryRoot(dir: string) {
+  const s = await lstat(join(dir, ".git")).catch(() => null);
+  // Not its mtime: Git touches the folder with every index write.
+  const key = s ? `${s.dev}:${s.ino}:${s.mode}` : "";
+  const known = knownRoots.get(dir);
+  if (key && known?.key === key) return known.repository;
+  const repository = await repositoryRoot(dir);
+  if (key && repository) knownRoots.set(dir, { key, repository });
+  else knownRoots.delete(dir);
+  return repository;
+}
 /** Marks a folder without Git, so the app leaves out branches, changes and history. */
 const withKind = async (p: Project): Promise<Project> =>
-  (await lstat(join(p.path, ".git")).then(
-    () => true,
-    () => false,
-  ))
-    ? p
-    : { ...p, plain: true };
+  p.computer
+    ? p.computer.plain
+      ? { ...p, plain: true }
+      : p
+    : (await lstat(join(p.path, ".git")).then(
+          () => true,
+          () => false,
+        ))
+      ? p
+      : { ...p, plain: true };
 const maxFiles = 50000;
 /** A folder to browse: a project's checkout, or a thread's worktree of it. */
 export interface Place {
@@ -256,14 +279,19 @@ export class Projects {
         .map((p) => withKind(this.named(p))),
     );
     for (const p of projects)
-      if (!p.repository && !p.plain && !this.linkAttempts.has(p.id)) {
+      if (
+        !p.repository &&
+        !p.plain &&
+        !p.computer &&
+        !this.linkAttempts.has(p.id)
+      ) {
         this.linkAttempts.add(p.id);
         const linked = await this.linkBySite(p.id).catch(() => null);
         if (linked) Object.assign(p, { repository: linked.repository });
       }
     if (client)
       for (const p of projects)
-        if (!p.repository && !p.plain) {
+        if (!p.repository && !p.plain && !p.computer) {
           const attempt = JSON.stringify([client.account.id, p.id]);
           if (!this.linkAttempts.has(attempt)) {
             this.linkAttempts.add(attempt);
@@ -280,13 +308,15 @@ export class Projects {
   }
   /** The project's folder: its repository's root, or a plain folder outside any. */
   async inspect(id: string) {
-    const p = this.get(id),
-      root = await realpath(p.path).catch((e: NodeJS.ErrnoException) => {
-        if (e.code === "ENOENT" || e.code === "ENOTDIR")
-          throw new Error(folderGoneMessage(p.path));
-        throw e;
-      }),
-      repository = root === p.path ? await repositoryRoot(root) : undefined;
+    const p = this.get(id);
+    if (p.computer) throw new Error(onComputerMessage(p));
+    const root = await realpath(p.path).catch((e: NodeJS.ErrnoException) => {
+      if (e.code === "ENOENT" || e.code === "ENOTDIR")
+        throw new Error(folderGoneMessage(p.path));
+      throw e;
+    });
+    const repository =
+      root === p.path ? await knownRepositoryRoot(root) : undefined;
     if (repository === undefined || (repository && repository !== root))
       throw new Error(
         "This project’s Git root changed. Add the correct folder again.",
@@ -305,7 +335,7 @@ export class Projects {
       throw new Error("Choose the root of its Git repository.");
     const other = this.store
       .get()
-      .projects?.find((p) => p.path === root && p.id !== id);
+      .projects?.find((p) => p.path === root && p.id !== id && !p.computer);
     if (other)
       throw new Error(
         `${root} is already the project ${this.named(other).name}${other.removed ? ", removed from Relay. Add that folder again instead" : ""}.`,
@@ -329,7 +359,9 @@ export class Projects {
     const repository = await repositoryRoot(root);
     if (repository && repository !== root)
       throw new Error("Choose the root of its Git repository.");
-    const existing = this.store.get().projects?.find((p) => p.path === root);
+    const existing = this.store
+      .get()
+      .projects?.find((p) => p.path === root && !p.computer);
     if (existing?.removed)
       await this.store.update((s) => {
         const p = s.projects?.find((p) => p.id === existing.id);
@@ -358,6 +390,51 @@ export class Projects {
         /* Local work must remain available when the Git host is offline. */
       }
     }
+    return withKind(this.named(project));
+  }
+  /**
+   * A project whose folder is on a paired computer, as that computer added
+   * it; the one already made for it comes back, unhidden and with what that
+   * computer says of it now: a plain folder may have become a repository.
+   */
+  async addRemote(
+    computer: { id: string; name: string },
+    remote: { id: string; name: string; path: string; plain?: boolean },
+  ) {
+    const same = (p: Project) =>
+      p.computer?.id === computer.id && p.computer.projectId === remote.id;
+    const existing = this.store.get().projects?.find(same);
+    if (existing) {
+      await this.store.update((s) => {
+        const p = s.projects?.find(same);
+        if (!p?.computer) return;
+        delete p.removed;
+        p.path = remote.path;
+        if (p.name === p.automaticName) p.name = remote.name;
+        p.automaticName = remote.name;
+        p.computer.name = computer.name;
+        if (remote.plain) p.computer.plain = true;
+        else delete p.computer.plain;
+      });
+      return withKind(this.get(existing.id));
+    }
+    const project: Project = {
+      id: randomUUID(),
+      path: remote.path,
+      name: remote.name,
+      automaticName: remote.name,
+      repository: null,
+      added: Date.now(),
+      computer: {
+        id: computer.id,
+        name: computer.name,
+        projectId: remote.id,
+        ...(remote.plain ? { plain: true as const } : {}),
+      },
+    };
+    await this.store.update((s) => {
+      (s.projects ??= []).push(project);
+    });
     return withKind(this.named(project));
   }
   /**
@@ -462,6 +539,9 @@ export class Projects {
       );
     return [...new Set(names)].sort();
   }
+  filePreview({ root }: Place, path: string) {
+    return filePreview(root, path);
+  }
   async file({ root, plain }: Place, path: string) {
     const file = await readWorkingFile(root, path);
     if (!file) throw new Error("This file no longer exists.");
@@ -478,11 +558,15 @@ export class Projects {
     // Only HEAD and the branch are needed, not a full status scan.
     const [head, branch] = (
       await Promise.all([
-        git(root, ["rev-parse", "HEAD"]),
+        // --revs-only returns no revision on an unborn branch, without
+        // swallowing failures such as a missing repository or Git binary.
+        git(root, ["rev-parse", "--revs-only", "HEAD"]),
         git(root, ["branch", "--show-current"]),
       ])
     ).map((out) => out.trim());
-    const entry = await git(root, ["ls-tree", "-z", head, "--", path]);
+    const entry = head
+      ? await git(root, ["ls-tree", "-z", head, "--", path])
+      : "";
     const original = entry
       ? decodeText(await gitBytes(root, ["show", `${head}:${path}`]))
       : "";
@@ -504,14 +588,13 @@ export class Projects {
   ) {
     await writeWorkingFile(root, path, version, { contents }, async () => {
       if (
-        (plain ? "" : (await git(root, ["rev-parse", "HEAD"])).trim()) !== head
+        (plain
+          ? ""
+          : (await git(root, ["rev-parse", "--revs-only", "HEAD"])).trim()) !==
+        head
       )
         throw new Error(
           "The checkout moved to another commit. Reopen the file; your unsaved text is kept.",
-        );
-      if (!(await readWorkingFile(root, path)))
-        throw new Error(
-          "The file was deleted on disk. Reopen it before saving.",
         );
     });
     return { version: digest(contents) };

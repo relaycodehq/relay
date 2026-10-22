@@ -1,4 +1,9 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -27,18 +32,11 @@ test("chat, changes and files are inline panes that can be reordered", async () 
   git("add", ".");
   git("commit", "-qm", "Base");
   await writeFile(join(repo, "src/a.ts"), "export const a = 2;\n");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   try {
@@ -52,9 +50,15 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await page
       .getByRole("button", { name: "Add project folder", exact: true })
       .click();
-    await page
-      .getByRole("dialog", { name: "Add a project", exact: true })
-      .getByRole("option", { name: "Choose in Finder…", exact: true })
+    const adding = page.getByRole("dialog", {
+      name: "Add a project",
+      exact: true,
+    });
+    await adding
+      .getByRole("button", { name: "Open a folder", exact: true })
+      .click();
+    await adding
+      .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
     const toggles = page.getByRole("group", { name: "Workspace panes" });
     // Changes carries its line counts after the label.
@@ -114,8 +118,39 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
 
-    // Changes open in the Files pane, next to the diff.
+    // A change opens in the Files pane, which takes the diff's place.
     await page.locator('.change-select[aria-label$=" src/a.ts"]').click();
+    // Find opens from the diff's keyboard context and indexes both changed sides.
+    const localDiff = page.locator(".working-diff-frame");
+    await localDiff.locator("[data-line]").first().click();
+    await page.keyboard.press("ControlOrMeta+f");
+    const find = localDiff.getByRole("textbox", { name: "Find in diff" });
+    await expect(find).toBeFocused();
+    await find.fill("export");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          ["relay-diff-find", "relay-diff-find-current"].reduce(
+            (count, name) => count + (CSS.highlights.get(name)?.size ?? 0),
+            0,
+          ),
+        ),
+      )
+      .toBe(2);
+    await find.press("Enter");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("2 of 2");
+    await find.press("Shift+Enter");
+    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await find.press("Escape");
+    await expect(find).toHaveCount(0);
+    expect(
+      await page.evaluate(
+        () =>
+          CSS.highlights.has("relay-diff-find") ||
+          CSS.highlights.has("relay-diff-find-current"),
+      ),
+    ).toBe(false);
     await page
       .getByRole("button", { name: "Open in editor", exact: true })
       .click();
@@ -126,6 +161,8 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       }),
     ).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await order()).toEqual(["chat", "panel"]);
+    await toggle("Changes").click();
     expect(await order()).toEqual(["chat", "changes", "panel"]);
 
     // Drag a header toggle to reorder the panes; the order and the open
@@ -157,8 +194,25 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       "Terminal",
       "Terminal 2",
     ]);
+    const fileEditor = panel
+      .locator(".project-inline-editor")
+      .getByRole("textbox", { name: "src/a.ts", exact: true });
+    await fileEditor.press("ControlOrMeta+End");
+    await fileEditor.pressSequentially("// Keep while Files is hidden");
+    const unsaved = panel.getByText("Unsaved changes", { exact: true });
+    await expect(unsaved).toBeVisible();
     await panel.getByRole("tab", { name: "Terminal 2", exact: true }).click();
     await expect(panel.locator(".xterm-rows")).toBeVisible();
+    await expect(fileEditor).toBeHidden();
+    await openSurface(page, "Files");
+    await expect(fileEditor).toContainText("Keep while Files is hidden");
+    await expect(unsaved).toBeVisible();
+    await fileEditor.press("ControlOrMeta+s");
+    await expect(unsaved).toHaveCount(0);
+    await expect
+      .poll(() => readFile(join(repo, "src/a.ts"), "utf8"))
+      .toContain("Keep while Files is hidden");
+    await panel.getByRole("tab", { name: "Terminal 2", exact: true }).click();
     await panel
       .getByRole("button", { name: "Close terminal 2", exact: true })
       .click();
@@ -213,19 +267,12 @@ test("each thread keeps the panes it had open", async () => {
     join(bin, "codex"),
     await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
   );
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: {
       ...env,
       ...pathWith(env, bin),
       RELAY_TEST_DATA: join(root, "data"),
-      RELAY_TEST_HEADED: "0",
-      RELAY_TEST_NATIVE_STORAGE: "0",
     },
   });
   const mod = process.platform === "darwin" ? "Meta" : "Control";

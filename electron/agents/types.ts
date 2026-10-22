@@ -1,3 +1,4 @@
+import type { PredictionAsked } from "../../shared/prediction";
 import type { WatchNote, WatchScope, WatchSpend } from "../../shared/watch";
 import type {
   RuntimeMode,
@@ -20,6 +21,7 @@ import type { ModelChoice } from "../../shared/settings";
 import type { Streamed, UsageJob, UsageTokens } from "../../shared/usage";
 import type { RenderMode } from "../../shared/html-render";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
+import type { ContextReport } from "../../shared/context-report";
 
 /** What one request of a run used, as the agent reported it. */
 export type UsageReport = {
@@ -66,6 +68,17 @@ export type AgentWatch = {
   onSpend?: (spend: WatchSpend) => void;
 };
 
+/** Guessing the person's next message once a turn's answer is in; see ./predict. */
+export type AgentPredict = {
+  /** What the person asked this turn, in their own words. */
+  request: string;
+  onPrediction: (text: string) => void;
+  /** Asked once the turn has earned a guess: false skips it after all. */
+  allows?: () => boolean | Promise<boolean>;
+  /** A guess was asked for, whether or not it came back as one. */
+  onAsked?: (asked: PredictionAsked) => void;
+};
+
 /** One turn of any agent, as a thread, title or helper job runs it. */
 export interface AgentOptions {
   job: AgentJob;
@@ -89,6 +102,11 @@ export interface AgentOptions {
   }) => void;
   /** The agent read steering message `id`; what follows answers it. */
   onSteered?: (id: string) => void;
+  /**
+   * The agent took steering message `id`, but its turn ended before reading
+   * it. With `error`, whether it still reaches the agent can't be told.
+   */
+  onSteerUnread?: (id: string, error?: Error) => void;
   cwd: string;
   /** Folders beyond `cwd` the user linked, and whether the agent may edit them. */
   links?: LinkedFolder[];
@@ -142,6 +160,7 @@ export interface AgentOptions {
   };
   onRequest?: AskAgentRequest;
   watch?: AgentWatch;
+  predict?: AgentPredict;
   session?: {
     key?: string;
     id?: string;
@@ -177,6 +196,11 @@ export interface AgentRuntime {
   reloadSession?(key: string): Promise<SessionReload | undefined>;
   /** The subagents of the session under `key`, for an agent that starts them. */
   subagents?(key: string): SubagentSource | undefined;
+  /** Counts or estimates the live session's context against its last reported usage. */
+  contextReport?(
+    key: string,
+    usage: ContextUsage,
+  ): Promise<ContextReport | null>;
   /**
    * Signs the agent in from Relay, for one with no login command; resolves
    * once the user is through.

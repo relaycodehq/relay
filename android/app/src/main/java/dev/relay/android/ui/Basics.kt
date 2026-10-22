@@ -1,11 +1,7 @@
 package dev.relay.android.ui
 
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,6 +16,7 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
@@ -39,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import dev.relay.android.ui.theme.Motion
 import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
+import kotlinx.coroutines.delay
 import androidx.compose.material3.Icon as MaterialIcon
 import androidx.compose.material3.Text as MaterialText
 
@@ -172,13 +170,21 @@ fun Skeleton(
  * An endless 0..1-style value read at draw time, so it never recomposes. It
  * only runs while the app is in front and animations are on; otherwise it
  * holds at `still`. `showsWork` loops (spinners) keep going under reduced motion.
+ * Twenty updates a second, independent of the display's refresh rate.
  */
 @Composable
 fun loop(durationMs: Int, easing: androidx.compose.animation.core.Easing, from: Float, to: Float, still: Float = from, showsWork: Boolean = false): () -> Float {
     val inFront by rememberInFront()
     val reduced = rememberReducedMotion()
     if (!inFront || (reduced && !showsWork)) return { still }
-    val t = rememberInfiniteTransition(label = "loop")
-    val v = t.animateFloat(from, to, infiniteRepeatable(tween(durationMs, easing = easing), RepeatMode.Restart), label = "loop")
+    val v = produceState(from, durationMs, easing, from, to) {
+        val start = System.nanoTime()
+        val duration = durationMs * 1_000_000L
+        while (true) {
+            delay(50)
+            val fraction = ((System.nanoTime() - start) % duration).toFloat() / duration
+            value = from + (to - from) * easing.transform(fraction)
+        }
+    }
     return { v.value }
 }

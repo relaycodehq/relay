@@ -16,6 +16,7 @@ export type SignInOffer =
 /** How a signed-out agent signs in: its own CLI login in the thread's terminal, or Relay's browser sign-in. */
 export function signInOffer(provider: AgentProvider): SignInOffer {
   const name = agentName(provider);
+  if (provider === "opencode") return { via: "relay", label: "Sign in to OpenCode" };
   const login = agentInfo(provider).login;
   return login
     ? {

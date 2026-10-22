@@ -1,9 +1,9 @@
 // The add-project palette's work in the main process: what it opens on,
 // adding a folder, cloning, and making a new project. One clone or creation
 // runs at a time; its progress goes to the window as it goes.
-import { lstat, mkdir, rm, stat } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
-import { dirname, join, sep } from "node:path";
+import { lstat, mkdir, realpath, rm, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   parseRemote,
   repoName,
@@ -18,7 +18,6 @@ import { isRemoteOf } from "../git/repository";
 import { inspectFolder, expandHome } from "../projects/folder-inspect";
 import type { Projects } from "../projects/projects";
 import type { Gitea } from "../pull-requests/gitea";
-import type { TerminalSessions } from "../terminal-sessions";
 import { cloneRepository } from "./clone";
 import { createProjectFolder } from "./create";
 import { githubCredentials } from "./github";
@@ -31,8 +30,9 @@ const exists = (path: string) =>
     () => false,
   );
 const isRepository = (path: string) => exists(join(path, ".git"));
-const within = (path: string, dir: string) =>
-  path === dir || path.startsWith(dir.endsWith(sep) ? dir : dir + sep);
+
+/** A project whose folder is on this computer: not a Scratchpad, nor one on another computer, whose path means nothing here. */
+const here = (p: Project) => !p.scratch && !p.computer;
 
 export class ProjectAdding {
   private running?: AbortController;
@@ -42,56 +42,18 @@ export class ProjectAdding {
       store: Store;
       projects: Projects;
       client: () => Gitea | null;
-      sessions: TerminalSessions;
-      /**
-       * Where apps keep their data. Every Relay build's worktrees and
-       * Scratchpad live there, and nobody's projects do.
-       */
-      appData: string;
       send: (job: AddingJob | null) => void;
     },
   ) {}
 
   async start(): Promise<AddingStart> {
-    const projects = await this.deps.projects.list(this.deps.client());
-    const real = projects.filter((p) => !p.scratch);
-    const temporary = [
-      tmpdir(),
-      "/tmp",
-      "/private/tmp",
-      "/private/var/folders",
-    ];
-    const recent = await this.deps.sessions.recentFolders(20).catch(() => []);
-    const shown = new Set<string>();
-    const folders = [];
-    for (const { cwd, mtime } of recent) {
-      if (
-        cwd === homedir() ||
-        within(cwd, this.deps.appData) ||
-        cwd.includes(`${sep}.claude${sep}worktrees${sep}`) ||
-        temporary.some((t) => within(cwd, t)) ||
-        real.some((p) => within(cwd, p.path))
-      )
-        continue;
-      const info = await inspectFolder(cwd).catch(() => null);
-      if (!info || info.kind === "missing" || info.kind === "file") continue;
-      const path = info.kind === "inside" ? info.root : info.path;
-      if (shown.has(path) || real.some((p) => p.path === path)) continue;
-      shown.add(path);
-      folders.push({ path, repository: info.kind !== "plain", when: mtime });
-      if (folders.length === 6) break;
-    }
-    return {
-      cloneFolder: await this.cloneFolder(real),
-      home: homedir(),
-      recent: folders,
-    };
+    return { cloneFolder: await this.defaultFolder(), home: homedir() };
   }
 
   /** Where a clone goes when nobody picks a folder: as the palette would open on it. */
   async defaultFolder() {
     const projects = await this.deps.projects.list(this.deps.client());
-    return this.cloneFolder(projects.filter((p) => !p.scratch));
+    return this.cloneFolder(projects.filter(here));
   }
 
   /** The folder the last clone or new project went into, else the newest project's parent. */
@@ -170,7 +132,15 @@ export class ProjectAdding {
   async create(spec: NewProject) {
     const location = expandHome(spec.location);
     const dest = join(location, spec.name);
-    if (await exists(dest)) throw new Error(`${dest} is there already.`);
+    if (await exists(dest)) {
+      // Asked again after the answer got lost, as over a dropped link: it's made.
+      const real = await realpath(dest);
+      const made = (await this.deps.projects.list(this.deps.client())).find(
+        (p) => here(p) && p.path === real,
+      );
+      if (made) return made;
+      throw new Error(`${dest} is there already.`);
+    }
     return this.job(
       `Creating ${spec.name}`,
       undefined,

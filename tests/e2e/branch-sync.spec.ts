@@ -1,10 +1,11 @@
 import { screenshot } from "../fixtures/screenshot";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -46,18 +47,11 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
     otherGit("push", "-q");
     const remoteHead = otherGit("rev-parse", "HEAD");
 
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-      ),
-    ) as Record<string, string>;
+    const env = relayEnv();
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         RELAY_TEST_DATA: join(root, "data"),
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
     const page = await app.firstWindow();
@@ -71,11 +65,8 @@ test("shows ahead/behind next to the branch, syncs with its upstream and rebases
       await window.relay.connect(url, "test-token");
       await window.relay.addProject();
     }, fixture.serverUrl);
-    await page.keyboard.press(
-      process.platform === "darwin" ? "Meta+N" : "Control+N",
-    );
     await expect(
-      page.locator(".composer-branch-trigger:not(.workspace-trigger)"),
+      page.getByRole("button", { name: "review", exact: true }),
     ).toHaveText("review");
 
     // The background fetch surfaces the remote commit without user action.

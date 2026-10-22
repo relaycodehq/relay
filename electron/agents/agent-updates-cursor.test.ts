@@ -5,7 +5,6 @@ import {
   type SdkIo,
 } from "./agent-updates";
 import { isBehind } from "../../shared/agent-updates";
-import { agents, isCliProvider } from "../../shared/agents";
 
 /** A machine where the only agent is Cursor, whose SDK Relay downloads. */
 function cursorMachine(state: {
@@ -50,14 +49,6 @@ function cursorMachine(state: {
 }
 
 describe("Cursor's SDK in the agent list", () => {
-  it("is the one agent Relay downloads instead of finding", () => {
-    expect(agents.cursor.sdk).toBe(true);
-    expect(isCliProvider("cursor")).toBe(false);
-    expect(
-      (["codex", "claude", "opencode"] as const).every(isCliProvider),
-    ).toBe(true);
-  });
-
   it("offers to set it up when nothing is downloaded yet", async () => {
     const { updates, cursor } = cursorMachine({ newest: "1.0.33" });
     await updates.check();

@@ -358,6 +358,7 @@ export interface Api
   /** The problem report, looked at afresh: the system, the log and the `gh` login. */
   openBugReport(): Promise<import("./bug-report").BugReportPreview>;
   saveBugReport(
+    draftId: string,
     fields: import("./bug-report").BugReportFields,
   ): Promise<import("./bug-report").BugReportPreview>;
   /** Has the draft's agent tidy up its description; nothing else goes to the agent. */
@@ -366,6 +367,7 @@ export interface Api
   undoBugReportTidy(): Promise<import("./bug-report").BugReportPreview>;
   /** An edited screenshot as a flattened PNG; `replacing` swaps it for that one. */
   addBugReportScreenshot(
+    draftId: string,
     name: string,
     png: Uint8Array,
     replacing?: string,
@@ -415,6 +417,9 @@ export interface Api
   /** Flag what I'd miss in Claude threads: off (the default), the main thread, or with its subagents. */
   watchThreads(): Promise<WatchScope>;
   saveWatchThreads(scope: WatchScope): Promise<WatchScope>;
+  /** Draft the message you'd likely send next once a Claude or Codex turn ends; off by default. */
+  composerPredictions(): Promise<boolean>;
+  saveComposerPredictions(enabled: boolean): Promise<boolean>;
   /** When agents show pages in answers: on their own (the default), only when asked, or never. */
   renderMode(): Promise<RenderMode>;
   saveRenderMode(mode: RenderMode): Promise<RenderMode>;
@@ -497,9 +502,13 @@ export interface Api
     provider: import("./agent-accounts").AccountProvider,
     id: string,
   ): Promise<import("./projects").ChatSummary>;
-  /** An agent's models; Codex's and Claude's carry their own extra fields. */
+  /**
+   * An agent's models; Codex's and Claude's carry their own extra fields.
+   * With `computerId`, as that paired computer's copy lists them.
+   */
   agentModels<P extends import("./agents").AgentProvider>(
     provider: P,
+    computerId?: string,
   ): Promise<
     P extends "codex"
       ? CodexModel[]
@@ -516,11 +525,13 @@ export interface Api
   /**
    * Has the agent list its models afresh, restarting it where that takes
    * a restart. Refuses while threads run on it, naming them, unless
-   * `stopRunning` says to stop them; they resume once it is back.
+   * `stopRunning` says to stop them; they resume once it is back. With
+   * `computerId`, that paired computer's copy and threads.
    */
   reloadAgentModels(
     provider: import("./agents").AgentProvider,
     stopRunning: boolean,
+    computerId?: string,
   ): Promise<{ running: { id: string; title: string }[] }>;
   /** What an agent runs in this project where a thread leaves the model on Default. */
   agentDefaults(
@@ -652,10 +663,21 @@ export interface Api
   stopReadAloud(id: number): Promise<void>;
   onReadAloudState(callback: (state: ReadAloudState) => void): () => void;
   onReadAloud(callback: (event: ReadAloudEvent) => void): () => void;
-  /** The agent CLIs as last checked, and whether newer ones are out. */
-  agentVersions(): Promise<AgentVersions>;
+  /**
+   * The agent CLIs as last checked, and whether newer ones are out; with
+   * `computerId`, that paired computer's.
+   */
+  agentVersions(computerId?: string): Promise<AgentVersions>;
   /** Looks again now, asking the registries afresh. */
-  checkAgentVersions(): Promise<AgentVersions>;
+  checkAgentVersions(computerId?: string): Promise<AgentVersions>;
+  /**
+   * Whether the agent's CLI is signed in, here or with `computerId` on that
+   * paired computer; null when it can't tell (Claude and Codex only).
+   */
+  agentSignedIn(
+    provider: import("./agents").AgentProvider,
+    computerId?: string,
+  ): Promise<boolean | null>;
   /** Whether Relay looks for newer agent releases on its own and offers them under the sidebar. */
   agentUpdateChecks(): Promise<boolean>;
   saveAgentUpdateChecks(enabled: boolean): Promise<boolean>;
@@ -678,6 +700,15 @@ export interface Api
   ): () => void;
   /** Updates an agent's CLI with whatever installed it. */
   updateAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /**
+   * Starts installing a missing agent CLI (or updating one) without waiting
+   * for it, here or with `computerId` on that paired computer; `agentVersions`
+   * follows it.
+   */
+  installAgent(
+    provider: AgentProvider,
+    computerId?: string,
+  ): Promise<AgentVersions>;
   /**
    * Links an agent's CLI if it says its version: the program at `path`, or
    * one chosen in a file dialog when it's left out. Null if cancelled.
@@ -715,6 +746,9 @@ export interface Api
    * downloading its SDK first if needed, or Antigravity.
    */
   signInAgent(provider: AgentProvider): Promise<AgentVersions>;
+  /** OpenCode 2's provider connections. Returned metadata contains no credentials. */
+  openCodeAuthProviders(directory?: string): Promise<import("./opencode-auth").OpenCodeAuthProvider[]>;
+  openCodeAuth(input: import("./opencode-auth").OpenCodeAuthRequest): Promise<import("./opencode-auth").OpenCodeAuthResult>;
   signOutAgent(provider: AgentProvider): Promise<AgentVersions>;
   onAgentVersions(callback: (state: AgentVersions) => void): () => void;
   /** Every agent the ACP registry lists, as this machine would get it; `fresh` asks again. */
@@ -763,6 +797,7 @@ export interface Api
    */
   setSidebarShown(shown: boolean, toggled: boolean): Promise<void>;
   onMaximized(callback: (maximized: boolean) => void): () => void;
+  onFullScreen(callback: (fullScreen: boolean) => void): () => void;
   parseUrl(url: string): Promise<PullRef>;
   onOpenUrl(callback: (url: string) => void): () => void;
   /** A project to show: `relay <folder>` or a folder dropped on Relay. */

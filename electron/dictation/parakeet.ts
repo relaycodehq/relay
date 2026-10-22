@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type * as Ort from "onnxruntime-node";
 import { featureBands, logMel } from "./features";
+import type { Heard } from "./transcriber";
 
 /** Tokens one encoder frame may emit before decoding moves on regardless. */
 const maxPerFrame = 10;
@@ -82,7 +83,7 @@ export async function loadParakeet(
 
   return {
     /** Transcribes one phrase of 16 kHz samples. */
-    async decode(samples: Float32Array) {
+    async decode(samples: Float32Array): Promise<Heard> {
       const features = logMel(samples);
       const encoded = await encoder.run({
         [audioIn]: new ort.Tensor("float32", features.data, [
@@ -108,7 +109,9 @@ export async function loadParakeet(
           hidden,
         ]);
       let prediction = await predict(blank, zero(), zero());
-      const said: number[] = [];
+      const said: number[] = [],
+        // The encoder frame each token was said in.
+        when: number[] = [];
       const frame = new Float32Array(width);
       for (let t = 0, emitted = 0; t < length;) {
         for (let i = 0; i < width; i++) frame[i] = data[i * stride + t]!;
@@ -127,6 +130,7 @@ export async function loadParakeet(
           if (logits[blank + 1 + i]! > logits[blank + 1 + skip]!) skip = i;
         if (token !== blank) {
           said.push(token);
+          when.push(t);
           emitted++;
           prediction = await predict(token, prediction.h, prediction.c);
         }
@@ -138,11 +142,23 @@ export async function loadParakeet(
           emitted = 0;
         }
       }
-      return said
-        .map((token) => tokens[token])
-        .join("")
-        .replace(/▁/g, " ")
-        .trim();
+      const perFrame = samples.length / Math.max(1, length),
+        words: Heard["words"] = [];
+      said.forEach((token, i) => {
+        const piece = tokens[token]!;
+        // "▁" starts a word; punctuation and word pieces join the last one.
+        if (piece.startsWith("▁") || !words.length)
+          words.push({
+            text: piece.replace(/▁/g, ""),
+            at: when[i]! * perFrame,
+          });
+        else words.at(-1)!.text += piece;
+      });
+      const nonEmpty = words.filter((word) => word.text);
+      return {
+        text: nonEmpty.map((word) => word.text).join(" "),
+        words: nonEmpty,
+      };
     },
   };
 }

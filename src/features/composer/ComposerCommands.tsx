@@ -1,7 +1,6 @@
 import {
   useEffect,
   useId,
-  useLayoutEffect,
   useState,
   type KeyboardEvent,
   type RefObject,
@@ -40,6 +39,7 @@ import {
 import type { ProviderCommand } from "../../../shared/commands";
 import type { SkillPick } from "./ComposerPromptInput";
 import { api } from "../../lib/api";
+import { usePopupBounds } from "../../lib/usePopupBounds";
 import {
   agentName,
   type AgentProvider,
@@ -192,7 +192,12 @@ export function useComposerCommands({
                   kind: "relay" as const,
                   name: c.name,
                   label: "/" + c.name + ("args" in c ? " " + c.args : ""),
-                  description: c.description,
+                  description:
+                    c.name === "reload" &&
+                    provider !== "message" &&
+                    agentInfo(provider).reloadsService
+                      ? `Reload ${agentName(provider)} configuration across all projects`
+                      : c.description,
                   source: "Relay",
                   Icon: Zap,
                 })),
@@ -215,13 +220,12 @@ export function useComposerCommands({
   // Mid-sentence, a slash that matches nothing is just text, e.g. a path;
   // so is a `$` that names no skill, e.g. `$5` or `$HOME`.
   const visible = open && ((!inline && prefix === "/") || items.length > 0);
-  const [bounds, setBounds] = useState({
-    left: 0,
-    top: 0,
-    width: 400,
-    maxHeight: 300,
-    above: true,
-  });
+  const bounds = usePopupBounds(
+    visible,
+    () => input.current?.closest("form") ?? input.current,
+    288,
+    items.length * 34 + 16,
+  );
   // A bare value list starts on the present value, so arrows step from it.
   useEffect(() => {
     setActive(
@@ -234,36 +238,6 @@ export function useComposerCommands({
     );
     setError(undefined);
   }, [draft, provider]);
-  useLayoutEffect(() => {
-    if (!visible) return;
-    function measure() {
-      const box = (
-        input.current?.closest("form") ?? input.current
-      )?.getBoundingClientRect();
-      if (!box) return;
-      const maxHeight = Math.min(288, innerHeight - 24);
-      const height = Math.min(maxHeight, items.length * 34 + 16);
-      const width = Math.min(box.width, innerWidth - 24);
-      setBounds({
-        left: Math.max(12, Math.min(box.left, innerWidth - width - 12)),
-        top:
-          box.top > height + 12
-            ? box.top - 4
-            : Math.min(box.bottom + 8, innerHeight - height - 12),
-        width,
-        maxHeight:
-          box.top > height + 12 ? Math.min(288, box.top - 20) : maxHeight,
-        above: box.top > height + 12,
-      });
-    }
-    measure();
-    window.addEventListener("resize", measure);
-    window.addEventListener("scroll", measure, true);
-    return () => {
-      window.removeEventListener("resize", measure);
-      window.removeEventListener("scroll", measure, true);
-    };
-  }, [visible, items.length, input]);
   /**
    * Workspace actions clear the draft. Composer settings take out only their
    * own text, first, so the command sees the rest; a refusal puts it back.
@@ -380,13 +354,7 @@ export function useComposerCommands({
     ? createPortal(
         <div
           className="composer-command-menu"
-          style={{
-            left: bounds.left,
-            top: bounds.top,
-            width: bounds.width,
-            maxHeight: bounds.maxHeight,
-            transform: bounds.above ? "translateY(-100%)" : undefined,
-          }}
+          style={bounds}
           onMouseDown={(e) => e.preventDefault()}
         >
           <div id={id} role="listbox" aria-label="Commands">

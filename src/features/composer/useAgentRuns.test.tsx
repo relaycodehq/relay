@@ -50,4 +50,8 @@ it("offers an agent's own efforts without waiting for Codex's settings, which on
   const offers = (to: AgentProvider) => runs.offersEffort(to);
   expect(offers("opencode")).toBe(true);
   expect(offers("codex")).toBe(false);
+  expect(runs.sendSettings("codex")).toBeUndefined();
+  expect(runs.sendSettings("opencode")?.choice.model).toBe("openai/gpt-5");
+  expect(runs.sendSettings("claude")?.to).toBe("claude");
+  expect(runs.sendSettings("message")?.to).toBe("message");
 });

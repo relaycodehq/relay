@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron } from "@playwright/test";
+import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -51,21 +51,14 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
   gitIn(repo, "worktree", "add", "-q", "-b", "newer", newer);
   await writeFile(join(newer, "newer.txt"), "Newer worktree\n");
   await writeFile(join(repo, "main-only.txt"), "Another thread's work\n");
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const launch = () =>
     electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: {
         ...env,
         ...pathWith(env, bin),
         RELAY_AGENT_CAPTURE: capture,
         RELAY_TEST_DATA: data,
-        RELAY_TEST_HEADED: "0",
-        RELAY_TEST_NATIVE_STORAGE: "0",
       },
     });
   let app = await launch();
@@ -149,7 +142,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     await expect(
       page.getByRole("menuitemradio", { name: "Current checkout", exact: true }),
     ).toHaveAttribute("aria-checked", "true");
-    await screenshot(page, { path: "test-results/agent-worktree-picker.png" });
+    await screenshot(page, { path: join(root, "agent-worktree-picker.png") });
     await page.getByRole("menuitemradio", { name: /^local-urls/ }).click();
     await expect(page.locator(".agent-worktree-trigger")).toHaveText(
       "local-urls",
@@ -171,7 +164,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.getByRole("menuitemradio", { name: /^newer/ }),
     ).toHaveAttribute("aria-checked", "false");
     await screenshot(page, {
-      path: "test-results/agent-worktree-selected.png",
+      path: join(root, "agent-worktree-selected.png"),
     });
     await page.keyboard.press("Escape");
     const where = workspaceId(chat.projectId, chat.id, "old-temp-folder");
@@ -216,13 +209,15 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       worktree,
     );
     await screenshot(page, {
-      path: "test-results/agent-worktree-recovered.png",
+      path: join(root, "agent-worktree-recovered.png"),
     });
 
     await page.getByRole("button", { name: "More Git actions" }).click();
     await page.getByRole("menuitem", { name: "Commit", exact: true }).click();
     const sheet = page.getByRole("dialog", { name: "Commit", exact: true });
-    await sheet.getByLabel("Commit message").fill("Worktree change");
+    await sheet
+      .getByRole("textbox", { name: "Commit message", exact: true })
+      .fill("Worktree change");
     await sheet.getByRole("button", { name: "Commit", exact: true }).click();
     await expect(sheet).toBeHidden();
     expect(gitIn(worktree, "log", "-1", "--format=%s")).toBe("Worktree change");
@@ -235,7 +230,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     gitIn(worktree, "checkout", "-q", "--detach");
     await expect(footer).toHaveText("Detached HEAD");
     await screenshot(page, {
-      path: "test-results/agent-worktree-detached.png",
+      path: join(root, "agent-worktree-detached.png"),
     });
     gitIn(worktree, "checkout", "-q", "local-urls");
     await page.locator(".agent-worktree-trigger").click();
@@ -276,7 +271,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.getByRole("button", { name: "Send message", exact: true }),
     ).toBeDisabled();
     await screenshot(page, {
-      path: "test-results/agent-worktree-deleted.png",
+      path: join(root, "agent-worktree-deleted.png"),
     });
     await page.getByRole("button", { name: "Recreate worktree" }).click();
     await expect(

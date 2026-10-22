@@ -7,12 +7,13 @@ import {
   pullsNav,
 } from "../fixtures/navigation";
 import {
+  relayEnv,
   test,
   expect,
   _electron as electron,
   type ElectronApplication,
   type Page,
-} from "@playwright/test";
+} from "../fixtures/electron";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,16 +22,11 @@ import { fixtureServer } from "../fixtures/gitea";
 test("finished PRs stay closed on restart, while new commits after an approval remain resumable", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-finished-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   let app: ElectronApplication | undefined;
   let page: Page;
   const launch = async () => {
     app = await electron.launch({
-      args: ["tests/fixtures/launch.cjs"],
       env: { ...env, RELAY_TEST_DATA: dataDir },
     });
     page = await app.firstWindow();
@@ -114,11 +110,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
 test("restores the PR, late-page file and the page's search across reload/restart; explicit URLs take priority", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-workspace-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   let app: ElectronApplication | undefined;
   let page: Page;
   const launch = async (url?: string) => {
@@ -278,13 +270,8 @@ test("keeps remembered reviews separate for each account and restores them after
   const first = await fixtureServer(),
     second = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-accounts-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: dataDir },
   });
   const page = await app.firstWindow();
@@ -338,13 +325,8 @@ test("keeps remembered reviews separate for each account and restores them after
 test("the Pull requests page keeps its open PR after a visit to a chat", async () => {
   const fixture = await fixtureServer();
   const dataDir = await mkdtemp(join(tmpdir(), "relay-inbox-return-"));
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) => k !== "ELECTRON_RUN_AS_NODE" && v !== undefined,
-    ),
-  ) as Record<string, string>;
+  const env = relayEnv();
   const app = await electron.launch({
-    args: ["tests/fixtures/launch.cjs"],
     env: { ...env, RELAY_TEST_DATA: dataDir },
   });
   try {
