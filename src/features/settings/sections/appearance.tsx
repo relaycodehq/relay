@@ -9,6 +9,10 @@ import {
 import { mac } from "../../../lib/mod-key";
 import { GlassFrostSlider } from "../GlassFrostSlider";
 import {
+  setActivityBranches,
+  useActivityBranches,
+} from "../../../lib/activity-branches";
+import {
   setSidebarAutoHide,
   useSidebarAutoHide,
 } from "../../../lib/sidebar-auto-hide";
@@ -37,6 +41,7 @@ import { kindLabels, ThemeChoiceCard, ThemeModes } from "../ThemeCards";
 export function useAppearanceEntries(): SettingEntry[] {
   const appearance = useAppearance();
   const sidebarAutoHide = useSidebarAutoHide();
+  const activityBranches = useActivityBranches();
   const smartNames = useSavedSetting(
     {
       queryKey: ["smart-project-names"],
@@ -239,6 +244,23 @@ export function useAppearanceEntries(): SettingEntry[] {
           label="Hide the sidebar while side panes are open"
           checked={sidebarAutoHide}
           onChange={setSidebarAutoHide}
+        />
+      ),
+    },
+    {
+      id: "activity-branches",
+      category: "appearance",
+      section: "Sidebar",
+      title: "Branches in Activity",
+      description:
+        "The branch or worktree under each thread's title. Off leaves Activity to titles and times; Projects still shows them.",
+      keywords:
+        "branch worktree git main commit activity cards thread line hide show version control",
+      render: () => (
+        <Switch
+          label="Show branches in Activity"
+          checked={activityBranches}
+          onChange={setActivityBranches}
         />
       ),
     },

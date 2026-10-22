@@ -50,6 +50,7 @@ import { rowKeys } from "../../ui/ui";
 import { useStoredState } from "../../lib/persisted-store";
 import { parseFamilyFolds, withFamilyFold } from "../../../shared/family-folds";
 import { ThreadRef } from "./ThreadRef";
+import { useActivityBranches } from "../../lib/activity-branches";
 import { CardShortcut } from "./CardShortcut";
 
 export function ActivityView({
@@ -233,6 +234,7 @@ function ThreadCard({
   compact?: boolean;
 }) {
   const { chatId, now, unread, projects, actions, settleKeys } = rows;
+  const branches = useActivityBranches();
   const p = projects.get(c.projectId);
   const isUnread = unread(c);
   const selected = chatId === c.id;
@@ -358,8 +360,10 @@ function ThreadCard({
               <span className="sb-card-goal" title={c.goal.objective}>
                 {c.goal.objective}
               </span>
-            ) : (
+            ) : branches ? (
               <ThreadRef chat={c} />
+            ) : (
+              <span className="sb-thread-ref" />
             )}
             <AwayWhere chatId={c.id} view={away} />
             {compact && state}
@@ -556,7 +560,8 @@ function CompactRow({
 }) {
   const { chatId, now, projects, actions } = rows;
   const p = projects.get(c.projectId);
-  const hasRef = !!(c.branch || c.commit) && !p?.scratch;
+  const hasRef =
+    useActivityBranches() && !!(c.branch || c.commit) && !p?.scratch;
   const when = (
     <small
       title={
