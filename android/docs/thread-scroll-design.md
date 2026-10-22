@@ -60,7 +60,11 @@ through fetching, decoding, failure and streaming completion. Native selectable
 TextViews are not pooled: repeated visits must measure unchanged text identically.
 
 Loading earlier history saves the first visible message row rather than the
-persistent history button, and waits for changed keys before restoring it.
+persistent history button, and waits for a matching completed request before
+restoring it. Request identity and page amount both match, so a streaming tail
+or an old failure cannot acknowledge a newer retry. A failed request releases
+restoration without moving the list. Retry asks for the failed amount again;
+automatic reconnect refreshes only the last known page until that explicit retry.
 Saved state uses a row key plus offset, rather than relying on a numeric index.
 Width/font changes preserve the block key with a proportional offset after
 remeasurement; this is best effort, not glyph-exact across changed line wrapping.

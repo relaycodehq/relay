@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.scrollToIndex
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Constraints
 import dev.relay.android.features.thread.ThreadScroll
+import dev.relay.android.features.thread.HistoryLoadResult
 import dev.relay.android.features.diagnostics.scrollTouches
 
 /** One viewport shared by the real conversation, gallery and device tests. */
@@ -31,12 +32,12 @@ internal fun ThreadViewport(
     signature: ContentSignature,
     modifier: Modifier = Modifier,
     restorationComplete: Boolean = true,
-    loadedHistory: Int? = null,
+    historyResult: HistoryLoadResult? = null,
     empty: (@Composable ColumnScope.() -> Unit)? = null,
     dock: @Composable ColumnScope.() -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    SideEffect { scroll.content(keys, signature, restorationComplete, loadedHistory) }
+    SideEffect { scroll.content(keys, signature, restorationComplete, historyResult) }
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val reserve = remember(scroll) { ReadingViewport() }

@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -32,6 +31,9 @@ class ThreadModel(
     private val remote: Remote,
     val id: String,
     private val cache: ThreadCache,
+    private val fetch: suspend (RemoteChat?, Int) -> RemoteChat? = { known, history ->
+        remote.client.value?.chat(id, known, history)
+    },
 ) {
     private val computer = remote.active.value
     private val _thread = MutableStateFlow(cache.now(computer, id))
@@ -41,9 +43,14 @@ class ThreadModel(
     private val _history = MutableStateFlow(Bridge.REMOTE_HISTORY)
     /** How many of the latest messages to hold; "Load earlier" asks for a page more. */
     val history: StateFlow<Int> = _history.asStateFlow()
-    val canLoadEarlier get() = _history.value < Bridge.MAX_REMOTE_HISTORY
-    private val _loadedHistory = MutableStateFlow(0)
+    val canLoadEarlier get() = _history.value > _loadedHistory.value || _history.value < Bridge.MAX_REMOTE_HISTORY
+    val nextHistory get() = if (_history.value > _loadedHistory.value) _history.value
+        else minOf(Bridge.MAX_REMOTE_HISTORY, _history.value + Bridge.REMOTE_HISTORY)
+    private val _loadedHistory = MutableStateFlow(Bridge.REMOTE_HISTORY)
     val loadedHistory: StateFlow<Int> = _loadedHistory.asStateFlow()
+    private val _historyResult = MutableStateFlow<HistoryLoadResult?>(null)
+    val historyResult: StateFlow<HistoryLoadResult?> = _historyResult.asStateFlow()
+    private var requestSequence = 0L
     private val _fetched = MutableStateFlow(0L)
     /** The outbox [stamp] taken as the latest fetch went out, for telling which sends it covers. */
     val fetched: StateFlow<Long> = _fetched.asStateFlow()
@@ -70,30 +77,44 @@ class ThreadModel(
     }
 
     private suspend fun fetchOnce() {
-        val client = remote.client.value ?: return
+        val history = _history.value
+        val request = ++requestSequence
         try {
-            val history = _history.value
             val started = stamp()
             val asked = _thread.value
             val next = try {
-                client.chat(id, asked, history)
+                fetch(asked, history)
             } catch (_: MissingMessage) {
-                client.chat(id, null, history)
+                fetch(null, history)
+            }
+            if (next == null) {
+                historyFailed(request, history)
+                return
             }
             _thread.value = keepNewer(next, _thread.value, asked)
             _fetched.value = started
             _loadedHistory.value = history
             cache.save(computer, id, next)
             _error.value = null
+            _historyResult.value = HistoryLoadResult(request, history, true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _error.value = e.message ?: e.toString()
+            historyFailed(request, history)
         }
     }
 
-    fun loadEarlier() {
-        _history.value = minOf(Bridge.MAX_REMOTE_HISTORY, _history.value + Bridge.REMOTE_HISTORY)
+    private fun historyFailed(request: Long, history: Int) {
+        // Refreshes after failure should fetch the known page; only an explicit retry
+        // asks for more again. Otherwise a reconnect could unexpectedly prepend history.
+        if (_history.value == history && history > _loadedHistory.value) _history.value = _loadedHistory.value
+        _historyResult.value = HistoryLoadResult(request, history, false)
+    }
+
+    suspend fun loadEarlier() {
+        _history.value = nextHistory
+        load()
     }
 
     /** Keeps it current while [scope] lives: the screen's lifetime. */
@@ -117,6 +138,5 @@ class ThreadModel(
                 if (signature.isNotEmpty() && _thread.value != null) launch { load() }
             }
         }
-        scope.launch { _history.drop(1).collect { load() } }
     }
 }

@@ -42,6 +42,7 @@ class ThreadScroll internal constructor(
     private var mode by mutableStateOf<ScrollMode>(ScrollMode.Following)
     val pinned: Boolean get() = mode == ScrollMode.Following
     val reading: Boolean get() = !pinned
+    internal val currentMode: ScrollMode get() = state.mode
     var touching by mutableStateOf(false)
         private set
     internal val diagnostics = ThreadScrollDiagnostics(trace)
@@ -51,6 +52,7 @@ class ThreadScroll internal constructor(
     private var pendingAnchor: RowAnchor? = null
     private var prependKeys: List<String>? = null
     private var prependHistory: Int? = null
+    private var prependAfterRequest = 0L
     private var previousSize: Pair<Int, Int>? = null
     private var previousTextScale: Pair<Float, Float>? = null
     private var resizeAnchor: Pair<String, Float>? = null
@@ -80,9 +82,9 @@ class ThreadScroll internal constructor(
         if (state.mode !is ScrollMode.Restoring) { pendingAnchor = null; prependKeys = null; prependHistory = null }
     }
 
-    internal fun content(keys: List<String>, signature: ContentSignature, restorationComplete: Boolean, loadedHistory: Int?) {
+    internal fun content(keys: List<String>, signature: ContentSignature, restorationComplete: Boolean, historyResult: HistoryLoadResult?) {
         this.keys = keys
-        restoreIfAvailable(restorationComplete, loadedHistory)
+        restoreIfAvailable(restorationComplete, historyResult)
         accept(ScrollEvent.Content(signature))
     }
 
@@ -173,11 +175,12 @@ class ThreadScroll internal constructor(
     }
 
     /** Capture the first message row, rather than the history button that will remain above the new page. */
-    internal fun preserveForPrepend(requestedHistory: Int? = null) {
+    internal fun preserveForPrepend(requestedHistory: Int? = null, afterRequest: Long = 0) {
         val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key != "earlier" } ?: return
         val anchor = RowAnchor(row.key.toString(), -row.offset)
         prependKeys = keys
         prependHistory = requestedHistory
+        prependAfterRequest = afterRequest
         accept(ScrollEvent.Opened(SavedScroll(false, anchor)))
     }
 
@@ -189,7 +192,7 @@ class ThreadScroll internal constructor(
         return SavedScroll(pinned, anchor)
     }
 
-    private fun restoreIfAvailable(complete: Boolean, loadedHistory: Int?) {
+    private fun restoreIfAvailable(complete: Boolean, historyResult: HistoryLoadResult?) {
         val mode = state.mode as? ScrollMode.Restoring ?: return
         val anchor = pendingAnchor ?: return
         if (keys.isEmpty()) return
@@ -197,7 +200,12 @@ class ThreadScroll internal constructor(
         if (before != null) {
             val requested = prependHistory
             if (requested != null) {
-                if (loadedHistory == null || loadedHistory < requested) return
+                if (historyResult == null || historyResult.request <= prependAfterRequest || historyResult.history < requested) return
+                if (!historyResult.succeeded) {
+                    // A failed load changed no rows: release ownership without requesting a position.
+                    accept(ScrollEvent.RestoreResult(mode.token, false))
+                    return
+                }
             } else {
                 // Unrelated streaming changes at the tail must not acknowledge a history prepend.
                 val boundary = before.firstOrNull { it != "earlier" && it != "end" && it != "bottom" }

@@ -128,6 +128,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val error by model.error.collectAsState()
     val history by model.history.collectAsState()
     val loadedHistory by model.loadedHistory.collectAsState()
+    val historyResult by model.historyResult.collectAsState()
     val overview by remote.overview.collectAsState()
     val online = remote.status.collectAsState().value.state == LinkState.Online
     val summary = overview?.chats?.find { it.id == id }
@@ -321,7 +322,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                     listOf(running, canResume, t?.queue).hashCode()),
                 Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap().scrollGeometry(trace, "scroll_view"),
                 restorationComplete = fetched > 0 || error != null || (!online && t != null),
-                loadedHistory = loadedHistory,
+                historyResult = historyResult,
                 empty = if (t == null && listed.isEmpty()) ({ Empty(error, online, computerName(remote)) { scope.launchLoad(model) } }) else null,
                 dock = {
                     Strips(t, summary, rootId, running, actions)
@@ -396,10 +397,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
             ) {
                 if (earlier != null) item("earlier") {
                     Box(Modifier.onSizeChanged { measurements.size("earlier", it) }) {
-                        Earlier(earlier, history < Bridge.MAX_REMOTE_HISTORY) {
+                        Earlier(earlier, history > loadedHistory || history < Bridge.MAX_REMOTE_HISTORY) {
                             trace.event("load_earlier", "earlier" to earlier)
-                            scroll.preserveForPrepend(minOf(Bridge.MAX_REMOTE_HISTORY, history + Bridge.REMOTE_HISTORY))
-                            model.loadEarlier()
+                            scope.launch {
+                                scroll.preserveForPrepend(model.nextHistory, model.historyResult.value?.request ?: 0)
+                                model.loadEarlier()
+                            }
                         }
                     }
                 }
