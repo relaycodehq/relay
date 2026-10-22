@@ -982,6 +982,11 @@
   display: grid;
   gap: 10px;
 }
+.usage-ring-popup .usage-credits {
+  margin-top: 0;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
 .usage-ring-popup[data-grouped] {
   width: 304px;
   max-width: calc(100vw - 24px);
@@ -1002,6 +1007,18 @@
   /* The button's hit area overhangs the popup padding instead of growing
      the heading row. */
   margin: -4px -6px -4px 0;
+}
+/* Saved resets sit beside the refresh, pushing it to the edge. */
+.usage-ring-header .usage-reset[data-compact] {
+  gap: 4px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.usage-ring-header .usage-reset[data-compact] + .usage-ring-refresh {
+  margin-left: -6px;
 }
 .usage-ring-refresh {
   display: grid;

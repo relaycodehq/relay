@@ -9,7 +9,11 @@ import {
   type ProviderUsage,
   type UsageMeter,
 } from "../../../shared/provider-usage";
-import { useUsageReadings } from "../agents/provider-usage";
+import { putUsage, useUsageReadings } from "../agents/provider-usage";
+import { ResetUsage } from "../agents/saved-resets/ResetUsage";
+import { CreditsRow } from "../agents/UsageMeters";
+import { SYSTEM_ACCOUNT } from "../../../shared/agent-accounts";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNow } from "../../lib/useNow";
 import { UsageDial } from "../agents/UsageDial";
 import "../agents/composer-model-picker.css";
@@ -52,10 +56,13 @@ export function ringState(
 export const UsageRing = memo(function UsageRing({
   provider,
   account,
+  accountName,
 }: {
   provider: UsageProvider;
   /** Whose limits: the thread's account; the usual sign-in when left out. */
   account?: string;
+  /** How a reset's confirm names that account; the agent's name when left out. */
+  accountName?: string;
 }) {
   const {
     readings: [reading],
@@ -65,6 +72,8 @@ export const UsageRing = memo(function UsageRing({
   const now = useNow(20_000);
   const refreshing = reading.isFetching;
   const pinOnClick = usePinOnClick();
+  const qc = useQueryClient();
+  const resets = usage?.provider === "codex" ? usage.resets : null;
   const refresh = () => {
     void refreshUsage(provider, account).catch(() => {});
   };
@@ -104,6 +113,19 @@ export const UsageRing = memo(function UsageRing({
           >
             <div className="usage-ring-header">
               <p className="usage-ring-heading">{agent} usage</p>
+              {resets && (
+                <ResetUsage
+                  key={account ?? SYSTEM_ACCOUNT}
+                  compact
+                  accountId={account ?? SYSTEM_ACCOUNT}
+                  accountName={accountName ?? agent}
+                  resets={resets}
+                  low={state?.meters.some((m) => m.leftPercent < 20) ?? false}
+                  onUsage={(next) =>
+                    putUsage(qc, "codex", account ?? SYSTEM_ACCOUNT, next)
+                  }
+                />
+              )}
               <button
                 type="button"
                 className="icon-button usage-ring-refresh"
@@ -126,6 +148,7 @@ export const UsageRing = memo(function UsageRing({
             ) : (
               <p className="usage-ring-status">Checking usage…</p>
             )}
+            {usage?.credits && <CreditsRow credits={usage.credits} />}
           </Popover.Popup>
         </Popover.Positioner>
       </Popover.Portal>

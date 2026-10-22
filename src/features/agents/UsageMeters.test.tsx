@@ -56,15 +56,19 @@ async function render(account = "work", strip = false, initial = reading()) {
   );
   await act(async () => {
     await vi.waitFor(() =>
-      expect(host.textContent).toContain(
-        strip ? "2 resets" : "2 resets available",
-      ),
+      strip
+        ? expect(savedResets(2)).not.toBeNull()
+        : expect(host.textContent).toContain("2 resets available"),
     );
   });
 }
+const savedResets = (count: number) =>
+  host.querySelector(
+    `button[aria-label="Reset usage, ${count} saved ${count === 1 ? "reset" : "resets"}"]`,
+  );
 async function click(label: string) {
   const button = [...document.querySelectorAll("button")].find(
-    (b) => b.textContent === label,
+    (b) => b.textContent === label || b.getAttribute("aria-label") === label,
   );
   expect(button, label).toBeDefined();
   await act(async () => button!.click());
@@ -139,7 +143,8 @@ it("opens full usage details from the strip without a second reset action", asyn
     ],
     credits: { balance: 65492.713, unlimited: false },
   });
-  expect(host.textContent).toContain("65.5K credits · 2 resets");
+  expect(host.textContent).not.toContain("credits");
+  expect(savedResets(2)).not.toBeNull();
   expect(host.textContent).toContain("Week 20%");
   const trigger = document.querySelector<HTMLButtonElement>(
     ".usage-strip-status",
@@ -150,13 +155,30 @@ it("opens full usage details from the strip without a second reset action", asyn
 });
 it("refreshes the strip and shared reading after a confirmed reset", async () => {
   await render("work", true);
-  await click("Reset usage…");
+  await click("Reset usage, 2 saved resets");
   expect(api.redeemCodexReset).not.toHaveBeenCalled();
   vi.mocked(api.redeemCodexReset).mockResolvedValue({
     outcome: "reset",
     usage: reading(1),
   });
   await click("Use 1 reset");
-  expect(host.textContent).toContain("1 reset");
+  expect(savedResets(1)).not.toBeNull();
   expect(client.getQueryData(usageKey("codex", "work"))).toEqual(reading(1));
+});
+it("swaps the strip's readings for the credit balance once a limit is spent", async () => {
+  await render("work", true, {
+    ...reading(),
+    windows: [
+      {
+        kind: "session",
+        usedPercent: 100,
+        resetsAt: Date.now() + 3600000,
+        periodMs: 18000000,
+      },
+    ],
+    credits: { balance: 1200, unlimited: false },
+  });
+  const status = document.querySelector(".usage-strip-status")!;
+  expect(status.textContent).toContain("On credits 1.2K");
+  expect(status.querySelector(".usage-strip-ring")).toBeNull();
 });

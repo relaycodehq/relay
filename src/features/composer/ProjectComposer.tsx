@@ -69,7 +69,11 @@ import { UsageRing } from "./UsageRing";
 import { ThreadCostButton } from "./ThreadCost";
 import type { ThreadCost } from "../../../shared/thread-cost";
 import { useThreadAccounts } from "../accounts/useThreadAccounts";
-import { AccountControl, accountUsageFooter } from "../accounts/AccountSwitch";
+import {
+  AccountControl,
+  accountUsageFooter,
+  accountUsageName,
+} from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import "./composer.css";
 export interface ComposerHandle {
@@ -586,7 +590,11 @@ export function ProjectComposer({
                 />
               ),
               usage: reportsUsage(to) ? (
-                <UsageRing provider={to} account={accounts.of(to)} />
+                <UsageRing
+                  provider={to}
+                  account={accounts.of(to)}
+                  accountName={accountUsageName(to, accounts)}
+                />
               ) : (
                 threadCost && <ThreadCostButton cost={threadCost} />
               ),
