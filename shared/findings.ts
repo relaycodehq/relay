@@ -61,6 +61,14 @@ export function threadReports(findings: ThreadFindings | undefined) {
   return findings?.reports ?? [];
 }
 
+/** The number the thread's next finding gets, after every one it published. */
+export function nextFindingNumber(findings: ThreadFindings | undefined) {
+  const ids = threadReports(findings).flatMap((r) =>
+    r.findings.map((f) => Number(f.id.slice(1))),
+  );
+  return Math.max(0, ...ids) + 1;
+}
+
 const FENCE = "```relay-findings";
 /**
  * Splits a findings block off the end of an answer. Only a block that starts

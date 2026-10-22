@@ -207,6 +207,91 @@ it("reads a pull request detached, and gives it a branch of its own with the fir
   expect(git(made.path, "status", "--porcelain")).toBe("?? fix.ts");
 });
 
+it("moves a pull request's worktree to its new head in the next round, or reads beside edits there", async () => {
+  git(repo, "update-ref", "refs/relay/pulls/7/head", head);
+  const pr = scope({
+    target: { kind: "pr", ref: { owner: "o", name: "r", number: 7 } },
+  });
+  const first = (await openReviewCheckout(repo, pr, worktrees, "c20"))!;
+  // The author pushed again before the next round.
+  git(repo, "switch", "-q", "--detach", head);
+  await writeFile(join(repo, "more.ts"), "export {};\n");
+  git(repo, "add", ".");
+  git(repo, "commit", "-q", "-m", "More");
+  const next = git(repo, "rev-parse", "HEAD");
+  git(repo, "switch", "-q", "main");
+  git(repo, "update-ref", "refs/relay/pulls/7/head", next);
+  const again = await openReviewCheckout(
+    repo,
+    scope({ ...pr, head: next }),
+    worktrees,
+    "c20",
+  );
+  expect(again).toEqual(first);
+  expect(git(first.path, "rev-parse", "HEAD")).toBe(next);
+  // Edits left there stay, at the head they were made on.
+  await writeFile(join(first.path, "fix.ts"), "export {};\n");
+  const beside = await openReviewCheckout(
+    repo,
+    scope({ ...pr, head }),
+    worktrees,
+    "c20",
+  );
+  expect(beside).toEqual({ ...first, path: `${first.path}-2` });
+  expect(git(beside!.path, "rev-parse", "HEAD")).toBe(head);
+  expect(git(first.path, "rev-parse", "HEAD")).toBe(next);
+  expect(git(first.path, "status", "--porcelain")).toBe("?? fix.ts");
+});
+
+it("reviews another branch beside a review's worktree that holds edits or a running answer, and puts one it moved back", async () => {
+  const first = (await openReviewCheckout(repo, scope(), worktrees, "c21"))!;
+  await writeFile(join(first.path, "panel.ts"), "export const fixed = 1;\n");
+  const branch = (name: string) => {
+    git(repo, "branch", name, "main");
+    return scope({
+      target: { kind: "branch", head: name, base: "main" },
+      label: `${name} → main`,
+      head: git(repo, "rev-parse", "main"),
+    });
+  };
+  // Switched, Git would carry the panel's fix along to queue.
+  const queue = branch("queue");
+  const next = (await openReviewCheckout(repo, queue, worktrees, "c21"))!;
+  expect(next).toEqual({
+    path: `${first.path}-2`,
+    made: true,
+    branch: "queue",
+  });
+  expect(git(first.path, "branch", "--show-current")).toBe("panel");
+  expect(git(first.path, "status", "--porcelain")).toBe("M panel.ts");
+  expect(git(next.path, "status", "--porcelain")).toBe("");
+  // Queue is in a worktree the review made, so it stays the review's.
+  expect(await openReviewCheckout(repo, queue, worktrees, "c21")).toEqual(next);
+
+  git(first.path, "checkout", "panel.ts");
+  const rail = branch("rail");
+  expect(
+    await openReviewCheckout(repo, rail, worktrees, "c21", undefined, {
+      inUse: true,
+    }),
+  ).toEqual({ path: `${first.path}-3`, made: true, branch: "rail" });
+  git(repo, "worktree", "remove", `${first.path}-3`);
+  let back: (() => Promise<unknown>) | undefined;
+  const moved = await openReviewCheckout(
+    repo,
+    rail,
+    worktrees,
+    "c21",
+    undefined,
+    {
+      moved: (b) => (back = b),
+    },
+  );
+  expect(moved).toEqual({ path: first.path, made: true, branch: "rail" });
+  await back!();
+  expect(git(first.path, "branch", "--show-current")).toBe("panel");
+});
+
 it("puts a pull request's fixes on its head branch: the local one holding its head, or a new one", async () => {
   git(repo, "update-ref", "refs/relay/pulls/5/head", head);
   const pr = scope({

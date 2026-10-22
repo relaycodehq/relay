@@ -11,7 +11,12 @@ import type {
 } from "../../shared/projects";
 import type { AgentProvider } from "../../shared/agents";
 import {
+  latestReview,
+  reviewerRound,
   reviewerTitle,
+  roundOf,
+  workingReview,
+  reviewRunning,
   reviewThreadTitle,
   type DeepReviewStart,
   type DeepReviewState,
@@ -29,18 +34,23 @@ import {
 } from "./council";
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
+import type { PullRef } from "../../shared/types";
 import {
   discardReviewCheckout,
   followReviewedBranch,
+  needsCheckout,
   openReviewCheckout,
 } from "./checkout";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
+import { fixesFit, roundsOfFindings } from "./rounds";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
   sweepReviewCheckouts,
 } from "./checkout";
 
+export { migrateReviewRounds } from "./rounds";
+export { forgePulls } from "./pull-info";
 export type { PullInfo };
 
 export interface DeepReviewHost {
@@ -55,13 +65,16 @@ export interface DeepReviewHost {
     reviewer: { task: ReviewerTask; title: string; by: AgentProvider },
   ): Promise<ProjectChat>;
   send(chatId: string, input: ProjectChatSend): Promise<void>;
-  /** Starts the lead's turn in the review thread; it runs on after this returns. */
+  /** Starts the lead's turn in the review thread, its answer `answer`; it runs on after this returns. */
   lead(
     chat: ProjectChat,
     input: ProjectChatSend,
     prompt: string,
+    answer: string,
   ): Promise<void>;
   active(chatId: string): boolean;
+  /** A turn is at work in the thread, one its agent started beside another included. */
+  answering(chatId: string): boolean;
   /** Its agent has subagents at work in the background; they start another turn when they end. */
   waiting(chatId: string): boolean;
   /** Its agent's session still runs, so what it waits for can start a turn. */
@@ -85,12 +98,39 @@ export class DeepReviews {
   private awaiting = new Set<string>();
   constructor(private host: DeepReviewHost) {}
 
-  async start(chatId: string, config: DeepReviewStart, pull?: PullInfo) {
+  /**
+   * Starts a round in `folder`, where the thread works now: the project's
+   * checkout, its own worktree, or the folder an earlier round of a deep
+   * review moved it to; asked for once the round may start, as finding it
+   * can make the folder again. A deep review's own thread checks out the
+   * reviewed code when that folder doesn't have it. `pull` asks the forge
+   * about a pull request. `duringTurn` is a round its agent asked for
+   * mid-answer: the lead's turn waits for that answer to end, and the
+   * folder it runs in isn't moved.
+   */
+  async start(
+    chatId: string,
+    config: DeepReviewStart,
+    {
+      folder,
+      pull: pullInfo,
+      duringTurn = false,
+    }: {
+      folder?: (chat: ProjectChat) => Promise<string>;
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    } = {},
+  ) {
     const chat = await this.host.load(chatId);
-    if (chat.scope.kind !== "review")
-      throw new Error("Start a deep review from a new deep review thread.");
-    if (chat.deepReview || chat.messages.length)
-      throw new Error("This thread already holds a review.");
+    const own = chat.scope.kind === "review";
+    if (chat.reviewer)
+      throw new Error("A reviewer can't start a review of its own.");
+    if (
+      reviewRunning(latestReview(chat)) ||
+      (!duringTurn && this.host.active(chat.id))
+    )
+      throw new Error("Wait for the review to finish first.");
+    const first = !chat.reviews?.length;
     const project = this.host.project(chat.projectId);
     if (
       config.target.kind === "pr" &&
@@ -98,23 +138,43 @@ export class DeepReviews {
         project.repository?.name !== config.target.ref.name)
     )
       throw new Error("This pull request belongs to a different project.");
-    const root = await this.host.root(chat.projectId);
+    // The forge knows which branch a pull request merges into.
+    const pull =
+      config.target.kind === "pr"
+        ? await pullInfo?.(config.target.ref)
+        : undefined;
+    const root = await (folder?.(chat) ?? this.host.root(chat.projectId));
     const scope = await resolveScope(root, config.target, project, pull);
     // Reviewers read the code around the changes, so they work where it's
-    // checked out. Without that they still read it from Git.
-    const checkout = await openReviewCheckout(
-      root,
-      scope,
-      this.host.worktrees,
-      chat.id,
-      pull?.headBranch,
-    ).catch((e: unknown) => {
-      console.warn("Could not check out the reviewed code for review:", e);
-      return undefined;
-    });
+    // checked out. Without that they still read it from Git. Another
+    // thread's agent stays in its own folder, so nothing is checked out.
+    let putBack: (() => Promise<unknown>) | undefined;
+    const checkout = own
+      ? await openReviewCheckout(
+          root,
+          scope,
+          this.host.worktrees,
+          chat.id,
+          pull?.headBranch,
+          { inUse: duringTurn, moved: (back) => (putBack = back) },
+        ).catch((e: unknown) => {
+          console.warn("Could not check out the reviewed code for review:", e);
+          return undefined;
+        })
+      : undefined;
     if (checkout) scope.checkout = checkout;
+    else scope.folder = root;
+    // An earlier round's folder stays when this one doesn't start, back
+    // where that round had it.
+    const kept =
+      !!checkout &&
+      chat.reviews?.some((r) => r.scope.checkout?.path === checkout.path);
     const discardCheckout = () =>
-      checkout ? discardReviewCheckout(checkout) : undefined;
+      !checkout
+        ? undefined
+        : kept
+          ? putBack?.()
+          : discardReviewCheckout(checkout);
     const request: ChatMessage = {
       id: randomUUID(),
       role: "user",
@@ -140,7 +200,12 @@ export class DeepReviews {
       for (const [slot, reviewer] of config.reviewers.entries()) {
         const { codex } = reviewerTask(reviewer, scope, state.focus);
         const child = await this.host.createReviewer(chat, {
-          task: { parent: chat.id, slot, ...(codex ? { codex } : {}) },
+          task: {
+            parent: chat.id,
+            round: request.id,
+            slot,
+            ...(codex ? { codex } : {}),
+          },
           title: reviewerTitle(slot, reviewer),
           by: config.lead.provider,
         });
@@ -160,24 +225,26 @@ export class DeepReviews {
       branch: chat.branch,
     };
     chat.messages.push(request);
-    chat.title = reviewThreadTitle(scope);
+    // A review's own thread is named after what its first round covers.
+    if (own && first) chat.title = reviewThreadTitle(scope);
     chat.updated = Date.now();
-    chat.branch = scope.branch ?? chat.branch;
-    chat.deepReview = state;
+    if (own) chat.branch = scope.branch ?? chat.branch;
+    (chat.reviews ??= []).push(state);
     try {
       await this.host.touch(chat, request.id);
     } catch (error) {
       // The loaded thread is the cached one, so put it back as it was.
       chat.messages.splice(chat.messages.indexOf(request), 1);
       Object.assign(chat, before);
-      delete chat.deepReview;
+      chat.reviews.pop();
+      if (!chat.reviews.length) delete chat.reviews;
       await Promise.allSettled([
         ...created.map((c) => this.host.discard(c)),
         discardCheckout(),
       ]);
       throw error;
     }
-    await this.sendReviewers(chat, [...state.reviewers.keys()]);
+    await this.sendReviewers(chat, state, [...state.reviewers.keys()]);
   }
 
   /**
@@ -187,7 +254,7 @@ export class DeepReviews {
    * with the reports that are in.
    */
   async resume(chatId: string, only?: ResumeReview) {
-    const stopped = (await this.host.load(chatId)).deepReview;
+    const stopped = latestReview(await this.host.load(chatId));
     if (!stopped) throw new Error("This thread has no review to continue.");
     // A stopped answer reads as stopped while its agent winds down; going on
     // waits for that rather than refusing.
@@ -196,8 +263,9 @@ export class DeepReviews {
       ...stopped.reviewers.map((r) => this.host.windDown(r.chatId)),
     ]);
     const chat = await this.host.load(chatId);
-    const state = chat.deepReview;
-    if (!state) throw new Error("This thread has no review to continue.");
+    const state = latestReview(chat);
+    if (state?.request !== stopped.request)
+      throw new Error("This thread has no review to continue.");
     if (only && "slot" in only) return this.rerun(chat, state, only.slot);
     if (only?.lead) return this.leadNow(chat, state);
     if (
@@ -205,13 +273,13 @@ export class DeepReviews {
       state.reviewers.some((r) => this.host.active(r.chatId))
     )
       throw new Error("This review is already running.");
-    if (chat.findings?.reports.length)
+    if (state.status === "done" || state.status === "leading")
       throw new Error("The review is done. Ask the lead to continue instead.");
     const unfinished = await unfinishedSlots(this.host, state.reviewers);
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    if (unfinished.length) await this.sendReviewers(chat, unfinished);
-    else await this.reviewerDone(chat.id);
+    if (unfinished.length) await this.sendReviewers(chat, state, unfinished);
+    else await this.reviewerDone(chat.id, state.request);
   }
 
   private async leadNow(chat: ProjectChat, state: DeepReviewState) {
@@ -224,7 +292,7 @@ export class DeepReviews {
       throw new Error("This review is already running.");
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    await this.reviewerDone(chat.id, true);
+    await this.reviewerDone(chat.id, state.request, true);
   }
 
   private async rerun(chat: ProjectChat, state: DeepReviewState, slot: number) {
@@ -236,7 +304,7 @@ export class DeepReviews {
       throw new Error("This reviewer is already at work.");
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    await this.sendReviewers(chat, [slot]);
+    await this.sendReviewers(chat, state, [slot]);
   }
 
   /**
@@ -248,14 +316,14 @@ export class DeepReviews {
     const task = member.reviewer;
     if (!task) return;
     const chat = await this.host.load(task.parent).catch(() => undefined);
-    const state = chat?.deepReview;
+    const state = chat && reviewerRound(chat.reviews, task);
     if (
       !chat ||
       !state ||
+      state !== latestReview(chat) ||
       state.reviewers[task.slot]?.chatId !== member.id ||
       (state.status !== "stopped" && state.status !== "failed") ||
-      leadStarted(state) ||
-      chat.findings?.reports.length
+      leadStarted(state)
     )
       return;
     state.status = "reviewing";
@@ -264,7 +332,7 @@ export class DeepReviews {
 
   /** Stop in the review thread stops the reviewers too. */
   async stop(chat: ProjectChat) {
-    const state = chat.deepReview;
+    const state = latestReview(chat);
     if (state?.status !== "reviewing") return;
     state.status = "stopped";
     const abandoning: Promise<void>[] = [];
@@ -306,7 +374,7 @@ export class DeepReviews {
       const member = await this.host.load(id).catch(() => undefined);
       if (!member?.reviewer) continue;
       await this.abandon(member);
-      await this.reviewerDone(member.reviewer.parent);
+      await this.reviewerDone(member.reviewer.parent, member.reviewer.round);
     }
   }
 
@@ -317,20 +385,20 @@ export class DeepReviews {
    */
   async reattached(chatId: string, kept: ReadonlySet<string>) {
     const chat = await this.host.load(chatId).catch(() => undefined);
-    const state = chat?.deepReview;
+    const state = chat && latestReview(chat);
     if (!chat || state?.status !== "reviewing") return;
     for (const r of state.reviewers)
       if (
         !kept.has(r.chatId) &&
         !hasCouncilReport(await lastAnswer(this.host, r.chatId))
       )
-        return this.reviewerLost(chat.id);
+        return this.reviewerLost(chat.id, state.request);
   }
 
-  /** A reviewer's turn a restart cut off couldn't be picked back up. */
-  async reviewerLost(chatId: string) {
+  /** A reviewer's turn a restart cut off couldn't be picked back up; `round` is the one it works for. */
+  async reviewerLost(chatId: string, round: string | undefined) {
     const chat = await this.host.load(chatId).catch(() => undefined);
-    const state = chat?.deepReview;
+    const state = chat && roundOf(chat.reviews, round);
     if (!chat || state?.status !== "reviewing") return;
     state.status = "stopped";
     await this.host.touch(chat, state.request);
@@ -338,7 +406,7 @@ export class DeepReviews {
 
   /** Messages wait for the lead while the reviewers work. */
   reviewing(chat: ProjectChat) {
-    return chat.deepReview?.status === "reviewing";
+    return latestReview(chat)?.status === "reviewing";
   }
 
   /**
@@ -348,13 +416,16 @@ export class DeepReviews {
    * the branch. A fix request in a pull request's review gives it a local
    * branch first. The thread notes the move, and the lead hears of it.
    * Nothing it can't do holds up a question, which reads on where the
-   * review is; only a fix that can't get onto the branch is refused.
+   * review is; only a fix that can't get onto the branch is refused, or one
+   * of findings from a round that reviewed other code than the thread's.
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
-    const state = chat.deepReview;
-    const checkout = state?.scope.checkout;
-    if (!state?.scope.head || !checkout || this.reviewing(chat)) return;
+    if (this.reviewing(chat)) return;
+    const state = workingReview(chat);
     const fixing = !!input.fixes?.length;
+    if (fixing) this.fixesHere(chat, input.fixes!, state);
+    const checkout = state?.scope.checkout;
+    if (!state?.scope.head || !checkout) return;
     const next = await followReviewedBranch(
       await this.host.root(chat.projectId),
       checkout,
@@ -404,6 +475,32 @@ export class DeepReviews {
   }
 
   /**
+   * Refuses fixes that would land on other code than the findings are
+   * about: the round's reviewers read it from Git, as it wasn't checked out
+   * where the thread works, or a later round moved the thread on to other
+   * code, or the thread itself moved to another branch.
+   */
+  private fixesHere(
+    chat: ProjectChat,
+    ids: string[],
+    working: DeepReviewState | undefined,
+  ) {
+    const rounds = roundsOfFindings(chat, ids);
+    const away = rounds.find(
+      (r) => !r.scope.checkout && needsCheckout(r.scope),
+    );
+    if (away)
+      throw new Error(
+        `Those findings are from the review of ${away.scope.label}, which isn't checked out where this thread works. Review it from a deep review thread to fix them there.`,
+      );
+    const elsewhere = rounds.find((r) => !fixesFit(chat, r, working));
+    if (elsewhere)
+      throw new Error(
+        `Those findings are from the review of ${elsewhere.scope.label}, and this thread works on ${working?.scope.label ?? chat.branch ?? "other code"} now. Review ${elsewhere.scope.label} again to fix them there.`,
+      );
+  }
+
+  /**
    * After any turn in a review or reviewer thread, or a reviewer's turn that
    * never got going: a reviewer finishing may hand over to the lead, and the
    * lead's first answer ends the review.
@@ -419,16 +516,23 @@ export class DeepReviews {
         const review = await this.host
           .load(chat.reviewer.parent)
           .catch(() => undefined);
-        if (review?.deepReview?.status === "stopped") await this.abandon(chat);
+        if (reviewerRound(review?.reviews, chat.reviewer)?.status === "stopped")
+          await this.abandon(chat);
         else this.awaiting.add(chat.id);
       }
       // Its agent would idle until Relay quits; a message waiting for it, or
       // one sent since, picks its session back up.
       else if (!this.host.active(chat.id) && !queued(chat))
         this.host.close(chat.id);
-      return this.reviewerDone(chat.reviewer.parent);
+      return this.reviewerDone(chat.reviewer.parent, chat.reviewer.round);
     }
-    const state = chat.deepReview;
+    // A round its agent asked for mid-answer: the reviewers may have finished
+    // while that answer ran, so the lead goes on now.
+    const latest = latestReview(chat);
+    if (latest?.status === "reviewing")
+      return this.reviewerDone(chat.id, latest.request);
+    // Only one round's lead can be on its first turn.
+    const state = chat.reviews?.find((r) => r.status === "leading");
     if (!state) return;
     const answer = turn.answer
       ? chat.messages.find((m) => m.id === turn.answer)
@@ -446,10 +550,13 @@ export class DeepReviews {
     }
   }
 
-  private async sendReviewers(chat: ProjectChat, slots: number[]) {
-    const state = chat.deepReview!;
+  private async sendReviewers(
+    chat: ProjectChat,
+    state: DeepReviewState,
+    slots: number[],
+  ) {
     try {
-      await this.startReviewers(chat, slots);
+      await this.startReviewers(chat, state, slots);
     } catch (error) {
       // Nothing is running that would ever hand over to the lead, so leave
       // the review where Resume picks it up.
@@ -466,8 +573,11 @@ export class DeepReviews {
     }
   }
 
-  private async startReviewers(chat: ProjectChat, slots: number[]) {
-    const state = chat.deepReview!;
+  private async startReviewers(
+    chat: ProjectChat,
+    state: DeepReviewState,
+    slots: number[],
+  ) {
     await startSlots(
       slots,
       async (slot) => {
@@ -484,7 +594,7 @@ export class DeepReviews {
           fromThread: { id: chat.id, name: "Deep review" },
         });
       },
-      () => this.reviewerDone(chat.id),
+      () => this.reviewerDone(chat.id, state.request),
     );
   }
 
@@ -494,10 +604,16 @@ export class DeepReviews {
    * reviewer's latest answer.
    * `withReportsIn` goes on past a stopped reviewer, as long as one reported.
    */
-  private async reviewerDone(parentId: string, withReportsIn = false) {
+  private async reviewerDone(
+    parentId: string,
+    round: string | undefined,
+    withReportsIn = false,
+  ) {
     const chat = await this.host.load(parentId).catch(() => undefined);
-    const state = chat?.deepReview;
+    const state = chat && roundOf(chat.reviews, round);
     if (!chat || !state || state.status !== "reviewing") return;
+    // The answer that asked for this round still runs; its end comes back here.
+    if (this.host.answering(chat.id)) return;
     const working = () =>
       state.reviewers.some(
         (r) => this.host.active(r.chatId) || this.host.waiting(r.chatId),
@@ -515,6 +631,8 @@ export class DeepReviews {
       return;
     // Claimed before anything else is awaited, so reviewers finishing together start one lead.
     state.status = "leading";
+    // Named before it starts: another answer may sit after the request.
+    state.leadAnswer = randomUUID();
     const reports = state.reviewers.map((reviewer, i) => ({
       number: i + 1,
       reviewer,
@@ -528,6 +646,7 @@ export class DeepReviews {
       : halted(answers);
     if (halt) {
       state.status = halt;
+      delete state.leadAnswer;
       await this.host.touch(chat, state.request);
       return;
     }
@@ -543,7 +662,8 @@ export class DeepReviews {
           runtimeMode: state.runtimeMode,
           interactionMode: "default",
         },
-        leadPrompt(state, reports),
+        leadPrompt(state, reports, chat),
+        state.leadAnswer,
       );
     } catch (e) {
       // The lead never started; Resume tries again.

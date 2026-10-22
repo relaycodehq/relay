@@ -49,7 +49,7 @@ const thread = (messages: ChatMessage[], deepReview?: DeepReviewState) =>
     id: "chat",
     projectId: "project",
     messages,
-    ...(deepReview ? { deepReview } : {}),
+    ...(deepReview ? { reviews: [deepReview] } : {}),
   }) as unknown as ProjectChat;
 
 it("publishes each answer's batch under it, once", () => {
@@ -122,7 +122,7 @@ it("moves an older save's findings off its deep review", () => {
     reports,
     statuses: { F1: "fixed" },
   });
-  expect(Object.keys(chat.deepReview!)).not.toContain("report");
+  expect(Object.keys(chat.reviews!.at(-1)!)).not.toContain("report");
   expect(migrateFindings(chat)).toBe(false);
 });
 

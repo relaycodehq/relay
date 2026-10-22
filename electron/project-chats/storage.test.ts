@@ -264,13 +264,14 @@ it("reads back a review it let go of mid-session as it left it, and stops it onl
   const id = await (async () => {
     const chat: ProjectChat = {
       ...thread(),
+      // Saved before a thread held rounds: it migrates on reading.
       deepReview: {
         scope: { label: "PR #4" },
         status: "reviewing",
         reviewers: [],
-      } as unknown as ProjectChat["deepReview"],
+      } as unknown,
       queue: [{ input: { id: "q", runtimeMode: "full-access" }, created: 1 }],
-    } as ProjectChat;
+    } as unknown as ProjectChat;
     await storage.add(chat);
     return chat.id;
   })();
@@ -280,11 +281,11 @@ it("reads back a review it let go of mid-session as it left it, and stops it onl
   (runInNewContext("gc") as () => void)();
   expect(storage.cached(id)).toBeUndefined();
   const again = await storage.load(id);
-  expect(again.deepReview?.status).toBe("reviewing");
+  expect(again.reviews?.at(-1)?.status).toBe("reviewing");
   expect(again.queuePaused).toBeUndefined();
   await open();
   const restarted = await storage.load(id);
-  expect(restarted.deepReview?.status).toBe("stopped");
+  expect(restarted.reviews?.at(-1)?.status).toBe("stopped");
   expect(restarted.queuePaused).toBe(true);
 });
 
@@ -420,7 +421,10 @@ it("keeps a steer's move of the answer: the new answer below it, the read steer,
 it("drops the checkpoint once the thread is saved whole, and ignores one written over an older save", async () => {
   const chat = thread();
   const streaming = answer("Start");
-  const earlier = { ...answer("x".repeat(50_000)), status: "complete" as const };
+  const earlier = {
+    ...answer("x".repeat(50_000)),
+    status: "complete" as const,
+  };
   chat.messages = [earlier, streaming];
   await storage.add(chat);
   streaming.body = "Checkpointed";

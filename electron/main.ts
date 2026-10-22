@@ -7,6 +7,7 @@ import { watchSavedSignIns } from "./agents";
 import { cursorSdkIo } from "./agents/cursor/account";
 import { antigravityIo, registryUpdatesIo } from "./agents/acp";
 import { apiContext } from "./api/context";
+import { forgePulls } from "./deep-review";
 import { createDispatch, serveApi } from "./api";
 import { serveSettingsFile } from "./api/settings-file";
 import { openSettingsFile, readPrefs, type SettingsFile } from "./settings";
@@ -562,6 +563,14 @@ app
           ),
         handoffs: handoffs.sender,
         reportProblem: draftBugReport,
+        reviews: {
+          setups: () => loaded.get().reviewSetups ?? [],
+          start: (chatId, config) =>
+            chats.startDeepReview(chatId, config, {
+              pull: forgePulls(api.clientFor),
+              duringTurn: true,
+            }),
+        },
         ...(process.env.RELAY_DEV_STALE
           ? { restart: () => devBuild.restart() }
           : {}),

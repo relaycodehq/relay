@@ -500,11 +500,17 @@ export class TurnSends {
   /**
    * The lead's first turn in a deep review. It answers the review request,
    * so it has no user message of its own; later turns are ordinary ones.
+   * Its answer is `answer`, which the review names before it starts.
    */
-  async lead(chat: ProjectChat, input: ProjectChatSend, prompt: string) {
+  async lead(
+    chat: ProjectChat,
+    input: ProjectChatSend,
+    prompt: string,
+    answer: string,
+  ) {
     if (this.core.closing()) throw new Error("Relay is closing.");
     const active = this.core.active.claim(chat.id, input, "lead");
-    const message = streamingAnswer(input.provider);
+    const message = streamingAnswer(input.provider, { id: answer });
     try {
       const root = await this.worktrees.root(chat);
       // Resume and later sends pick the lead's agent and settings up from here.

@@ -12,6 +12,11 @@ import { ProjectAccess, type AgentProjects } from "./project-access";
 import { ThreadPages } from "./thread-pages";
 import { json, localTime } from "./tool-output";
 import {
+  listReviewSetups,
+  reviewRound,
+  type ThreadReviews,
+} from "./thread-reviews";
+import {
   agentName,
   usageProviders,
   type AgentProvider,
@@ -55,6 +60,7 @@ import { errorMessage } from "../../shared/error-message";
 
 export { localTime } from "./tool-output";
 export type { AgentProjects } from "./project-access";
+export type { ThreadReviews } from "./thread-reviews";
 
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
@@ -150,6 +156,7 @@ export class StartedThreads {
   private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
   private reportProblem: ReportProblem | undefined;
+  private reviews: ThreadReviews | undefined;
   private agentChoices: AgentChoices;
   private failureWatchMs: number;
   constructor(
@@ -169,6 +176,8 @@ export class StartedThreads {
       restart?: () => void;
       /** Fills in and shows Relay's Report a problem page; absent without windows. */
       reportProblem?: ReportProblem;
+      /** Deep reviews an agent starts in its thread; absent where nothing keeps review setups. */
+      reviews?: ThreadReviews;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -178,6 +187,7 @@ export class StartedThreads {
     this.handoffs = options.handoffs;
     this.restart = options.restart;
     this.reportProblem = options.reportProblem;
+    this.reviews = options.reviews;
     this.agentChoices = new AgentChoices(options.agents);
     this.failureWatchMs = options.failureWatchMs ?? 0;
   }
@@ -250,6 +260,12 @@ export class StartedThreads {
         return this.tickNote(lead, input, signal);
       case "move_to_worktree":
         return json(await this.chats.enterWorktree(lead.id, input));
+      case "deep_review":
+        return this.deepReview(lead, input, signal);
+      case "list_review_setups":
+        if (!this.reviews)
+          return toolText("This Relay can't run deep reviews.", true);
+        return listReviewSetups(this.reviews);
       case "list_projects":
         return json(await this.projects.list(lead.projectId));
       case "add_project":
@@ -353,6 +369,40 @@ export class StartedThreads {
 
   private fullAccess(lead: ProjectChat) {
     return this.leadSide(lead).last.runtimeMode === "full-access";
+  }
+
+  /** A deep review round in the lead's own thread; its reviewers run on the user's accounts, so it asks as starting threads does. */
+  private async deepReview(
+    lead: ProjectChat,
+    input: RelayToolArgs<"deep_review">,
+    signal: AbortSignal,
+  ) {
+    if (!this.reviews)
+      return toolText("This Relay can't run deep reviews.", true);
+    const { name, config } = reviewRound(this.reviews, lead, input);
+    const count = config.reviewers.length;
+    const approved = await this.approve(
+      lead,
+      `Start a deep review with ${count === 1 ? "1 reviewer" : `${count} reviewers`}?`,
+      [
+        `"${name}", led by ${agentName(config.lead.provider)}.`,
+        ...config.reviewers.map(
+          (r, i) =>
+            `${i + 1}. ${agentName(r.provider)}${r.choice.model ? ` (${r.choice.model})` : ""}`,
+        ),
+        ...(config.focus ? [`\nFocus: ${head(config.focus)}`] : []),
+      ].join("\n"),
+      signal,
+    );
+    if (!approved)
+      return toolText(
+        "The user didn't start the review. Ask them what they want instead.",
+        true,
+      );
+    await this.reviews.start(lead.id, config);
+    return toolText(
+      `Started ${count === 1 ? "1 reviewer" : `${count} reviewers`} with "${name}". End your answer now: their reports come to you in this thread as your next turn.`,
+    );
   }
 
   private async restartRelay(

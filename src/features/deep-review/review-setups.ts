@@ -1,29 +1,16 @@
 // Deep review setups you've run, across projects: named by a helper agent
 // once a review starts, pinned to keep, the first one where the next starts.
 import { useSyncExternalStore } from "react";
-import { z } from "zod";
 import {
-  deepReviewStartSchema,
   ownReviewCommand,
+  savedReviewSetupSchema as entrySchema,
   type ReviewAgent,
+  type SavedReviewSetup,
 } from "../../../shared/deep-review";
 import { api } from "../../lib/api";
 
-const setupSchema = deepReviewStartSchema.pick({
-  reviewers: true,
-  lead: true,
-  runChecks: true,
-});
-export type ReviewSetupChoice = z.infer<typeof setupSchema>;
-const entrySchema = z.object({
-  id: z.string().max(100),
-  /** When it last ran. */
-  at: z.number(),
-  name: z.string().max(80).optional(),
-  pinned: z.boolean().optional(),
-  setup: setupSchema,
-});
-export type SavedReviewSetup = z.infer<typeof entrySchema>;
+export type { SavedReviewSetup };
+export type ReviewSetupChoice = SavedReviewSetup["setup"];
 
 const key = "deep-review-setups";
 /** Unpinned setups kept; pinned ones are kept on top of these. */
@@ -56,8 +43,17 @@ function read(): Snapshot {
 }
 function write(entries: SavedReviewSetup[]) {
   localStorage.setItem(key, JSON.stringify(entries));
+  share(entries);
   changed();
 }
+/** Agents start reviews with these too, through the deep_review tool. */
+function share(entries: SavedReviewSetup[]) {
+  void api
+    .saveReviewSetups(entries)
+    .catch((e) => console.warn("Could not share the review setups:", e));
+}
+/** Hands the main process the setups as they are when the app starts: saved before it kept a copy, or in another window. */
+export const shareReviewSetups = () => share(read().entries);
 function changed() {
   version += 1;
   for (const listener of listeners) listener();

@@ -30,7 +30,7 @@ export const threadTitleSchema = z
 export const chatScopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project") }).strict(),
   z.object({ kind: z.literal("pr"), ref: refSchema }).strict(),
-  // What a deep review covers is fixed when it starts; see `deepReview`.
+  // What a deep review covers is fixed when it starts; see `reviews`.
   z.object({ kind: z.literal("review") }).strict(),
 ]);
 export type ChatScope = z.infer<typeof chatScopeSchema>;

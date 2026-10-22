@@ -20,7 +20,7 @@ const branchNameSchema = z
     (v) => !v.startsWith("-") && !v.includes("..") && !/[\s~^:?*[\\]/.test(v),
     "Choose a valid branch.",
   );
-const reviewTargetSchema = z.discriminatedUnion("kind", [
+export const reviewTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("uncommitted") }).strict(),
   z
     .object({
@@ -109,6 +109,24 @@ export const reviewDraftSetupSchema = deepReviewStartSchema
   .strip();
 export type ReviewDraftSetup = z.infer<typeof reviewDraftSetupSchema>;
 
+/** The longest name a review setup goes by, saved or as the deep_review tool lists it. */
+export const REVIEW_SETUP_NAME_MAX = 80;
+
+/** A setup you've run, as the deep review sheet lists it; the main process keeps a copy for the deep_review tool. */
+export const savedReviewSetupSchema = z.object({
+  id: z.string().max(100),
+  /** When it last ran. */
+  at: z.number(),
+  name: z.string().max(REVIEW_SETUP_NAME_MAX).optional(),
+  pinned: z.boolean().optional(),
+  setup: deepReviewStartSchema.pick({
+    reviewers: true,
+    lead: true,
+    runChecks: true,
+  }),
+});
+export type SavedReviewSetup = z.infer<typeof savedReviewSetupSchema>;
+
 /** What a helper agent names a setup from, to find it again later. */
 export const reviewSetupSchema = deepReviewStartSchema.pick({
   reviewers: true,
@@ -132,6 +150,12 @@ export interface ReviewScope {
   stats?: { files: number; additions: number; deletions: number };
   /** Where the reviewed code is checked out when the thread's checkout doesn't have it; reviewers and the lead work there. */
   checkout?: ReviewCheckout;
+  /**
+   * The folder the thread worked in when a round that made no checkout
+   * started; its reviewers work there too. What isn't on disk there, they
+   * read from Git.
+   */
+  folder?: string;
 }
 /** A worktree the review reads from and fixes in. */
 export interface ReviewCheckout {
@@ -153,8 +177,12 @@ export function reviewThreadTitle(scope: ReviewScope): string {
   return title.length > 120 ? `${title.slice(0, 119).trimEnd()}…` : title;
 }
 
+/**
+ * One round of a deep review. A thread can hold several, one after another;
+ * the user message that asked for a round names it.
+ */
 export interface DeepReviewState {
-  /** The user message that asked for the review. */
+  /** The user message that asked for the review, and the round's key. */
   request: string;
   scope: ReviewScope;
   /** Each reviewer works in a thread of its own, listed under the review's. */
@@ -169,7 +197,62 @@ export interface DeepReviewState {
    * the latest one after a resume; resuming the lead goes on from there.
    */
   leadStopped?: string;
+  /**
+   * The lead's first answer to the round, named before it starts. Rounds
+   * saved before this was kept have the first answer after their request.
+   */
+  leadAnswer?: string;
 }
+/** The thread's latest round: the one Stop, Resume and following its branch act on. */
+export const latestReview = <R>(chat: { reviews?: R[] }) =>
+  chat.reviews?.at(-1);
+
+/**
+ * The round a deep review's own thread works in: the latest that checked the
+ * reviewed code out. A round that made no checkout reviewed where the thread
+ * already worked, so it doesn't move it.
+ */
+export const workingReview = <
+  R extends { scope: { checkout?: unknown } },
+>(chat: {
+  reviews?: R[];
+}) => chat.reviews?.filter((r) => r.scope.checkout).at(-1);
+
+/**
+ * The round each main-conversation message falls in, by its id: the latest
+ * one asked for up to it.
+ */
+export function messageRounds(
+  messages: readonly { id: string; parentId?: string | null; side?: unknown }[],
+  reviews: DeepReviewState[] | undefined,
+) {
+  const byRequest = new Map(reviews?.map((r) => [r.request, r]));
+  const rounds = new Map<string, DeepReviewState>();
+  let current: DeepReviewState | undefined;
+  for (const m of messages) {
+    if (m.parentId || m.side) continue;
+    current = byRequest.get(m.id) ?? current;
+    if (current) rounds.set(m.id, current);
+  }
+  return rounds;
+}
+
+/** The round `request` asked for; rounds from before rounds had keys are the first. */
+export const roundOf = (
+  reviews: DeepReviewState[] | undefined,
+  request: string | undefined,
+) => (request ? reviews?.find((r) => r.request === request) : reviews?.[0]);
+
+/** The round a reviewer works for. */
+export const reviewerRound = (
+  reviews: DeepReviewState[] | undefined,
+  task: ReviewerTask,
+) => roundOf(reviews, task.round);
+
+/** Reviewers or the lead's first turn are at work: a new round waits for them. */
+export const reviewRunning = (state: DeepReviewState | undefined) =>
+  state?.status === "reviewing" || state?.status === "leading";
+
 /** Picks a stopped review up in part: one reviewer again, or the lead with the reports that are in. */
 export type ResumeReview = { slot: number } | { lead: true };
 
@@ -190,6 +273,8 @@ export function reviewerTitle(slot: number, reviewer: ReviewAgent) {
 /** A reviewer thread's place in its review. */
 export interface ReviewerTask {
   parent: string;
+  /** Its round's `request`; reviewers from before rounds belong to the first. */
+  round?: string;
   slot: number;
   /** Codex's own review target, when it runs `/review`. */
   codex?: CodexReviewTarget;

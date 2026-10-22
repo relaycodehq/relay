@@ -10,6 +10,10 @@ import { agentProviderSchema, agentProviders } from "../../shared/agents";
 import { reasoningEffortSchema } from "../../shared/settings";
 import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import {
+  REVIEW_SETUP_NAME_MAX,
+  reviewTargetSchema,
+} from "../../shared/deep-review";
+import {
   ASK_ANSWER_MAX_CHARS,
   RENDER_GUIDE,
   RENDER_MAX_CHARS,
@@ -276,6 +280,31 @@ export const relayToolSchemas = {
         ),
     })
     .strict(),
+  deep_review: z
+    .object({
+      target: reviewTargetSchema
+        .optional()
+        .describe(
+          "What to review: uncommitted changes, a branch against its base, a commit, or a pull request. Left out: this thread's uncommitted changes.",
+        ),
+      setup: z
+        .string()
+        .trim()
+        .min(1)
+        .max(REVIEW_SETUP_NAME_MAX)
+        .optional()
+        .describe(
+          "A saved review setup's name, as list_review_setups gives it. Left out: the one the user ran last.",
+        ),
+      focus: z
+        .string()
+        .trim()
+        .max(4000)
+        .optional()
+        .describe("What the reviewers should look at hardest."),
+    })
+    .strict(),
+  list_review_setups: z.object({}).strict(),
   list_projects: z.object({}).strict(),
   add_project: z
     .object({
@@ -492,6 +521,10 @@ const descriptions: Record<RelayToolName, string> = {
     'The agents you can start threads on here, with the models each offers (id, name, efforts, fast), and which agents can\'t run here and why. `fast` says the model offers Fast mode. `you` marks your own. Check it before start_threads when the user names an agent or model, which may be either: "sol" or "astra" can be a model\'s short name, not an agent.',
   move_to_worktree:
     "Move this thread out of the project folder into a Git worktree of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
+  deep_review:
+    "Start a deep review round in this thread: several agents review the changes on their own, each in a thread of its own listed under this one, using a review setup the user saved. Use it when the user asks for a deep review, another round, or several rounds. It returns at once: end your answer then. Once every reviewer has reported, their reports come to you here as your next turn, to verify, rank and publish as findings; the user's messages wait until then. One round at a time; for several rounds, fix what the user picked, then call it again.",
+  list_review_setups:
+    "The review setups the user saved in the deep review sheet, last run first: each one's name, reviewers (agent, model, effort, prompt) and whether the lead may run checks. Pass a name to deep_review.",
   list_notes:
     "The notes the user keeps in a thread, beside its composer: lists from answers, snippets, decisions they want at hand. A list note's items are numbered, ticked ones marked done. Read them when the user refers to their notes, or to work they listed there.",
   add_note:

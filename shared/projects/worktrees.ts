@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { branchNameProblem } from "../branch-names";
 import type { AgentProvider } from "../agents";
-import type { ReviewCheckout } from "../deep-review";
+import { workingReview, type ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
 /**
@@ -221,16 +221,16 @@ type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
   activeAgentWorktree?: ActiveAgentWorktree;
-  /** On summaries; the full thread has it as `deepReview.scope.checkout`. */
+  /** On summaries; the full thread has it as the latest checkout a round made. */
   reviewFolder?: ReviewFolder;
-  deepReview?: { scope: { checkout?: ReviewCheckout } };
+  reviews?: { scope: { checkout?: ReviewCheckout } }[];
 };
 
 export const reviewFolder = (
   chat: ThreadWorkspace | undefined,
 ): ReviewFolder | undefined => {
   if (chat?.reviewFolder) return chat.reviewFolder;
-  const checkout = chat?.deepReview?.scope.checkout;
+  const checkout = chat && workingReview(chat)?.scope.checkout;
   return (
     checkout && {
       path: checkout.path,
@@ -242,8 +242,7 @@ export const reviewFolder = (
 
 /** What a review's folder has checked out, for a branch label: its branch, or the pull request it holds detached. */
 export const reviewFolderLabel = (folder: ReviewFolder | undefined) =>
-  folder?.branch ??
-  (folder?.prNumber ? `PR #${folder.prNumber}` : undefined);
+  folder?.branch ?? (folder?.prNumber ? `PR #${folder.prNumber}` : undefined);
 
 export const agentWorktreeKey = (worktree: ActiveAgentWorktree) =>
   worktree.gitdir ?? worktree.path;

@@ -18,8 +18,9 @@ interface ReviewFindings {
  * else was quoted, not meant. Says whether the thread changed.
  */
 export function migrateFindings(chat: ProjectChat) {
-  const review = chat.deepReview as
-    (ProjectChat["deepReview"] & ReviewFindings) | undefined;
+  // Only a review from before rounds kept them, so it's the first.
+  const review = chat.reviews?.[0] as
+    (NonNullable<ProjectChat["reviews"]>[0] & ReviewFindings) | undefined;
   if (!review) return false;
   let changed = false;
   if (review.report || review.reports || review.statuses || review.fixing) {

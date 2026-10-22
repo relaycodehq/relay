@@ -540,7 +540,7 @@ test("follow-up findings get a fresh report and fix controls after the old batch
       const [project] = await window.relay.projects();
       const [summary] = await window.relay.projectChats(project!.id);
       const chat = await window.relay.projectChat(summary!.id);
-      const review = chat.deepReview!;
+      const review = chat.reviews!.at(-1)!;
       await window.relay.sendProjectChat(chat.id, {
         id: crypto.randomUUID(),
         body: "@codex fixture followup findings",

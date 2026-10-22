@@ -26,6 +26,7 @@ import type {
   DeepReviewStart,
   ResumeReview,
   ReviewSetup,
+  SavedReviewSetup,
 } from "../deep-review";
 import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
@@ -368,6 +369,8 @@ export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
   /** A short name for a deep review setup, written by a helper agent; null when none could. */
   nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
+  /** The setups the deep review sheet lists, for the deep_review tool to pick from. */
+  saveReviewSetups(setups: SavedReviewSetup[]): Promise<void>;
   /**
    * Runs the reviewers that didn't finish, then the lead. `slot` runs that
    * reviewer's task again before the lead starts; `lead` hands a stopped

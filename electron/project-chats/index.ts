@@ -36,6 +36,7 @@ import type { LineQuestion } from "../../shared/questions";
 import { everyAgentRuntime } from "../agents";
 import { accountHomes } from "../agents/accounts";
 import type { PullInfo } from "../deep-review";
+import type { PullRef } from "../../shared/types";
 import type { Projects } from "../projects/projects";
 import type { Store } from "../app/store";
 import { TerminalSessions } from "../terminal-sessions";
@@ -204,7 +205,8 @@ export class ProjectChats {
       core,
       {
         send: (id, input) => this.send(id, input),
-        lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
+        lead: (chat, input, prompt, answer) =>
+          this.turns.lead(chat, input, prompt, answer),
       },
       worktrees,
     );
@@ -605,8 +607,23 @@ export class ProjectChats {
       goal,
     };
   }
-  startDeepReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
-    return this.councils.startReview(id, config, pull);
+  /**
+   * A round in the folder the thread works in now. `pull` asks the forge
+   * about a pull request; `duringTurn`: the thread's agent asked for it
+   * mid-answer, through the deep_review tool.
+   */
+  startDeepReview(
+    id: string,
+    config: DeepReviewStart,
+    options: {
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    } = {},
+  ) {
+    return this.councils.startReview(id, config, {
+      ...options,
+      folder: (chat) => this.worktrees.root(chat),
+    });
   }
   resumeDeepReview(id: string, only?: ResumeReview) {
     return this.councils.resumeReview(id, only);

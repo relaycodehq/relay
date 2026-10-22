@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
-import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import type {
-  DeepReviewStart,
-  ResumeReview,
-  ReviewerTask,
+import {
+  threadWorktree,
+  type ProjectChat,
+  type ProjectChatSend,
+} from "../../shared/projects";
+import type { PullRef } from "../../shared/types";
+import {
+  reviewerRound,
+  workingReview,
+  type DeepReviewStart,
+  type ResumeReview,
+  type ReviewerTask,
 } from "../../shared/deep-review";
 import type { AgentProvider } from "../../shared/agents";
 import {
@@ -22,6 +29,7 @@ export interface CouncilHost {
     chat: ProjectChat,
     input: ProjectChatSend,
     prompt: string,
+    answer: string,
   ): Promise<void>;
 }
 
@@ -47,10 +55,15 @@ export class Councils {
       createReviewer: (parent, reviewer) =>
         this.createReviewer(parent, reviewer),
       send: (id, input) => this.host.send(id, input),
-      lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
+      lead: (chat, input, prompt, answer) =>
+        this.host.lead(chat, input, prompt, answer),
       // A reviewer whose cut-off turn is being picked back up is at work too.
       active: (id) =>
         this.core.active.has(id) || this.core.sessions.resumingIn(id),
+      answering: (id) =>
+        this.core.active.has(id) ||
+        this.core.active.rides(id) ||
+        this.core.sessions.resumingIn(id),
       // Only agents report back: a dev server it left up never ends.
       waiting: (id) =>
         this.core.sessions
@@ -97,9 +110,18 @@ export class Councils {
    */
   async root(chat: ProjectChat, make = true) {
     const state = chat.reviewer
-      ? (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
-          ?.deepReview
-      : chat.deepReview;
+      ? reviewerRound(
+          (await this.core.storage.load(chat.reviewer.parent).catch(() => null))
+            ?.reviews,
+          chat.reviewer,
+        )
+      : chat.scope.kind === "review"
+        ? workingReview(chat)
+        : // Any other thread keeps working where it did.
+          undefined;
+    // A round that made no checkout has its reviewers work where the thread did.
+    if (chat.reviewer && state?.scope.folder && !state.scope.checkout)
+      return state.scope.folder;
     const checkout = state?.scope.checkout;
     if (!checkout || !state.scope.head) return;
     if (!make)
@@ -144,7 +166,9 @@ export class Councils {
   /** A reviewer's turn a restart cut off couldn't be picked back up. */
   reviewerLost(chat: ProjectChat) {
     if (!chat.reviewer) return;
-    return this.track(this.reviews.reviewerLost(chat.reviewer.parent));
+    return this.track(
+      this.reviews.reviewerLost(chat.reviewer.parent, chat.reviewer.round),
+    );
   }
 
   /** A turn in the thread ended; a review at work takes its next step, settling once it has. */
@@ -178,13 +202,22 @@ export class Councils {
       .catch((e) => console.warn("Could not reopen the deep review:", e));
   }
 
-  startReview(id: string, config: DeepReviewStart, pull?: PullInfo) {
+  startReview(
+    id: string,
+    config: DeepReviewStart,
+    options: {
+      folder?: (chat: ProjectChat) => Promise<string>;
+      pull?: (ref: PullRef) => Promise<PullInfo>;
+      duringTurn?: boolean;
+    },
+  ) {
     return this.core.control(id, async () => {
       if (this.core.closing()) throw new Error("Relay is closing.");
-      this.core.projects.assertCheckoutAvailable(
-        (await this.core.storage.load(id)).projectId,
-      );
-      await this.reviews.start(id, config, pull);
+      const chat = await this.core.storage.load(id);
+      // As a message would: a thread in a worktree of its own isn't held up.
+      if (!chat.worktree && !threadWorktree(chat))
+        this.core.projects.assertCheckoutAvailable(chat.projectId);
+      await this.reviews.start(id, config, options);
     });
   }
 

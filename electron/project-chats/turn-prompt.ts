@@ -6,7 +6,8 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { agentMention, agentName } from "../../shared/agents";
-import { threadReports } from "../../shared/findings";
+import { nextFindingNumber } from "../../shared/findings";
+import { latestReview } from "../../shared/deep-review";
 
 export interface TurnPromptInput {
   chat: ProjectChat;
@@ -49,13 +50,14 @@ export function turnPrompt({
   evidence,
   historyPath,
 }: TurnPromptInput) {
+  const latest = latestReview(chat);
   const scope =
     chat.scope.kind === "pr"
       ? `This discussion concerns PR #${chat.scope.ref.number} in ${chat.scope.ref.owner}/${chat.scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`
       : chat.scope.kind === "review"
         ? chat.reviewer
           ? "You are one of several reviewers in a deep review. Don't change any files."
-          : `This conversation is a deep review${chat.deepReview ? ` of ${chat.deepReview.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
+          : `This conversation is a deep review${latest ? ` of ${latest.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
         : "This is a general discussion of the linked project and its local working changes.";
   // A forked session already holds everything up to its message.
   const known =
@@ -190,14 +192,9 @@ export function turnPrompt({
     (chat.scopeHeard ??= {})[heardKey] = command && tellScope ? "" : scopeKey;
   };
   const framing = `${tellScope ? `\n${scope}` : ""}${side}${input.viewing ? `\nThe file I am currently viewing is ${JSON.stringify(input.viewing)}.` : ""}`;
-  const reports = threadReports(chat.findings);
-  const nextFinding =
-    Math.max(
-      0,
-      ...reports.flatMap((r) => r.findings.map((f) => Number(f.id.slice(1)))),
-    ) + 1;
+  const nextFinding = nextFindingNumber(chat.findings);
   const findingsNote =
-    chat.deepReview && !parent && !command
+    chat.reviews?.length && !parent && !command
       ? `\n\nIf you discover new confirmed issues, publish only the new findings as a fresh report at the end of your answer in a fenced block tagged relay-findings. Use JSON shaped like {"findings":[{"id":"F${nextFinding}","priority":"P2","title":"Short title","files":[{"path":"src/app.ts","line":42}],"reviewers":[],"check":"How you confirmed it"}],"dropped":[]}. Continue numbering from F${nextFinding}; never reuse earlier IDs or repeat old findings. Relay shows this batch under this answer with its own fix controls. For a normal answer or fix summary with no new findings, omit the block.`
       : "";
   const request = [

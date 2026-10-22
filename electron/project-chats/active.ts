@@ -104,6 +104,10 @@ export class ActiveTurns {
   has(id: string) {
     return this.turns.has(id);
   }
+  /** A turn the agent started beside the one holding the thread runs. */
+  rides(id: string) {
+    return this.riders.has(id);
+  }
   ids() {
     return [...this.turns.keys()];
   }

@@ -1,17 +1,9 @@
-import {
-  Fragment,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { awayDuring, unreadStart } from "../../../shared/chat-activity";
 import { latestSetup } from "../../../shared/worktree-command";
 import { threadReports } from "../../../shared/findings";
-import { leadStoppedLast } from "../deep-review/lead-halted";
 import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import type {
@@ -27,11 +19,11 @@ import type { ThreadHandle } from "./useThreadHandle";
 import type { ThreadScroll } from "./useThreadScroll";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import {
-  DeepReviewCouncil,
-  DeepReviewRequest,
   FindingsTray,
+  ReviewRound,
   findingCode,
 } from "../deep-review/DeepReview";
+import { reviewRounds } from "../deep-review/rounds";
 import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
@@ -90,7 +82,6 @@ export function ThreadMessages({
     running,
     replyCounts,
     sideThreads,
-    leadAnswered,
     messages,
   },
   view: {
@@ -105,6 +96,7 @@ export function ThreadMessages({
   },
   councils: {
     review,
+    reviews,
     findings,
     fixFindings,
     setFindingStatus,
@@ -151,6 +143,10 @@ export function ThreadMessages({
   // and statuses change with every finding dismissed or fixed.
   const reports = threadReports(findings);
   const reportUnder = (id: string) => reports.find((r) => r.messageId === id);
+  const rounds = useMemo(
+    () => reviewRounds(messages, reviews),
+    [messages, reviews],
+  );
   const findingsCode = useMemo(
     () =>
       chat && reports.length
@@ -325,24 +321,25 @@ export function ThreadMessages({
                 thread={root ? undefined : sideThreads.get(m.id)}
                 onOpen={() => openReply(m)}
               />
-            ) : review && m.id === review.request ? (
-              <Fragment key={m.id}>
-                <DeepReviewRequest message={m} state={review} />
-                <DeepReviewCouncil
-                  state={review}
-                  kept={reports[0]?.findings.length}
-                  hasLead={leadAnswered}
-                  leadHalted={leadStoppedLast(messages, review.leadStopped)}
-                  busy={busy}
-                  projectRoot={projectPath}
-                  onOpenFile={openFile}
-                  onResume={resumeReview}
-                  onStop={stopReview}
-                  onStopMember={stopReviewer}
-                  onResumeMember={rerunReviewer}
-                  onLead={leadWithReports}
-                />
-              </Fragment>
+            ) : rounds.asked(m.id) ? (
+              <ReviewRound
+                key={m.id}
+                message={m}
+                state={rounds.asked(m.id)!}
+                // Only the latest round can be stopped, resumed or led on.
+                latest={rounds.asked(m.id) === review}
+                lead={rounds.leadOf(rounds.asked(m.id)!)}
+                messages={messages}
+                reportUnder={reportUnder}
+                busy={busy}
+                projectRoot={projectPath}
+                onOpenFile={openFile}
+                onResume={resumeReview}
+                onStop={stopReview}
+                onStopMember={stopReviewer}
+                onResumeMember={rerunReviewer}
+                onLead={leadWithReports}
+              />
             ) : (
               <Message
                 key={m.id}
@@ -393,8 +390,8 @@ export function ThreadMessages({
                           chatId={chat.id}
                           report={reportUnder(m.id)!}
                           statuses={findings?.statuses}
-                          reviewers={review?.reviewers}
-                          lead={review?.lead}
+                          reviewers={rounds.roundOf(m.id)?.reviewers}
+                          lead={rounds.roundOf(m.id)?.lead}
                           // A fix asked for while the agent works would wait in the
                           // queue, its findings still open to ask for again.
                           busy={busy || running}

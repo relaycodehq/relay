@@ -410,6 +410,32 @@ if (args.includes("--permission-prompt-tool")) {
           tasks(false);
           finish("The background reviewer found the queue reorder.");
         }, text.includes("slowly") ? 2500 : 300);
+      } else if (text.includes("fixture background relay ")) {
+        // The turn Claude Code starts by itself when the task ends calls one
+        // of Relay's tools, then works on until RELAY_FIXTURE_GATE exists.
+        const [, tool, input] = /fixture background relay (\w+) (.*)/.exec(
+          text,
+        );
+        finish("Started the background task.");
+        setTimeout(async () => {
+          emit({
+            type: "stream_event",
+            uuid: "fixture-event",
+            session_id: "fixture-claude",
+            event: {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "The task finished. " },
+            },
+          });
+          const said = await callRelayTool(tool, JSON.parse(input)).catch(
+            (e) => `Failed: ${e.message}`,
+          );
+          const gate = process.env.RELAY_FIXTURE_GATE;
+          while (gate && !require("node:fs").existsSync(gate))
+            await new Promise((r) => setTimeout(r, 25));
+          finish(said);
+        }, 300);
       } else if (text.includes("fixture background task")) {
         finish("Started the background task.");
         // Claude Code starts a turn by itself when the task ends; no user message comes first.

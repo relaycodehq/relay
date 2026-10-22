@@ -68,13 +68,10 @@ export class TurnRecovery {
         resumed,
       });
     } finally {
-      // A resumed answer may be a review lead's, whose end settles the review.
+      // A resumed answer may be a review lead's, whose end settles the
+      // review; any other may have asked for a round its reviewers finished.
       if (idle)
-        this.ends.run(
-          chat,
-          active,
-          resumed ? { answer: resumed.id } : undefined,
-        );
+        this.ends.run(chat, active, resumed ? { answer: resumed.id } : {});
       else this.ends.rider(chat, active);
     }
   }

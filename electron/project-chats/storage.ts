@@ -34,6 +34,8 @@ import {
   type SavedBase,
 } from "./live-turn";
 import { reviveChat } from "./revive";
+import { migrateReviewRounds } from "../deep-review";
+import { latestReview } from "../../shared/deep-review";
 import { ShownImages } from "./shown-images";
 
 /** The earliest scheduled message still waiting to go out on its own. */
@@ -78,7 +80,7 @@ export function chatSummary({
   scopeHeard,
   movedIn,
   setupNote,
-  deepReview,
+  reviews,
   findings: _findings,
   handover,
   outbox,
@@ -109,7 +111,7 @@ export function chatSummary({
   const mark = queueMark({ queue, queuePaused, scheduled });
   const notesAt = notesMark(notes);
   const open = asksYou(messages);
-  const review = reviewFolder({ deepReview });
+  const review = reviewFolder({ reviews });
   return {
     ...summary,
     providers,
@@ -121,7 +123,9 @@ export function chatSummary({
     ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
     ...(open ? { asking: true as const } : {}),
     ...(review ? { reviewFolder: review } : {}),
-    ...(deepReview?.status === "reviewing" ? { reviewing: true as const } : {}),
+    ...(latestReview({ reviews })?.status === "reviewing"
+      ? { reviewing: true as const }
+      : {}),
     empty: !messages.length && !scheduled?.length,
   };
 }
@@ -254,8 +258,10 @@ export class ChatStorage {
       // Cut off mid-write it can't be: it's renamed into place whole.
       console.warn("Could not read a thread's last turn:", e);
     }
+    const chat = withLiveTurn(saved, rev, live);
+    migrateReviewRounds(chat);
     return {
-      chat: withLiveTurn(saved, rev, live),
+      chat,
       base: rev ? savedBase(saved, rev, text.length) : undefined,
     };
   }
@@ -490,7 +496,8 @@ export class ChatStorage {
           read(review.id),
           read(stray.id),
         ]);
-        const state = parent.deepReview;
+        // Reviewers from before rounds all belong to the first one.
+        const state = parent.reviews?.[0];
         const slot = chat.reviewer?.slot ?? -1;
         const reviewer = state?.reviewers[slot];
         chat.startedBy = {

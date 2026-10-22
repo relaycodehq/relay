@@ -43,6 +43,8 @@ interface State {
   /** Frosted glass, on unless the page last said off; windows then start clear. */
   glass?: boolean;
   chats?: import("../../shared/projects").ChatSummary[];
+  /** The deep review sheet's setups, newest first, for the deep_review tool. */
+  reviewSetups?: import("../../shared/deep-review").SavedReviewSetup[];
   /** This computer's last page and known server command for each thread. */
   previews?: Record<string, import("../preview/saved-previews").SavedPreview>;
   aiSettings?: StoredAISettings;

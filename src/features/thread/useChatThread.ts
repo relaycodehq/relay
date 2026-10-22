@@ -68,6 +68,5 @@ export function useChatThread(
     ),
     replyCounts: counts,
     sideThreads: sides,
-    leadAnswered: messages.some((m) => m.role === "assistant" && !m.parentId),
   };
 }
