@@ -26,11 +26,15 @@ export interface QueueHost {
   ): Promise<void>;
 }
 
+/** Agents whose steers run a `$skill` the way a new turn would. */
+const skillSteers: ReadonlySet<string> = new Set(["claude", "codex"]);
+
 /**
  * Whether a queued message can join the answer running for `prior` instead of
  * waiting for it: the same agent, conversation, model and modes, and nothing
- * the agent only takes at the start of a turn (a selection, a skill or a
- * command). Another effort or speed still steers; see `retune`.
+ * the agent only takes at the start of a turn (a selection, a command, or a
+ * skill for agents outside `skillSteers`). Another effort or speed still
+ * steers; see `retune`.
  */
 export function steers(
   next: ProjectChatSend,
@@ -47,7 +51,7 @@ export function steers(
     next.choice.model !== prior.choice.model ||
     next.contextWindow !== prior.contextWindow ||
     next.selection ||
-    mayMentionSkill(asked.question) ||
+    (!skillSteers.has(asked.provider) && mayMentionSkill(asked.question)) ||
     /(?:^|\s)\/skill:/.test(asked.question) ||
     /^\s*\//.test(asked.question)
   );

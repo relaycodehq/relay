@@ -1045,24 +1045,28 @@ it("resuming a stopped answer sends the queue its stop paused once the answer is
   ]);
 });
 
-it("queues a currency-prefixed skill instead of steering the active turn", async () => {
+it("steers an active Codex turn with a currency-prefixed skill", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
-  await chats.send(chat.id, input("@codex fixture codex steer"));
+  await chats.send(chat.id, input("@codex wait for cancellation"));
   await vi.waitFor(async () =>
-    expect(
-      (await chats.get(chat.id)).messages.at(-1)?.trace?.length,
-    ).toBeGreaterThan(0),
+    expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
+      "cache guard",
+    ),
   );
   const followup = {
     ...input("@codex use €review src/a.ts"),
+    parentId: null,
     delivery: "steer" as const,
   };
   await chats.send(chat.id, followup);
-  const saved = await chats.get(chat.id);
-  expect(saved.queue?.map((q) => q.input.id)).toEqual([followup.id]);
-  expect(saved.messages.some((m) => m.id === followup.id)).toBe(false);
-  expect(await agentCalls()).not.toContain('"steer"');
-  await chats.queueAction(chat.id, "remove", followup.id);
+  expect((await chats.get(chat.id)).queue).toHaveLength(0);
+  const calls = (await agentCalls())
+    .trim()
+    .split("\n")
+    .map((s) => JSON.parse(s));
+  expect(calls.find((c) => c.steer)?.steer).toMatchObject({
+    input: [{ type: "text", text: "use $review src/a.ts" }],
+  });
   await chats.cancel(chat.id);
 });
 

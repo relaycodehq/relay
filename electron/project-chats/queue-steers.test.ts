@@ -54,13 +54,20 @@ it("waits for what an agent only takes at the start of a turn", () => {
     dataUrl: "data:image/png;base64,",
   };
   expect(steers(send("@codex /review"), running)).toBe(false);
-  expect(steers(send("@codex run $deploy now"), running)).toBe(false);
   expect(steers(send("@codex use /skill:lint"), running)).toBe(false);
   expect(steers(send("@codex this", { selection: {} as never }), running)).toBe(
     false,
   );
   // A screenshot can steer.
   expect(steers(send("@codex look", { images: [image] }), running)).toBe(true);
+});
+
+it("steers with a skill for agents that run one mid-turn", () => {
+  expect(steers(send("@codex $deploy"), running)).toBe(true);
+  const claude = send("@claude Fix it", { provider: "claude" });
+  expect(steers(send("@claude €review", { provider: "claude" }), claude)).toBe(
+    true,
+  );
 });
 
 it("queues skills with every supported currency prefix instead of steering", () => {
