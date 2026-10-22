@@ -88,8 +88,10 @@ internal fun FollowDraft(drafts: DraftStore, computer: String?, key: String?, te
         }
     }
     val now = text()
-    LaunchedEffect(computer, key, now, loaded) {
-        if (computer != null && key != null && loaded == "$computer\n$key") drafts.editText(computer, key, now)
+    // Read here with the text: read in the effect, it sees the load that ran first while `now` is still the empty field.
+    val ready = loaded == "$computer\n$key"
+    LaunchedEffect(computer, key, now, ready) {
+        if (ready && computer != null && key != null) drafts.editText(computer, key, now)
     }
 }
 
