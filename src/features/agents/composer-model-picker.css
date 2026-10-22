@@ -102,6 +102,10 @@
 }
 .model-provider-tab .provider-glyph {
   width: 21px;
+/* Every mark in the rail is plain, so a coloured one doesn't read as picked. */
+.model-provider-tab [data-brand-fill] {
+  fill: currentColor;
+}
   height: 21px;
 }
 .model-picker-rail .model-provider-tab:hover {
