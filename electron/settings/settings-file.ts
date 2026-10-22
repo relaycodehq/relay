@@ -19,6 +19,7 @@ import {
   parse,
   parseTree,
   printParseErrorCode,
+  type Edit,
   type ParseError,
 } from "jsonc-parser";
 import {
@@ -48,7 +49,6 @@ export function settingsDir(o: {
 const SETTLE_MS = 40;
 /** Times a save starts over because a script replaced the file meanwhile. */
 const RETRIES = 3;
-const formattingOptions = { insertSpaces: true, tabSize: 2, eol: "\n" };
 
 function parseSettings(
   text: string,
@@ -86,12 +86,90 @@ function describe(code: string) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
+/** The whitespace a line starts with, for the line `offset` is on. */
+function indentAt(text: string, offset: number) {
+  const start = text.lastIndexOf("\n", offset - 1) + 1;
+  return /^[ \t]*/.exec(text.slice(start))![0];
+}
+
+/**
+ * `value` as JSON laid out like its section: spread over lines indented
+ * from `indent` where the section is, on one line where the section is.
+ */
+function render(value: unknown, indent: string, unit: string | null) {
+  return unit === null
+    ? JSON.stringify(value, null, 1).replace(/\n\s*/g, " ")
+    : JSON.stringify(value, null, unit).replace(/\n/g, `\n${indent}`);
+}
+
+/**
+ * One edit putting `value` at `path`, or removing it, written in the file's
+ * own layout. jsonc-parser finds where it goes; its formatter would also
+ * redo every line the edit touches, spreading a `{ "mode": "dark" }` beside
+ * it over several lines, so the text is written here instead.
+ */
+function editAt(text: string, path: string[], value: unknown): Edit[] {
+  const [raw] = modify(text, path, value, {});
+  if (!raw) return [];
+  const root = parseTree(text)!;
+  let depth = path.length - 1;
+  while (depth > 0 && !findNodeAtLocation(root, path.slice(0, depth))) depth--;
+  const section = depth
+    ? findNodeAtLocation(root, path.slice(0, depth))!
+    : root;
+  const inside = text.slice(
+    section.offset + 1,
+    section.offset + section.length - 1,
+  );
+  const children = section.children ?? [];
+  const sectionIndent = indentAt(text, section.offset);
+  const childIndent = children.length
+    ? indentAt(text, children[0].offset)
+    : sectionIndent + "  ";
+  const unit =
+    inside.includes("\n") || (section === root && !children.length)
+      ? childIndent.slice(sectionIndent.length) || "  "
+      : null;
+
+  if (value === undefined) {
+    // The first key leaves with the space after it, the next one keeping its line.
+    if (raw.offset === section.offset + 1 && children.length > 1) {
+      const after = children[0].offset + children[0].length;
+      const gap = text.slice(after, children[1].offset);
+      const [offset, end] = gap.includes("\n")
+        ? [raw.offset, after + gap.lastIndexOf("\n")]
+        : [children[0].offset, children[1].offset];
+      return [{ offset, length: end - offset, content: "" }];
+    }
+    return [raw];
+  }
+  if (raw.length) {
+    return [
+      { ...raw, content: render(value, indentAt(text, raw.offset), unit) },
+    ];
+  }
+  const wrapped = path
+    .slice(depth + 1)
+    .reduceRight<unknown>((inner, key) => ({ [key]: inner }), value);
+  const property = `${JSON.stringify(path[depth])}: ${render(wrapped, childIndent, unit)}`;
+  const content = raw.content.startsWith(",")
+    ? unit === null
+      ? `, ${property}`
+      : `,\n${childIndent}${property}`
+    : unit === null
+      ? ` ${property} `
+      : inside.includes("\n")
+        ? `\n${childIndent}${property}`
+        : `\n${childIndent}${property}\n${sectionIndent}`;
+  return [{ ...raw, content }];
+}
+
 /** The file's text with each edit's value put at its path, or the key removed. */
 function withEdits(text: string, edits: SettingsEdit[]) {
   let next = text.trim() ? text : "{}\n";
   const node = (path: string[]) => findNodeAtLocation(parseTree(next)!, path);
   const edit = (path: string[], value: unknown) => {
-    next = applyEdits(next, modify(next, path, value, { formattingOptions }));
+    next = applyEdits(next, editAt(next, path, value));
   };
   for (const { path, value } of edits) {
     if (value === undefined) {

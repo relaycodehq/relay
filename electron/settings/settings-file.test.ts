@@ -120,6 +120,67 @@ it("edits only the keys Settings changes, keeping comments, and reports each cha
   expect(changes[1].values).toEqual({ typography: { interfaceSize: 12 } });
 });
 
+it("keeps the file's layout around what a save changes", async () => {
+  const saved = async (
+    text: string,
+    edits: Parameters<SettingsFile["update"]>[0],
+  ) => {
+    await writeFile(join(dir, "settings.json"), text);
+    file?.close();
+    await open();
+    await file.update(edits);
+    return readFile(join(dir, "settings.json"), "utf8");
+  };
+  // A one-line file stays on one line.
+  expect(
+    await saved('{ "typography": { "codeSize": 15 } }\n', [
+      { path: ["appearance", "mode"], value: "light" },
+    ]),
+  ).toBe(
+    '{ "typography": { "codeSize": 15 }, "appearance": { "mode": "light" } }\n',
+  );
+  // A one-line section beside the new key keeps its line; the file's indent is used.
+  expect(
+    await saved('{\n    "appearance": { "mode": "light" }\n}\n', [
+      { path: ["keepAwake"], value: false },
+      { path: ["threads", "autoSettleDays"], value: 5 },
+    ]),
+  ).toBe(
+    [
+      "{",
+      '    "appearance": { "mode": "light" },',
+      '    "keepAwake": false,',
+      '    "threads": {',
+      '        "autoSettleDays": 5',
+      "    }",
+      "}",
+      "",
+    ].join("\n"),
+  );
+  // Removing the first key leaves the next one on its own line.
+  expect(
+    await saved('{\n  "chat": { "width": 1200 },\n  "keepAwake": false\n}\n', [
+      { path: ["chat", "width"], value: undefined },
+      { path: ["appearance", "mode"], value: "dark" },
+    ]),
+  ).toBe(
+    '{\n  "keepAwake": false,\n  "appearance": {\n    "mode": "dark"\n  }\n}\n',
+  );
+  expect(
+    await saved('{\n  "chat": 1, "keepAwake": false\n}\n', [
+      { path: ["chat"], value: undefined },
+    ]),
+  ).toBe('{\n  "keepAwake": false\n}\n');
+  // A new file is spread out.
+  await rm(join(dir, "settings.json"));
+  file.close();
+  await open();
+  await file.update([{ path: ["chat", "sendKey"], value: "mod-enter" }]);
+  expect(await readFile(join(dir, "settings.json"), "utf8")).toBe(
+    '{\n  "chat": {\n    "sendKey": "mod-enter"\n  }\n}\n',
+  );
+});
+
 it("removes a key that isn't there as nothing to do, and says which section isn't one", async () => {
   await writeFile(join(dir, "settings.json"), '{ "chat": 1 }');
   await open();
