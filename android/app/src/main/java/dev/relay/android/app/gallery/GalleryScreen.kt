@@ -32,7 +32,10 @@ private enum class GalleryTheme { App, Light, Dark }
 fun GalleryScreen() {
     val nav = LocalNavigator.current
     var theme by rememberSaveable { mutableStateOf(GalleryTheme.App) }
+    var scrollChecks by rememberSaveable { mutableStateOf(false) }
     Screen("Gallery", subtitle = "Sample data", onBack = nav.backAction) {
+        SegmentedTabs(listOf(TabOption(false, "Components"), TabOption(true, "Scroll checks")), scrollChecks, { scrollChecks = it },
+            Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         SegmentedTabs(
             listOf(TabOption(GalleryTheme.App, "App"), TabOption(GalleryTheme.Light, "Light"), TabOption(GalleryTheme.Dark, "Dark")),
             theme,
@@ -40,6 +43,8 @@ fun GalleryScreen() {
             Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
         val body: @Composable () -> Unit = {
+            if (scrollChecks) ScrollStabilityDemo()
+            else
             Column(
                 Modifier.fillMaxSize().background(RelayTheme.colors.background).verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(28.dp),

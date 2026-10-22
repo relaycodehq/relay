@@ -95,8 +95,11 @@ private fun bootstrap(theme: RenderTheme, fit: Boolean): String {
   let last = 0, queued = 0;
   const measure = () => {
     queued = 0;
-    root.removeAttribute("data-relay-fit");
     const avail = root.clientWidth;
+    // Lazy precomposition can load the page before WebView has a viewport.
+    // Keep the cached frame height until a real width can produce a real measurement.
+    if (avail <= 0 || !document.body) return;
+    root.removeAttribute("data-relay-fit");
     const need = Math.max(root.scrollWidth, document.body ? document.body.scrollWidth : 0);
     let height;
     if (avail > 0 && need > avail + 1) {
@@ -107,7 +110,10 @@ private fun bootstrap(theme: RenderTheme, fit: Boolean): String {
       root.setAttribute("data-relay-fit", "");
       height = Math.ceil(root.getBoundingClientRect().height * scale);
     } else height = Math.ceil(root.getBoundingClientRect().height);
-    if (height !== last) post({ relayRender: "size", height: (last = height) });
+    if (height !== last) post({ relayRender: "size", height: (last = height),
+      availableWidthDp: avail, contentWidthDp: need, rootHeightDp: root.getBoundingClientRect().height,
+      viewportHeightDp: innerHeight, bodyHeightDp: document.body ? document.body.getBoundingClientRect().height : 0,
+      scale: root.hasAttribute("data-relay-fit") ? Number(root.style.getPropertyValue("--relay-s")) : 1 });
   };
   const schedule = () => { if (!queued) queued = requestAnimationFrame(measure); };
   new ResizeObserver(schedule).observe(root);
@@ -177,7 +183,7 @@ fun phoneRenderDocument(html: String, theme: RenderTheme, fit: Boolean = true): 
 
 /** What a page said: only the four messages Relay speaks pass, cut to what they may carry. */
 sealed interface RenderMessage {
-    data class Size(val height: Int) : RenderMessage
+    data class Size(val height: Int, val metrics: Map<String, Double> = emptyMap()) : RenderMessage
     data class Link(val href: String) : RenderMessage
     data class Compose(val text: String) : RenderMessage
     data class Answer(val json: String) : RenderMessage
@@ -196,7 +202,16 @@ fun parseRenderMessage(data: String): RenderMessage? {
         "size" -> (message["height"] as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
             ?.takeIf { it.isFinite() }
             // A formula is one line tall: the desktop's minimum frame would triple it.
-            ?.let { RenderMessage.Size(ceil(it).coerceIn(1.0, RENDER_MAX_HEIGHT.toDouble()).toInt()) }
+            ?.let { height ->
+                val metrics = listOf("availableWidthDp", "contentWidthDp", "rootHeightDp", "viewportHeightDp", "bodyHeightDp", "scale")
+                    .mapNotNull { key ->
+                        (message[key] as? JsonPrimitive)?.takeIf { !it.isString }?.doubleOrNull
+                            ?.takeIf { it.isFinite() && it in 0.0..10_000_000.0 }?.let { key to it }
+                    }.toMap()
+                if (metrics["availableWidthDp"] == 0.0) null
+                else RenderMessage.Size(ceil(height).coerceIn(1.0, RENDER_MAX_HEIGHT.toDouble()).toInt(),
+                    if (metrics.isEmpty()) metrics else metrics + ("rawHeightDp" to height))
+            }
         "link" -> string("href")?.takeIf { WEB_OR_MAIL.containsMatchIn(it) }?.let { RenderMessage.Link(it.take(2000)) }
         "compose" -> string("text")?.takeIf { it.isNotBlank() }?.let { RenderMessage.Compose(it.take(RENDER_COMPOSE_CHARS)) }
         // Too big to hand back is no answer at all, rather than a cut one.

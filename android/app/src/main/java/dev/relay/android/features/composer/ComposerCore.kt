@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import dev.relay.android.features.diagnostics.LocalScrollTrace
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -487,10 +488,14 @@ internal fun ComposerCore(
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
                 if (text.isEmpty()) Text(placeholder ?: "Message ${agentName(provider)}", color = c.faint, style = RelayTheme.type.base)
+                val scrollTrace = LocalScrollTrace.current
                 BasicTextField(
                     field,
                     Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 132.dp).focusRequester(focus)
-                        .onFocusChanged { typing = it.isFocused }
+                        .onFocusChanged {
+                            if (typing != it.isFocused) scrollTrace?.event("composer_focus", "focused" to it.isFocused)
+                            typing = it.isFocused
+                        }
                         // Images from the keyboard's clipboard or a long-press Paste; text goes on into the field.
                         .contentReceiver { content ->
                             if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
