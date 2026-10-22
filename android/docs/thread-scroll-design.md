@@ -40,6 +40,10 @@ Viewport dimensions are observed in the parent's measure before its LazyColumn
 child measures. Requests are gated on changed dimensions, not every measure:
 an unconditional request here creates a layout loop. Async child size changes
 have one post-layout correction through the same policy, only while following.
+The parent reads scroll geometry only when expanding a held reading viewport;
+ordinary scrolling does not subscribe parent measurement to every list layout.
+The bounded diagnostics include a parent-measure counter, and Android tracing
+can inspect the `Relay.ThreadViewport.measure` section.
 
 Every assistant answer has stable header, render, Markdown block and footer
 rows, including before its first render arrives. Markdown keys use normalized

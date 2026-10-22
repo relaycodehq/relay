@@ -59,7 +59,7 @@ ordinary scroll regressions no longer require a phone connected by USB.
 ## Regression gate and limits
 
 `.github/workflows/android-scroll.yml` runs the same command for Android pull
-requests and non-main branch pushes, using an API36 x86_64 emulator on Linux.
+requests and branch pushes, using an API36 x86_64 emulator on Linux.
 It includes the JVM suite and captures instrumentation output in
 `android/app/build/scroll-test-results.txt`. A failed run uploads that output and
 JVM reports. The local command has been exercised on the API36 ARM64 emulator;
@@ -84,3 +84,21 @@ When changing the controller, row keys, loading frames, native Markdown, WebView
 sizing, or dock layout, run the gate. Keep a failing case as a regression before
 fixing its shared cause. Do not weaken pixel assertions or replace real native
 renderers with fixed-height mocks to make a timing failure disappear.
+
+## Failed history requests and layout cost
+
+History recovery tests assert both mode and pixel positions: failure leaves
+`Reading` with every visible coordinate unchanged; a retry ignores the previous
+failure and restores the same paragraph when history arrives. Explicit bottom
+navigation after failure remains usable. JVM tests exercise the actual model's
+failed/empty responses, retry amount, queued fetches, maximum page and automatic
+reconnect behavior through an injected fetch function, without a live bridge.
+
+`ThreadLayoutCostTest` also scrolls the production viewport over 80 separate
+frames and counts parent measurements, viewport-call-site recompositions, newly
+measured lazy rows and dock measurements. On the API36 ARM64 emulator, the
+unconditional layout-state read produced 81 extra parent measures; lazy geometry
+observation reduced that to 0, with 24 incoming rows measured in both runs and no
+call-site recompositions or dock remeasurements. This is a structural cost check,
+not a claim about release frame timing on physical devices. A parent dependency
+while reclaiming reserved space is intentional and covered separately.

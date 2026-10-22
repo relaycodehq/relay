@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Constraints
 import dev.relay.android.features.thread.ThreadScroll
 import dev.relay.android.features.thread.HistoryLoadResult
+import android.os.Trace
 import dev.relay.android.features.diagnostics.scrollTouches
 
 /** One viewport shared by the real conversation, gallery and device tests. */
@@ -68,18 +69,22 @@ internal fun ThreadViewport(
             Column(content = dock)
         },
     ) { children, constraints ->
-        val width = constraints.maxWidth
-        val height = constraints.maxHeight
-        val dockSize = children[1].measure(constraints.copy(minHeight = 0))
-        val available = (height - dockSize.height).coerceAtLeast(0)
-        val listHeight = reserve.height(width, available,
-            holding = scroll.reading || scroll.touching, belowEnd = scroll.below())
-        scroll.viewport(width, listHeight, density.fontScale, density.density)
-        val list = children[0].measure(Constraints.fixed(width, listHeight))
-        layout(width, height) {
-            list.placeRelative(0, 0)
-            dockSize.placeRelative(0, height - dockSize.height)
-        }
+        scroll.diagnostics.viewportMeasured()
+        Trace.beginSection("Relay.ThreadViewport.measure")
+        try {
+            val width = constraints.maxWidth
+            val height = constraints.maxHeight
+            val dockSize = children[1].measure(constraints.copy(minHeight = 0))
+            val available = (height - dockSize.height).coerceAtLeast(0)
+            val listHeight = reserve.height(width, available,
+                holding = scroll.reading || scroll.touching, belowEnd = scroll::below)
+            scroll.viewport(width, listHeight, density.fontScale, density.density)
+            val list = children[0].measure(Constraints.fixed(width, listHeight))
+            layout(width, height) {
+                list.placeRelative(0, 0)
+                dockSize.placeRelative(0, height - dockSize.height)
+            }
+        } finally { Trace.endSection() }
     }
 }
 
@@ -88,14 +93,16 @@ internal class ReadingViewport {
     private var width = -1
     private var held: Int? = null
 
-    fun height(width: Int, available: Int, holding: Boolean, belowEnd: Int?): Int {
+    fun height(width: Int, available: Int, holding: Boolean, belowEnd: () -> Int?): Int {
         if (this.width != width || !holding) held = null
         this.width = width
         val previous = held
-        val increase = available - (previous ?: available)
-        val safe = belowEnd == null || belowEnd >= increase
-        val next = if (previous == null || available <= previous || safe) available
-            else previous
+        // Reading layoutInfo establishes a remeasure dependency. Ordinary scroll frames
+        // need no parent layout work; observe it only when reclaiming reserved space.
+        val next = if (previous == null || available <= previous) available else {
+            val below = belowEnd()
+            if (below == null || below >= available - previous) available else previous
+        }
         held = next
         return next
     }

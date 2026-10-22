@@ -9,6 +9,10 @@ import kotlin.math.abs
 
 /** Observes scrolling; recording is deliberately outside the input and follow policy. */
 internal class ThreadScrollDiagnostics(private val trace: ScrollTrace?) {
+    var viewportMeasures = 0L
+        private set
+    fun viewportMeasured() { viewportMeasures++ }
+
     private var touching = false
     private var lastTouch = 0L
     private var lastRequest = 0L
@@ -44,6 +48,7 @@ internal class ThreadScrollDiagnostics(private val trace: ScrollTrace?) {
             val recentRequest = lastRequest > 0 && now - lastRequest < 500
             val recentTouch = touching || (lastTouch > 0 && now - lastTouch < 500)
             val fields = mapOf(
+                "viewportMeasures" to viewportMeasures,
                 "firstIndex" to state.first, "firstOffsetPx" to state.offset,
                 "widthPx" to state.width, "heightPx" to state.height,
                 "viewportStartPx" to state.start, "viewportEndPx" to state.end, "totalItems" to state.total,
