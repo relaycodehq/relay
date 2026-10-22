@@ -172,7 +172,7 @@ export const relayToolSchemas = {
         .boolean()
         .optional()
         .describe(
-          "Hand it to the agent mid-answer, if it's working. Otherwise it waits for the answer to end.",
+          "true: steer, it reaches the agent mid-answer. Left out: queue, it waits for the answer to end.",
         ),
     })
     .strict(),
@@ -477,7 +477,7 @@ const descriptions: Record<RelayToolName, string> = {
   find_threads:
     "Any of the user's threads, in any project, newest first: id, title, project, agent, branch, whether it's working, waiting on the user, idle or settled, which thread started it, and `on` the computer it runs on when that's another one. Use it to look at work done elsewhere, then read_thread for what was said. Archived threads are left out.",
   read_thread: `Any thread, from list_threads or find_threads: the notes the user keeps there, if any, then its latest messages in order, as many as fit. When older ones didn't, it says \`earlier\`: pass that as \`before\` to page back. Pass \`after\` to get only what's new, oldest first; a page that stops early says \`more\`, so read on from its \`next\`. A message longer than ${MESSAGE_CHARS} characters comes with its start and a \`nextOffset\`; read the rest with \`message\` (its id) and \`offset\` until there's no \`nextOffset\`.`,
-  send_to_thread: `Send a message to a thread, as its user would. It answers in its own turn.\n\n${DRIVE_NOTE}`,
+  send_to_thread: `Send a message to a thread, as its user would. If it's working, the message either queues or steers:\n- Queue (the default): it waits until the current answer ends and starts its own turn. For a new task, or anything that should come after what it's doing.\n- Steer (\`steer\`): the agent reads it mid-answer and adjusts what it's doing now. For findings, corrections or a change of plan it needs before it finishes; queued, they arrive after its answer is already written.\nAn idle thread answers either way in a new turn.\n\n${DRIVE_NOTE}`,
   wait_for_threads:
     "Wait until the threads, yours or any others, stop working: each is done, stopped, failed, or needs the user's input, which only the user can give. Returns where each stands; a timeout leaves them working. Async questions do not end the wait while the agent keeps working.",
   stop_thread: `Stop the answer a thread is working on.\n\n${DRIVE_NOTE}`,

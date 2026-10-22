@@ -967,9 +967,15 @@ export class StartedThreads {
           : `Sent; it runs on ${computer}.`,
       );
     }
+    // Read now: approving may have taken long enough for the answer to end.
+    const now = await this.reads.thread(id);
+    const working = chatStatus(now.summary, now.chat).status === "working";
     await this.chats.send(id, send);
+    if (!working) return toolText("Sent.");
     return toolText(
-      steer ? "Sent; it reads it mid-answer if it's working." : "Sent.",
+      steer
+        ? "Steered; it reads it mid-answer."
+        : "Queued; it goes out when its current answer ends. To reach it mid-answer, send with steer.",
     );
   }
 }
