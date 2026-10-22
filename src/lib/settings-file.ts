@@ -197,7 +197,12 @@ export function fileSetting<T>(options: {
   return {
     get: () => current,
     subscribe,
-    use: () => useSyncExternalStore(subscribe, () => current),
+    use: () =>
+      useSyncExternalStore(
+        subscribe,
+        () => current,
+        () => current,
+      ),
     set(next: T) {
       const edits = editsBetween(serialize(current), serialize(next), path);
       current = next;
