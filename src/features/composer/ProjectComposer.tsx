@@ -34,7 +34,7 @@ import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
 import { useNextGuess, type NextGuess } from "./useNextGuess";
 import { draftRecipient } from "../../../shared/recipient";
-import { AgentMissingNotice } from "./AgentMissingNotice";
+import { useAgentSetup } from "./AgentSetup";
 import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
 import { composerKeys, type ComposerSubmitOptions } from "./composer-keys";
@@ -257,6 +257,14 @@ export function ProjectComposer({
   useToolbarFit(tools);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const to = draftRecipient(draft.text, composer.provider);
+  const setup = useAgentSetup({
+    provider: to,
+    providers: Object.keys(runs.picker) as AgentProvider[],
+    computer,
+    projectId,
+    chatId: conversation.chatId,
+    accountOf: accounts.of,
+  });
   const toolbar = useComposerToolbar();
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
@@ -430,12 +438,6 @@ export function ProjectComposer({
       {typeof notice === "function"
         ? notice({ sendGoal: sending.sendGoal })
         : notice}
-      <AgentMissingNotice
-        provider={to}
-        computer={computer}
-        projectId={projectId}
-        chatId={conversation.chatId}
-      />
       <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}
@@ -556,6 +558,7 @@ export function ProjectComposer({
                   onSelect={runs.select}
                   defaultNames={catalogs.defaultNames}
                   computer={computer}
+                  setup={setup}
                   account={{
                     of: accounts.of,
                     footer: (provider, now, container) =>

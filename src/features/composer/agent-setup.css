@@ -1,0 +1,71 @@
+/* The model picker's panel for an agent that can't run where the project
+   does: install it, sign it in, or say why not. */
+.agent-setup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px 22px;
+  font-size: 12px;
+  animation: agent-setup-in 180ms ease-out;
+}
+@keyframes agent-setup-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.agent-setup-glyph .provider-glyph {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 12px;
+}
+.agent-setup h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.agent-setup p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.agent-setup-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+.agent-setup-actions .primary {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.agent-setup-log button {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.agent-setup-log button:hover {
+  color: var(--text);
+}
+.agent-setup .agent-setup-hint {
+  margin-top: 14px;
+  font-size: 11px;
+}
+.agent-setup .agent-setup-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.agent-setup-progress > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 11px var(--font-mono);
+}
