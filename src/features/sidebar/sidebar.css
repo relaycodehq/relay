@@ -1486,6 +1486,15 @@
   flex: none;
   font-size: 10.5px;
 }
+.sb-compact-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sb-compact-meta > .sb-thread-ref {
+  flex: 1;
+}
 .sb-compact .sb-card-action {
   opacity: 0;
 }

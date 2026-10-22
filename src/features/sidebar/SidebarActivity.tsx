@@ -556,6 +556,22 @@ function CompactRow({
 }) {
   const { chatId, now, projects, actions } = rows;
   const p = projects.get(c.projectId);
+  const hasRef = !!(c.branch || c.commit) && !p?.scratch;
+  const when = (
+    <small
+      title={
+        c.autoSettled
+          ? c.worktree?.landed
+            ? "Settled when its PR merged"
+            : "Settled after days without activity"
+          : undefined
+      }
+    >
+      {kind === "snoozed"
+        ? wakeLabel(c.snoozedUntil!, new Date(now))
+        : shortAge(c.updated, now)}
+    </small>
+  );
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger
@@ -579,25 +595,16 @@ function CompactRow({
               title={c.title}
               regenerating={actions.regenerating.has(c.id)}
             />
-            {(c.branch || c.commit) && !p?.scratch && (
-              <ThreadRef chat={c} />
+            {hasRef && (
+              <span className="sb-compact-meta">
+                <ThreadRef chat={c} />
+                {when}
+              </span>
             )}
           </span>
         )}
         {isLive(c) && <StatusMark chat={c} unread={false} now={now} />}
-        <small
-          title={
-            c.autoSettled
-              ? c.worktree?.landed
-                ? "Settled when its PR merged"
-                : "Settled after days without activity"
-              : undefined
-          }
-        >
-          {kind === "snoozed"
-            ? wakeLabel(c.snoozedUntil!, new Date(now))
-            : shortAge(c.updated, now)}
-        </small>
+        {(!hasRef || actions.renaming === c.id) && when}
         <button
           className="sb-card-action icon"
           title={kind === "snoozed" ? "Wake now" : "Move back to activity"}
