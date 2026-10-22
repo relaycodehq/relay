@@ -1,6 +1,7 @@
-import type {
-  DeepReviewStart,
-  SavedReviewSetup,
+import {
+  REVIEW_SETUP_NAME_MAX,
+  type DeepReviewStart,
+  type SavedReviewSetup,
 } from "../../shared/deep-review";
 import type { ProjectChat } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
@@ -24,8 +25,11 @@ function namedSetups(setups: SavedReviewSetup[]) {
       entry.setup.reviewers
         .map((r) => r.choice.model || r.provider)
         .join(" + ");
-    let name = base;
-    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})`;
+    // Short enough to pass back to deep_review, the number included.
+    const fit = (suffix = "") =>
+      `${base.slice(0, REVIEW_SETUP_NAME_MAX - suffix.length).trimEnd()}${suffix}`;
+    let name = fit();
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = fit(` (${n})`);
     taken.add(name.toLowerCase());
     return { entry, name };
   });

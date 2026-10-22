@@ -202,7 +202,8 @@ export class ProjectChats {
       core,
       {
         send: (id, input) => this.send(id, input),
-        lead: (chat, input, prompt) => this.turns.lead(chat, input, prompt),
+        lead: (chat, input, prompt, answer) =>
+          this.turns.lead(chat, input, prompt, answer),
       },
       worktrees,
     );
@@ -608,7 +609,7 @@ export class ProjectChats {
    * about a pull request; `duringTurn`: the thread's agent asked for it
    * mid-answer, through the deep_review tool.
    */
-  async startDeepReview(
+  startDeepReview(
     id: string,
     config: DeepReviewStart,
     options: {
@@ -616,8 +617,10 @@ export class ProjectChats {
       duringTurn?: boolean;
     } = {},
   ) {
-    const folder = await this.worktrees.root(await this.storage.load(id));
-    return this.councils.startReview(id, config, { ...options, folder });
+    return this.councils.startReview(id, config, {
+      ...options,
+      folder: (chat) => this.worktrees.root(chat),
+    });
   }
   resumeDeepReview(id: string, only?: ResumeReview) {
     return this.councils.resumeReview(id, only);

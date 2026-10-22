@@ -29,6 +29,7 @@ export interface CouncilHost {
     chat: ProjectChat,
     input: ProjectChatSend,
     prompt: string,
+    answer: string,
   ): Promise<void>;
 }
 
@@ -54,10 +55,15 @@ export class Councils {
       createReviewer: (parent, reviewer) =>
         this.createReviewer(parent, reviewer),
       send: (id, input) => this.host.send(id, input),
-      lead: (chat, input, prompt) => this.host.lead(chat, input, prompt),
+      lead: (chat, input, prompt, answer) =>
+        this.host.lead(chat, input, prompt, answer),
       // A reviewer whose cut-off turn is being picked back up is at work too.
       active: (id) =>
         this.core.active.has(id) || this.core.sessions.resumingIn(id),
+      answering: (id) =>
+        this.core.active.has(id) ||
+        this.core.active.rides(id) ||
+        this.core.sessions.resumingIn(id),
       // Only agents report back: a dev server it left up never ends.
       waiting: (id) =>
         this.core.sessions
@@ -160,7 +166,9 @@ export class Councils {
   /** A reviewer's turn a restart cut off couldn't be picked back up. */
   reviewerLost(chat: ProjectChat) {
     if (!chat.reviewer) return;
-    return this.track(this.reviews.reviewerLost(chat.reviewer.parent));
+    return this.track(
+      this.reviews.reviewerLost(chat.reviewer.parent, chat.reviewer.round),
+    );
   }
 
   /** A turn in the thread ended; a review at work takes its next step, settling once it has. */
@@ -198,7 +206,7 @@ export class Councils {
     id: string,
     config: DeepReviewStart,
     options: {
-      folder?: string;
+      folder?: (chat: ProjectChat) => Promise<string>;
       pull?: (ref: PullRef) => Promise<PullInfo>;
       duringTurn?: boolean;
     },

@@ -35,6 +35,7 @@ import {
 } from "./live-turn";
 import { reviveChat } from "./revive";
 import { migrateReviewRounds } from "../deep-review";
+import { latestReview } from "../../shared/deep-review";
 import { ShownImages } from "./shown-images";
 
 /** The earliest scheduled message still waiting to go out on its own. */
@@ -122,7 +123,7 @@ export function chatSummary({
     ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
     ...(open ? { asking: true as const } : {}),
     ...(review ? { reviewFolder: review } : {}),
-    ...(reviews?.at(-1)?.status === "reviewing"
+    ...(latestReview({ reviews })?.status === "reviewing"
       ? { reviewing: true as const }
       : {}),
     empty: !messages.length && !scheduled?.length,

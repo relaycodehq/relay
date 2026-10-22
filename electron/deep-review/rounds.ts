@@ -1,5 +1,10 @@
 import type { ProjectChat } from "../../shared/projects";
-import type { DeepReviewState, ReviewTarget } from "../../shared/deep-review";
+import {
+  messageRounds,
+  workingReview,
+  type DeepReviewState,
+  type ReviewTarget,
+} from "../../shared/deep-review";
 import { threadReports } from "../../shared/findings";
 
 /** Saves from before a thread held rounds kept its one review as `deepReview`. */
@@ -11,23 +16,13 @@ export function migrateReviewRounds(chat: ProjectChat) {
   return true;
 }
 
-/** The round a main-conversation message falls in: the latest asked for up to it. */
-function roundAt(chat: ProjectChat, messageId: string) {
-  const byRequest = new Map(chat.reviews?.map((r) => [r.request, r]));
-  let current: DeepReviewState | undefined;
-  for (const m of chat.messages) {
-    if (m.parentId || m.side) continue;
-    current = byRequest.get(m.id) ?? current;
-    if (m.id === messageId) return current;
-  }
-}
-
 /** The rounds whose answers published the findings `ids`. */
 export function roundsOfFindings(chat: ProjectChat, ids: string[]) {
+  const roundOf = messageRounds(chat.messages, chat.reviews);
   const rounds = new Set<DeepReviewState>();
   for (const report of threadReports(chat.findings)) {
     if (!report.findings.some((f) => ids.includes(f.id))) continue;
-    const round = roundAt(chat, report.messageId);
+    const round = roundOf.get(report.messageId);
     if (round) rounds.add(round);
   }
   return [...rounds];
@@ -47,20 +42,32 @@ function reviewed(t: ReviewTarget) {
   }
 }
 
-/** The folder a round reviewed in, and the branch checked out there. */
-const reviewedIn = ({ scope }: DeepReviewState) =>
-  scope.checkout
-    ? `${scope.checkout.path}\n${scope.checkout.branch ?? ""}`
-    : `${scope.folder ?? ""}\n${scope.branch ?? ""}`;
-
 /**
- * Whether `asked`'s findings get fixed where `working` has the thread work:
- * it's the same round, the same branch, pull request or commit, or the same
- * folder on the same branch.
+ * Whether `asked`'s findings get fixed where the thread works now: in a
+ * deep review's own thread, where `working` has it. They do for the same
+ * round, or one that reviewed the same branch, pull request or commit, or
+ * one whose checkout holds the same branch: a branch is checked out in one
+ * folder at most. A checkout with no branch holds one commit, which a later
+ * round may have moved it off, so it only fits its own round. A round that
+ * made no checkout reviewed where the thread worked then: it fits while the
+ * round that had the thread there still has it, or, with none, while the
+ * thread is still on the branch it was.
  */
-export function fixesFit(asked: DeepReviewState, working: DeepReviewState) {
+export function fixesFit(
+  chat: ProjectChat,
+  asked: DeepReviewState,
+  working: DeepReviewState | undefined,
+) {
   if (asked === working) return true;
   const what = reviewed(asked.scope.target);
-  if (what && what === reviewed(working.scope.target)) return true;
-  return reviewedIn(asked) === reviewedIn(working);
+  if (what && working && what === reviewed(working.scope.target)) return true;
+  if (asked.scope.checkout) {
+    const branch = asked.scope.checkout.branch;
+    return !!branch && branch === working?.scope.checkout?.branch;
+  }
+  const then = workingReview({
+    reviews: chat.reviews?.slice(0, chat.reviews.indexOf(asked)),
+  });
+  if (then || working) return then === working;
+  return asked.scope.branch === chat.branch;
 }

@@ -38,6 +38,8 @@ export function ReviewRound({
   onResumeMember: (slot: number) => void;
   onLead: () => void;
 }) {
+  // Without a lead answer, the thread's first answer isn't this round's.
+  const stopped = state.leadStopped ?? lead?.id;
   return (
     <>
       <DeepReviewRequest message={message} state={state} />
@@ -46,9 +48,7 @@ export function ReviewRound({
         state={state}
         kept={lead && reportUnder(lead.id)?.findings.length}
         hasLead={!!lead}
-        leadHalted={
-          latest && leadStoppedLast(messages, state.leadStopped ?? lead?.id)
-        }
+        leadHalted={latest && !!stopped && leadStoppedLast(messages, stopped)}
         {...(latest
           ? { onResume, onStop, onStopMember, onResumeMember, onLead }
           : {})}

@@ -109,12 +109,15 @@ export const reviewDraftSetupSchema = deepReviewStartSchema
   .strip();
 export type ReviewDraftSetup = z.infer<typeof reviewDraftSetupSchema>;
 
+/** The longest name a review setup goes by, saved or as the deep_review tool lists it. */
+export const REVIEW_SETUP_NAME_MAX = 80;
+
 /** A setup you've run, as the deep review sheet lists it; the main process keeps a copy for the deep_review tool. */
 export const savedReviewSetupSchema = z.object({
   id: z.string().max(100),
   /** When it last ran. */
   at: z.number(),
-  name: z.string().max(80).optional(),
+  name: z.string().max(REVIEW_SETUP_NAME_MAX).optional(),
   pinned: z.boolean().optional(),
   setup: deepReviewStartSchema.pick({
     reviewers: true,
@@ -194,9 +197,14 @@ export interface DeepReviewState {
    * the latest one after a resume; resuming the lead goes on from there.
    */
   leadStopped?: string;
+  /**
+   * The lead's first answer to the round, named before it starts. Rounds
+   * saved before this was kept have the first answer after their request.
+   */
+  leadAnswer?: string;
 }
 /** The thread's latest round: the one Stop, Resume and following its branch act on. */
-export const latestReview = (chat: { reviews?: DeepReviewState[] }) =>
+export const latestReview = <R>(chat: { reviews?: R[] }) =>
   chat.reviews?.at(-1);
 
 /**
@@ -204,8 +212,30 @@ export const latestReview = (chat: { reviews?: DeepReviewState[] }) =>
  * reviewed code out. A round that made no checkout reviewed where the thread
  * already worked, so it doesn't move it.
  */
-export const workingReview = (chat: { reviews?: DeepReviewState[] }) =>
-  chat.reviews?.filter((r) => r.scope.checkout).at(-1);
+export const workingReview = <
+  R extends { scope: { checkout?: unknown } },
+>(chat: {
+  reviews?: R[];
+}) => chat.reviews?.filter((r) => r.scope.checkout).at(-1);
+
+/**
+ * The round each main-conversation message falls in, by its id: the latest
+ * one asked for up to it.
+ */
+export function messageRounds(
+  messages: readonly { id: string; parentId?: string | null; side?: unknown }[],
+  reviews: DeepReviewState[] | undefined,
+) {
+  const byRequest = new Map(reviews?.map((r) => [r.request, r]));
+  const rounds = new Map<string, DeepReviewState>();
+  let current: DeepReviewState | undefined;
+  for (const m of messages) {
+    if (m.parentId || m.side) continue;
+    current = byRequest.get(m.id) ?? current;
+    if (current) rounds.set(m.id, current);
+  }
+  return rounds;
+}
 
 /** The round `request` asked for; rounds from before rounds had keys are the first. */
 export const roundOf = (

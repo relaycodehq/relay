@@ -68,6 +68,8 @@ export class TurnEndings {
   /** A turn the agent started beside the one holding the thread ended; that one ends the run. */
   rider(chat: ProjectChat, active: ActiveChat) {
     this.core.active.release(chat.id, active);
+    // It may have asked for a review round, whose lead waited for it.
+    if (!chat.reviewer) void this.councils.step(chat.id, {});
     void this.core.storage
       .syncSummary(chat)
       .catch((e) => console.warn("Could not update the thread's summary:", e));

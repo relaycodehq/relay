@@ -5,7 +5,7 @@
 // checkout, and the thread's Git and file panes follow it there.
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { git, worktreeList } from "../git/git";
+import { currentBranchOrNull, git, worktreeList } from "../git/git";
 import { sameFolder } from "../git/worktrees";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
 import { errorMessage } from "../../shared/error-message";
@@ -16,6 +16,18 @@ export const reviewCheckoutsIn = (worktrees: string) =>
 
 /** The review thread a folder there is for: its own, or one a fix made beside it, `<id>-2`. */
 const ownerOf = (name: string) => name.replace(/-\d{1,3}$/, "");
+
+/** Whether `at` is one of the review's worktrees: its own, `own`, or one made beside it. */
+const ownsFolder = async (at: string, own: string) =>
+  ownerOf(basename(at)) === basename(own) &&
+  (await sameFolder(dirname(at), dirname(own)));
+
+/** A free folder beside the review's own worktree, `<own>-2` and on, for when edits there are in the way. */
+async function besideFolder(own: string) {
+  let beside = `${own}-2`;
+  for (let n = 3; await exists(beside); n++) beside = `${own}-${n}`;
+  return beside;
+}
 
 const exists = (path: string) =>
   stat(path).then(
@@ -100,6 +112,7 @@ async function addWorktree(
   path: string,
   head: string,
   branch?: string,
+  moved?: (back: () => Promise<unknown>) => void,
 ) {
   await mkdir(dirname(path), { recursive: true });
   // A folder deleted by hand leaves Git's record of it behind.
@@ -120,12 +133,25 @@ async function addWorktree(
     // One a discard couldn't remove, a file held open or a lock on it, or
     // an earlier round's, is still this repository's worktree: taken back,
     // on the branch or at the head this review reads.
+    const [was, at] = await Promise.all([
+      currentBranchOrNull(path),
+      git(path, ["rev-parse", "HEAD"]).then((s) => s.trim()),
+    ]);
     await git(
       path,
       onBranch
         ? ["switch", "--quiet", branch]
         : ["switch", "--quiet", "--detach", head],
       60000,
+    );
+    moved?.(() =>
+      git(
+        path,
+        was
+          ? ["switch", "--quiet", was]
+          : ["switch", "--quiet", "--detach", at],
+        60000,
+      ),
     );
     return;
   }
@@ -147,7 +173,9 @@ async function addWorktree(
  * otherwise a detached copy to read, `prHead` being its head branch when
  * it's in the project's own repository, to name the branch a fix makes.
  * Undefined when the thread's checkout already has it. Nothing is copied in
- * and no setup runs: reviewers only read.
+ * and no setup runs: reviewers only read. `inUse`: an answer runs in the
+ * review's own worktree, so it isn't moved. `moved` hears how to put back
+ * a worktree an earlier round left that this moved.
  */
 export async function openReviewCheckout(
   root: string,
@@ -155,6 +183,10 @@ export async function openReviewCheckout(
   dir: string,
   chatId: string,
   prHead?: string,
+  {
+    inUse = false,
+    moved,
+  }: { inUse?: boolean; moved?: (back: () => Promise<unknown>) => void } = {},
 ): Promise<ReviewCheckout | undefined> {
   if (!needsCheckout(scope) || !scope.head) return;
   const t = scope.target;
@@ -173,30 +205,35 @@ export async function openReviewCheckout(
   if (branch) {
     const at = await folderOf(root, branch);
     if (at) {
-      const made = await sameFolder(at, own);
-      return { path: made ? own : at, made, ...about };
+      const made = await ownsFolder(at, own);
+      return { path: (await sameFolder(at, own)) ? own : at, made, ...about };
     }
   }
-  const path = branch ? own : await detachedFolder(own, scope.head);
-  await addWorktree(root, path, scope.head, branch);
+  const path = await freeFolder(own, scope.head, branch, inUse);
+  await addWorktree(root, path, scope.head, branch, moved);
   return { path, made: true, ...about };
 }
 
 /**
- * Where a review reads code with no branch to be on: its own worktree, moved
- * to `head`, unless an earlier round's edits there are in the way of that;
- * then a worktree beside it, the edits left alone.
+ * Where a review reads code checked out nowhere else: its own worktree,
+ * moved to `branch` or `head`, unless an earlier round is in the way of
+ * that, with edits there or an answer running in it; then a worktree beside
+ * it, left alone. Git would carry the edits along to the other branch.
  */
-async function detachedFolder(own: string, head: string) {
+async function freeFolder(
+  own: string,
+  head: string,
+  branch: string | undefined,
+  inUse: boolean,
+) {
   if (!(await exists(own))) return own;
   const at = await git(own, ["rev-parse", "HEAD"]).then(
     (s) => s.trim(),
     () => undefined,
   );
-  if (at === head || !(await dirty(own).catch(() => false))) return own;
-  let beside = `${own}-2`;
-  for (let n = 3; await exists(beside); n++) beside = `${own}-${n}`;
-  return beside;
+  if (!branch && at === head) return own;
+  if (!inUse && !(await dirty(own).catch(() => false))) return own;
+  return besideFolder(own);
 }
 
 /** The review's folder, made again at `head` when it was one Relay made and has since been cleaned up. */
@@ -244,12 +281,7 @@ export async function followReviewedBranch(
   const at = await folderOf(root, branch);
   if (at && (await sameFolder(at, checkout.path)))
     return branch === checkout.branch ? checkout : { ...checkout, branch };
-  if (at) {
-    const ours =
-      ownerOf(basename(at)) === chatId &&
-      (await sameFolder(dirname(at), dirname(own)));
-    return { path: at, made: ours, ...about };
-  }
+  if (at) return { path: at, made: await ownsFolder(at, own), ...about };
   // Checked out nowhere: the review's own worktree takes it, as it is or made again.
   if (!(await exists(own))) {
     await addWorktree(root, own, head, branch);
@@ -266,8 +298,7 @@ export async function followReviewedBranch(
   // Edits there are in the way. A question reads on where the review is; a
   // fix gets a worktree on the branch beside it, the edits left alone.
   if (!fixing) return checkout;
-  let beside = `${own}-2`;
-  for (let n = 3; await exists(beside); n++) beside = `${own}-${n}`;
+  const beside = await besideFolder(own);
   await addWorktree(root, beside, head, branch);
   return { path: beside, made: true, ...about };
 }

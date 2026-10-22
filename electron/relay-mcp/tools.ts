@@ -9,7 +9,10 @@ import { z } from "zod";
 import { agentProviderSchema, agentProviders } from "../../shared/agents";
 import { reasoningEffortSchema } from "../../shared/settings";
 import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
-import { reviewTargetSchema } from "../../shared/deep-review";
+import {
+  REVIEW_SETUP_NAME_MAX,
+  reviewTargetSchema,
+} from "../../shared/deep-review";
 import {
   ASK_ANSWER_MAX_CHARS,
   RENDER_GUIDE,
@@ -288,7 +291,7 @@ export const relayToolSchemas = {
         .string()
         .trim()
         .min(1)
-        .max(80)
+        .max(REVIEW_SETUP_NAME_MAX)
         .optional()
         .describe(
           "A saved review setup's name, as list_review_setups gives it. Left out: the one the user ran last.",

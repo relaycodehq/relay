@@ -1,4 +1,7 @@
-import type { DeepReviewState } from "../../../shared/deep-review";
+import {
+  messageRounds,
+  type DeepReviewState,
+} from "../../../shared/deep-review";
 import type { ChatMessage } from "../../../shared/projects";
 
 /**
@@ -11,15 +14,18 @@ export function reviewRounds(
   reviews: DeepReviewState[] | undefined,
 ) {
   const byRequest = new Map(reviews?.map((r) => [r.request, r]));
-  const roundOf = new Map<string, DeepReviewState>();
+  const roundOf = messageRounds(messages, reviews);
   const leadOf = new Map<DeepReviewState, ChatMessage>();
-  let current: DeepReviewState | undefined;
   for (const m of messages) {
-    if (m.parentId || m.side) continue;
-    current = byRequest.get(m.id) ?? current;
-    if (!current) continue;
-    roundOf.set(m.id, current);
-    if (m.role === "assistant" && !leadOf.has(current)) leadOf.set(current, m);
+    const round = roundOf.get(m.id);
+    if (!round || leadOf.has(round)) continue;
+    if (
+      round.leadAnswer
+        ? m.id === round.leadAnswer
+        : // Saved before rounds named it; a round whose lead hasn't started has none.
+          m.role === "assistant" && savedBeforeLeadAnswer(round)
+    )
+      leadOf.set(round, m);
   }
   return {
     /** The round whose request this message is. */
@@ -28,3 +34,7 @@ export function reviewRounds(
     leadOf: (round: DeepReviewState) => leadOf.get(round),
   };
 }
+
+/** A round whose lead ran before rounds named its answer. */
+const savedBeforeLeadAnswer = (round: DeepReviewState) =>
+  round.status === "leading" || round.status === "done" || !!round.leadStopped;

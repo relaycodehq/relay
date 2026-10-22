@@ -243,6 +243,55 @@ it("moves a pull request's worktree to its new head in the next round, or reads 
   expect(git(first.path, "status", "--porcelain")).toBe("?? fix.ts");
 });
 
+it("reviews another branch beside a review's worktree that holds edits or a running answer, and puts one it moved back", async () => {
+  const first = (await openReviewCheckout(repo, scope(), worktrees, "c21"))!;
+  await writeFile(join(first.path, "panel.ts"), "export const fixed = 1;\n");
+  const branch = (name: string) => {
+    git(repo, "branch", name, "main");
+    return scope({
+      target: { kind: "branch", head: name, base: "main" },
+      label: `${name} → main`,
+      head: git(repo, "rev-parse", "main"),
+    });
+  };
+  // Switched, Git would carry the panel's fix along to queue.
+  const queue = branch("queue");
+  const next = (await openReviewCheckout(repo, queue, worktrees, "c21"))!;
+  expect(next).toEqual({
+    path: `${first.path}-2`,
+    made: true,
+    branch: "queue",
+  });
+  expect(git(first.path, "branch", "--show-current")).toBe("panel");
+  expect(git(first.path, "status", "--porcelain")).toBe("M panel.ts");
+  expect(git(next.path, "status", "--porcelain")).toBe("");
+  // Queue is in a worktree the review made, so it stays the review's.
+  expect(await openReviewCheckout(repo, queue, worktrees, "c21")).toEqual(next);
+
+  git(first.path, "checkout", "panel.ts");
+  const rail = branch("rail");
+  expect(
+    await openReviewCheckout(repo, rail, worktrees, "c21", undefined, {
+      inUse: true,
+    }),
+  ).toEqual({ path: `${first.path}-3`, made: true, branch: "rail" });
+  git(repo, "worktree", "remove", `${first.path}-3`);
+  let back: (() => Promise<unknown>) | undefined;
+  const moved = await openReviewCheckout(
+    repo,
+    rail,
+    worktrees,
+    "c21",
+    undefined,
+    {
+      moved: (b) => (back = b),
+    },
+  );
+  expect(moved).toEqual({ path: first.path, made: true, branch: "rail" });
+  await back!();
+  expect(git(first.path, "branch", "--show-current")).toBe("panel");
+});
+
 it("puts a pull request's fixes on its head branch: the local one holding its head, or a new one", async () => {
   git(repo, "update-ref", "refs/relay/pulls/5/head", head);
   const pr = scope({

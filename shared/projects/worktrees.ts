@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { branchNameProblem } from "../branch-names";
 import type { AgentProvider } from "../agents";
-import type { ReviewCheckout } from "../deep-review";
+import { workingReview, type ReviewCheckout } from "../deep-review";
 import type { TurnFileChange } from "./messages";
 
 /**
@@ -230,8 +230,7 @@ export const reviewFolder = (
   chat: ThreadWorkspace | undefined,
 ): ReviewFolder | undefined => {
   if (chat?.reviewFolder) return chat.reviewFolder;
-  const checkout = chat?.reviews?.filter((r) => r.scope.checkout).at(-1)
-    ?.scope.checkout;
+  const checkout = chat && workingReview(chat)?.scope.checkout;
   return (
     checkout && {
       path: checkout.path,
