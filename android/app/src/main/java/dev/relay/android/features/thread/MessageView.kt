@@ -33,11 +33,14 @@ import androidx.compose.runtime.setValue
 import dev.relay.android.features.images.AnswerImage
 import dev.relay.android.features.images.ImageSource
 import dev.relay.android.features.images.LightboxImage
+import dev.relay.android.features.images.MessageImageList
 import dev.relay.android.features.images.MessageImages
 import dev.relay.android.features.images.imageFailed
 import dev.relay.android.features.images.localImagePath
 import dev.relay.android.features.images.messageImages
 import dev.relay.android.features.markdown.FileLinkTarget
+import dev.relay.android.features.markdown.MarkdownBlock
+import dev.relay.android.features.markdown.MarkdownBlockView
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.markdown.OpenLink
 import dev.relay.android.features.markdown.ShowImage
@@ -89,6 +92,20 @@ internal class MessageViewing(val images: List<LightboxImage>, val index: Int)
 
 internal class MessageViewState {
     var traceOpen by mutableStateOf(false)
+    private var imageMessage: ChatMessage? = null
+    private var imageChat: String? = null
+    private var imageRoot: String? = null
+    private var imageList: MessageImageList? = null
+
+    fun images(chatId: String, message: ChatMessage, root: String?): MessageImageList {
+        if (imageMessage != message || imageChat != chatId || imageRoot != root || imageList == null) {
+            imageList = messageImages(chatId, message, root)
+            imageMessage = message
+            imageChat = chatId
+            imageRoot = root
+        }
+        return checkNotNull(imageList)
+    }
 }
 
 /** A message laid out like the desktop's (src/features/thread/ProjectChat.tsx). */
@@ -105,6 +122,7 @@ internal fun MessageView(
     state: MessageViewState,
     section: MessageSection,
     onView: (MessageViewing) -> Unit,
+    block: MarkdownBlock? = null,
 ) {
     val remote = LocalThreadRemote.current
     val changes = m.changes
@@ -120,8 +138,7 @@ internal fun MessageView(
         }
         links
     }
-    val images = remember(chatId, m, root) { messageImages(chatId, m, root) }
-    val traceOpen = state.traceOpen
+    val images = state.images(chatId, m, root)
     val computer = remote?.active?.collectAsState()?.value
     fun view(among: List<LightboxImage>, source: ImageSource) {
         // The list is fixed while it's open; ones that failed to load are left out.
@@ -158,11 +175,11 @@ internal fun MessageView(
             // An answer's held text selects, so its menu is the ••• under it; yours opens on a hold.
             .then(on.onActions?.takeIf { user }?.let { act -> Modifier.pointerInput(m.id) { detectTapGestures(onLongPress = { act(m) }) } } ?: Modifier)
             .padding(start = 16.dp, end = 16.dp,
-                top = if (section == MessageSection.Body) 8.dp else 12.dp,
-                bottom = if (section == MessageSection.Header) 0.dp else 12.dp),
+                top = when (section) { MessageSection.Body -> 10.dp; MessageSection.Footer -> 8.dp; else -> 12.dp },
+                bottom = if (section == MessageSection.Whole || section == MessageSection.Footer) 12.dp else 0.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (section != MessageSection.Body) {
+        if (section == MessageSection.Whole || section == MessageSection.Header) {
             // Another thread's agent wrote it: its name opens that thread, while the phone knows it.
             val sender = m.fromThread?.takeIf { user && on.onOpenThread != null }?.let { id ->
                 remote?.overview?.collectAsState()?.value?.chats?.find { it.id == id }
@@ -196,7 +213,7 @@ internal fun MessageView(
         if (section != MessageSection.Header) {
             // Your images sit above what you wrote, as on the desktop; the agent's come after its answer.
             val strip = @Composable { at: Modifier ->
-                if (remote != null) MessageImages(remote, if (traceOpen) images.pasted else images.strip, openImage, at)
+                if (remote != null) MessageImages(remote, if (state.traceOpen) images.pasted else images.strip, openImage, at)
             }
             if (user) strip(Modifier.align(Alignment.End))
             if (user) {
@@ -209,7 +226,9 @@ internal fun MessageView(
                     Modifier.align(Alignment.End),
                     style = RelayTheme.type.xs, color = c.faint,
                 )
-            } else if (m.body.isNotBlank()) {
+            } else if (section == MessageSection.Body && block != null) {
+                MarkdownBlockView(block, openPath = openPath, image = showImage, selectable = m.status != "streaming")
+            } else if (section == MessageSection.Whole && m.body.isNotBlank()) {
                 Markdown(
                     m.body, folder = root, openPath = openPath,
                     image = showImage,
@@ -218,35 +237,37 @@ internal fun MessageView(
                     native = true,
                 )
             }
-            if (!user && m.status != "streaming") m.preview?.let { TurnPreviewCard(chatId, m.id, it) }
-            if (!user) strip(Modifier)
-            if (!user) AsyncQuestions(chatId, m)
-            if (!user) WatchNotes(chatId, m.id, m.notes, agentName(m.provider), openPath, on.onSteer)
-            if (!changes.isNullOrEmpty() && m.status != "streaming") ChangedFiles(
-                changes,
-                onOpen = { on.onOpenFile(it, m.id) },
-                onOpenAll = on.onOpenTurn?.let { open -> { open(m) } },
-                onRewind = on.onRewind?.let { rewind -> { paths, mode, force -> rewind(m, paths, mode, force) } },
-                failures = failures,
-            )
-            if (m.status == "cancelled") Text(stoppedNote(m), color = c.mutedForeground)
-            // A lost login's error only says to sign in again, which the note says better from here.
-            if (m.signIn != null) SignInNote(m.signIn)
-            else if (m.error != null && m.status != "cancelled") AgentErrorNote(m.error)
-            if (!user && m.status != "streaming") MessageActions(
-                m,
-                onReply = on.onReply?.let { reply -> { reply(m) } },
-                onFork = on.onFork?.takeIf { m.status == "complete" && m.parentId == null && m.side != true }?.let { fork -> { fork(m) } },
-                onMore = on.onActions?.let { more -> { more(m) } },
-            )
-            val openReplies = on.onReplies
-            if (replies > 0 && openReplies != null) Row(
-                Modifier.pressable(onClick = { openReplies(m) }, scale = false),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(TablerIcons.Outline.CornerUpLeft, null, size = 13.dp, tint = c.accent)
-                Text("$replies ${if (replies == 1) "reply" else "replies"}", color = c.accent)
+            if (section != MessageSection.Body) {
+                if (!user && m.status != "streaming") m.preview?.let { TurnPreviewCard(chatId, m.id, it) }
+                if (!user) strip(Modifier)
+                if (!user) AsyncQuestions(chatId, m)
+                if (!user) WatchNotes(chatId, m.id, m.notes, agentName(m.provider), openPath, on.onSteer)
+                if (!changes.isNullOrEmpty() && m.status != "streaming") ChangedFiles(
+                    changes,
+                    onOpen = { on.onOpenFile(it, m.id) },
+                    onOpenAll = on.onOpenTurn?.let { open -> { open(m) } },
+                    onRewind = on.onRewind?.let { rewind -> { paths, mode, force -> rewind(m, paths, mode, force) } },
+                    failures = failures,
+                )
+                if (m.status == "cancelled") Text(stoppedNote(m), color = c.mutedForeground)
+                // A lost login's error only says to sign in again, which the note says better from here.
+                if (m.signIn != null) SignInNote(m.signIn)
+                else if (m.error != null && m.status != "cancelled") AgentErrorNote(m.error)
+                if (!user && m.status != "streaming") MessageActions(
+                    m,
+                    onReply = on.onReply?.let { reply -> { reply(m) } },
+                    onFork = on.onFork?.takeIf { m.status == "complete" && m.parentId == null && m.side != true }?.let { fork -> { fork(m) } },
+                    onMore = on.onActions?.let { more -> { more(m) } },
+                )
+                val openReplies = on.onReplies
+                if (replies > 0 && openReplies != null) Row(
+                    Modifier.pressable(onClick = { openReplies(m) }, scale = false),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(TablerIcons.Outline.CornerUpLeft, null, size = 13.dp, tint = c.accent)
+                    Text("$replies ${if (replies == 1) "reply" else "replies"}", color = c.accent)
+                }
             }
         }
     }

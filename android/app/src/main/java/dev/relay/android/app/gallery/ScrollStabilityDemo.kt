@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,7 +25,6 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.diagnostics.LocalScrollTrace
@@ -36,7 +34,9 @@ import dev.relay.android.features.diagnostics.scrollTouches
 import dev.relay.android.features.images.AnswerImageFrame
 import dev.relay.android.features.images.LoadedImage
 import dev.relay.android.features.markdown.Markdown
-import dev.relay.android.features.thread.ThreadDock
+import dev.relay.android.features.thread.scroll.ThreadViewport
+import dev.relay.android.features.thread.scroll.ContentSignature
+import dev.relay.android.features.thread.scroll.stableGeometry
 import dev.relay.android.features.thread.AgentRun
 import dev.relay.android.features.thread.LocalReadingBack
 import dev.relay.android.features.thread.rememberThreadScroll
@@ -54,7 +54,7 @@ import kotlinx.coroutines.launch
 internal fun ScrollStabilityDemo() {
     val context = LocalContext.current
     val trace = remember { ScrollDiagnostics.of(context).trace("scroll-regression-sample", null, null) }
-    val scroll = rememberThreadScroll(22, trace)
+    val scroll = rememberThreadScroll(trace)
     val scope = rememberCoroutineScope()
     var image by remember { mutableIntStateOf(0) }
     var growth by remember { mutableIntStateOf(0) }
@@ -87,12 +87,18 @@ internal fun ScrollStabilityDemo() {
                 Button("Finish tools", { running = false }, size = ButtonSize.Xs)
             }
             Text("Sample data · pinned=${scroll.pinned} · image=$image", Modifier.padding(horizontal = 12.dp), style = RelayTheme.type.xs)
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().nestedScroll(scroll.readerScroll).scrollTouches(trace, scroll::touch).scrollGeometry(trace, "sample_list"),
-                state = scroll.list,
-            ) {
+            ThreadViewport(scroll, (0..20).map { "sample-$it" } + "end",
+                ContentSignature(22, "end", growth.toLong(), running.hashCode()),
+                Modifier.weight(1f).fillMaxWidth().scrollGeometry(trace, "sample_list"), dock = {
+                if (status) Box(Modifier.fillMaxWidth().height(48.dp).background(RelayTheme.colors.muted)) {
+                    Text("Sample agent status", Modifier.padding(12.dp))
+                }
+                Box(Modifier.fillMaxWidth().height(if (draft) 80.dp else 32.dp).background(RelayTheme.colors.card)) {
+                    Text("Sample composer", Modifier.padding(8.dp))
+                }
+            }) {
                 items((0..20).toList(), key = { "sample-$it" }) { index ->
-                    Column(Modifier.fillMaxWidth().padding(12.dp).onSizeChanged {
+                    Column(Modifier.fillMaxWidth().then(if (index == 16) Modifier.stableGeometry(scroll.reading || scroll.touching) else Modifier).padding(12.dp).onSizeChanged {
                         trace.event("sample_row_size", "key" to "sample-$index", "heightPx" to it.height)
                     }) {
                         if (index == 16) AgentRun("scroll-regression-sample", message, null)
@@ -106,14 +112,7 @@ internal fun ScrollStabilityDemo() {
                 }
                 item("end") { Box(Modifier.height(1.dp)) }
             }
-            ThreadDock(scroll.pinned, Modifier.fillMaxWidth().scrollGeometry(trace, "sample_dock")) {
-                if (status) Box(Modifier.fillMaxWidth().height(48.dp).background(RelayTheme.colors.muted)) {
-                    Text("Sample agent status", Modifier.padding(12.dp))
-                }
-                Box(Modifier.fillMaxWidth().height(if (draft) 80.dp else 32.dp).background(RelayTheme.colors.card)) {
-                    Text("Sample composer", Modifier.padding(8.dp))
-                }
-            }
+
         }
     }
 }

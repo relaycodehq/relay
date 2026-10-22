@@ -6,25 +6,29 @@ package dev.relay.android.features.markdown
  * text is added, so they are kept (the same instances, which Compose skips)
  * and only the text from there on is parsed again.
  */
-internal class MarkdownCache {
+class MarkdownCache {
     private var text = ""
     private var placed: List<Placed> = emptyList()
-    private var blocks: List<MdBlock> = emptyList()
+    private var blocks: List<MarkdownBlock> = emptyList()
 
-    fun blocks(markdown: String): List<MdBlock> {
+    fun blocks(markdown: String): List<MdBlock> = positioned(markdown).map { it.block }
+
+    fun positioned(markdown: String): List<MarkdownBlock> {
         val next = normalizeMath(markdown)
         if (next == text && placed.isNotEmpty()) return blocks
         val (keep, offset, line) = reusable(next)
         placed = placed.subList(0, keep) + parseBlocks(next.substring(offset), line)
         // Kept blocks stay the same instances, so the list's items compare equal and skip.
-        blocks = placed.map { it.block }
+        blocks = placed.map { MarkdownBlock(it.line, it.block) }
         text = next
         return blocks
     }
 
     /** How many blocks to keep, and the offset and line the rest starts at. */
     private fun reusable(next: String): Triple<Int, Int, Int> {
-        if (placed.size < 2) return Triple(0, 0, 0)
+        // References have document-wide scope: a definition arriving at the end
+        // can turn an earlier plain label into a link. Keep its key, reparse its content.
+        if (placed.size < 2 || referenceDefinition.containsMatchIn(next) || referenceDefinition.containsMatchIn(text)) return Triple(0, 0, 0)
         val starts = lineStarts(text)
         for (k in placed.size - 1 downTo 1) {
             val line = placed[k].line
@@ -37,6 +41,8 @@ internal class MarkdownCache {
         return Triple(0, 0, 0)
     }
 
+    private val referenceDefinition = Regex("""(?m)^ {0,3}\[[^\]\n]+\]:""")
+
     private fun lineStarts(text: String): IntArray {
         val starts = ArrayList<Int>()
         starts += 0
@@ -44,3 +50,7 @@ internal class MarkdownCache {
         return starts.toIntArray()
     }
 }
+
+/** Source positions survive appends and block-kind changes, unlike content hashes. */
+@androidx.compose.runtime.Immutable
+data class MarkdownBlock(val sourceLine: Int, val block: MdBlock)

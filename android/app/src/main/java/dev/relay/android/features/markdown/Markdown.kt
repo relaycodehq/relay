@@ -113,6 +113,24 @@ fun Markdown(
     if (selectable && !native) SelectionContainer { CompositionLocalProvider(LocalInSelection provides true, content) } else content()
 }
 
+/** A single lazy-list row, using the same link, image and native selection behavior as Markdown. */
+@Composable
+fun MarkdownBlockView(
+    block: MarkdownBlock,
+    modifier: Modifier = Modifier,
+    openPath: OpenLink? = null,
+    image: ShowImage? = null,
+    selectable: Boolean = false,
+) {
+    val uri = LocalUriHandler.current
+    val localhost = LocalOpensLocalhost.current
+    val context = remember(openPath, image, selectable, uri, localhost) {
+        MdContext(false, openPath, { href -> runCatching { uri.openUri(href) } }, image,
+            localhost, native = true, selectable = selectable)
+    }
+    Column(modifier) { Block(block.block, context) }
+}
+
 /** Inside a selectable answer: a code block mustn't open a selection of its own within it. */
 internal val LocalInSelection = staticCompositionLocalOf { false }
 

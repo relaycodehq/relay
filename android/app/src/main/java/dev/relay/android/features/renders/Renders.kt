@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
@@ -53,7 +54,8 @@ import dev.relay.android.features.diagnostics.LocalScrollTrace
 // back to a thread, or the list unmounting a row, doesn't fetch it again.
 private val pages = ImageCache()
 // The height each page last settled at, so a row mounted again opens at it.
-private val settled = ConcurrentHashMap<String, Int>()
+private data class PageSizeKey(val computer: String?, val chat: String, val render: String, val page: Int, val width: Int, val fontScale: Float, val theme: RenderTheme)
+private val settled = SettledSizes<PageSizeKey>()
 // What each render last composed, so its next relay.compose() replaces it.
 private val composed = ConcurrentHashMap<String, String>()
 
@@ -193,11 +195,12 @@ private fun RenderPage(remote: Remote, chatId: String, render: HtmlRender, index
         val c = RelayTheme.colors
         val loaded = rememberPage(remote, chatId, render.id, index)
         val width = maxWidth.value.toInt()
-        val settledKey = "${render.id}:$index:$width"
+        val theme = remember(c) { renderTheme(c) }
+        val computer by remote.active.collectAsState()
+        val settledKey = PageSizeKey(computer, chatId, render.id, index, width, LocalDensity.current.fontScale, theme)
         val estimate = settled[settledKey]
             ?: renderHeightAt(render.pages.getOrNull(index)?.heights, width.toDouble())
             ?: clampRenderHeight(RENDER_MIN_HEIGHT * 2.0)
-        val theme = remember(c) { renderTheme(c) }
         val page = remember(loaded.html, theme) { loaded.html?.let { phoneRenderDocument(it, theme) } }
         val note = @Composable {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

@@ -26,9 +26,9 @@ The export's README explains the schema. Useful events:
   message status/version/content lengths, rendered-card IDs, and last measured
   dimensions. `earlier` counts history not fetched from the computer.
 - `row_size`: measured message section, rendered card, earlier-history row and
-  end-row height changes. Assistant messages with cards have separate stable
-  header, card and answer-body keys, so a card settling above the reader does
-  not move the answer's anchor. `message_metadata.rowKeys` maps these parts back
+  end-row height changes. Assistant messages always have separate stable
+  header, card, source-line keyed Markdown block and footer keys, so a card
+  settling above the reader does not move the answer paragraph's anchor. `message_metadata.rowKeys` maps these parts back
   to their message; its total measured height is known only once every part has
   been measured.
   Offscreen lazy rows that have never been composed have unknown heights. The
@@ -37,8 +37,9 @@ The export's README explains the schema. Useful events:
   visible row keys/positions/sizes, scrollability, pinning, common-anchor shift,
   and the most recent app scroll request. At most ten snapshots per second,
   emitted only on change. The final settled position is included.
-- `scroll_request`, `scroll_phase`, `pin`: composition-follow, layout-follow,
-  sending, note navigation, gesture/fling state and bottom-pinning decisions.
+- `scroll_request`, `scroll_phase`, `pin`: content changes, viewport changes, asynchronous layout changes,
+  sending, keyed restoration, note navigation and bottom-pinning decisions.
+  These requests come from one scroll policy; diagnostics never decide intent.
 - `geometry`, `configuration`, `ime`, `composer_focus`, `touch`: window/list/
   composer dimensions, density/font scale, keyboard inset, focus, and observed
   pointer activity. Touch recording never consumes input.
@@ -72,8 +73,8 @@ does not send messages or change a real thread. Its events use thread ID
 - At the bottom, use **Up 6 px**, then **Stream**. Pinning must stay false and
   the first visible row's offset must stay unchanged as text grows below it.
 - While six pixels from the end, use **Toggle status** and **Toggle draft**.
-  The dock retains its measured space, so the larger viewport cannot clamp the
-  reader back to the bottom. **Bottom** releases the reserved space.
+  The viewport retains only the space needed to prevent clamping the reader
+  back to the bottom; the dock renders at its real size. **Bottom** releases the reserved space.
 - Scroll to the sample image and text below it. **Load image** and **Fail image**
   must keep the image row's height and the visible text's offset unchanged.
   Real inline images use the same reserved frame, with `ContentScale.Fit`;
@@ -104,3 +105,11 @@ left pinning off. The release build and 333 JVM tests passed.
 
 This was a scroll sample across 24 conversations; it did not traverse every
 message or fetch every older-history page of the longest conversations.
+
+## Rewrite regression gate
+
+The Fold sweep above describes the preserved baseline, not a physical-device
+validation of the rewrite. See [scroll-testing.md](scroll-testing.md) for the
+emulator regression command and [thread-scroll-design.md](thread-scroll-design.md)
+for ownership, restoration and layout contracts. The real screen, gallery and
+instrumentation fixture share `ThreadViewport`.

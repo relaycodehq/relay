@@ -59,6 +59,7 @@ internal fun ObserveThreadMeasurements(
             if (earlier != null) add("earlier" to null)
             rows.forEach { add(it.key to it.message.id) }
             add("end" to null)
+            add("bottom" to null)
         })
     }
     val currentAll by rememberUpdatedState(all)

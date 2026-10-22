@@ -142,9 +142,6 @@ fun AgentRun(
     var wasLive by remember { mutableStateOf(live) }
     var held by remember { mutableStateOf(false) }
     val step = live && message.body.isEmpty()
-    var reservedStep by remember { mutableStateOf(step) }
-    if (step) reservedStep = true
-    else if (!readingBack) reservedStep = false
     if (wasLive != live) {
         wasLive = live
         if (!live && readingBack) held = true
@@ -208,7 +205,7 @@ fun AgentRun(
                         }
                     }
                     // Keeps its height while a call runs, so the thread doesn't jolt.
-                    if (step || (reservedStep && readingBack)) Step {
+                    if (step) Step {
                         if (turn.thinking) {
                             ThinkingGlyph(message.provider)
                             ThinkingWord(message.id)

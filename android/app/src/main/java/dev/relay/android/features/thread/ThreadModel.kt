@@ -42,6 +42,8 @@ class ThreadModel(
     /** How many of the latest messages to hold; "Load earlier" asks for a page more. */
     val history: StateFlow<Int> = _history.asStateFlow()
     val canLoadEarlier get() = _history.value < Bridge.MAX_REMOTE_HISTORY
+    private val _loadedHistory = MutableStateFlow(0)
+    val loadedHistory: StateFlow<Int> = _loadedHistory.asStateFlow()
     private val _fetched = MutableStateFlow(0L)
     /** The outbox [stamp] taken as the latest fetch went out, for telling which sends it covers. */
     val fetched: StateFlow<Long> = _fetched.asStateFlow()
@@ -80,6 +82,7 @@ class ThreadModel(
             }
             _thread.value = keepNewer(next, _thread.value, asked)
             _fetched.value = started
+            _loadedHistory.value = history
             cache.save(computer, id, next)
             _error.value = null
         } catch (e: CancellationException) {
