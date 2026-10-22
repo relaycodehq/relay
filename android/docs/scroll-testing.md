@@ -58,12 +58,10 @@ ordinary scroll regressions no longer require a phone connected by USB.
 
 ## Regression gate and limits
 
-`.github/workflows/android-scroll.yml` runs the same command for Android pull
-requests and branch pushes, using an API36 x86_64 emulator on Linux.
-It includes the JVM suite and captures instrumentation output in
-`android/app/build/scroll-test-results.txt`. A failed run uploads that output and
-JVM reports. The local command has been exercised on the API36 ARM64 emulator;
-the hosted Linux workflow needs its first CI run to verify runner provisioning.
+Nothing runs it automatically; Relay doesn't use GitHub Actions. Run it before
+landing scroll changes. It includes the JVM suite and captures instrumentation
+output in `android/app/build/scroll-test-results.txt`. It has been exercised on
+the API36 ARM64 emulator.
 
 Additional device cases exercise production message block keys, inserting and
 removing render rows above a paragraph, the persistent earlier-history button
