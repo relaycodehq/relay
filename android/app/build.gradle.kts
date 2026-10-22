@@ -37,6 +37,7 @@ android {
         applicationId = "dev.relay.android"
         minSdk = 33
         targetSdk = 36
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // The release's own version on the mini; versionCode grows as major*1e6+minor*1e3+patch.
         versionCode = System.getenv("RELAY_VERSION_CODE")?.toInt() ?: 1
         versionName = System.getenv("RELAY_VERSION") ?: "0.1.0"
@@ -81,6 +82,11 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.ui.test.manifest)
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
     implementation(libs.material3.adaptive)
     implementation(libs.material3.adaptive.layout)
     implementation(libs.material3.adaptive.navigation3)
