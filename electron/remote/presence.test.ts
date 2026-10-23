@@ -59,7 +59,7 @@ it("goes by input in Relay's own windows where the system can't tell idle", () =
   fire("input");
   expect(presence.present()).toBe(true);
   // Left in front overnight.
-  at.now = 3 * 60_000;
+  at.now = 11 * 60_000;
   expect(presence.present()).toBe(false);
   fire("input");
   at.now += 60_000;

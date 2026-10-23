@@ -1,6 +1,6 @@
 // Whether someone sits at this computer with Relay in reach, so phones keep
 // their news to themselves: a Relay window was in front within the last half
-// hour, and the keyboard or mouse moved within the last two minutes. Walking
+// hour, and the keyboard or mouse moved within the last ten minutes. Walking
 // away, locking the screen or sleeping hands the news back to the phone.
 import { app, BrowserWindow, powerMonitor, webContents } from "electron";
 import type { WebContents } from "electron";
@@ -8,7 +8,7 @@ import type { WebContents } from "electron";
 /** How long after Relay was last in front someone still counts as working in it. */
 export const recentMs = 30 * 60_000;
 /** Seconds without input after which nobody counts as at the computer. */
-export const idleSeconds = 120;
+export const idleSeconds = 10 * 60;
 /** Walking away shows in no event, so it's looked for this often. */
 const checkMs = 15_000;
 
