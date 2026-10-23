@@ -12,17 +12,29 @@ import dev.relay.android.remote.crypto.helloKey
 import dev.relay.android.remote.wire.WireData
 import dev.relay.android.remote.wire.openFrame
 import dev.relay.android.remote.wire.sealFrame
+import dev.relay.android.remote.wire.frameFits
+import dev.relay.android.remote.wire.Codec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
 /** The Kotlin port against what the TypeScript bridge produced (TsVectors). */
 class CrossImplementationTest {
+    @Test fun `large image batches fit but oversized frames are refused before encryption`() {
+        val batch = "A".repeat(11_000_000)
+        assertTrue(frameFits(batch, true))
+        assertTrue(frameFits(batch, false))
+        assertFalse(frameFits("A".repeat(Codec.MAX_FRAME_BYTES - 16), true))
+        assertFalse(frameFits("A".repeat(25 * 1024 * 1024), false))
+        assertFalse(frameFits("é".repeat(Codec.MAX_FRAME_BYTES / 2), true))
+    }
     private val v = Json.parseToJsonElement(TS_VECTORS).jsonObject
     private fun str(key: String) = v[key]!!.jsonPrimitive.content
     private fun fill(start: Int) = ByteArray(32) { (start + it).toByte() }

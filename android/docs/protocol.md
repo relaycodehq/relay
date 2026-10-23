@@ -65,7 +65,7 @@ Everything is in `expo-secure-store` (Android Keystore-backed):
 - URL: `ws://<host>:<port>/`. A bare IPv6 host gets brackets (`shared/remote-client.ts:434`).
 - `binaryType = "arraybuffer"`.
 - Desktop server (`electron/remote/server.ts`):
-  - `perMessageDeflate: false` and `maxPayload: 8 MiB` (`:133-134`).
+  - `perMessageDeflate: false` and `maxPayload: 16 MiB` (`:133-134`).
   - Binds to `0.0.0.0` when local network is allowed, otherwise to the first Tailscale IPv4 (`phone-remote.ts:322-344`). It re-syncs every 10 s.
 
 ### Peer filter (`server.ts:153-155`)
@@ -74,6 +74,7 @@ The desktop accepts:
 - With local network on, also LAN peers: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, `fc`/`fd`/`fe8-b` prefixes, `::1` (`lan.ts:21-28`).
 
 ### Desktop limits
+- Requests are checked before sealing against the 16 MiB wire budget, including the encryption tag and legacy base64 expansion. Oversized calls fail locally without consuming a channel counter or dropping their attachments.
 - 24 connections in total (`server.ts:55`).
 - 4 unauthenticated sockets per address; the oldest idle one is evicted (`makeRoom`, `:72-88`).
 - 10 s to finish the handshake (`:54`).
@@ -358,7 +359,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - `workspaceId` = `<projectUuid>[/<chatUuid>[?worktree=<urlenc>]]` (`shared/workspaces.ts:8-37`).
 - **`ProjectChatSend`** (strict, `shared/projects/send.ts:21-86`):
   - required: `id`, `body` (trimmed, 1–32000), `choice`, `provider`, `runtimeMode`, `interactionMode`;
-  - optional: `delivery:"queue"|"steer"`, `sendAt`, `contextWindow:"200k"`, `account`, `to`, `parentId`, `side:true`, `viewing`, `selection`, `images` (≤3 × `{name ≤120, mimeType png|jpeg|webp, dataUrl ≤1.1M chars of data:image/…;base64,…}`), `fromThread`, `pageAnswer`, `skills` (≤20, only send to bridge ≥ 21), `fixes`.
+  - optional: `delivery:"queue"|"steer"`, `sendAt`, `contextWindow:"200k"`, `account`, `to`, `parentId`, `side:true`, `viewing`, `selection`, `images` (array of `{name ≤120, mimeType png|jpeg|webp, dataUrl ≤1.1M chars of data:image/…;base64,…}`; no fixed count limit), `fromThread`, `pageAnswer`, `skills` (≤20, only send to bridge ≥ 21), `fixes`.
   - The client removes `to` for desktops below bridge 11 (`remote-client.ts:198-201`).
 
 ### Push events (`shared/remote.ts:696-715`)

@@ -5,7 +5,13 @@
 import type { ChatMessage } from "./projects";
 import { clientHandshake, fromBase64Url, type Channel } from "./remote-crypto";
 import { applyChatsPatch, applyMessagePatch } from "./remote-delta";
-import { jsCodec, openFrame, sealFrame, type Codec } from "./remote-wire";
+import {
+  frameFits,
+  jsCodec,
+  openFrame,
+  sealFrame,
+  type Codec,
+} from "./remote-wire";
 import {
   defaultRoutes,
   learnHosts,
@@ -177,13 +183,20 @@ export class RemoteClient {
     if (this.status !== "online" || !this.channel)
       return Promise.reject(new Error(`Not connected to ${this.name}.`));
     const id = this.nextCall++;
+    const frame = { t: "call" as const, id, method, args };
+    if (!frameFits(JSON.stringify(frame), (this.bridge ?? 0) >= compactBridge))
+      return Promise.reject(
+        new Error(
+          "This request is too large to send. Remove some attachments and try again.",
+        ),
+      );
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.calls.delete(id);
         reject(new Unanswered(`${this.name} didn't answer in time.`));
       }, timeoutMs);
       this.calls.set(id, { resolve, reject, timer });
-      this.sendFrame({ t: "call", id, method, args });
+      this.sendFrame(frame);
     });
   }
   /** One of the desktop's own calls on the phone's allowlist, typed as the desktop's Api. */

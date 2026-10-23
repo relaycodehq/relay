@@ -449,7 +449,7 @@ internal fun ComposerCore(
     }
 
     val pickers = rememberImagePickers(
-        onPicked = { picked -> images = (images + picked).take(MAX_IMAGES) },
+        onPicked = { picked -> images = (images + picked) },
         onError = { error = it },
     )
     val stop = running && empty && onStop != null
@@ -501,7 +501,7 @@ internal fun ComposerCore(
                             if (!content.hasMediaType(MediaType.Image)) return@contentReceiver content
                             val uris = mutableListOf<android.net.Uri>()
                             val rest = content.consume { item -> item.uri?.also { uris += it } != null }
-                            pickers.receive(uris.take(MAX_IMAGES - images.size))
+                            pickers.receive(uris)
                             rest
                         }
                         .semantics { contentDescription = "Message" },
@@ -514,7 +514,7 @@ internal fun ComposerCore(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 // Short of room, the model's label is cut short.
                 Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                Tool("Attach a photo", enabled = images.size < MAX_IMAGES, onClick = { sheet = Sheet.Attach }) {
+                Tool("Attach a photo", onClick = { sheet = Sheet.Attach }) {
                     Icon(TablerIcons.Outline.PhotoPlus, null, size = 17.dp, tint = c.mutedForeground)
                 }
                 // Permissions and Plan are a tap further, in the sheet it opens with the model.
@@ -564,7 +564,7 @@ internal fun ComposerCore(
         Sheet.Attach -> MenuSheet(
             "Attach",
             listOf(
-                MenuOption("Photo library") { pickers.library(MAX_IMAGES - images.size) },
+                MenuOption("Photo library") { pickers.library() },
                 MenuOption("Take a photo") { pickers.camera() },
                 MenuOption("Paste image", "The image you copied last") { pickers.paste() },
             ),

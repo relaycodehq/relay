@@ -91,8 +91,6 @@ export function draftIntake({
       const kept = attachedImages(text, existing);
       // A screenshot shown twice in what was copied comes as one file.
       const unique = [...new Set(files.map(({ file }) => file))];
-      if (kept.length + unique.length > 3)
-        throw new Error("Attach up to three screenshots per message.");
       const first = nextImageNumber(text, existing);
       const long =
         at.text !== undefined &&
@@ -102,13 +100,13 @@ export function draftIntake({
       // none, the screenshot just sits in the strip. Without a pill it has no
       // number, so it always goes along.
       const inText = imagePills && !onlyImageTokens(`${text} ${at.text ?? ""}`);
-      const prepared = new Map(
-        await Promise.all(
-          unique.map(
-            async (file) => [file, await prepareScreenshot(file)] as const,
-          ),
-        ),
-      );
+      // Decode one at a time so a large batch doesn't keep every bitmap in memory.
+      const prepared = new Map<
+        File,
+        Awaited<ReturnType<typeof prepareScreenshot>>
+      >();
+      for (const file of unique)
+        prepared.set(file, await prepareScreenshot(file));
       const placed =
         at.text === undefined
           ? {
@@ -138,8 +136,6 @@ export function draftIntake({
         ...kept.filter((image) => now.some((n) => n.id === image.id)),
         ...now.filter((image) => !before.has(image.id) && image.browser),
       ];
-      if (base.length + placed.images.length > 3)
-        throw new Error("Attach up to three screenshots per message.");
       // Screenshots whose pills were deleted make room here, not on undo.
       const next = [...base, ...placed.images];
       await screenshots.save(next);

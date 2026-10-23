@@ -7,6 +7,9 @@
 }
 .composer-images {
   padding: 12px 16px 0;
+  max-height: min(240px, 35vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .composer-image,
 .message-image {

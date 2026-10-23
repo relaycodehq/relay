@@ -72,4 +72,19 @@ struct ComposerTests {
         #expect(json["images"]?.array?.first?["dataUrl"]?.string == "data:image/jpeg;base64,/9g=")
         #expect(try JSON(encoding: ProjectChatSend(body: "x", settings: settings))["images"] == nil)
     }
+
+    @Test func everyPhotoGoesWithTheSameMessage() throws {
+        let photos = (1...10).map { PastedImage(name: "photo-\($0).jpg", mimeType: "image/jpeg", data: Data([0xff, 0xd8])) }
+        let send = ProjectChatSend(body: "Review these", settings: settings, images: photos)
+        #expect(try JSON(encoding: send)["images"]?.array?.count == 10)
+    }
+
+    @Test func imageBatchesUseAByteBudgetInsteadOfACountLimit() {
+        let large = String(repeating: "A", count: 11_000_000)
+        #expect(frameFits(large, compact: true))
+        #expect(frameFits(large, compact: false))
+        #expect(!frameFits(String(repeating: "A", count: Codec.maxFrameBytes - 16), compact: true))
+        #expect(!frameFits(String(repeating: "A", count: 25 * 1024 * 1024), compact: false))
+        #expect(!frameFits(String(repeating: "é", count: Codec.maxFrameBytes / 2), compact: true))
+    }
 }

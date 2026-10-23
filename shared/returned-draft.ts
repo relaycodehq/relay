@@ -47,9 +47,5 @@ export function returnedDraft(
       "Send or shorten the current draft before restoring this message.",
     );
   const restored = [...attachedImages(draft, images), ...back.images];
-  if (restored.length > 3)
-    throw new Error(
-      "Remove draft screenshots before restoring this message; a message can hold three.",
-    );
   return { body, images: restored, codeRefs: code.refs };
 }

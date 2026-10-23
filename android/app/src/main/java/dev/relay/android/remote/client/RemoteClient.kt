@@ -11,6 +11,7 @@ import dev.relay.android.remote.tunnel.TunnelFrame
 import dev.relay.android.remote.tunnel.TunnelStreams
 import dev.relay.android.remote.validHost
 import dev.relay.android.remote.wire.sealFrame
+import dev.relay.android.remote.wire.frameFits
 import dev.relay.android.remote.wire.sealTunnel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -219,12 +220,16 @@ class RemoteClient(
     private fun request(method: String, args: JsonArray, timeoutMs: Long): CompletableDeferred<JsonElement> {
         if (_status.value.state != LinkState.Online || channel == null) throw NotConnected("Not connected to $name.")
         return calls.open(timeoutMs) { id ->
-            sendFrame(buildJsonObject {
+            val frame = buildJsonObject {
                 put("t", "call")
                 put("id", id)
                 put("method", method)
                 put("args", args)
-            })
+            }
+            require(frameFits(frame.toString(), (bridgeVersion ?: 0) >= Bridge.COMPACT)) {
+                "This request is too large to send. Remove some attachments and try again."
+            }
+            sendFrame(frame)
         }
     }
 

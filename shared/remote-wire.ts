@@ -41,6 +41,18 @@ const deflated = 1;
 /** Too small to gain. */
 const deflateFrom = 256;
 
+/** Transport budget, independent of how many attachments a message has. */
+export const maxFrameBytes = 16 * 1024 * 1024;
+
+/** Check before sealing: a rejected send must not advance the channel's counter. */
+export function frameFits(json: string, compact: boolean): boolean {
+  const bytes = utf8ToBytes(json).length;
+  // ChaCha20-Poly1305 adds a 16-byte tag; compact frames also carry a flag.
+  return (
+    (compact ? bytes + 17 : Math.ceil(((bytes + 16) * 4) / 3)) <= maxFrameBytes
+  );
+}
+
 export function sealFrame(
   channel: Channel,
   frame: unknown,

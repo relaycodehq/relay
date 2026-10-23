@@ -82,7 +82,7 @@ public enum RemoteCallError: LocalizedError, Equatable, CustomStringConvertible 
     case notConnected(String)
     /// The call went out but no answer came back: the desktop may have done it all the same.
     case unanswered(String)
-    /// The desktop answered with an error.
+    /// The request was refused before it could run.
     case rejected(String)
 
     public var description: String {

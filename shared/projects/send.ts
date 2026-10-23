@@ -55,7 +55,7 @@ export const projectChatSendSchema = z
     side: z.literal(true).optional(),
     viewing: filePathSchema.optional(),
     selection: lineQuestionSchema.optional(),
-    images: z.array(pastedImageSchema).max(3).optional(),
+    images: z.array(pastedImageSchema).optional(),
     /** Sent by the agent in another thread, through Relay's tools; see electron/started-threads. */
     fromThread: z
       .object({ id: idSchema, name: z.string().trim().min(1).max(300) })

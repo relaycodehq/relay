@@ -67,13 +67,13 @@ describe("a queued message back in the composer", () => {
       returnedDraft("x".repeat(32000), [], message("more"), false),
     ).toThrow(/shorten the current draft/);
     const mine = [1, 2].map((n) => ({ ...shot, id: `${n}`, n }));
-    expect(() =>
-      returnedDraft(
-        "[Image #1] [Image #2]",
-        mine,
-        message("[Image #1] [Image #2]", 2),
-        false,
-      ),
-    ).toThrow(/a message can hold three/);
+    const restored = returnedDraft(
+      "[Image #1] [Image #2]",
+      mine,
+      message("More photos", 10),
+      false,
+    );
+    expect(restored.images).toHaveLength(12);
+    expect(restored.images.slice(0, 2)).toEqual(mine);
   });
 });

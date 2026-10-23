@@ -428,6 +428,61 @@ test("browser feedback stays anchored in the page and sends as structured contex
       .locator(".image-viewer")
       .getByRole("button", { name: "Close", exact: true })
       .click();
+    // Ordinary screenshots don't consume comment slots; both can grow past three.
+    await page
+      .locator('[contenteditable="true"]')
+      .first()
+      .evaluate((editor, source) => {
+        const bytes = Uint8Array.from(atob(source.split(",")[1]), (c) =>
+          c.charCodeAt(0),
+        );
+        const blob = new Blob([bytes], { type: "image/png" });
+        const transfer = new DataTransfer();
+        for (let n = 1; n <= 9; n++)
+          transfer.items.add(
+            new File([blob], `sample-${n}.png`, { type: "image/png" }),
+          );
+        editor.dispatchEvent(
+          new ClipboardEvent("paste", {
+            bubbles: true,
+            cancelable: true,
+            clipboardData: transfer,
+          }),
+        );
+      }, stored.dataUrl);
+    await expect(page.locator(".composer-image")).toHaveCount(9);
+    await page
+      .getByRole("button", { name: "Comment on this page", exact: true })
+      .click();
+    for (let n = 2; n <= 4; n++) {
+      await expect
+        .poll(() => inspector("root?.querySelectorAll('button.pin').length"))
+        .toBe(n - 1);
+      await pointer("#map");
+      await type(`Additional comment ${n}`);
+      await pointer(".save");
+      await expect(page.locator(".browser-annotation-chip")).toHaveCount(n);
+    }
+    await expect
+      .poll(() => inspector("root?.querySelectorAll('button.pin').length"))
+      .toBe(4);
+    await pointer(".status button");
+    const attachments = page.locator(".composer-images");
+    expect(
+      await attachments.evaluate((el) => el.clientHeight),
+    ).toBeLessThanOrEqual(240);
+    expect(
+      await attachments.evaluate((el) => el.scrollHeight > el.clientHeight),
+    ).toBe(true);
+    await expect(
+      page.locator('[contenteditable="true"]').first(),
+    ).toBeInViewport();
+    await attachments.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    await page
+      .locator(".composer-images")
+      .screenshot({ path: join(tmpdir(), "relay-many-browser-comments.png") });
     // Sent cards use the stored screenshot, with the same readable presentation.
     await page.locator('.sb-thread[title="Browser feedback test"]').click();
     const sentCard = page.locator(".project-message .browser-annotation-chip");
