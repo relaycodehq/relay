@@ -52,6 +52,8 @@ interface State {
   newThreadAgent?: import("../../shared/agents").AgentProvider;
   /** Each agent's model a new thread starts on; see shared/new-thread-models. */
   newThreadModels?: import("../../shared/new-thread-models").NewThreadModels;
+  /** The access a new thread starts on: the one last picked for a new thread or sent with in any. */
+  newThreadRuntimeMode?: import("../../shared/agent-modes").RuntimeMode;
   devops?: import("../../shared/devops").DevOpsSettings;
   /** Encrypted with the OS credential store, like `encryptedToken`. */
   devopsPat?: string;

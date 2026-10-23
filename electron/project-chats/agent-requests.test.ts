@@ -4,11 +4,12 @@ import { codexRequest } from "../agents/codex/codex-requests";
 import { savedRuntimeMode } from "../../shared/agent-modes";
 
 it("migrates saved choices without upgrading existing read-only/edit drafts to Full access", () => {
-  expect(savedRuntimeMode(undefined)).toBe("full-access");
+  expect(savedRuntimeMode(undefined)).toBe("auto-accept-edits");
   expect(savedRuntimeMode("ask")).toBe("approval-required");
   expect(savedRuntimeMode("edit")).toBe("auto-accept-edits");
   expect(savedRuntimeMode("auto")).toBe("auto");
   expect(savedRuntimeMode("read-only")).toBe("read-only");
+  expect(savedRuntimeMode("sandboxed")).toBe("auto-accept-edits");
 });
 it("rejects unoffered decisions and releases requests when the provider cancels", async () => {
   const turn = new AbortController(),

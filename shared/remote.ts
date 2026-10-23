@@ -186,7 +186,7 @@ export type RemoteProjectIcon =
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
 export const remoteBridgeVersion = 32;
-/** Sends may ask for the `read-only` runtime mode. */
+/** Sends may ask for the `read-only` runtime mode, and new threads remember theirs. */
 export const readOnlyModeBridge = 32;
 /** A large phone send arrives in acknowledged batches before being submitted once. */
 export const messageBatchesBridge = 31;
@@ -493,6 +493,8 @@ export const phoneDesktopMethods = [
   "saveNewThreadAgent",
   "newThreadModels",
   "saveNewThreadModel",
+  "newThreadRuntimeMode",
+  "saveNewThreadRuntimeMode",
   "projectWorktree",
   "projectCommands",
   "providerUsage",

@@ -70,11 +70,13 @@ export const runtimeModesFor = (provider?: AgentProvider) =>
     description:
       (provider && limitedModes[provider]?.[mode.value]) || mode.description,
   }));
-/** Older saved choices map to their closest mode; anything unknown becomes full access. */
+/** Where a composer with nothing saved starts. */
+export const defaultRuntimeMode: RuntimeMode = "auto-accept-edits";
+/** Older saved choices map to their closest mode; nothing saved, or one this version doesn't know, is the default. */
 export function savedRuntimeMode(value: unknown): RuntimeMode {
   if (value === "ask") return "approval-required";
   if (value === "edit") return "auto-accept-edits";
-  return runtimeModeSchema.safeParse(value).data ?? "full-access";
+  return runtimeModeSchema.safeParse(value).data ?? defaultRuntimeMode;
 }
 const decisionSchema = z.enum([
   "accept",

@@ -1,4 +1,5 @@
 import {
+  runtimeModeSchema,
   savedRuntimeMode,
   type InteractionMode,
   type RuntimeMode,
@@ -67,6 +68,12 @@ export const cachedNewThreadModels = (): NewThreadModels | undefined =>
   newThreadModelsSchema.safeParse(readJson(newThreadModelsKey)).data;
 export const cacheNewThreadModels = (models: NewThreadModels) =>
   localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
+/** The same for the access a new thread starts on. */
+const newThreadModeKey = "composer-mode:new-thread";
+export const cachedNewThreadRuntimeMode = (): RuntimeMode | undefined =>
+  runtimeModeSchema.safeParse(readJson(newThreadModeKey)).data;
+export const cacheNewThreadRuntimeMode = (mode: RuntimeMode) =>
+  localStorage.setItem(newThreadModeKey, JSON.stringify(mode));
 /**
  * Where a new thread's composer stands with the agent last picked for one:
  * the one it took up or handed on (unset before the first answer), and the
@@ -125,7 +132,9 @@ export function loadComposerSettings(
             cachedNewThreadModels() ?? {},
           )
         : readComposerModels(saved),
-    runtimeMode: savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
+    runtimeMode:
+      (isNewThread(key) && !frozen && cachedNewThreadRuntimeMode()) ||
+      savedRuntimeMode(saved?.runtimeMode ?? saved?.mode),
     interactionMode: saved?.interactionMode === "plan" ? "plan" : "default",
     // An inherited one's last message says nothing about this conversation.
     ...(own && typeof saved?.sent === "string" ? { sent: saved.sent } : {}),

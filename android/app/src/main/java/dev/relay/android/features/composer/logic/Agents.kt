@@ -107,4 +107,7 @@ val runtimeModes = listOf(
     RuntimeModeInfo("full-access", "Full access", "Runs commands and edits files without asking."),
 )
 
+/** Where a composer with nothing saved starts; shared/agent-modes' defaultRuntimeMode. */
+const val DEFAULT_RUNTIME_MODE = "auto-accept-edits"
+
 fun modeLabel(mode: String) = runtimeModes.find { it.value == mode }?.label ?: mode

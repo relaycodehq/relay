@@ -7,6 +7,7 @@ import type {
   SessionReload,
   ContextUsage,
 } from "../../shared/projects";
+import { defaultRuntimeMode } from "../../shared/agent-modes";
 import { sentAgent } from "../../shared/recipient";
 import { codexQuestionChoice } from "../../shared/settings";
 import { agentRuntime, agentRuntimes, everyAgentRuntime } from "../agents";
@@ -81,7 +82,7 @@ export function sessionInput(
     ...(same && previous.contextWindow
       ? { contextWindow: previous.contextWindow }
       : {}),
-    runtimeMode: previous?.runtimeMode ?? "full-access",
+    runtimeMode: previous?.runtimeMode ?? defaultRuntimeMode,
     interactionMode: previous?.interactionMode ?? "default",
     ...(parentId ? { parentId } : {}),
   };

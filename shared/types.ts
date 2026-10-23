@@ -442,6 +442,11 @@ export interface Api
     provider: AgentProvider,
     model: import("./new-thread-models").NewThreadModel,
   ): Promise<void>;
+  /** The access a new thread starts on, here or on the phone; null before any send or pick. */
+  newThreadRuntimeMode(): Promise<import("./agent-modes").RuntimeMode | null>;
+  saveNewThreadRuntimeMode(
+    mode: import("./agent-modes").RuntimeMode,
+  ): Promise<void>;
   /** `force` skips the cached reading, for an explicit refresh; `account` is the usual sign-in when left out. */
   providerUsage(
     provider: UsageProvider,

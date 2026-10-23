@@ -696,7 +696,7 @@ final class Connection {
     }
 
     /// The next new thread, here or on the computer, opens on what was picked:
-    /// the agent, or that agent's model.
+    /// the agent, or that agent's model, and the access.
     func rememberNewThread(_ settings: ResumeSettings, over before: ResumeSettings) {
         guard let client, settings != before else { return }
         newThread?.settings = settings
@@ -709,11 +709,16 @@ final class Connection {
                 } else if NewThreadModel(settings) != NewThreadModel(before) {
                     try await client.saveNewThreadModel(settings.provider, NewThreadModel(settings))
                 }
+                if settings.runtimeMode != before.runtimeMode, canRememberAccess {
+                    try await client.saveNewThreadRuntimeMode(settings.runtimeMode)
+                }
             } catch {
                 log.error("Couldn't remember the new thread's pick: \(String(describing: error), privacy: .public)")
             }
         }
     }
+
+    private var canRememberAccess: Bool { (overview?.bridge ?? 0) >= Bridge.readOnlyMode }
 
     /// Desktops from before phone dictation don't say, and can't.
     var canDictate: Bool {

@@ -25,7 +25,7 @@ import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
-import { rememberSentModel } from "../agents/new-thread-models";
+import { rememberSent } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { nameReviewSetup } from "../deep-review/review-setup-names";
 import { forgePulls } from "../deep-review/pull-info";
@@ -173,7 +173,7 @@ export function chatHandlers(ctx: ApiContext) {
       [idSchema, projectChatSendSchema],
       async (id, send) => {
         const sent = await projectChats.sendYours(id, send);
-        await rememberSentModel(store, send);
+        await rememberSent(store, send);
         return sent;
       },
     ),

@@ -133,7 +133,7 @@ it("falls back to defaults for anything unreadable", () => {
   expect(loadComposerSettings("a")).toEqual({
     ...defaults,
     models: {},
-    runtimeMode: "full-access",
+    runtimeMode: "auto-accept-edits",
   });
   // What reads is kept: Codex's model, without the level it doesn't know.
   expect(loadComposerSettings("b")).toEqual({

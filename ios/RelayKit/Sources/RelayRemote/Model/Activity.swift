@@ -188,6 +188,9 @@ public let runtimeModes = [
     RuntimeMode(value: "full-access", label: "Full access", description: "Runs commands and edits files without asking."),
 ]
 
+/// Where a composer with nothing saved starts; shared/agent-modes' defaultRuntimeMode.
+public let defaultRuntimeMode = "auto-accept-edits"
+
 public func modeLabel(_ mode: String) -> String { runtimeModes.first { $0.value == mode }?.label ?? mode }
 
 // MARK: Started families

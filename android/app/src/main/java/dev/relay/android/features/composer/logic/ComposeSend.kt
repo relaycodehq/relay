@@ -103,11 +103,17 @@ typealias NewThreadModels = Map<String, NewThreadModel>
 
 private fun known(provider: String?) = provider?.takeIf { isAgentProvider(it) }
 
-/** A new thread's composer as the desktop starts one: Full access, Build, the remembered model. */
-fun newThreadSettings(ai: NewThreadAI?, provider: String? = null, models: NewThreadModels = emptyMap()): ResumeSettings {
+/** A new thread's composer as the desktop starts one: the remembered access (else Auto-accept edits), Build, the remembered model. */
+fun newThreadSettings(
+    ai: NewThreadAI?,
+    provider: String? = null,
+    models: NewThreadModels = emptyMap(),
+    runtimeMode: String? = null,
+): ResumeSettings {
     val p = provider ?: known(ai?.threadProvider) ?: "codex"
     val codex = if (p == "codex" && ai?.questionsProvider == "codex") ai.questions else null
-    return withRememberedModel(ResumeSettings(p, codex ?: byDefault, null, "full-access", "default"), models)
+    val mode = runtimeMode?.takeIf { m -> runtimeModes.any { it.value == m } } ?: DEFAULT_RUNTIME_MODE
+    return withRememberedModel(ResumeSettings(p, codex ?: byDefault, null, mode, "default"), models)
 }
 
 /** `settings` on the model its agent last ran with, when there is one. */
@@ -120,8 +126,10 @@ fun withRememberedModel(settings: ResumeSettings, models: NewThreadModels): Resu
 }
 
 /** desktopNewThread's pick: the agent last picked for a new thread, unless it's switched off since, else the default one. */
-fun newThreadSettingsFrom(last: String?, ai: NewThreadAI?, models: NewThreadModels) =
-    newThreadSettings(ai, known(last)?.takeUnless { it in ai?.agentsOff.orEmpty() } ?: known(ai?.threadProvider), models)
+fun newThreadSettingsFrom(last: String?, ai: NewThreadAI?, models: NewThreadModels, runtimeMode: String? = null) =
+    newThreadSettings(
+        ai, known(last)?.takeUnless { it in ai?.agentsOff.orEmpty() } ?: known(ai?.threadProvider), models, runtimeMode,
+    )
 
 /** The same composer on another agent: its model goes back to Default. */
 fun switchAgent(settings: ResumeSettings, provider: String): ResumeSettings =

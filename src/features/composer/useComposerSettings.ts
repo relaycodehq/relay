@@ -26,6 +26,8 @@ import {
 import { useAISettings } from "../agents/useAISettings";
 import { useNewThreadAgent } from "./useNewThreadAgent";
 import { useNewThreadModels } from "./useNewThreadModels";
+import { useNewThreadRuntimeMode } from "./useNewThreadRuntimeMode";
+import type { RuntimeMode } from "../../../shared/agent-modes";
 
 export type ComposerState = ReturnType<typeof useComposerSettings>;
 
@@ -81,6 +83,11 @@ export function useComposerSettings({
     setModels,
   );
   const [runtimeMode, setRuntimeMode] = useState(saved.runtimeMode);
+  const pickRuntimeMode = useFollowLastRuntimeMode(
+    followsLastAgent,
+    !!saved.frozen,
+    setRuntimeMode,
+  );
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
   const [sent, setSent] = useState(saved.sent);
   const sentHere = useRef(new Set<string>());
@@ -123,7 +130,7 @@ export function useComposerSettings({
     codexChoice:
       models.codex?.choice ?? (ai.data && codexQuestionChoice(ai.data)),
     setModels,
-    setRuntimeMode,
+    setRuntimeMode: pickRuntimeMode,
     setInteractionMode,
     /** Remembers what a new thread starts `to` on, here and on the phone. */
     saveLastModel,
@@ -202,4 +209,31 @@ function useFollowLastModels(
         saveLastModel(p, shared[p]!);
   }, [shared]);
   return saveLastModel;
+}
+
+/**
+ * A new thread's draft takes the access last picked for one or sent with,
+ * here or on the phone, once that loads; picking one here makes it the
+ * access for both. A draft frozen before it opened keeps its own.
+ */
+function useFollowLastRuntimeMode(
+  follows: boolean,
+  frozen: boolean,
+  set: (mode: RuntimeMode) => void,
+) {
+  const [last, save] = useNewThreadRuntimeMode(follows);
+  const taken = useRef(frozen);
+  useEffect(() => {
+    if (!follows || !last || taken.current) return;
+    taken.current = true;
+    set(last);
+  }, [follows, last]);
+  return useCallback(
+    (mode: RuntimeMode) => {
+      taken.current = true;
+      set(mode);
+      if (follows) save(mode);
+    },
+    [follows, save, set],
+  );
 }

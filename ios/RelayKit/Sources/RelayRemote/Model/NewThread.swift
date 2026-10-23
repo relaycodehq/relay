@@ -32,16 +32,20 @@ public struct NewThreadAI: Codable, Sendable, Equatable {
 
 private func known(_ provider: String?) -> String? { isAgentProvider(provider) ? provider : nil }
 
-/// A new thread's composer as the desktop starts one: Full access, Build,
-/// the agent picked last (else the default one) on its remembered model.
-public func newThreadSettings(last: String?, ai: NewThreadAI?, models: NewThreadModels) -> ResumeSettings {
+/// A new thread's composer as the desktop starts one: the access it remembers
+/// (else Auto-accept edits), Build, the agent picked last (else the default
+/// one) on its remembered model.
+public func newThreadSettings(
+    last: String?, ai: NewThreadAI?, models: NewThreadModels, runtimeMode: String? = nil
+) -> ResumeSettings {
     // The agent picked last, unless it's been switched off since.
     let lastOn = known(last).flatMap { ai?.agentsOff?.contains($0) == true ? nil : $0 }
     let provider = lastOn ?? known(ai?.threadProvider) ?? "codex"
     // Codex picked for questions too starts on that model.
     let codex = provider == "codex" && ai?.questionsProvider == "codex" ? ai?.questions : nil
     return ResumeSettings(
-        provider: provider, choice: codex ?? byDefault, contextWindow: nil, runtimeMode: "full-access",
+        provider: provider, choice: codex ?? byDefault, contextWindow: nil,
+        runtimeMode: runtimeModes.first { $0.value == runtimeMode }?.value ?? defaultRuntimeMode,
         interactionMode: "default"
     ).remembering(models)
 }
@@ -88,6 +92,11 @@ public extension RemoteClient {
         _ = try await desktop("saveNewThreadModel", [.string(provider), try JSON(encoding: model)])
     }
 
+    /// From `Bridge.readOnlyMode`.
+    func saveNewThreadRuntimeMode(_ mode: String) async throws {
+        _ = try await desktop("saveNewThreadRuntimeMode", [.string(mode)])
+    }
+
     /// A thread in the project; `workspace` "checkout" | "worktree", left out for plain folders.
     func createProjectChat(projectId: String, workspace: String?) async throws -> CreatedChat {
         try await desktop(
@@ -101,7 +110,12 @@ public extension RemoteClient {
         async let last = try? desktop("newThreadAgent").string
         async let ai = try? desktop("aiSettings").decode(NewThreadAI.self)
         async let models = try? desktop("newThreadModels").decode(NewThreadModels.self)
+        // Older desktops don't know the call; the default stands.
+        async let mode = try? desktop("newThreadRuntimeMode").string
         let remembered = await models ?? [:]
-        return (newThreadSettings(last: await last, ai: await ai, models: remembered), remembered)
+        return (
+            newThreadSettings(last: await last, ai: await ai, models: remembered, runtimeMode: await mode),
+            remembered
+        )
     }
 }

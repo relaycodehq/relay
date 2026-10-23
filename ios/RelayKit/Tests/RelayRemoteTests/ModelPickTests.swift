@@ -7,10 +7,11 @@ import Testing
 
 private func settings(_ provider: String, _ choice: ModelChoice, window: String? = nil) -> ResumeSettings {
     ResumeSettings(
-        provider: provider, choice: choice, contextWindow: window, runtimeMode: "full-access", interactionMode: "default")
+        provider: provider, choice: choice, contextWindow: window, runtimeMode: "auto-accept-edits",
+        interactionMode: "default")
 }
 
-@Test func aNewThreadOpensOnTheRememberedModelFullAccessAndBuild() {
+@Test func aNewThreadOpensOnTheRememberedModelAutoAcceptEditsAndBuild() {
     let models = ["claude": NewThreadModel(choice: ModelChoice(model: "opus", reasoningEffort: "max"), contextWindow: "200k")]
     #expect(
         newThreadSettings(last: "claude", ai: nil, models: models)
@@ -22,6 +23,11 @@ private func settings(_ provider: String, _ choice: ModelChoice, window: String?
     // A remembered Default leaves the agent's own.
     let blank = ["codex": NewThreadModel(choice: byDefault)]
     #expect(newThreadSettings(last: "codex", ai: ai, models: blank).choice.model == "gpt-6-sol")
+}
+
+@Test func aNewThreadOpensOnTheRememberedAccessUnlessItsUnknown() {
+    #expect(newThreadSettings(last: nil, ai: nil, models: [:], runtimeMode: "read-only").runtimeMode == "read-only")
+    #expect(newThreadSettings(last: nil, ai: nil, models: [:], runtimeMode: "yolo").runtimeMode == "auto-accept-edits")
 }
 
 @Test func aNewThreadSkipsTheLastAgentOnceItsSwitchedOff() {

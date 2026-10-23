@@ -81,13 +81,18 @@ class ComposeSendTest {
         assertEquals(SendSettings("claude", byDefault, null, "approval-required", "default"), next)
     }
 
-    @Test fun `a new thread opens on the remembered model, Full access and Build`() {
+    @Test fun `a new thread opens on the remembered model, Auto-accept edits and Build`() {
         val models = mapOf("claude" to NewThreadModel(ModelChoice("opus", false, "max"), "200k"))
         val s = newThreadSettingsFrom("claude", null, models)
-        assertEquals(ResumeSettings("claude", ModelChoice("opus", false, "max"), "200k", "full-access", "default"), s)
+        assertEquals(ResumeSettings("claude", ModelChoice("opus", false, "max"), "200k", "auto-accept-edits", "default"), s)
         val codex = newThreadSettings(NewThreadAI("codex", "codex", ModelChoice("gpt-6-sol")))
         assertEquals("gpt-6-sol", codex.choice.model)
         assertEquals("codex", newThreadSettingsFrom("nobody-knows", null, emptyMap()).provider)
+    }
+
+    @Test fun `a new thread opens on the remembered access, unless it's unknown`() {
+        assertEquals("read-only", newThreadSettingsFrom(null, null, emptyMap(), "read-only").runtimeMode)
+        assertEquals("auto-accept-edits", newThreadSettingsFrom(null, null, emptyMap(), "yolo").runtimeMode)
     }
 
     @Test fun `a new thread skips the last agent once it's switched off`() {

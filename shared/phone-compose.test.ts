@@ -78,7 +78,7 @@ it("addresses the picked agent, as only a leading mention makes one answer", () 
     to: "codex",
     provider: "codex",
     choice: { model: "gpt-5.5", fast: true, reasoningEffort: "low" },
-    runtimeMode: "full-access",
+    runtimeMode: "auto-accept-edits",
     interactionMode: "default",
   });
   // The desktop accepts it as it would its own composer's.
@@ -157,6 +157,25 @@ it("starts new threads on the agent last picked for one, else the default agent"
     (await desktopNewThreadSettings(desktop(new Error("Invalid enum"))))
       .provider,
   ).toBe("cursor");
+});
+
+it("starts new threads on the access last picked or sent with, else Auto-accept edits", async () => {
+  const desktop = (mode: unknown) =>
+    (async (method: string) => {
+      if (method === "newThreadRuntimeMode") {
+        if (mode instanceof Error) throw mode;
+        return mode;
+      }
+      if (method === "newThreadModels") return {};
+      return null;
+    }) as Parameters<typeof desktopNewThreadSettings>[0];
+  const mode = async (answer: unknown) =>
+    (await desktopNewThreadSettings(desktop(answer))).runtimeMode;
+  expect(await mode("read-only")).toBe("read-only");
+  expect(await mode(null)).toBe("auto-accept-edits");
+  expect(await mode("yolo")).toBe("auto-accept-edits");
+  // A desktop from before the method turns it down.
+  expect(await mode(new Error("Unknown method"))).toBe("auto-accept-edits");
 });
 
 it("puts /model on the model's agent, as the desktop does", () => {

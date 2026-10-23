@@ -40,9 +40,11 @@ import dev.relay.android.features.composer.logic.relayCommand
 import dev.relay.android.features.composer.logic.sameModel
 import dev.relay.android.features.composer.saveNewThreadAgent
 import dev.relay.android.features.composer.saveNewThreadModel
+import dev.relay.android.features.composer.saveNewThreadRuntimeMode
 import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.backAction
+import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.model.RemoteProject
 import dev.relay.android.remote.client.LinkState
@@ -280,6 +282,9 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
                         if (s.provider != settings.provider) cl.saveNewThreadAgent(s.provider)
                         else if (!sameModel(NewThreadModel(s.choice, s.contextWindow), NewThreadModel(settings.choice, settings.contextWindow))) {
                             cl.saveNewThreadModel(s.provider, NewThreadModel(s.choice, s.contextWindow))
+                        }
+                        if (s.runtimeMode != settings.runtimeMode && (overview?.bridge ?: 0) >= Bridge.READ_ONLY_MODE) {
+                            cl.saveNewThreadRuntimeMode(s.runtimeMode)
                         }
                     }
                 }

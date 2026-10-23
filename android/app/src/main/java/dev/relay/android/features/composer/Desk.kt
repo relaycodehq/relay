@@ -74,6 +74,14 @@ suspend fun RemoteClient.saveNewThreadModel(provider: String, model: NewThreadMo
     desktop("saveNewThreadModel", listOf(p(provider), RemoteJson.encodeToJsonElement(model)))
 }
 
+/** From [Bridge.READ_ONLY_MODE]; older desktops don't know the call. */
+suspend fun RemoteClient.newThreadRuntimeMode(): String? =
+    desktop("newThreadRuntimeMode").takeUnless { it is JsonNull }?.let { (it as? JsonPrimitive)?.content }
+
+suspend fun RemoteClient.saveNewThreadRuntimeMode(mode: String) {
+    desktop("saveNewThreadRuntimeMode", listOf(p(mode)))
+}
+
 @Serializable data class CreatedChat(val id: String, val title: String = "")
 
 /** A thread in [projectId]; [workspace] "checkout" | "worktree", left out for plain folders. */
@@ -105,7 +113,8 @@ suspend fun RemoteClient.desktopNewThread(): Pair<ResumeSettings, NewThreadModel
     val last = async { runCatching { newThreadAgent() }.getOrNull() }
     val ai = async { runCatching { aiSettings() }.getOrNull() }
     val models = async { runCatching { newThreadModels() }.getOrDefault(emptyMap()) }
-    newThreadSettingsFrom(last.await(), ai.await(), models.await()) to models.await()
+    val mode = async { runCatching { newThreadRuntimeMode() }.getOrNull() }
+    newThreadSettingsFrom(last.await(), ai.await(), models.await(), mode.await()) to models.await()
 }
 
 suspend fun RemoteClient.reloadChatSession(chatId: String) {

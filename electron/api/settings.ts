@@ -19,7 +19,11 @@ import { accountIdSchema } from "../../shared/agent-accounts";
 import { defaultAutoCompact } from "../../shared/context-usage";
 import { renderModes } from "../../shared/html-render";
 import { newThreadModelSchema } from "../../shared/new-thread-models";
-import { saveNewThreadModel } from "../agents/new-thread-models";
+import {
+  saveNewThreadModel,
+  saveNewThreadRuntimeMode,
+} from "../agents/new-thread-models";
+import { runtimeModeSchema } from "../../shared/agent-modes";
 import { agentSignedIn } from "../agents/sign-in";
 import { parseVersion } from "../../shared/agent-updates";
 import { agentRuntime, forgetRegistryRuntime } from "../agents";
@@ -179,6 +183,10 @@ export function settingsHandlers(ctx: ApiContext) {
     saveNewThreadModel: takes(
       [agentProviderSchema, newThreadModelSchema],
       (provider, model) => saveNewThreadModel(store, provider, model),
+    ),
+    newThreadRuntimeMode: () => store.get().newThreadRuntimeMode ?? null,
+    saveNewThreadRuntimeMode: takes([runtimeModeSchema], (mode) =>
+      saveNewThreadRuntimeMode(store, mode),
     ),
     providerUsage: takes(
       [usageProviderSchema, z.boolean().optional(), accountIdSchema.optional()],

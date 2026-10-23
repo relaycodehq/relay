@@ -1,4 +1,9 @@
 import {
+  defaultRuntimeMode,
+  runtimeModeSchema,
+  type RuntimeMode,
+} from "./agent-modes";
+import {
   agentMentionPattern,
   isAgentProvider,
   type AgentProvider,
@@ -25,7 +30,8 @@ const known = (provider: unknown) =>
 
 /**
  * A new thread's composer, as the desktop starts one: the default agent,
- * Full access and Build, on the agent's remembered model or its Default.
+ * its remembered access (else Auto-accept edits) and Build, on the agent's
+ * remembered model or its Default.
  * Codex's Default is the line-question model when Codex answers those
  * (shared/settings' codexQuestionChoice).
  */
@@ -33,6 +39,7 @@ export function newThreadSettings(
   settings: AISettings | undefined,
   provider: AgentProvider = known(settings?.threadProvider) ?? "codex",
   models: NewThreadModels = {},
+  runtimeMode: RuntimeMode = defaultRuntimeMode,
 ): RemoteSettings {
   const codex =
     provider === "codex" && settings?.questionsProvider === "codex"
@@ -42,7 +49,7 @@ export function newThreadSettings(
     {
       provider,
       choice: codex ?? { model: "", fast: false, reasoningEffort: "" },
-      runtimeMode: "full-access",
+      runtimeMode,
       interactionMode: "default",
     },
     models,
@@ -78,16 +85,18 @@ export function withRememberedModel(
  * Older desktops only know the default.
  */
 export async function desktopNewThread(desktop: RemoteClient["desktop"]) {
-  const [last, ai, models] = await Promise.all([
+  const [last, ai, models, mode] = await Promise.all([
     desktop("newThreadAgent").catch(() => null),
     desktop("aiSettings").catch(() => undefined),
     desktop("newThreadModels").catch(() => ({}) as NewThreadModels),
+    desktop("newThreadRuntimeMode").catch(() => null),
   ]);
   return {
     settings: newThreadSettings(
       ai,
       known(last) ?? known(ai?.threadProvider),
       models,
+      runtimeModeSchema.safeParse(mode).data,
     ),
     models,
   };

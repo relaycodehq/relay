@@ -5,6 +5,7 @@ import { defaultAISettings } from "../../../shared/settings";
 import type { SentComposerSettings } from "../../../shared/projects";
 import type { AgentProvider } from "../../../shared/agents";
 import type { NewThreadModels } from "../../../shared/new-thread-models";
+import type { RuntimeMode } from "../../../shared/agent-modes";
 import { onWindow } from "../../../shared/model-fit";
 import {
   cacheNewThreadModels,
@@ -23,14 +24,19 @@ const follow = vi.hoisted(() => ({
   agent: vi.fn(),
   lastModels: undefined as NewThreadModels | undefined,
   lastAgent: undefined as AgentProvider | undefined,
+  lastMode: undefined as RuntimeMode | undefined,
   saveModel: vi.fn(),
   saveAgent: vi.fn(),
+  saveMode: vi.fn(),
 }));
 vi.mock("./useNewThreadModels", () => ({
   useNewThreadModels: (enabled: boolean) => {
     follow.models(enabled);
     return [follow.lastModels, follow.saveModel];
   },
+}));
+vi.mock("./useNewThreadRuntimeMode", () => ({
+  useNewThreadRuntimeMode: () => [follow.lastMode, follow.saveMode],
 }));
 vi.mock("./useNewThreadAgent", () => ({
   useNewThreadAgent: (enabled: boolean) => {
@@ -44,6 +50,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   follow.lastModels = undefined;
   follow.lastAgent = undefined;
+  follow.lastMode = undefined;
 });
 const launch: SentComposerSettings = {
   id: "launch",
@@ -192,6 +199,28 @@ it("freezes a new draft once created: sends and picks elsewhere leave it be", ()
   expect(current().models.claude?.contextWindow).toBeUndefined();
   expect(current().provider).toBe("claude");
   expect(follow.saveAgent).not.toHaveBeenCalled();
+});
+
+it("opens a new draft on the access last picked or sent with, and remembers a pick in it", () => {
+  const draft = () => useComposerSettings({ key: "new:p" });
+  let current = mount(draft);
+  expect(current().runtimeMode).toBe("auto-accept-edits");
+  follow.lastMode = "read-only";
+  current.rerender();
+  expect(current().runtimeMode).toBe("read-only");
+  update(() => current().setRuntimeMode("full-access"));
+  expect(follow.saveMode).toHaveBeenCalledWith("full-access");
+  // Its own pick stands, whatever another device picks after.
+  follow.lastMode = "approval-required";
+  current.rerender();
+  expect(current().runtimeMode).toBe("full-access");
+  // An existing thread's pick is its own.
+  current.unmount();
+  follow.saveMode.mockClear();
+  current = mount(() => useComposerSettings({ key: "thread" }));
+  expect(current().runtimeMode).toBe("auto-accept-edits");
+  update(() => current().setRuntimeMode("read-only"));
+  expect(follow.saveMode).not.toHaveBeenCalled();
 });
 
 it("creates the next draft on the shared picks after one starts a thread", () => {
