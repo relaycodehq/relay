@@ -35,6 +35,7 @@ import {
 import { recipient } from "../../shared/recipient";
 import { composeSend, newThreadSettings } from "../../shared/remote-compose";
 import { defaultAISettings } from "../../shared/settings";
+import { MessageBatches } from "./message-batches";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -1176,7 +1177,7 @@ it("keeps a desktop rejection distinct from an unanswered call and releases its 
   ).toBe(false);
 });
 
-it("sends ten large screenshots together and refuses an oversized batch without breaking the link", async () => {
+it("sends ten screenshots directly and automatically batches forty into one idempotent send", async () => {
   const { remote, dispatched } = await desktop();
   const p = phone({
     link: parsePairingUrl((await remote.pairing()).url)!,
@@ -1202,19 +1203,62 @@ it("sends ten large screenshots together and refuses an oversized batch without 
   expect(delivered.images).toEqual(images);
   expect(dispatched).toHaveLength(1);
 
-  const oversized = {
+  const batched = {
     ...send,
     id: randomUUID(),
     images: Array.from({ length: 40 }, () => image),
   };
-  await expect(
-    p.client.desktop("sendProjectChat", chatId, oversized),
-  ).rejects.toThrow("too large to send");
-  expect(oversized.images).toHaveLength(40);
-  expect(dispatched).toHaveLength(1);
+  await p.client.desktop("sendProjectChat", chatId, batched);
+  expect(projectChatSendSchema.parse(dispatched.at(-1)?.args[1])).toEqual(
+    batched,
+  );
+  expect(dispatched).toHaveLength(2);
+  // Retrying the same send after an ambiguous reply must not submit it twice.
+  await p.client.desktop("sendProjectChat", chatId, batched);
+  expect(dispatched).toHaveLength(2);
+  expect(batched.images).toHaveLength(40);
   expect(p.client.status).toBe("online");
-  // Size rejection happened before encryption, so the next frame's counter still matches.
+  // The upload's many sealed frames leave the channel ready for ordinary calls.
   expect((await p.client.call("overview")).chats[0]?.id).toBe(chatId);
+});
+
+it("never dispatches an interrupted image upload and retries it whole after reconnect", async () => {
+  const { remote, dispatched } = await desktop();
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Interrupted upload",
+  });
+  await p.until("online");
+  const send = composeSend(
+    newThreadSettings(defaultAISettings),
+    "Keep every screenshot: čau 🌍",
+    {
+      id: randomUUID(),
+      images: Array.from({ length: 20 }, (_, n) => ({
+        name: `shot-${n}.jpg`,
+        mimeType: "image/jpeg" as const,
+        dataUrl: `data:image/jpeg;base64,${"A".repeat(1_066_664)}`,
+      })),
+    },
+  );
+  const accept = MessageBatches.prototype.accept;
+  const interruption = vi
+    .spyOn(MessageBatches.prototype, "accept")
+    .mockImplementation(function (this: MessageBatches, frame) {
+      if (frame.n === 1) p.client.close();
+      return accept.call(this, frame);
+    });
+  await expect(
+    p.client.desktop("sendProjectChat", chatId, send),
+  ).rejects.toBeInstanceOf(Unanswered);
+  expect(dispatched).toHaveLength(0);
+  expect(send.images).toHaveLength(20);
+  interruption.mockRestore();
+  const retry = phone(p.credentials()!);
+  await retry.until("online");
+  await retry.client.desktop("sendProjectChat", chatId, send);
+  expect(dispatched).toHaveLength(1);
+  expect(projectChatSendSchema.parse(dispatched[0].args[1])).toEqual(send);
 });
 
 it("says who answers in `to` only to desktops that take it", async () => {

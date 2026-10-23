@@ -36,6 +36,17 @@ struct LiveBridgeTests {
             if case .event(.chats(let chats)) = update { heard = chats }
         }
         #expect(heard?.first?.title.hasPrefix("Fix the flaky test ") == true)
+        // Over the 16 MiB frame budget: the native client must upload batches,
+        // while the desktop still sees one user message with all twenty images.
+        let settings = ResumeSettings(provider: "claude", choice: ModelChoice(model: ""), contextWindow: nil,
+                                      runtimeMode: "full-access", interactionMode: "default")
+        let images = (1...20).map { PastedImage(name: "photo-\($0).jpg", mimeType: "image/jpeg", data: Data(repeating: 0, count: 800_000)) }
+        let send = ProjectChatSend(body: "Review all twenty: čau 🌍", settings: settings, images: images)
+        try await first.sendProjectChat(chatId: chatId, send)
+        let delivered = try await first.chat(chatId).messages.filter { $0.id == send.id }
+        #expect(delivered.count == 1)
+        #expect(delivered.first?.images?.count == 20)
+        #expect(delivered.first?.body == send.body)
         await first.close()
 
         let again = RemoteClient(.saved(try #require(credentials)))

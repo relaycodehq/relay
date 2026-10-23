@@ -3,7 +3,8 @@ package dev.relay.android.remote
 /** `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes. */
 object Bridge {
     /** This app's own bridge, sent with `pair`/`auth`. */
-    const val VERSION = 23
+    const val VERSION = 31
+    const val MESSAGE_BATCHES = 31
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11

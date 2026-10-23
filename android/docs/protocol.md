@@ -74,7 +74,7 @@ The desktop accepts:
 - With local network on, also LAN peers: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, `fc`/`fd`/`fe8-b` prefixes, `::1` (`lan.ts:21-28`).
 
 ### Desktop limits
-- Requests are checked before sealing against the 16 MiB wire budget, including the encryption tag and legacy base64 expansion. Oversized calls fail locally without consuming a channel counter or dropping their attachments.
+- Requests are checked before sealing against the 16 MiB wire budget, including the encryption tag and legacy base64 expansion. From bridge 31, oversized `desktop/sendProjectChat` and `sendDraft` calls upload in acknowledged batches; other oversized calls fail locally without dropping their attachments.
 - 24 connections in total (`server.ts:55`).
 - 4 unauthenticated sockets per address; the oldest idle one is evicted (`makeRoom`, `:72-88`).
 - 10 s to finish the handshake (`:54`).
@@ -185,6 +185,14 @@ toServer = okm[0..32), toClient = okm[32..64)
 - An undecryptable frame:
   - while dialing → "Couldn't verify … Pair again." (`remote-client.ts:521-523`);
   - after sign-in → the phone closes the socket; the desktop terminates on any open failure (`server.ts:240-243`).
+
+### Large phone messages (bridge 31)
+- Photos already resize and JPEG-compress on the phone to fit the 1.1M-character per-image limit. Batching preserves that image quality and the original message id.
+- If a send exceeds one frame, serialize its original `{t:"call", id, method, args}` as UTF-8. Upload consecutive **3 MiB** byte pieces as `{t:"batch", id, batch, n, data, last}`: `batch` is a positive connection-local upload number, `n` starts at zero, `data` is canonical unpadded base64url. Only the last piece can be smaller. Each piece gets a fresh call `id`.
+- Wait for the normal `{t:"result", id, ok:true, value:null}` acknowledgement before sending another piece. The last piece returns the original call's result under its own `id`. Nothing is submitted to the agent before that piece.
+- The authenticated socket owns incomplete uploads: at most two, **128 MiB total** decoded bytes, expiring after **120 s** without a piece. Invalid or out-of-order pieces discard their upload. Disconnect clears them all. `{t:"batchCancel", batch}` clears an abandoned upload without a reply.
+- Only `desktop/sendProjectChat` and `sendDraft` can be assembled; they still run through normal validation and send-id deduplication. On failure, the existing outbox retains the complete send and retries with the same message id. Never resume an upload on a new connection, and don't switch to a better route mid-upload.
+- Both ends advertise bridge 31. Older desktops get ordinary sends that fit; oversized sends ask for a desktop update.
 
 ---
 

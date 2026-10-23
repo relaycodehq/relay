@@ -16,6 +16,7 @@ import {
 import type { TunnelFrame } from "../../shared/remote-tunnel";
 import {
   compactBridge,
+  messageBatchesBridge,
   remoteBridgeVersion,
   remoteMethods,
   tunnelBridge,
@@ -27,6 +28,7 @@ import {
 } from "../../shared/remote";
 import { SignInUnavailable, type RemoteDevices } from "./devices";
 import { LinkSender } from "./link-sender";
+import { MessageBatches } from "./message-batches";
 import { lanPeer } from "./lan";
 import { tailnetPeer } from "./tailscale";
 
@@ -72,6 +74,7 @@ interface Connection {
   tunnel?: TunnelEnd;
   /** The phone said it's in the background (`backgroundBridge`). */
   background?: boolean;
+  batches?: MessageBatches;
 }
 
 /** Unauthenticated sockets get this long to finish the handshake. */
@@ -240,6 +243,7 @@ export class RemoteServer {
       clearTimeout(unauthenticated);
       c.tunnel?.close();
       c.link?.close();
+      c.batches?.close();
       this.connections.delete(c);
       if (c.deviceId) this.options.onPresence?.();
     });
@@ -334,6 +338,10 @@ export class RemoteServer {
       return;
     }
     if (!this.stillPaired(c)) return;
+    if (frame.t === "batchCancel") {
+      c.batches?.cancel(frame.batch);
+      return;
+    }
     if (frame.t === "got") return c.link?.got(Number(frame.s));
     if (frame.t === "background") {
       c.background = frame.on === true;
@@ -342,7 +350,33 @@ export class RemoteServer {
       if (!c.background) this.send(c, { t: "tick", hosts: this.options.hosts?.() });
       return;
     }
-    if (frame.t !== "call" || !Number.isSafeInteger(frame.id)) return;
+    if (
+      (frame.t !== "call" && frame.t !== "batch") ||
+      !Number.isSafeInteger(frame.id)
+    )
+      return;
+    if (frame.t === "batch") {
+      try {
+        if ((c.bridge ?? 0) < messageBatchesBridge)
+          throw new Error("Update Relay on your phone to send this message.");
+        c.batches ??= new MessageBatches();
+        const call = c.batches.accept(frame);
+        if (!call) {
+          this.send(c, { t: "result", id: frame.id, ok: true, value: null });
+          return;
+        }
+        frame = call;
+      } catch (error) {
+        this.send(c, {
+          t: "result",
+          id: frame.id,
+          ok: false,
+          error:
+            error instanceof Error ? error.message : "Invalid message batch.",
+        });
+        return;
+      }
+    }
     const { id, method, args } = frame;
     try {
       if (!(remoteMethods as readonly string[]).includes(method))

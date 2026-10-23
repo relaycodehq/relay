@@ -185,7 +185,9 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 30;
+export const remoteBridgeVersion = 31;
+/** A large phone send arrives in acknowledged batches before being submitted once. */
+export const messageBatchesBridge = 31;
 /** From here computers carry saved paste files along with sends and handoffs. */
 export const pastesBridge = 26;
 /**
@@ -973,6 +975,8 @@ export type DeviceKind = "computer";
  * `remoteBridgeVersion`; clients before `compactBridge` send none.
  */
 export type ClientFrame =
+  | import("./remote-batches").MessageBatchFrame
+  | { t: "batchCancel"; batch: number }
   | {
       t: "pair";
       code: string;

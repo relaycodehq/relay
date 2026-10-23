@@ -3,7 +3,18 @@
  * over makes it. The desktop's tests drive this exact client against the real bridge.
  */
 import type { ChatMessage } from "./projects";
-import { clientHandshake, fromBase64Url, type Channel } from "./remote-crypto";
+import {
+  clientHandshake,
+  fromBase64Url,
+  toBase64Url,
+  type Channel,
+} from "./remote-crypto";
+import { utf8ToBytes } from "@noble/hashes/utils.js";
+import {
+  batchableMessage,
+  maxBatchedMessageBytes,
+  messageBatchBytes,
+} from "./remote-batches";
 import { applyChatsPatch, applyMessagePatch } from "./remote-delta";
 import {
   frameFits,
@@ -36,6 +47,7 @@ import type {
 } from "./remote";
 import {
   compactBridge,
+  messageBatchesBridge,
   recipientBridge,
   remoteBridgeVersion,
   slowPhoneMethods,
@@ -84,6 +96,7 @@ export class RemoteClient {
     { resolve: (v: any) => void; reject: (e: Error) => void; timer: any }
   >();
   private nextCall = 1;
+  private uploads = 0;
   private closed = true;
   private retry = 0;
   private retryTimer?: ReturnType<typeof setTimeout>;
@@ -129,8 +142,9 @@ export class RemoteClient {
       : undefined;
   }
   get routes(): readonly RouteKind[] {
-    return ("link" in this.target ? undefined : this.target.routes) ??
-      defaultRoutes;
+    return (
+      ("link" in this.target ? undefined : this.target.routes) ?? defaultRoutes
+    );
   }
   /** A new order: kept with the credentials, and the link moves if an earlier route answers. */
   setRoutes(routes: RouteKind[]) {
@@ -175,28 +189,89 @@ export class RemoteClient {
         : (this.options.timeoutMs ?? 15000),
     );
   }
-  private request<M extends RemoteMethod>(
+  private async request<M extends RemoteMethod>(
     method: M,
     args: unknown[],
     timeoutMs: number,
   ): Promise<Result<M>> {
     if (this.status !== "online" || !this.channel)
-      return Promise.reject(new Error(`Not connected to ${this.name}.`));
+      throw new Error(`Not connected to ${this.name}.`);
     const id = this.nextCall++;
     const frame = { t: "call" as const, id, method, args };
-    if (!frameFits(JSON.stringify(frame), (this.bridge ?? 0) >= compactBridge))
-      return Promise.reject(
-        new Error(
-          "This request is too large to send. Remove some attachments and try again.",
-        ),
-      );
+    const json = JSON.stringify(frame);
+    if (!frameFits(json, (this.bridge ?? 0) >= compactBridge)) {
+      if (!batchableMessage(method, args))
+        throw new Error("This request is too large to send.");
+      if ((this.bridge ?? 0) < messageBatchesBridge)
+        throw new Error(
+          "Update Relay on your computer to send this many attachments.",
+        );
+      const bytes = utf8ToBytes(json);
+      if (bytes.length > maxBatchedMessageBytes)
+        throw new Error(
+          "This message is too large to send. Remove some attachments and try again.",
+        );
+      const channel = this.channel;
+      let result: unknown;
+      this.uploads++;
+      try {
+        for (
+          let offset = 0, n = 0;
+          offset < bytes.length;
+          offset += messageBatchBytes, n++
+        ) {
+          if (this.channel !== channel || this.status !== "online")
+            throw new Unanswered(
+              "The connection changed while uploading. Send the message again.",
+            );
+          result = await this.exchange(
+            {
+              t: "batch",
+              id: this.nextCall++,
+              batch: id,
+              n,
+              data: toBase64Url(
+                bytes.subarray(offset, offset + messageBatchBytes),
+              ),
+              last: offset + messageBatchBytes >= bytes.length,
+            },
+            timeoutMs,
+          );
+        }
+        return result as Result<M>;
+      } catch (error) {
+        if (this.channel === channel) {
+          try {
+            this.sendFrame({ t: "batchCancel", batch: id });
+          } catch {
+            /* The socket may have closed too. */
+          }
+        }
+        throw error;
+      } finally {
+        this.uploads--;
+      }
+    }
+    return this.exchange(frame, timeoutMs);
+  }
+  private exchange(
+    frame: Extract<ClientFrame, { t: "call" | "batch" }>,
+    timeoutMs: number,
+  ): Promise<any> {
+    const { id } = frame;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.calls.delete(id);
         reject(new Unanswered(`${this.name} didn't answer in time.`));
       }, timeoutMs);
       this.calls.set(id, { resolve, reject, timer });
-      this.sendFrame(frame);
+      try {
+        this.sendFrame(frame);
+      } catch (error) {
+        clearTimeout(timer);
+        this.calls.delete(id);
+        reject(error);
+      }
     });
   }
   /** One of the desktop's own calls on the phone's allowlist, typed as the desktop's Api. */
@@ -413,7 +488,7 @@ export class RemoteClient {
     this.race(hosts, {
       stale: () => this.closed || this.socket !== socket,
       claim: (link) => {
-        if (this.calls.size) return !(busy = true);
+        if (this.calls.size || this.uploads) return !(busy = true);
         const old = this.socket;
         if (old) {
           old.onclose = old.onmessage = old.onerror = old.onopen = null;
