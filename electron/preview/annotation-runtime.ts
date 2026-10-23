@@ -5,7 +5,8 @@ export const annotationRuntime = String.raw`
   const host = document.createElement("div");
   host.id = "relay-element-inspector";
   host.setAttribute("popover", "manual");
-  const shadow = host.attachShadow({ mode: "open" });
+  // Closed, so the page's own scripts can't read or rewrite the comment.
+  const shadow = host.attachShadow({ mode: "closed" });
   const style = document.createElement("style");
   style.textContent = css;
   shadow.append(style);
@@ -46,7 +47,6 @@ export const annotationRuntime = String.raw`
   document.documentElement.append(host);
   host.showPopover();
   let selected = null, hovered = null, editing = null, done = false, frame = 0;
-  const own = (event) => event.composedPath().some((node) => node === editor || node === status || (node instanceof Element && node.matches("button.pin") && shadow.contains(node)));
   const live = new Map();
   const pins = annotations.map((annotation, index) => {
     const pin = button(shadow, "pin", "Edit comment " + (index + 1) + ": " + annotation.comment, String(index + 1));
@@ -58,6 +58,13 @@ export const annotationRuntime = String.raw`
     });
     return { annotation, pin };
   });
+  // A closed root hides its nodes from composedPath(), so ask the root what is under the pointer or focused.
+  const ours = (node) => !!node && (editor.contains(node) || status.contains(node) || pins.some(({ pin }) => pin === node));
+  const own = (event) => {
+    if (event.target !== host) return false;
+    const pointed = "clientX" in event && !(event.type === "click" && event.detail === 0);
+    return pointed ? shadow.elementsFromPoint(event.clientX, event.clientY).some(ours) : ours(shadow.activeElement);
+  };
   function textOf(element) {
     return (element.innerText ?? element.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
   }
@@ -147,11 +154,10 @@ export const annotationRuntime = String.raw`
       const testId = el.getAttribute("data-testid");
       if (testId) part += '[data-testid="' + CSS.escape(testId) + '"]';
       else if (el.id && !generated.test(el.id)) part = "#" + CSS.escape(el.id);
-      else {
-        part += [...el.classList].filter((c) => !generated.test(c)).slice(0, 2).map((c) => "." + CSS.escape(c)).join("");
-        const same = el.parentElement && [...el.parentElement.children].filter((c) => c.matches(part));
-        if (same?.length > 1) part += ":nth-of-type(" + ([...el.parentElement.children].filter((c) => c.localName === el.localName).indexOf(el) + 1) + ")";
-      }
+      else part += [...el.classList].filter((c) => !generated.test(c)).slice(0, 2).map((c) => "." + CSS.escape(c)).join("");
+      // Lists repeat test ids, and pages sometimes ids, as often as classes.
+      const siblings = el.parentElement ? [...el.parentElement.children] : [];
+      if (siblings.filter((c) => c.matches(part)).length > 1) part += ":nth-of-type(" + (siblings.filter((c) => c.localName === el.localName).indexOf(el) + 1) + ")";
       selector = selector ? part + " > " + selector : part;
       if (unique(selector)) break;
     }
@@ -188,9 +194,29 @@ export const annotationRuntime = String.raw`
     if (event.key === "Escape") {
       event.preventDefault(); event.stopImmediatePropagation();
       if (selected) deselect(); else finish(null);
-    } else if (own(event) && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+    } else if (own(event) && shadow.activeElement === input && event.key === "Enter" && !event.shiftKey && !event.isComposing) {
       event.preventDefault(); submit();
     }
+  };
+  // The overlay sits over the page and takes the wheel, so scroll what is under it by hand.
+  const scrolls = (el, axis, delta) => {
+    const style = getComputedStyle(el);
+    const overflow = axis === "y" ? style.overflowY : style.overflowX;
+    if (el !== document.scrollingElement && !/auto|scroll|overlay/.test(overflow)) return false;
+    const at = axis === "y" ? el.scrollTop : el.scrollLeft;
+    const max = axis === "y" ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth;
+    return delta < 0 ? at > 0 : at < max - 1;
+  };
+  const wheel = (event) => {
+    if (!event.isTrusted || own(event)) return;
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1;
+    const dx = event.deltaX * unit, dy = event.deltaY * unit;
+    const under = document.elementsFromPoint(event.clientX, event.clientY).find((node) => node !== host);
+    let scroller = document.scrollingElement;
+    for (let el = under; el; el = el.parentElement)
+      if ((dy && scrolls(el, "y", dy)) || (dx && scrolls(el, "x", dx))) { scroller = el; break; }
+    scroller?.scrollBy(dx, dy);
   };
   input.addEventListener("input", () => {
     save.disabled = !input.value.trim();
@@ -208,6 +234,7 @@ export const annotationRuntime = String.raw`
   const pointerEvents = ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "contextmenu"];
   for (const name of pointerEvents) document.addEventListener(name, click, true);
   document.addEventListener("keydown", key, true);
+  document.addEventListener("wheel", wheel, { capture: true, passive: false });
   window.addEventListener("scroll", schedule, true);
   window.addEventListener("resize", schedule);
   window.visualViewport?.addEventListener("resize", schedule);
@@ -220,6 +247,7 @@ export const annotationRuntime = String.raw`
     document.removeEventListener("pointermove", move, true);
     for (const name of pointerEvents) document.removeEventListener(name, click, true);
     document.removeEventListener("keydown", key, true);
+    document.removeEventListener("wheel", wheel, true);
     window.removeEventListener("scroll", schedule, true);
     window.removeEventListener("resize", schedule);
     window.visualViewport?.removeEventListener("resize", schedule);
@@ -228,7 +256,8 @@ export const annotationRuntime = String.raw`
     delete globalThis.__relayElementPicker;
     resolve(result);
   }
-  globalThis.__relayElementPicker = { id: newId, cancel: () => finish(null) };
+  // Lives in the isolated world, out of the page's reach; tests reach the closed root through it.
+  globalThis.__relayElementPicker = { id: newId, cancel: () => finish(null), shadow };
   render();
 })
 `;

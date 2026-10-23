@@ -37,7 +37,8 @@ test("browser feedback stays anchored in the page and sends as structured contex
       section{display:flex;gap:20px}button{width:260px;height:220px;border:0;border-radius:26px;background:#254742;color:#fff;text-align:left;padding:28px;font:700 30px system-ui}
       button small{display:block;color:#c8c39e;font-size:24px;margin-bottom:80px}#map{background:radial-gradient(circle at 110% 0,#587b68,#254742 80%)}
       .space{height:1400px}
-      </style><h1>Your applications</h1><section><button id=map><small>MS</small>Map tiles</button><button id=gps><small>GL</small>GPS logger</button></section><div class=space></div>
+      #pane{height:90px;overflow:auto;border:1px solid}#pane div{height:600px}
+      </style><div id=pane><div>Scrolls inside</div></div><h1>Your applications</h1><section><button id=map><small>MS</small>Map tiles</button><button id=gps><small>GL</small>GPS logger</button></section><div class=space></div>
       <script>window.clicked=0;document.getElementById('map').onclick=()=>window.clicked++;</script>`);
   }).listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -59,9 +60,24 @@ test("browser feedback stays anchored in the page and sends as structured contex
       },
       { origin, expression },
     );
+  // The inspector's root is closed to the page; only its own isolated world holds it.
+  const inspector = async (expression: string) =>
+    app.evaluate(
+      ({ webContents }, { origin, expression }) => {
+        const wc = webContents
+          .getAllWebContents()
+          .find((wc) => wc.getURL().startsWith(origin))!;
+        return wc.executeJavaScriptInIsolatedWorld(1007, [
+          {
+            code: `(() => { const root = globalThis.__relayElementPicker?.shadow; return ${expression}; })()`,
+          },
+        ]);
+      },
+      { origin, expression },
+    );
   const pointer = async (selector: string, move = false) => {
-    const point = await query(
-      `(() => {const root=document.getElementById('relay-element-inspector')?.shadowRoot;const el=root?.querySelector(${JSON.stringify(selector)}) ?? document.querySelector(${JSON.stringify(selector)});const b=el.getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()`,
+    const point = await inspector(
+      `(() => {const el=root?.querySelector(${JSON.stringify(selector)}) ?? document.querySelector(${JSON.stringify(selector)});const b=el.getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()`,
     );
     await app.evaluate(
       ({ webContents }, { origin, point, move }) => {
@@ -87,6 +103,18 @@ test("browser feedback stays anchored in the page and sends as structured contex
       { origin, point, move },
     );
   };
+  const press = async (keyCode: string, char?: string) =>
+    app.evaluate(
+      ({ webContents }, { origin, keyCode, char }) => {
+        const wc = webContents
+          .getAllWebContents()
+          .find((wc) => wc.getURL().startsWith(origin))!;
+        wc.sendInputEvent({ type: "keyDown", keyCode });
+        if (char) wc.sendInputEvent({ type: "char", keyCode: char });
+        wc.sendInputEvent({ type: "keyUp", keyCode });
+      },
+      { origin, keyCode, char },
+    );
   const type = async (text: string) =>
     app.evaluate(
       ({ webContents }, { origin, text }) =>
@@ -153,11 +181,7 @@ test("browser feedback stays anchored in the page and sends as structured contex
       .toBe(true);
     await pointer("#map", true);
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('.details').textContent",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('.details').textContent"))
       .toContain("button");
     await shot("relay-browser-inspect.png");
     await pointer("#gps");
@@ -169,28 +193,64 @@ test("browser feedback stays anchored in the page and sends as structured contex
       wc.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
     }, origin);
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('.editor').hidden",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('.editor').hidden"))
+      .toBe(true);
+    await expect(page.locator(".browser-annotation-chip")).toHaveCount(0);
+    expect(
+      await query(
+        "document.getElementById('relay-element-inspector').shadowRoot",
+      ),
+    ).toBeNull();
+    // The wheel scrolls a pane under the overlay, not only the page.
+    const pane = await query(
+      "(() => {const b=document.getElementById('pane').getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()",
+    );
+    await app.evaluate(
+      ({ webContents }, { origin, pane }) =>
+        webContents
+          .getAllWebContents()
+          .find((wc) => wc.getURL().startsWith(origin))!
+          .sendInputEvent({
+            type: "mouseWheel",
+            ...pane,
+            deltaX: 0,
+            deltaY: -120,
+          }),
+      { origin, pane },
+    );
+    await expect
+      .poll(() => query("document.getElementById('pane').scrollTop"))
+      .toBeGreaterThan(0);
+    expect(await query("scrollY")).toBe(0);
+    await query("document.getElementById('pane').scrollTop = 0");
+    // Enter on Cancel cancels; only the comment box saves on Enter.
+    await pointer("#gps");
+    await type("Not this one");
+    await inspector(
+      "root.querySelector('[aria-label=\"Cancel comment\"]').focus()",
+    );
+    await press("Enter", "\r");
+    await expect
+      .poll(() => inspector("root.querySelector('.editor').hidden"))
       .toBe(true);
     await expect(page.locator(".browser-annotation-chip")).toHaveCount(0);
 
     await pointer("#map");
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('.editor').hidden",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('.editor').hidden"))
       .toBe(false);
     await type("Make this card easier to read");
+    // A single-page app changing its route keeps the inspector and the words typed.
+    await query("history.pushState(null, '', '#route')");
+    await expect(address).toHaveValue(/#route$/);
+    await query("history.replaceState(null, '', location.pathname)");
+    await expect(address).not.toHaveValue(/#route$/);
+    expect(await inspector("root.querySelector('textarea').value")).toBe(
+      "Make this card easier to read",
+    );
     await shot("relay-browser-comment.png");
     expect(await query("window.clicked")).toBe(0);
-    await query(
-      "document.getElementById('relay-element-inspector').shadowRoot.querySelector('.save').click()",
-    );
+    await inspector("root.querySelector('.save').click()");
     await expect(page.locator(".browser-annotation-chip")).toHaveCount(0);
     await pointer(".save");
     await expect(page.locator(".browser-annotation-chip")).toContainText(
@@ -210,21 +270,13 @@ test("browser feedback stays anchored in the page and sends as structured contex
       )
       .toBe(true);
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector')?.shadowRoot.querySelectorAll('button.pin').length",
-        ),
-      )
+      .poll(() => inspector("root?.querySelectorAll('button.pin').length"))
       .toBe(1);
     await query(
       "window.originalMap = document.getElementById('map'); const replacement = window.originalMap.cloneNode(true); replacement.textContent = 'A different card'; window.originalMap.replaceWith(replacement)",
     );
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('button.pin').hidden",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('button.pin').hidden"))
       .toBe(true);
     await expect(page.locator(".browser-annotation-chip")).toContainText(
       "Make this card easier to read",
@@ -233,39 +285,31 @@ test("browser feedback stays anchored in the page and sends as structured contex
       "document.getElementById('map').replaceWith(window.originalMap)",
     );
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('button.pin').hidden",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('button.pin').hidden"))
       .toBe(false);
     // A scroll repositions the same pin; a changed target never silently reattaches.
-    const before = await query(
-      "document.getElementById('relay-element-inspector').shadowRoot.querySelector('button.pin').getBoundingClientRect().top",
+    const before = await inspector(
+      "root.querySelector('button.pin').getBoundingClientRect().top",
     );
     await query("window.scrollBy(0, 60)");
     await expect
       .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('button.pin').getBoundingClientRect().top",
+        inspector(
+          "root.querySelector('button.pin').getBoundingClientRect().top",
         ),
       )
       .toBeLessThan(before);
     await query("window.scrollTo(0,0)");
     await expect
       .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('button.pin').getBoundingClientRect().top",
+        inspector(
+          "root.querySelector('button.pin').getBoundingClientRect().top",
         ),
       )
       .toBe(before);
     await pointer("button.pin");
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector').shadowRoot.querySelector('textarea').value",
-        ),
-      )
+      .poll(() => inspector("root.querySelector('textarea').value"))
       .toBe("Make this card easier to read");
     await type(" please");
     await pointer(".save");
@@ -335,11 +379,7 @@ test("browser feedback stays anchored in the page and sends as structured contex
       .getByRole("button", { name: "Comment on this page", exact: true })
       .click();
     await expect
-      .poll(() =>
-        query(
-          "document.getElementById('relay-element-inspector')?.shadowRoot.querySelectorAll('button.pin').length",
-        ),
-      )
+      .poll(() => inspector("root?.querySelectorAll('button.pin').length"))
       .toBe(1);
     await pointer("button.pin");
     await pointer('[aria-label="Delete comment"]');

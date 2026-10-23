@@ -44,10 +44,15 @@ export function pickElement(
     fail = no;
   });
   const newId = randomUUID();
-  const url = wc.getURL();
   let done = false;
   const execute = (code: string) =>
     wc.executeJavaScriptInIsolatedWorld(WORLD, [{ code }]);
+  const stopInPage = () => {
+    if (!wc.isDestroyed())
+      void execute(
+        `if (globalThis.__relayElementPicker?.id === ${JSON.stringify(newId)}) globalThis.__relayElementPicker.cancel()`,
+      ).catch(() => {});
+  };
   const clean = () => {
     wc.off("did-start-navigation", navigated);
     wc.off("destroyed", cancel);
@@ -57,16 +62,14 @@ export function pickElement(
     if (done) return;
     done = true;
     clean();
-    if (!wc.isDestroyed())
-      void execute(
-        `if (globalThis.__relayElementPicker?.id === ${JSON.stringify(newId)}) globalThis.__relayElementPicker.cancel()`,
-      ).catch(() => {});
+    stopInPage();
     settle(null);
   };
   const navigated = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
   ) => {
-    if (details.isMainFrame) cancel();
+    // A route change in a single-page app keeps the page, and the comment being typed.
+    if (details.isMainFrame && !details.isSameDocument) cancel();
   };
   wc.on("did-start-navigation", navigated);
   wc.on("destroyed", cancel);
@@ -91,19 +94,17 @@ export function pickElement(
         settle(change);
         return;
       }
-      if (change.annotation.url !== url || wc.getURL() !== url) {
-        cancel();
-        return;
-      }
+      const moved = () => wc.getURL() !== change.annotation.url;
+      if (moved())
+        throw new Error("The page changed while saving. Comment again.");
       const clip = clipRect(change.annotation);
       if (!clip)
         throw new Error("That element is no longer visible. Select it again.");
       // A frame without the inspector in it.
       await new Promise((resolve) => setTimeout(resolve, 50));
-      if (done || wc.isDestroyed() || wc.getURL() !== url) {
-        cancel();
-        return;
-      }
+      if (done) return;
+      if (wc.isDestroyed() || moved())
+        throw new Error("The page changed while saving. Comment again.");
       const image = await wc.capturePage(clip);
       if (done) return;
       if (image.isEmpty())
@@ -115,10 +116,7 @@ export function pickElement(
       if (done) return;
       done = true;
       clean();
-      if (!wc.isDestroyed())
-        void execute(
-          `if (globalThis.__relayElementPicker?.id === ${JSON.stringify(newId)}) globalThis.__relayElementPicker.cancel()`,
-        ).catch(() => {});
+      stopInPage();
       fail(error);
     }
   })();
