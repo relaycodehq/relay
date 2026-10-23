@@ -41,7 +41,10 @@ export function BrowserAnnotationChip({
   const label = targetLabel(annotation);
   return (
     <>
-      <div className="browser-annotation-chip">
+      <div
+        className="browser-annotation-chip"
+        title={`${annotation.comment}\n${label}`}
+      >
         <button
           type="button"
           className="browser-annotation-preview"
@@ -51,12 +54,12 @@ export function BrowserAnnotationChip({
           {source ? (
             <img src={source} alt={`Screenshot of ${label}`} />
           ) : isError ? (
-            <ImageOff size={18} aria-hidden />
+            <ImageOff size={16} aria-hidden />
           ) : null}
         </button>
         <div className="browser-annotation-copy">
-          <small title={label}>{label}</small>
           <span>{annotation.comment}</span>
+          <small>{label}</small>
         </div>
         {onRemove && (
           <button

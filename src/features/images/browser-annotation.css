@@ -1,12 +1,14 @@
+/* As tall as a screenshot tile, so both sit in one row of the strip. */
 .browser-annotation-chip {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  width: min(100%, 360px);
+  gap: 8px;
+  width: min(100%, 260px);
+  height: 74px;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 5px 4px 5px 5px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--surface);
   color: var(--text);
   font-size: 12px;
@@ -15,8 +17,17 @@
   min-width: 0;
   flex: 1;
   display: grid;
-  gap: 3px;
+  align-content: start;
+  gap: 2px;
   padding-top: 2px;
+}
+.browser-annotation-copy > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 .browser-annotation-copy small {
   font-size: 11px;
@@ -24,10 +35,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.browser-annotation-copy > span {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 .browser-annotation-chip > button {
   flex-shrink: 0;
@@ -39,12 +46,12 @@
 .browser-annotation-chip > .browser-annotation-preview {
   display: grid;
   place-items: center;
-  width: 56px;
-  height: 48px;
+  width: 72px;
+  height: 100%;
   padding: 0;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: 5px;
   background: var(--hover);
   cursor: zoom-in;
 }
@@ -64,6 +71,16 @@
   opacity: 0.4;
   cursor: default;
 }
+/* Sent comments show in full. */
 .project-message > .browser-annotation-chip {
-  margin-bottom: 8px;
+  height: auto;
+  min-height: 74px;
+  margin-bottom: 6px;
+}
+.project-message > .browser-annotation-chip > .browser-annotation-preview {
+  height: 62px;
+}
+.project-message .browser-annotation-copy > span {
+  display: block;
+  white-space: pre-wrap;
 }
