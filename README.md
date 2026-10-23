@@ -98,7 +98,7 @@ Phone access starts in **Settings → Phone**. Tailscale is the default; **Local
 ## Good to know
 
 - Relay runs agent software on your computer; prompts, selected files and other context go to the providers configured in those agents. Helper jobs such as titles, commit messages and reviews also use agents. There is no Relay-hosted model service.
-- **Relay counts its users.** Once a day each copy tells `ping.relaycode.io` it is in use: its version, the system and whether it is desktop or headless. There's no ID and the address isn't kept, so it only says how many people use Relay that day; the [Worker](ping/worker.js) is all there is to it. Turn it off with **Count me as a user** in Settings → About, `relay settings set usage-ping off`, `"usagePing": false` in settings.json, or `DO_NOT_TRACK=1`.
+- **Relay counts its users.** Once a day each copy tells `ping.relaycode.io` it is in use: its version, the system and whether it is desktop or headless. There's no ID and the address isn't kept, so it only says how many people use Relay that day; the [Worker](ping/worker.js) is all there is to it. Turn it off with **Count me as a user** in Settings → About, `relay settings set usage-ping off`, `"usagePing": false` in settings.json, or `DO_NOT_TRACK=1`. That ping is Relay's only telemetry: [every host Relay talks to](docs/network.md) is listed with what it's for, and a test fails if the code names one that isn't.
 - Desktop threads, drafts and settings are stored in `~/Library/Application Support/Relay Experimental` (macOS), `%APPDATA%\Relay Experimental` (Windows) or `~/.config/Relay Experimental` (Linux, or your XDG config directory). Headless Relay uses `~/.relay`. Chat history isn't encrypted at rest; pairing and handoffs copy relevant data to your other devices.
 - Desktop secrets use OS-backed encryption where available; agent CLIs also manage their own credentials. Without an available encryption backend, the bridge key and paired-computer tokens can be saved unencrypted. Headless Relay encrypts its secrets with a local key file; see [its security notes](docs/headless.md#security).
 - **Full access is the default for fresh threads.** Agents can edit files and run commands, including Git, within the selected permission mode. Relay also changes Git state as part of requested worktree, merge and handoff operations; handoffs commit uncommitted work for transfer. A worktree separates checkouts; it is not a security sandbox.
@@ -111,6 +111,7 @@ Phone access starts in **Settings → Phone**. Tailscale is the default; **Local
 - [Headless Relay](docs/headless.md): Relay without its window on a server or a spare computer.
 - [Pull request review](docs/pr-review.md): the review workflow, grouping and live checks.
 - [Browser previews](docs/previews.md): preview sessions and existing dev servers.
+- [Network](docs/network.md): every host Relay connects to, when, and what turns the automatic ones off.
 - [Development and releases](docs/development.md): tests, packaging, updates and release status.
 
 ## For contributors
