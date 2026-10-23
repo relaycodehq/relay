@@ -4,7 +4,6 @@ import {
   mkdir,
   readdir,
   readFile,
-  rename,
   rm,
   stat,
   writeFile,
@@ -44,6 +43,7 @@ import {
   type IssueHost,
 } from "./submit";
 import { errorMessage } from "../../shared/error-message";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** GitHub takes images up to 10 MB. */
 export const screenshotLimit = 10_000_000;
@@ -214,10 +214,7 @@ export class BugReports {
   }
 
   private async write(draft: BugReportDraft) {
-    await mkdir(this.deps.dir, { recursive: true, mode: 0o700 });
-    const tmp = join(this.deps.dir, `draft-${randomUUID()}.tmp`);
-    await writeFile(tmp, JSON.stringify(draft), { mode: 0o600 });
-    await rename(tmp, this.file);
+    await writeFileAtomic(this.file, JSON.stringify(draft), { mkdir: 0o700 });
   }
 
   /** Marks that a prompt wants the report shown once a window can. */
@@ -342,10 +339,7 @@ export class BugReports {
       if (!replacing && at >= maxScreenshots)
         throw new Error(`A report holds up to ${maxScreenshots} screenshots.`);
       // The file lands first, so a draft never names one that isn't there.
-      await mkdir(join(this.deps.dir, "screenshots"), { recursive: true });
-      const tmp = `${this.shot(id)}.tmp`;
-      await writeFile(tmp, png.bytes, { mode: 0o600 });
-      await rename(tmp, this.shot(id));
+      await writeFileAtomic(this.shot(id), png.bytes, { mkdir: true });
       draft.screenshots.splice(at, replacing ? 1 : 0, {
         id,
         name: name.slice(0, 120) || "Screenshot",

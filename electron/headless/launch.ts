@@ -1,15 +1,6 @@
-import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync } from "node:fs";
-import {
-  lstat,
-  open,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
@@ -20,6 +11,7 @@ import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
 import { sleep } from "../util/sleep";
 import { pidAlive as alive } from "../util/pid";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** What a Relay run as a service exits with to be started again. */
 export const restartCode = 75;
@@ -68,23 +60,13 @@ export async function saveConfig(home: string, patch: HeadlessConfig) {
   await privateDirectory(home);
   const config = headlessPaths(home).config;
   const release = await lockPath(config);
-  const temporary = `${config}.${randomUUID()}.tmp`;
   try {
     const next = { ...(await readConfig(home)), ...patch };
-    const file = await open(temporary, "wx", 0o600);
-    try {
-      await file.writeFile(JSON.stringify(next, null, 2) + "\n");
-      await file.sync();
-    } finally {
-      await file.close();
-    }
-    await rename(temporary, config);
+    await writeFileAtomic(config, JSON.stringify(next, null, 2) + "\n", {
+      sync: true,
+    });
   } finally {
-    try {
-      await rm(temporary, { force: true });
-    } finally {
-      await release();
-    }
+    await release();
   }
 }
 

@@ -1,6 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import {
   applyDraftWrite,
   dropOtherDraft,
@@ -11,6 +9,7 @@ import {
   type DraftWrite,
   type SharedDraft,
 } from "../../shared/drafts";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** Written this long after the last change; a draft changes with every pause in typing. */
 const saveMs = 300;
@@ -114,10 +113,7 @@ export class DraftStore {
     const json = JSON.stringify({ rev: this.rev, drafts: this.list() });
     this.queue = this.queue
       .then(async () => {
-        await mkdir(dirname(this.file), { recursive: true, mode: 0o700 });
-        const tmp = join(dirname(this.file), `drafts-${randomUUID()}.tmp`);
-        await writeFile(tmp, json, { mode: 0o600 });
-        await rename(tmp, this.file);
+        await writeFileAtomic(this.file, json, { mkdir: 0o700 });
       })
       .catch((e) => console.warn("Could not save the drafts:", e));
   }

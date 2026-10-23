@@ -16,6 +16,7 @@ vi.mock("node:fs/promises", () => ({
   },
   readFile: async (path: string) => files.get(path),
   writeFile: async (path: string, text: string) => void files.set(path, text),
+  chmod: async () => {},
   rename: async (from: string, to: string) => {
     files.set(to, files.get(from)!);
     files.delete(from);

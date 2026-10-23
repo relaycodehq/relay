@@ -1,6 +1,5 @@
-import { readFile, writeFile, mkdir, rename, stat } from "node:fs/promises";
+import { readFile, mkdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import type { Account, Progress, WorkspaceState } from "../../shared/types";
 import {
   aiSettingsSchema,
@@ -8,6 +7,7 @@ import {
   type StoredAISettings,
 } from "../../shared/settings";
 import type { RemoteSettings, SavedComputer } from "./store-types";
+import { writeFileAtomic } from "../util/atomic-write";
 
 interface State {
   projects?: import("../../shared/projects").Project[];
@@ -133,9 +133,7 @@ export class Store {
     const task = this.queue.then(async () => {
       const next = structuredClone(this.state);
       fn(next);
-      const tmp = join(this.dir, `state-${randomUUID()}.tmp`);
-      await writeFile(tmp, JSON.stringify(next), { mode: 0o600 });
-      await rename(tmp, join(this.dir, "state.json"));
+      await writeFileAtomic(join(this.dir, "state.json"), JSON.stringify(next));
       this.state = next;
       this.writeError = undefined;
     });

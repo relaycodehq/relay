@@ -1,5 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -10,6 +9,7 @@ import {
   gitReads,
   plain,
 } from "../../agent-host/read-only-bash";
+import { writeFileAtomic } from "../../util/atomic-write";
 
 // amp-acp never asks Relay before a tool runs, so a read-only turn can't be
 // held back over ACP. Amp's own permission rules can: the process gets a copy
@@ -157,10 +157,10 @@ export async function readOnlyEnv(cwd: string) {
   const dir = join(tmpdir(), "relay-amp-read-only");
   await mkdir(dir, { recursive: true });
   const path = join(dir, "settings.json");
-  // Reviewers start together, so a name from the clock could be taken twice.
-  const temp = `${path}.${randomUUID()}`;
-  await writeFile(temp, JSON.stringify(readOnlySettings(await userSettings()), null, 2));
-  await rename(temp, path);
+  await writeFileAtomic(
+    path,
+    JSON.stringify(readOnlySettings(await userSettings()), null, 2),
+  );
   const overriding = await overridingWorkspace(cwd);
   return {
     env: { AMP_SETTINGS_FILE: path },

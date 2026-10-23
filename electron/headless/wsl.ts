@@ -4,9 +4,10 @@
 // that nothing on Windows holds, `.wslconfig` can turn the timeout off.
 import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { writeFileAtomic } from "../util/atomic-write";
 
 const run = promisify(execFile);
 
@@ -85,8 +86,6 @@ export async function keepDistributionsUp() {
     },
   );
   if (idleShutdownOff(config)) return undefined;
-  const next = `${file}.relay-${process.pid}`;
-  await writeFile(next, withoutIdleShutdown(config));
-  await rename(next, file);
+  await writeFileAtomic(file, withoutIdleShutdown(config), { keepMode: true });
   return file;
 }

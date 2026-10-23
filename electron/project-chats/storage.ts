@@ -2,7 +2,6 @@ import {
   copyFile,
   mkdir,
   readFile,
-  rename,
   rm,
   stat,
   writeFile,
@@ -37,6 +36,7 @@ import { reviveChat } from "./revive";
 import { migrateReviewRounds } from "../deep-review";
 import { latestReview } from "../../shared/deep-review";
 import { ShownImages } from "./shown-images";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** The earliest scheduled message still waiting to go out on its own. */
 export function nextSend(scheduled: ScheduledChatMessage[] = []) {
@@ -372,12 +372,9 @@ export class ChatStorage {
     );
   }
 
-  /** Writes `value` to `path` whole: to a file beside it, then renamed over it. */
   private async replace(path: string, value: string) {
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
-    const tmp = path + "." + randomUUID() + ".tmp";
-    await writeFile(tmp, value, { mode: 0o600 });
-    await rename(tmp, path);
+    await writeFileAtomic(path, value);
   }
 
   private async persist(

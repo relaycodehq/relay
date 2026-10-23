@@ -1,6 +1,6 @@
-import { appendFile, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { appendFile, readFile } from "node:fs/promises";
 import { keyedQueue } from "./keyed-queue";
+import { writeFileAtomic } from "./atomic-write";
 
 /** Serialized JSONL persistence. A crash-cut final record never consumes the next append. */
 export class JsonLines<T> {
@@ -40,19 +40,12 @@ export class JsonLines<T> {
       const records = await this.load();
       const kept = records.filter(keep);
       if (kept.length === records.length) return;
-      const temporary = `${this.path}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(
-          temporary,
-          kept.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
-          { mode: 0o600 },
-        );
-        await rename(temporary, this.path);
-        this.records = kept;
-        this.cut = false;
-      } finally {
-        await rm(temporary, { force: true }).catch(() => {});
-      }
+      await writeFileAtomic(
+        this.path,
+        kept.map((entry) => `${JSON.stringify(entry)}\n`).join(""),
+      );
+      this.records = kept;
+      this.cut = false;
     });
   }
 

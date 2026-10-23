@@ -3,8 +3,8 @@ import {
   modelSchema,
   reasoningEffortSchema,
 } from "../../shared/settings";
-import { createHash, randomUUID } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import {
@@ -15,6 +15,7 @@ import {
 } from "../../shared/triage";
 import { filePathSchema } from "../../shared/validation";
 import { responseSchema, failedReason } from "./classifier";
+import { writeFileAtomic } from "../util/atomic-write";
 
 const reasonSchema = z.string().max(1000);
 const pathsSchema = z.array(filePathSchema).max(1000);
@@ -286,8 +287,7 @@ export async function saveAnalysis(
   key: string,
   saved: SavedAnalysis,
 ) {
-  const target = analysisFile(dir, key),
-    tmp = `${target}.${randomUUID()}.tmp`;
+  const target = analysisFile(dir, key);
   await mkdir(join(dir, "analysis"), { recursive: true, mode: 0o700 });
   const serialized = JSON.stringify({
     ...saved.result,
@@ -297,15 +297,5 @@ export async function saveAnalysis(
     throw new Error(
       "Analysis checkpoint exceeds its storage limit. The previous checkpoint is preserved.",
     );
-  const handle = await open(tmp, "wx", 0o600);
-  try {
-    await handle.writeFile(serialized);
-    await handle.sync();
-    await handle.close();
-    await rename(tmp, target);
-  } catch (e) {
-    await handle.close().catch(() => {});
-    await rm(tmp, { force: true }).catch(() => {});
-    throw e;
-  }
+  await writeFileAtomic(target, serialized, { sync: true });
 }

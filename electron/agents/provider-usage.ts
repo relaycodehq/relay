@@ -3,7 +3,7 @@
 // ChatGPT; tokens stay in the main process and rotated ones are written back to
 // the same credential store.
 import { execFile } from "node:child_process";
-import { stat, readFile, writeFile, rename } from "node:fs/promises";
+import { stat, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { promisify } from "node:util";
@@ -27,6 +27,7 @@ import { recordUsage } from "./usage-history";
 import { profileDir } from "./accounts/profiles";
 import { withTimeout } from "../util/timeout";
 import { asRecord } from "../../shared/records";
+import { writeFileAtomic } from "../util/atomic-write";
 
 const exec = promisify(execFile);
 const CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
@@ -455,12 +456,7 @@ async function writeText(path: string, text: string) {
   if (basename(path) !== "auth.json") {
     throw new Error("refusing credential write");
   }
-  const mode = await stat(path)
-    .then((info) => info.mode & 0o777)
-    .catch(() => 0o600);
-  const tmp = `${path}.${process.pid}.tmp`;
-  await writeFile(tmp, text, { mode });
-  await rename(tmp, path);
+  await writeFileAtomic(path, text, { keepMode: true });
 }
 
 async function readKeychain(service: string, account: string | null) {

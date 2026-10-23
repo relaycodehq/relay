@@ -2,11 +2,11 @@
 // sessions that followed them end on a restart or after sitting idle, and the
 // indicator's fan-outs and each agent's side thread shouldn't go with them.
 // Read only when asked for, so a thread's long runs never slow its loading.
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import type { SubagentDetail } from "../../shared/subagents";
 import { keyedQueue } from "../util/keyed-queue";
+import { writeFileAtomic } from "../util/atomic-write";
 
 type Saved = {
   /** When the runs were last seen live; one still running then ended by it. */
@@ -75,14 +75,8 @@ export class SubagentArchive {
         mode: 0o700,
       });
       const path = this.path(chatId);
-      const tmp = `${path}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(tmp, JSON.stringify(next), { mode: 0o600 });
-        await rename(tmp, path);
-        this.cache.set(chatId, next);
-      } finally {
-        await rm(tmp, { force: true }).catch(() => {});
-      }
+      await writeFileAtomic(path, JSON.stringify(next));
+      this.cache.set(chatId, next);
     });
   }
 

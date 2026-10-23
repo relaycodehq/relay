@@ -1,7 +1,7 @@
 // Keeps each account's usage readings on disk so the week's forecast can
 // learn when someone actually works. Nothing is kept until main points it at
 // a file.
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import type { ProviderUsage } from "../../shared/provider-usage";
 import {
   activeHours,
@@ -9,6 +9,7 @@ import {
   type ActiveHours,
   type UsageSample,
 } from "../../shared/usage-history";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** By provider for its usual sign-in, `provider:account` for another account. */
 type History = Partial<Record<string, UsageSample[]>>;
@@ -52,8 +53,7 @@ export async function recordUsage(
     const text = JSON.stringify(all);
     writing = writing
       .then(async () => {
-        await writeFile(`${file}.tmp`, text);
-        await rename(`${file}.tmp`, file);
+        await writeFileAtomic(file, text);
       })
       .catch(() => {});
   }

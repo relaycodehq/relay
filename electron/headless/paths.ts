@@ -1,16 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
 import { lstatSync, readFileSync } from "node:fs";
-import {
-  chmod,
-  lstat,
-  mkdir,
-  mkdtemp,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /**
  * Where a headless Relay keeps everything: its threads, settings, keys and
@@ -92,15 +85,11 @@ export async function prepareControlSocket(home: string) {
     `/tmp/relay-${process.getuid?.() ?? "user"}-`,
   );
   const path = join(directory, "control.sock");
-  const temporary = join(home, `control-path.${randomUUID()}.tmp`);
   try {
-    await writeFile(temporary, path + "\n", { mode: 0o600, flag: "wx" });
-    await rename(temporary, join(home, "control-path"));
+    await writeFileAtomic(join(home, "control-path"), path + "\n");
   } catch (e) {
     await rm(directory, { recursive: true, force: true });
     throw e;
-  } finally {
-    await rm(temporary, { force: true });
   }
   return path;
 }

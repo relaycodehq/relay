@@ -4,8 +4,8 @@
 // file under an ignored folder (`node_modules/`, `src/generated/`) is too
 // costly to keep and has no copy from before. The list sits in the checkout's
 // Git folder and clears at the next commit, like the tracked changes do.
-import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import { lstat, readFile } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import { within } from "../util/paths";
 import { git } from "./git";
 import { ignoreRules } from "./working-tree";
@@ -16,6 +16,7 @@ import { videoSides } from "./video-pair";
 import type { AgentProvider } from "../../shared/agents";
 import type { FilePair } from "../../shared/types";
 import type { IgnoredTouch } from "../../shared/working-tree";
+import { writeFileAtomic } from "../util/atomic-write";
 
 /** What a turn kept at its start; reading more would slow every turn down. */
 const keepFiles = 500,
@@ -75,10 +76,7 @@ async function load(root: string): Promise<Store | null> {
 
 async function save(root: string, store: Store) {
   const file = await storePath(root);
-  await mkdir(dirname(file), { recursive: true });
-  const temp = `${file}.${process.pid}.tmp`;
-  await writeFile(temp, JSON.stringify(store));
-  await rename(temp, file);
+  await writeFileAtomic(file, JSON.stringify(store), { mkdir: true });
 }
 
 /** The loose ignored files as a turn starts, read before the agent can write. */

@@ -1,4 +1,5 @@
-import { readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { writeFileAtomic } from "../../util/atomic-write";
 
 /** Filter cache key → last use and question hash → yes-probability. */
 export interface RelevanceAnswers {
@@ -35,11 +36,10 @@ export class RelevanceCache {
     const file = this.file;
     if (!file) return;
     const text = JSON.stringify({ version: 1, keys: cache });
-    // Writes queue up so runs for different projects never share the temp file.
+    // Writes queue up so an older cache never lands over a newer one.
     return (this.saving = this.saving.then(async () => {
       try {
-        await writeFile(`${file}.tmp`, text, { mode: 0o600 });
-        await rename(`${file}.tmp`, file);
+        await writeFileAtomic(file, text);
       } catch {
         // The answers stay cached in memory for this session.
       }

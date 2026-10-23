@@ -1,6 +1,6 @@
 // The meme folder in app data: memes.json, the list the person can edit, and
 // one picture per meme beside it, which an agent downloads in a thread.
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   builtInMemes,
@@ -12,6 +12,7 @@ import {
   type MemesState,
 } from "../../shared/memes";
 import { mediaUrl } from "../media";
+import { writeFileAtomic } from "../util/atomic-write";
 
 const picture = /^([a-z0-9]+(?:-[a-z0-9]+)*)\.(jpg|png|gif|webp)$/;
 
@@ -105,10 +106,11 @@ export class Memes {
     if (read.problem) return this.state();
     const fresh = withNewBuiltIns(read.file ?? { memes: [] });
     if (!read.file || fresh.added) {
-      await mkdir(this.folder, { recursive: true });
-      const part = `${this.list}.part`;
-      await writeFile(part, `${JSON.stringify(fresh.file, null, 2)}\n`);
-      await rename(part, this.list);
+      await writeFileAtomic(
+        this.list,
+        `${JSON.stringify(fresh.file, null, 2)}\n`,
+        { mkdir: true, mode: 0o644 },
+      );
     }
     return this.state();
   }
