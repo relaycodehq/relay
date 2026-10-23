@@ -31,13 +31,7 @@ export async function processTable({ usage = false } = {}): Promise<
 > {
   if (process.platform === "win32")
     return parseWindows(await windows.read(usage ? "usage" : "plain"));
-  const rows = parsePs(
-    await run("ps", [
-      "-axww",
-      "-o",
-      "pid=,ppid=,pgid=,rss=,pcpu=,lstart=,command=",
-    ]),
-  );
+  const rows = await psTable();
   if (process.platform !== "linux") return rows;
   // Linux's %CPU is an average over the process's whole life.
   for (const row of rows) delete row.cpu;
@@ -69,12 +63,57 @@ export class CpuRates {
   }
 }
 
-/** `ps -o pid=,ppid=,pgid=,rss=,pcpu=,lstart=,command=` in the C locale. */
+/**
+ * Command lines by pid and start, kept between looks: `ps` reading every
+ * process's arguments is half of what a look costs, and between two looks
+ * a few seconds apart nearly all of them are the same processes.
+ */
+const commandLines = new Map<string, string>();
+/** More new processes than this, and one look reading every line is cheaper. */
+const askedAtMost = 64;
+
+async function psTable() {
+  const rows = parsePs(
+    await run("ps", ["-axww", "-o", "pid=,ppid=,pgid=,rss=,pcpu=,lstart="]),
+  );
+  const key = (p: ProcessRow) => `${p.pid}:${p.started}`;
+  const missing = rows.filter((p) => !commandLines.has(key(p)));
+  if (missing.length) {
+    const lines =
+      missing.length > askedAtMost
+        ? parsePs(
+            await run("ps", [
+              "-axww",
+              "-o",
+              "pid=,ppid=,pgid=,rss=,pcpu=,lstart=,command=",
+            ]),
+          )
+        : parsePs(
+            await run("ps", [
+              "-ww",
+              "-o",
+              "pid=,ppid=,pgid=,rss=,pcpu=,lstart=,command=",
+              "-p",
+              missing.map((p) => p.pid).join(","),
+            ]),
+          );
+    for (const p of lines) commandLines.set(key(p), p.line);
+  }
+  const live = new Set(rows.map(key));
+  for (const k of commandLines.keys()) if (!live.has(k)) commandLines.delete(k);
+  // One that ended between the two looks has no line, and is gone anyway.
+  return rows.flatMap((p) => {
+    const line = commandLines.get(key(p));
+    return line === undefined ? [] : [{ ...p, line }];
+  });
+}
+
+/** `ps -o pid=,ppid=,pgid=,rss=,pcpu=,lstart=[,command=]` in the C locale. */
 export function parsePs(out: string): ProcessRow[] {
   const rows: ProcessRow[] = [];
   for (const row of out.split("\n")) {
     const m =
-      /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\w{3} \w{3}\s+\d+ [\d:]{8} \d{4})\s+(.*)$/.exec(
+      /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+([\d.]+)\s+(\w{3} \w{3}\s+\d+ [\d:]{8} \d{4})(?:\s+(.*))?$/.exec(
         row,
       );
     if (m)
@@ -85,7 +124,7 @@ export function parsePs(out: string): ProcessRow[] {
         mb: +m[4] / 1024,
         cpu: +m[5],
         started: Date.parse(m[6]) || 0,
-        line: m[7],
+        line: m[7] ?? "",
       });
   }
   return rows;
