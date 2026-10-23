@@ -88,13 +88,25 @@ function makeRoom(message: ChatMessage, trace: AgentTrace[]) {
 }
 
 /**
+ * What a turn's checkpoints may write a second. Each one writes the answer
+ * whole, so at a fixed second apart a long answer's writes grow with it: an
+ * answer of a few hundred KB rewrote itself every second for the rest of the
+ * turn. Past this they space out, up to `checkpointMostMs` apart.
+ */
+const checkpointBytesPerSecond = 64 * 1024;
+const checkpointLeastMs = 1000;
+const checkpointMostMs = 10_000;
+
+/**
  * The answer an agent is writing. The window sees it at most every 40ms and
- * the disk every second. When the agent reads a steering message, the rest of
- * the turn moves to an answer below it, so read `message` as the turn goes.
+ * the disk every second, or less often once the answer is long. When the
+ * agent reads a steering message, the rest of the turn moves to an answer
+ * below it, so read `message` as the turn goes.
  */
 export class AnswerRecorder {
   private flush: ReturnType<typeof setTimeout> | null = null;
   private checkpoint: ReturnType<typeof setTimeout> | null = null;
+  private checkpointMs = checkpointLeastMs;
   private model?: TurnModel;
   /** The import offer waiting for the answer to end; see `importOffer`. */
   private offer?: ImportOffer;
@@ -104,7 +116,8 @@ export class AnswerRecorder {
     private chat: ProjectChat,
     public message: ChatMessage,
     private emit: (message: ChatMessage) => void,
-    private save: () => void,
+    /** Writes a checkpoint; says how many bytes it wrote, when it knows. */
+    private save: () => Promise<number | void> | void,
   ) {}
   publish() {
     this.flush = null;
@@ -120,8 +133,17 @@ export class AnswerRecorder {
         clearTimeout(this.flush);
         this.publish();
       }
-      this.save();
-    }, 1000);
+      void Promise.resolve(this.save()).then((bytes) => {
+        if (bytes)
+          this.checkpointMs = Math.min(
+            checkpointMostMs,
+            Math.max(
+              checkpointLeastMs,
+              (bytes / checkpointBytesPerSecond) * 1000,
+            ),
+          );
+      });
+    }, this.checkpointMs);
   }
   text(body: string) {
     if (this.stopped) return;

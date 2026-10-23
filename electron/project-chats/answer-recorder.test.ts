@@ -179,7 +179,7 @@ it("moves the version of a change that came just before a checkpoint, so the che
     chat,
     message,
     () => {},
-    () => saved.push({ body: message.body, version: message.version }),
+    () => void saved.push({ body: message.body, version: message.version }),
   );
   answer.text("a");
   vi.advanceTimersByTime(40);
@@ -189,6 +189,34 @@ it("moves the version of a change that came just before a checkpoint, so the che
   answer.text("ab");
   vi.advanceTimersByTime(10);
   expect(saved).toEqual([{ body: "ab", version: published + 1 }]);
+  answer.end();
+  vi.useRealTimers();
+});
+
+it("spaces checkpoints out while each writes a lot, so a long answer doesn't rewrite itself every second", async () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const saves: number[] = [];
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    async () => {
+      saves.push(Date.now());
+      return 320 * 1024;
+    },
+  );
+  const start = Date.now();
+  answer.text("a");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(saves).toEqual([start + 1000]);
+  // 320 KB at 64 KB a second: the next one waits five seconds, not one.
+  answer.text("ab");
+  await vi.advanceTimersByTimeAsync(4900);
+  expect(saves).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(saves).toHaveLength(2);
   answer.end();
   vi.useRealTimers();
 });

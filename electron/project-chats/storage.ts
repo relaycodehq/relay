@@ -362,16 +362,22 @@ export class ChatStorage {
   /**
    * Keeps a running turn's progress: what changed since the thread's last
    * full save, mostly the turn's answer, goes to `<id>.live.json` rather than
-   * the thread being rewritten whole. A full save takes over without a file
-   * to build on, or once the turn changed a good part of the thread.
+   * the thread being rewritten whole; so does a change outside a turn that
+   * leaves the messages be, such as a seen mark. A full save takes over
+   * without a file to build on, or once the turn changed a good part of the
+   * thread. Says how many bytes it wrote.
    */
   async checkpoint(chat: ProjectChat) {
     const base = this.bases.get(chat);
     const live = base && JSON.stringify(liveTurn(chat, base));
-    if (!live || live.length > base.bytes / 4) return this.save(chat);
+    if (!live || live.length > base.bytes / 4) {
+      await this.save(chat);
+      return this.bases.get(chat)?.bytes;
+    }
     await this.persist(chat, false, () =>
       this.replace(this.file(chat.id, true), live),
     );
+    return live.length;
   }
 
   private async replace(path: string, value: string) {

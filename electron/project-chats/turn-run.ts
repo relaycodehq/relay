@@ -147,7 +147,10 @@ export class TurnRunner {
       chat,
       message,
       (m) => this.core.emit({ chatId: chat.id, message: m }),
-      () => void this.core.storage.checkpoint(chat).catch(() => abort.abort()),
+      () =>
+        this.core.storage.checkpoint(chat).catch(() => {
+          abort.abort();
+        }),
     );
     const stop = () => answer.stop();
     abort.signal.addEventListener("abort", stop, { once: true });
