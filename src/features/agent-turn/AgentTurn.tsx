@@ -209,7 +209,7 @@ function ToolRow({
   onChanges: () => void;
 }) {
   const asked = askedQuestions(a);
-  // A failed call looks like any other: commands fail as part of the work.
+  // A failed call keeps its own icon, only its line turns red: commands fail as part of the work.
   const Icon = iconOf(a);
   const calls = useContext(Subagents).calls.get(a.id) ?? [];
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;

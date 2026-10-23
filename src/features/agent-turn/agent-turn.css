@@ -90,6 +90,10 @@ details.agent-step > .agent-step-heading {
 details.agent-step > .agent-step-heading:hover {
   color: var(--text);
 }
+.agent-step.failed > .agent-step-heading,
+details.agent-step.failed > .agent-step-heading:hover {
+  color: var(--danger);
+}
 .agent-step-heading > svg {
   flex: none;
   opacity: 0.75;
