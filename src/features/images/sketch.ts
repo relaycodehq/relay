@@ -313,7 +313,12 @@ export async function flattenSketch(image: DraftImage): Promise<DraftImage> {
   const prepared = await prepareScreenshot(
     new File([blob], image.name, { type: "image/png" }),
   );
-  return { ...prepared, id: image.id, name: image.name };
+  return {
+    ...prepared,
+    id: image.id,
+    name: image.name,
+    ...(image.browser ? { browser: image.browser } : {}),
+  };
 }
 
 /** Guesses which clean shape a freehand stroke was meant to be. */

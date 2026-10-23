@@ -5,6 +5,7 @@ export interface DraftImage {
   name: string;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   dataUrl: string;
+  browser?: import("../../../shared/browser-annotations").BrowserAnnotation;
   /** Its `[Image #n]` token in the draft; see image-refs. */
   n?: number;
   /** Ink drawn over the screenshot, burned in only when the message is sent. */
@@ -228,29 +229,53 @@ export function onDraftImagesSaved(
   return () => void savedListeners.delete(listener);
 }
 
+function putImages(
+  transaction: IDBTransaction,
+  key: string,
+  images: DraftImage[],
+) {
+  const store = transaction.objectStore(STORE);
+  const metadata = transaction.objectStore(METADATA);
+  const value = images.length ? metadataOf(images) : undefined;
+  if (value) {
+    store.put(images, key);
+    metadata.put(value, key);
+  } else {
+    store.delete(key);
+    metadata.delete(key);
+  }
+  return value;
+}
+function imagesSaved(
+  key: string,
+  images: DraftImage[],
+  value: DraftImageMetadata | undefined,
+) {
+  written.add(key);
+  setMetadata(key, value);
+  changes()?.postMessage(key);
+  savedListeners.forEach((listener) => listener(key, images));
+}
+
 /** Keeps a draft's screenshots; none clears its entry. */
 export const saveDraftImages = (
   key: string,
   images: DraftImage[],
 ): Promise<void> =>
-  withDrafts([STORE, METADATA], "readwrite", (transaction) => {
-    const store = transaction.objectStore(STORE);
-    const metadata = transaction.objectStore(METADATA);
-    const value = images.length ? metadataOf(images) : undefined;
-    if (value) {
-      store.put(images, key);
-      metadata.put(value, key);
-    } else {
-      store.delete(key);
-      metadata.delete(key);
-    }
-    return value;
-  }).then((value) => {
-    written.add(key);
-    setMetadata(key, value);
-    changes()?.postMessage(key);
-    savedListeners.forEach((listener) => listener(key, images));
-  });
+  withDrafts([STORE, METADATA], "readwrite", (transaction) =>
+    putImages(transaction, key, images),
+  ).then((value) => imagesSaved(key, images, value));
+
+/** An external editor changes the latest record atomically, preserving attachments added meanwhile. */
+export const updateDraftImages = (
+  key: string,
+  change: (now: DraftImage[]) => DraftImage[],
+): Promise<void> =>
+  withDrafts([STORE, METADATA], "readwrite", async (transaction) => {
+    const now = await requested(transaction.objectStore(STORE).get(key));
+    const next = change(now ?? []);
+    return { next, value: putImages(transaction, key, next) };
+  }).then(({ next, value }) => imagesSaved(key, next, value));
 
 /** The most a screenshot may weigh once stored. */
 const LIMIT = 800_000;

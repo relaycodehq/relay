@@ -6,12 +6,14 @@ import { lineQuestionSchema } from "../questions";
 import { aiSettingsSchema } from "../settings";
 import { filePathSchema, idSchema } from "../validation";
 import { recipient } from "../recipient";
+import { browserAnnotationSchema } from "../browser-annotations";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
     mimeType: imageMimeSchema,
+    browser: browserAnnotationSchema.optional(),
     dataUrl: z
       .string()
       .max(1_100_000)

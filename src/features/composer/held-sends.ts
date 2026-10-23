@@ -6,13 +6,15 @@
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
 import { numberImages } from "../../../shared/image-refs";
-import { draftThread, newDraftProject, type HeldSend, type HeldSendResult } from "../../../shared/drafts";
+import {
+  draftThread,
+  newDraftProject,
+  type HeldSend,
+  type HeldSendResult,
+} from "../../../shared/drafts";
 import type { ProjectChatSend } from "../../../shared/projects";
 import { flattenSketch } from "../images/sketch";
-import {
-  loadDraftImages,
-  saveDraftImages,
-} from "../images/draft-images";
+import { loadDraftImages, saveDraftImages } from "../images/draft-images";
 import {
   clearDraftAttachments,
   loadDraftAttachments,
@@ -51,7 +53,11 @@ export function followHeldSends() {
   return stop;
 }
 
-async function sendHeld({ key, chatId, send }: HeldSend): Promise<HeldSendResult> {
+async function sendHeld({
+  key,
+  chatId,
+  send,
+}: HeldSend): Promise<HeldSendResult> {
   const composer = threadDraftKey(key);
   const thread = draftThread(key)?.chatId ?? key;
   const reply = !!draftThread(key)?.root;
@@ -70,7 +76,12 @@ async function sendHeld({ key, chatId, send }: HeldSend): Promise<HeldSendResult
   const base: ProjectChatSend = {
     ...send,
     body: outgoing.text,
-    images: images.map(({ name, mimeType, dataUrl }) => ({ name, mimeType, dataUrl })),
+    images: images.map(({ name, mimeType, dataUrl, browser }) => ({
+      name,
+      mimeType,
+      dataUrl,
+      ...(browser ? { browser } : {}),
+    })),
   };
   const value = attachments
     ? { ...withAttachments(base, attachments), id: send.id }

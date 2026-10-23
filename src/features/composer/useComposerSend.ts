@@ -133,10 +133,11 @@ export function useComposerSend({
           sendAt,
           skills: draft.skills(body),
           compact,
-          images: flattened.map(({ name, mimeType, dataUrl }) => ({
+          images: flattened.map(({ name, mimeType, dataUrl, browser }) => ({
             name,
             mimeType,
             dataUrl,
+            ...(browser ? { browser } : {}),
           })),
         }),
         outgoing.dispatch,

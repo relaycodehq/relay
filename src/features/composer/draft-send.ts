@@ -132,10 +132,11 @@ export async function sendDraft(
     {
       ...(chat?.running ? { running: { steer: false } } : {}),
       skills: pickedSkills(outgoing.text, draftChips(key).skills.load()),
-      images: images.map(({ name, mimeType, dataUrl }) => ({
+      images: images.map(({ name, mimeType, dataUrl, browser }) => ({
         name,
         mimeType,
         dataUrl,
+        ...(browser ? { browser } : {}),
       })),
     },
   );

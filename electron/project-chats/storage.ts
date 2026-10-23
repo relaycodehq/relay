@@ -596,7 +596,7 @@ export class ChatStorage {
     chatId: string,
     images: NonNullable<ProjectChatSend["images"]>,
   ) {
-    const checked = images.map(({ name, mimeType, dataUrl }) => {
+    const checked = images.map(({ name, mimeType, dataUrl, browser }) => {
       const bytes = Buffer.from(
         dataUrl.slice(dataUrl.indexOf(",") + 1),
         "base64",
@@ -609,6 +609,7 @@ export class ChatStorage {
           name,
           mimeType,
           sizeBytes: bytes.length,
+          ...(browser ? { browser } : {}),
         } as ChatImage,
         bytes,
       };

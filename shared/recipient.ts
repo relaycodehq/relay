@@ -4,6 +4,7 @@ import {
   type AgentProvider,
 } from "./agents";
 import type { ChatMessage, ChatSummary, ProjectChatSend } from "./projects";
+import { browserAnnotationPrompt } from "./browser-annotations";
 
 /** Who a message goes to: an agent, or "message", a note no agent answers. */
 export type Recipient = AgentProvider | "message";
@@ -18,14 +19,17 @@ export const recipient = (send: Pick<ProjectChatSend, "body" | "to">) =>
 
 /** The agent that answers a sent message and what it's asked; null for a note. */
 export function agentAsked(
-  send: Pick<ProjectChatSend, "body" | "to">,
+  send: Pick<ProjectChatSend, "body" | "to" | "images">,
 ): { provider: AgentProvider; question: string } | null {
   const to = recipient(send);
   return to === "message"
     ? null
     : {
         provider: to,
-        question: send.body.trim().replace(agentMentionPattern, "").trim(),
+        question: browserAnnotationPrompt(
+          send.body.trim().replace(agentMentionPattern, "").trim(),
+          send.images,
+        ),
       };
 }
 
