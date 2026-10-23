@@ -123,13 +123,31 @@ it("links files outside the clone by their absolute path", () => {
     directory: false,
   });
 });
-it("leaves routes, folders and commands outside the clone as text", () => {
+it("leaves routes, slashless folders and commands outside the clone as text", () => {
   for (const value of [
     "/api/users.json",
-    "/tmp/drafts/",
+    "/api/users/",
+    "/tmp/drafts",
     "/usr/local/bin/node",
+    "~/",
+    "C:\\",
   ])
     expect(chatFileLink(value, root, true)).toBeNull();
+});
+it("links folders outside the clone written with a trailing slash", () => {
+  const folder = (path: string) => ({ path, directory: true, outside: true });
+  expect(chatFileLink("/tmp/drafts/", root, true)).toEqual(
+    folder("/tmp/drafts"),
+  );
+  expect(chatFileLink("~/Downloads/invoices/", root, true)).toEqual(
+    folder("~/Downloads/invoices"),
+  );
+  expect(chatFileLink("C:\\Users\\me\\Downloads\\", root, true)).toEqual(
+    folder("C:\\Users\\me\\Downloads"),
+  );
+  expect(chatFileLink("file:///home/me/out/", root)).toEqual(
+    folder("/home/me/out"),
+  );
 });
 it("splits an outside path into its folder and name", () => {
   expect(splitOutsidePath("/tmp/a/b.md")).toEqual({
@@ -142,4 +160,14 @@ it("splits an outside path into its folder and name", () => {
     folder: "C:\\",
     name: "x.md",
   });
+});
+it("takes a Windows path for an absolute one", () => {
+  expect(chatFileLink("C:\\Users\\me\\notes.md", root, true)).toEqual({
+    path: "C:\\Users\\me\\notes.md",
+    directory: false,
+    outside: true,
+  });
+  expect(
+    projectFileLink("C:\\work\\app\\src\\a.ts:3", "C:\\work\\app", true),
+  ).toEqual({ path: "src/a.ts", line: 3, directory: false });
 });

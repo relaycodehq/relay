@@ -213,6 +213,19 @@ export function isOutsideFilePath(path: string) {
   return EXTENSIONLESS_FILES.has(last) || EXTENSION.test(last);
 }
 
+/**
+ * An absolute or home path written as a folder: under a system root or `~`,
+ * with a trailing slash. Without the slash it could as well be a file.
+ */
+export function isOutsideFolderPath(path: string) {
+  const unix =
+    path.startsWith("~/") || OS_ROOTS.some((r) => path.startsWith(r));
+  if (!unix && !WINDOWS_ABSOLUTE.test(path)) return false;
+  if (!/[/\\]$/.test(path)) return false;
+  const named = path.replace(/[/\\]+$/, "");
+  return named !== "~" && !/^[A-Za-z]:$/.test(named);
+}
+
 /** `path` has its position removed, `written` still carries it. */
 function isFilePath(path: string, written: string) {
   if (WINDOWS_ABSOLUTE.test(path) || EXPLICIT_RELATIVE.test(path)) return true;

@@ -2,6 +2,7 @@ import { filePathSchema } from "./validation";
 import {
   filePathInInlineCode,
   isOutsideFilePath,
+  isOutsideFolderPath,
   resolveFileLink,
 } from "./markdown-links";
 
@@ -11,7 +12,7 @@ export type ProjectFileLink = {
   /** The last line of a cited range, after `line`. */
   endLine?: number;
   directory: boolean;
-  /** `path` is absolute (or from `~`), a file outside the project. */
+  /** `path` is absolute (or from `~`), outside the project. */
   outside?: boolean;
 };
 
@@ -46,9 +47,9 @@ export function projectFileLink(
   const target =
     parsed ?? (directoryCandidate ? { path: directoryCandidate } : null);
   if (!target || !root) return null;
-  const normalizedRoot = root.replace(/\/+$/, "");
+  const normalizedRoot = root.replaceAll("\\", "/").replace(/\/+$/, "");
   let path = target.path.replaceAll("\\", "/");
-  if (path.startsWith("/")) {
+  if (path.startsWith("/") || /^[A-Za-z]:\//.test(path)) {
     if (!path.startsWith(normalizedRoot + "/")) return null;
     path = path.slice(normalizedRoot.length + 1);
   } else if (path.startsWith("~/")) return null;
@@ -67,8 +68,8 @@ export function projectFileLink(
 }
 
 /**
- * A file link in an answer: one in the clone, else a file elsewhere on disk
- * named by its absolute path, like a draft an agent wrote to /tmp.
+ * A file link in an answer: one in the clone, else a file or folder elsewhere
+ * on disk named by its absolute path, like a draft an agent wrote to /tmp.
  */
 export function chatFileLink(
   value: string,
@@ -79,9 +80,18 @@ export function chatFileLink(
   if (inside || !root) return inside;
   const candidate = inline ? filePathInInlineCode(value) : value;
   const target = candidate ? resolveFileLink(candidate) : null;
-  if (!target || !isOutsideFilePath(target.path)) return null;
+  if (!target) return null;
   // What the clone itself turned down stays text.
-  if (target.path.startsWith(root.replace(/\/+$/, "") + "/")) return null;
+  const slashed = (path: string) => path.replaceAll("\\", "/");
+  if (slashed(target.path).startsWith(slashed(root).replace(/\/+$/, "") + "/"))
+    return null;
+  if (isOutsideFolderPath(target.path))
+    return {
+      path: target.path.replace(/[/\\]+$/, ""),
+      directory: true,
+      outside: true,
+    };
+  if (!isOutsideFilePath(target.path)) return null;
   return {
     path: target.path,
     ...(target.line ? { line: target.line } : {}),

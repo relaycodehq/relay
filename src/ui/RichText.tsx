@@ -32,6 +32,7 @@ import {
 } from "../../shared/project-file-links";
 import { api } from "../lib/api";
 import { looksLikeColor } from "../lib/color-value";
+import { revealLabel } from "../lib/mod-key";
 import { parentSuffixes } from "../lib/file-icons";
 import { normalizeFileCitations } from "../lib/file-citations";
 import {
@@ -247,7 +248,7 @@ function FileLinkChip({
 }) {
   const suffix = useContext(FileLinkSuffixes).get(target.path);
   const label = [
-    target.path.split("/").at(-1) || target.path,
+    target.path.split(/[/\\]/).at(-1) || target.path,
     ...(suffix ? [suffix] : []),
     ...(target.line ? [`L${linesOf(target, "–")}`] : []),
   ].join(" · ");
@@ -255,7 +256,7 @@ function FileLinkChip({
     <button
       type="button"
       className="chat-file-link"
-      title={`${target.path}${target.line ? `:${linesOf(target, "-")}` : ""}`}
+      title={`${target.path}${target.line ? `:${linesOf(target, "-")}` : ""}${target.outside && target.directory ? `\n${revealLabel}` : ""}`}
       onClick={() => onOpen(target)}
     >
       <FileEntryIcon path={target.path} directory={target.directory} />

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   matchLink,
+  splitOutsidePath,
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import type { QuestionTarget } from "../../shared/questions";
@@ -123,13 +124,18 @@ export function usePaneOpens(
   }
   // A file clicked in the chat shows its diff in Changes (Review in a PR
   // thread), or opens in Files when it has none. A name that fits several
-  // files lists them in Files. A file outside the project opens in Files too.
+  // files lists them in Files. A file outside the project opens in Files too,
+  // a folder outside it in the system's file manager.
   async function openChatFile(target: ProjectFileLink) {
     const sequence = ++request.current;
     const isCurrent = () =>
       mounted.current &&
       currentLocation.current === location &&
       request.current === sequence;
+    if (target.outside && target.directory) {
+      const { folder, name } = splitOutsidePath(target.path);
+      return void api.revealProjectPath(folder, name).catch(onError);
+    }
     if (target.outside) return void openInEditor(target);
     if (pull) return revealChange(target);
     const id = folder.where;
@@ -142,7 +148,19 @@ export function usePaneOpens(
       if (!isCurrent()) return;
       const changed = changedTarget(target, changes);
       if (changed) return revealChange(changed);
-      if (target.directory) return void openInEditor(target);
+      if (target.directory) {
+        // An agent naming a folder elsewhere by its bare name gets a link here.
+        const exists = await api.projectDirectory(id, target.path).then(
+          () => true,
+          () => false,
+        );
+        if (!isCurrent()) return;
+        if (!exists)
+          return onError(
+            new Error(`There's no ${target.path}/ in this project.`),
+          );
+        return void openInEditor(target);
+      }
       const found = matchLink(
         target,
         await qc.query({

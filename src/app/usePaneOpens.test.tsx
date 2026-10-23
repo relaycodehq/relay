@@ -12,6 +12,8 @@ vi.mock("../lib/api", () => ({
     projectWorkingTree: vi.fn(),
     projectFiles: vi.fn(),
     projectFileInfo: vi.fn(),
+    projectDirectory: vi.fn(),
+    revealProjectPath: vi.fn(),
   },
 }));
 afterEach(() => vi.clearAllMocks());
@@ -194,7 +196,10 @@ it("ignores errors after a workspace switch or unmount", async () => {
   expect(s.showPane).not.toHaveBeenCalled();
 });
 
-it("preserves immediate directory, outside-file and PR routing", async () => {
+it("preserves directory, outside-file and PR routing", async () => {
+  vi.mocked(api.projectDirectory).mockResolvedValue(
+    {} as Awaited<ReturnType<typeof api.projectDirectory>>,
+  );
   const s = setup();
   s.folder.tree = tree([]);
   s.result.rerender();
@@ -214,4 +219,29 @@ it("preserves immediate directory, outside-file and PR routing", async () => {
   expect(revealed).toHaveBeenCalledExactlyOnceWith(file("pr.ts"));
   expect(api.projectWorkingTree).not.toHaveBeenCalled();
   expect(api.projectFiles).not.toHaveBeenCalled();
+});
+
+it("opens an outside folder in the file manager, not in Files", async () => {
+  vi.mocked(api.revealProjectPath).mockResolvedValue(undefined);
+  const s = setup();
+  await s.result().openChatFile({
+    path: "~/Downloads/invoices/pending",
+    directory: true,
+    outside: true,
+  });
+  expect(api.revealProjectPath).toHaveBeenCalledExactlyOnceWith(
+    "~/Downloads/invoices",
+    "pending",
+  );
+  expect(s.opened).not.toHaveBeenCalled();
+});
+
+it("says so when a linked folder isn't in the project", async () => {
+  vi.mocked(api.projectDirectory).mockRejectedValue(new Error("ENOENT"));
+  const s = setup();
+  s.folder.tree = tree([]);
+  s.result.rerender();
+  await s.result().openChatFile({ path: "pending", directory: true });
+  expect(s.opened).not.toHaveBeenCalled();
+  expect(s.onError).toHaveBeenCalledOnce();
 });
