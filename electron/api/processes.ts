@@ -10,7 +10,7 @@ export function processHandlers(ctx: ApiContext) {
         p.removed || p.computer ? [] : [{ id: p.id, name: p.name }],
       ),
     taskFolder: (id) => ctx.projects.taskFolder(id),
-    worktrees: (id) => ctx.projectChats.worktreeFolders(id),
+    worktrees: (id) => ctx.projectChats.worktrees.folders(id),
     chats: (id) => ctx.listChats(id),
   });
   const machine = new MachineLoads();

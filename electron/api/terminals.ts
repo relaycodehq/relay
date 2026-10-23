@@ -21,7 +21,7 @@ export function terminalHandlers(ctx: ApiContext) {
       projectTasks[change](
         await projects.taskFolder(id),
         taskId,
-        projectChats.worktreeFolders(id),
+        projectChats.worktrees.folders(id),
       ),
     );
   return {
@@ -30,7 +30,7 @@ export function terminalHandlers(ctx: ApiContext) {
       async (id, costed) =>
         projectTasks.list(
           await projects.taskFolder(id),
-          projectChats.worktreeFolders(id),
+          projectChats.worktrees.folders(id),
           { costed },
         ),
     ),
@@ -46,7 +46,7 @@ export function terminalHandlers(ctx: ApiContext) {
       ],
       async (projectId, chatId, size, fresh, slot) => {
         const cwd = chatId
-          ? await projectChats.terminalFolder(projectId, chatId)
+          ? await projectChats.worktrees.terminalFolder(projectId, chatId)
           : await projects.root(projectId);
         return threadTerminals.open(
           terminalSlotKey(chatId ?? draftTerminalKey(projectId), slot ?? ""),

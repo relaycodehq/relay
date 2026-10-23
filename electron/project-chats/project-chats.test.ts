@@ -520,20 +520,20 @@ it("previews only the images a turn read, and only when they really are images",
   });
   await writeFile(path, JSON.stringify(saved));
   restart(() => {});
-  expect(await chats.readImage(chat.id, turn, shot)).toBe(
+  expect(await chats.files.readImage(chat.id, turn, shot)).toBe(
     `data:image/png;base64,${tinyPng}`,
   );
-  await expect(chats.readImage(chat.id, turn, fake)).rejects.toThrow(
+  await expect(chats.files.readImage(chat.id, turn, fake)).rejects.toThrow(
     "isn't an image",
   );
-  await expect(chats.readImage(chat.id, turn, unread)).rejects.toThrow(
+  await expect(chats.files.readImage(chat.id, turn, unread)).rejects.toThrow(
     "didn't read or show that image",
   );
-  await expect(chats.readImage(chat.id, randomUUID(), shot)).rejects.toThrow(
-    "didn't read that image",
-  );
+  await expect(
+    chats.files.readImage(chat.id, randomUUID(), shot),
+  ).rejects.toThrow("didn't read that image");
   await rm(shot);
-  await expect(chats.readImage(chat.id, turn, shot)).rejects.toThrow(
+  await expect(chats.files.readImage(chat.id, turn, shot)).rejects.toThrow(
     "no longer on disk",
   );
 });
@@ -554,12 +554,12 @@ it("keeps the images an answer shows as they were, also in a fork", async () => 
   const shown = `data:image/png;base64,${tinyPng}`;
   // The agent's next screenshot lands on the same path.
   await writeFile(shot, "drawn over");
-  expect(await chats.readImage(chat.id, answer.id, shot)).toBe(shown);
+  expect(await chats.files.readImage(chat.id, answer.id, shot)).toBe(shown);
   await rm(shot);
-  expect(await chats.readImage(chat.id, answer.id, shot)).toBe(shown);
+  expect(await chats.files.readImage(chat.id, answer.id, shot)).toBe(shown);
   const fork = await chats.get((await chats.fork(chat.id)).id);
   const copied = fork.messages.find((m) => m.body === answer.body)!;
-  expect(await chats.readImage(fork.id, copied.id, shot)).toBe(shown);
+  expect(await chats.files.readImage(fork.id, copied.id, shot)).toBe(shown);
 });
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });

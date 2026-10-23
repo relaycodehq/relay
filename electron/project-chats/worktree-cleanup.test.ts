@@ -363,9 +363,9 @@ describe("cleaning up a real thread's worktree", () => {
     expect(await chats.worktreeStatus(id)).toMatchObject({ files: [] });
     expect((await chats.worktreeStatus(id)).landed).toBeUndefined();
 
-    await chats.branchMerged(id, "some/other-branch");
+    await chats.worktrees.branchMerged(id, "some/other-branch");
     expect((await chats.worktreeStatus(id)).landed).toBeUndefined();
-    await chats.branchMerged(id, worktree.branch!);
+    await chats.worktrees.branchMerged(id, worktree.branch!);
     expect((await chats.worktreeStatus(id)).landed).toEqual({ by: "merge" });
   });
 

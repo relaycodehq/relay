@@ -91,9 +91,9 @@ type Chats = Pick<
   | "showRender"
   | "showPreview"
   | "askWithPage"
-  | "enterWorktree"
   | "notes"
 > & {
+  worktrees: Pick<ProjectChats["worktrees"], "enter">;
   liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
   importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
 };
@@ -259,7 +259,7 @@ export class StartedThreads {
       case "tick_note":
         return this.tickNote(lead, input, signal);
       case "move_to_worktree":
-        return json(await this.chats.enterWorktree(lead.id, input));
+        return json(await this.chats.worktrees.enter(lead.id, input));
       case "deep_review":
         return this.deepReview(lead, input, signal);
       case "list_review_setups":

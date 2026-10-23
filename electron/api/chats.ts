@@ -92,7 +92,7 @@ export function chatHandlers(ctx: ApiContext) {
       },
     ),
     worktreeBranch: takes([idSchema, branchSchema], (projectId, branch) =>
-      projectChats.worktreeBranch(projectId, branch),
+      projectChats.worktrees.branch(projectId, branch),
     ),
     projectChat: takes(
       [idSchema, optional(knownMessagesSchema)],
@@ -245,43 +245,48 @@ export function chatHandlers(ctx: ApiContext) {
       projectChats.stopAgent(id, agentId),
     ),
     projectChatImage: takes([idSchema, idSchema], (id, imageId) =>
-      projectChats.image(id, imageId),
+      projectChats.files.image(id, imageId),
     ),
     projectChatQueuedImages: takes([idSchema, idSchema], (id, messageId) =>
       projectChats.queuedImages(id, messageId),
     ),
     projectChatReadImage: takes(
       [idSchema, idSchema, imagePathSchema],
-      (id, messageId, path) => projectChats.readImage(id, messageId, path),
+      (id, messageId, path) =>
+        projectChats.files.readImage(id, messageId, path),
     ),
     projectChatVideo: takes(
       [idSchema, idSchema, imagePathSchema],
       async (id, messageId, path) => {
-        const full = await projectChats.videoPath(id, messageId, path);
+        const full = await projectChats.files.turnVideoPath(
+          id,
+          messageId,
+          path,
+        );
         return mediaUrl(full, dirname(full));
       },
     ),
     projectChatPreviewShot: takes(
       [idSchema, messageIdSchema],
-      (id, messageId) => projectChats.previewShot(id, messageId),
+      (id, messageId) => projectChats.files.previewShot(id, messageId),
     ),
     revealProjectChatReadImage: takes(
       [idSchema, idSchema, imagePathSchema],
       async (id, messageId, path) => {
         shell.showItemInFolder(
-          await projectChats.revealImagePath(id, messageId, path),
+          await projectChats.files.revealImagePath(id, messageId, path),
         );
       },
     ),
     projectTurnDiff: takes(
       [idSchema, idSchema, workingPathSchema],
       (chatId, messageId, path) =>
-        projectChats.turnDiff(chatId, messageId, path),
+        projectChats.files.diff(chatId, messageId, path),
     ),
     revealProjectTurnFile: takes(
       [idSchema, idSchema.nullable(), workingPathSchema],
       async (chatId, messageId, path) => {
-        const file = await projectChats.turnFilePath(chatId, messageId, path);
+        const file = await projectChats.files.path(chatId, messageId, path);
         if (!existsSync(file)) throw new Error("That file is gone from disk.");
         shell.showItemInFolder(file);
       },
@@ -308,19 +313,19 @@ export function chatHandlers(ctx: ApiContext) {
       return status;
     }),
     projectWorktreeDiff: takes([idSchema, workingPathSchema], (chatId, path) =>
-      projectChats.worktreeDiff(chatId, path),
+      projectChats.worktrees.diff(chatId, path),
     ),
     removeProjectWorktree: takes([idSchema], (chatId) =>
-      projectChats.removeWorktree(chatId),
+      projectChats.worktrees.remove(chatId),
     ),
     projectWorktreeMove: takes([idSchema], (chatId) =>
-      projectChats.worktreeMovePreview(chatId),
+      projectChats.worktrees.movePreview(chatId),
     ),
     moveProjectChatToWorktree: takes([idSchema], (chatId) =>
-      projectChats.moveToWorktree(chatId),
+      projectChats.worktrees.move(chatId),
     ),
     revealProjectWorktree: takes([idSchema], (chatId) =>
-      openPath(projectChats.worktreePath(chatId)),
+      openPath(projectChats.worktrees.path(chatId)),
     ),
     revealAgentWorktree: takes(
       [idSchema, z.string().max(4096)],

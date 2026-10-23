@@ -163,7 +163,7 @@ export function threadServices({
   const pullMerges = new PullMerges({
     chats: () => store.get().chats ?? [],
     ...pullHosts.merges,
-    record: (id) => chats.pullMerged(id),
+    record: (id) => chats.worktrees.pullMerged(id),
     online,
   });
   const clockify = new ClockifyPlugin({

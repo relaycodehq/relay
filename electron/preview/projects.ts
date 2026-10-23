@@ -24,10 +24,9 @@ export function worktreeDevPort(port: number, env: Record<string, string>) {
 export class PreviewProjects {
   constructor(
     private projects: Pick<Projects, "get" | "root">,
-    private chats: Pick<
-      ProjectChats,
-      "get" | "terminalFolder" | "worktreeEnv" | "worktreeFolders"
-    >,
+    private chats: Pick<ProjectChats, "get" | "worktreeEnv"> & {
+      worktrees: Pick<ProjectChats["worktrees"], "folders" | "terminalFolder">;
+    },
     private summaries: () => ChatSummary[],
   ) {}
 
@@ -47,7 +46,7 @@ export class PreviewProjects {
       project: basename(project.path),
       root,
       worktrees: [
-        ...this.chats.worktreeFolders(chat.projectId),
+        ...this.chats.worktrees.folders(chat.projectId),
         ...this.summaries()
           .filter((c) => c.projectId === chat.projectId)
           .flatMap((c) =>
@@ -91,7 +90,7 @@ export class PreviewProjects {
     const scope = await this.folders(chat);
     // Validate managed worktrees (removed or not yet made) before scanning.
     const primary = chatId
-      ? await this.chats.terminalFolder(projectId, chatId)
+      ? await this.chats.worktrees.terminalFolder(projectId, chatId)
       : scope.root;
     const settings = this.projects.get(projectId).settings;
     const sameSettings =

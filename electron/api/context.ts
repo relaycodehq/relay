@@ -202,7 +202,7 @@ export function apiContext(services: Services) {
     );
     if (!chatId) return { ...(await projects.inspect(projectId)), projectId };
     return {
-      root: await projectChats.worktreeRoot(projectId, chatId, worktree),
+      root: await projectChats.worktrees.rootFor(projectId, chatId, worktree),
       plain: false,
       projectId,
       chatId,

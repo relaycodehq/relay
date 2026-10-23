@@ -892,7 +892,7 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(git(repo, "branch", "--show-current")).toBe(main);
   // On the branch from the start, and the thread's Git and file panes work there.
   expect(git(checkout.path, "branch", "--show-current")).toBe("panel");
-  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(checkout.path);
+  expect(await chats.worktrees.rootFor(projectId, chat.id)).toBe(checkout.path);
   expect(
     chats.list(projectId).find((c) => c.id === chat.id)?.reviewFolder,
   ).toEqual({ path: checkout.path, branch: "panel" });
@@ -914,7 +914,9 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   expect(
     chats.list(projectId).find((c) => c.id === claude.id)?.reviewFolder,
   ).toEqual({ path: checkout.path, branch: "panel" });
-  expect(await chats.worktreeRoot(projectId, claude.id)).toBe(checkout.path);
+  expect(await chats.worktrees.rootFor(projectId, claude.id)).toBe(
+    checkout.path,
+  );
 
   // A fix checks the branch out there first.
   await chats.send(chat.id, {
@@ -945,8 +947,8 @@ it("reviews a branch that isn't checked out in a worktree of its own, fixes it o
   await expect(readFile(join(checkout.path, ".git"))).rejects.toThrow();
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   // Looking at the thread reads the checkout, without making the folder again.
-  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(repo);
-  expect(await chats.worktreeRoot(projectId, claude.id)).toBe(repo);
+  expect(await chats.worktrees.rootFor(projectId, chat.id)).toBe(repo);
+  expect(await chats.worktrees.rootFor(projectId, claude.id)).toBe(repo);
   expect(git(repo, "worktree", "list")).not.toContain("deep-reviews");
   expect(git(repo, "rev-parse", "refs/heads/panel")).toBe(head);
 });
@@ -994,11 +996,11 @@ it("runs the next round where the review works, and won't fix an earlier round's
     folder: checkout.path,
   });
   expect(second.scope.checkout).toBeUndefined();
-  expect(await chats.worktreeRoot(projectId, second.reviewers[0]!.chatId)).toBe(
-    checkout.path,
-  );
+  expect(
+    await chats.worktrees.rootFor(projectId, second.reviewers[0]!.chatId),
+  ).toBe(checkout.path);
   // The thread stays where the review moved it.
-  expect(await chats.worktreeRoot(projectId, chat.id)).toBe(checkout.path);
+  expect(await chats.worktrees.rootFor(projectId, chat.id)).toBe(checkout.path);
 
   git(checkout.path, "commit", "-qam", "Fix the panel");
   await chats.startDeepReview(

@@ -83,7 +83,9 @@ function setup() {
     window: { send, caller: () => null },
     projectChats: {
       get,
-      terminalFolder: async (_: string, id: string) => folders[id],
+      worktrees: {
+        terminalFolder: async (_: string, id: string) => folders[id],
+      },
       startedThreads: () => started,
       onSaved: (listener: (chat: ProjectChat) => void) => {
         saved.add(listener);

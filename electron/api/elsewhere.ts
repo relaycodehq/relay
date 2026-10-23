@@ -80,7 +80,9 @@ export function touchMark(chat: ProjectChat) {
 export function elsewhereHandlers(ctx: ApiContext) {
   const { projectChats, store } = ctx;
   const folderOf = (chat: ProjectChat) =>
-    projectChats.terminalFolder(chat.projectId, chat.id).catch(() => null);
+    projectChats.worktrees
+      .terminalFolder(chat.projectId, chat.id)
+      .catch(() => null);
   const readings = new Map<string, Reading>();
 
   /** A thread's reading no longer holds: its window reads it again. */

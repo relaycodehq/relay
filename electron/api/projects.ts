@@ -418,8 +418,8 @@ export function projectHandlers(ctx: ApiContext) {
           throw new Error("That thread belongs to another project.");
         // A worktree thread reports its own branch; a removed one, the checkout's.
         const root = threadWorktree(chat ?? undefined)
-          ? await projectChats
-              .worktreeRoot(id, chatId!)
+          ? await projectChats.worktrees
+              .rootFor(id, chatId!)
               .catch(() => projects.root(id))
           : await projects.root(id);
         const settings = store.get().sourceControl;
@@ -447,7 +447,7 @@ export function projectHandlers(ctx: ApiContext) {
         const { root, chatId, client } = await pullRequestPlace(where);
         const created = await pullRequestCreation.create(root, client, input);
         if (chatId)
-          await projectChats.recordPull(chatId, {
+          await projectChats.worktrees.recordPull(chatId, {
             number: created.pull.ref.number,
             url: created.pull.url,
           });

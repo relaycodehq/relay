@@ -622,7 +622,7 @@ export class HandoffReceiver {
         ...(over ? { over: over.worktree } : {}),
       },
     );
-    if (over) await this.host.chats.passedOn(over.id);
+    if (over) await this.host.chats.worktrees.passedOn(over.id);
     await git(root, ["update-ref", "-d", ref]).catch(() => {});
     const chat = await this.host.chats.handoffs.adopt(
       project.id,

@@ -37,9 +37,11 @@ function setup(
     },
     {
       get: async (id) => ({ ...own, id }),
-      terminalFolder,
       worktreeEnv: async () => ({ RELAY_PORT_OFFSET: "10" }),
-      worktreeFolders: () => [{ path: "/repo/neighbour", chatId: "other" }],
+      worktrees: {
+        terminalFolder,
+        folders: () => [{ path: "/repo/neighbour", chatId: "other" }],
+      },
     },
     () => [],
   );

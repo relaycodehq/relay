@@ -123,7 +123,7 @@ export function gitHandlers(ctx: ApiContext) {
         const result = await mergeBranch(await placeRoot(where), input);
         const { chatId } = parseWorkspaceId(where);
         if (result.merged && chatId)
-          await projectChats.branchMerged(chatId, input.branch);
+          await projectChats.worktrees.branchMerged(chatId, input.branch);
         return result;
       },
     ),

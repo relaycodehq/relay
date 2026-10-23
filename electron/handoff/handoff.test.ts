@@ -644,7 +644,7 @@ it("keeps the worktree of a thread that hasn't gone back, so it can still be han
   expect(
     (await mini.chats.get(arrived!.id)).worktree!.removedAt,
   ).toBeUndefined();
-  await expect(mini.chats.removeWorktree(arrived!.id)).rejects.toThrow(
+  await expect(mini.chats.worktrees.remove(arrived!.id)).rejects.toThrow(
     /Hand this thread back first/,
   );
   expect(existsSync(there)).toBe(true);
@@ -659,7 +659,7 @@ it("keeps the worktree of a thread that hasn't gone back, so it can still be han
       (await mini.chats.get(arrived!.id)).cameFrom?.returnedAt,
     ).toBeTruthy(),
   );
-  await mini.chats.removeWorktree(arrived!.id);
+  await mini.chats.worktrees.remove(arrived!.id);
   expect(existsSync(there)).toBe(false);
 });
 
@@ -1860,7 +1860,7 @@ it("tells the other computer a thread was taken back, so its copy is no longer o
   const { id } = (await laptop.chats.get(thread.id)).sentTo!;
   const [arrived] = mini.chats.list(mini.projectId).filter((c) => c.cameFrom);
   expect(awaitsReturn(arrived!)).toBe(true);
-  await expect(mini.chats.removeWorktree(arrived!.id)).rejects.toThrow(
+  await expect(mini.chats.worktrees.remove(arrived!.id)).rejects.toThrow(
     /Hand this thread back first/,
   );
 
@@ -1886,7 +1886,7 @@ it("tells the other computer a thread was taken back, so its copy is no longer o
   // Its copy carries on as a thread of its own, and its worktree goes like any other.
   await mini.chats.send(arrived!.id, input("@codex Carry on on the mini"));
   await finished(mini.chats, arrived!.id);
-  await mini.chats.removeWorktree(arrived!.id);
+  await mini.chats.worktrees.remove(arrived!.id);
   expect(existsSync(there)).toBe(false);
 });
 

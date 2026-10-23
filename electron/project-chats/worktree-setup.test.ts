@@ -196,7 +196,7 @@ it("leaves a project without setup alone, and runs teardown before removing the 
   const path = (await chats.get(chat.id)).worktree!.path!;
   expect(await readFile(join(path, ".env"), "utf8")).toBe("SECRET=1\n");
 
-  await chats.removeWorktree(chat.id);
+  await chats.worktrees.remove(chat.id);
   expect(await readFile(torn, "utf8")).toBe("10\n");
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
 });
@@ -262,7 +262,7 @@ it("shows a failed teardown in the thread but removes the worktree anyway", asyn
   await chats.send(chat.id, input("@codex Hello"));
   await answered(chat.id, 2);
 
-  await chats.removeWorktree(chat.id);
+  await chats.worktrees.remove(chat.id);
   const { messages, worktree } = await chats.get(chat.id);
   expect(worktree!.removedAt).toBeDefined();
   expect(messages.at(-1)).toMatchObject({

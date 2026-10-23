@@ -349,10 +349,10 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
   });
   const image = (await chats.get(chat.id)).messages[0].images?.[0];
   expect(image).toMatchObject({ name: "screen.png", mimeType: "image/png" });
-  expect(await chats.image(chat.id, image!.id)).toBe(
+  expect(await chats.files.image(chat.id, image!.id)).toBe(
     `data:image/png;base64,${tinyPng}`,
   );
-  await expect(chats.image(chat.id, randomUUID())).rejects.toThrow(
+  await expect(chats.files.image(chat.id, randomUUID())).rejects.toThrow(
     "Screenshot not found",
   );
   expect(

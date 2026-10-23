@@ -75,7 +75,7 @@ import { TurnCompactions } from "./turn-flows/compaction";
 import { TurnEndings } from "./turn-flows/end";
 import { TurnHandoffs } from "./turn-flows/handoff-notes";
 import { TurnRecovery } from "./turn-flows/recovery";
-import { ThreadWorktrees, type WorktreeRequest } from "./worktrees";
+import { ThreadWorktrees } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
 import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
@@ -117,9 +117,9 @@ export class ProjectChats {
   private limits: LimitResumes;
   private idle: IdleCompactions;
   private titles: ThreadTitles;
-  private worktrees: ThreadWorktrees;
+  readonly worktrees: ThreadWorktrees;
   private cleanup: WorktreeCleanup;
-  private files: TurnFiles;
+  readonly files: TurnFiles;
   readonly handoffs: ComputerHandoff;
   readonly liveHandoff: LiveHandoff;
   readonly setupMirror: SetupMirror;
@@ -782,9 +782,6 @@ export class ProjectChats {
   async cost(id: string) {
     return threadCost((await this.storage.load(id)).messages);
   }
-  image(chatId: string, imageId: string) {
-    return this.files.image(chatId, imageId);
-  }
   /** The screenshots of a queued or scheduled message; it is gone once it has been sent. */
   async queuedImages(chatId: string, messageId: string) {
     const chat = await this.storage.load(chatId);
@@ -793,18 +790,6 @@ export class ProjectChats {
     );
     if (!waiting) throw new Error("That message is no longer waiting.");
     return structuredClone(waiting.input.images ?? []);
-  }
-  readImage(chatId: string, messageId: string, path: string) {
-    return this.files.readImage(chatId, messageId, path);
-  }
-  videoPath(chatId: string, messageId: string, path: string) {
-    return this.files.turnVideoPath(chatId, messageId, path);
-  }
-  revealImagePath(chatId: string, messageId: string, path: string) {
-    return this.files.revealImagePath(chatId, messageId, path);
-  }
-  worktreeFolders(projectId: string) {
-    return this.worktrees.folders(projectId);
   }
   /**
    * Gives worktree thread `id` its worktree now, holding a copy of the files
@@ -1022,20 +1007,8 @@ export class ProjectChats {
     this.cleanup.shown(id);
     return this.worktrees.status(id);
   }
-  worktreeDiff(id: string, path: string) {
-    return this.worktrees.diff(id, path);
-  }
-  removeWorktree(id: string) {
-    return this.worktrees.remove(id);
-  }
   returnedCopy(projectId: string, branch: string, tip: string) {
     return this.worktrees.returnedCopy(projectId, branch, tip);
-  }
-  passedOn(id: string) {
-    return this.worktrees.passedOn(id);
-  }
-  worktreeBranch(projectId: string, branch: string) {
-    return this.worktrees.branch(projectId, branch);
   }
   rerunWorktreeSetup(id: string, messageId: string) {
     return this.worktrees.setup.rerun(id, messageId);
@@ -1044,43 +1017,9 @@ export class ProjectChats {
   async worktreeEnv(id: string) {
     return this.worktrees.setup.env(await this.storage.load(id));
   }
-  worktreeMovePreview(id: string) {
-    return this.worktrees.movePreview(id);
-  }
-  moveToWorktree(id: string) {
-    return this.worktrees.move(id);
-  }
-  /** Moves the thread into a worktree its agent asked for in the middle of its answer. */
-  enterWorktree(id: string, request: WorktreeRequest) {
-    return this.worktrees.enter(id, request);
-  }
-  terminalFolder(projectId: string, id: string) {
-    return this.worktrees.terminalFolder(projectId, id);
-  }
   /** The worktrees agents made from project-folder threads. */
   get agentWorkspaces() {
     return this.worktrees.agents;
-  }
-  worktreeRoot(projectId: string, id: string, expectedWorktree?: string) {
-    return this.worktrees.rootFor(projectId, id, expectedWorktree);
-  }
-  worktreePath(id: string) {
-    return this.worktrees.path(id);
-  }
-  recordPull(id: string, pr: { number: number; url: string }) {
-    return this.worktrees.recordPull(id, pr);
-  }
-  pullMerged(id: string) {
-    return this.worktrees.pullMerged(id);
-  }
-  branchMerged(id: string, branch: string) {
-    return this.worktrees.branchMerged(id, branch);
-  }
-  turnDiff(chatId: string, messageId: string, path: string) {
-    return this.files.diff(chatId, messageId, path);
-  }
-  turnFilePath(chatId: string, messageId: string | null, path: string) {
-    return this.files.path(chatId, messageId, path);
   }
   rewindTurn(
     chatId: string,
@@ -1147,10 +1086,6 @@ export class ProjectChats {
           },
         ));
     active.preview({ ...preview, ...(shot ? { shot } : {}) });
-  }
-  /** The preview's last frame a turn kept, as a data URL. */
-  previewShot(chatId: string, messageId: string) {
-    return this.files.previewShot(chatId, messageId);
   }
   /**
    * Leaves a page the thread's agent asks with (ask_html) in the answer it is
