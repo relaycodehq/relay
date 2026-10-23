@@ -25,6 +25,9 @@ export const imageQuery = (image: PreviewImage) => ({
   // An answer can reach the renderer before main has saved the image's turn.
   retry: 2,
   retryDelay: 500,
+  // One that failed stays failed until Retry: a thread's rows mount again
+  // as it scrolls and redraws, and each mount would read a missing file anew.
+  retryOnMount: false,
 });
 
 export function useImageSource(image: PreviewImage, enabled = true) {

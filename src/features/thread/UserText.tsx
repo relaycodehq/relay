@@ -149,11 +149,16 @@ export function sentPills(
   return pills;
 }
 
+// Shared, so a message without skills or images doesn't make a new list each
+// render: `inlineCode` would change with it, and RichText remount every pill.
+const noSkills: SentSkill[] = [];
+const noImages: SentImage[] = [];
+
 /** A sent message's text in one box like the composer's, with the same pills where they went. */
 export function UserText({
   text,
-  skills = [],
-  images = [],
+  skills = noSkills,
+  images = noImages,
   onOpenImage,
   projectRoot,
   onOpenFile,
