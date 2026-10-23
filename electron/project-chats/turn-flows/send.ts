@@ -364,11 +364,13 @@ export class TurnSends {
           ? outgoing.provider
           : undefined;
       // An agent whose last turn failed, usually on a usage limit, can't
-      // write a note either; Relay writes one from what it left instead.
+      // write a note either; Relay writes one from what it left instead. A
+      // fork has no session of its own yet, so the note turn forks one.
       const asksNote =
         switchedFrom &&
         outgoing!.status !== "failed" &&
-        agentSession(chat, switchedFrom, parent?.id).thread;
+        (agentSession(chat, switchedFrom, parent?.id).thread ||
+          forkFor(chat, switchedFrom, parent?.id));
       let note = asksNote
         ? await this.handoffs.note(
             chat,

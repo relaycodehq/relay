@@ -73,6 +73,40 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
 });
+it("asks the outgoing agent for a note in a fork it hasn't answered in yet", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Explain the cache guard"));
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe(
+      "complete",
+    );
+    expect(chats.hasActiveProject(projectId)).toBe(false);
+  });
+  const fork = await chats.fork(chat.id);
+  await chats.send(fork.id, {
+    ...input("@claude Now fix it"),
+    provider: "claude",
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(fork.id)).messages.at(-1)).toMatchObject({
+      provider: "claude",
+      status: "complete",
+    }),
+  );
+  const note = (await chats.get(fork.id)).messages.find((m) => m.handoff)!;
+  expect(note).toMatchObject({
+    provider: "codex",
+    status: "complete",
+    body: "The cache guard prevents duplicate requests.",
+  });
+  expect(note.handoff?.byRelay).toBeUndefined();
+  const forked = (await agentCalls())
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+    .find((r) => r.method === "thread/fork");
+  expect(forked?.thread).toMatchObject({ threadId: "fixture-thread" });
+});
 /** Sends `body` to Claude after Codex's turn, and returns the thread and Claude's prompt. */
 async function switchToClaude(chatId: string, body: string) {
   await chats.send(chatId, { ...input(body), provider: "claude" });
