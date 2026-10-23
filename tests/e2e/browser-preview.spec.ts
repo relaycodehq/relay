@@ -276,9 +276,7 @@ test("the Browser surface starts the project's dev server and shows its page ove
       try {
         await address.fill(`localhost:${manualPort}/next`);
         await address.press("Enter");
-        await expect(panel.getByRole("alert")).toContainText(
-          /ENOENT|Git root changed/,
-        );
+        await expect(panel.getByRole("alert")).toContainText(/folder is gone/);
         await page.screenshot({
           path: "test-results/browser-navigation-error.png",
         });
