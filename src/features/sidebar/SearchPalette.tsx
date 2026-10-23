@@ -6,6 +6,8 @@ import { relativeDate } from "../../lib/relative-date";
 import { useReturnFocus } from "../../lib/focus-return";
 import { useBackdropClose } from "../../lib/backdrop-close";
 import { ProjectBadge } from "../projects/ProjectBadge";
+import { ProviderIcon } from "../agents/ComposerModelPicker";
+import { ThreadRef } from "./ThreadRef";
 import "../../ui/palette.css";
 
 const LISTED = 100;
@@ -24,7 +26,7 @@ function Marked({ title, query }: { title: string; query: string }) {
 }
 
 /**
- * Finds a thread by its title or its project's name, across every project,
+ * Finds a thread by its title, project, model or branch, across every project,
  * whatever the sidebar's filter hides. Empty, it lists the latest threads.
  */
 export function SearchPalette({
@@ -55,10 +57,14 @@ export function SearchPalette({
     const p = projects.get(c.projectId);
     return p?.scratch ? "Scratchpad" : (p?.name ?? "");
   };
+  const hasRef = (c: ChatSummary) =>
+    !!(c.branch || c.commit) && !projects.get(c.projectId)?.scratch;
   const results = (
     query
       ? threads.filter((c) =>
-          `${c.title} ${projectName(c)}`.toLowerCase().includes(query),
+          `${c.title} ${projectName(c)} ${c.model ?? ""} ${c.branch ?? ""}`
+            .toLowerCase()
+            .includes(query),
         )
       : threads
   ).slice(0, LISTED);
@@ -144,9 +150,20 @@ export function SearchPalette({
               <strong>
                 <Marked title={c.title} query={query} />
               </strong>
-              <small>{projectName(c)}</small>
+              <small className="palette-thread-meta">
+                <span>{projectName(c)}</span>
+                {hasRef(c) && <ThreadRef chat={c} branchIcon />}
+              </small>
             </span>
-            <em>{relativeDate(new Date(c.updated).toISOString())}</em>
+            <span className="palette-thread-side">
+              {c.provider && (
+                <span className="palette-thread-model">
+                  <ProviderIcon provider={c.provider} />
+                  {c.model}
+                </span>
+              )}
+              <em>{relativeDate(new Date(c.updated).toISOString())}</em>
+            </span>
           </button>
         ))}
         {!results.length && (

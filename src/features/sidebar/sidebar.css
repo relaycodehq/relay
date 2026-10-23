@@ -1834,3 +1834,48 @@
 .sb-card-state.stopped {
   color: var(--muted);
 }
+
+/* The search palette's thread rows: project · branch under the title, the
+   branch giving way first; the agent and model on the right, over the age. */
+.palette-thread-meta {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.palette-thread-meta > span:not(.sb-thread-ref) {
+  flex: none;
+}
+.palette-thread-meta > * + *::before {
+  content: "·";
+  margin: 0 6px;
+  opacity: 0.7;
+}
+.palette-thread-meta > .sb-thread-ref {
+  font-size: inherit;
+}
+/* The ref's own gap already spaces it from the dot. */
+.palette-thread-meta > .sb-thread-ref::before {
+  margin-right: 2px;
+}
+.palette-thread-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex: none;
+  max-width: 40%;
+}
+.palette-thread-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.palette-thread-model .provider-glyph {
+  width: 13px;
+  height: 13px;
+}

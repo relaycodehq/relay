@@ -91,12 +91,13 @@ export function chatSummary({
   queueMark: _staleMark,
   notesMark: _staleNotesMark,
   setupMark: _staleSetupMark,
+  model: _staleModel,
   asking,
   ...summary
 }: ProjectChat): ChatSummary {
-  const provider = [...messages]
-    .reverse()
-    .find((m) => m.role === "assistant")?.provider;
+  const latest = [...messages].reverse().find((m) => m.role === "assistant");
+  const provider = latest?.provider;
+  const model = latest?.model?.name;
   const holder = contextAgent(messages.filter((m) => !m.parentId));
   const providers = [
     ...new Set(
@@ -116,6 +117,7 @@ export function chatSummary({
     ...summary,
     providers,
     ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
     ...(holder ? { contextAgent: holder } : {}),
     ...(next ? { nextSend: next } : {}),
     ...(mark ? { queueMark: mark } : {}),

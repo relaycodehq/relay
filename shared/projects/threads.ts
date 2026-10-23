@@ -48,6 +48,8 @@ export interface ChatSummary {
   updated: number;
   /** Provider of the latest answer, for the activity card. */
   provider?: AgentProvider;
+  /** The latest answer's model, by its listed name ("Opus 5.5"). */
+  model?: string;
   /** Every agent used in the conversation, most recently used first. */
   providers?: AgentProvider[];
   /** The agent holding the main conversation's context; see shared/recipient. */
