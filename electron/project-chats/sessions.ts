@@ -98,10 +98,19 @@ export function parseSessionKey(key: string) {
  * How long a session may sit unused before its agent process ends. The
  * thread resumes its conversation with the next message, which only costs
  * that message the agent's startup. Kept open, every thread ever touched
- * held a process (~150 MB for Claude), and the agent host that ran it,
- * until Relay quit.
+ * held a process (hundreds of MB for Claude), and the agent host that
+ * ran it, until Relay quit.
  */
 export const IDLE_CLOSE = 30 * 60_000;
+/**
+ * How many unused sessions may wait out `IDLE_CLOSE`; past them the oldest
+ * end once unused for `IDLE_KEEP_MIN`. An idle Claude held 450–850 MB on a
+ * Mac (2026-10), so every thread touched in half an hour kept warm could
+ * hold several GB between them.
+ */
+export const IDLE_KEEP = 4;
+/** Not even past the cap does a session end this soon: its reply may still be being read. */
+export const IDLE_KEEP_MIN = 5 * 60_000;
 
 /**
  * The agent sessions Relay's threads have open, by key, and what Claude's
@@ -207,6 +216,7 @@ export class ProviderSessions {
    * cut off count as use.
    */
   closeIdle(now = Date.now()) {
+    const idle: string[] = [];
     for (const key of this.keys) {
       const { chatId } = parseSessionKey(key);
       if (
@@ -217,7 +227,11 @@ export class ProviderSessions {
       )
         this.used.set(key, now);
       else if (now - this.used.get(key)! >= IDLE_CLOSE) this.end(key);
+      else idle.push(key);
     }
+    idle.sort((a, b) => this.used.get(b)! - this.used.get(a)!);
+    for (const key of idle.slice(IDLE_KEEP))
+      if (now - this.used.get(key)! >= IDLE_KEEP_MIN) this.end(key);
   }
 
   private end(key: string) {

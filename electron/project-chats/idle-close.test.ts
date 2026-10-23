@@ -14,7 +14,8 @@ vi.mock("../agents/claude/project", () => ({
   readClaudeContext: async () => null,
 }));
 
-const { IDLE_CLOSE, ProviderSessions } = await import("./sessions");
+const { IDLE_CLOSE, IDLE_KEEP, IDLE_KEEP_MIN, ProviderSessions } =
+  await import("./sessions");
 
 describe("closing idle sessions", () => {
   const busy = new Set<string>();
@@ -53,6 +54,22 @@ describe("closing idle sessions", () => {
     expect(closed).toEqual([]);
     sessions.closeIdle(t0 + 4 * IDLE_CLOSE + 1000);
     expect(closed).toEqual([key]);
+  });
+
+  it("ends the oldest unused sessions past the few it keeps warm, once they've sat a while", () => {
+    vi.useFakeTimers({ now: t0 });
+    const keys = Array.from({ length: IDLE_KEEP + 2 }, (_, i) => {
+      vi.setSystemTime(t0 + i * 1000);
+      const key = sessions.key(`t${i}`);
+      sessions.add(key);
+      return key;
+    });
+    vi.useRealTimers();
+    sessions.closeIdle(t0 + IDLE_KEEP_MIN - 60_000);
+    expect(closed).toEqual([]);
+    sessions.closeIdle(t0 + IDLE_KEEP_MIN + 10_000);
+    expect(closed.toSorted()).toEqual(keys.slice(0, 2).toSorted());
+    expect(sessions.of(`t${IDLE_KEEP + 1}`)).toEqual([keys.at(-1)]);
   });
 
   it("keeps a session with background work or a wake-up, and a side thread's beside it", () => {
