@@ -33,6 +33,11 @@ const MAX_PAGES = 20;
  */
 export function DiffStatBreakdown({ files }: { files: readonly FileStat[] }) {
   const by = useMemo(() => statsByKind(files), [files]);
+  return <KindStatBreakdown by={by} />;
+}
+
+/** Lines already split by kind, as a deep review keeps them. */
+export function KindStatBreakdown({ by }: { by: ByKind }) {
   const total = headlineStat(by);
   if (!changed(total)) return null;
   const kinds = Object.values(by).filter(changed).length;

@@ -8,6 +8,7 @@ import type {
 } from "../../../shared/deep-review";
 import { traitsName, useAgentName } from "./useAgentName";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
+import { KindStatBreakdown } from "../changes/DiffStatBreakdown";
 
 function AgentChip({
   agent,
@@ -65,7 +66,10 @@ export function DeepReviewRequest({
             <strong>Deep review</strong>
             <span>{scope.label}</span>
             {scope.title && <span className="muted">{scope.title}</span>}
-            {scope.stats && (scope.stats.additions || scope.stats.deletions) ? (
+            {scope.stats?.byKind ? (
+              <KindStatBreakdown by={scope.stats.byKind} />
+            ) : scope.stats &&
+              (scope.stats.additions || scope.stats.deletions) ? (
               <span className="diff-stat">
                 <span className="diff-stat-add">+{scope.stats.additions}</span>
                 <span className="diff-stat-del">−{scope.stats.deletions}</span>

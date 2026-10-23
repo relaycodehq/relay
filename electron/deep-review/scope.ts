@@ -2,6 +2,8 @@
 // commits or changes, their range and stats, a pull request fetched to hidden refs.
 import { currentBranchOrNull, git } from "../git/git";
 import { isRemoteOfRepo } from "../git/repository";
+import { numstatFiles } from "../git/working-tree";
+import { headlineStat, statsByKind } from "../../shared/diff-kinds";
 import type { Project } from "../../shared/projects";
 import type { ReviewScope, ReviewTarget } from "../../shared/deep-review";
 
@@ -15,15 +17,6 @@ export interface PullInfo {
   headRef: string;
   /** The branch it comes from, when that's in the project's own repository rather than a fork. */
   headBranch?: string;
-}
-
-function parseShortstat(text: string) {
-  const number = (pattern: RegExp) => Number(text.match(pattern)?.[1] ?? 0);
-  return {
-    files: number(/(\d+) files? changed/),
-    additions: number(/(\d+) insertions?\(\+\)/),
-    deletions: number(/(\d+) deletions?\(-\)/),
-  };
 }
 
 async function commit(root: string, rev: string, missing: string) {
@@ -63,8 +56,23 @@ export async function resolveScope(
   pull?: PullInfo,
 ): Promise<ReviewScope> {
   const branch = await currentBranchOrNull(root);
-  const stats = async (from: string, to: string) =>
-    parseShortstat(await git(root, ["diff", "--shortstat", from, to]));
+  // Lockfiles and generated files stay out of the headline, as everywhere else.
+  const stats = async (...range: string[]) => {
+    const files = numstatFiles(
+      await git(root, [
+        "diff",
+        "--numstat",
+        "-z",
+        "-M",
+        "--no-color",
+        "--no-ext-diff",
+        "--no-textconv",
+        ...range,
+      ]),
+    );
+    const byKind = statsByKind(files);
+    return { files: files.length, ...headlineStat(byKind), byKind };
+  };
   switch (target.kind) {
     case "uncommitted": {
       const changed = (
@@ -74,14 +82,12 @@ export async function resolveScope(
         .filter(Boolean);
       if (!changed.length)
         throw new Error("There are no uncommitted changes to review.");
-      const tracked = await git(root, ["diff", "--shortstat", "HEAD"]).catch(
-        () => "",
-      );
+      const tracked = await stats("HEAD").catch(() => undefined);
       return {
         target,
         label: "Uncommitted changes",
         branch,
-        stats: { ...parseShortstat(tracked), files: changed.length },
+        ...(tracked && { stats: { ...tracked, files: changed.length } }),
       };
     }
     case "branch": {

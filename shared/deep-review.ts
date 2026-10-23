@@ -8,6 +8,7 @@ import {
   agents,
   reviewerProviderSchema,
 } from "./agents";
+import type { DiffKind } from "./diff-kinds";
 import { aiSettingsSchema, type ModelChoice } from "./settings";
 import { refSchema } from "./validation";
 
@@ -147,7 +148,13 @@ export interface ReviewScope {
   /** The reviewed changes run from `base` to `head` (commits, branches, PRs). */
   base?: string;
   head?: string;
-  stats?: { files: number; additions: number; deletions: number };
+  stats?: {
+    files: number;
+    additions: number;
+    deletions: number;
+    /** The lines split into code, tests, fixtures, docs and generated files; missing on older reviews. */
+    byKind?: Record<DiffKind, { additions: number; deletions: number }>;
+  };
   /** Where the reviewed code is checked out when the thread's checkout doesn't have it; reviewers and the lead work there. */
   checkout?: ReviewCheckout;
   /**

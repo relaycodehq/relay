@@ -190,7 +190,7 @@ async function lineCounts(
   };
 }
 /** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
-function numstatFiles(output: string) {
+export function numstatFiles(output: string) {
   const fields = output.split("\0");
   const files: { path: string; additions: number; deletions: number }[] = [];
   for (let i = 0; i < fields.length; i++) {
