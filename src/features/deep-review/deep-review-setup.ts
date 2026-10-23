@@ -25,6 +25,7 @@ const defaultPair = [claudeAgent("high"), codexAgent("gpt-5.6-sol")];
 export type Setup = ReviewDraftSetup;
 export const setupKey = (projectId: string) => "deep-review-setup:" + projectId;
 export const focusKey = (projectId: string) => "deep-review-focus:" + projectId;
+export const baseKey = (projectId: string) => "deep-review-base:" + projectId;
 export const savedSetup = (projectId: string): Setup | undefined =>
   reviewDraftSetupSchema.safeParse(readJson(setupKey(projectId))).data;
 

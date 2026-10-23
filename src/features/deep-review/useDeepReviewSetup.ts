@@ -13,6 +13,7 @@ import {
   useDraftRecord,
 } from "../composer/drafts";
 import {
+  baseKey,
   firstSetup,
   focusKey,
   reviewBranches,
@@ -141,9 +142,11 @@ function useTargetPick(
       (await api.projectHistory(projectId, "head", 40)).commits,
     enabled: setup.kind === "commit",
   });
-  // Once it starts, neither branch is kept: the next review starts from the checkout into the repository's base.
+  // Once it starts, the branch isn't kept, but the base is: the project's next review goes into the same one.
   const [chosenHead, setHead] = useState(saved.head ?? "");
-  const [chosenBase, setBase] = useState(saved.base ?? "");
+  const [chosenBase, setBase] = useState(
+    () => saved.base ?? localStorage.getItem(baseKey(projectId)) ?? "",
+  );
   const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
     keepReview(projectId, draftId, setup, change);
   const { heads, head, bases, base } = reviewBranches(
@@ -182,6 +185,7 @@ function useTargetPick(
     setBase: (name: string) => {
       setBase(name);
       keep({ base: name || undefined });
+      if (name) localStorage.setItem(baseKey(projectId), name);
     },
     baseChanges: baseChanges.isError ? undefined : baseChanges.data,
     branchList: branches.data,
