@@ -1,3 +1,4 @@
+import { formatDate } from "./date-format";
 import type { ChatMessage, ChatSummary, ChatTriageState } from "./projects";
 
 // Settling and snoozing are overlays on an open thread. New activity can
@@ -351,27 +352,20 @@ export function wakeLabel(until: number, now: Date): string {
       : ahead === 1
         ? "tomorrow "
         : ahead < 7
-          ? `${wake.toLocaleDateString(undefined, { weekday: "short" })} `
-          : `${wake.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, `;
-  return (
-    day +
-    wake.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-  );
+          ? `${formatDate(wake, { weekday: "short" })} `
+          : `${formatDate(wake, { month: "short", day: "numeric" })}, `;
+  return day + formatDate(wake, { hour: "numeric", minute: "2-digit" });
 }
 
 /** When a message was sent: "13:25", "Yesterday 13:25", "Tuesday 13:25", "Sep 3, 13:25". */
 export function sentLabel(sent: number, now: Date): string {
   const at = new Date(sent);
-  const time = at.toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const time = formatDate(at, { hour: "2-digit", minute: "2-digit" });
   const days = calendarDays(at, now);
   if (days <= 0) return time;
   if (days === 1) return `Yesterday ${time}`;
-  if (days < 7)
-    return `${at.toLocaleDateString(undefined, { weekday: "long" })} ${time}`;
-  const date = at.toLocaleDateString(undefined, {
+  if (days < 7) return `${formatDate(at, { weekday: "long" })} ${time}`;
+  const date = formatDate(at, {
     month: "short",
     day: "numeric",
     year: at.getFullYear() === now.getFullYear() ? undefined : "numeric",

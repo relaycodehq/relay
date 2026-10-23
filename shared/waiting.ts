@@ -1,5 +1,6 @@
 // The line under a finished turn about what Claude left behind, shared by the
 // desktop's WaitingStrip and the phone's.
+import { formatDate } from "./date-format";
 import type { ChatPending } from "./projects";
 
 /** "12s", "3m", "1h 4m": minutes are enough once it has run a while. */
@@ -13,7 +14,7 @@ function span(ms: number) {
 }
 
 export const clock = (at: number) =>
-  new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  formatDate(at, { hour: "2-digit", minute: "2-digit" });
 
 export function wakeupTitle(item: Extract<ChatPending, { kind: "wakeup" }>) {
   if (!item.at) return "Claude checks back on a schedule";
