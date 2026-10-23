@@ -118,7 +118,9 @@ export function CopyMessageButton({
         text,
         images.flatMap(({ image }, i) => {
           const src = sources[i];
-          return src ? [{ n: i + 1, name: image.name, src }] : [];
+          return src
+            ? [{ n: i + 1, name: image.name, src, browser: image.browser }]
+            : [];
         }),
       ) + marks
     );

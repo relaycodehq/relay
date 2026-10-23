@@ -32,6 +32,7 @@ export function ComposerAttachmentStrip({
               load: () => Promise.resolve(image.dataUrl),
             }}
             onRemove={() => draft.removeImage(image)}
+            removeDisabled={draft.preparing}
           />
         ) : (
           <CopyImageMenu

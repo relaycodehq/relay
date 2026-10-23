@@ -6,9 +6,25 @@ import {
   prepareScreenshot,
   onDraftImagesSaved,
   onDraftImagesChanged,
+  type DraftImage,
 } from "../images/draft-images";
 import { attachedImages } from "../../../shared/image-refs";
 import { readDraftText } from "../../lib/thread-storage";
+import { dataUrlFile } from "../images/image-drag";
+
+/** The draft's comments the inspector shows, and room for more. */
+function inspected(draftKey: string, images: DraftImage[]) {
+  const attached = attachedImages(readDraftText(draftKey), images);
+  const annotations = attached.flatMap((image) =>
+    image.browser ? [image.browser] : [],
+  );
+  const available = Math.max(0, 3 - attached.length);
+  return {
+    annotations,
+    available,
+    shown: JSON.stringify([annotations, available]),
+  };
+}
 
 /** Keeps browser edits in the same durable draft store as other screenshots. */
 export function useBrowserAnnotations(
@@ -20,11 +36,22 @@ export function useBrowserAnnotations(
   const inspection = useRef(0);
   const waiting = useRef(false);
   const refresh = useRef(false);
+  const shown = useRef("");
   useEffect(() => {
+    // Restarting drops a comment being typed, so only for a change the inspector would show.
     const changed = (changedKey: string) => {
       if (changedKey !== draftKey || !waiting.current) return;
-      refresh.current = true;
-      void api.previewAction(key, "stopPicking").catch(() => {});
+      void loadDraftImages(draftKey)
+        .then((images) => {
+          if (
+            !waiting.current ||
+            inspected(draftKey, images).shown === shown.current
+          )
+            return;
+          refresh.current = true;
+          void api.previewAction(key, "stopPicking").catch(() => {});
+        })
+        .catch(() => {});
     };
     const off = onDraftImagesSaved(changed);
     const offOtherWindow = onDraftImagesChanged(changed);
@@ -45,18 +72,15 @@ export function useBrowserAnnotations(
     onError(null);
     try {
       while (sequence === inspection.current) {
-        const images = await loadDraftImages(draftKey);
-        const attached = attachedImages(readDraftText(draftKey), images);
-        const annotations = attached.flatMap((image) =>
-          image.browser ? [image.browser] : [],
-        );
+        const now = inspected(draftKey, await loadDraftImages(draftKey));
         if (sequence !== inspection.current) return;
         refresh.current = false;
         waiting.current = true;
+        shown.current = now.shown;
         const change = await api.pickPreviewElement(
           key,
-          annotations,
-          Math.max(0, 3 - attached.length),
+          now.annotations,
+          now.available,
         );
         waiting.current = false;
         if (!change) {
@@ -69,13 +93,10 @@ export function useBrowserAnnotations(
             now.filter((image) => image.browser?.id !== change.id),
           );
         } else {
-          const bytes = Uint8Array.from(
-            atob(change.image.split(",")[1] ?? ""),
-            (c) => c.charCodeAt(0),
-          );
-          const image = await prepareScreenshot(
-            new File([bytes], "Browser comment.png", { type: "image/png" }),
-          );
+          const file = dataUrlFile(change.image, "Browser comment.png");
+          if (!file)
+            throw new Error("Could not read the element's screenshot.");
+          const image = await prepareScreenshot(file);
           await updateDraftImages(draftKey, (now) => {
             const kept = attachedImages(readDraftText(draftKey), now);
             const replacing = kept.some(

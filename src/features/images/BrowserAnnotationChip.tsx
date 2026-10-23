@@ -28,11 +28,13 @@ export function BrowserAnnotationChip({
   image,
   onOpen,
   onRemove,
+  removeDisabled,
 }: {
   annotation: BrowserAnnotation;
   image: PreviewImage;
   onOpen?: () => void;
   onRemove?: () => void;
+  removeDisabled?: boolean;
 }) {
   const { data: source, isError } = useImageSource(image);
   const [viewing, setViewing] = useState(false);
@@ -60,6 +62,7 @@ export function BrowserAnnotationChip({
           <button
             type="button"
             className="browser-annotation-remove"
+            disabled={removeDisabled}
             aria-label={`Remove browser comment: ${annotation.comment}`}
             onClick={onRemove}
           >
