@@ -1,0 +1,69 @@
+.browser-annotation-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(100%, 360px);
+  box-sizing: border-box;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+.browser-annotation-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+  padding-top: 2px;
+}
+.browser-annotation-copy small {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.browser-annotation-copy > span {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.browser-annotation-chip > button {
+  flex-shrink: 0;
+  border: 0;
+  padding: 2px;
+  background: transparent;
+  color: var(--muted);
+}
+.browser-annotation-chip > .browser-annotation-preview {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 48px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--hover);
+  cursor: zoom-in;
+}
+.browser-annotation-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.browser-annotation-chip > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.browser-annotation-remove:hover:not(:disabled) {
+  color: var(--text);
+}
+.browser-annotation-remove:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.project-message > .browser-annotation-chip {
+  margin-bottom: 8px;
+}

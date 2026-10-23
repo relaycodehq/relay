@@ -5,6 +5,7 @@ import { CopyImageMenu } from "../images/CopyImageMenu";
 import { SketchOverlay } from "../images/ImageSketch";
 import { PastedTextCard } from "./PastedTextCard";
 import "../images/image-tiles.css";
+import { BrowserAnnotationChip } from "../images/BrowserAnnotationChip";
 
 /** The draft's screenshots and long pastes, as cards above the input. */
 export function ComposerAttachmentStrip({
@@ -20,35 +21,49 @@ export function ComposerAttachmentStrip({
   if (!attached.length && !pastes.length) return null;
   return (
     <div className="composer-images" aria-label="Attachments">
-      {attached.map((image) => (
-        <CopyImageMenu
-          className="composer-image"
-          key={image.id}
-          source={async () => (await flattenSketch(image)).dataUrl}
-        >
-          <button
-            type="button"
-            className="composer-image-open"
-            aria-label={`Draw on ${image.name}`}
-            title="Draw on screenshot"
-            onClick={() => draft.sketch(image.id)}
+      {attached.map((image) =>
+        image.browser ? (
+          <BrowserAnnotationChip
+            key={image.id}
+            annotation={image.browser}
+            image={{
+              key: `draft:${image.id}`,
+              name: image.name,
+              load: () => Promise.resolve(image.dataUrl),
+            }}
+            onRemove={() => draft.removeImage(image)}
+            removeDisabled={draft.preparing}
+          />
+        ) : (
+          <CopyImageMenu
+            className="composer-image"
+            key={image.id}
+            source={async () => (await flattenSketch(image)).dataUrl}
           >
-            <img src={image.dataUrl} alt={image.name} />
-            {image.sketch && (
-              <SketchOverlay sketch={image.sketch} src={image.dataUrl} />
-            )}
-          </button>
-          <button
-            type="button"
-            className="composer-image-remove"
-            disabled={draft.preparing}
-            aria-label={`Remove ${image.name}`}
-            onClick={() => draft.removeImage(image)}
-          >
-            <X size={13} />
-          </button>
-        </CopyImageMenu>
-      ))}
+            <button
+              type="button"
+              className="composer-image-open"
+              aria-label={`Draw on ${image.name}`}
+              title="Draw on screenshot"
+              onClick={() => draft.sketch(image.id)}
+            >
+              <img src={image.dataUrl} alt={image.name} />
+              {image.sketch && (
+                <SketchOverlay sketch={image.sketch} src={image.dataUrl} />
+              )}
+            </button>
+            <button
+              type="button"
+              className="composer-image-remove"
+              disabled={draft.preparing}
+              aria-label={`Remove ${image.name}`}
+              onClick={() => draft.removeImage(image)}
+            >
+              <X size={13} />
+            </button>
+          </CopyImageMenu>
+        ),
+      )}
       {pastes.map((paste, index) => (
         <PastedTextCard
           key={index}

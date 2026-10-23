@@ -191,3 +191,30 @@ it("leaves a draft rewritten while it went out as it is", () => {
     "Fix the slow test instead",
   );
 });
+
+it("keeps browser feedback with its screenshot and preserves a newer edit while sending", async () => {
+  const browser = {
+    id: "b74407b4-0d67-434d-9da6-7fa8f71f88be",
+    url: "http://localhost:3000/",
+    selector: "#card",
+    tag: "<button>",
+    text: "Card",
+    comment: "Increase contrast",
+    rect: { x: 20, y: 30, width: 200, height: 100 },
+    viewport: { width: 800, height: 600 },
+  };
+  writeDraft(key, "Fix this feedback");
+  images.set(key, [{ ...shot("original-revision", 1), n: undefined, browser }]);
+  const pending = await sendHeldBack();
+  expect(pending.body).not.toContain("selector");
+  expect(pending.images?.[0].browser).toEqual(browser);
+  images.set(key, [
+    {
+      ...shot("new-revision", 1),
+      n: undefined,
+      browser: { ...browser, comment: "Use a larger font too" },
+    },
+  ]);
+  await pending.finish();
+  expect(images.get(key)?.[0].browser?.comment).toBe("Use a larger font too");
+});

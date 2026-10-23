@@ -14,6 +14,7 @@ import {
   pastedImages,
   withoutImageTokens,
 } from "../../../shared/image-refs";
+import type { BrowserAnnotation } from "../../../shared/browser-annotations";
 import { api } from "../../lib/api";
 import { draftChips } from "../../lib/thread-storage";
 import { isScreenshot, prepareScreenshot } from "../images/draft-images";
@@ -80,7 +81,7 @@ export function draftIntake({
    * a token inside a paste pill points at nothing.
    */
   async function attachImages(
-    files: { file: File; n?: number }[],
+    files: { file: File; n?: number; browser?: BrowserAnnotation }[],
     at: { point?: Point; text?: string },
   ) {
     try {
@@ -119,15 +120,28 @@ export function draftIntake({
             }
           : pastedImages(
               at.text,
-              files.map(({ file, n }) => ({
+              files.map(({ file, n, browser }) => ({
                 ...prepared.get(file)!,
                 n: inText ? n : undefined,
+                // A pasted copy is a comment of its own, apart from the one it was copied from.
+                ...(browser
+                  ? { browser: { ...browser, id: crypto.randomUUID() } }
+                  : {}),
               })),
               first - 1,
               (image) => image.id,
             );
+      // A browser comment can be saved or deleted while these were prepared.
+      const now = await screenshots.read();
+      const before = new Set(existing.map((image) => image.id));
+      const base = [
+        ...kept.filter((image) => now.some((n) => n.id === image.id)),
+        ...now.filter((image) => !before.has(image.id) && image.browser),
+      ];
+      if (base.length + placed.images.length > 3)
+        throw new Error("Attach up to three screenshots per message.");
       // Screenshots whose pills were deleted make room here, not on undo.
-      const next = [...kept, ...placed.images];
+      const next = [...base, ...placed.images];
       await screenshots.save(next);
       // Numbered on in token order, so ascending is the order they sat in.
       const ns = placed.images
@@ -154,9 +168,13 @@ export function draftIntake({
             : editor.current.pasteText(words))
         ) {
           // The words don't fit, so their screenshots don't stay either.
-          screenshots.reset(existing);
+          const back = [
+            ...existing.filter((image) => now.some((n) => n.id === image.id)),
+            ...base.filter((image) => !before.has(image.id)),
+          ];
+          screenshots.reset(back);
           setError(PASTE_TOO_LONG);
-          await screenshots.save(existing).catch(() => {});
+          await screenshots.save(back).catch(() => {});
         } else if (long && ns.length) editor.current.insertImages(ns);
       } else if (added) {
         // Navigation clears the editor ref; its tokens must still be saved.

@@ -122,7 +122,6 @@ export function ProjectChat({
     text: string;
     selection?: LineQuestion;
     code?: CodeReference;
-    images?: File[];
   };
   onContextUsed: () => void;
   /** The unsent thread was made by its first write. */
@@ -242,10 +241,6 @@ export function ProjectChat({
           old = readDraft(key);
         writeDraft(key, `${old}${old ? "\n\n" : ""}${text}`);
       }
-      // Once the composer shows the text, so the pills land after it.
-      const { images } = contextText;
-      if (images?.length)
-        requestAnimationFrame(() => composer.current?.attachImages(images));
       onContextUsed();
     }
   }, [contextText?.id]);

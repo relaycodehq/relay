@@ -84,8 +84,6 @@ export interface ComposerHandle {
   focus: () => void;
   /** Focuses the draft with the caret at its end. */
   focusEnd: () => void;
-  /** Adds screenshots at the end of the draft, as pills after its words. */
-  attachImages: (files: File[]) => void;
   /** Sends the draft, exactly as the send button does. */
   submit: () => void;
 }
@@ -234,7 +232,6 @@ export function ProjectComposer({
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
   );
-  const addFiles = useRef(draft.addFiles);
   useImperativeHandle(
     ref,
     () => ({
@@ -242,16 +239,11 @@ export function ProjectComposer({
       agentSettings: () => agentSettings.current(),
       focus: () => input.current?.focus(),
       focusEnd: () => promptInput.current?.focusEnd(),
-      attachImages(files) {
-        promptInput.current?.focusEnd();
-        addFiles.current(files);
-      },
       submit: () => form.current?.requestSubmit(),
     }),
     [],
   );
   agentSettings.current = runs.resumeSettings;
-  addFiles.current = draft.addFiles;
   const filePick = useRef<HTMLInputElement>(null);
   const tools = useRef<HTMLDivElement>(null);
   useToolbarFit(tools);

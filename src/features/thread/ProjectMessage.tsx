@@ -34,6 +34,7 @@ import { AgentError } from "../agents/AgentError";
 import { ContextReportCard } from "../agents/ContextBreakdown";
 import { ChangedFilesCard } from "../changes/ChangedFilesCard";
 import { CodeReferenceList } from "./CodeReferenceChip";
+import { BrowserAnnotationChip } from "../images/BrowserAnnotationChip";
 import { CompactionRow } from "./CompactionRow";
 import { SessionReloadRow } from "./SessionReloadRow";
 import { WorktreeCommandRow } from "./WorktreeCommandRow";
@@ -300,7 +301,11 @@ export const Message = memo(function Message({
   }, [m.role, text, sentImages]);
   const stripImages = images.filter(
     (image) =>
-      !pilled.has(image.key) && (!image.path || !shown.includes(image.path)),
+      !pilled.has(image.key) &&
+      !sentImages.some(
+        (sent) => sent.preview.key === image.key && sent.image.browser,
+      ) &&
+      (!image.path || !shown.includes(image.path)),
   );
   const answerImage = useCallback(
     (src: string, alt: string) => {
@@ -464,6 +469,17 @@ export const Message = memo(function Message({
         )}
       </header>
       {m.role === "user" && strip}
+      {m.role === "user" &&
+        sentImages
+          .filter((sent) => sent.image.browser)
+          .map(({ image, preview }) => (
+            <BrowserAnnotationChip
+              key={image.id}
+              annotation={image.browser!}
+              image={preview}
+              onOpen={() => setViewing(preview.key)}
+            />
+          ))}
       {m.role === "assistant" && (
         <AgentTurn
           message={m}

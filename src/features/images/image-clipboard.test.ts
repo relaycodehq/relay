@@ -40,3 +40,29 @@ it("finds nothing in HTML from elsewhere, or in a marked image that isn't data",
     copiedImages('<img data-relay-image="1" src="https://example.com/a.png">'),
   ).toEqual([]);
 });
+
+it("brings a browser comment back with its screenshot, and shows it as text elsewhere", () => {
+  const browser = {
+    id: "b74407b4-0d67-434d-9da6-7fa8f71f88be",
+    url: "http://localhost:3000/",
+    selector: "#card",
+    tag: '<button id="card">',
+    text: "Card",
+    comment: 'Make it "bigger" & bolder',
+    rect: { x: 1, y: 1, width: 10, height: 10 },
+    viewport: { width: 800, height: 600 },
+  };
+  const html = messageHtml("Fix these", [
+    { n: 1, name: "Browser comment.png", src: png, browser },
+  ]);
+  expect(
+    new DOMParser().parseFromString(html, "text/html").body.textContent,
+  ).toContain('Make it "bigger" & bolder');
+  expect(copiedImages(html)[0].browser).toEqual(browser);
+  // Something that isn't a valid comment pastes as a plain screenshot.
+  expect(
+    copiedImages(
+      `<img data-relay-image="" data-name="a.png" data-browser="{}" src="${png}">`,
+    )[0].browser,
+  ).toBeUndefined();
+});

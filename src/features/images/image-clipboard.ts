@@ -1,4 +1,8 @@
 import { imageToken } from "../../../shared/image-refs";
+import {
+  browserAnnotationSchema,
+  type BrowserAnnotation,
+} from "../../../shared/browser-annotations";
 import { dataUrlFile } from "./image-drag";
 
 /**
@@ -10,6 +14,8 @@ export interface CopiedImage {
   name: string;
   /** A data URL. */
   src: string;
+  /** The browser comment the screenshot is the picture of. */
+  browser?: BrowserAnnotation;
 }
 
 const MARK = "data-relay-image";
@@ -18,8 +24,9 @@ const escaped = (text: string) =>
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!,
   );
+// A browser comment rides along for the composer, and shows as text elsewhere.
 const tag = (image: CopiedImage) =>
-  `<img ${MARK}="${image.n ?? ""}" data-name="${escaped(image.name)}" alt="${escaped(image.name)}" src="${escaped(image.src)}">`;
+  `<img ${MARK}="${image.n ?? ""}" data-name="${escaped(image.name)}"${image.browser ? ` data-browser="${escaped(JSON.stringify(image.browser))}"` : ""} alt="${escaped(image.name)}" src="${escaped(image.src)}">${image.browser ? ` ${escaped(image.browser.comment)}` : ""}`;
 
 /**
  * A sent message as HTML, each screenshot where its token was and any without
@@ -51,9 +58,12 @@ export function messageHtml(text: string, images: CopiedImage[]) {
  * the order they sit in it. One screenshot shown twice (its token repeated)
  * comes back as the same file each time.
  */
-export function copiedImages(
-  html: string,
-): { n?: number; file: File; src: string }[] {
+export function copiedImages(html: string): {
+  n?: number;
+  file: File;
+  src: string;
+  browser?: BrowserAnnotation;
+}[] {
   if (!html.includes(MARK)) return [];
   const doc = new DOMParser().parseFromString(html, "text/html");
   const files = new Map<string, File | undefined>();
@@ -65,9 +75,28 @@ export function copiedImages(
       if (!files.has(key)) files.set(key, dataUrlFile(src, name));
       const file = files.get(key);
       const n = Number(img.getAttribute(MARK));
-      return file ? [{ n: n > 0 ? n : undefined, file, src }] : [];
+      const browser = browserComment(img.dataset.browser);
+      return file
+        ? [
+            {
+              n: n > 0 ? n : undefined,
+              file,
+              src,
+              ...(browser ? { browser } : {}),
+            },
+          ]
+        : [];
     },
   );
+}
+
+function browserComment(json: string | undefined) {
+  if (!json) return undefined;
+  try {
+    return browserAnnotationSchema.parse(JSON.parse(json));
+  } catch {
+    return undefined;
+  }
 }
 
 /** What a screenshot pill carries when a selection over it is copied. */

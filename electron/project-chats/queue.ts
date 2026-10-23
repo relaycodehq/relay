@@ -7,6 +7,7 @@ import type {
 } from "../../shared/projects";
 import { replyRoot, sentBy, sentSettingsOf } from "../../shared/projects";
 import { agentAsked } from "../../shared/recipient";
+import { browserAnnotationPrompt } from "../../shared/browser-annotations";
 import type { ModelChoice } from "../../shared/settings";
 import { compactInstructions } from "../../shared/commands";
 import { mayMentionSkill } from "../../shared/skill-mentions";
@@ -216,7 +217,7 @@ export class ChatQueue {
         tuned ? next.input : { ...next.input, choice: running.choice },
       );
       await active.steer(
-        asked.question +
+        browserAnnotationPrompt(asked.question, next.input.images) +
           (next.input.viewing
             ? `\nThe file I am viewing is ${JSON.stringify(next.input.viewing)}.`
             : ""),

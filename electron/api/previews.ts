@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext } from "./context";
+import { browserAnnotationSchema } from "../../shared/browser-annotations";
 
 const previewKeySchema = z.union([
   idSchema,
@@ -57,8 +58,14 @@ export function previewHandlers(ctx: ApiContext) {
       ],
       (key, action) => previews().act(key, action),
     ),
-    pickPreviewElement: takes([previewKeySchema], (key) =>
-      previews().pick(key),
+    pickPreviewElement: takes(
+      [
+        previewKeySchema,
+        z.array(browserAnnotationSchema).max(3),
+        z.number().int().min(0).max(3),
+      ],
+      (key, annotations, available) =>
+        previews().pick(key, annotations, available),
     ),
     closePreview: takes([previewKeySchema], (key) => previews().close(key)),
   };

@@ -1,3 +1,4 @@
+import { BrowserAnnotationChip } from "../images/BrowserAnnotationChip";
 import {
   useLayoutEffect,
   useMemo,
@@ -48,6 +49,7 @@ function queuedImages(input: ProjectChatSend): SentImage[] {
       id: `${input.id}-${i}`,
       name: image.name,
       mimeType: image.mimeType,
+      browser: image.browser,
       sizeBytes: Math.floor(
         ((image.dataUrl.length - image.dataUrl.indexOf(",") - 1) * 3) / 4,
       ),
@@ -77,11 +79,23 @@ function QueuedBody({
   const memes = useSentMemes(text);
   const images = useMemo(() => queuedImages(input), [input]);
   const pilled = useMemo(() => pilledImages(text), [text]);
-  const strip = images.filter((_, i) => !pilled.has(i + 1));
+  const strip = images.filter(
+    (sent, i) => !pilled.has(i + 1) && !sent.image.browser,
+  );
   const previews = images.map((sent) => sent.preview);
   const viewingIndex = previews.findIndex((image) => image.key === viewing);
   return (
     <>
+      {images
+        .filter((sent) => sent.image.browser)
+        .map(({ image, preview }) => (
+          <BrowserAnnotationChip
+            key={image.id}
+            annotation={image.browser!}
+            image={preview}
+            onOpen={() => setViewing(preview.key)}
+          />
+        ))}
       {!!strip.length && (
         <div className="message-images">
           {strip.map(({ preview }) => (

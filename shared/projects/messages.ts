@@ -202,6 +202,7 @@ export interface ChatImage {
   name: string;
   mimeType: "image/png" | "image/jpeg" | "image/webp";
   sizeBytes: number;
+  browser?: import("../browser-annotations").BrowserAnnotation;
 }
 export interface AgentActivity {
   id: string;

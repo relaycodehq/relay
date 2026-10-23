@@ -86,3 +86,44 @@ it("does not replay imported history to a session that already heard it, or prep
     turnPrompt({ ...input, question: "/help", command: true }).prompt,
   ).toBe("/help");
 });
+it("numbers browser comments after the screenshots of missed messages, which go out first", () => {
+  const shot = (id: string) => ({
+    id,
+    name: `${id}.png`,
+    mimeType: "image/png" as const,
+    sizeBytes: 1,
+  });
+  const missed = {
+    ...message("missed", "@codex Look at these"),
+    steered: true,
+    missed: true,
+    images: [shot("a"), shot("b")],
+  };
+  const input = setup([missed]);
+  delete input.chat.fromTerminal;
+  const browser = {
+    id: "b74407b4-0d67-434d-9da6-7fa8f71f88be",
+    url: "http://localhost:3000/",
+    selector: "#card",
+    tag: "<button>",
+    text: "Card",
+    comment: "Increase the contrast",
+    rect: { x: 1, y: 1, width: 10, height: 10 },
+    viewport: { width: 800, height: 600 },
+  };
+  input.input.images = [
+    {
+      name: "card.png",
+      mimeType: "image/png",
+      dataUrl: "data:image/png;base64,AA==",
+      browser,
+    },
+  ];
+  const { prompt, carried } = turnPrompt(input);
+  expect(carried).toHaveLength(2);
+  expect(prompt).toContain("Comment 1 (Image #3): Increase the contrast");
+  // A command goes out alone, without the feedback as its arguments.
+  expect(
+    turnPrompt({ ...input, question: "/review", command: true }).prompt,
+  ).toBe("/review");
+});

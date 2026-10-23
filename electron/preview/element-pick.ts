@@ -1,177 +1,125 @@
+import { randomUUID } from "node:crypto";
 import type { WebContents } from "electron";
-import type { PickedElement } from "../../shared/preview";
+import { z } from "zod";
+import {
+  browserAnnotationSchema,
+  type BrowserAnnotation,
+} from "../../shared/browser-annotations";
+import type { PreviewAnnotationChange } from "../../shared/preview";
+import { annotationRuntime } from "./annotation-runtime";
+import { annotationStyle } from "./annotation-style";
 
-// Chromium's own inspect highlight, over the DevTools protocol, so nothing
-// is added to the page.
-const HIGHLIGHT = {
-  showInfo: true,
-  showStyles: false,
-  contentColor: { r: 111, g: 168, b: 220, a: 0.55 },
-  paddingColor: { r: 147, g: 196, b: 125, a: 0.45 },
-  borderColor: { r: 255, g: 229, b: 153, a: 0.66 },
-  marginColor: { r: 246, g: 178, b: 107, a: 0.45 },
-};
-/** Room around the element in its picture. */
-const MARGIN = 8;
+const WORLD = 1007;
+const changeSchema = z.discriminatedUnion("action", [
+  z
+    .object({ action: z.literal("save"), annotation: browserAnnotationSchema })
+    .strict(),
+  z.object({ action: z.literal("remove"), id: z.uuid() }).strict(),
+]);
 
-interface Described {
-  selector: string;
-  tag: string;
-  text: string;
-  rect: { x: number; y: number; width: number; height: number };
-  viewport: { width: number; height: number };
-}
-
-/**
- * Runs on the picked element, in the page: a selector that finds only it,
- * preferring test ids and stable ids over generated class names, then where
- * it sits. Source text, since the main process has no DOM to type it with.
- */
-const DESCRIBE = `function () {
-  const unique = (selector) => {
-    try {
-      return document.querySelectorAll(selector).length === 1;
-    } catch {
-      return false;
-    }
-  };
-  const generated = /\\d{4,}|[0-9a-f]{6,}|__|^(css|sc|jsx|svelte)-/i;
-  const part = (el) => {
-    const tag = el.localName;
-    const testId = el.getAttribute("data-testid");
-    if (testId) return tag + '[data-testid="' + CSS.escape(testId) + '"]';
-    if (el.id && !generated.test(el.id)) return "#" + CSS.escape(el.id);
-    let own = tag + [...el.classList]
-      .filter((c) => !generated.test(c))
-      .slice(0, 2)
-      .map((c) => "." + CSS.escape(c))
-      .join("");
-    const parent = el.parentElement;
-    if (parent && [...parent.children].filter((c) => c.matches(own)).length > 1) {
-      const sameTag = [...parent.children].filter((c) => c.localName === tag);
-      own += ":nth-of-type(" + (sameTag.indexOf(el) + 1) + ")";
-    }
-    return own;
-  };
-  let selector = "";
-  for (let el = this; el && el !== document.documentElement; el = el.parentElement) {
-    const own = part(el);
-    selector = selector ? own + " > " + selector : own;
-    if (own.startsWith("#") || unique(selector)) break;
-  }
-  const html = this.outerHTML;
-  const open = html.slice(0, html.indexOf(">") + 1 || html.length);
-  const box = this.getBoundingClientRect();
-  return {
-    selector: unique(selector) ? selector : "",
-    tag: open.length > 300 ? open.slice(0, 299) + "…" : open,
-    text: (this.innerText ?? this.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 160),
-    rect: { x: box.x, y: box.y, width: box.width, height: box.height },
-    viewport: { width: innerWidth, height: innerHeight },
-  };
-}`;
-
-/** The element's box with a margin, kept inside the viewport; whole numbers. */
-export function clipRect({ rect, viewport }: Pick<Described, "rect" | "viewport">) {
-  const x = Math.max(0, Math.floor(rect.x - MARGIN));
-  const y = Math.max(0, Math.floor(rect.y - MARGIN));
-  const right = Math.min(viewport.width, Math.ceil(rect.x + rect.width + MARGIN));
-  const bottom = Math.min(viewport.height, Math.ceil(rect.y + rect.height + MARGIN));
+/** A visible element's crop, with a little surrounding context. */
+export function clipRect({
+  rect,
+  viewport,
+}: Pick<BrowserAnnotation, "rect" | "viewport">) {
+  const x = Math.max(0, Math.floor(rect.x - 8));
+  const y = Math.max(0, Math.floor(rect.y - 8));
+  const right = Math.min(viewport.width, Math.ceil(rect.x + rect.width + 8));
+  const bottom = Math.min(viewport.height, Math.ceil(rect.y + rect.height + 8));
   return right > x && bottom > y
     ? { x, y, width: right - x, height: bottom - y }
     : undefined;
 }
 
-/** Waits for the user to click an element on the page; `cancel` gives up. */
-export function pickElement(wc: WebContents) {
-  const dbg = wc.debugger;
-  let settle: (picked: PickedElement | null) => void = () => {};
-  const result = new Promise<PickedElement | null>((r) => (settle = r));
+/** Runs the inspector with no Node API or bridge exposed to the webpage. */
+export function pickElement(
+  wc: WebContents,
+  annotations: BrowserAnnotation[],
+  available: number,
+) {
+  let settle: (change: PreviewAnnotationChange | null) => void = () => {};
+  let fail: (error: unknown) => void = () => {};
+  const result = new Promise<PreviewAnnotationChange | null>((yes, no) => {
+    settle = yes;
+    fail = no;
+  });
+  const newId = randomUUID();
   let done = false;
-  const ownsDebugger = !dbg.isAttached();
-  const send = (method: string, params?: object) =>
-    dbg.sendCommand(method, params);
-
-  const finish = async (picked: PickedElement | null) => {
+  const execute = (code: string) =>
+    wc.executeJavaScriptInIsolatedWorld(WORLD, [{ code }]);
+  const stopInPage = () => {
+    if (!wc.isDestroyed())
+      void execute(
+        `if (globalThis.__relayElementPicker?.id === ${JSON.stringify(newId)}) globalThis.__relayElementPicker.cancel()`,
+      ).catch(() => {});
+  };
+  const clean = () => {
+    wc.off("did-start-navigation", navigated);
+    wc.off("destroyed", cancel);
+    wc.off("render-process-gone", cancel);
+  };
+  const cancel = () => {
     if (done) return;
     done = true;
-    dbg.off("message", onMessage);
-    dbg.off("detach", onDetach);
-    wc.off("before-input-event", onKey);
-    wc.off("did-start-navigation", onNavigate);
-    if (dbg.isAttached()) {
-      await send("Overlay.setInspectMode", { mode: "none", highlightConfig: {} }).catch(() => {});
-      await send("Overlay.hideHighlight").catch(() => {});
-      if (ownsDebugger) dbg.detach();
-    }
-    settle(picked);
+    clean();
+    stopInPage();
+    settle(null);
   };
-  const cancel = () => void finish(null);
-
-  const onMessage = (_e: unknown, method: string, params: any) => {
-    if (method !== "Overlay.inspectNodeRequested") return;
-    void (async () => {
-      try {
-        await send("Overlay.setInspectMode", { mode: "none", highlightConfig: {} });
-        await send("Overlay.hideHighlight");
-        const { object } = await send("DOM.resolveNode", {
-          backendNodeId: params.backendNodeId,
-        });
-        const { result } = await send("Runtime.callFunctionOn", {
-          objectId: object.objectId,
-          functionDeclaration: DESCRIBE,
-          returnByValue: true,
-        });
-        await send("Runtime.releaseObject", { objectId: object.objectId }).catch(() => {});
-        const described = result.value as Described;
-        // A frame for the highlight to leave the picture.
-        await new Promise((r) => setTimeout(r, 50));
-        const clip = clipRect(described);
-        const image = await wc.capturePage(clip);
-        await finish({
-          url: wc.getURL(),
-          selector: described.selector,
-          tag: described.tag,
-          text: described.text,
-          image: image.toDataURL(),
-        });
-      } catch (error) {
-        console.warn("Picking an element failed:", error);
-        await finish(null);
-      }
-    })();
-  };
-  const onDetach = () => void finish(null);
-  const onKey = (event: Electron.Event, input: Electron.Input) => {
-    if (input.type === "keyDown" && input.key === "Escape") {
-      event.preventDefault();
-      cancel();
-    }
-  };
-  const onNavigate = (details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>) => {
+  const navigated = (
+    details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
+  ) => {
+    // A route change in a single-page app keeps the page, and the comment being typed.
     if (details.isMainFrame && !details.isSameDocument) cancel();
   };
-
+  wc.on("did-start-navigation", navigated);
+  wc.on("destroyed", cancel);
+  wc.on("render-process-gone", cancel);
   void (async () => {
     try {
-      if (ownsDebugger) dbg.attach("1.3");
-      dbg.on("message", onMessage);
-      dbg.on("detach", onDetach);
-      wc.on("before-input-event", onKey);
-      wc.on("did-start-navigation", onNavigate);
-      await send("DOM.enable");
-      await send("DOM.getDocument", { depth: 0 });
-      await send("Overlay.enable");
-      await send("Overlay.setInspectMode", {
-        mode: "searchForNode",
-        highlightConfig: HIGHLIGHT,
-      });
-      // Escape reaches the page only while it has the keyboard.
-      wc.focus();
+      const raw: unknown = await execute(
+        `(${annotationRuntime})(${JSON.stringify(annotations)}, ${JSON.stringify(newId)}, ${JSON.stringify(annotationStyle)}, ${available})`,
+      );
+      if (done) return;
+      if (raw === null) {
+        cancel();
+        return;
+      }
+      const change = changeSchema.parse(raw);
+      const id = change.action === "save" ? change.annotation.id : change.id;
+      if (id !== newId && !annotations.some((a) => a.id === id))
+        throw new Error("That browser comment is no longer available.");
+      if (change.action === "remove") {
+        done = true;
+        clean();
+        settle(change);
+        return;
+      }
+      const moved = () => wc.getURL() !== change.annotation.url;
+      if (moved())
+        throw new Error("The page changed while saving. Comment again.");
+      const clip = clipRect(change.annotation);
+      if (!clip)
+        throw new Error("That element is no longer visible. Select it again.");
+      // A frame without the inspector in it.
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      if (done) return;
+      if (wc.isDestroyed() || moved())
+        throw new Error("The page changed while saving. Comment again.");
+      const image = await wc.capturePage(clip);
+      if (done) return;
+      if (image.isEmpty())
+        throw new Error("Could not capture the selected element.");
+      done = true;
+      clean();
+      settle({ ...change, image: image.toDataURL() });
     } catch (error) {
-      console.warn("Could not start picking an element:", error);
-      await finish(null);
+      if (done) return;
+      done = true;
+      clean();
+      stopInPage();
+      fail(error);
     }
   })();
+  wc.focus();
   return { result, cancel };
 }
