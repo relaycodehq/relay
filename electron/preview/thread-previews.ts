@@ -11,13 +11,14 @@ import type {
   ConsoleEntry,
   DevServerState,
   PreviewAction,
-  PickedElement,
+  PreviewAnnotationChange,
   PreviewBounds,
   PreviewState,
 } from "../../shared/preview";
 import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
+import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
 import { localPort } from "./local-urls";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
@@ -746,15 +747,19 @@ export class ThreadPreviews {
   }
 
   /**
-   * Lets the user pick an element on the page with Chromium's inspect
-   * highlight; null when they cancel or the preview goes away.
+   * Lets the user inspect the page and write feedback beside an element;
+   * null when they cancel or the preview goes away.
    */
-  async pick(key: string): Promise<PickedElement | null> {
+  async pick(
+    key: string,
+    annotations: BrowserAnnotation[],
+    available: number,
+  ): Promise<PreviewAnnotationChange | null> {
     const preview = this.previews.get(key);
     const wc = preview?.view?.webContents;
     if (!preview || !wc || wc.isDestroyed() || !wc.getURL()) return null;
     preview.stopPick?.();
-    const picking = pickElement(wc);
+    const picking = pickElement(wc, annotations, available);
     preview.stopPick = picking.cancel;
     this.emit(preview);
     try {

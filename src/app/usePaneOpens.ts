@@ -7,6 +7,7 @@ import {
 import type { QuestionTarget } from "../../shared/questions";
 import type { Pull } from "../../shared/types";
 import { api } from "../lib/api";
+import { threadDraftKey } from "../lib/thread-storage";
 import {
   changedTarget,
   fileTarget,
@@ -169,6 +170,7 @@ export function usePaneOpens(
     panes.show("chat");
   }
   return {
+    draftKey: threadDraftKey(chatId ?? draftId),
     fileOpens,
     changeReveals,
     openCode,

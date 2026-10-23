@@ -18,13 +18,9 @@ import {
 } from "../../../shared/preview";
 import { api } from "../../lib/api";
 import { IconButton } from "../../ui/ui";
-import {
-  openPreview,
-  pickedContext,
-  previewKey,
-  usePreviewState,
-} from "./previews";
+import { openPreview, previewKey, usePreviewState } from "./previews";
 import { useNativeView } from "../../lib/useNativeView";
+import { useBrowserAnnotations } from "./useBrowserAnnotations";
 import "./browser.css";
 
 /**
@@ -35,18 +31,19 @@ export function BrowserSurface({
   projectId,
   chatId,
   front,
-  onPick,
+  draftKey,
 }: {
   projectId: string;
   chatId: string | null;
   /** Its tab is in front, in an open panel. */
   front: boolean;
-  /** Hands a clicked element to the composer. */
-  onPick: (context: ReturnType<typeof pickedContext>) => void;
+  /** The main conversation's draft, even while its composer is hidden. */
+  draftKey: string;
 }) {
   const key = previewKey(projectId, chatId);
   const state = usePreviewState(key);
   const [opening, setOpening] = useState<string | null>(null);
+  const inspect = useBrowserAnnotations(key, draftKey, front, setOpening);
   useEffect(() => {
     if (!front) return;
     setOpening(null);
@@ -83,10 +80,7 @@ export function BrowserSurface({
             .navigatePreview(projectId, chatId, url)
             .catch((e: Error) => setOpening(e.message));
         }}
-        onPick={async () => {
-          const picked = await api.pickPreviewElement(key);
-          if (picked) onPick(pickedContext(picked));
-        }}
+        onPick={() => void inspect()}
       />
       {opening && state?.url && (
         <div className="browser-action-error" role="alert">
@@ -194,7 +188,7 @@ function AddressBar({
       />
       <IconButton
         label={
-          state?.picking ? "Stop picking (Esc)" : "Pick an element to ask about"
+          state?.picking ? "Stop annotating (Esc)" : "Comment on this page"
         }
         disabled={!state?.url || state.poppedOut}
         active={state?.picking}

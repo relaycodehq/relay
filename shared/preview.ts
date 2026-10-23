@@ -70,18 +70,13 @@ export type PreviewAction =
   | "openExternal"
   | "stopPicking";
 
-/** An element the user picked on the page, to ask the agent about. */
-export interface PickedElement {
-  url: string;
-  /** A CSS selector that matches only it, when one was found. */
-  selector: string;
-  /** Its opening tag, cut short. */
-  tag: string;
-  /** The start of its text. */
-  text: string;
-  /** It and a little around it, as a PNG data URL. */
-  image: string;
-}
+export type PreviewAnnotationChange =
+  | {
+      action: "save";
+      annotation: import("./browser-annotations").BrowserAnnotation;
+      image: string;
+    }
+  | { action: "remove"; id: string };
 
 /** Tells the window an agent opened a thread's preview. */
 export interface PreviewReveal {
@@ -112,8 +107,12 @@ export interface PreviewApi {
     command?: string,
   ): Promise<void>;
   previewAction(key: string, action: PreviewAction): Promise<void>;
-  /** Waits for the user to click an element on the page; null when they don't. */
-  pickPreviewElement(key: string): Promise<PickedElement | null>;
+  /** Inspects without changing the draft; resolves on a saved/deleted comment, or cancellation. */
+  pickPreviewElement(
+    key: string,
+    annotations: import("./browser-annotations").BrowserAnnotation[],
+    available: number,
+  ): Promise<PreviewAnnotationChange | null>;
   /** Ends the preview: its tab was closed. Its cookies stay. */
   closePreview(key: string): Promise<void>;
   onPreview(callback: (state: PreviewState) => void): () => void;

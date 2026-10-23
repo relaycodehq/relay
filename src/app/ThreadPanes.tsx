@@ -368,7 +368,7 @@ export function ThreadPanel({
             projectId={project.id}
             chatId={chatId}
             front={front?.surface === "browser"}
-            onPick={opens.ask}
+            draftKey={opens.draftKey}
           />
         </div>
       )}
