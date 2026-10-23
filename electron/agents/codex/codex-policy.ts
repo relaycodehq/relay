@@ -1,4 +1,4 @@
-import type { RuntimeMode } from "../../../shared/agent-modes";
+import type { AgentRuntimeMode } from "../../../shared/agent-modes";
 import type { LinkedFolder } from "../../../shared/projects";
 
 /** What Codex is told about approvals and the sandbox for one of Relay's modes. */
@@ -18,7 +18,7 @@ const writesWorkspace = {
   sandboxPolicy: { type: "workspaceWrite" },
 } as const;
 
-const policies: Record<RuntimeMode, CodexPolicy> = {
+const policies: Record<AgentRuntimeMode, CodexPolicy> = {
   "approval-required": {
     ...readOnly,
     approvalPolicy: "untrusted",
@@ -43,7 +43,7 @@ const policies: Record<RuntimeMode, CodexPolicy> = {
   },
 };
 
-export const codexPolicy = (mode: RuntimeMode): CodexPolicy => policies[mode];
+export const codexPolicy = (mode: AgentRuntimeMode): CodexPolicy => policies[mode];
 
 /** A deep review's reviewer: reads and runs what it likes, writes nothing, never asks. */
 export const codexReviewerPolicy: CodexPolicy = {

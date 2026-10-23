@@ -274,6 +274,8 @@ export class TurnRunner {
       this.core.store.get().renderMode,
       !!chat.importFrom,
     );
+    const readOnly =
+      !!chat.reviewer || !!rules.side || input.runtimeMode === "read-only";
     const env = await this.host.env(chat);
     const links = await this.links(chat, root);
     const attached = [
@@ -369,11 +371,15 @@ export class TurnRunner {
         : (id: string, questions: AgentQuestion[]) =>
             answer.questions(id, questions),
       onEdit: (paths: string[]) => snapshot.edits(paths),
-      runtimeMode: input.runtimeMode,
+      runtimeMode:
+        input.runtimeMode === "read-only"
+          ? "approval-required"
+          : input.runtimeMode,
       interactionMode: input.interactionMode,
-      ...(chat.reviewer || rules.side ? { readOnly: true } : {}),
+      // Read only runs as a reviewer does: no writes, MCP servers or Relay's tools.
+      ...(readOnly ? { readOnly } : {}),
       // A started thread only gets the reading ones: no threads of threads.
-      ...(relayTools && !chat.reviewer && !rules.side ? { relayTools } : {}),
+      ...(relayTools && !readOnly ? { relayTools } : {}),
       // The thread's running answer owns its requests; a side turn asks none.
       onRequest: rules.side
         ? undefined

@@ -572,9 +572,10 @@ describe("what Cursor may do", () => {
       runtimeModesFor("codex").at(-1),
     );
     expect(runtimeModesFor("codex")).toEqual(runtimeModesFor());
-    expect(runtimeModesFor("codex")[0].description).toMatch(
-      /^Asks before running commands/,
-    );
+    expect(
+      runtimeModesFor("codex").find((m) => m.value === "approval-required")
+        ?.description,
+    ).toMatch(/^Asks before running commands/);
   });
 
   it("gives a read-only turn no shell, no edits and no Bugbot, but a git that only reads", async () => {

@@ -194,6 +194,9 @@ toServer = okm[0..32), toClient = okm[32..64)
 - Only `desktop/sendProjectChat` and `sendDraft` can be assembled; they still run through normal validation and send-id deduplication. On failure, the existing outbox retains the complete send and retries with the same message id. Never resume an upload on a new connection, and don't switch to a better route mid-upload.
 - Both ends advertise bridge 31. Older desktops get ordinary sends that fit; oversized sends ask for a desktop update.
 
+### Read only (bridge 32)
+- `runtimeMode` may be `read-only`: the agent reads and runs read-only commands but changes no files. Offer it only to a desktop at bridge ≥ 32; older ones reject the send.
+
 ---
 
 ## 4. Version negotiation and handshake messages (`shared/remote.ts:168-241`, `:723-761`)

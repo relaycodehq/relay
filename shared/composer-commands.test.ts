@@ -202,8 +202,12 @@ describe("composer commands", () => {
     expect(
       composerCommand("permissions", "Auto-accept edits", phone()),
     ).toEqual({ command: "permissions", runtimeMode: "auto-accept-edits" });
+    expect(composerCommand("permissions", "Read only", phone())).toEqual({
+      command: "permissions",
+      runtimeMode: "read-only",
+    });
     expect(composerCommand("permissions", "yolo", phone())).toMatch(
-      /^Choose one of: approval-required/,
+      /^Choose one of: read-only, approval-required/,
     );
   });
 });

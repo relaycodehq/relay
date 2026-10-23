@@ -4,6 +4,7 @@ import {
   Bot,
   Check,
   ChevronDown,
+  Eye,
   PencilRuler,
   LockKeyhole,
   LockKeyholeOpen,
@@ -18,7 +19,8 @@ import {
 import type { AgentProvider } from "../../../shared/agents";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { useAccessNamed } from "./composer-toolbar";
-const icons = {
+const icons: Record<RuntimeMode, typeof Eye> = {
+  "read-only": Eye,
   "approval-required": LockKeyhole,
   "auto-accept-edits": PencilLine,
   auto: Sparkles,
@@ -75,7 +77,7 @@ export const ComposerModeControls = memo(function ComposerModeControls({
   );
 });
 
-/** How much the agent may do without asking: approvals up to full access. */
+/** What the agent may do and how much without asking: read only up to full access. */
 export const RuntimeModeSelect = memo(function RuntimeModeSelect({
   provider,
   runtimeMode,

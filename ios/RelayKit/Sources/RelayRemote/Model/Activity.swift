@@ -181,6 +181,7 @@ public struct RuntimeMode: Sendable, Equatable {
 
 /// The desktop's permission modes, least trusting first.
 public let runtimeModes = [
+    RuntimeMode(value: "read-only", label: "Read only", description: "Reads and runs read-only commands; never changes files."),
     RuntimeMode(value: "approval-required", label: "Supervised", description: "Asks before running commands or changing files."),
     RuntimeMode(value: "auto-accept-edits", label: "Auto-accept edits", description: "Edits files freely, asks before anything else."),
     RuntimeMode(value: "auto", label: "Auto", description: "The agent's own reviewer clears routine actions; agents without one ask."),

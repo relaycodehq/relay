@@ -77,11 +77,11 @@ fun MenuSheet(title: String, options: List<MenuOption>, onDismiss: () -> Unit) {
 
 /** Permissions, with full access confirmed first. */
 @Composable
-fun PermissionsSheet(settings: ResumeSettings, onSettings: (ResumeSettings) -> Unit, onDismiss: () -> Unit) {
+fun PermissionsSheet(settings: ResumeSettings, readOnly: Boolean, onSettings: (ResumeSettings) -> Unit, onDismiss: () -> Unit) {
     var confirm by remember { mutableStateOf<String?>(null) }
     MenuSheet(
         "Permissions",
-        dev.relay.android.features.composer.logic.runtimeModes.map { m ->
+        dev.relay.android.features.composer.logic.runtimeModes.filter { readOnly || it.value != "read-only" }.map { m ->
             MenuOption(m.label, m.description, m.value == settings.runtimeMode) {
                 if (m.value == "full-access" && settings.runtimeMode != "full-access") confirm = m.value
                 else onSettings(settings.copy(runtimeMode = m.value))

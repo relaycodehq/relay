@@ -671,7 +671,7 @@ export class StartedThreads {
     const listed = threads
       .map(
         (t, i) =>
-          `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
+          `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.readOnly ? ", read only" : t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
       )
       .join("\n\n");
     const title = `Start ${count}${detached ? " of their own" : ""}${elsewhere ? ` in “${elsewhere.name}”` : ""}?`;
@@ -729,7 +729,7 @@ export class StartedThreads {
           : {}),
         provider: agent,
         to: agent,
-        runtimeMode: last.runtimeMode,
+        runtimeMode: spec.readOnly ? "read-only" : last.runtimeMode,
         interactionMode: spec.plan ? "plan" : "default",
         ...(account ? { account } : {}),
         fromThread: from,
@@ -746,7 +746,7 @@ export class StartedThreads {
         const chat = await this.create(
           lead,
           elsewhere?.id ?? lead.projectId,
-          spec.worktree,
+          spec.worktree ?? (spec.readOnly ? false : undefined),
           detached ? undefined : caller,
         );
         // A worktree made from the commit alone would miss the work in progress it's about.
@@ -760,6 +760,7 @@ export class StartedThreads {
           title: promptTitle(spec.prompt),
           agent,
           ...(spec.plan ? { plan: true } : {}),
+          ...(spec.readOnly ? { readOnly: true } : {}),
           ...(elsewhere ? { project: elsewhere.name } : {}),
           ...(detached ? { detached: true } : {}),
           worktree: !!chat.worktree,

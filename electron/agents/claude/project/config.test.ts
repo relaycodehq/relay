@@ -1,5 +1,8 @@
 import { expect, it } from "vitest";
-import { runtimeModeSchema } from "../../../../shared/agent-modes";
+import {
+  runtimeModeSchema,
+  type AgentRuntimeMode,
+} from "../../../../shared/agent-modes";
 import {
   claudePermissionMode,
   linkedFolders,
@@ -7,9 +10,14 @@ import {
   type ClaudeRunOptions,
 } from "./config";
 
+// Read only reaches an agent as Supervised with `readOnly`; see turn-run.
+const agentModes = runtimeModeSchema.options.filter(
+  (mode): mode is AgentRuntimeMode => mode !== "read-only",
+);
+
 it("maps each approval mode to a Claude permission mode, and Plan to plan", () => {
   expect(
-    runtimeModeSchema.options.map((mode) =>
+    agentModes.map((mode) =>
       claudePermissionMode({ runtimeMode: mode, interactionMode: "default" }),
     ),
   ).toEqual(["default", "acceptEdits", "auto", "bypassPermissions"]);
@@ -22,7 +30,7 @@ it("maps each approval mode to a Claude permission mode, and Plan to plan", () =
 });
 
 it("keeps a read-only reviewer asking canUseTool whatever its approval mode", () => {
-  for (const runtimeMode of runtimeModeSchema.options)
+  for (const runtimeMode of agentModes)
     expect(
       claudePermissionMode({
         runtimeMode,

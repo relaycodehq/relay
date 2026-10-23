@@ -560,7 +560,9 @@ internal fun ComposerCore(
             onChange = { next, to -> onSettings(if (to != null) switched(next, to) else next) },
             onDismiss = { sheet = null },
         )
-        Sheet.Mode -> PermissionsSheet(settings, onSettings, onDismiss = { sheet = null })
+        Sheet.Mode -> PermissionsSheet(
+            settings, (overview?.bridge ?: 1) >= Bridge.READ_ONLY_MODE, onSettings, onDismiss = { sheet = null },
+        )
         Sheet.Attach -> MenuSheet(
             "Attach",
             listOf(

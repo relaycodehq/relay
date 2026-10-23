@@ -185,7 +185,9 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 31;
+export const remoteBridgeVersion = 32;
+/** Sends may ask for the `read-only` runtime mode. */
+export const readOnlyModeBridge = 32;
 /** A large phone send arrives in acknowledged batches before being submitted once. */
 export const messageBatchesBridge = 31;
 /** From here computers carry saved paste files along with sends and handoffs. */

@@ -52,7 +52,10 @@ struct ModelSheet: View {
                 .cardRow()
                 Section {
                     NavigationLink {
-                        PermissionsPage(mode: $settings.runtimeMode)
+                        PermissionsPage(
+                            mode: $settings.runtimeMode,
+                            readOnly: (connection.overview?.bridge ?? 1) >= Bridge.readOnlyMode
+                        )
                     } label: {
                         LabeledContent("Permissions", value: modeLabel(settings.runtimeMode))
                     }
@@ -204,6 +207,8 @@ struct ModelSheet: View {
 /// What the agent may do without asking; full access asks first, then goes back.
 private struct PermissionsPage: View {
     @Binding var mode: String
+    /// The desktop takes Read only.
+    let readOnly: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colors) private var colors
     @State private var allowing = false
@@ -211,7 +216,7 @@ private struct PermissionsPage: View {
     var body: some View {
         Form {
             Section {
-                ForEach(runtimeModes, id: \.value) { option in
+                ForEach(runtimeModes.filter { readOnly || $0.value != "read-only" }, id: \.value) { option in
                     Button {
                         if option.value == "full-access" && mode != "full-access" { return allowing = true }
                         mode = option.value

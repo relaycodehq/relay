@@ -2,15 +2,23 @@ import { z } from "zod";
 import type { AgentProvider } from "./agents";
 import { ASK_ANSWER_MAX_CHARS, type HtmlRender } from "./html-render";
 export const runtimeModeSchema = z.enum([
+  "read-only",
   "approval-required",
   "auto-accept-edits",
   "auto",
   "full-access",
 ]);
 export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
+/** What an agent runs in: Read only reaches it as Supervised with `readOnly` set. */
+export type AgentRuntimeMode = Exclude<RuntimeMode, "read-only">;
 export const interactionModeSchema = z.enum(["default", "plan"]);
 export type InteractionMode = z.infer<typeof interactionModeSchema>;
 export const runtimeModes = [
+  {
+    value: "read-only",
+    label: "Read only",
+    description: "Reads and runs read-only commands; never changes files.",
+  },
   {
     value: "approval-required",
     label: "Supervised",

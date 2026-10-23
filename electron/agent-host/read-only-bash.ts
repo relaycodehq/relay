@@ -279,7 +279,7 @@ export async function readOnlyBashHook(input: unknown) {
       hookEventName: "PreToolUse" as const,
       permissionDecision: "deny" as const,
       permissionDecisionReason:
-        "This review only reads the code. Use Read, Grep and Glob, or a plain read-only command like git diff, git log or rg, and report problems instead of changing files.",
+        "This thread only reads the code. Use Read, Grep and Glob, or a plain read-only command like git diff, git log or rg, and report what should change instead of changing files.",
     },
   };
 }

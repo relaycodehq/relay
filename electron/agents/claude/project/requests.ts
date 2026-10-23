@@ -36,13 +36,13 @@ export function sessionCallbacks(holder: Asker) {
   ) => {
     await holder.ready?.promise;
     const options = holder.options;
-    // A reviewer works unattended and leaves the checkout as it found it.
+    // A reviewer or a Read only thread leaves the checkout as it found it, unattended.
     if (options.readOnly) {
       if (tool === "AskUserQuestion" || tool === "ExitPlanMode")
         return {
           behavior: "deny",
           message:
-            "Nobody is watching this review to answer. Decide on your own and keep reviewing.",
+            "Nobody can answer this here. Decide on your own and keep going; ask in your answer if you must.",
         };
       // Claude Code runs the commands it knows only read without asking,
       // so a command that gets here might change files.
@@ -50,7 +50,7 @@ export function sessionCallbacks(holder: Asker) {
         return {
           behavior: "deny",
           message:
-            "This review only reads the code. Run only commands that read, and report problems instead of changing files.",
+            "This thread only reads the code. Run only commands that read, and report what should change instead of changing files.",
         };
       return { behavior: "allow", updatedInput: input };
     }

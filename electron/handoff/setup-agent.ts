@@ -171,20 +171,24 @@ const here = (provider: AgentProvider) =>
 
 /**
  * The agent that sets it up: the thread's own when it's installed here,
- * else Claude or Codex on their default model. Never in plan mode, which
- * would only plan the clone.
+ * else Claude or Codex on their default model. Never in plan mode or read
+ * only, which would only plan the clone; read only asks instead.
  */
 async function setupAgent(
   settings: HandoffSettings,
 ): Promise<HandoffSettings | undefined> {
+  const runtimeMode =
+    settings.runtimeMode === "read-only"
+      ? "approval-required"
+      : settings.runtimeMode;
   if (await here(settings.provider))
-    return { ...settings, interactionMode: "default" };
+    return { ...settings, runtimeMode, interactionMode: "default" };
   for (const provider of ["claude", "codex"] as const)
     if (provider !== settings.provider && (await here(provider)))
       return {
         provider,
         choice: { model: "", fast: false, reasoningEffort: "" },
-        runtimeMode: settings.runtimeMode,
+        runtimeMode,
         interactionMode: "default",
       };
 }

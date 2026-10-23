@@ -284,6 +284,27 @@ it("streams locally, persists final answers, and resumes the same Codex session 
     "The cache guard prevents duplicate requests.",
   );
 });
+it("runs a Read only turn in Codex's read-only sandbox, never asking", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@codex Explain the cache guard"),
+    runtimeMode: "read-only",
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const turns = (await agentCalls())
+    .trim()
+    .split("\n")
+    .map((s) => JSON.parse(s))
+    .filter((r) => r.turn);
+  expect(turns).toHaveLength(1);
+  expect(turns[0].turn).toMatchObject({
+    approvalPolicy: "never",
+    sandboxPolicy: { type: "readOnly" },
+  });
+  expect((await chats.get(chat.id)).lastInput?.runtimeMode).toBe("read-only");
+});
 it("names a thread from its first message while the answer is still running", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   vi.stubEnv("RELAY_AGENT_TURN_MS", "4000");

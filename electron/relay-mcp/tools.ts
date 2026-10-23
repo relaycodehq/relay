@@ -95,7 +95,7 @@ export const relayToolSchemas = {
                 .boolean()
                 .optional()
                 .describe(
-                  "Work in a worktree of its own on a new branch (the default), so threads working at once don't edit the same files. False: the project's checkout.",
+                  "Work in a worktree of its own on a new branch (the default, except read only), so threads working at once don't edit the same files. False: the project's checkout.",
                 ),
               uncommitted: z
                 .boolean()
@@ -108,6 +108,12 @@ export const relayToolSchemas = {
                 .optional()
                 .describe(
                   "Plan first and wait for the user's go-ahead before changing anything.",
+                ),
+              readOnly: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Read only: it reads and runs read-only commands but can't change files, and nobody answers its questions. For reviews, research and second opinions. It works in the project's checkout unless `worktree` says otherwise. Left out: the access you have.",
                 ),
             })
             .strict(),

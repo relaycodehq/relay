@@ -1,7 +1,7 @@
 import type { PredictionAsked } from "../../shared/prediction";
 import type { WatchNote, WatchScope, WatchSpend } from "../../shared/watch";
 import type {
-  RuntimeMode,
+  AgentRuntimeMode,
   InteractionMode,
   AskAgentRequest,
   AgentQuestion,
@@ -147,7 +147,7 @@ export interface AgentOptions {
     path: string;
     mimeType: "image/png" | "image/jpeg" | "image/webp";
   }[];
-  runtimeMode?: RuntimeMode;
+  runtimeMode?: AgentRuntimeMode;
   interactionMode?: InteractionMode;
   /** A deep review's reviewer: it may read and run anything but changes no files. */
   readOnly?: boolean;

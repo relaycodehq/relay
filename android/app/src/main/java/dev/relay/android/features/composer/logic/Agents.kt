@@ -100,6 +100,7 @@ typealias ModelCatalogs = Map<String, List<AgentModel>>
 data class RuntimeModeInfo(val value: String, val label: String, val description: String)
 
 val runtimeModes = listOf(
+    RuntimeModeInfo("read-only", "Read only", "Reads and runs read-only commands; never changes files."),
     RuntimeModeInfo("approval-required", "Supervised", "Asks before running commands or changing files."),
     RuntimeModeInfo("auto-accept-edits", "Auto-accept edits", "Edits files freely, asks before anything else."),
     RuntimeModeInfo("auto", "Auto", "The agent's own reviewer clears routine actions; agents without one ask."),
