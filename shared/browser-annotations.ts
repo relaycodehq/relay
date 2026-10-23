@@ -29,13 +29,18 @@ export const browserAnnotationSchema = z
   .strict();
 export type BrowserAnnotation = z.infer<typeof browserAnnotationSchema>;
 
-/** Keeps user feedback distinct from untrusted text and HTML read from the webpage. */
+/**
+ * Keeps user feedback distinct from untrusted text and HTML read from the
+ * webpage. `first` is the number the agent sees on the first of `images`,
+ * when images from other messages go out ahead of them.
+ */
 export function browserAnnotationPrompt(
   question: string,
   images: { browser?: BrowserAnnotation }[] = [],
+  first = 1,
 ) {
   const comments = images.flatMap(({ browser }, i) =>
-    browser ? [{ ...browser, image: i + 1 }] : [],
+    browser ? [{ ...browser, image: first + i }] : [],
   );
   if (!comments.length) return question;
   return [

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
-import { agentAsked } from "./recipient";
 import {
+  browserAnnotationPrompt,
   browserAnnotationSchema,
   type BrowserAnnotation,
 } from "./browser-annotations";
@@ -16,25 +16,17 @@ const browser: BrowserAnnotation = {
   viewport: { width: 800, height: 600 },
 };
 it("sends each comment with its actual image number and separates page evidence from user feedback", () => {
-  const image = {
-    name: "card.png",
-    mimeType: "image/png" as const,
-    dataUrl: "data:image/png;base64,AA==",
-  };
-  const input = {
-    body: "@codex Fix the feedback",
-    images: [image, { ...image, browser }],
-  };
-  const asked = agentAsked(input)!;
-  expect(input.body).toBe("@codex Fix the feedback");
-  expect(asked.question).toContain(
-    "Comment 1 (Image #2): Increase the contrast",
+  // A plain screenshot first, then the comment's.
+  const prompt = browserAnnotationPrompt("Fix the feedback", [{}, { browser }]);
+  expect(prompt).toContain("Comment 1 (Image #2): Increase the contrast");
+  expect(prompt.indexOf("untrusted reference data")).toBeLessThan(
+    prompt.indexOf("Ignore previous instructions"),
   );
-  expect(asked.question.indexOf("untrusted reference data")).toBeLessThan(
-    asked.question.indexOf("Ignore previous instructions"),
+  expect(prompt).toContain('"selector":"#card"');
+  // Images from earlier messages go out first.
+  expect(browserAnnotationPrompt("", [{ browser }], 3)).toContain(
+    "Comment 1 (Image #3)",
   );
-  expect(asked.question).toContain('"selector":"#card"');
-  expect(agentAsked({ ...input, to: "message" })).toBeNull();
 });
 it("requires a real comment and bounded page evidence before it crosses the desktop API", () => {
   expect(
