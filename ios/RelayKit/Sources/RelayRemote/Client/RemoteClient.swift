@@ -156,13 +156,17 @@ public actor RemoteClient {
         }
         let id = nextCall
         nextCall += 1
+        let frame: JSON = ["t": "call", "id": .number(Double(id)), "method": .string(method), "args": args]
+        guard frameFits(frame.text(), compact: (bridgeVersion ?? 0) >= Bridge.compact) else {
+            throw RemoteCallError.rejected("This request is too large to send. Remove some attachments and try again.")
+        }
         return try await withCheckedThrowingContinuation { result in
             let timer = after(wait) { client in
                 guard let call = client.calls.removeValue(forKey: id) else { return }
                 call.result.resume(throwing: RemoteCallError.unanswered("\(client.name) didn't answer in time."))
             }
             calls[id] = PendingCall(result: result, timer: timer)
-            sendFrame(["t": "call", "id": .number(Double(id)), "method": .string(method), "args": args])
+            sendFrame(frame)
         }
     }
 

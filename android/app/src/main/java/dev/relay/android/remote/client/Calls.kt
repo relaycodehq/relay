@@ -27,7 +27,13 @@ internal class Calls(private val scope: CoroutineScope, private val name: () -> 
             if (pending.remove(id) != null) result.completeExceptionally(Unanswered("${name()} didn't answer in time."))
         }
         pending[id] = Pending(result, timer)
-        send(id)
+        try {
+            send(id)
+        } catch (error: Exception) {
+            pending.remove(id)
+            timer.cancel()
+            result.completeExceptionally(error)
+        }
         return result
     }
 

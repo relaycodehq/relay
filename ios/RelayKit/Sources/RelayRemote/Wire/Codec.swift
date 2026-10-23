@@ -12,6 +12,7 @@ public enum Codec {
     public static let deflateUpTo = 1024 * 1024
     public static let deflateFrom = 256
     public static let inflateCap = 32 * 1024 * 1024
+    public static let maxFrameBytes = 16 * 1024 * 1024
 
     public static func deflate(_ bytes: Data) throws -> Data {
         try run(COMPRESSION_STREAM_ENCODE, bytes, cap: Int.max)

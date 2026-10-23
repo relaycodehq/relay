@@ -15,6 +15,13 @@ public enum Opened: Equatable {
 private let raw: UInt8 = 0
 private let deflated: UInt8 = 1
 
+/// Reject before sealing, so a refused request doesn't consume a channel counter.
+public func frameFits(_ json: String, compact: Bool) -> Bool {
+    let bytes = json.utf8.count
+    let sealed = compact ? bytes + 17 : ((bytes + 16) * 4 + 2) / 3
+    return sealed <= Codec.maxFrameBytes
+}
+
 /// `sealFrame`: text = base64url(seal(json)); compact = seal(flag || json or deflate(json)).
 public func sealFrame(_ channel: Channel, _ json: String, compact: Bool) -> WireData {
     guard compact else { return .text(Base64URL.encode(channel.seal(json))) }

@@ -22,6 +22,7 @@ object Codec {
     const val DEFLATE_UP_TO = 1024 * 1024
     const val DEFLATE_FROM = 256
     const val INFLATE_CAP = 32 * 1024 * 1024
+    const val MAX_FRAME_BYTES = 16 * 1024 * 1024
 
     fun deflate(bytes: ByteArray): ByteArray {
         val deflater = Deflater(6, true)
@@ -59,6 +60,13 @@ object Codec {
 
 private const val RAW: Byte = 0
 private const val DEFLATED: Byte = 1
+
+/** Check before sealing so a refused request doesn't consume a channel counter. */
+fun frameFits(json: String, compact: Boolean): Boolean {
+    val bytes = json.toByteArray(Charsets.UTF_8).size.toLong()
+    val sealed = if (compact) bytes + 17 else ((bytes + 16) * 4 + 2) / 3
+    return sealed <= Codec.MAX_FRAME_BYTES
+}
 
 /** `sealFrame`: text = base64url(seal(json)); compact = seal(flag || json or deflate(json)). */
 fun sealFrame(channel: Channel, json: String, compact: Boolean): WireData {

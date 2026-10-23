@@ -1176,6 +1176,47 @@ it("keeps a desktop rejection distinct from an unanswered call and releases its 
   ).toBe(false);
 });
 
+it("sends ten large screenshots together and refuses an oversized batch without breaking the link", async () => {
+  const { remote, dispatched } = await desktop();
+  const p = phone({
+    link: parsePairingUrl((await remote.pairing()).url)!,
+    device: "Image batch",
+  });
+  await p.until("online");
+  const image = {
+    name: "shot.png",
+    mimeType: "image/png" as const,
+    dataUrl: `data:image/png;base64,${"A".repeat(1_066_664)}`,
+  };
+  const images = Array.from({ length: 10 }, (_, n) => ({
+    ...image,
+    name: `shot-${n}.png`,
+  }));
+  const send = composeSend(
+    newThreadSettings(defaultAISettings),
+    "Review all ten",
+    { id: randomUUID(), images },
+  );
+  await p.client.desktop("sendProjectChat", chatId, send);
+  const delivered = projectChatSendSchema.parse(dispatched.at(-1)?.args[1]);
+  expect(delivered.images).toEqual(images);
+  expect(dispatched).toHaveLength(1);
+
+  const oversized = {
+    ...send,
+    id: randomUUID(),
+    images: Array.from({ length: 40 }, () => image),
+  };
+  await expect(
+    p.client.desktop("sendProjectChat", chatId, oversized),
+  ).rejects.toThrow("too large to send");
+  expect(oversized.images).toHaveLength(40);
+  expect(dispatched).toHaveLength(1);
+  expect(p.client.status).toBe("online");
+  // Size rejection happened before encryption, so the next frame's counter still matches.
+  expect((await p.client.call("overview")).chats[0]?.id).toBe(chatId);
+});
+
 it("says who answers in `to` only to desktops that take it", async () => {
   const { remote, dispatched } = await desktop();
   const p = phone({

@@ -43,8 +43,8 @@ final class NWSocket: RemoteSocket, @unchecked Sendable {
     init(url: URL, queue: DispatchQueue, handler: @escaping @Sendable (SocketEvent) -> Void) {
         let ws = NWProtocolWebSocket.Options()
         ws.autoReplyPing = true
-        // The desktop's own cap is 8 MiB.
-        ws.maximumMessageSize = 16 * 1024 * 1024
+        // Match the desktop's sealed-frame budget.
+        ws.maximumMessageSize = Codec.maxFrameBytes
         let parameters = NWParameters.tcp
         parameters.defaultProtocolStack.applicationProtocols.insert(ws, at: 0)
         connection = NWConnection(to: .url(url), using: parameters)

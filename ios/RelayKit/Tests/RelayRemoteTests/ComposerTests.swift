@@ -78,4 +78,13 @@ struct ComposerTests {
         let send = ProjectChatSend(body: "Review these", settings: settings, images: photos)
         #expect(try JSON(encoding: send)["images"]?.array?.count == 10)
     }
+
+    @Test func imageBatchesUseAByteBudgetInsteadOfACountLimit() {
+        let large = String(repeating: "A", count: 11_000_000)
+        #expect(frameFits(large, compact: true))
+        #expect(frameFits(large, compact: false))
+        #expect(!frameFits(String(repeating: "A", count: Codec.maxFrameBytes - 16), compact: true))
+        #expect(!frameFits(String(repeating: "A", count: 25 * 1024 * 1024), compact: false))
+        #expect(!frameFits(String(repeating: "é", count: Codec.maxFrameBytes / 2), compact: true))
+    }
 }

@@ -7,6 +7,7 @@ import {
 } from "../../shared/remote-crypto";
 import {
   isTunnel,
+  maxFrameBytes,
   openFrame,
   sealFrame,
   sealTunnel,
@@ -155,8 +156,8 @@ export class RemoteServer {
     const server = new WebSocketServer({
       port: this.options.port,
       host,
-      // Room for three photos, each up to 1.1 MB as a data URL, once sealed.
-      maxPayload: 8 * 1024 * 1024,
+      // Image batches share the phones' socket budget, independent of image count.
+      maxPayload: maxFrameBytes,
       perMessageDeflate: false,
     });
     await new Promise<void>((resolve, reject) => {
