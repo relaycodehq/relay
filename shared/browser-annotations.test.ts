@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { agentAsked } from "./recipient";
 import {
   browserAnnotationPrompt,
   browserAnnotationSchema,
@@ -15,6 +16,26 @@ const browser: BrowserAnnotation = {
   rect: { x: 20, y: 30, width: 200, height: 100 },
   viewport: { width: 800, height: 600 },
 };
+it.each([
+  "",
+  "/review",
+  "/goal pause",
+  "/btw Why is this slow?",
+  "Check the layout",
+])("keeps browser feedback out of the routing question %j", (question) => {
+  const input = {
+    body: `@codex ${question}`,
+    images: [
+      {
+        name: "card.png",
+        mimeType: "image/png" as const,
+        dataUrl: "data:image/png;base64,AA==",
+        browser,
+      },
+    ],
+  };
+  expect(agentAsked(input)).toEqual({ provider: "codex", question });
+});
 it("sends each comment with its actual image number and separates page evidence from user feedback", () => {
   // A plain screenshot first, then the comment's.
   const prompt = browserAnnotationPrompt("Fix the feedback", [{}, { browser }]);
