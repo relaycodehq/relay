@@ -367,7 +367,7 @@ it("pastes a copied message's screenshots as pills numbered after the draft's ow
   ]);
 });
 
-it("still pastes a copied message's words when its screenshots don't fit", async () => {
+it("pastes every screenshot and its words into a draft that already has images", async () => {
   const { useComposerDraft } = await import("./useComposerDraft");
   const { writeDraft } = await import("./drafts");
   const { saveDraftImages } = await import("../images/draft-images");
@@ -402,8 +402,9 @@ it("still pastes a copied message's words when its screenshots don't fit", async
     } as never),
   );
   await settle();
-  expect(draft().error).toBe("Attach up to three screenshots per message.");
-  expect(pasteText).toHaveBeenCalledWith("See  and ");
+  expect(draft().error).toBeUndefined();
+  expect(pasteText).toHaveBeenCalledWith("See [Image #3] and [Image #4]");
+  expect(saved.get(KEY)).toHaveLength(4);
 });
 
 const mine = (n: number) => ({

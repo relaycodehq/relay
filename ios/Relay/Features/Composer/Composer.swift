@@ -92,7 +92,6 @@ struct Composer: View {
     }
     private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var empty: Bool { field.blank && photos.isEmpty && computerShots.isEmpty }
-    private var tooManyPhotos: Bool { photos.count > PastedImage.maxPerMessage }
 
     private var computerShots: [Int] { connection.computerShots(draftAt) }
 
@@ -141,11 +140,6 @@ struct Composer: View {
                 ComposerPhotos(photos: photos, loading: loadingPhotos, draftAt: draftAt) { id in
                     photos.removeAll { $0.id == id }
                 }
-                if tooManyPhotos {
-                    Text("A message can hold three photos. Remove extras to send.")
-                        .font(.footnote)
-                        .foregroundStyle(colors.destructive)
-                }
                 ComposerField(
                     field: field, prompt: running ? "Queue a message" : placeholder, focused: focused
                 ) { now in
@@ -173,7 +167,7 @@ struct Composer: View {
         .onChange(of: picked) { _, items in add(items) }
         .photosPicker(
             isPresented: $library, selection: $picked,
-            maxSelectionCount: max(1, PastedImage.maxPerMessage - photos.count - loadingPhotos), matching: .images)
+            maxSelectionCount: nil, matching: .images)
         .fullScreenCover(isPresented: $camera) {
             CameraPicker { add($0, name: "photo-\(photos.count + loadingPhotos + 1).jpg") }
                 .ignoresSafeArea()
@@ -297,7 +291,6 @@ struct Composer: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .disabled(photos.count + loadingPhotos >= PastedImage.maxPerMessage)
             .accessibilityLabel("Attach a photo")
             model
             Spacer(minLength: 0)
@@ -383,25 +376,21 @@ struct Composer: View {
     }
 
     private var canSend: Bool {
-        (!empty || dictation.phase == .listening) && !sending && loadingPhotos == 0 && !tooManyPhotos
+        (!empty || dictation.phase == .listening) && !sending && loadingPhotos == 0
             && dictation.phase != .finishing
     }
 
     private func add(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         picked = []
-        let taking = Array(items.prefix(max(0, PastedImage.maxPerMessage - photos.count - loadingPhotos)))
+        let taking = items
         let first = photos.count + loadingPhotos + 1
         loadingPhotos += taking.count
         Task {
-            // Loaded side by side, shown in the order they were picked.
-            let loaded = await withTaskGroup(of: (Int, Result<PickedPhoto?, Error>).self) { group in
-                for (n, item) in taking.enumerated() {
-                    group.addTask { (n, await Result { try await pickedPhoto(item, name: "photo-\(first + n).jpg") }) }
-                }
-                var all: [(Int, Result<PickedPhoto?, Error>)] = []
-                for await one in group { all.append(one) }
-                return all.sorted { $0.0 < $1.0 }
+            // Decode one at a time so a large selection doesn't hold every full-size photo in memory.
+            var loaded: [(Int, Result<PickedPhoto?, Error>)] = []
+            for (n, item) in taking.enumerated() {
+                loaded.append((n, await Result { try await pickedPhoto(item, name: "photo-\(first + n).jpg") }))
             }
             loadingPhotos -= taking.count
             for (_, result) in loaded {
@@ -441,7 +430,7 @@ struct Composer: View {
     }
 
     private func submit(steer: Bool = false, sendAt: Int64? = nil, confirmed: Bool = false) {
-        guard !tooManyPhotos, loadingPhotos == 0 else { return }
+        guard loadingPhotos == 0 else { return }
         if !confirmed, startsWithCommand(text), !command(text) { return }
         // A `/btw` question goes beside the conversation; nobody takes over.
         let side = rootId == nil && text.range(of: "^/btw\\s", options: [.regularExpression, .caseInsensitive]) != nil
@@ -451,7 +440,7 @@ struct Composer: View {
         }
         Task {
             if dictation.phase != .idle { await dictation.finish() }
-            guard !tooManyPhotos, loadingPhotos == 0 else { return }
+            guard loadingPhotos == 0 else { return }
             let body = text
             let sent = photos
             let at = draftAt
@@ -635,7 +624,6 @@ struct Composer: View {
 
     /// A photo from the camera or the clipboard.
     private func add(_ image: UIImage, name: String) {
-        guard photos.count + loadingPhotos < PastedImage.maxPerMessage else { return }
         loadingPhotos += 1
         Task {
             let photo = await Task.detached { pickedPhoto(image, name: name) }.value
@@ -688,9 +676,6 @@ struct Composer: View {
 
     private func restore(_ text: String, _ images: [PastedImage]) throws -> () -> Void {
         let back = images.compactMap(PickedPhoto.init(restoring:))
-        guard photos.count + loadingPhotos + back.count <= PastedImage.maxPerMessage else {
-            throw PairingError("Remove a photo first: a message can hold three.")
-        }
         // A side question stays one only at the start of the message.
         if text.hasPrefix("/btw "), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty {
             throw PairingError("Send or clear the current draft before restoring this side question.")

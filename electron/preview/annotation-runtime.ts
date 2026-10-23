@@ -1,6 +1,6 @@
 /** Runs in the preview's isolated world. Returns a user-confirmed edit for durable storage. */
 export const annotationRuntime = String.raw`
-(annotations, newId, css, available) => new Promise((resolve) => {
+(annotations, newId, css) => new Promise((resolve) => {
   globalThis.__relayElementPicker?.cancel();
   const host = document.createElement("div");
   host.id = "relay-element-inspector";
@@ -106,7 +106,7 @@ export const annotationRuntime = String.raw`
       pin.hidden = editing?.id === annotation.id;
       place(pin, rect.left + Math.min(rect.width / 2, 48), rect.top + Math.min(rect.height / 2, 42));
     }
-    statusText.textContent = (available ? "Click an element to comment" : "Send or remove an attachment to add more") + (pins.length ? " · " + pins.length + " saved" : "") + (unavailable ? " · " + unavailable + " unavailable here" : "");
+    statusText.textContent = "Click an element to comment" + (pins.length ? " · " + pins.length + " saved" : "") + (unavailable ? " · " + unavailable + " unavailable here" : "");
     const element = selected || hovered;
     const rect = element?.isConnected ? element.getBoundingClientRect() : null;
     outline.hidden = !rect || !visible(rect);
@@ -134,7 +134,6 @@ export const annotationRuntime = String.raw`
   }
   function schedule() { if (!done && !frame) frame = requestAnimationFrame(render); }
   function select(element, annotation = null) {
-    if (!annotation && !available) return;
     selected = element;
     editing = annotation;
     input.value = annotation?.comment ?? "";

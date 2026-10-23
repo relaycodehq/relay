@@ -36,12 +36,11 @@ import kotlin.math.roundToInt
 
 // mobile/src/remote/images.ts and ui/clipboard-image.ts.
 
-/** A photo ready to send: the desktop takes JPEG, PNG or WebP data URLs up to 1.1 MB, three at most. */
+/** A photo ready to send: the desktop takes JPEG, PNG or WebP data URLs up to 1.1 MB. */
 data class Attachment(val uri: String, val name: String, val mimeType: String, val dataUrl: String, val id: String? = null) {
     fun pasted() = PastedImage(name, mimeType, dataUrl)
 }
 
-const val MAX_IMAGES = 3
 private const val MAX_CHARS = 1_100_000
 
 /** Tried in turn until the photo fits: long side in pixels, JPEG quality. */
@@ -95,7 +94,7 @@ private fun declaresCamera(context: Context) = runCatching {
 
 /** The composer's ways in for photos: library, camera, clipboard. Results and failures go to the callbacks. */
 class ImagePickers internal constructor(
-    val library: (limit: Int) -> Unit,
+    val library: () -> Unit,
     val camera: () -> Unit,
     val paste: () -> Unit,
     /** Images handed over by the keyboard or a paste into the text field. */
@@ -122,8 +121,7 @@ fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String)
             }
         }
     }
-    val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_IMAGES)) { prepareAll(it) }
-    val one = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { prepareAll(listOfNotNull(it)) }
+    val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { prepareAll(it) }
     var shot by remember { mutableStateOf<Uri?>(null) }
     val take = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = shot ?: return@rememberLauncherForActivityResult
@@ -152,10 +150,7 @@ fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String)
     }
 
     return ImagePickers(
-        library = { limit ->
-            val request = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            if (limit > 1) many.launch(request) else if (limit == 1) one.launch(request)
-        },
+        library = { many.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         camera = {
             val needs = declaresCamera(context) &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED

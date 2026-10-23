@@ -9,6 +9,27 @@ import org.junit.Test
 class ComposerDraftTest {
     private val pc = "computer-1"
 
+    private fun photos(count: Int) = (1..count).map {
+        Attachment("photo-$it", "photo-$it.jpg", "image/jpeg", "data:image/jpeg;base64,AAAA")
+    }
+
+    @Test fun `moving a draft keeps every photo in both drafts`() {
+        val from = "photo-count-from"
+        val to = "photo-count-to"
+        UnsentDrafts.of(pc, from).images.value = photos(10)
+        UnsentDrafts.of(pc, to).images.value = photos(2)
+        UnsentDrafts.move(pc, from, to)
+        assertEquals(12, UnsentDrafts.of(pc, to).images.value.size)
+        assertEquals(0, UnsentDrafts.of(pc, from).images.value.size)
+    }
+
+    @Test fun `taking a send back restores every photo after the draft's photos`() {
+        val back = Returned("Review these", photos(10).map { it.pasted() })
+        val (text, restored) = returnedDraft("Keep this", photos(2), back)
+        assertEquals("Keep this\n\nReview these", text)
+        assertEquals(12, restored.size)
+    }
+
     @Test fun `a new thread's text moved to a project with a draft loads there once`() = runTest {
         val drafts = DraftStore(null, backgroundScope)
         drafts.editText(pc, "new:a:1", "A")

@@ -111,7 +111,6 @@ export interface PreviewApi {
   pickPreviewElement(
     key: string,
     annotations: import("./browser-annotations").BrowserAnnotation[],
-    available: number,
   ): Promise<PreviewAnnotationChange | null>;
   /** Ends the preview: its tab was closed. Its cookies stay. */
   closePreview(key: string): Promise<void>;

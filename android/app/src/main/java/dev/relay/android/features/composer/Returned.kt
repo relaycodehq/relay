@@ -22,7 +22,5 @@ internal fun returnedDraft(draft: String, images: List<Attachment>, back: Return
     val restored = images + back.images.map {
         Attachment(it.dataUrl, it.name, it.mimeType, it.dataUrl, id = "taken-back-${takenBackIds.getAndIncrement()}")
     }
-    if (restored.size > MAX_IMAGES)
-        throw IllegalStateException("Remove draft screenshots before restoring this message; a message can hold three.")
     return body to restored
 }

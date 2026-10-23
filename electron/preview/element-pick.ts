@@ -32,11 +32,7 @@ export function clipRect({
 }
 
 /** Runs the inspector with no Node API or bridge exposed to the webpage. */
-export function pickElement(
-  wc: WebContents,
-  annotations: BrowserAnnotation[],
-  available: number,
-) {
+export function pickElement(wc: WebContents, annotations: BrowserAnnotation[]) {
   let settle: (change: PreviewAnnotationChange | null) => void = () => {};
   let fail: (error: unknown) => void = () => {};
   const result = new Promise<PreviewAnnotationChange | null>((yes, no) => {
@@ -77,7 +73,7 @@ export function pickElement(
   void (async () => {
     try {
       const raw: unknown = await execute(
-        `(${annotationRuntime})(${JSON.stringify(annotations)}, ${JSON.stringify(newId)}, ${JSON.stringify(annotationStyle)}, ${available})`,
+        `(${annotationRuntime})(${JSON.stringify(annotations)}, ${JSON.stringify(newId)}, ${JSON.stringify(annotationStyle)})`,
       );
       if (done) return;
       if (raw === null) {

@@ -358,7 +358,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - `workspaceId` = `<projectUuid>[/<chatUuid>[?worktree=<urlenc>]]` (`shared/workspaces.ts:8-37`).
 - **`ProjectChatSend`** (strict, `shared/projects/send.ts:21-86`):
   - required: `id`, `body` (trimmed, 1–32000), `choice`, `provider`, `runtimeMode`, `interactionMode`;
-  - optional: `delivery:"queue"|"steer"`, `sendAt`, `contextWindow:"200k"`, `account`, `to`, `parentId`, `side:true`, `viewing`, `selection`, `images` (≤3 × `{name ≤120, mimeType png|jpeg|webp, dataUrl ≤1.1M chars of data:image/…;base64,…}`), `fromThread`, `pageAnswer`, `skills` (≤20, only send to bridge ≥ 21), `fixes`.
+  - optional: `delivery:"queue"|"steer"`, `sendAt`, `contextWindow:"200k"`, `account`, `to`, `parentId`, `side:true`, `viewing`, `selection`, `images` (array of `{name ≤120, mimeType png|jpeg|webp, dataUrl ≤1.1M chars of data:image/…;base64,…}`; no fixed count limit), `fromThread`, `pageAnswer`, `skills` (≤20, only send to bridge ≥ 21), `fixes`.
   - The client removes `to` for desktops below bridge 11 (`remote-client.ts:198-201`).
 
 ### Push events (`shared/remote.ts:696-715`)

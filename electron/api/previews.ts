@@ -59,13 +59,8 @@ export function previewHandlers(ctx: ApiContext) {
       (key, action) => previews().act(key, action),
     ),
     pickPreviewElement: takes(
-      [
-        previewKeySchema,
-        z.array(browserAnnotationSchema).max(3),
-        z.number().int().min(0).max(3),
-      ],
-      (key, annotations, available) =>
-        previews().pick(key, annotations, available),
+      [previewKeySchema, z.array(browserAnnotationSchema)],
+      (key, annotations) => previews().pick(key, annotations),
     ),
     closePreview: takes([previewKeySchema], (key) => previews().close(key)),
   };

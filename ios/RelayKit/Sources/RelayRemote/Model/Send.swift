@@ -19,7 +19,6 @@ public struct ProjectChatSend: Codable, Sendable, Equatable {
     public var parentId: String?
     /// Asks `/btw`: starts a side conversation instead of a turn of the main one.
     public var side: Bool?
-    /// At most 3.
     public var images: [PastedImage]?
 
     /// A message to the agent `settings` name, Fast and Claude's window kept
@@ -74,7 +73,6 @@ public struct PastedImage: Codable, Sendable, Equatable, Hashable {
     public var dataUrl: String
 
     public static let maxDataURL = 1_100_000
-    public static let maxPerMessage = 3
 
     public init(name: String, mimeType: String, data: Data) {
         self.name = name

@@ -12,18 +12,13 @@ import { attachedImages } from "../../../shared/image-refs";
 import { readDraftText } from "../../lib/thread-storage";
 import { dataUrlFile } from "../images/image-drag";
 
-/** The draft's comments the inspector shows, and room for more. */
+/** The draft's comments the inspector shows. */
 function inspected(draftKey: string, images: DraftImage[]) {
   const attached = attachedImages(readDraftText(draftKey), images);
   const annotations = attached.flatMap((image) =>
     image.browser ? [image.browser] : [],
   );
-  const available = Math.max(0, 3 - attached.length);
-  return {
-    annotations,
-    available,
-    shown: JSON.stringify([annotations, available]),
-  };
+  return { annotations, shown: JSON.stringify(annotations) };
 }
 
 /** Keeps browser edits in the same durable draft store as other screenshots. */
@@ -77,11 +72,7 @@ export function useBrowserAnnotations(
         refresh.current = false;
         waiting.current = true;
         shown.current = now.shown;
-        const change = await api.pickPreviewElement(
-          key,
-          now.annotations,
-          now.available,
-        );
+        const change = await api.pickPreviewElement(key, now.annotations);
         waiting.current = false;
         if (!change) {
           if (refresh.current) continue;
@@ -98,14 +89,6 @@ export function useBrowserAnnotations(
             throw new Error("Could not read the element's screenshot.");
           const image = await prepareScreenshot(file);
           await updateDraftImages(draftKey, (now) => {
-            const kept = attachedImages(readDraftText(draftKey), now);
-            const replacing = kept.some(
-              (image) => image.browser?.id === change.annotation.id,
-            );
-            if (!replacing && kept.length >= 3)
-              throw new Error(
-                "Send or remove an attachment before adding another browser comment. A message holds three screenshots.",
-              );
             return [
               ...now.filter(
                 (existing) => existing.browser?.id !== change.annotation.id,

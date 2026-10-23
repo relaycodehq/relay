@@ -36,7 +36,7 @@ internal object UnsentDrafts {
         val photos = moving.images.value
         if (photos.isEmpty()) return
         val there = of(computer, to)
-        there.images.value = (there.images.value + photos).take(MAX_IMAGES)
+        there.images.value = (there.images.value + photos)
         moving.images.value = emptyList()
     }
 
@@ -53,7 +53,7 @@ internal fun rememberUnsent(computer: String?, key: String?): Unsent {
     val unsent = if (computer != null && key != null) remember(computer, key) { UnsentDrafts.of(computer, key) } else loose
     SideEffect {
         if (unsent !== loose && loose.images.value.isNotEmpty()) {
-            unsent.images.value = (unsent.images.value + loose.images.value).take(MAX_IMAGES)
+            unsent.images.value = (unsent.images.value + loose.images.value)
             loose.images.value = emptyList()
         }
     }

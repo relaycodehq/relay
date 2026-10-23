@@ -753,13 +753,12 @@ export class ThreadPreviews {
   async pick(
     key: string,
     annotations: BrowserAnnotation[],
-    available: number,
   ): Promise<PreviewAnnotationChange | null> {
     const preview = this.previews.get(key);
     const wc = preview?.view?.webContents;
     if (!preview || !wc || wc.isDestroyed() || !wc.getURL()) return null;
     preview.stopPick?.();
-    const picking = pickElement(wc, annotations, available);
+    const picking = pickElement(wc, annotations);
     preview.stopPick = picking.cancel;
     this.emit(preview);
     try {
