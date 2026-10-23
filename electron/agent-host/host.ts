@@ -29,6 +29,7 @@ import {
 } from "./protocol";
 import {
   readRelayMcp,
+  relayToolsWhere,
   serveRelayTools,
   toolText,
   verifyRelayToken,
@@ -152,13 +153,7 @@ type ToolCall = {
 const toolCalls = new Map<number, ToolCall>();
 let nextTool = 1;
 /** Calls that only read or wait; anything else may have happened already. */
-const replayable = new Set([
-  "list_threads",
-  "read_thread",
-  "find_threads",
-  "wait_for_threads",
-  "list_projects",
-]);
+const replayable = relayToolsWhere((t) => t.replayable);
 let tools: ReturnType<typeof serveRelayTools> | undefined;
 /** Tries in a row that found the tools' port taken. */
 let portTries = 0;

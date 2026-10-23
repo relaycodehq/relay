@@ -11,6 +11,7 @@ import type { RenderMode } from "../../shared/html-render";
 import { DEV_PARAM, IMPORT_PARAM, PAGES_PARAM, STARTED_PATH } from "./tools";
 
 export { serveRelayTools, type McpHandlers } from "./server";
+export { relayToolLabel, relayToolsWhere } from "./tool-meta";
 export {
   relayToolSchemas,
   relayToolList,

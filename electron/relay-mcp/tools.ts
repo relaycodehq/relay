@@ -19,6 +19,7 @@ import {
   RENDER_MAX_CHARS,
   RENDER_MAX_PAGES,
 } from "../../shared/html-render";
+import { relayToolsWhere } from "./tool-meta";
 
 /** How many threads one thread may have working at once. */
 export const STARTED_LIMIT = 6;
@@ -560,47 +561,23 @@ ${RENDER_GUIDE}`,
 
 /** Where a thread started by another reaches the tools: none that drive other threads. */
 export const STARTED_PATH = "/mcp/started";
-export const startedTools = new Set<string>([
-  "usage_limits",
-  "list_notes",
-  "add_note",
-  "tick_note",
-  "move_to_worktree",
-  "settle_this_thread",
-  "find_threads",
-  "read_thread",
-  "list_projects",
-  "open_preview",
-  "screenshot",
-  "console_errors",
-  "show_html",
-  "preview_html",
-  "ask_html",
-  "report_relay_problem",
-]);
+export const startedTools = relayToolsWhere((t) => t.started);
 
 /** In a URL's query, `pages=off` leaves out the tools that show the user pages. */
 export const PAGES_PARAM = "pages";
-const pageTools = new Set<string>([
-  "show_html",
-  "preview_html",
-  "ask_html",
-] satisfies RelayToolName[]);
+const pageTools = relayToolsWhere((t) => t.group === "pages");
 export const withoutPages = <T extends { name: string }>(list: T[]) =>
   list.filter((t) => !pageTools.has(t.name));
 
 /** In a URL's query, `dev=on` adds the tools for working on Relay itself; only a Relay run under npm run dev sets it. */
 export const DEV_PARAM = "dev";
-const devTools = new Set<string>(["restart_relay"] satisfies RelayToolName[]);
+const devTools = relayToolsWhere((t) => t.group === "dev");
 export const withoutDev = <T extends { name: string }>(list: T[]) =>
   list.filter((t) => !devTools.has(t.name));
 
 /** In a URL's query, `import=on` adds the tools for importing another app's history; only threads opened for that set it. */
 export const IMPORT_PARAM = "import";
-const importTools = new Set<string>([
-  "import_sources",
-  "offer_import",
-] satisfies RelayToolName[]);
+const importTools = relayToolsWhere((t) => t.group === "import");
 export const withoutImports = <T extends { name: string }>(list: T[]) =>
   list.filter((t) => !importTools.has(t.name));
 

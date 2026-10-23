@@ -1,5 +1,6 @@
 import type { AgentActivity } from "../../shared/projects";
 import { isImagePath } from "../../shared/answer-images";
+import { relayToolLabel } from "../relay-mcp";
 
 /** Keep a small, local-only activity trace. Never retain raw tool arguments or patches. */
 export function codexActivity(
@@ -180,42 +181,10 @@ export class CodexPlanRows {
   }
 }
 
-/** What Relay's own tools read as in a turn. */
-const relayToolLabels: Record<string, string> = {
-  start_threads: "Started threads",
-  list_threads: "Checked on started threads",
-  find_threads: "Looked through threads",
-  read_thread: "Read a thread",
-  send_to_thread: "Messaged a started thread",
-  wait_for_threads: "Waited for started threads",
-  stop_thread: "Stopped a started thread",
-  hand_off_thread: "Moved a thread to another computer",
-  settle_thread: "Settled a started thread",
-  settle_this_thread: "Settles this thread when done",
-  move_to_worktree: "Moved the thread to its own worktree",
-  deep_review: "Started a deep review",
-  list_review_setups: "Listed review setups",
-  list_notes: "Read the notes",
-  add_note: "Added a note",
-  tick_note: "Ticked an item in the notes",
-  usage_limits: "Checked usage limits",
-  list_agents: "Listed agents",
-  list_projects: "Listed projects",
-  add_project: "Added a project",
-  restart_relay: "Restarted Relay",
-  report_relay_problem: "Drafted a report about Relay",
-  show_html: "Showed a page",
-  preview_html: "Looked at a page",
-  ask_html: "Asked with a page",
-  open_preview: "Opened the preview",
-  screenshot: "Looked at the preview",
-  console_errors: "Read the preview's console",
-};
-
 /** An MCP call's label and which server's tool it was. */
 export function mcpCall(server: string, tool: string) {
   const label =
-    (server === "relay" && relayToolLabels[tool]) || `${server}: ${tool}`;
+    (server === "relay" && relayToolLabel(tool)) || `${server}: ${tool}`;
   return {
     label: label.slice(0, 500),
     mcp: { server: server.slice(0, 120), tool: tool.slice(0, 120) },
