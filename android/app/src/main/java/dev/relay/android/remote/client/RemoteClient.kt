@@ -4,6 +4,8 @@ import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.RouteKind
 import dev.relay.android.remote.Routes
 import dev.relay.android.remote.crypto.Channel
+import dev.relay.android.remote.crypto.Base64Url
+import dev.relay.android.remote.wire.MessageBatches
 import dev.relay.android.remote.model.RemoteCredentials
 import dev.relay.android.remote.model.RemoteEvent
 import dev.relay.android.remote.model.ServerFrame
@@ -21,6 +23,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -194,8 +198,7 @@ class RemoteClient(
     /** One bridge call. Throws [NotConnected], [Unanswered] or [Rejected]. Nulls go as JSON null. */
     suspend fun call(method: String, args: List<JsonElement?> = emptyList(), timeoutMs: Long? = null): JsonElement {
         val wait = timeoutMs ?: if (method in Bridge.slowRemoteMethods) options.slowTimeoutMs else options.timeoutMs
-        val pending = withContext(dispatcher) { request(method, JsonArray(args.map { it ?: JsonNull }), wait) }
-        return pending.await()
+        return withContext(dispatcher) { request(method, JsonArray(args.map { it ?: JsonNull }), wait) }
     }
 
     /**
@@ -211,27 +214,66 @@ class RemoteClient(
             if (send != null) sent[1] = JsonObject(send - "to")
         }
         val wait = if (method in Bridge.slowPhoneMethods) options.slowTimeoutMs else options.timeoutMs
-        val pending = withContext(dispatcher) {
+        return withContext(dispatcher) {
             request("desktop", JsonArray(listOf(JsonPrimitive(method), JsonArray(sent.map { it ?: JsonNull }))), wait)
         }
-        return pending.await()
     }
 
-    private fun request(method: String, args: JsonArray, timeoutMs: Long): CompletableDeferred<JsonElement> {
+    private var nextBatch = 1L
+    private var uploads = 0
+
+    private suspend fun request(method: String, args: JsonArray, timeoutMs: Long): JsonElement {
         if (_status.value.state != LinkState.Online || channel == null) throw NotConnected("Not connected to $name.")
-        return calls.open(timeoutMs) { id ->
-            val frame = buildJsonObject {
-                put("t", "call")
-                put("id", id)
-                put("method", method)
-                put("args", args)
-            }
-            require(frameFits(frame.toString(), (bridgeVersion ?: 0) >= Bridge.COMPACT)) {
-                "This request is too large to send. Remove some attachments and try again."
-            }
-            sendFrame(frame)
+        val frame = buildJsonObject {
+            put("t", "call")
+            // Reserve enough bytes for any call number when checking the budget.
+            put("id", 9_007_199_254_740_991L)
+            put("method", method)
+            put("args", args)
         }
+        val json = frame.toString()
+        if (!frameFits(json, (bridgeVersion ?: 0) >= Bridge.COMPACT)) {
+            if (!MessageBatches.allows(method, args)) throw Rejected("This request is too large to send.")
+            if (!supports(Bridge.MESSAGE_BATCHES)) throw Rejected("Update Relay on your computer to send this many attachments.")
+            val bytes = json.toByteArray(Charsets.UTF_8)
+            if (bytes.size > MessageBatches.MAX_BYTES) throw Rejected("This message is too large to send. Remove some attachments and try again.")
+            val uploading = channel
+            val batch = nextBatch++
+            var result: JsonElement = JsonNull
+            var offset = 0
+            var n = 0
+            uploads++
+            try {
+                while (offset < bytes.size) {
+                    currentCoroutineContext().ensureActive()
+                    if (channel !== uploading || _status.value.state != LinkState.Online)
+                        throw Unanswered("The connection changed while uploading. Send the message again.")
+                    val end = minOf(offset + MessageBatches.CHUNK_BYTES, bytes.size)
+                    result = exchange(buildJsonObject {
+                        put("t", "batch")
+                        put("batch", batch)
+                        put("n", n++)
+                        put("data", Base64Url.encode(bytes.copyOfRange(offset, end)))
+                        put("last", end == bytes.size)
+                    }, timeoutMs).await()
+                    offset = end
+                }
+                return result
+            } catch (error: Exception) {
+                if (channel === uploading) sendFrame(buildJsonObject {
+                    put("t", "batchCancel")
+                    put("batch", batch)
+                })
+                throw error
+            } finally {
+                uploads--
+            }
+        }
+        return exchange(frame, timeoutMs).await()
     }
+
+    private fun exchange(frame: JsonObject, timeoutMs: Long): CompletableDeferred<JsonElement> =
+        calls.open(timeoutMs) { id -> sendFrame(JsonObject(frame + ("id" to JsonPrimitive(id)))) }
 
     private fun post(block: () -> Unit) {
         scope.launch { block() }
@@ -359,7 +401,7 @@ class RemoteClient(
             override fun stale() = closed || current !== was
             override fun claim(link: Link): Boolean {
                 // A move would cut open pages' connections, Vite's live reload among them.
-                if (calls.waiting || tunnel.active > 0) {
+                if (calls.waiting || uploads > 0 || tunnel.active > 0) {
                     busy = true
                     return false
                 }

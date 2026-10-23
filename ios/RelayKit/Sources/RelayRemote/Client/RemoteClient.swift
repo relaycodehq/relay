@@ -26,6 +26,7 @@ public actor RemoteClient {
     var raceDials: [ObjectIdentifier: Dial] = [:]
     private var calls: [Int: PendingCall] = [:]
     private var nextCall = 1
+    private var uploads = 0
     var closed = true
     private var retry = 0
     private var retryTimer: Task<Void, Never>?
@@ -157,9 +158,46 @@ public actor RemoteClient {
         let id = nextCall
         nextCall += 1
         let frame: JSON = ["t": "call", "id": .number(Double(id)), "method": .string(method), "args": args]
-        guard frameFits(frame.text(), compact: (bridgeVersion ?? 0) >= Bridge.compact) else {
-            throw RemoteCallError.rejected("This request is too large to send. Remove some attachments and try again.")
+        let json = frame.text()
+        if !frameFits(json, compact: (bridgeVersion ?? 0) >= Bridge.compact) {
+            guard MessageBatches.allows(method, args) else {
+                throw RemoteCallError.rejected("This request is too large to send.")
+            }
+            guard (bridgeVersion ?? 0) >= Bridge.messageBatches else {
+                throw RemoteCallError.rejected("Update Relay on your computer to send this many attachments.")
+            }
+            let bytes = Data(json.utf8)
+            guard bytes.count <= MessageBatches.maxBytes else {
+                throw RemoteCallError.rejected("This message is too large to send. Remove some attachments and try again.")
+            }
+            let uploading = channel
+            var result = JSON.null
+            uploads += 1
+            defer { uploads -= 1 }
+            do {
+                for (n, offset) in stride(from: 0, to: bytes.count, by: MessageBatches.chunkBytes).enumerated() {
+                    try Task.checkCancellation()
+                    guard channel === uploading, status.state == .online else {
+                        throw RemoteCallError.unanswered("The connection changed while uploading. Send the message again.")
+                    }
+                    let end = min(offset + MessageBatches.chunkBytes, bytes.count)
+                    let part = nextCall
+                    nextCall += 1
+                    result = try await exchange([
+                        "t": "batch", "id": .number(Double(part)), "batch": .number(Double(id)), "n": .number(Double(n)),
+                        "data": .string(Base64URL.encode(bytes[offset..<end])), "last": .bool(end == bytes.count),
+                    ], id: part, wait: wait)
+                }
+                return result
+            } catch {
+                if channel === uploading { sendFrame(["t": "batchCancel", "batch": .number(Double(id))]) }
+                throw error
+            }
         }
+        return try await exchange(frame, id: id, wait: wait)
+    }
+
+    private func exchange(_ frame: JSON, id: Int, wait: Duration) async throws -> JSON {
         return try await withCheckedThrowingContinuation { result in
             let timer = after(wait) { client in
                 guard let call = client.calls.removeValue(forKey: id) else { return }
@@ -313,7 +351,7 @@ public actor RemoteClient {
                 stale: { [unowned self] in closed || current !== was },
                 claim: { [unowned self] race, link in
                     // A move would cut open pages' connections, Vite's live reload among them.
-                    if !calls.isEmpty || tunnel.active > 0 {
+                    if !calls.isEmpty || uploads > 0 || tunnel.active > 0 {
                         race.busy = true
                         return false
                     }

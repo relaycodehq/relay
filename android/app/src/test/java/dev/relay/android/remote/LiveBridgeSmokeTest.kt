@@ -6,6 +6,10 @@ import dev.relay.android.remote.client.RemoteClientListener
 import dev.relay.android.remote.client.RemoteStart
 import dev.relay.android.remote.client.chat
 import dev.relay.android.remote.client.overview
+import dev.relay.android.remote.client.sendProjectChat
+import dev.relay.android.remote.model.ModelChoice
+import dev.relay.android.remote.model.PastedImage
+import dev.relay.android.remote.model.ProjectChatSend
 import dev.relay.android.remote.model.RemoteCredentials
 import dev.relay.android.remote.model.RemoteEvent
 import kotlinx.coroutines.CompletableDeferred
@@ -18,6 +22,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
+import java.util.UUID
 
 /**
  * Pairs with a real desktop bridge (PhoneRemote under Node, /tmp/relay-vectors/fake-desktop.ts),
@@ -44,6 +49,15 @@ class LiveBridgeSmokeTest {
         assertTrue(first.chat(chatId).messages.isEmpty())
         val event = withTimeout(10_000) { first.events.filterIsInstance<RemoteEvent.Chats>().first() }
         assertTrue(event.chats.single().title.startsWith("Fix the flaky test "))
+        // Beyond one 16 MiB frame, but still one user message after reassembly.
+        val images = (1..20).map { PastedImage("photo-$it.jpg", "image/jpeg", "data:image/jpeg;base64," + "A".repeat(1_066_664)) }
+        val send = ProjectChatSend(UUID.randomUUID().toString(), "@claude Review all twenty: čau 🌍", ModelChoice(""),
+            "claude", "full-access", "default", to = "claude", images = images)
+        first.sendProjectChat(chatId, send)
+        val delivered = first.chat(chatId).messages.filter { it.id == send.id }
+        assertEquals(1, delivered.size)
+        assertEquals(20, delivered.single().images?.size)
+        assertEquals(send.body, delivered.single().body)
         first.close()
 
         val again = RemoteClient(RemoteStart.Saved(credentials))

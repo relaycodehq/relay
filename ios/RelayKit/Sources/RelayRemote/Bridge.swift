@@ -1,7 +1,8 @@
 /// `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes.
 public enum Bridge {
     /// This app's own bridge, sent with `pair`/`auth`.
-    public static let version = 23
+    public static let version = 31
+    public static let messageBatches = 31
     public static let defaultPort = 47821
 
     public static let recipient = 11
