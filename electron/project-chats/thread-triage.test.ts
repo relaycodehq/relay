@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -92,7 +92,10 @@ it("snoozing or unsettling a thread leaves the threads it started as they were",
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };
   const done = await chats.create(projectId, scope, "checkout", startedBy);
-  await chats.triage(lead.id, { kind: "snooze", until: Date.now() + 3_600_000 });
+  await chats.triage(lead.id, {
+    kind: "snooze",
+    until: Date.now() + 3_600_000,
+  });
   expect((await chats.get(done.id)).settledAt).toBeUndefined();
   await chats.triage(lead.id, { kind: "unsettle" });
   expect((await chats.get(done.id)).settledAt).toBeUndefined();
@@ -208,6 +211,33 @@ it("a thread its agent settles stays in Activity until the user reads its answer
   const after = thread.listed();
   expect(after.settleWhenDone).toBeUndefined();
   expect(chatActivitySection(after, Date.now())).toBe("settled");
+});
+
+it("marks a long thread seen beside it, without rewriting the thread", async () => {
+  const thread = await chats.create(projectId, scope);
+  const storage = (chats as unknown as { core: ChatCore }).core.storage;
+  const chat = await storage.load(thread.id);
+  chat.messages.push({
+    id: "long",
+    role: "assistant",
+    provider: "claude",
+    status: "complete",
+    body: "x".repeat(200_000),
+    created: 1,
+    version: 1,
+  });
+  await storage.save(chat);
+  const file = join(root, "chats", `${thread.id}.json`);
+  const before = await readFile(file, "utf8");
+
+  await chats.markSeen(thread.id, Date.now());
+
+  expect(await readFile(file, "utf8")).toBe(before);
+  const live = JSON.parse(
+    await readFile(join(root, "chats", `${thread.id}.live.json`), "utf8"),
+  );
+  expect(live.messages).toEqual([]);
+  expect(live.chat.seenAt).toBeGreaterThan(0);
 });
 
 it("a thread its agent settles while the user watches settles when the answer ends", async () => {

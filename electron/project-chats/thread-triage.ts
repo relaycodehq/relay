@@ -260,7 +260,9 @@ export class ThreadTriage {
     if ((chat.seenAt ?? 0) >= seenAt && !chat.markedUnread) return;
     chat.seenAt = Math.max(chat.seenAt ?? 0, seenAt);
     delete chat.markedUnread;
-    await this.core.storage.save(chat);
+    // A seen mark changes no message: beside the thread, it's a few hundred
+    // bytes, where saving it whole rewrote a long thread (MBs) at every look.
+    await this.core.storage.checkpoint(chat);
     // Its agent asked to settle it once read.
     if (chat.settleWhenDone && chat.settledAt == null) await this.ended(id);
   }
