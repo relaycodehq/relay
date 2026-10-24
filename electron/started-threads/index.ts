@@ -255,6 +255,8 @@ export class StartedThreads {
         return this.settle(lead, input.id, signal);
       case "settle_this_thread":
         return this.settleSelf(lead);
+      case "wake_this_thread":
+        return this.wakeLater(lead, input);
       case "usage_limits":
         return json(await this.usage(lead));
       case "list_agents":
@@ -697,6 +699,30 @@ export class StartedThreads {
       lead.startedBy
         ? "It settles once this answer ends cleanly."
         : "It settles once this answer ends cleanly and the user has read it.",
+    );
+  }
+
+  /** The agent's message to itself, held like Send later until its time. */
+  private async wakeLater(
+    lead: ProjectChat,
+    { minutes, prompt }: RelayToolArgs<"wake_this_thread">,
+  ) {
+    const at = Date.now() + minutes * 60_000;
+    const { last, agent } = this.leadSide(lead);
+    await this.chats.send(lead.id, {
+      id: randomUUID(),
+      body: prompt,
+      choice: last.choice,
+      ...(last.contextWindow ? { contextWindow: last.contextWindow } : {}),
+      provider: agent,
+      to: agent,
+      runtimeMode: last.runtimeMode,
+      interactionMode: last.interactionMode,
+      fromThread: { id: lead.id, name: `${agentName(agent)}'s wake-up` },
+      sendAt: at,
+    });
+    return toolText(
+      `It goes out at ${localTime(at)} as your next message here. The user sees it waiting and can send it early or cancel it.`,
     );
   }
 

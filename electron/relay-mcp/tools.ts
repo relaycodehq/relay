@@ -30,6 +30,8 @@ export const MESSAGE_CHARS = 20_000;
 const FIND_LIMIT = 50;
 /** The longest wait_for_threads holds its call. */
 export const WAIT_LIMIT_SECONDS = 600;
+/** The furthest ahead wake_this_thread sets a wake-up: a week. */
+const WAKE_LIMIT_MINUTES = 7 * 24 * 60;
 
 const threadId = z
   .uuid()
@@ -310,6 +312,24 @@ export const relayToolSchemas = {
     .strict(),
   settle_thread: z.object({ id: threadId }).strict(),
   settle_this_thread: z.object({}).strict(),
+  wake_this_thread: z
+    .object({
+      minutes: z
+        .number()
+        .int()
+        .min(1)
+        .max(WAKE_LIMIT_MINUTES)
+        .describe("How long from now, in minutes."),
+      prompt: z
+        .string()
+        .trim()
+        .min(1)
+        .max(4000)
+        .describe(
+          "Your next message, written to yourself: what to check then, and what to do with what you find.",
+        ),
+    })
+    .strict(),
   usage_limits: z.object({}).strict(),
   list_agents: z
     .object({
@@ -629,6 +649,8 @@ const descriptions: Record<RelayToolName, string> = {
   settle_thread: `Settle a thread once its work is finished and taken in, the way the user settles one: it leaves their Activity and they can bring it back. Not while it works or needs the user. For your own thread, settle_this_thread.\n\n${DRIVE_NOTE}`,
   settle_this_thread:
     "Settle this thread once this answer ends, the way the user settles one: it leaves their Activity and they can bring it back. Only when the user asked you to, or when your work here is finished and needs nothing more from them. It settles once the answer ends cleanly with nothing queued, and after the user has read it; a thread another thread started settles without, as its lead reads it. An open question, a failure, a stop or the user's next message keeps it in Activity.",
+  wake_this_thread:
+    "Come back to this thread later: after `minutes`, Relay sends `prompt` here as your next message, and you carry on from it. The user sees it waiting with the thread's scheduled messages and can send it early or cancel it; it still goes out after Relay restarts. Use it whenever you mean to check on something later, like a long download, a cooldown, a deploy or a slow job on another machine, and whenever you'd tell the user you'll report back. Don't use sleep, a command that only waits, a detached timer like `nohup … &` or your own agent's wake-up or scheduling tools for that: nothing wakes you when those end, and the user can't see what's coming. A command you run in the background yourself, which tells you when it ends, needs none of this. For something the user wants to happen regularly, add_schedule. Returns when it goes out; end your answer then if there's nothing else to do now.",
   usage_limits:
     "Plan usage limits of each agent (Claude, Codex) on the account this thread uses: percent used of the session (5-hour) and weekly windows and when each resets. Check it when the user gives you a budget, like stopping at 85% of the weekly limit.",
   list_agents:

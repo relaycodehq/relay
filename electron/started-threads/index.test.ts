@@ -469,6 +469,28 @@ test("a message to a started thread goes on its own settings, from the lead", as
   });
 });
 
+test("a wake-up is the agent's own message to its thread, held until its time", async () => {
+  const { lead, sent, api } = fakeChats();
+  const threads = new StartedThreads(api);
+  const before = Date.now();
+  const result = await call(threads, lead.id, "wake_this_thread", {
+    minutes: 105,
+    prompt: "Check whether the cooldown is over",
+  });
+  expect(result.isError).toBeUndefined();
+  const { id, input } = sent.at(-1)!;
+  expect(id).toBe(lead.id);
+  expect(input).toMatchObject({
+    body: "Check whether the cooldown is over",
+    to: "claude",
+    choice: { model: "claude-opus-5-5" },
+    fromThread: { id: lead.id, name: "Claude's wake-up" },
+  });
+  expect(input.delivery).toBeUndefined();
+  expect(input.sendAt! - before).toBeGreaterThanOrEqual(105 * 60_000);
+  expect(input.sendAt! - Date.now()).toBeLessThanOrEqual(105 * 60_000);
+});
+
 test("starting threads asks the user first, unless the lead has full access", async () => {
   const { lead, sent, asked, answer, api } = fakeChats();
   const threads = new StartedThreads(api);

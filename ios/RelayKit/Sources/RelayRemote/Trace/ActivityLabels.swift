@@ -187,6 +187,7 @@ let relayToolLabels = [
     "hand_off_thread": "Moved a thread to another computer",
     "settle_thread": "Settled a started thread",
     "settle_this_thread": "Settles this thread when done",
+    "wake_this_thread": "Set a wake-up",
     "move_to_worktree": "Moved the thread to its own worktree",
     "deep_review": "Started a deep review",
     "list_review_setups": "Listed review setups",

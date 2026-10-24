@@ -28,6 +28,7 @@ export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
   hand_off_thread: { label: "Moved a thread to another computer" },
   settle_thread: { label: "Settled a started thread" },
   settle_this_thread: { label: "Settles this thread when done", started: true },
+  wake_this_thread: { label: "Set a wake-up", started: true },
   usage_limits: { label: "Checked usage limits", started: true },
   list_agents: { label: "Listed agents" },
   move_to_worktree: {

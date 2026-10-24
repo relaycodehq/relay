@@ -524,12 +524,16 @@ export function QueuedMessages({
                         Didn't send
                       </span>
                     ) : (
-                      <time
-                        dateTime={new Date(scheduled.at).toISOString()}
-                        title={new Date(scheduled.at).toLocaleString()}
-                      >
-                        Sends {wakeLabel(scheduled.at, new Date())}
-                      </time>
+                      <>
+                        {scheduled.input.fromThread &&
+                          `${scheduled.input.fromThread.name} · `}
+                        <time
+                          dateTime={new Date(scheduled.at).toISOString()}
+                          title={new Date(scheduled.at).toLocaleString()}
+                        >
+                          Sends {wakeLabel(scheduled.at, new Date())}
+                        </time>
+                      </>
                     )
                   }
                   actions={

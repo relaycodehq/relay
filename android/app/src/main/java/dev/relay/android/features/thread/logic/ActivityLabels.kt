@@ -38,6 +38,7 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "hand_off_thread" to "Moved a thread to another computer",
     "settle_thread" to "Settled a started thread",
     "settle_this_thread" to "Settles this thread when done",
+    "wake_this_thread" to "Set a wake-up",
     "move_to_worktree" to "Moved the thread to its own worktree",
     "deep_review" to "Started a deep review",
     "list_review_setups" to "Listed review setups",
