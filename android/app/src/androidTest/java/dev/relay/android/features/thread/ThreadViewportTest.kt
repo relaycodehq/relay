@@ -142,6 +142,15 @@ class ThreadViewportTest {
         compose.runOnIdle { header.intValue = 0 }; frame()
         assertEquals("paragraph below finishing header", before, positions.getValue("tail").first)
     }
+    @Test fun heldHeaderLetsGoOnceScrolledAway() {
+        growth.intValue = 900
+        setup(); read(31, 0)
+        val held = positions.getValue("header").second
+        compose.runOnIdle { header.intValue = 0 }; frame()
+        assertEquals("held while in view", held, positions.getValue("header").second)
+        read(0); read(31, 0)
+        assertEquals("no gap after coming back", 0, positions.getValue("header").second)
+    }
     @Test fun imageLoadingAndFailureNeverChangeFrame() {
         growth.intValue = 900
         setup(); read(30, 0)

@@ -14,6 +14,14 @@ class StableGeometryTest {
         assertEquals(30, size.height(400, 10, true))
     }
 
+    @Test fun forgottenReserveRemeasuresNaturallyWhileReading() {
+        val size = StableGeometryState()
+        size.height(400, 2400, false)
+        assertEquals(2400, size.height(400, 40, true))
+        size.forget()
+        assertEquals(40, size.height(400, 40, true))
+    }
+
     @Test fun widthChangeStartsNewMeasurementRegime() {
         val size = StableGeometryState()
         size.height(400, 300, false)

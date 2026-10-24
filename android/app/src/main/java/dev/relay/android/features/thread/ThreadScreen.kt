@@ -298,7 +298,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
 
     val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: made?.title ?: ""
     CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned,
-        LocalScrollTrace provides trace) {
+        LocalSavedCopy provides (fetched == 0L), LocalScrollTrace provides trace) {
         val line = composer.line
         Screen(
             title,

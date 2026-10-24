@@ -52,7 +52,10 @@ Reference definitions reparse the message because they can affect earlier text.
 Parsing caches are retained per loaded message and pruned with the loaded set.
 
 Header/footer/end chrome retain shrinking geometry while reading or holding a
-pointer. Body edits use natural layout. A reading viewport can shrink, but grows
+pointer, until the row leaves the screen (off screen a reserve keeps nothing
+still; kept, it returns as a blank gap). A turn that ends while read keeps its
+trace open until the row scrolls away, and a turn the offline copy shows running
+opens folded until the fetch, so neither folds on screen. Body edits use natural layout. A reading viewport can shrink, but grows
 only when enough content exists below its anchor to avoid clamping. Its reserve
 never exceeds the available window and resets on width changes or following.
 There is always a separate tiny bottom sentinel, after queue content; following

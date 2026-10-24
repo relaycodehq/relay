@@ -42,6 +42,7 @@ import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.thread.logic.RunShape
 import dev.relay.android.features.thread.logic.TracePart
+import dev.relay.android.features.thread.logic.TraceFold
 import dev.relay.android.features.thread.logic.TurnHeading
 import dev.relay.android.features.thread.logic.askedQuestions
 import dev.relay.android.features.thread.logic.batchHead
@@ -97,10 +98,13 @@ private fun iconOf(a: AgentActivity) = if (isQuestionCall(a)) TablerIcons.Outlin
 
 /**
  * True while the reader is scrolled back in the thread. A turn that ends then
- * stays open until they're at the bottom again: folding it would pull the
- * answer below it out from under them.
+ * stays open while its row is on screen: folding it would pull the answer below
+ * it out from under them.
  */
 val LocalReadingBack = compositionLocalOf { false }
+
+/** True while the thread shown is the offline copy, not fetched yet. */
+val LocalSavedCopy = compositionLocalOf { false }
 
 /** Each agent call's own calls, how to show paths, and whose turn they're in (none for a subagent's own run). */
 private class TraceScope(
@@ -138,16 +142,11 @@ fun AgentRun(
     val live = turn.live
     // Open while the turn runs; folds back once it ends unless the reader toggled it.
     var toggled by rememberSaveable(message.id) { mutableStateOf<Boolean?>(null) }
-    val readingBack = LocalReadingBack.current
-    var wasLive by remember { mutableStateOf(live) }
-    var held by remember { mutableStateOf(false) }
+    // Scrolling away forgets it, so a trace held open folds while off screen.
+    val fold = remember { TraceFold() }
+    val opened = fold.open(live, LocalSavedCopy.current, LocalReadingBack.current)
     val step = live && message.body.isEmpty()
-    if (wasLive != live) {
-        wasLive = live
-        if (!live && readingBack) held = true
-    }
-    if (held && !readingBack) held = false
-    val expanded = toggled ?: (open || live || held)
+    val expanded = toggled ?: (open || opened)
     val traced = expanded && turn.entries.isNotEmpty()
     LaunchedEffect(traced) { onExpanded(traced) }
     if (!live && turn.entries.isEmpty()) return
@@ -197,7 +196,7 @@ fun AgentRun(
                             part is TracePart.Commentary ->
                                 Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
                             part !is TracePart.Run -> Unit
-                            else -> when (runShape(parts, index, live, settled = !live && (toggled != null || !held))) {
+                            else -> when (runShape(parts, index, live, settled = !live && (toggled != null || !fold.held))) {
                                 RunShape.Live -> OpenBatch(part.activity)
                                 RunShape.Rows -> part.activity.forEach { ToolRow(it) }
                                 RunShape.Group -> ActivityGroup(part.activity)

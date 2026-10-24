@@ -120,6 +120,26 @@ fun turnHeading(message: ChatMessage, expanded: Boolean, turn: TurnRead = readTu
     return if (message.body.isNotEmpty()) TurnHeading.Writing else TurnHeading.Thinking
 }
 
+/**
+ * Whether a turn's trace opens on its own: while it runs, and after it ends while
+ * read back, for as long as its row stays composed. One that only the offline copy
+ * shows running counts as ended until the fetch: it most likely has, and opening
+ * it would fold it under the reader once the fetch says so.
+ */
+class TraceFold {
+    private var wasRunning: Boolean? = null
+    /** Ended while read back. */
+    var held = false
+        private set
+
+    fun open(live: Boolean, savedCopy: Boolean, readingBack: Boolean): Boolean {
+        val running = live && !savedCopy
+        if (wasRunning != null && wasRunning != running) held = !running && readingBack
+        wasRunning = running
+        return running || held
+    }
+}
+
 /** The batch still being worked on shows one row: its running call, else its latest; the rest fold behind it. */
 fun batchHead(activity: List<AgentActivity>): Pair<AgentActivity, List<AgentActivity>> {
     val head = activity.lastOrNull { it.status == "running" } ?: activity.last()
