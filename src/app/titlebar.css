@@ -55,7 +55,7 @@
   border-right: 1px solid var(--sidebar-edge);
 }
 .project-titlebar-brand .traffic-space {
-  width: 66px;
+  width: 76px;
   flex-shrink: 0;
 }
 .platform-linux .project-titlebar-brand .traffic-space,

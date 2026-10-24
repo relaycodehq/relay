@@ -386,7 +386,7 @@ export class AppWindow {
       ...(process.platform === "darwin"
         ? {
             titleBarStyle: "hiddenInset" as const,
-            trafficLightPosition: { x: 20, y: 17 },
+            trafficLightPosition: { x: 20, y: 19 },
             vibrancy: "sidebar" as const,
             visualEffectState: "followWindow" as const,
           }
