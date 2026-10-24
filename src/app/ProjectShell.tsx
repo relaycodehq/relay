@@ -264,6 +264,23 @@ export default function ProjectShell() {
     void api.takeOpenThread().then(show).catch(setError);
     return api.onOpenThread(show);
   }, [loaded]);
+  // A thread its agent moved to another project goes along while it shows,
+  // into a project the agent may have only just added.
+  const followMoved = useStableCallback(async (t: ThreadWindow) => {
+    if (t.chatId !== nav.chatId) return;
+    const listed = projects.data?.some((p) => p.id === t.projectId)
+      ? projects.data
+      : (await projects.refetch()).data;
+    const p = listed?.find((p) => p.id === t.projectId);
+    if (!p) return;
+    const list = await qc.query({ ...projectChatsQuery(p.id), staleTime: 0 });
+    const next = list.find((c) => c.id === t.chatId);
+    if (next) navigate(p, next);
+  });
+  useEffect(
+    () => api.onThreadMoved((t) => void followMoved(t).catch(setError)),
+    [followMoved],
+  );
   // Asked from a thread's own window, which has no Scratchpad or Activity.
   const runAsked = useStableCallback((command: MainWindowCommand | null) => {
     if (command === "meme") runCommand(command);

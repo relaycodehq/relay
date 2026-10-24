@@ -59,6 +59,7 @@ export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
     label: "Drafted a report about Relay",
     started: true,
   },
+  move_to_project: { label: "Moved the thread to another project" },
   add_project: { label: "Added a project" },
 };
 

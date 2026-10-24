@@ -57,7 +57,7 @@ public struct WorkspaceMove: Codable, Sendable, Equatable {
     public var at: Int64
     /// The main conversation's last message before it; its line shows under that one.
     public var after: String?
-    /// "moved" | "recreated" | "switched"
+    /// "moved" | "recreated" | "switched" | "project"
     public var how: String
     /// The folder it works in from here on; nil for the project folder.
     public var to: String?
@@ -65,6 +65,8 @@ public struct WorkspaceMove: Codable, Sendable, Equatable {
     public var fresh: Bool?
     public var unasked: Bool?
     public var by: String?
+    /// The name of the project it moved to.
+    public var project: String?
 }
 
 public struct AgentRequest: Codable, Sendable, Equatable, Identifiable {

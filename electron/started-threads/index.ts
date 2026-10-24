@@ -98,6 +98,7 @@ type Chats = Pick<
   worktrees: Pick<ProjectChats["worktrees"], "enter">;
   liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
   importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
+  projectMoves?: Pick<ProjectChats["projectMoves"], "blocked" | "move">;
 };
 
 /** Moving threads to the user's other computers, as the thread header does. */
@@ -283,6 +284,8 @@ export class StartedThreads {
         return this.schedule(lead, { name: tool, input } as ToolCall, signal);
       case "list_projects":
         return json(await this.projects.list(lead.projectId));
+      case "move_to_project":
+        return this.moveToProject(lead, input.project, signal);
       case "add_project":
         return this.projects.add(input, (title, detail) =>
           this.approve(lead, title, detail, signal, true),
@@ -324,6 +327,37 @@ export class StartedThreads {
         throw new Error(`There is no handler for tool ${unhandled}.`);
       }
     }
+  }
+
+  /** Moves the lead's own thread to another project, once the user says so. */
+  private async moveToProject(
+    lead: ProjectChat,
+    projectId: string,
+    signal: AbortSignal,
+  ) {
+    const moves = this.chats.projectMoves;
+    if (!moves) return toolText("Threads can't move from here.", true);
+    const target = (await this.projects.real()).find((p) => p.id === projectId);
+    if (!target)
+      return toolText(
+        "There's no such project; list_projects gives their ids.",
+        true,
+      );
+    const problem = await moves.blocked(lead.id, target.id);
+    if (problem) return toolText(problem, true);
+    const approved = await this.approve(
+      lead,
+      `Move this thread to “${target.name}”?`,
+      `${target.path}\nThe conversation carries on there with its agents. Nothing is copied: files stay where they are. Agents in this thread can read and change everything in this folder.`,
+      signal,
+      true,
+    );
+    if (!approved)
+      return toolText(
+        "The user didn't move this thread. Ask them what they want instead.",
+        true,
+      );
+    return json(await moves.move(lead.id, target.id));
   }
 
   /**

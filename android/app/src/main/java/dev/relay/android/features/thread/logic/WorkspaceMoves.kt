@@ -13,6 +13,8 @@ fun workspaceMoveLine(move: WorkspaceMove): String {
     val agent = move.by?.let(::agentName) ?: "the agent"
     val unasked = move.unasked == true
     return when {
+        move.how == "project" ->
+            "${if (move.by != null) agent else "The agent"} moved this thread to ${move.project ?: where ?: "another project"}"
         move.how == "recreated" -> "${if (move.fresh == true) "New worktree" else "Worktree made again"}$on"
         move.how == "moved" ->
             "${if (unasked) "${if (move.by != null) agent else "The agent"} moved" else "Moved"} this thread into its own worktree$on"

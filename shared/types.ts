@@ -843,6 +843,10 @@ export interface Api
   onOpenThread(
     callback: (thread: import("./thread-windows").ThreadWindow) => void,
   ): () => void;
+  /** A thread that moved to another project, for a window showing it to follow. */
+  onThreadMoved(
+    callback: (thread: import("./thread-windows").ThreadWindow) => void,
+  ): () => void;
   /** Every draft this computer shares with its phones; see shared/drafts. */
   sharedDrafts(): Promise<import("./drafts").SharedDraft[]>;
   /** This window's edits; each draft as it stands after, null once gone. */

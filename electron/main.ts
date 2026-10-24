@@ -414,6 +414,10 @@ app
     chats.onNews((item) => window.send("relay:thread-news", item));
     chats.onNews((item) => phoneRemote?.news(item));
     chats.onNews((item) => menubarSounds?.news(item));
+    chats.projectMoves.onMoved((move) => {
+      window.threads.moved(move);
+      window.send("relay:thread-moved", move);
+    });
     serveMedia();
     serveRenders((chatId, renderId, page) =>
       chats.renderPage(chatId, renderId, page),

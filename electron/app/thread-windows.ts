@@ -121,6 +121,16 @@ export class ThreadWindows {
     this.changed();
   }
 
+  /** The thread moved to another project: its window loads it there. */
+  moved(thread: ThreadWindow) {
+    const entry = this.entries.get(thread.chatId);
+    if (!entry || entry.thread.projectId === thread.projectId) return;
+    entry.thread = { projectId: thread.projectId, chatId: thread.chatId };
+    void loadPage(entry.win, threadWindowSearch(entry.thread));
+    this.save();
+    this.changed();
+  }
+
   /** Closes the thread's window and shows the thread in the main window. */
   giveBack(chatId: string) {
     const entry = this.entries.get(chatId);

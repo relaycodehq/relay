@@ -191,16 +191,19 @@ export type ActiveAgentWorktree = Pick<
 };
 /**
  * The folder a thread works in changed after it started: it moved into a
- * worktree of its own, its removed worktree was made again, or it switched
- * between the project folder and a worktree its agent made.
+ * worktree of its own, its removed worktree was made again, it switched
+ * between the project folder and a worktree its agent made, or it moved to
+ * another project.
  */
 export interface WorkspaceMove {
   at: number;
   /** The main conversation's last message before it; its line shows under that one. */
   after?: string;
-  how: "moved" | "recreated" | "switched";
+  how: "moved" | "recreated" | "switched" | "project";
   /** The folder it works in from here on; unset for the project folder. */
   to?: string;
+  /** The name of the project it moved to. */
+  project?: string;
   branch?: string;
   /** Recreated from the project folder on a new branch; the old one couldn't be checked out again. */
   fresh?: true;

@@ -55,7 +55,7 @@ data class WorkspaceMove(
     val at: Long,
     /** The main conversation's last message before it; its line shows under that one. */
     val after: String? = null,
-    /** "moved" | "recreated" | "switched" */
+    /** "moved" | "recreated" | "switched" | "project" */
     val how: String,
     /** The folder it works in from here on; null for the project folder. */
     val to: String? = null,
@@ -63,6 +63,8 @@ data class WorkspaceMove(
     val fresh: Boolean? = null,
     val unasked: Boolean? = null,
     val by: String? = null,
+    /** The name of the project it moved to. */
+    val project: String? = null,
 )
 
 @Serializable

@@ -22,6 +22,8 @@ const folderName = (path: string) => path.split(/[\\/]/).pop() || path;
 export function workspaceMoveLine(move: WorkspaceMove) {
   const where = move.branch ?? (move.to ? folderName(move.to) : undefined);
   const agent = move.by ? agentName(move.by) : "the agent";
+  if (move.how === "project")
+    return `${move.by ? agent : "The agent"} moved this thread to ${move.project ?? where ?? "another project"}`;
   if (move.how === "recreated")
     return `${move.fresh ? "New worktree" : "Worktree made again"}${where ? ` on ${where}` : ""}`;
   if (move.how === "moved")

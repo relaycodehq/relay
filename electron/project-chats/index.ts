@@ -87,6 +87,7 @@ import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
 import { defaultPrefs, type AppPrefs } from "../settings";
 import { ImportOffers } from "./import-offers";
+import { ProjectMoves } from "./project-move";
 import { chatStatus } from "./status";
 
 export { chatStatus, type ChatStatus } from "./status";
@@ -146,6 +147,8 @@ export class ProjectChats {
   readonly imports: ProjectImports;
   /** Importing another app's history with an agent. */
   readonly importOffers: ImportOffers;
+  /** Threads moving to another project at their agent's asking. */
+  readonly projectMoves: ProjectMoves;
   constructor(
     private store: Store,
     projects: Projects,
@@ -269,6 +272,7 @@ export class ProjectChats {
     );
     this.imports = new ProjectImports(core, terminalSessions, this.terminal);
     this.importOffers = new ImportOffers(core, this.imports);
+    this.projectMoves = new ProjectMoves(core);
     this.handoffs = new ComputerHandoff(core, this.schedule, this.councils, {
       send: (id, input) => this.send(id, input),
       note: (chat, root, provider, active, computer) =>

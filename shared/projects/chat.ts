@@ -43,7 +43,8 @@ export interface ProjectChat extends ChatSummary {
    * Local: moved from the project folder into its worktree; `owed` are the
    * sessions not yet told. `copied` when the worktree got a copy of the
    * folder's edits and the folder kept its own; `fresh` when it started
-   * from the folder's commit alone.
+   * from the folder's commit alone. `project` names the project it moved
+   * to, its folders being the two projects'.
    */
   movedIn?: {
     from: string;
@@ -52,6 +53,7 @@ export interface ProjectChat extends ChatSummary {
     copied?: true;
     fresh?: true;
     selected?: true;
+    project?: string;
   };
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;

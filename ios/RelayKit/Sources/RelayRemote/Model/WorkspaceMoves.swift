@@ -15,6 +15,9 @@ public func workspaceMoveLine(_ move: WorkspaceMove) -> String {
     let on = place.map { " on \($0)" } ?? ""
     let agent = move.by.map(agentName) ?? "the agent"
     let unasked = move.unasked == true
+    if move.how == "project" {
+        return "\(move.by != nil ? agent : "The agent") moved this thread to \(move.project ?? place ?? "another project")"
+    }
     if move.how == "recreated" { return "\(move.fresh == true ? "New worktree" : "Worktree made again")\(on)" }
     if move.how == "moved" {
         return "\(unasked ? "\(move.by != nil ? agent : "The agent") moved" : "Moved") this thread into its own worktree\(on)"
