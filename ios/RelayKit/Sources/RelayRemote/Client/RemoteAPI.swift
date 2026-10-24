@@ -46,6 +46,13 @@ public extension RemoteClient {
         _ = try await call("tunnelAllow", [.number(Double(port))])
     }
 
+    /// Appends base64 `data` at `offset` of file `id`; how much of it the computer has after. From `Bridge.files`.
+    func uploadFile(id: String, name: String, size: Int64, offset: Int64, data: String) async throws -> UploadedFile {
+        try await call(
+            "uploadFile", [.string(id), .string(name), .number(Double(size)), .number(Double(offset)), .string(data)]
+        ).decode()
+    }
+
     /// `desktop("markProjectChatSeen", [chatId, at])`.
     func markSeen(chatId: String, at: Int64) async throws {
         _ = try await desktop("markProjectChatSeen", [.string(chatId), .number(Double(at))])

@@ -60,7 +60,7 @@ struct MessageView: View {
             if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 HStack {
                     Spacer(minLength: 56)
-                    SelectableText(text: AttributedString(text), look: TextLook(color: colors.foreground))
+                    SelectableText(text: sentText(text), look: TextLook(color: colors.foreground))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
                         .background {
@@ -76,9 +76,13 @@ struct MessageView: View {
                 }
             }
             HStack(spacing: 2) {
-                Text(message.pending == true && message.error == nil ? "Sending…" : Clock().clock(message.created))
-                    .font(.caption)
-                    .foregroundStyle(colors.faint)
+                if message.pending == true && message.error == nil {
+                    SendingLabel(id: message.id)
+                } else {
+                    Text(Clock().clock(message.created))
+                        .font(.caption)
+                        .foregroundStyle(colors.faint)
+                }
                 if message.pending != true { UserMessageMenu(chatId: chatId, message: message, replies: main) }
             }
             repliesLink
@@ -170,5 +174,31 @@ struct MessageView: View {
         .font(.footnote)
         .foregroundStyle(colors.muted)
         .lineLimit(1)
+    }
+}
+
+/// What you wrote, a file it took along shown by its name, set as code.
+private func sentText(_ text: String) -> AttributedString {
+    sentPieces(text).reduce(into: AttributedString()) { out, piece in
+        switch piece {
+        case .text(let words): out += AttributedString(words)
+        case .file(let name):
+            var file = AttributedString(name)
+            file.inlinePresentationIntent = .code
+            out += file
+        }
+    }
+}
+
+/// "Sending…", or how far its files got while the outbox still sends them.
+private struct SendingLabel: View {
+    let id: String
+    @Environment(Connection.self) private var connection
+    @Environment(\.colors) private var colors
+
+    var body: some View {
+        Text(connection.outbox.uploadPercent(id).map(Files.uploading) ?? "Sending…")
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(colors.faint)
     }
 }

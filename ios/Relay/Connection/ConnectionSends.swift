@@ -4,8 +4,44 @@ import RelayRemote
 /// The outbox and the offline copies, as the connection feeds them.
 extension Connection {
     /// Goes in the background: the thread shows it at once, a failure stays there to retry or take back.
-    func deliver(_ send: ProjectChatSend, to chatId: String, through client: RemoteClient, computer: String, draft: String? = nil) {
-        outbox.deliver(ClientOutboxLink(client), computer: computer, chatId: chatId, send, draft: draft)
+    func deliver(
+        _ send: ProjectChatSend, to chatId: String, through client: RemoteClient, computer: String, draft: String? = nil,
+        files: [FileAttachment] = []
+    ) {
+        outbox.deliver(ClientOutboxLink(client), computer: computer, chatId: chatId, send, draft: draft, files: files)
+    }
+
+    /// Why this computer can't take files, once it has said which bridge it speaks.
+    var filesRefused: String? {
+        guard let overview else { return nil }
+        return (overview.bridge ?? 0) < Bridge.files ? Files.needsUpdate : nil
+    }
+
+    /// Sends what the computer doesn't have yet of a file the composer holds, trying again a few
+    /// times as the outbox does; the outbox carries on from what it got to.
+    func uploadFile(
+        _ file: FileAttachment, progress: @escaping @Sendable (FileAttachment) async -> Void
+    ) async throws -> FileAttachment {
+        guard let active, let folder = outbox.files else { throw PairingError("Not connected.") }
+        let link = link
+        return try await retrying {
+            try await upload(file, from: folder.url(file), to: active, via: link, progress: progress)
+        }
+    }
+
+    /// A send that goes straight to the computer, not through the outbox, with its files uploaded
+    /// first and named in it. Their copies go once it's sent.
+    func withFiles(_ send: ProjectChatSend, _ files: [FileAttachment]) async throws -> ProjectChatSend {
+        guard !files.isEmpty else { return send }
+        var done: [FileAttachment] = []
+        for file in files { done.append(try await uploadFile(file) { _ in }) }
+        var send = send
+        send.body = bodyWithFiles(send.body, done.compactMap(\.path))
+        return send
+    }
+
+    func letGo(_ files: [FileAttachment]) {
+        for file in files { outbox.files?.remove(file) }
     }
 
     /// The desktop took one the thread doesn't show yet: ask for it.

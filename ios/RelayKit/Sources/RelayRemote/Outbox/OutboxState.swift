@@ -17,12 +17,15 @@ public struct Outgoing: Codable, Sendable, Equatable {
     public var refused: Bool?
     /// The draft it came from, which the desktop holds part of: it goes through the desktop's composer.
     public var draft: String?
+    /// Files it takes along, uploaded before it goes; the body names each once it's on the computer.
+    public var files: [FileAttachment]?
 
     public var id: String { send.id }
 
     public init(
         computer: String, chatId: String, send: ProjectChatSend, created: Int64, sent: Int64? = nil,
-        error: String? = nil, unsure: Bool? = nil, refused: Bool? = nil, draft: String? = nil
+        error: String? = nil, unsure: Bool? = nil, refused: Bool? = nil, draft: String? = nil,
+        files: [FileAttachment]? = nil
     ) {
         self.computer = computer
         self.chatId = chatId
@@ -33,6 +36,23 @@ public struct Outgoing: Codable, Sendable, Equatable {
         self.unsure = unsure
         self.refused = refused
         self.draft = draft
+        self.files = files?.isEmpty == true ? nil : files
+    }
+
+    /// The send as it goes out: its files named where the computer keeps them.
+    public var sending: ProjectChatSend {
+        guard let files, !files.isEmpty else { return send }
+        var send = send
+        send.body = bodyWithFiles(send.body, files.map { $0.path ?? $0.name })
+        return send
+    }
+
+    /// How far its files got, while any is still on its way to `computer`.
+    public var uploadPercent: Int? {
+        guard let files, files.contains(where: { !$0.uploaded(to: computer) }) else { return nil }
+        let size = files.reduce(Int64(0)) { $0 + $1.size }
+        let had = files.reduce(Int64(0)) { $0 + ($1.computer == computer ? min($1.received, $1.size) : 0) }
+        return size > 0 ? Int((Double(had) * 100 / Double(size)).rounded(.down)) : 0
     }
 }
 
@@ -73,8 +93,13 @@ public func outgoingMessage(_ o: Outgoing) -> ChatMessage {
             id: "\(o.id):\(i)", name: image.name, mimeType: image.mimeType,
             sizeBytes: Int64((Double(image.dataUrl.utf8.count) * 3 / 4).rounded()))
     }
+    // A file still on its way reads as a sent one does, by its name.
+    var shown = o.send
+    if let files = o.files {
+        shown.body = bodyWithFiles(o.send.body, files.map { $0.path ?? "/pastes/\($0.id)/\($0.name)" })
+    }
     return ChatMessage(
-        id: o.id, role: "user", body: o.send.body, status: "complete", created: o.created, provider: o.send.provider,
+        id: o.id, role: "user", body: shown.body, status: "complete", created: o.created, provider: o.send.provider,
         version: 0, error: o.error.map { o.unsure == true ? "Maybe not sent: \($0)" : "Not sent: \($0)" },
         side: o.send.side == true ? true : nil, images: images.isEmpty ? nil : images, parentId: o.send.parentId,
         pending: true)

@@ -11,7 +11,9 @@ struct UnsentList: View {
     let chatId: String
     var rootId: String?
     /// Into the composer; answers how to undo that.
-    let restore: (_ text: String, _ images: [PastedImage], _ settings: ResumeSettings?) throws -> () -> Void
+    let restore:
+        (_ text: String, _ images: [PastedImage], _ files: [FileAttachment], _ settings: ResumeSettings?) throws -> () ->
+        Void
     @Environment(Connection.self) private var connection
     @Environment(\.colors) private var colors
     @State private var busy: Set<String> = []
@@ -104,8 +106,10 @@ struct UnsentList: View {
             }
         }
         _ = try restore(
-            (o.send.side == true ? "/btw " : "") + withoutAgentMention(o.send.body), o.send.images ?? [], o.send.sentWith)
-        connection.outbox.drop(o.id)
+            (o.send.side == true ? "/btw " : "") + withoutAgentMention(o.send.body), o.send.images ?? [], o.files ?? [],
+            o.send.sentWith)
+        // Its files' copies stay: the composer has them now.
+        connection.outbox.takeBack(o.id)
     }
 
     private func act(_ o: Outgoing, _ work: @escaping () async throws -> Void) {

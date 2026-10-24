@@ -173,7 +173,7 @@ struct ThreadView: View {
                             focused: $composing, handle: composer, onCommand: command
                         ) {
                             try await connection.send(
-                                $0.text, images: $0.images, to: chatId, with: $0.settings, steer: $0.steer, rootId: rootId,
+                                $0.text, images: $0.images, files: $0.files, to: chatId, with: $0.settings, steer: $0.steer, rootId: rootId,
                                 sendAt: $0.sendAt, throughDraft: $0.throughDraft, id: $0.id)
                         }
                     }
@@ -242,8 +242,10 @@ struct ThreadView: View {
     }
 
     /// A failed send back in the composer, with the agent it was for back in the picker.
-    private func restoreUnsent(_ text: String, _ images: [PastedImage], _ settings: ResumeSettings?) throws -> () -> Void {
-        let undo = try composer.restore(text, images)
+    private func restoreUnsent(
+        _ text: String, _ images: [PastedImage], _ files: [FileAttachment], _ settings: ResumeSettings?
+    ) throws -> () -> Void {
+        let undo = try composer.restore(text, images, files)
         if let settings { picked = settings }
         return undo
     }
@@ -264,7 +266,7 @@ struct ThreadView: View {
         // Only a computer that sends `settings` can hand the photos over; older ones give the text alone.
         let images =
             (item.images ?? 0) > 0 && item.settings != nil ? try await connection.queuedImages(chatId, item: item.id) : []
-        let undo = try composer.restore(back.body, images)
+        let undo = try composer.restore(back.body, images, [])
         let previousSettings = picked
         if let settings = back.settings { picked = settings }
         composing = true

@@ -109,7 +109,7 @@ struct NewThreadView: View {
                 if let through = sent.throughDraft {
                     // Started on the computer with a screenshot or a branch of its own: it starts it.
                     let chatId = try await connection.start(
-                        in: projectId ?? "", workspace: workspace, sent.text, images: sent.images,
+                        in: projectId ?? "", workspace: workspace, sent.text, images: sent.images, files: sent.files,
                         with: sent.settings, sendAt: sent.sendAt, throughDraft: through, id: sent.id, on: computer)
                     if connection.active == computer { started(chatId) }
                     return
@@ -122,7 +122,7 @@ struct NewThreadView: View {
                 if let made, made.computer == computer, made.place == at { chat = made.chat } else { chat = try await connection.createThread(in: place, workspace: workspace, on: computer) }
                 made = (computer, at, chat)
                 try await connection.send(
-                    sent.text, images: sent.images, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id, on: computer)
+                    sent.text, images: sent.images, files: sent.files, to: chat.id, with: sent.settings, sendAt: sent.sendAt, id: sent.id, on: computer)
                 made = nil
                 // Titled as the computer titles it once the message is in.
                 let title = sent.sendAt == nil ? promptTitle(sent.text) : chat.title ?? ""

@@ -83,9 +83,12 @@ private nonisolated func scale(_ image: UIImage, longSide: CGFloat) -> UIImage {
 /// screenshots the computer's composer has in this draft, which go with it from there.
 struct PhotoStrip: View {
     let photos: [PickedPhoto]
+    var files: [AttachedFile] = []
     let loading: Int
     var computerShots: [Int] = []
     let remove: (PickedPhoto.ID) -> Void
+    var retry: (AttachedFile) -> Void = { _ in }
+    var removeFile: (AttachedFile) -> Void = { _ in }
     @Environment(\.colors) private var colors
 
     var body: some View {
@@ -106,6 +109,9 @@ struct PhotoStrip: View {
                                 .buttonStyle(.plain)
                                 .padding(3)
                         }
+                }
+                ForEach(files) { file in
+                    FileCard(file: file, retry: { retry(file) }, remove: { removeFile(file) })
                 }
                 ForEach(0..<loading, id: \.self) { _ in
                     Spinner()

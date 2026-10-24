@@ -61,7 +61,9 @@ final class Connection {
     /// How many of a thread's latest messages to hold, where Load earlier asked for more.
     private(set) var history: [String: Int] = [:]
     /// Messages on their way to a computer, shown in their threads until it has them (ConnectionSends.swift).
-    let outbox = Outbox(dir: URL.applicationSupportDirectory.appending(path: "relay-outbox"))
+    let outbox = Outbox(
+        dir: URL.applicationSupportDirectory.appending(path: "relay-outbox"),
+        files: URL.applicationSupportDirectory.appending(path: "relay-attachments"))
     /// Each computer's last overview, shown while it can't be reached.
     @ObservationIgnored let cache = OfflineCache(dir: URL.cachesDirectory.appending(path: "relay-overview"))
     /// When this phone last reached each computer, by key.
@@ -466,9 +468,9 @@ final class Connection {
     /// side conversation; `/btw` on the main one asks beside it, as the desktop's composer does.
     /// `throughDraft` sends it from the computer's composer, which adds what it holds of that draft.
     func send(
-        _ text: String, images: [PastedImage] = [], to chatId: String, with picked: ResumeSettings? = nil,
-        steer: Bool = false, rootId: String? = nil, sendAt: Int64? = nil, throughDraft: String? = nil,
-        id: String = UUID().uuidString.lowercased(), on computer: String? = nil
+        _ text: String, images: [PastedImage] = [], files: [FileAttachment] = [], to chatId: String,
+        with picked: ResumeSettings? = nil, steer: Bool = false, rootId: String? = nil, sendAt: Int64? = nil,
+        throughDraft: String? = nil, id: String = UUID().uuidString.lowercased(), on computer: String? = nil
     ) async throws {
         guard let client, let active else { throw PairingError("Not connected.") }
         guard computer == nil || computer == active else { throw PairingError("The computer changed. Send again on the computer you want.") }
@@ -479,7 +481,7 @@ final class Connection {
         let send = ProjectChatSend(
             id: id, body: btw.map { String(text[$0.upperBound...]) } ?? text, settings: settings, delivery: delivery,
             images: images, parentId: rootId, side: btw != nil, sendAt: sendAt)
-        deliver(send, to: chatId, through: client, computer: active, draft: throughDraft)
+        deliver(send, to: chatId, through: client, computer: active, draft: throughDraft, files: files)
     }
 
     /// Whether a send of this draft goes through the computer, which holds part of it.
@@ -560,23 +562,28 @@ final class Connection {
     /// Makes the thread, then sends its first message; the thread's id. A retry passes the
     /// failed attempt's `id`, so the computer, which knows the draft's sends by it, starts one thread.
     func start(
-        in projectId: String, workspace: String?, _ text: String, images: [PastedImage], with settings: ResumeSettings,
-        sendAt: Int64? = nil, throughDraft: String? = nil, id: String = UUID().uuidString.lowercased(), on computer: String? = nil
+        in projectId: String, workspace: String?, _ text: String, images: [PastedImage], files: [FileAttachment] = [],
+        with settings: ResumeSettings, sendAt: Int64? = nil, throughDraft: String? = nil,
+        id: String = UUID().uuidString.lowercased(), on computer: String? = nil
     ) async throws -> String {
         guard let client, let active else { throw PairingError("Not connected.") }
         guard computer == nil || computer == active else { throw PairingError("The computer changed. Send again on the computer you want.") }
         let send = ProjectChatSend(id: id, body: text, settings: settings, images: images, sendAt: sendAt)
         if let throughDraft {
-            return try await client.sendDraft(key: throughDraft, chatId: nil, send)
+            // Straight to the computer's composer, so its files go up first.
+            let chatId = try await client.sendDraft(key: throughDraft, chatId: nil, try await withFiles(send, files))
+            letGo(files)
+            return chatId
         }
         let made = try await client.createProjectChat(projectId: projectId, workspace: workspace)
         guard self.client === client else { throw PairingError("The connection changed. Send again on the computer you want.") }
         // One for later goes to the desktop's queue, which the thread shows; through the outbox it
         // would sit there twice. A plain one follows the thread, as a worktree or images can take a while.
         if sendAt != nil {
-            try await client.sendProjectChat(chatId: made.id, send)
+            try await client.sendProjectChat(chatId: made.id, try await withFiles(send, files))
+            letGo(files)
         } else {
-            deliver(send, to: made.id, through: client, computer: active)
+            deliver(send, to: made.id, through: client, computer: active, files: files)
         }
         return made.id
     }

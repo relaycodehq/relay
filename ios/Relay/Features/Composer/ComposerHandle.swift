@@ -5,7 +5,7 @@ import SwiftUI
 final class ComposerHandle {
     /// Puts a message taken back from the queue after what's typed, and
     /// answers how to undo that, for when the queue can't let it go after all.
-    var restore: (_ text: String, _ images: [PastedImage]) throws -> () -> Void = { _, _ in
+    var restore: (_ text: String, _ images: [PastedImage], _ files: [FileAttachment]) throws -> () -> Void = { _, _, _ in
         throw PairingError("The composer isn't ready yet.")
     }
     /// What a page composed with relay.compose(), in place of what it composed before.

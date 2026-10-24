@@ -8,6 +8,8 @@ struct ComposerSend {
     var id = UUID().uuidString.lowercased()
     var text: String
     var images: [PastedImage]
+    /// Videos and other files, as far as they've gone to the computer; the outbox sends the rest.
+    var files: [FileAttachment] = []
     var settings: ResumeSettings
     /// Into the running answer rather than behind it.
     var steer = false
@@ -47,6 +49,8 @@ struct Composer: View {
     @Environment(ReadAloud.self) private var reader
     @State private var field = ComposerText()
     @State private var photos: [PickedPhoto] = []
+    @State private var files: [AttachedFile] = []
+    @State private var importing = false
     @State private var picked: [PhotosPickerItem] = []
     @State private var loadingPhotos = 0
     @State private var sending = false
@@ -91,14 +95,15 @@ struct Composer: View {
         nonmutating set { field.text = newValue }
     }
     private var text: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var empty: Bool { field.blank && photos.isEmpty && computerShots.isEmpty }
+    private var empty: Bool { field.blank && photos.isEmpty && files.isEmpty && computerShots.isEmpty }
 
     private var computerShots: [Int] { connection.computerShots(draftAt) }
 
     /// The send as it'd go now, for telling a retry of the one that failed from a new one.
     private func attempt(steer: Bool, sendAt: Int64?) -> Attempt {
         Attempt(
-            target: draftID ?? chatId ?? projectId ?? "", text: text, photos: photos.map(\.id), settings: settings,
+            target: draftID ?? chatId ?? projectId ?? "", text: text, photos: photos.map(\.id), files: files.map(\.id),
+            settings: settings,
             steer: steer, sendAt: sendAt)
     }
 
@@ -137,9 +142,11 @@ struct Composer: View {
                 if let at = draftAt {
                     DraftNotes(computer: at.computer, key: at.key)
                 }
-                ComposerPhotos(photos: photos, loading: loadingPhotos, draftAt: draftAt) { id in
-                    photos.removeAll { $0.id == id }
-                }
+                ComposerPhotos(
+                    photos: photos, files: files, loading: loadingPhotos, draftAt: draftAt,
+                    remove: { id in photos.removeAll { $0.id == id } },
+                    retry: { $0.upload(with: connection) },
+                    removeFile: removeFile)
                 ComposerField(
                     field: field, prompt: running ? "Queue a message" : placeholder, focused: focused
                 ) { now in
@@ -167,7 +174,13 @@ struct Composer: View {
         .onChange(of: picked) { _, items in add(items) }
         .photosPicker(
             isPresented: $library, selection: $picked,
-            maxSelectionCount: nil, matching: .images)
+            maxSelectionCount: nil, matching: .any(of: [.images, .videos]))
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            switch result {
+            case .success(let urls): attach(urls)
+            case .failure(let failure): error = "Couldn't open that file: \(failure.localizedDescription)"
+            }
+        }
         .fullScreenCover(isPresented: $camera) {
             CameraPicker { add($0, name: "photo-\(photos.count + loadingPhotos + 1).jpg") }
                 .ignoresSafeArea()
@@ -204,6 +217,13 @@ struct Composer: View {
         }
         .onChange(of: photos.map(\.id)) {
             if let id = photosLoaded { UnsentPhotos.keep(photos, for: id) }
+        }
+        .onChange(of: files.map(\.id)) {
+            if let id = photosLoaded { UnsentFiles.keep(files, for: id) }
+        }
+        // Picked while away from the computer: they go up once it's back.
+        .onChange(of: connection.status.state, initial: true) {
+            for file in files { file.upload(with: connection) }
         }
         // Changed on the computer or another phone: the field takes it.
         .onChange(of: draftAt.map { connection.drafts.changes($0.computer, $0.key) }) {
@@ -278,6 +298,7 @@ struct Composer: View {
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button("Take Photo", systemImage: "camera") { camera = true }
                 }
+                Button("Files", systemImage: "folder") { importing = true }
                 Button { paste() } label: {
                     Label("Paste Image", systemImage: "doc.on.clipboard")
                     Text("The image you copied last")
@@ -291,7 +312,7 @@ struct Composer: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
-            .accessibilityLabel("Attach a photo")
+            .accessibilityLabel("Attach a photo or file")
             model
             Spacer(minLength: 0)
             if field.isEmpty && dictation.phase == .idle {
@@ -377,13 +398,15 @@ struct Composer: View {
 
     private var canSend: Bool {
         (!empty || dictation.phase == .listening) && !sending && loadingPhotos == 0
-            && dictation.phase != .finishing
+            && dictation.phase != .finishing && files.allSatisfy(\.ready)
     }
 
     private func add(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         picked = []
-        let taking = items
+        for video in items where video.isVideo { attach(video) }
+        let taking = items.filter { !$0.isVideo }
+        guard !taking.isEmpty else { return }
         let first = photos.count + loadingPhotos + 1
         loadingPhotos += taking.count
         Task {
@@ -440,14 +463,15 @@ struct Composer: View {
         }
         Task {
             if dictation.phase != .idle { await dictation.finish() }
-            guard loadingPhotos == 0 else { return }
+            guard loadingPhotos == 0, files.allSatisfy(\.ready) else { return }
             let body = text
             let sent = photos
+            let attached = files
             let at = draftAt
             let textDraft = draftID
             let photoDraft = photosLoaded
             let through = draftKey.map(connection.sendsThroughComputer) ?? false
-            guard !body.isEmpty || !sent.isEmpty || through else { return }
+            guard !body.isEmpty || !sent.isEmpty || !attached.isEmpty || through else { return }
             // Sent again unchanged after failing: as it was, under its own id, so it can't go twice.
             let fresh = attempt(steer: steer, sendAt: sendAt)
             let attempt = !steer && sendAt == nil ? failed.flatMap { $0.same(as: fresh) ? $0 : nil } ?? fresh : fresh
@@ -458,13 +482,20 @@ struct Composer: View {
             error = nil
             draft = ""
             photos = []
-            if let photoDraft { UnsentPhotos.keep([], for: photoDraft) }
+            files = []
+            if let photoDraft {
+                UnsentPhotos.keep([], for: photoDraft)
+                UnsentFiles.keep([], for: photoDraft)
+            }
+            // The outbox carries on from wherever each got.
+            let going = attached.compactMap { $0.handOver() }
             defer { sending = false }
             do {
                 guard let settings else { throw PairingError("Wait for your computer to say which agent answers.") }
                 try await send(
                     ComposerSend(
-                        id: attempt.id, text: body, images: sent.map(\.image), settings: settings, steer: attempt.steer,
+                        id: attempt.id, text: body, images: sent.map(\.image), files: going, settings: settings,
+                        steer: attempt.steer,
                         sendAt: attempt.sendAt, throughDraft: through ? draftKey : nil))
                 if let at { connection.drafts.went(at.computer, at.key, text: body, throughComputer: through) }
             } catch {
@@ -477,12 +508,21 @@ struct Composer: View {
                 }
                 if let photoDraft {
                     let showingDraft = visible && photosLoaded == photoDraft && draftID == photoDraft
-                    if showingDraft { UnsentPhotos.keep(photos, for: photoDraft) }
+                    if showingDraft {
+                        UnsentPhotos.keep(photos, for: photoDraft)
+                        UnsentFiles.keep(files, for: photoDraft)
+                    }
                     let restored = UnsentPhotos.restore(sent, for: photoDraft)
-                    if showingDraft { photos = restored }
-                } else if photos.isEmpty {
-                    photos = sent
+                    let restoredFiles = UnsentFiles.restore(attached, for: photoDraft)
+                    if showingDraft {
+                        photos = restored
+                        files = restoredFiles
+                    }
+                } else {
+                    if photos.isEmpty { photos = sent }
+                    if files.isEmpty { files = attached }
                 }
+                for file in attached { file.upload(with: connection) }
             }
             // The draft ignored edits while the send held it: what was typed meanwhile goes in now.
             if let at, draftID == textDraft {
@@ -632,6 +672,54 @@ struct Composer: View {
         }
     }
 
+    /// A video from the library: made smaller, then sent up while the message is written.
+    private func attach(_ video: PhotosPickerItem) {
+        guard let folder = filesReady() else { return }
+        let file = AttachedFile(name: "Video", video: true)
+        files.append(file)
+        Task {
+            do {
+                file.prepared(try await preparedVideo(video, in: folder))
+                file.upload(with: connection)
+            } catch {
+                files.removeAll { $0.id == file.id }
+                self.error = error.localizedDescription
+            }
+        }
+    }
+
+    /// Files from the Files app, as they are.
+    private func attach(_ urls: [URL]) {
+        guard let folder = filesReady() else { return }
+        for url in urls {
+            let file = AttachedFile(name: url.lastPathComponent, video: false)
+            files.append(file)
+            Task {
+                do {
+                    file.prepared(try await preparedFile(url, in: folder))
+                    file.upload(with: connection)
+                } catch {
+                    files.removeAll { $0.id == file.id }
+                    self.error = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    /// Where picked files go; nil, with why, when this computer can't take them.
+    private func filesReady() -> FileFolder? {
+        if let refused = connection.filesRefused {
+            error = refused
+            return nil
+        }
+        return connection.outbox.files
+    }
+
+    private func removeFile(_ file: AttachedFile) {
+        files.removeAll { $0.id == file.id }
+        if let copy = file.handOver() { connection.letGo([copy]) }
+    }
+
     private func paste() {
         guard let image = UIPasteboard.general.image else {
             error = "There's no image on the clipboard."
@@ -670,30 +758,42 @@ struct Composer: View {
         let held = UnsentPhotos.take(id)
         let heldIDs = Set(held.map(\.id))
         photos = photosLoaded != nil ? held : held + photos.filter { !heldIDs.contains($0.id) }
+        let heldFiles = UnsentFiles.take(id)
+        let heldFileIDs = Set(heldFiles.map(\.id))
+        files = photosLoaded != nil ? heldFiles : heldFiles + files.filter { !heldFileIDs.contains($0.id) }
         photosLoaded = id
         UnsentPhotos.keep(photos, for: id)
+        UnsentFiles.keep(files, for: id)
     }
 
-    private func restore(_ text: String, _ images: [PastedImage]) throws -> () -> Void {
+    private func restore(_ text: String, _ images: [PastedImage], _ taken: [FileAttachment]) throws -> () -> Void {
         let back = images.compactMap(PickedPhoto.init(restoring:))
+        let backFiles = taken.map(AttachedFile.init(restoring:))
         // A side question stays one only at the start of the message.
-        if text.hasPrefix("/btw "), !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty {
+        if text.hasPrefix("/btw "),
+            !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !photos.isEmpty || !files.isEmpty
+        {
             throw PairingError("Send or clear the current draft before restoring this side question.")
         }
         let body = [draft, text].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
             .joined(separator: "\n\n")
         guard body.count <= 32_000 else { throw PairingError("Send or shorten the current draft before restoring this message.") }
-        let before = (draft, photos)
+        let before = (draft, photos, files)
         draft = body
         cursor = SwiftUI.TextSelection(insertionPoint: draft.endIndex)
         photos += back
+        files += backFiles
+        for file in backFiles { file.upload(with: connection) }
         error = nil
         let restoredPhotos = photos.map(\.id)
+        let restoredFiles = files.map(\.id)
         return {
             // The desktop may answer after the user has edited or added photos.
-            guard draft == body, photos.map(\.id) == restoredPhotos else { return }
+            guard draft == body, photos.map(\.id) == restoredPhotos, files.map(\.id) == restoredFiles else { return }
             draft = before.0
             photos = before.1
+            for file in backFiles { _ = file.handOver() }
+            files = before.2
         }
     }
 
@@ -713,16 +813,22 @@ private let stopRed = Color(red: 0xED / 255, green: 0x39 / 255, blue: 0x49 / 255
 /// read in the composer it ran the whole composer again each time.
 private struct ComposerPhotos: View {
     let photos: [PickedPhoto]
+    let files: [AttachedFile]
     let loading: Int
     let draftAt: (computer: String, key: String)?
     let remove: (PickedPhoto.ID) -> Void
+    let retry: (AttachedFile) -> Void
+    let removeFile: (AttachedFile) -> Void
     @Environment(Connection.self) private var connection
 
     var body: some View {
         let shots = connection.computerShots(draftAt)
-        if !photos.isEmpty || loading > 0 || !shots.isEmpty {
-            PhotoStrip(photos: photos, loading: loading, computerShots: shots, remove: remove)
-                .padding(.top, 4)
+        if !photos.isEmpty || !files.isEmpty || loading > 0 || !shots.isEmpty {
+            PhotoStrip(
+                photos: photos, files: files, loading: loading, computerShots: shots, remove: remove, retry: retry,
+                removeFile: removeFile
+            )
+            .padding(.top, 4)
         }
     }
 }
@@ -746,12 +852,14 @@ private struct Attempt {
     let target: String
     let text: String
     let photos: [PickedPhoto.ID]
+    let files: [AttachedFile.ID]
     let settings: ResumeSettings?
     let steer: Bool
     let sendAt: Int64?
     var id = UUID().uuidString.lowercased()
 
     func same(as other: Attempt) -> Bool {
-        target == other.target && text == other.text && photos == other.photos && settings == other.settings
+        target == other.target && text == other.text && photos == other.photos && files == other.files
+            && settings == other.settings
     }
 }
