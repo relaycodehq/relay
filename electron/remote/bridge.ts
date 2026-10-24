@@ -14,6 +14,8 @@ import {
   type ProjectComputer,
 } from "../../shared/projects";
 import {
+  fileUploadChunk,
+  maxUploadBytes,
   phoneDesktopMethods,
   remoteBridgeVersion,
   maxRemoteHistory,
@@ -30,6 +32,7 @@ import {
   type RemoteMethod,
   type RemoteProjectComputer,
   type RemoteProjectIcon,
+  type UploadedFile,
 } from "../../shared/remote";
 import { shortHost, type PairedComputer } from "../../shared/handoff";
 import { RENDER_MAX_PAGES } from "../../shared/html-render";
@@ -86,6 +89,14 @@ export interface RemoteHost {
   dictation?: SpeechService;
   /** The voice phones hear answers in. */
   readAloud?: VoiceService;
+  /** Keeps a chunk of a file a phone attaches; see ../drafts/uploads. */
+  uploadFile?(
+    id: string,
+    name: string,
+    size: number,
+    offset: number,
+    bytes: Buffer,
+  ): Promise<UploadedFile>;
   /** Drafts shared with phones; see ../drafts. */
   drafts?: {
     list(): SharedDraft[];
@@ -116,6 +127,12 @@ export interface RemoteHost {
 }
 
 const pathSchema = z.string().min(1).max(1000);
+const uploadSizeSchema = z.number().int().min(0).max(maxUploadBytes);
+// A chunk may be up to twice `fileUploadChunk`, for phones that send bigger ones.
+const uploadChunkSchema = z
+  .string()
+  .max(Math.ceil((2 * fileUploadChunk) / 3) * 4)
+  .regex(/^[A-Za-z0-9+/]*={0,2}$/);
 const newsCursorSchema = z
   .object({ epoch: z.string().max(64), seq: z.number().int().min(0) })
   .strict();
@@ -208,6 +225,7 @@ export class RemoteBridge {
     | "dictate"
     | "readAloud"
     | "saveDraft"
+    | "uploadFile"
     | "sites"
     | "tunnelAllow"
     | ComputerMethod
@@ -472,6 +490,16 @@ export class RemoteBridge {
         return this.requireDrafts().write(
           draftWriteSchema.parse(args[0]),
           `phone:${deviceId}`,
+        );
+      case "uploadFile":
+        if (!this.host.uploadFile)
+          throw new Error("This computer can't take files.");
+        return this.host.uploadFile(
+          idSchema.parse(args[0]),
+          z.string().min(1).max(1000).parse(args[1]),
+          uploadSizeSchema.parse(args[2]),
+          uploadSizeSchema.parse(args[3]),
+          Buffer.from(uploadChunkSchema.parse(args[4]), "base64"),
         );
       case "draftOther":
         return a.draftOther(

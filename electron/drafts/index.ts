@@ -20,6 +20,7 @@ export {
   setPastesRoot,
   sweepPastes,
 } from "./pastes";
+export { writeUploadChunk } from "./uploads";
 
 /** How long a phone's send waits on the desktop's page; the phone gives a send two minutes. */
 const heldSendMs = 110_000;

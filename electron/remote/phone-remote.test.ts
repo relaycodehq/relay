@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { mkdtemp, realpath, rm } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, rm } from "node:fs/promises";
+import { writeUploadChunk } from "../drafts";
 import { networkInterfaces, tmpdir } from "node:os";
 import { createServer } from "node:net";
 import { join } from "node:path";
@@ -1511,4 +1512,30 @@ it("carries agent tool inspection through the desktop bridge without adding a fo
     { method: "agentTools", args: [projectId, "codex"] },
     { method: "agentTools", args: [projectId, "codex"] },
   ]);
+});
+
+it("takes a phone's file in chunks through the real socket", async () => {
+  const uploads = await mkdtemp(join(tmpdir(), "relay-phone-uploads-"));
+  cleanup.push(() => rm(uploads, { recursive: true, force: true }));
+  const { remote } = await desktop(undefined, undefined, {
+    uploadFile: (id, name, size, offset, bytes) =>
+      writeUploadChunk(id, name, size, offset, bytes, uploads),
+  });
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  const p = phone({ link, device: "Pixel 7" });
+  await p.until("online");
+  const id = randomUUID();
+  const chunk = (text: string) => Buffer.from(text).toString("base64");
+  expect(
+    await p.client.call("uploadFile", id, "clip.mp4", 6, 0, chunk("abc")),
+  ).toEqual({ received: 3 });
+  const done = await p.client.call(
+    "uploadFile",
+    id,
+    "clip.mp4",
+    6,
+    3,
+    chunk("def"),
+  );
+  expect(await readFile(done.path!, "utf8")).toBe("abcdef");
 });

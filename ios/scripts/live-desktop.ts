@@ -28,6 +28,9 @@ type DraftDevice = import("../../shared/drafts").DraftDevice;
 const { Store } = await import(join(root, "electron/app/store.ts"));
 const { PhoneRemote } = await import(join(root, "electron/remote/phone-remote.ts"));
 const { remoteBridgeVersion } = await import(join(root, "shared/remote.ts"));
+const { writeUploadChunk } = await import(join(root, "electron/drafts/uploads.ts"));
+// Files phones attach land here, as they would among a desktop's pastes.
+const uploads = join(await mkdtemp(join(tmpdir(), "relay-stand-in-")), "pastes");
 
 const out = process.argv[2];
 if (!out) throw new Error("Usage: live-desktop.ts <file for the pairing link> [--seed]");
@@ -605,6 +608,8 @@ const draftsHost = {
 
 const host = {
   drafts: seeded ? draftsHost : undefined,
+  uploadFile: (id: string, name: string, size: number, offset: number, bytes: Buffer) =>
+    writeUploadChunk(id, name, size, offset, bytes, uploads),
   version: extras.version,
   handoffs: extras.handoffs,
   renderPage: async (_chatId: string, renderId: string, page: number) => {

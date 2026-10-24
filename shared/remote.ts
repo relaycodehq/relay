@@ -185,7 +185,9 @@ export type RemoteProjectIcon =
   { hash: string; dataUrl: string } | { hash: null };
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 32;
+export const remoteBridgeVersion = 33;
+/** Phones may attach any file (`uploadFile`); the message names the copy saved here. */
+export const filesBridge = 33;
 /** Sends may ask for the `read-only` runtime mode, and new threads remember theirs. */
 export const readOnlyModeBridge = 32;
 /** A large phone send arrives in acknowledged batches before being submitted once. */
@@ -621,6 +623,19 @@ export interface RemoteApi {
     chatId: string | null,
     send: ProjectChatSend,
   ): Promise<{ chatId: string }>;
+  /**
+   * Appends `data` (base64) at `offset` of the phone's file `id`, called
+   * `name`, `size` bytes in all. A chunk the computer already has is skipped
+   * and one past what it has changes nothing, so the phone carries on from
+   * `received` after any failure. From `filesBridge`.
+   */
+  uploadFile(
+    id: string,
+    name: string,
+    size: number,
+    offset: number,
+    data: string,
+  ): Promise<UploadedFile>;
   /** Computers only from here, handing threads over; see shared/handoff. */
   computerProjects(): Promise<ComputerProject[]>;
   /**
@@ -804,6 +819,15 @@ export interface SetupRequest {
   /** The agent and how it runs, as the thread it's for runs. */
   settings: HandoffSettings;
 }
+/** How far a phone's file got; `path`, where the message names it, once all of it is here. */
+export interface UploadedFile {
+  received: number;
+  path?: string;
+}
+/** What a phone uploads per `uploadFile` call, before base64. */
+export const fileUploadChunk = 1024 * 1024;
+/** The largest file a phone may attach. */
+export const maxUploadBytes = 200 * 1024 * 1024;
 export type RemoteMethod = keyof RemoteApi;
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
@@ -853,6 +877,7 @@ export const remoteMethods = [
   "saveDraft",
   "draftOther",
   "sendDraft",
+  "uploadFile",
   ...computerMethods,
 ] as const satisfies readonly RemoteMethod[];
 /** The bridge from which phones may call `updateMethods` too. */

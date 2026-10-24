@@ -197,6 +197,12 @@ toServer = okm[0..32), toClient = okm[32..64)
 ### Read only (bridge 32)
 - `runtimeMode` may be `read-only`: the agent reads and runs read-only commands but changes no files. Offer it only to a desktop at bridge ≥ 32; older ones reject the send.
 
+### Files (bridge 33)
+- `uploadFile(id, name, size, offset, data)` → `{received, path?}`. `id` is a UUID the phone picks per file, `name` its file name (the desktop cleans it), `size` its whole length (≤ **200 MiB**), `data` base64 (standard, padded) of up to **1 MiB** (`fileUploadChunk`; the desktop takes up to 2 MiB) starting at byte `offset`.
+- Resumable and idempotent: bytes the desktop already has are skipped, a chunk starting past what it has writes nothing; either way the answer's `received` is where to carry on. A whole file answers `path` (also on any repeat). Send chunks one at a time; after a failure or reconnect, send the next chunk from the last `received` you heard (or 0).
+- The file lives in the desktop's paste folder (`<Relay data>/pastes/<id>/<name>`), readable by agents and swept 30 days after nothing names it. The message names it as `` `path` ``, as a desktop file pill does.
+- Ask a desktop below bridge 33 for an update rather than sending files.
+
 ---
 
 ## 4. Version negotiation and handshake messages (`shared/remote.ts:168-241`, `:723-761`)
@@ -219,6 +225,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 21 | `skillsBridge` | `skills` field in a send |
 | 22 | `previewBridge`, `notesBridge`, `workspaceMovesBridge` | `image` with `{kind:"preview"}`; `notesMark` on summaries and `threadNotes` / `tickThreadNote` / `removeThreadNote`; `workspaceMoves` on a thread |
 | 29 | `backgroundBridge` | `{t:"background", on}`: batched events and slower heartbeats while the app is in the background |
+| 33 | `filesBridge` | `uploadFile`: phones attach any file |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.

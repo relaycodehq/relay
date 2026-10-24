@@ -381,7 +381,8 @@ export class RemoteServer {
     try {
       if (!(remoteMethods as readonly string[]).includes(method))
         throw new Error("Phones can't do that.");
-      if (!Array.isArray(args) || args.length > 4)
+      // uploadFile takes the most: id, name, size, offset, data.
+      if (!Array.isArray(args) || args.length > 5)
         throw new Error("Invalid request.");
       const value = await this.options.handle(method, args, c.deviceId);
       this.send(c, { t: "result", id, ok: true, value: value ?? null });

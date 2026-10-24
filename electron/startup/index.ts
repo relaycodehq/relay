@@ -18,7 +18,7 @@ import type { KeepAwake } from "../app/keep-awake";
 import { GiteaLogin, seal, unseal } from "../app/login";
 import type { Store } from "../app/store";
 import { rearmOnWake } from "../app/wake";
-import { setPastesRoot, sweepPastes } from "../drafts";
+import { setPastesRoot, sweepPastes, writeUploadChunk } from "../drafts";
 import { gitExecutable, setGitPath } from "../git/git";
 import type { GithubLogin } from "../github";
 import { Computers } from "../handoff/computers";
@@ -310,6 +310,7 @@ export function remoteServices({
         chats.renderPage(chatId, renderId, page),
       news: (cursor) => chats.newsSince(cursor),
       handoffs: receiver,
+      uploadFile: writeUploadChunk,
       ...host,
     },
     port,
