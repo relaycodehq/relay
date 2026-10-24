@@ -81,3 +81,18 @@ it("adds the calls a full trace let go of to the summary", () => {
     }),
   ).toBe("Ran 141 commands, read 3 files, and 2 tool calls failed");
 });
+
+it("counts the threads a start_threads call started, not the call", () => {
+  const start = (id: string, ids: string[]): AgentActivity => ({
+    ...call(id, "tool", "complete"),
+    mcp: { server: "relay", tool: "start_threads" },
+    detail: JSON.stringify(ids.map((t) => ({ id: t }))),
+  });
+  expect(
+    summarizeActivity([
+      call("stat", "command", "complete"),
+      start("a", ["t1", "t2"]),
+      start("b", ["t3"]),
+    ]),
+  ).toBe("Ran 1 command and started 3 threads");
+});

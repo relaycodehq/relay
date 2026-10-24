@@ -1,6 +1,7 @@
 // Moved from the desktop's AgentTurn so the phone app words a turn the same way.
 import type { AgentActivity, TraceDropped } from "./projects";
 import { askedQuestions, isQuestionCall } from "./asked-questions";
+import { isStartThreads, startedIds } from "./started-threads";
 
 export function duration(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -49,9 +50,14 @@ export function summarizeActivity(
   const stopped = new Set<string>();
   const running = new Set<string>();
   let questions = 0;
+  let threads = 0;
   for (const a of activity) {
     if (isQuestionCall(a) && a.status === "complete") {
       questions += askedQuestions(a)?.length ?? 1;
+      continue;
+    }
+    if (isStartThreads(a) && a.status === "complete") {
+      threads += startedIds(a.detail)?.length ?? 1;
       continue;
     }
     if (a.status !== "complete") {
@@ -76,6 +82,7 @@ export function summarizeActivity(
   for (const [kind, seen] of groups)
     counts.set(kind, (counts.get(kind) ?? 0) + seen.size);
   const labels = [...counts].map(([kind, n]) => summaries[kind](n));
+  if (threads) labels.push(`Started ${plural(threads, "thread")}`);
   if (questions) labels.push(`Asked you ${plural(questions, "question")}`);
   const failures = failed.size + (dropped.failed ?? 0);
   if (failures) labels.push(`${plural(failures, "tool call")} failed`);
