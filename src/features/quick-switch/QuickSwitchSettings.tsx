@@ -255,7 +255,7 @@ function StyleSample({
   const pick = (to: number, dir?: number) =>
     to !== at && setState({ at: to, dir: dir ?? (to < at ? -1 : 1) });
   const go = (step: -1 | 1) =>
-    pick(stepPreset(items.length, at, step, style === "revolver"), step);
+    pick(stepPreset(items.length, at, step, true), step);
   const onKeyDown = (e: KeyboardEvent) => {
     const step = (
       { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 } as const

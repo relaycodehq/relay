@@ -65,9 +65,9 @@ describe("stepPreset", () => {
     expect(stepPreset(4, 3, 1)).toBe(3);
     expect(stepPreset(4, 0, -1)).toBe(0);
   });
-  it("enters the list from its near end when off it", () => {
+  it("enters the list at the first preset when off it, either way", () => {
     expect(stepPreset(4, -1, 1)).toBe(0);
-    expect(stepPreset(4, -1, -1)).toBe(3);
+    expect(stepPreset(4, -1, -1)).toBe(0);
   });
   it("goes on round from the ends when wrapping", () => {
     expect(stepPreset(4, 3, 1, true)).toBe(0);

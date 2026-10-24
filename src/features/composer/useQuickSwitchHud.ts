@@ -48,11 +48,9 @@ export function useQuickSwitchHud(runs: AgentRuns, to: Recipient) {
     step(step: -1 | 1) {
       const run = runs.now(to);
       const from = run ? presetIndex(presets, run, hud.at) : -1;
-      // The revolver goes on round past the ends; the other styles stop there.
-      const wrap = quickSwitch.style === "revolver";
-      const at = stepPreset(presets.length, from, step, wrap);
+      const at = stepPreset(presets.length, from, step, true);
       if (at < 0) return;
-      // At an end: show where you are without changing anything.
+      // A single preset already on: show it without changing anything.
       if (at === from) {
         setHud({ open: true, at, dir: step });
         hideSoon();

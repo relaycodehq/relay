@@ -130,9 +130,8 @@ export function presetIndex(
 }
 
 /**
- * The preset one step from `at`. Off the list, → starts at the first and ←
- * at the last. Like effort, the ends stop there, unless `wrap` goes on round,
- * as the revolver does.
+ * The preset one step from `at`. Off the list, either way starts at the
+ * first. The ends stop there unless `wrap` goes on round, as the keys do.
  */
 export function stepPreset(
   count: number,
@@ -141,7 +140,7 @@ export function stepPreset(
   wrap = false,
 ): number {
   if (count <= 0) return -1;
-  if (at < 0) return step > 0 ? 0 : count - 1;
+  if (at < 0) return 0;
   if (wrap) return (at + step + count) % count;
   return Math.min(count - 1, Math.max(0, at + step));
 }
