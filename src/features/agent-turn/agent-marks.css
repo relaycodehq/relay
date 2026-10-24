@@ -1,15 +1,17 @@
-/* A finished turn's agents, while any still works: overlapping marks in its
-   heading and their card. The working ones' spinners are the app's own, so
-   they pause with the window like every other. */
+/* Agents a turn sent off, or threads it started: their agents' marks
+   overlapping, a badge on each, and the card that lists them. The working
+   ones' spinners are the app's own, so they pause with the window like every
+   other; inside a turn that is still running they stay a still dot, as the
+   turn's own row is what moves. */
 
 /* How far apart the marks start: overlapping, then fanned out on hover. */
-@property --turn-agent-step {
+@property --agent-mark-step {
   syntax: "<length>";
   inherits: true;
   initial-value: 17px;
 }
-.turn-agents {
-  --turn-agent-step: 17px;
+.agent-marks {
+  --agent-mark-step: 17px;
   display: inline-flex;
   flex: none;
   gap: 0;
@@ -20,26 +22,26 @@
   background: none;
   color: inherit;
   cursor: default;
-  transition: --turn-agent-step 150ms ease;
+  transition: --agent-mark-step 150ms ease;
 }
-.turn-agents:hover,
-.turn-agents[data-popup-open] {
-  --turn-agent-step: 22px;
+.agent-marks:hover,
+.agent-marks[data-popup-open] {
+  --agent-mark-step: 22px;
   background: none;
 }
-.turn-agent-mark {
+.agent-mark {
   position: relative;
   flex: none;
   width: 20px;
   height: 20px;
 }
-.turn-agents > .turn-agent-mark + .turn-agent-mark {
-  margin-left: calc(var(--turn-agent-step) - 20px);
+.agent-marks > .agent-mark + .agent-mark {
+  margin-left: calc(var(--agent-mark-step) - 20px);
 }
 /* Gaps are cut out of the disc rather than drawn in the pane's colour, so
    they stay true over frosted glass: around its own badge, and in the stack
    around the mark before it and that mark's badge. */
-.turn-agent-disc {
+.agent-mark-disc {
   --cut-badge: linear-gradient(#000 0 0);
   --cut-before: linear-gradient(#000 0 0);
   --cut-before-badge: linear-gradient(#000 0 0);
@@ -52,30 +54,30 @@
   mask-image: var(--cut-badge), var(--cut-before), var(--cut-before-badge);
   mask-composite: intersect;
 }
-.turn-agent-mark:has(> .turn-agent-badge) > .turn-agent-disc {
+.agent-mark:has(> .agent-mark-badge) > .agent-mark-disc {
   --cut-badge: radial-gradient(
     circle 6.5px at 17.5px 17.5px,
     transparent 98%,
     #000
   );
 }
-.turn-agents > .turn-agent-mark + .turn-agent-mark > .turn-agent-disc {
+.agent-marks > .agent-mark + .agent-mark > .agent-mark-disc {
   --cut-before: radial-gradient(
-    circle 11.5px at calc(10px - var(--turn-agent-step)) 50%,
+    circle 11.5px at calc(10px - var(--agent-mark-step)) 50%,
     transparent 98%,
     #000
   );
   --cut-before-badge: radial-gradient(
-    circle 6.5px at calc(17.5px - var(--turn-agent-step)) 17.5px,
+    circle 6.5px at calc(17.5px - var(--agent-mark-step)) 17.5px,
     transparent 98%,
     #000
   );
 }
-.turn-agent-disc > .provider-glyph {
+.agent-mark-disc > .provider-glyph {
   width: 11px;
   height: 11px;
 }
-.turn-agent-badge {
+.agent-mark-badge {
   position: absolute;
   right: -3px;
   bottom: -3px;
@@ -84,20 +86,35 @@
   width: 11px;
   height: 11px;
 }
-.turn-agent-badge.working {
+.agent-mark-badge.working {
   color: var(--accent);
 }
-.turn-agent-badge .spinner-track {
+.agent-activity.live .agent-mark-badge.working .spinner {
+  display: none;
+}
+.agent-activity.live .agent-mark-badge.working::after,
+.agent-mark-badge.asks::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+/* A thread waiting on you, in the amber Activity marks it with. */
+.agent-mark-badge.asks::after {
+  background: #d99a2b;
+}
+.agent-mark-badge .spinner-track {
   opacity: 0.3;
 }
-.turn-agents-done {
+.agent-marks-done {
   color: light-dark(#1a7f45, #4cc38a);
 }
-.turn-agents-lead {
+.agent-marks-lead {
   color: var(--text);
 }
 
-.turn-agents-card {
+.agent-marks-card {
   width: 400px;
   max-width: calc(100vw - 24px);
   padding: 6px;
@@ -113,23 +130,23 @@
     opacity 0.12s,
     transform 0.12s;
 }
-.turn-agents-card[data-starting-style],
-.turn-agents-card[data-ending-style] {
+.agent-marks-card[data-starting-style],
+.agent-marks-card[data-ending-style] {
   opacity: 0;
   transform: translateY(-3px);
 }
-.turn-agents-head {
+.agent-marks-head {
   display: flex;
   justify-content: space-between;
   padding: 3px 7px 6px;
   color: var(--muted);
   font-size: 12px;
 }
-.turn-agents-head b {
+.agent-marks-head b {
   color: var(--text);
   font-weight: 600;
 }
-.turn-agents-item {
+.agent-marks-item {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 9px;
@@ -143,27 +160,32 @@
   font: inherit;
   text-align: left;
 }
-.turn-agents-item:hover,
-.turn-agents-item:focus-visible {
+.agent-marks-item:hover,
+.agent-marks-item:focus-visible {
   background: var(--hover);
   outline: none;
 }
-.turn-agents-text {
+.agent-marks-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-.turn-agents-name {
+.agent-marks-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.turn-agents-meta,
-.turn-agents-time {
+.agent-marks-meta,
+.agent-marks-time {
   color: var(--muted);
   font-size: 11.5px;
 }
-.turn-agents-time {
+.agent-marks-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-marks-time {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

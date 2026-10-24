@@ -1,20 +1,20 @@
-// The threads a turn's agent started with Relay's tools, beside the call that
-// started them: an icon and how many are done, and on hover a card like the
-// subagents one, each thread's task and latest line, a click to open it.
+// The threads a turn's agent started with Relay's tools, as their agents'
+// marks: beside the call that started them, in place of the folded turn's
+// icon, and by the composer while any works or asks. A badge says where each
+// stands, and the card on hover gives its latest line and opens it.
 import { inputBlocksThread } from "../../../shared/thread-state";
-import { createContext, useContext, useState } from "react";
-import { Popover } from "@base-ui/react/popover";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronRight, MessagesSquare } from "lucide-react";
+import { createContext, useContext, type ReactNode } from "react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { ChevronRight } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
-import { agentName } from "../../../shared/agents";
+import { plural } from "../../../shared/activity-labels";
 import { chatSettled } from "../../../shared/chat-activity";
 import { byStanding } from "../../../shared/started-families";
+import { took } from "../../../shared/subagents";
 import { chatKey, fetchChat } from "../../lib/chat-events";
-import { ProviderIcon } from "../agents/ComposerModelPicker";
-import "./subagents.css";
+import { useNow } from "../../lib/useNow";
+import { AgentMarks, AgentMarksRow, type MarkState } from "./AgentMarks";
 import "./started-threads.css";
-import "../changes/branch-picker.css";
 
 /** The open thread, every project's threads and how to open one; absent where nothing can open. */
 export interface StartedThreadsView {
@@ -27,80 +27,18 @@ export const StartedThreadsContext = createContext<
 >(undefined);
 export const useStartedThreads = () => useContext(StartedThreadsContext);
 
-/** Still while it works, like a subagent: the turn's own row is what moves. */
-function StartedStatus({ chat }: { chat: ChatSummary }) {
-  return (
-    <span className="subagent-status">
-      {inputBlocksThread(chat) ? (
-        <span className="started-ask" aria-label="Needs input" />
-      ) : chat.running ? (
-        <span className="subagent-dot" aria-label="Working" />
-      ) : (
-        <Check size={13} className="subagent-done" aria-label="Done" />
-      )}
-    </span>
-  );
-}
-
-/** The thread pointed at: what it was asked and what it said last. */
-function Detail({ chat, onOpen }: { chat: ChatSummary; onOpen: () => void }) {
-  const qc = useQueryClient();
-  const thread = useQuery({
-    queryKey: chatKey(chat.id),
-    queryFn: () => fetchChat(qc, chat.id),
-  }).data;
-  const main = thread?.messages.filter((m) => !m.parentId) ?? [];
-  const task = main.find((m) => m.role === "user")?.body;
-  const last = [...main].reverse().find((m) => m.role === "assistant");
-  const now = chat.waiting
-    ? (thread?.requests?.[0]?.title ?? "Needs your input")
-    : last?.body.trim()
-      ? last.body.trim().split("\n").filter(Boolean).at(-1)
-      : chat.running
-        ? "Starting…"
-        : "No answer yet";
-  return (
-    <div className="subagents-detail">
-      <div className="subagents-title">
-        <b>{chat.title}</b>
-        <span>
-          {[chat.provider && agentName(chat.provider), chat.branch]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </div>
-      {task && <p className="subagents-brief">{task}</p>}
-      <p className={`subagents-now ${chat.waiting ? "started-asks" : ""}`}>
-        {now}
-      </p>
-      <div className="subagents-calls" />
-      <div className="subagents-actions">
-        <button type="button" className="text-button" onClick={onOpen}>
-          {chat.waiting ? "Answer it" : "Open thread"}
-          <ChevronRight size={13} />
-        </button>
-      </div>
-    </div>
-  );
-}
+const markState = (chat: ChatSummary): MarkState =>
+  inputBlocksThread(chat) ? "asks" : chat.running ? "working" : "done";
 
 /**
- * Beside a start_threads call, the threads it started; by the composer, with
- * `live`, the lead's threads while any of them works or asks.
+ * The lead's threads, asking first, then working, then done; settled ones
+ * are put away. `ids` narrows them to one call's; `live` wants any working
+ * or asking, or nothing.
  */
-export function StartedChip({
-  ids,
-  live = false,
-}: {
-  ids: string[] | undefined;
-  live?: boolean;
-}) {
+function useStarted(ids: string[] | undefined, live = false) {
   const view = useStartedThreads();
-  const [open, setOpen] = useState(false);
-  const [focus, setFocus] = useState<string>();
   const lead = view?.lead;
   // Without a lead (a new thread's draft) undefined would match every thread.
-  // Settled threads are put away, so only live and freshly done ones show.
   const started = (view && lead ? view.threads : [])
     .filter(
       (c) =>
@@ -111,86 +49,161 @@ export function StartedChip({
         !chatSettled(c),
     )
     .sort(byStanding);
-  if (!view || !started.length || (live && !started.some((c) => c.running)))
-    return null;
-  const done = started.filter((c) => !c.running).length;
-  const asking = started.some((c) => c.waiting);
-  const pointed =
-    started.find((c) => c.id === focus) ??
-    started.find((c) => c.waiting) ??
-    started.find((c) => c.running) ??
-    started[0]!;
-  const go = (chat: ChatSummary) => {
-    setOpen(false);
-    view.open(chat);
-  };
+  if (live && !started.some((c) => markState(c) !== "done")) return [];
+  return started;
+}
+
+function StartedMarks({
+  started,
+  className,
+}: {
+  started: ChatSummary[];
+  className?: string;
+}) {
+  const view = useStartedThreads()!;
+  const done = started.filter((c) => markState(c) === "done").length;
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger
-        openOnHover
-        delay={150}
-        closeDelay={250}
-        className="composer-branch-trigger subagents-chip started-chip"
-        aria-label={`${started.length} started threads: ${done} done`}
-        // Inside the call's row, which folds open on a click.
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      >
-        <MessagesSquare size={13} />
+    <AgentMarks
+      className={className}
+      marks={started.map((c) => ({
+        id: c.id,
+        provider: c.provider ?? "claude",
+        state: markState(c),
+      }))}
+      label={`${plural(started.length, "started thread")}: ${done} done`}
+      cardLabel="Started threads"
+      card={(close) => (
+        <StartedCard
+          started={started}
+          onOpen={(c) => {
+            close();
+            view.open(c);
+          }}
+        />
+      )}
+    />
+  );
+}
+
+/** Beside a start_threads call, or by the composer with `live`. */
+export function StartedThreadMarks({
+  ids,
+  live = false,
+}: {
+  ids: string[] | undefined;
+  live?: boolean;
+}) {
+  const started = useStarted(ids, live);
+  if (!started.length) return null;
+  return (
+    <StartedMarks
+      started={started}
+      className={live ? "started-marks-live" : undefined}
+    />
+  );
+}
+
+/**
+ * A folded, finished turn's icon and label, the threads it started in their
+ * place while any isn't settled, and what needs you after the label.
+ */
+export function StartedHeading({
+  ids,
+  label,
+  children,
+}: {
+  ids: string[] | undefined;
+  label: ReactNode;
+  /** The heading as it would be without them. */
+  children: ReactNode;
+}) {
+  const started = useStarted(ids);
+  if (!started.length) return children;
+  const asks = started.filter((c) => markState(c) === "asks").length;
+  const working = started.filter((c) => markState(c) === "working").length;
+  return (
+    <>
+      <StartedMarks started={started} />
+      {label}
+      {asks ? (
+        <span className="started-heading-state asks">· {asks} needs you</span>
+      ) : working ? (
+        <span className="started-heading-state">· {working} working</span>
+      ) : null}
+    </>
+  );
+}
+
+/** Mounted only while open, so it loads the threads and ticks just then. */
+function StartedCard({
+  started,
+  onOpen,
+}: {
+  started: ChatSummary[];
+  onOpen: (chat: ChatSummary) => void;
+}) {
+  const qc = useQueryClient();
+  const now = useNow(1000);
+  const threads = useQueries({
+    queries: started.map((c) => ({
+      queryKey: chatKey(c.id),
+      queryFn: () => fetchChat(qc, c.id),
+    })),
+  });
+  const done = started.filter((c) => markState(c) === "done").length;
+  return (
+    <>
+      <div className="agent-marks-head">
+        <b>Started threads</b>
         <span>
-          {done}/{started.length}
+          {done} of {started.length} done
         </span>
-        {asking && (
-          <span className="started-ask" aria-label="One needs input" />
-        )}
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          side="top"
-          align="start"
-          sideOffset={8}
-          collisionPadding={12}
-        >
-          <Popover.Popup
-            data-shortcut-passive
-            className="subagents-card"
-            aria-label="Started threads"
-          >
-            <div className="subagents-peek">
-              <div className="subagents-list">
-                <div className="subagents-card-head">
-                  <b>Started threads</b>
-                  <span>
-                    {done} of {started.length} done
-                  </span>
-                </div>
-                {started.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="subagents-item"
-                    aria-current={c === pointed}
-                    onMouseEnter={() => setFocus(c.id)}
-                    onFocus={() => setFocus(c.id)}
-                    onClick={() => go(c)}
-                  >
-                    <StartedStatus chat={c} />
-                    <span className="subagents-name">{c.title}</span>
-                    {c.provider && (
-                      <span className="started-agent">
-                        <ProviderIcon provider={c.provider} />
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-              <Detail chat={pointed} onOpen={() => go(pointed)} />
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+      </div>
+      {started.map((chat, i) => {
+        const state = markState(chat);
+        const thread = threads[i]?.data;
+        const main = thread?.messages.filter((m) => !m.parentId) ?? [];
+        const last = [...main].reverse().find((m) => m.role === "assistant");
+        const line =
+          state === "asks"
+            ? (thread?.requests?.[0]?.title ?? "Needs your input")
+            : last?.body.trim()
+              ? last.body.trim().split("\n").filter(Boolean).at(-1)
+              : chat.running
+                ? "Starting…"
+                : "No answer yet";
+        return (
+          <AgentMarksRow
+            key={chat.id}
+            provider={chat.provider ?? "claude"}
+            state={state}
+            name={chat.title}
+            meta={
+              state === "asks" ? (
+                <span className="started-marks-asks">
+                  <b>Asks</b> {line}
+                </span>
+              ) : (
+                line
+              )
+            }
+            aside={
+              state === "asks" ? (
+                <span className="started-marks-answer">
+                  Answer <ChevronRight size={12} />
+                </span>
+              ) : state === "working" && chat.runningSince ? (
+                `working ${took(now - chat.runningSince)}`
+              ) : state === "working" ? (
+                "working"
+              ) : (
+                "done"
+              )
+            }
+            onClick={() => onOpen(chat)}
+          />
+        );
+      })}
+    </>
   );
 }

@@ -50,7 +50,7 @@ import {
   isQuestionCall,
 } from "../../../shared/asked-questions";
 import { AnsweredQuestions } from "./AnsweredQuestions";
-import { StartedChip } from "./StartedThreads";
+import { StartedHeading, StartedThreadMarks } from "./StartedThreads";
 import { WorkingAgentsHeading } from "./TurnAgents";
 import "./agent-trace.css";
 import "./agent-turn.css";
@@ -233,7 +233,7 @@ function ToolRow({
           : label}
       </span>
       <Progress activity={a} />
-      {isStartThreads(a) && <StartedChip ids={startedIds(a.detail)} />}
+      {isStartThreads(a) && <StartedThreadMarks ids={startedIds(a.detail)} />}
     </>
   );
   if (!expandable)
@@ -377,6 +377,9 @@ export function AgentTurn({
         e.kind === "activity" && isStartThreads(e.activity) ? [e.activity] : [],
       );
   const startedBy = starts.map((a) => startedIds(a.detail));
+  const startedIn = startedBy.every(Boolean)
+    ? startedBy.flatMap((ids) => ids!)
+    : undefined;
   const label = presentation?.waiting ? (
     "Waiting for your answer"
   ) : heading.kind === "working" ? (
@@ -419,6 +422,22 @@ export function AgentTurn({
       {label}
     </span>
   );
+  const plainHeading =
+    headingTurn.live ||
+    !headingTurn.activity.some((a) => a.kind === "agent") ? (
+      <>
+        {headingIcon}
+        {headingLabel}
+      </>
+    ) : (
+      // Agents it sent off can work on after the turn ends.
+      <WorkingAgentsHeading
+        activity={headingTurn.activity}
+        dropped={headingMessage.traceDropped}
+        icon={headingIcon}
+        label={headingLabel}
+      />
+    );
   return (
     <Container
       className={`agent-activity${live ? " live" : ""}${continuation ? " continuation" : ""}`}
@@ -438,20 +457,12 @@ export function AgentTurn({
     >
       {!continuation && (
         <summary className="agent-run-heading">
-          {headingTurn.live ||
-          !headingTurn.activity.some((a) => a.kind === "agent") ? (
-            <>
-              {headingIcon}
-              {headingLabel}
-            </>
+          {!headingLive && starts.length > 0 ? (
+            <StartedHeading ids={startedIn} label={headingLabel}>
+              {plainHeading}
+            </StartedHeading>
           ) : (
-            // Agents it sent off can work on after the turn ends.
-            <WorkingAgentsHeading
-              activity={headingTurn.activity}
-              dropped={headingMessage.traceDropped}
-              icon={headingIcon}
-              label={headingLabel}
-            />
+            plainHeading
           )}
           <span className="agent-run-time">
             {headingLive ? (
@@ -468,14 +479,9 @@ export function AgentTurn({
               </>
             ) : null}
           </span>
-          {starts.length > 0 && (
-            <StartedChip
-              ids={
-                startedBy.every(Boolean)
-                  ? startedBy.flatMap((ids) => ids!)
-                  : undefined
-              }
-            />
+          {/* While the turn runs its own icon stays, the threads after it. */}
+          {headingLive && starts.length > 0 && (
+            <StartedThreadMarks ids={startedIn} />
           )}
           <ChevronRight size={13} className="agent-run-chevron" />
         </summary>
