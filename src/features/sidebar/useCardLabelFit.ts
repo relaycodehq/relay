@@ -8,14 +8,20 @@ import { useCallback, useLayoutEffect, useRef } from "react";
  */
 export function useCardLabelFit() {
   const row = useRef<HTMLElement | null>(null);
-  // A new state can swap in a longer or shorter word without resizing the name.
+  const fitted = useRef<string | null>(null);
+  // A new state can swap in a longer or shorter word without resizing the
+  // name. Only a new word: fitting lays the page out, every card every render.
   useLayoutEffect(() => {
-    if (row.current) fit(row.current);
+    const el = row.current;
+    if (!el || el.textContent === fitted.current) return;
+    fitted.current = el.textContent;
+    fit(el);
   });
   return useCallback((el: HTMLElement | null) => {
     const name = el?.querySelector(".sb-card-name");
     if (!el || !name) return;
     row.current = el;
+    fitted.current = el.textContent;
     fit(el);
     observer().observe(name);
     return () => {
