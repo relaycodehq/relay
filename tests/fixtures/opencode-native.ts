@@ -37,6 +37,8 @@ export async function openCodeNativeFixture() {
   const controls = {
     password: "fixture-local-password",
     deliver: true,
+    /** Like OpenCode 2.1: a delivered steer becomes a message, with no event and no wake. */
+    silentDelivery: false,
     lostPromptReply: false,
     failCancel: false,
     failRead: false,
@@ -352,8 +354,10 @@ export async function openCodeNativeFixture() {
               text: body.text,
               time: { created: Date.now() },
             });
-          emit("session.inbox.delivered", { sessionID, inboxID: body.id });
-          wake(sessionID);
+          if (!controls.silentDelivery) {
+            emit("session.inbox.delivered", { sessionID, inboxID: body.id });
+            wake(sessionID);
+          }
         }
         if (body.resume !== false) finish(sessionID, "An image helper answer");
         if (controls.lostPromptReply) {

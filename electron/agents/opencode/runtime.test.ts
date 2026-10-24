@@ -123,6 +123,28 @@ it("delivers a steer with images at a step boundary, acknowledges its chat id, a
   );
 });
 
+it("hears a steer OpenCode takes without an event while the turn still runs, so its answer goes below it", async () => {
+  setScenario({ turn: [{ waitNative: true }, say("Changed course.")] });
+  native.controls.silentDelivery = true;
+  const onSteered = vi.fn();
+  const controls = vi.fn();
+  const running = openCodeRuntime.run(opts({ onControl: controls, onSteered }));
+  await vi.waitFor(() => expect(native.active.size).toBe(1));
+  await controls.mock.calls[0][0].steer("Use the small version", "chat-steer");
+  // Before the turn ends, not from the look back once it has.
+  await vi.waitFor(() =>
+    expect(onSteered).toHaveBeenCalledExactlyOnceWith("chat-steer"),
+  );
+  expect(native.active.size).toBe(1);
+  await fetch(native.url + "/fixture/release", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionID: [...native.active][0] }),
+  });
+  expect(await running).toBe("Changed course.");
+  expect(onSteered).toHaveBeenCalledTimes(1);
+});
+
 it("recovers a delivered steer after its HTTP reply is lost, without submitting twice", async () => {
   setScenario({ turn: [{ waitNative: true }, say("Steer received.")] });
   native.controls.lostPromptReply = true;

@@ -10,6 +10,7 @@ import type {
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { UncertainSteerError } from "../errors";
 import { guardSteer } from "../turn-kit";
 import { SubagentBook } from "../subagent-book";
@@ -33,6 +34,9 @@ type PendingSteer = {
   admitted?: boolean;
   cancellation?: Promise<"delivered" | "returned">;
 };
+
+/** How often a steer OpenCode hasn't taken yet is looked for among its messages. */
+const deliveryPoll = 500;
 
 /** One ACP session's native observations, retained between turns for background children. */
 export class OpenCodeSession {
@@ -61,6 +65,7 @@ export class OpenCodeSession {
   private watcher?: TurnWatcher;
   private checks: WatchChecks;
   private finished = false;
+  private watchingDelivery = false;
   private active = new Set<string>();
   private initializing = true;
   private since = 0;
@@ -192,6 +197,7 @@ export class OpenCodeSession {
               // Delivery can be minutes away, behind a long tool call: the
               // thread mustn't wait for it. settle() reports one never read.
               pending.admitted = true;
+              void this.watchDelivery();
             },
           ),
         retune: async (choice) => {
@@ -332,6 +338,34 @@ export class OpenCodeSession {
     if (at < this.pointAt) return;
     this.point = messageID;
     this.pointAt = at;
+  }
+
+  /**
+   * OpenCode 2.1 takes a steer without saying so on its event stream: the
+   * waiting message just becomes a user message. Look for it while one
+   * waits, so what answers it goes below it, not above once the turn ends.
+   */
+  private async watchDelivery() {
+    if (this.watchingDelivery) return;
+    this.watchingDelivery = true;
+    try {
+      while (this.working) {
+        const waiting = [...this.steers.entries()].filter(
+          ([id, pending]) => pending.admitted && !this.delivered.has(id),
+        );
+        if (!waiting.length) return;
+        await delay(deliveryPoll);
+        for (const [id] of waiting) {
+          if (!this.working || this.delivered.has(id)) continue;
+          const message = await this.client.session.message
+            .get({ sessionID: this.id, messageID: id })
+            .catch(() => undefined);
+          if (message?.type === "user") this.deliveredSteer(id);
+        }
+      }
+    } finally {
+      this.watchingDelivery = false;
+    }
   }
 
   private deliveredSteer(id: string) {
