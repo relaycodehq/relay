@@ -288,7 +288,7 @@ export const groups: { title: string; rows: Row[] }[] = [
         label: "Starts work on its own",
         hint: "From issues, schedules or events",
         cells: {
-          relay: no("Scheduled sends only"),
+          relay: part("Scheduled prompts"),
           "t3-code": yes("Schedules and webhooks"),
           conductor: yes("Routines, Pro"),
           superset: yes("Automations, Pro"),
@@ -371,7 +371,7 @@ export const ahead: { title: string; text: string }[] = [
   },
   {
     title: "Work that starts itself",
-    text: "Jean turns issues into plans and fixes CI until it passes; T3 Code, Orca, Conductor and Cursor run on schedules and webhooks. Relay starts nothing on its own.",
+    text: "Jean turns issues into plans and fixes CI until it passes; T3 Code, Orca, Conductor and Cursor run on schedules and webhooks. Relay runs prompts on a schedule, but nothing starts from issues or webhooks.",
   },
   {
     title: "Teams",
