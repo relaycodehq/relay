@@ -1,16 +1,40 @@
-/* Started threads: what the shared marks and card don't already say. */
+/* Started threads: what the shared marks and card don't already say, and
+   the composer's chip. */
 
-/* By the composer, it takes the room the subagents chip would, and none of
-   the row's button padding. */
-.thread-context-controls .started-marks-live {
+/* The composer's chip, beside the subagents one, and its card's marks. */
+.started-chip {
+  flex: none;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.started-chip:hover,
+.started-chip[data-popup-open] {
+  background: var(--hover);
+  color: var(--text);
+}
+.started-ask {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d99a2b;
+}
+.started-agent {
+  flex: none;
   margin-left: auto;
-  gap: 0;
-  padding: 2px 0;
-  border: 0;
+  display: inline-flex;
+  opacity: 0.7;
 }
-.thread-context-controls .started-marks-live ~ .composer-branch-trigger {
-  margin-left: 0;
+.started-agent .provider-glyph {
+  width: 12px;
+  height: 12px;
 }
+.subagents-now.started-asks {
+  white-space: normal;
+  padding-left: 8px;
+  border-left: 2px solid #d99a2b;
+}
+
 .started-marks-asks {
   color: var(--text);
 }

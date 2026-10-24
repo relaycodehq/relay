@@ -35,7 +35,7 @@ import {
 } from "../composer/ProjectComposer";
 import { sentHistory } from "../composer/prompt-history";
 import { SubagentsIndicator } from "../agent-turn/Subagents";
-import { StartedThreadMarks } from "../agent-turn/StartedThreads";
+import { StartedChip } from "../agent-turn/StartedChip";
 import { ThreadNotice } from "./ThreadNotice";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
@@ -368,7 +368,7 @@ export function ThreadComposer({
         <>
           {scopeButtons}
           {notesChip}
-          <StartedThreadMarks ids={undefined} live />
+          <StartedChip />
           {agentBatch.length > 0 && (
             <SubagentsIndicator
               batch={agentBatch}

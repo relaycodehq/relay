@@ -1,7 +1,7 @@
 // The threads a turn's agent started with Relay's tools, as their agents'
-// marks: beside the call that started them, in place of the folded turn's
-// icon, and by the composer while any works or asks. A badge says where each
-// stands, and the card on hover gives its latest line and opens it.
+// marks: beside the call that started them and in place of the folded turn's
+// icon. A badge says where each stands, and the card on hover gives its
+// latest line and opens it. The composer keeps its chip (StartedChip).
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { createContext, useContext, type ReactNode } from "react";
 import { useQueries, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +35,7 @@ const markState = (chat: ChatSummary): MarkState =>
  * are put away. `ids` narrows them to one call's; `live` wants any working
  * or asking, or nothing.
  */
-function useStarted(ids: string[] | undefined, live = false) {
+export function useStarted(ids: string[] | undefined, live = false) {
   const view = useStartedThreads();
   const lead = view?.lead;
   // Without a lead (a new thread's draft) undefined would match every thread.
@@ -53,18 +53,11 @@ function useStarted(ids: string[] | undefined, live = false) {
   return started;
 }
 
-function StartedMarks({
-  started,
-  className,
-}: {
-  started: ChatSummary[];
-  className?: string;
-}) {
+function StartedMarks({ started }: { started: ChatSummary[] }) {
   const view = useStartedThreads()!;
   const done = started.filter((c) => markState(c) === "done").length;
   return (
     <AgentMarks
-      className={className}
       marks={started.map((c) => ({
         id: c.id,
         provider: c.provider ?? "claude",
@@ -85,22 +78,11 @@ function StartedMarks({
   );
 }
 
-/** Beside a start_threads call, or by the composer with `live`. */
-export function StartedThreadMarks({
-  ids,
-  live = false,
-}: {
-  ids: string[] | undefined;
-  live?: boolean;
-}) {
-  const started = useStarted(ids, live);
+/** Beside a start_threads call. */
+export function StartedThreadMarks({ ids }: { ids: string[] | undefined }) {
+  const started = useStarted(ids);
   if (!started.length) return null;
-  return (
-    <StartedMarks
-      started={started}
-      className={live ? "started-marks-live" : undefined}
-    />
-  );
+  return <StartedMarks started={started} />;
 }
 
 /**
