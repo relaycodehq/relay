@@ -1571,7 +1571,8 @@ body.resizing-table-column {
     .live-shine,
     .update-comet-spin,
     .thread-terminal .xterm-cursor-blink,
-    .read-aloud-button[data-reading="loading"] svg
+    .read-aloud-button[data-reading="loading"] svg,
+    .compaction-dots
   ),
 :root[data-inactive] .sb-status.waiting i::after,
 :root[data-inactive] .thinking-glyph::before {
@@ -2006,7 +2007,8 @@ body.resizing-table-column {
     .context-meter-trigger[data-compacting] > svg,
     .live-shine,
     .update-comet-spin,
-    .read-aloud-button[data-reading="loading"] svg
+    .read-aloud-button[data-reading="loading"] svg,
+    .compaction-dots
   ),
   *:not(.thinking-glyph)::before,
   *:not(.sb-status.waiting i)::after {

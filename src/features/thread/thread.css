@@ -544,6 +544,29 @@
   align-items: center;
   gap: 6px;
 }
+/* All three dots always take their room; the clip shows none, one, two, then
+   three, so the line never changes width. */
+.compaction-dots {
+  animation: compaction-dots 1.6s infinite;
+}
+@keyframes compaction-dots {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    animation-timing-function: steps(1, end);
+  }
+  25% {
+    clip-path: inset(0 66.67% 0 0);
+    animation-timing-function: steps(1, end);
+  }
+  50% {
+    clip-path: inset(0 33.33% 0 0);
+    animation-timing-function: steps(1, end);
+  }
+  75%,
+  100% {
+    clip-path: inset(0);
+  }
+}
 .compaction-tokens {
   font-variant-numeric: tabular-nums;
 }

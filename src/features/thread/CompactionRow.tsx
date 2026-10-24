@@ -76,21 +76,12 @@ export function CompactionRow({
       {unread}
       <span className="compaction-note">
         <Minimize2 size={12} aria-hidden />
-        {m.status === "streaming"
-          ? m.compactedCold
-            ? "Cache went cold, compacting context first…"
-            : m.compactedIdle
-              ? "Compacting while idle, before the cache goes cold…"
-              : "Compacting context…"
-          : m.status === "complete"
-            ? m.compactedCold
-              ? "Cache went cold, context compacted"
-              : m.compactedIdle
-                ? "Compacted while idle, before the cache went cold"
-                : "Context compacted"
-            : m.status === "cancelled"
-              ? "Compaction stopped"
-              : (m.error ?? "Compaction failed")}
+        <span>
+          {compactionLabel(m)}
+          {m.status === "streaming" && (
+            <span className="compaction-dots">...</span>
+          )}
+        </span>
         {tokens && <span className="compaction-tokens">{tokens}</span>}
       </span>
       {summary && (
@@ -124,6 +115,23 @@ export function CompactionRow({
         )}
     </LineDivider>
   );
+}
+
+function compactionLabel(m: ChatMessage) {
+  if (m.status === "streaming")
+    return m.compactedCold
+      ? "Cache went cold, compacting context first"
+      : m.compactedIdle
+        ? "Compacting while idle, before the cache goes cold"
+        : "Compacting context";
+  if (m.status === "complete")
+    return m.compactedCold
+      ? "Cache went cold, context compacted"
+      : m.compactedIdle
+        ? "Compacted while idle, before the cache went cold"
+        : "Context compacted";
+  if (m.status === "cancelled") return "Compaction stopped";
+  return m.error ?? "Compaction failed";
 }
 
 const gap = 6;
