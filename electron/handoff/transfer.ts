@@ -12,7 +12,6 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import {
-  pastesBridge,
   skillsBridge,
   type HandoffPart,
 } from "../../shared/remote";
@@ -48,8 +47,7 @@ export async function sendFor(
   const [carried] = await sendPastes(
     [send],
     client,
-    async () =>
-      ((await infos.get(computerId, client))?.bridge ?? 0) >= pastesBridge,
+    async () => (await infos.get(computerId, client))?.bridge ?? 0,
   );
   if (!send.skills) return carried!;
   const info = await infos.get(computerId, client).catch(() => null);
@@ -65,7 +63,7 @@ export async function receivePastesFrom(
   messages: ChatMessage[],
 ) {
   const info = await infos.get(computerId, client);
-  return receivePastes(messages, client, (info?.bridge ?? 0) >= pastesBridge);
+  return receivePastes(messages, client, info?.bridge ?? 0);
 }
 
 /** The thread as it came back, or an error naming what's wrong, before anything of it is applied. */

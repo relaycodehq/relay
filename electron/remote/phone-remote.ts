@@ -176,7 +176,9 @@ export class PhoneRemote {
             device,
           );
         }
-        if (computer) throw new Error("Computers can't do that.");
+        // A computer handing a thread over brings the files its messages name.
+        if (computer && method !== "uploadFile")
+          throw new Error("Computers can't do that.");
         if (method === "reportApp")
           return this.devices.setApp(deviceId, appReportSchema.parse(args[0]));
         if (method === "dictate") {

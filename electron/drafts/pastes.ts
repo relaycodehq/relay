@@ -24,14 +24,11 @@ export function setPastesRoot(dir: string) {
 /** The folder agents may read pastes from without asking; unset until Relay has started. */
 export const pastesRoot = () => root;
 
-const pasteRelative = /^[0-9a-f-]{36}[\\/]pasted-text(?:-[1-9]\d{0,2})?\.txt$/;
-/** Only files Relay saved as pastes may cross to a paired computer. */
-export async function readPaste(
-  path: string,
-  offset: number,
-  size: number,
-  at = root,
-) {
+// A paste, or a file a phone attached, each in a folder of its own.
+const pasteRelative = /^[0-9a-f-]{36}[\\/][^\\/]+$/;
+
+/** The file at `path` if Relay saved it among its pastes; null for any other path, or one that's gone. */
+async function savedPaste(path: string, at: string | undefined) {
   if (!at || !pasteRelative.test(relative(at, path))) return null;
   let real: string;
   try {
@@ -43,6 +40,23 @@ export async function readPaste(
   }
   if (!pasteRelative.test(relative(await realpath(at), real)))
     throw new Error("The paste points outside Relay's paste folder.");
+  return real;
+}
+
+/** The size of a file Relay saved among its pastes; null as `readPaste` gives. */
+export async function pasteSize(path: string, at = root) {
+  const real = await savedPaste(path, at);
+  return real === null ? null : (await stat(real)).size;
+}
+
+/** Only files Relay saved as pastes may cross to a paired computer. */
+export async function readPaste(
+  path: string,
+  offset: number,
+  size: number,
+  at = root,
+) {
+  if ((await savedPaste(path, at)) === null) return null;
   const handle = await open(path, "r");
   try {
     const buffer = Buffer.alloc(size);

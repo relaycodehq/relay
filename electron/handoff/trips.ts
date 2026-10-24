@@ -4,7 +4,6 @@ import { errorMessage } from "../../shared/error-message";
 import { needsFullBundle, type HandoffThread } from "../../shared/handoff";
 import {
   folderHandoffBridge,
-  pastesBridge,
   remoteProjectsBridge,
   startHandoffBridge,
   type HomeThread,
@@ -118,7 +117,7 @@ export class HandoffTrips {
         messages: await sendPastes(
           portableMessages(chat.messages),
           client,
-          info!.bridge >= pastesBridge,
+          info!.bridge,
         ),
         git: {
           branch: worktree.branch!,
@@ -279,7 +278,7 @@ export class HandoffTrips {
         messages: await sendPastes(
           portableMessages(chat.messages),
           client,
-          true,
+          info.bridge,
         ),
       };
       asked = true;

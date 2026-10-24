@@ -13,6 +13,7 @@ import { DraftStore } from "./store";
 
 export { DraftStore };
 export {
+  pasteSize,
   pastesRoot,
   readPaste,
   writePasteChunk,
@@ -20,7 +21,7 @@ export {
   setPastesRoot,
   sweepPastes,
 } from "./pastes";
-export { writeUploadChunk } from "./uploads";
+export { receiveFileChunk, writeUploadChunk } from "./uploads";
 
 /** How long a phone's send waits on the desktop's page; the phone gives a send two minutes. */
 const heldSendMs = 110_000;

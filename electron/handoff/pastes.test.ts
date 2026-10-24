@@ -12,7 +12,8 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RemoteClient } from "../../shared/remote-client";
 import { handoffChunk } from "../../shared/handoff";
-import { savePaste, setPastesRoot } from "../drafts";
+import { filesBridge, pastesBridge } from "../../shared/remote";
+import { savePaste, setPastesRoot, writeUploadChunk } from "../drafts";
 import { HandoffReceiver } from "./receiver";
 import { receivePastes, sendPastes } from "./pastes";
 
@@ -35,6 +36,23 @@ function peer() {
   const call = vi.fn(async (method: string, ...args: unknown[]) => {
     setPastesRoot(remote);
     try {
+      // Through the phone bridge's own handler, which writes as this does.
+      if (method === "uploadFile") {
+        const [id, name, size, offset, data] = args as [
+          string,
+          string,
+          number,
+          number,
+          string,
+        ];
+        return await writeUploadChunk(
+          id,
+          name,
+          size,
+          offset,
+          Buffer.from(data, "base64"),
+        );
+      }
       return await receiver.handle(method as never, args, {
         id: "peer",
         name: "Peer",
@@ -53,7 +71,7 @@ it("carries a multi-chunk paste once, rewrites its paths, and mirrors it back to
   const messages = [
     { body: `Read \`${path}\` and \`${path}\``, id: "message" },
   ];
-  const carried = await sendPastes(messages, client, true);
+  const carried = await sendPastes(messages, client, filesBridge);
   const there = carried[0]!.body.match(/`([^`]+)`/)![1]!;
   expect(there.startsWith(remote)).toBe(true);
   expect(there.endsWith("pasted-text-2.txt")).toBe(true);
@@ -66,9 +84,9 @@ it("carries a multi-chunk paste once, rewrites its paths, and mirrors it back to
   expect(
     call.mock.calls.filter(([method]) => method === "uploadPaste"),
   ).toHaveLength(3);
-  await sendPastes(messages, client, true);
+  await sendPastes(messages, client, filesBridge);
   expect(call).toHaveBeenCalledTimes(3);
-  expect(await receivePastes(carried, client, true)).toEqual(messages);
+  expect(await receivePastes(carried, client, filesBridge)).toEqual(messages);
   expect(call).toHaveBeenCalledTimes(3);
 });
 
@@ -78,13 +96,13 @@ it("brings a paste made on the receiving computer home and reuses it on the next
   const path = await savePaste("remote log\n".repeat(handoffChunk), 1);
   setPastesRoot(local);
   const messages = [{ body: `Investigate \`${path}\`` }];
-  const arrived = await receivePastes(messages, client, true);
+  const arrived = await receivePastes(messages, client, filesBridge);
   const here = arrived[0]!.body.match(/`([^`]+)`/)![1]!;
   expect(here.startsWith(local)).toBe(true);
   expect(await readFile(here, "utf8")).toBe(await readFile(path, "utf8"));
   expect(call.mock.calls.length).toBeGreaterThan(1);
   call.mockClear();
-  expect(await sendPastes(arrived, client, true)).toEqual(messages);
+  expect(await sendPastes(arrived, client, filesBridge)).toEqual(messages);
   expect(call).not.toHaveBeenCalled();
 });
 
@@ -95,12 +113,12 @@ it("leaves ordinary files alone and refuses to lose a saved paste on an older de
   const ordinary = join(outside, "pasted-text.txt");
   await writeFile(ordinary, "not a Relay paste");
   const message = [{ body: `Read \`${ordinary}\` and \`/docs/notes.txt\`` }];
-  expect(await sendPastes(message, client, false)).toEqual(message);
+  expect(await sendPastes(message, client, pastesBridge - 1)).toEqual(message);
   expect(call).not.toHaveBeenCalled();
   expect(await client.call("downloadPaste", ordinary, 0)).toBeNull();
   const path = await savePaste("saved log", 1);
   await expect(
-    sendPastes([{ body: `\`${path}\`` }], client, false),
+    sendPastes([{ body: `\`${path}\`` }], client, pastesBridge - 1),
   ).rejects.toThrow("Update Relay");
 });
 
@@ -136,8 +154,8 @@ it("retries a failed paste upload before sending its rewritten reference", async
   const path = await savePaste("important log", 1);
   const messages = [{ body: `Read \`${path}\`` }];
   call.mockRejectedValueOnce(new Error("link lost"));
-  await expect(sendPastes(messages, client, true)).rejects.toThrow("link lost");
-  const carried = await sendPastes(messages, client, true);
+  await expect(sendPastes(messages, client, filesBridge)).rejects.toThrow("link lost");
+  const carried = await sendPastes(messages, client, filesBridge);
   const remotePath = carried[0]!.body.match(/`([^`]+)`/)![1]!;
   expect(await readFile(remotePath, "utf8")).toBe("important log");
 });
@@ -148,11 +166,49 @@ it("refuses an interrupted download and retries it instead of caching a broken r
   const messages = [{ body: `Read \`${path}\`` }];
   call.mockResolvedValueOnce(Buffer.alloc(handoffChunk, 65).toString("base64"));
   call.mockResolvedValueOnce(null);
-  await expect(receivePastes(messages, client, true)).rejects.toThrow(
+  await expect(receivePastes(messages, client, filesBridge)).rejects.toThrow(
     "ended early",
   );
   call.mockResolvedValueOnce(Buffer.from("complete").toString("base64"));
-  const arrived = await receivePastes(messages, client, true);
+  const arrived = await receivePastes(messages, client, filesBridge);
   const here = arrived[0]!.body.match(/`([^`]+)`/)![1]!;
   expect(await readFile(here, "utf8")).toBe("complete");
+});
+
+it("carries a file a phone attached under its own name, and brings one made there home", async () => {
+  const { client, call } = peer();
+  const video = Buffer.alloc(handoffChunk + 10, 7);
+  const id = randomUUID();
+  const { path } = await writeUploadChunk(id, "bug.mp4", video.length, 0, video);
+  const messages = [{ body: `Look at \`${path}\`` }];
+  const carried = await sendPastes(messages, client, filesBridge);
+  const there = carried[0]!.body.match(/`([^`]+)`/)![1]!;
+  expect(there.startsWith(remote)).toBe(true);
+  expect(there.endsWith("bug.mp4")).toBe(true);
+  expect(await readFile(there)).toEqual(video);
+  expect(
+    call.mock.calls.filter(([method]) => method === "uploadFile"),
+  ).toHaveLength(2);
+  expect(await receivePastes(carried, client, filesBridge)).toEqual(messages);
+
+  setPastesRoot(remote);
+  const made = (
+    await writeUploadChunk(randomUUID(), "screen.mov", 3, 0, Buffer.from("abc"))
+  ).path!;
+  setPastesRoot(local);
+  const home = await receivePastes([{ body: `\`${made}\`` }], client, filesBridge);
+  const here = home[0]!.body.match(/`([^`]+)`/)![1]!;
+  expect(here.startsWith(local)).toBe(true);
+  expect(here.endsWith("screen.mov")).toBe(true);
+  expect(await readFile(here, "utf8")).toBe("abc");
+});
+
+it("asks for an update before handing an attached file to a computer that can't take one", async () => {
+  const { client } = peer();
+  const { path } = await writeUploadChunk(randomUUID(), "a.png", 1, 0, Buffer.from("x"));
+  await expect(
+    sendPastes([{ body: `\`${path}\`` }], client, filesBridge - 1),
+  ).rejects.toThrow("attached files");
+  const message = [{ body: `\`${join(remote, randomUUID(), "b.png")}\`` }];
+  expect(await receivePastes(message, client, filesBridge - 1)).toEqual(message);
 });
