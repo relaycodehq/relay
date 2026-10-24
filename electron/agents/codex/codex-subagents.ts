@@ -29,6 +29,7 @@ type Naming = {
   prompt?: string;
   nickname?: string;
   model?: string;
+  effort?: string;
   /** The thread that started it. */
   parent?: string;
 };
@@ -43,6 +44,9 @@ type Agent = {
   said?: string;
   answer?: string;
 };
+
+const str = (value: unknown) =>
+  typeof value === "string" && value ? value : undefined;
 
 const firstLine = (text: unknown) =>
   typeof text === "string"
@@ -95,6 +99,7 @@ export class CodexSubagents {
       this.name(item.agentThreadId, {
         path: typeof item.agentPath === "string" ? item.agentPath : undefined,
         model: typeof item.model === "string" ? item.model : undefined,
+        effort: str(item.reasoningEffort),
         parent: sender,
       });
     if (item.type !== "collabAgentToolCall") return;
@@ -106,6 +111,7 @@ export class CodexSubagents {
         this.name(thread, {
           prompt: typeof item.prompt === "string" ? item.prompt : undefined,
           model: typeof item.model === "string" ? item.model : undefined,
+          effort: str(item.reasoningEffort),
           parent: sender,
         });
     // A wait hands back what each agent answered; its own turn usually said so first.
@@ -235,6 +241,7 @@ export class CodexSubagents {
           nickname: record.agentNickname || undefined,
           path: spawn?.agent_path || undefined,
           model: record.model || undefined,
+          effort: str(record.reasoningEffort),
           parent: record.parentThreadId || undefined,
         });
       })
@@ -302,6 +309,7 @@ export class CodexSubagents {
       description: row.label || "Subagent",
       parentId: row.parentId,
       model: naming.model,
+      effort: naming.effort,
       brief: naming.prompt,
       stop: async () => {
         if (!turn)

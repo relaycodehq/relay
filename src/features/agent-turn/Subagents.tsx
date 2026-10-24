@@ -23,6 +23,7 @@ import type { AgentActivity } from "../../../shared/projects";
 import { doneLabel, liveLabel, plural } from "../../../shared/activity-labels";
 import {
   bySubagentStanding,
+  effortName,
   modelName,
   subagentNow,
   subagentUse,
@@ -232,6 +233,7 @@ function Peek({
             {[
               run.type !== "general-purpose" && run.type,
               run.model && modelName(run.model),
+              run.effort && effortName(run.effort),
               ...subagentUse(run),
             ]
               .filter(Boolean)

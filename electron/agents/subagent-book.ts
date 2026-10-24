@@ -15,6 +15,7 @@ type Run = {
   description: string;
   type?: string;
   model?: string;
+  effort?: string;
   brief?: string;
   parentId?: string;
   status: SubagentStatus;
@@ -32,7 +33,14 @@ type Run = {
 
 export type SubagentStart = Pick<
   Run,
-  "description" | "type" | "model" | "brief" | "parentId" | "stop" | "canStop"
+  | "description"
+  | "type"
+  | "model"
+  | "effort"
+  | "brief"
+  | "parentId"
+  | "stop"
+  | "canStop"
 >;
 
 const limits = {
@@ -205,6 +213,7 @@ export class SubagentBook implements SubagentSource {
       description: run.description,
       type: run.type,
       model: run.model,
+      effort: run.effort,
       brief: run.brief,
       status: run.status,
       canStop: run.canStop,

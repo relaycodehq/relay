@@ -131,3 +131,28 @@ it("keeps each subagent for the side thread, where Stop interrupts that one alon
     trace: [],
   });
 });
+
+it("keeps the reasoning effort Codex gave a subagent, from its spawn or else its thread", async () => {
+  const { agents, book } = tracked(async () => ({
+    thread: { preview: "Profile the list.", reasoningEffort: "low" },
+  }));
+  const say = (threadId: string, method: string, params: object) =>
+    agents.notification(n(method, { threadId, ...params }), "turn");
+  agents.spawned({
+    type: "subAgentActivity",
+    agentThreadId: "a",
+    agentPath: "/root/map_payloads",
+    model: "gpt-5.5",
+    reasoningEffort: "xhigh",
+  });
+  for (const child of ["a", "b"])
+    say(child, "turn/started", {
+      turn: { id: `t${child}`, rootTurnId: "turn" },
+    });
+  await vi.waitFor(() =>
+    expect(book.list().map((r) => [r.id, r.effort])).toEqual([
+      ["agent:a", "xhigh"],
+      ["agent:b", "low"],
+    ]),
+  );
+});
