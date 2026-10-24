@@ -28,6 +28,8 @@ import {
   useSendKey,
 } from "../../lib/send-key";
 import { mac } from "../../lib/mod-key";
+import { COMPACT_PICKS } from "../../lib/thread-storage";
+import { useStoredFlag } from "../../lib/useStoredFlag";
 import { useAutoCompactSaved } from "../agents/auto-compact";
 import { formatTokens } from "../../../shared/tokens";
 import { useAgentRuns } from "./useAgentRuns";
@@ -263,13 +265,13 @@ export function ProjectComposer({
   const quick = useQuickSwitchHud(runs, to);
   // The box by Send starts as Settings say, so it waits to know them.
   const sendCompacts = useAutoCompactSaved()?.cold;
-  // Ticked or unticked for the draft being written; sending it lets go.
-  const [compactPick, setCompactPick] = useState<{
-    draft: string;
-    compact: boolean;
-  }>();
-  const compactFirst =
-    compactPick?.draft === keys.draft ? compactPick.compact : sendCompacts;
+  // Ticked or unticked for the draft being written, kept while you're away
+  // from it, or the box would tick itself again under the same draft.
+  // Sending it lets go.
+  const [compactFirst, setCompactFirst, forgetCompactPick] = useStoredFlag(
+    COMPACT_PICKS + keys.draft,
+    sendCompacts,
+  );
   // A command means what it says, after an @mention too; the server sends it as is.
   const cold =
     sendCompacts !== undefined &&
@@ -355,15 +357,12 @@ export function ProjectComposer({
       after,
       flipCompact = false,
     }: ComposerSubmitOptions = {}) {
-      const pick =
-        cold && !running && compactFirst !== undefined
-          ? compactFirst !== flipCompact
-          : undefined;
+      const pick = cold && !running ? compactFirst !== flipCompact : undefined;
       return composerSend.send({
         steer,
         sendAt,
         after: () => {
-          setCompactPick(undefined);
+          forgetCompactPick();
           after?.();
         },
         compact: pick === sendCompacts ? undefined : pick,
@@ -618,13 +617,8 @@ export function ProjectComposer({
                   >
                     <input
                       type="checkbox"
-                      checked={!!compactFirst}
-                      onChange={(e) =>
-                        setCompactPick({
-                          draft: keys.draft,
-                          compact: e.target.checked,
-                        })
-                      }
+                      checked={compactFirst}
+                      onChange={(e) => setCompactFirst(e.target.checked)}
                     />
                     Compact {formatTokens(cold.tokens)} first
                   </label>

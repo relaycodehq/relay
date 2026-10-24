@@ -50,6 +50,8 @@ const OPEN_THREAD = "relay-project-chat:",
 export const TURN_FOLDS = "relay-turn-folds:";
 /** Per thread: whether the agent's inspected-image strips are expanded. */
 export const IMAGE_STRIPS = "relay-image-strips:";
+/** Per draft: "Compact first" ticked or unticked by hand, until it's sent. */
+export const COMPACT_PICKS = "relay-compact-pick:";
 
 /** A thread's main draft, or with `reply` its side conversation's. */
 export const threadDraftKey = draftKeyOf;
@@ -373,6 +375,10 @@ export function keyOwner(
       return key.length > prefix.length
         ? { thread: key.slice(prefix.length) }
         : undefined;
+  if (key.startsWith(COMPACT_PICKS)) {
+    const draft = splitDraftKey(key.slice(COMPACT_PICKS.length));
+    return draft && { thread: draft.thread };
+  }
   if (key.startsWith(RECORD_PREFIX))
     return key.length > RECORD_PREFIX.length
       ? { thread: key.slice(RECORD_PREFIX.length) }

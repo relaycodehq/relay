@@ -17,7 +17,7 @@ function flag(key: string): Flag {
   return store;
 }
 
-/** A boolean kept per device in localStorage; `fallback` until it's first set. */
+/** A boolean kept per device in localStorage; `fallback` until it's first set or once cleared. */
 export function useStoredFlag(key: string, fallback = false) {
   const store = flag(key);
   const on = store.use() ?? fallback;
@@ -28,5 +28,6 @@ export function useStoredFlag(key: string, fallback = false) {
       ),
     [store, fallback],
   );
-  return [on, setOn] as const;
+  const clear = useCallback(() => store.set(null), [store]);
+  return [on, setOn, clear] as const;
 }

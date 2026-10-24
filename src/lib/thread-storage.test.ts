@@ -248,6 +248,9 @@ describe("whose a key is", () => {
     expect(keyOwner("relay-draft:c1")).toEqual({ thread: "c1" });
     expect(keyOwner("relay-draft:new:p1:s")).toEqual({ thread: "new:p1:s" });
     expect(keyOwner("relay-draft:")).toBeUndefined();
+    expect(keyOwner("relay-compact-pick:chat-draft:c1:r1")).toEqual({
+      thread: "c1",
+    });
     expect(keyOwner("chat-draft:c1:r1")).toEqual({ thread: "c1" });
     expect(keyOwner("skill-chips:chat-draft:new:p1")).toEqual({
       thread: "new:p1",
