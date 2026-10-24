@@ -148,7 +148,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   const login = new GiteaLogin(teaTokenFor);
   const github = new GithubLogin(fetcher);
-  const { projects, pullHosts, devops, chats, pullMerges, clockify } =
+  const { projects, pullHosts, devops, chats, pullMerges, clockify, schedules } =
     threadServices({
       dir: home,
       store,
@@ -158,6 +158,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       online: () => true,
       chatEvent: (event) => phoneRemote?.chatEvent(event),
       prefs: () => readPrefs(settingsFile.state().values),
+      schedulesChanged: () => {},
     });
   chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
@@ -213,6 +214,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     store,
     projects,
     projectChats: chats,
+    schedules,
     pullMerges,
     devops,
     clockify,
@@ -296,13 +298,14 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   await resumeThreads({
     dir: home,
     chats,
+    schedules,
     projects,
     login,
     agentHosts,
     relayTools,
     agentUpdates,
     aiSettings: () => store.aiSettings(),
-    tools: { handoffs: handoffs.sender },
+    tools: { handoffs: handoffs.sender, schedules },
     powerMonitor,
   });
   new DailyPing({

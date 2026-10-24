@@ -43,6 +43,8 @@ interface State {
   /** Frosted glass, on unless the page last said off; windows then start clear. */
   glass?: boolean;
   chats?: import("../../shared/projects").ChatSummary[];
+  /** Prompts Relay sends on its own; see shared/schedules. */
+  schedules?: import("../../shared/schedules").Schedule[];
   /** The deep review sheet's setups, newest first, for the deep_review tool. */
   reviewSetups?: import("../../shared/deep-review").SavedReviewSetup[];
   /** This computer's last page and known server command for each thread. */

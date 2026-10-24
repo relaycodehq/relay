@@ -20,6 +20,7 @@ import {
   RENDER_MAX_PAGES,
 } from "../../shared/html-render";
 import { relayToolsWhere } from "./tool-meta";
+import { scheduleRepeats } from "../../shared/schedules";
 
 /** How many threads one thread may have working at once. */
 export const STARTED_LIMIT = 6;
@@ -37,6 +38,95 @@ const threadId = z
 const projectId = z
   .uuid()
   .describe("A project id from list_projects or add_project.");
+
+const scheduleId = z
+  .uuid()
+  .describe("A schedule's id from list_schedules or add_schedule.");
+
+/** Monday first, as the schedule keeps them. */
+export const scheduleWeekdays = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+] as const;
+
+const scheduleFields = {
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe("Short, like “Weekly changelog”."),
+  prompt: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32000)
+    .describe(
+      "What Relay sends each time, written as the user would ask it; skills and @files work as in a message. Nobody is around while it runs, so it must not need answers.",
+    ),
+  repeat: z.enum(scheduleRepeats),
+  days: z
+    .array(z.enum(scheduleWeekdays))
+    .min(1)
+    .max(7)
+    .optional()
+    .describe("For weekly, the days it runs. Left out: Friday."),
+  day_of_month: z
+    .number()
+    .int()
+    .min(1)
+    .max(31)
+    .optional()
+    .describe(
+      "For monthly; a shorter month runs on its last day. Left out: the 1st.",
+    ),
+  time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .describe("24-hour time on this computer's clock, like 09:00."),
+  project: projectId
+    .or(z.literal("scratchpad"))
+    .optional()
+    .describe(
+      "Left out: yours. scratchpad: no project, each run is a Scratchpad chat.",
+    ),
+  new_chat_each_run: z
+    .boolean()
+    .optional()
+    .describe(
+      "Left out: true. False: every run adds a turn to one thread, so it remembers the last run.",
+    ),
+  worktree: z
+    .boolean()
+    .optional()
+    .describe(
+      "Left out: true, each run in a worktree of its own when the project is a Git repository. False: in the project's folder.",
+    ),
+  agent: agentProviderSchema
+    .optional()
+    .describe("Left out: you. Check list_agents before naming another."),
+  model: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .describe("Left out: yours when the agent is you, otherwise its default."),
+  effort: reasoningEffortSchema.optional(),
+  token_limit: z
+    .number()
+    .int()
+    .min(0)
+    .max(10_000_000)
+    .optional()
+    .describe(
+      "Tokens one run may use before Relay stops it; 0 for no limit. Left out: 150000.",
+    ),
+};
 
 const pageHtml = z
   .string()
@@ -312,6 +402,22 @@ export const relayToolSchemas = {
     })
     .strict(),
   list_review_setups: z.object({}).strict(),
+  list_schedules: z.object({}).strict(),
+  add_schedule: z.object(scheduleFields).strict(),
+  update_schedule: z
+    .object({
+      id: scheduleId,
+      ...z.object(scheduleFields).partial().shape,
+    })
+    .strict(),
+  pause_schedule: z
+    .object({
+      id: scheduleId,
+      paused: z.boolean().describe("False turns it back on."),
+    })
+    .strict(),
+  remove_schedule: z.object({ id: scheduleId }).strict(),
+  run_schedule: z.object({ id: scheduleId }).strict(),
   list_projects: z.object({}).strict(),
   add_project: z
     .object({
@@ -532,6 +638,19 @@ const descriptions: Record<RelayToolName, string> = {
     "Start a deep review round in this thread: several agents review the changes on their own, each in a thread of its own listed under this one, using a review setup the user saved. Use it when the user asks for a deep review, another round, or several rounds. It returns at once: end your answer then. Once every reviewer has reported, their reports come to you here as your next turn, to verify, rank and publish as findings; the user's messages wait until then. One round at a time; for several rounds, fix what the user picked, then call it again.",
   list_review_setups:
     "The review setups the user saved in the deep review sheet, last run first: each one's name, reviewers (agent, model, effort, prompt) and whether the lead may run checks. Pass a name to deep_review.",
+  list_schedules:
+    "The prompts Relay sends on its own on a schedule, on this computer: each one's id, when it runs and runs next, its project, and how its last runs went. Check here before add_schedule, so you don't make the same one twice.",
+  add_schedule: `Set up a prompt Relay sends on its own on a schedule, as a new thread each time or into one thread that carries on. Only for something the user asked to happen regularly; when they describe work they do on a regular basis, you may offer once to schedule it.
+
+Settle it in plain conversation first, one question at a time. Ask only what you can't tell, usually how often and at what time, then propose the rest in one line for them to confirm or change: this project, you and your model, a new chat each run, a worktree, a ~150k token limit. Write the prompt so it works with nobody around. The user confirms every schedule in Relay before it's saved; once it is, offer to try it once with run_schedule. It runs only while Relay runs on this computer, and its runs appear as ordinary threads.`,
+  update_schedule:
+    "Change a schedule: only the fields you pass change. The user confirms every change in Relay.",
+  pause_schedule:
+    "Pause a schedule, or turn it back on. Pausing goes through at once; turning one on, the user confirms.",
+  remove_schedule:
+    "Delete a schedule and its list of runs, when the user asks. The threads its runs started stay.",
+  run_schedule:
+    "Run a schedule once now as a test, in a thread of its own, whether or not it's on. Returns the thread's id; once it's done, read it with read_thread to see whether the prompt did what the user wanted, and tune it with update_schedule if not. The user confirms it, since it spends usage.",
   list_notes:
     "The notes the user keeps in a thread, beside its composer: lists from answers, snippets, decisions they want at hand. A list note's items are numbered, ticked ones marked done. Read them when the user refers to their notes, or to work they listed there.",
   add_note:

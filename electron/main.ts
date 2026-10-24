@@ -18,6 +18,7 @@ import { setApplicationMenu } from "./app/menu";
 import { Menubar } from "./app/menubar";
 import { KeepAwake } from "./app/keep-awake";
 import { startLog } from "./app/log";
+import type { Schedules } from "./schedules";
 import { Quit } from "./app/quit";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
@@ -116,6 +117,7 @@ void pathReady();
 let store: Store | undefined;
 let settingsFile: SettingsFile | undefined;
 let projectChats: ProjectChats | undefined;
+let scheduleService: Schedules | undefined;
 /** The threads' browsers; unset until Relay has started. */
 let previews: ThreadPreviews | undefined;
 /** Simulators and emulators in the panel; unset until Relay has started. */
@@ -189,6 +191,8 @@ const quit = new Quit({
   cancelled: () => projectChats?.resumeAfterCancelledQuit(),
   stopping: () => triage?.cancel(),
   shutDown: async () => {
+    // Nothing starts on its own while Relay closes.
+    scheduleService?.stop();
     const closed = await Promise.allSettled([
       Promise.resolve().then(() => phoneRemote?.close()),
       Promise.resolve().then(() =>
@@ -368,7 +372,7 @@ app
       window.send("relay:agent-accounts", state);
       watchSavedSignIns();
     });
-    const { projects, pullHosts, devops, chats, pullMerges, clockify } =
+    const { projects, pullHosts, devops, chats, pullMerges, clockify, schedules } =
       threadServices({
         dir: dataDir,
         store: loaded,
@@ -381,8 +385,10 @@ app
           phoneRemote?.chatEvent(event);
         },
         prefs: () => readPrefs(file.state().values),
+        schedulesChanged: (list) => window.send("relay:schedules", list),
       });
     projectChats = chats;
+    scheduleService = schedules;
     links.onFolder((folder) => {
       void projectForFolder(folder, {
         list: () => projects.list(login.client),
@@ -461,6 +467,7 @@ app
       store: loaded,
       projects,
       projectChats: chats,
+      schedules,
       pullMerges,
       devops,
       clockify,
@@ -549,6 +556,7 @@ app
     await resumeThreads({
       dir: dataDir,
       chats,
+      schedules,
       projects,
       login,
       agentHosts,
@@ -562,6 +570,7 @@ app
             lookAtPage(html, { ...options, theme }, signal),
           ),
         handoffs: handoffs.sender,
+        schedules,
         reportProblem: draftBugReport,
         reviews: {
           setups: () => loaded.get().reviewSetups ?? [],

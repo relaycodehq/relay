@@ -65,12 +65,13 @@ interface SidebarShowing {
   inbox?: boolean;
   usage?: boolean;
   processes?: boolean;
+  schedules?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox, usage, processes },
+  showing: { projectId, chatId, draftId, inbox, usage, processes, schedules },
   onOpen,
   onPickNew,
   onNewScratch,
@@ -79,6 +80,7 @@ export function ProjectSidebar({
   onInbox,
   onUsage,
   onProcesses,
+  onSchedules,
   onSettings,
   onAttention,
 }: {
@@ -100,6 +102,7 @@ export function ProjectSidebar({
   onInbox: () => void;
   onUsage?: () => void;
   onProcesses?: () => void;
+  onSchedules?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -403,6 +406,8 @@ export function ProjectSidebar({
         onUsage={onUsage}
         processes={processes}
         onProcesses={onProcesses}
+        schedules={schedules}
+        onSchedules={onSchedules}
         onSettings={onSettings}
       />
     </div>

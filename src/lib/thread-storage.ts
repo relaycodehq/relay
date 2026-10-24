@@ -55,6 +55,11 @@ export const COMPACT_PICKS = "relay-compact-pick:";
 
 /** A thread's main draft, or with `reply` its side conversation's. */
 export const threadDraftKey = draftKeyOf;
+// The prompt a schedule's composer edits; the schedule keeps the real one.
+const SCHEDULE_DRAFT = "schedule-";
+export const scheduleDraftKey = (id: string) => draftKeyOf(SCHEDULE_DRAFT + id);
+/** A draft record that stays in this window's storage: never shared with phones, never swept. */
+export const localOnlyRecord = (thread: string) => thread.startsWith(SCHEDULE_DRAFT);
 /** A composer's settings: a thread's, or `<thread>:<reply>` for a side conversation. */
 export const composerSettingsKey = (key: string) => SETTINGS + key;
 

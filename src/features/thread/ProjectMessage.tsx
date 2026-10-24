@@ -58,6 +58,7 @@ import { SentMemes, useSentMemes } from "../memes/SentMemes";
 import { TipPeek } from "../tips/TipPeek";
 import { LineDivider } from "../../ui/LineDivider";
 import type { QuestionResponse } from "./question-responses";
+import { openSchedule } from "../../lib/open-schedule";
 import "./thread.css";
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -437,6 +438,18 @@ export const Message = memo(function Message({
           <MessageAgentName provider={m.provider} model={m.model} />
         )}
         {m.role === "user" && <time>{clock(m.created)}</time>}
+        {m.scheduled && (
+          <button
+            type="button"
+            className="message-scheduled"
+            title={`Open the “${m.scheduled.name}” schedule`}
+            onClick={() => openSchedule(m.scheduled!.id)}
+          >
+            {m.scheduled.test
+              ? "test run of Relay's schedule"
+              : "started by Relay's schedule"}
+          </button>
+        )}
         {m.unread ? (
           <span
             className="steer-unread muted"

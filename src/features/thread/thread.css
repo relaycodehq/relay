@@ -70,6 +70,20 @@
   color: inherit;
   cursor: pointer;
 }
+/* Where "started on its own" would be: Relay sent this for a schedule. */
+.project-message > header .message-scheduled {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.project-message > header .message-scheduled:hover {
+  text-decoration: underline;
+}
 .project-message > header .message-author-link:hover {
   text-decoration: underline;
 }

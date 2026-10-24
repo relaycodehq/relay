@@ -31,6 +31,7 @@ import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
+import { scheduleHandlers } from "./schedules";
 import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
@@ -67,6 +68,7 @@ export function createDispatch(
     computerHandlers(ctx),
     usageHandlers(ctx),
     processHandlers(ctx),
+    scheduleHandlers(ctx),
     bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.
   ]) satisfies Required<Handlers>;

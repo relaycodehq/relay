@@ -23,6 +23,7 @@ export {
   STARTED_LIMIT,
   startedTools,
   WAIT_LIMIT_SECONDS,
+  scheduleWeekdays,
   type RelayToolName,
   type RelayToolArgs,
   type ToolResult,

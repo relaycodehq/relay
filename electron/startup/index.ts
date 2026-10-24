@@ -46,6 +46,9 @@ import {
   threadAgents,
 } from "../started-threads/serve";
 import { projectTasks } from "../terminal/tasks";
+import { Schedules } from "../schedules";
+import { chatIsEmpty } from "../../shared/chat-activity";
+import type { Schedule } from "../../shared/schedules";
 import { keepUsageLog } from "../usage";
 import type { AgentUpdates } from "../agents/agent-updates";
 import type { Dispatch } from "../api";
@@ -119,7 +122,7 @@ export async function agentHost(dir: string, script: string) {
   return { hosts, tools };
 }
 
-/** Projects, their threads and what follows them: pull requests, DevOps cards, Clockify. */
+/** Projects, their threads and what follows them: pull requests, DevOps cards, Clockify, schedules. */
 export function threadServices({
   dir,
   store,
@@ -129,6 +132,7 @@ export function threadServices({
   online,
   chatEvent,
   prefs,
+  schedulesChanged,
 }: {
   dir: string;
   store: Store;
@@ -139,6 +143,8 @@ export function threadServices({
   chatEvent: ConstructorParameters<typeof ProjectChats>[3];
   /** settings.json's preferences as they are now. */
   prefs: () => AppPrefs;
+  /** Tells the windows the schedules changed. */
+  schedulesChanged: (schedules: Schedule[]) => void;
 }) {
   const projects = new Projects(store);
   const pullHosts = pullRequestHosts({ store, login, github, projects, fetch });
@@ -183,7 +189,35 @@ export function threadServices({
     },
     aiSettings: () => store.aiSettings(),
   });
-  return { projects, pullHosts, devops, chats, pullMerges, clockify };
+  const schedules = new Schedules(store, {
+    chats: {
+      create: (projectId, scope, workspace) => chats.create(projectId, scope, workspace),
+      send: (id, input) => chats.send(id, input),
+      get: (id) => chats.get(id),
+      busy: async (id) => {
+        const { status } = await chats.status(id);
+        return status === "working" || status === "needs-input";
+      },
+      cancel: (id) => chats.cancel(id),
+      onSaved: (listener) => chats.onSaved(listener),
+    },
+    projects: {
+      has: (id) =>
+        (store.get().projects ?? []).some(
+          (p) => p.id === id && !p.removed && !p.computer && !p.scratch,
+        ),
+      name: (id) => {
+        const found = (store.get().projects ?? []).find((p) => p.id === id);
+        return found && !found.removed ? projects.get(id).name : undefined;
+      },
+      scratch: () =>
+        projects.scratch(join(dir, "Scratchpad"), (id) =>
+          chats.list(id).some((c) => !chatIsEmpty(c)),
+        ),
+    },
+    changed: schedulesChanged,
+  });
+  return { projects, pullHosts, devops, chats, pullMerges, clockify, schedules };
 }
 
 /**
@@ -320,11 +354,13 @@ export function remoteServices({
 
 /**
  * Agent sessions that kept running through a restart come back, Relay's own
- * tools start answering them, and threads waiting on a time wake at it.
+ * tools start answering them, and threads and schedules waiting on a time
+ * wake at it.
  */
 export async function resumeThreads({
   dir,
   chats,
+  schedules,
   projects,
   login,
   agentHosts,
@@ -336,6 +372,7 @@ export async function resumeThreads({
 }: {
   dir: string;
   chats: ProjectChats;
+  schedules: Schedules;
   projects: Projects;
   login: GiteaLogin;
   agentHosts: AgentHosts | undefined;
@@ -356,8 +393,12 @@ export async function resumeThreads({
       { ...tools, agents: threadAgents(agentUpdates, aiSettings) },
     );
   chats.armWakeups();
+  schedules.armAll();
   void chats
     .reconcileSummaries()
     .catch((e) => console.warn("Could not reconcile thread summaries:", e));
-  rearmOnWake(powerMonitor, () => chats.armWakeups());
+  rearmOnWake(powerMonitor, () => {
+    chats.armWakeups();
+    schedules.armAll();
+  });
 }

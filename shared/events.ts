@@ -53,6 +53,8 @@ export interface RelayEvents {
   "relay:elsewhere": string;
   /** When Relay compacts unasked, saved in any window. */
   "relay:auto-compact": import("./context-usage").AutoCompact;
+  /** The schedules changed: one saved, removed, or a run started or ended. */
+  "relay:schedules": import("./schedules").Schedule[];
   /** settings.json changed outside the window it goes to. */
   "relay:settings-file": import("./settings-file").SettingsFileState;
 }

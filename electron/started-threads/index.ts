@@ -25,6 +25,7 @@ import {
 import { hasAccounts, pinnedAccount } from "../../shared/agent-accounts";
 import { fitModel } from "../../shared/model-fit";
 import { AgentChoices, type ThreadAgents } from "./thread-agents";
+import { ThreadSchedules, type ScheduleTools } from "./thread-schedules";
 import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
 import {
   projectChatSendSchema,
@@ -61,6 +62,7 @@ import { errorMessage } from "../../shared/error-message";
 export { localTime } from "./tool-output";
 export type { AgentProjects } from "./project-access";
 export type { ThreadReviews } from "./thread-reviews";
+export type { ScheduleTools } from "./thread-schedules";
 
 const DRIVE_ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
@@ -157,6 +159,7 @@ export class StartedThreads {
   private restart: (() => void) | undefined;
   private reportProblem: ReportProblem | undefined;
   private reviews: ThreadReviews | undefined;
+  private schedules: ThreadSchedules | undefined;
   private agentChoices: AgentChoices;
   private failureWatchMs: number;
   constructor(
@@ -178,6 +181,8 @@ export class StartedThreads {
       reportProblem?: ReportProblem;
       /** Deep reviews an agent starts in its thread; absent where nothing keeps review setups. */
       reviews?: ThreadReviews;
+      /** The prompts Relay sends on its own; absent where nothing runs them. */
+      schedules?: ScheduleTools;
     } = {},
   ) {
     this.readUsage = options.readUsage ?? readProviderUsage;
@@ -188,6 +193,9 @@ export class StartedThreads {
     this.restart = options.restart;
     this.reportProblem = options.reportProblem;
     this.reviews = options.reviews;
+    this.schedules = options.schedules
+      ? new ThreadSchedules(options.schedules)
+      : undefined;
     this.agentChoices = new AgentChoices(options.agents);
     this.failureWatchMs = options.failureWatchMs ?? 0;
   }
@@ -266,6 +274,13 @@ export class StartedThreads {
         if (!this.reviews)
           return toolText("This Relay can't run deep reviews.", true);
         return listReviewSetups(this.reviews);
+      case "list_schedules":
+      case "add_schedule":
+      case "update_schedule":
+      case "pause_schedule":
+      case "remove_schedule":
+      case "run_schedule":
+        return this.schedule(lead, { name: tool, input } as ToolCall, signal);
       case "list_projects":
         return json(await this.projects.list(lead.projectId));
       case "add_project":
@@ -308,6 +323,38 @@ export class StartedThreads {
         const unhandled: never = tool;
         throw new Error(`There is no handler for tool ${unhandled}.`);
       }
+    }
+  }
+
+  /**
+   * The schedule tools. Saving or turning one on always asks, even with full
+   * access: it spends usage while the user is away. A test run asks as
+   * starting a thread does.
+   */
+  private schedule(lead: ProjectChat, call: ToolCall, signal: AbortSignal) {
+    const schedules = this.schedules;
+    if (!schedules) return toolText("This Relay can't run schedules.", true);
+    const { last, agent } = this.leadSide(lead);
+    const defaults = { agent, choice: last.choice, runtimeMode: last.runtimeMode };
+    const always = (title: string, detail: string) =>
+      this.approve(lead, title, detail, signal, true);
+    switch (call.name) {
+      case "list_schedules":
+        return schedules.list();
+      case "add_schedule":
+        return schedules.add(lead, call.input, defaults, always);
+      case "update_schedule":
+        return schedules.update(call.input, defaults, always);
+      case "pause_schedule":
+        return schedules.pause(call.input, always);
+      case "remove_schedule":
+        return schedules.remove(call.input);
+      case "run_schedule":
+        return schedules.run(call.input, (title, detail) =>
+          this.approve(lead, title, detail, signal),
+        );
+      default:
+        throw new Error(`${call.name} isn't a schedule tool.`);
     }
   }
 

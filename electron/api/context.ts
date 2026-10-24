@@ -40,11 +40,14 @@ import type { BugReports } from "../bug-report/service";
 import type { TreeWatch } from "../git/tree-watch";
 import type { ElsewhereWatch } from "../git/elsewhere-watch";
 import type { SettingsFile } from "../settings";
+import type { Schedules } from "../schedules";
 
 export interface Services {
   store: Store;
   projects: Projects;
   projectChats: ProjectChats;
+  /** Prompts Relay sends on its own; see shared/schedules. */
+  schedules: Schedules;
   pullMerges: PullMerges;
   devops: DevOps;
   clockify: ClockifyPlugin;

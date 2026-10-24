@@ -172,6 +172,8 @@ export interface ChatMessage {
   authorId?: string;
   /** Local: the thread whose agent sent this message, through Relay's tools; `author` names it. */
   fromThread?: string;
+  /** Local: Relay sent this message for one of the user's schedules. */
+  scheduled?: import("../schedules").ScheduleMessage;
   seq?: number;
   parentId?: string | null;
   pending?: boolean;

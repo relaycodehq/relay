@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react";
 import { api } from "../../lib/api";
 import {
   loadThreadDraft,
+  localOnlyRecord,
   onThreadRecord,
   threadRecordIds,
 } from "../../lib/thread-storage";
@@ -178,7 +179,7 @@ function syncState(key: string) {
 
 /** Waits out the pause after an edit, then pushes what changed. */
 function schedule(thread: string) {
-  if (applying) return;
+  if (applying || localOnlyRecord(thread)) return;
   clearTimeout(waiting.get(thread));
   waiting.set(
     thread,
@@ -400,7 +401,8 @@ async function catchUp(takes: boolean) {
     ]);
     const local = new Map<string, LocalDraft>();
     for (const thread of threads)
-      for (const [key, draft] of localOf(thread)) local.set(key, draft);
+      if (!localOnlyRecord(thread))
+        for (const [key, draft] of localOf(thread)) local.set(key, draft);
     // Gone from storage altogether, it still was synced.
     for (const key of Object.keys(meta()))
       if (!local.has(key))

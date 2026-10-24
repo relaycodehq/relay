@@ -52,6 +52,11 @@ import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
 import { PullsTitle } from "../features/pulls/PullRequestsPage";
 import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
 import {
+  SchedulesPage,
+  SchedulesTitle,
+} from "../features/schedules/SchedulesPage";
+import { onOpenSchedule } from "../lib/open-schedule";
+import {
   ProcessesPage,
   ProcessesTitle,
 } from "../features/processes/ProcessesPage";
@@ -110,17 +115,35 @@ export default function ProjectShell() {
   };
   const usage = nav.surface === "usage";
   const processes = nav.surface === "processes";
-  // Leaving Usage or Processes goes back to the page it was opened from.
+  const schedules = nav.surface === "schedules";
+  // Leaving Usage, Processes or Schedules goes back to the page it was opened from.
   const pageFrom = useRef<Surface>("project");
-  function togglePage(page: "usage" | "processes") {
+  function togglePage(page: "usage" | "processes" | "schedules", stay = false) {
     if (lock.blocked()) return;
-    if (nav.surface === page) return nav.setSurface(pageFrom.current);
-    if (nav.surface !== "usage" && nav.surface !== "processes")
+    if (nav.surface === page) {
+      if (!stay) nav.setSurface(pageFrom.current);
+      return;
+    }
+    if (
+      nav.surface !== "usage" &&
+      nav.surface !== "processes" &&
+      nav.surface !== "schedules"
+    )
       pageFrom.current = nav.surface;
     nav.setSurface(page);
   }
   const toggleUsage = () => togglePage("usage");
   const toggleProcesses = () => togglePage("processes");
+  const toggleSchedules = () => togglePage("schedules");
+  // A scheduled run's message leads to its schedule.
+  const [scheduleShown, setScheduleShown] = useState<string>();
+  useEffect(
+    () =>
+      onOpenSchedule((id) => {
+        setScheduleShown(id);
+        togglePage("schedules", true);
+      }),
+  );
   // Pull requests, Usage or Processes instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
@@ -293,6 +316,8 @@ export default function ProjectShell() {
             <UsageTitle onBack={toggleUsage} />
           ) : processes ? (
             <ProcessesTitle onBack={toggleProcesses} />
+          ) : schedules ? (
+            <SchedulesTitle onBack={toggleSchedules} />
           ) : (
             <ProjectTitle
               project={project}
@@ -331,7 +356,7 @@ export default function ProjectShell() {
             projects={projects.data ?? []}
             showing={
               elsewhere
-                ? { inbox, usage, processes }
+                ? { inbox, usage, processes, schedules }
                 : {
                     projectId: project?.id,
                     chatId: chat?.id,
@@ -354,6 +379,7 @@ export default function ProjectShell() {
             }}
             onUsage={toggleUsage}
             onProcesses={toggleProcesses}
+            onSchedules={toggleSchedules}
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
@@ -408,6 +434,15 @@ export default function ProjectShell() {
         ) : processes ? (
           <div className="project-legacy" hidden={settings.open}>
             <ProcessesPage onOpenChat={openChatById} />
+          </div>
+        ) : schedules ? (
+          <div className="project-legacy" hidden={settings.open}>
+            <SchedulesPage
+              projects={projects.data ?? NO_PROJECTS}
+              projectId={nav.selected ?? undefined}
+              initial={scheduleShown}
+              onOpenChat={openChatById}
+            />
           </div>
         ) : !project ? (
           <NoProject

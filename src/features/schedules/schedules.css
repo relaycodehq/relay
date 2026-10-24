@@ -1,0 +1,298 @@
+/* The Schedules page sizes itself to its pane, not the window. */
+.schedules-page {
+  container-type: inline-size;
+}
+.schedules-body {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 28px;
+  margin-top: 22px;
+}
+.schedules-empty {
+  max-width: 460px;
+  margin-top: 40px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.schedules-empty p {
+  margin: 0 0 10px;
+}
+.schedules-empty .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* A schedule's row: its project's badge, when it runs next, what it did last. */
+.schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.schedule-list button {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  justify-items: start;
+  column-gap: 10px;
+  row-gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font-size: 12.5px;
+}
+.schedule-list button:hover {
+  background: var(--hover);
+}
+.schedule-list button[aria-current] {
+  background: var(--selected);
+}
+.schedule-list .sb-project-badge {
+  grid-row: 1;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  font-size: 9.5px;
+}
+.schedule-list button > :not(.sb-project-badge) {
+  grid-column: 2;
+  min-width: 0;
+}
+.schedule-row-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+}
+.schedule-row-top strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 550;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.schedule-row-top em {
+  flex: none;
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.schedule-row-when {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.schedule-row-last {
+  width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 11.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: color-mix(in srgb, var(--text) 72%, var(--muted));
+}
+.schedule-row-last[data-outcome="skipped"],
+.schedule-row-last[data-outcome="stopped"],
+.schedule-row-last:not([data-outcome]) {
+  color: var(--muted);
+}
+.schedule-row-last[data-outcome="failed"] {
+  color: var(--danger);
+}
+.schedule-list [data-off] .schedule-row-top strong {
+  color: var(--muted);
+}
+.schedule-list [data-off] .sb-project-badge {
+  opacity: 0.5;
+}
+
+/* The picked schedule */
+.schedule-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.schedule-editor-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.schedule-name {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  outline: none;
+}
+/* Global labels stack; this one is a switch and its word. */
+.schedule-switch {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.schedule-delete {
+  color: var(--danger);
+}
+.schedule-prompt {
+  margin-bottom: 18px;
+}
+/* The buttons above the prompt line up with its edges, the project first. */
+.schedule-prompt .thread-context-controls {
+  padding-left: 0;
+  padding-right: 0;
+}
+.schedule-prompt .thread-context-controls > .schedule-project {
+  margin-left: 0;
+  margin-right: auto;
+}
+.schedule-project .sb-project-badge {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  font-size: 9px;
+}
+/* The hint gets room of its own here, under the send button. */
+.schedule-prompt .composer-below {
+  height: auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px 0;
+}
+.schedule-hint {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.schedule-when {
+  gap: 6px;
+}
+.settings-row-text small strong {
+  color: var(--text);
+  font-weight: 550;
+}
+.schedule-test {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.schedule-runs-title {
+  margin: 10px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.schedule-runs-empty {
+  margin: 6px 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.schedule-runs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.schedule-runs li {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto 40px;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12.5px;
+}
+.schedule-runs time,
+.schedule-runs small {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.schedule-run-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.schedule-run-test {
+  color: var(--muted);
+}
+.schedule-runs :is([data-outcome="skipped"], [data-outcome="stopped"]) .schedule-run-summary {
+  color: var(--muted);
+}
+.schedule-runs [data-outcome="failed"] .schedule-run-summary {
+  color: var(--danger);
+}
+
+/* The When picker: Snooze's popup, with the repeats on top. */
+.schedule-pick-repeats {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+}
+.pick-time .schedule-pick-repeats button {
+  flex: 1;
+  height: 26px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.pick-time .schedule-pick-repeats button:hover {
+  background: var(--hover);
+}
+.pick-time .schedule-pick-repeats button[aria-checked="true"] {
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: var(--accent);
+  font-weight: 650;
+}
+.schedule-pick-month {
+  padding-top: 0;
+}
+.pick-time .pick-time-day[data-past] {
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+}
+.pick-time .pick-time-day[data-past][aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* A side panel or a narrow window: the list goes above the schedule. */
+@container (max-width: 860px) {
+  .schedules-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+  .schedule-list {
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .schedule-runs li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 12px;
+  }
+  .schedule-runs li time {
+    grid-column: 1 / -1;
+  }
+  .schedule-runs li small {
+    display: none;
+  }
+}

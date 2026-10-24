@@ -7,6 +7,7 @@ import { aiSettingsSchema } from "../settings";
 import { filePathSchema, idSchema } from "../validation";
 import { recipient } from "../recipient";
 import { browserAnnotationSchema } from "../browser-annotations";
+import { scheduleMessageSchema } from "../schedules";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z
@@ -61,6 +62,8 @@ export const projectChatSendSchema = z
       .object({ id: idSchema, name: z.string().trim().min(1).max(300) })
       .strict()
       .optional(),
+    /** Sent by Relay for one of the user's schedules; see shared/schedules. */
+    scheduled: scheduleMessageSchema.optional(),
     /** Answers a page the agent asked with; see PageAnswer. */
     pageAnswer: z
       .object({
@@ -122,11 +125,12 @@ export function sentSettingsOf(
   };
 }
 
-/** A message's sending thread, question/page response markers, and skill pills. */
+/** A message's sending thread or schedule, question/page response markers, and skill pills. */
 export const sentBy = (
   input: Pick<
     ProjectChatSend,
     | "fromThread"
+    | "scheduled"
     | "pageAnswer"
     | "asyncQuestionAnswer"
     | "questionMessageId"
@@ -137,6 +141,7 @@ export const sentBy = (
   ...(input.fromThread
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),
+  ...(input.scheduled ? { scheduled: input.scheduled } : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
   ...(input.asyncQuestionAnswer ? { asyncQuestionAnswer: true } : {}),
   ...(input.questionMessageId

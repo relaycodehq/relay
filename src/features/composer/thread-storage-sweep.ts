@@ -10,7 +10,11 @@ import {
   newThreadId,
   newThreadProject,
 } from "./drafts";
-import { keyOwner, migrateDrafts } from "../../lib/thread-storage";
+import {
+  keyOwner,
+  localOnlyRecord,
+  migrateDrafts,
+} from "../../lib/thread-storage";
 import { RECORD_PREFIX } from "../../lib/thread-draft";
 
 interface KnownThreads {
@@ -25,6 +29,8 @@ interface KnownThreads {
  * holds text (Activity lists it) or is the one the project shows.
  */
 function reachable(thread: string, known: KnownThreads): boolean {
+  // A schedule's prompt goes when the schedule does.
+  if (localOnlyRecord(thread)) return true;
   if (!thread.startsWith("new:")) return known.threads.has(thread);
   const project = newThreadProject(thread);
   // Not a shape Relay writes; not ours to judge.
