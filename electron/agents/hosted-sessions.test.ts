@@ -26,6 +26,7 @@ import {
   reattachClaudeSessions,
 } from "./claude/project/session";
 import { reattachAcp } from "./acp/sessions";
+import { runAcp } from "./acp/run";
 import { acpProfiles } from "./acp/profiles";
 import { AsyncQueue } from "../util/async-queue";
 
@@ -426,5 +427,60 @@ describe("saved sessions from another version of Relay", () => {
       contextWindow: undefined,
       choice: { model: "", reasoningEffort: "" },
     });
+  });
+});
+
+describe("an ACP turn taken back after a restart", () => {
+  it("lets its process be heard again when watching the turn fails to start", async () => {
+    // A process the host kept through a restart, in a turn: its output waits
+    // for the adopted turn to listen.
+    const process = {
+      read: () => {},
+      write: () => {},
+      close: () => {},
+      mark: () => {},
+      keep: () => {},
+    } as unknown as HostedProcess;
+    const kept = {
+      info: {
+        id: "one",
+        key: "thread",
+        split: 0,
+        open: true,
+        kind: "process",
+        meta: {
+          provider: "opencode-acp",
+          caps: { image: true, http: true, load: true, resume: true, auth: [] },
+          session: { id: "ses" },
+          run: { id: 5 },
+        },
+      },
+      attachProcess: () => process,
+      close: vi.fn(),
+    } as unknown as FoundSession;
+    hostAgents({ discover: async () => [kept] } as unknown as AgentHosts);
+    expect(await reattachAcp(acpProfiles.opencode, () => true)).toEqual([
+      { key: "thread", open: true },
+    ]);
+    const release = vi.spyOn(HostedChild.prototype, "release");
+    await expect(
+      runAcp(
+        acpProfiles.opencode,
+        {
+          job: { kind: "adopt" },
+          cwd: "/",
+          prompt: "",
+          choice: { model: "", reasoningEffort: "", fast: false },
+          signal: new AbortController().signal,
+          onText() {},
+          session: { key: "thread", id: "ses", onId: async () => {} },
+        },
+        async () => {
+          throw new Error("OpenCode couldn't complete this request (HTTP 500).");
+        },
+      ),
+    ).rejects.toThrow("HTTP 500");
+    // Held back, it would answer nothing again, this turn or the next.
+    expect(release).toHaveBeenCalled();
   });
 });

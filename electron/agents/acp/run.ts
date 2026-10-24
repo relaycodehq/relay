@@ -329,10 +329,16 @@ async function runAcpTurn(
     let reply: Promise<unknown>;
     if (adopted) {
       connection.listen(sessionId!, hear);
-      observer = await observe?.(agent, steered);
       reply = connection.wait(adopted.id, "session/prompt");
-      // What it said while Relay was away comes now, with a listener in place.
-      connection.resume();
+      void reply.catch(() => {});
+      try {
+        observer = await observe?.(agent, steered);
+      } finally {
+        // What it said while Relay was away comes now, with a listener in
+        // place. Held back after a failed start, the process would answer
+        // nothing ever again, this turn or the next.
+        connection.resume();
+      }
     } else {
       const opened = await openSession(agent, {
         id: job.kind === "helper" ? undefined : options.session?.id,
