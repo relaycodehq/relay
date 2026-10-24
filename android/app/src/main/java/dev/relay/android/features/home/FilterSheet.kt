@@ -74,7 +74,7 @@ private fun FilterSheet(overview: RemoteOverview, filter: ThreadFilter, onChange
         onClick = onClick,
     )
 
-    Sheet(onDismiss, title = "Filter threads") {
+    Sheet(onDismiss, title = "Filter threads", halfFirst = true) {
         Column {
             ListRow(
                 "Clear filter",

@@ -50,7 +50,8 @@ fun rememberIsWide(): Boolean {
 /**
  * Hexta's drawer: popover fill, radius 2xl on top, a grip, hairline ring and
  * a shadow. Drag down (or fling) to close; the content scrolls inside. On a
- * wide window it's a centred card instead.
+ * wide window it's a centred card instead. [halfFirst] opens a long sheet at
+ * half height; scrolling its content pulls it up the rest of the way.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -59,6 +60,7 @@ fun Sheet(
     modifier: Modifier = Modifier,
     title: String? = null,
     description: String? = null,
+    halfFirst: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val c = RelayTheme.colors
@@ -73,7 +75,7 @@ fun Sheet(
         onDismissRequest = onDismiss,
         // No ring: ModalBottomSheet hands the modifier to a full-window layer, so it drew a stray outline over the screen.
         modifier = modifier,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = !halfFirst),
         shape = shape,
         containerColor = c.popover,
         contentColor = c.foreground,
