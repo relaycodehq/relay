@@ -54,6 +54,7 @@ import dev.relay.android.remote.model.RemoteJson
 import dev.relay.android.remote.outbox.heldIds
 import dev.relay.android.remote.outbox.outboxLink
 import dev.relay.android.remote.outbox.outgoingMessage
+import dev.relay.android.remote.outbox.uploadPercent
 import java.util.UUID
 import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
@@ -243,6 +244,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val callbacks = remember(rootId, setupId, running, where, projectId) {
         MessageCallbacks(
             onOpenFile = { file, messageId -> actions.openFile(file.path, messageId) },
+            // Read from the collected items, so the row follows each chunk.
+            uploadPercent = { messageId -> outboxItems.find { it.send.id == messageId }?.let(::uploadPercent) },
             onOpenPath = where?.let { w ->
                 { target: FileLinkTarget ->
                     when (target) {
@@ -364,7 +367,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                                     "$computerLabel already accepted this send or is still processing it, so it can't be taken back here.",
                                 )
                             } else {
-                                composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty()))
+                                composer.restore(Returned("${if (o.send.side == true) "/btw " else ""}${withoutMention(o.send.body)}", o.send.images.orEmpty(), files = o.files.orEmpty()))
                                 outbox.drop(o.send.id)
                                 sentWith(o.send)?.let { composer.setSettings(it) }
                             }

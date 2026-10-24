@@ -45,6 +45,7 @@ import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.lib.navigation.Route
 import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Bridge
+import dev.relay.android.remote.model.ProjectChatSend
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.model.RemoteProject
 import dev.relay.android.remote.client.LinkState
@@ -56,6 +57,12 @@ import dev.relay.android.remote.drafts.newDraftProject
 import dev.relay.android.remote.drafts.scratchDraftKey
 import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.outbox.outboxLink
+import dev.relay.android.remote.client.uploadFile
+import dev.relay.android.remote.files.FILES_NEED_UPDATE
+import dev.relay.android.remote.files.FileSink
+import dev.relay.android.remote.files.bodyWithFiles
+import dev.relay.android.remote.files.deleteCopies
+import dev.relay.android.remote.files.uploadAll
 import dev.relay.android.lib.navigation.NEW_THREAD_MORPH
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.screenSettled
@@ -231,9 +238,17 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
             sendAt = out.attempt.sendAt,
             images = out.images.map { it.pasted() },
         )
+        // These go straight to the computer, not through the outbox, so their files go up first.
+        suspend fun direct(): ProjectChatSend {
+            if (out.files.isEmpty()) return message()
+            if (!cl.supports(Bridge.FILES)) error(FILES_NEED_UPDATE)
+            val up = uploadAll(FileSink(cl::uploadFile), out.files, pc)
+            return message().let { it.copy(body = bodyWithFiles(it.body, up.map { f -> f.path!! })) }
+        }
         // Started on the computer with a screenshot or a branch of its own: the computer starts it.
         if (out.held && draftKey != null) {
-            val sent = cl.sendDraft(draftKey, null, message())
+            val sent = cl.sendDraft(draftKey, null, direct())
+            deleteCopies(out.files)
             scope.launch { runCatching { remote.refresh() } }
             open(sent.chatId)
             return true
@@ -249,8 +264,10 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
         // shows; through the outbox it would also sit there as a pending send.
         // A plain one follows the thread, as making a worktree or carrying
         // images over a slow link can take a while.
-        if (out.attempt.sendAt != null) cl.sendProjectChat(chat.id, send)
-        else outbox.deliver(outboxLink(cl), pc, chat.id, send)
+        if (out.attempt.sendAt != null) {
+            cl.sendProjectChat(chat.id, direct())
+            deleteCopies(out.files)
+        } else outbox.deliver(outboxLink(cl), pc, chat.id, send, files = out.files)
         made = null
         // Titled as the desktop titles it once the message is in.
         MadeHere.add(chat.copy(title = if (out.attempt.sendAt != null) chat.title else promptTitle(send.body)))

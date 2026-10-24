@@ -5,6 +5,8 @@ import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.draftOther
 import dev.relay.android.remote.client.saveDraft
+import dev.relay.android.remote.files.copiesDir
+import dev.relay.android.remote.files.sweepCopies
 import dev.relay.android.remote.model.DraftWrite
 import dev.relay.android.remote.model.RemoteEvent
 import dev.relay.android.remote.outbox.Outbox
@@ -46,7 +48,13 @@ object Sends {
     private fun stores(filesDir: File) = stores ?: Pair(
         DraftStore(File(filesDir, "relay-drafts"), scope),
         Outbox(File(filesDir, "relay-outbox"), scope),
-    ).also { stores = it }
+    ).also { made ->
+        stores = made
+        // Composers start empty after a launch, so only kept sends still need their files.
+        val kept = made.second.files()
+        val now = System.currentTimeMillis()
+        scope.launch(Dispatchers.IO) { sweepCopies(copiesDir(filesDir), kept, now) }
+    }
 
     /** Idempotent per [remote]; call from the main thread. */
     fun attach(remote: Remote, filesDir: File) {

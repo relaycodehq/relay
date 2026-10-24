@@ -1,5 +1,7 @@
 package dev.relay.android.remote.outbox
 
+import dev.relay.android.remote.files.AttachedFile
+import dev.relay.android.remote.files.bodyWithFiles
 import dev.relay.android.remote.model.ChatImage
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.model.ProjectChatSend
@@ -26,7 +28,13 @@ data class Outgoing(
     val refused: Boolean? = null,
     /** The draft it came from, which the desktop holds part of: it goes through the desktop's composer. */
     val draft: String? = null,
-)
+    /** Files that go up before it, and how far each got; the body names them once they're there. */
+    val files: List<AttachedFile>? = null,
+) {
+    /** What goes to the computer once every file is there. */
+    fun withPaths(): ProjectChatSend =
+        if (files.isNullOrEmpty()) send else send.copy(body = bodyWithFiles(send.body, files.map { it.path ?: error("${it.name} isn't uploaded yet.") }))
+}
 
 private val clock = AtomicLong()
 
@@ -54,11 +62,22 @@ fun settled(items: List<Outgoing>, computer: String, chatId: String, held: Set<S
             (it.send.id in held || (it.sent != null && it.sent < fetched))
     }
 
+/** How much of its files are on its computer, while any still has to go up; null with none left to go. */
+fun uploadPercent(o: Outgoing): Int? {
+    val files = o.files ?: return null
+    if (files.all { it.path != null && it.computer == o.computer }) return null
+    val size = files.sumOf { it.size }
+    // What went to another computer goes again.
+    val there = files.sumOf { if (it.computer != o.computer) 0 else if (it.path != null) it.size else it.received }
+    return if (size <= 0) 0 else (there * 100 / size).toInt().coerceIn(0, 99)
+}
+
 /** How the thread shows one until the desktop's copy arrives. */
 fun outgoingMessage(o: Outgoing): ChatMessage = ChatMessage(
     id = o.send.id,
     role = "user",
-    body = o.send.body,
+    // Its files by name, on lines of their own, as the computer's copy will show them.
+    body = (listOf(o.send.body.trim()).filter { it.isNotEmpty() } + o.files.orEmpty().map { it.name }).joinToString("\n"),
     status = "complete",
     created = o.created,
     provider = o.send.provider,

@@ -11,12 +11,14 @@ import androidx.compose.runtime.remember
 import dev.relay.android.features.composer.logic.ComposeAttempt
 import dev.relay.android.remote.drafts.DraftStore
 
-/** What a draft holds beside its text: photos, a send to retry, and why the last one failed. */
+/** What a draft holds beside its text: photos, videos and files, a send to retry, and why the last one failed. */
 internal class Unsent {
     val images = mutableStateOf<List<Attachment>>(emptyList())
+    /** Its videos and files, by their key in [FileUploads]. */
+    val files = mutableStateOf<List<String>>(emptyList())
     val failedSend = mutableStateOf<ComposeAttempt<Attachment>?>(null)
     val error = mutableStateOf<String?>(null)
-    val empty get() = images.value.isEmpty() && failedSend.value == null && error.value == null
+    val empty get() = images.value.isEmpty() && files.value.isEmpty() && failedSend.value == null && error.value == null
 }
 
 /**
@@ -34,10 +36,13 @@ internal object UnsentDrafts {
     fun move(computer: String, from: String, to: String) {
         val moving = held["$computer\n$from"] ?: return
         val photos = moving.images.value
-        if (photos.isEmpty()) return
+        val files = moving.files.value
+        if (photos.isEmpty() && files.isEmpty()) return
         val there = of(computer, to)
         there.images.value = (there.images.value + photos)
+        there.files.value = (there.files.value + files)
         moving.images.value = emptyList()
+        moving.files.value = emptyList()
     }
 
     fun tidy(computer: String, key: String) {
@@ -55,6 +60,10 @@ internal fun rememberUnsent(computer: String?, key: String?): Unsent {
         if (unsent !== loose && loose.images.value.isNotEmpty()) {
             unsent.images.value = (unsent.images.value + loose.images.value)
             loose.images.value = emptyList()
+        }
+        if (unsent !== loose && loose.files.value.isNotEmpty()) {
+            unsent.files.value = (unsent.files.value + loose.files.value)
+            loose.files.value = emptyList()
         }
     }
     DisposableEffect(computer, key) {

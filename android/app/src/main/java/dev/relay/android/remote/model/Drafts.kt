@@ -52,6 +52,9 @@ data class DraftWrite(
 
 @Serializable data class SentChat(val chatId: String)
 
+/** How far a phone's file got; [path], where the message names it, once all of it is there. */
+@Serializable data class UploadedFile(val received: Long, val path: String? = null)
+
 @Serializable
 data class DictationHeard(val settled: String, val tentative: String, val loading: Boolean)
 

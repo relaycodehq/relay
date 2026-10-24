@@ -21,6 +21,8 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -59,6 +61,7 @@ import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.model.TurnFileChange
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
+import dev.relay.android.remote.files.shownFiles
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
@@ -86,6 +89,8 @@ class MessageCallbacks(
     val onCompose: RenderCompose? = null,
     /** Opens another thread, the one whose agent sent a message here. */
     val onOpenThread: ((String) -> Unit)? = null,
+    /** How far a pending send's files got, while they go up. */
+    val uploadPercent: ((String) -> Int?)? = null,
 )
 
 internal class MessageViewing(val images: List<LightboxImage>, val index: Int)
@@ -222,7 +227,8 @@ internal fun MessageView(
                 if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
                 // Only the phone's own sends are pending; see the outbox.
                 Text(
-                    if (m.pending == true && m.error == null) "Sending…" else Clock().clock(m.created),
+                    if (m.pending == true && m.error == null) on.uploadPercent?.invoke(m.id)?.let { "Uploading $it%" } ?: "Sending…"
+                    else Clock().clock(m.created),
                     Modifier.align(Alignment.End),
                     style = RelayTheme.type.xs, color = c.faint,
                 )
@@ -276,6 +282,7 @@ internal fun MessageView(
 @Composable
 private fun UserBubble(text: String, side: Boolean, pending: Boolean) {
     val c = RelayTheme.colors
+    val mono = RelayTheme.type.mono
     val shape = RoundedCornerShape(18.dp)
     // A /btw question: a dashed outline and nothing else, as on the desktop.
     val frame = if (side) Modifier.drawBehind {
@@ -285,10 +292,18 @@ private fun UserBubble(text: String, side: Boolean, pending: Boolean) {
             style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
         )
     } else Modifier.background(c.muted, shape)
+    // A file the message attached reads as its name, set like code, not its path on the computer.
+    val shown = remember(text) {
+        val files = shownFiles(text)
+        buildAnnotatedString {
+            append(files.text)
+            for (name in files.names) addStyle(SpanStyle(fontFamily = mono.fontFamily, fontSize = mono.fontSize), name.first, name.last + 1)
+        }
+    }
     SelectionContainer(
         Modifier.fillMaxWidth().wrapContentWidth(Alignment.End).fillMaxWidth(0.85f).wrapContentWidth(Alignment.End)
             .then(frame).alpha(if (pending) 0.6f else 1f).padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        Text(text, style = RelayTheme.type.base.copy(lineHeight = 22.sp))
+        androidx.compose.material3.Text(shown, style = RelayTheme.type.base.copy(lineHeight = 22.sp), color = c.foreground)
     }
 }

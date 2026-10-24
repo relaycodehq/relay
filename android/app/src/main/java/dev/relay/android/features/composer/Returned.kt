@@ -1,10 +1,11 @@
 package dev.relay.android.features.composer
 
+import dev.relay.android.remote.files.AttachedFile
 import dev.relay.android.remote.model.PastedImage
 import java.util.concurrent.atomic.AtomicInteger
 
-/** A message coming back into the composer: a taken-back send or a queued one. */
-data class Returned(val body: String, val images: List<PastedImage> = emptyList(), val side: Boolean = false)
+/** A message coming back into the composer: a taken-back send or a queued one, with the phone's copies of its files. */
+data class Returned(val body: String, val images: List<PastedImage> = emptyList(), val side: Boolean = false, val files: List<AttachedFile> = emptyList())
 
 private val takenBackIds = AtomicInteger()
 

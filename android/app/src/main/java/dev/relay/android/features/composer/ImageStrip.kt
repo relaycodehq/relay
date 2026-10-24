@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -26,6 +28,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import dev.relay.android.features.composer.logic.FilePhase
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.relay.android.ui.Icon
@@ -36,15 +40,35 @@ import dev.relay.android.ui.theme.Radii
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceLaptop
+import io.github.lyxnx.compose.ui.tablericons.outline.File
+import io.github.lyxnx.compose.ui.tablericons.outline.Movie
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** The photos going with the message and the computer's screenshots in this draft. */
+/** The photos, videos and files going with the message and the computer's screenshots in this draft. */
 @Composable
-internal fun ImageStrip(images: List<Attachment>, computerShots: List<Int>, onRemove: (Int) -> Unit) {
+internal fun ImageStrip(
+    images: List<Attachment>,
+    computerShots: List<Int>,
+    onRemove: (Int) -> Unit,
+    files: List<PickedFile> = emptyList(),
+    onRemoveFile: (String) -> Unit = {},
+    onRetryFile: (String) -> Unit = {},
+) {
     val c = RelayTheme.colors
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        files.forEach { file ->
+            Box {
+                FileTile(file, onRetry = { onRetryFile(file.key) })
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).background(c.background, CircleShape)
+                        .pressable(onClick = { onRemoveFile(file.key) })
+                        .semantics { contentDescription = "Remove ${file.name}" },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(TablerIcons.Outline.X, null, size = 12.dp, tint = c.foreground) }
+            }
+        }
         images.forEachIndexed { i, image ->
             Box {
                 Thumb(image.dataUrl)
@@ -61,6 +85,31 @@ internal fun ImageStrip(images: List<Attachment>, computerShots: List<Int>, onRe
                 Icon(TablerIcons.Outline.DeviceLaptop, null, size = 16.dp, tint = c.mutedForeground)
                 Text("On computer", style = RelayTheme.type.xs.copy(fontSize = 10.sp, lineHeight = 12.sp), color = c.mutedForeground, textAlign = TextAlign.Center, maxLines = 2)
             }
+        }
+    }
+}
+
+/** A video or file: its name, and its size or how far it got; a failed upload tries again on a tap. */
+@Composable
+private fun FileTile(file: PickedFile, onRetry: () -> Unit) {
+    val c = RelayTheme.colors
+    val failed = file.phase == FilePhase.Failed
+    val status = file.status
+    Row(
+        Modifier.height(56.dp).widthIn(max = 200.dp).clip(Radii.mdShape).ring(if (file.phase == FilePhase.Refused) c.destructive else c.border, Radii.mdShape)
+            .then(if (failed) Modifier.pressable(onClick = onRetry) else Modifier)
+            .semantics { contentDescription = if (status.isEmpty()) file.name else "${file.name}, $status" }
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(if (file.video) TablerIcons.Outline.Movie else TablerIcons.Outline.File, null, size = 18.dp, tint = c.mutedForeground)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(file.name, style = RelayTheme.type.xs, color = c.foreground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (status.isNotEmpty()) Text(
+                status, style = RelayTheme.type.xs.copy(fontSize = 11.sp, lineHeight = 14.sp),
+                color = if (failed || file.phase == FilePhase.Refused) c.destructive else c.mutedForeground, maxLines = 1,
+            )
         }
     }
 }

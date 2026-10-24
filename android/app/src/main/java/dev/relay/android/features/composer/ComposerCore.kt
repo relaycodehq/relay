@@ -106,6 +106,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.UUID
+import dev.relay.android.features.composer.logic.FilePhase
 
 // The desktop's composer on a phone (mobile/src/ui/Composer.tsx): the message,
 // then agent, model, mode and Plan under it.
@@ -181,6 +182,13 @@ internal fun ComposerCore(
     var typing by remember { mutableStateOf(false) }
     val unsent = rememberUnsent(computer, draftKey)
     var images by unsent.images
+    var files by unsent.files
+    val picked by FileUploads.files.collectAsState()
+    // A file whose copy couldn't be made leaves the draft.
+    LaunchedEffect(picked) {
+        val live = files.filter { it in picked }
+        if (live.size != files.size) files = live
+    }
     var error by unsent.error
     var failedSend by unsent.failedSend
     var busy by remember { mutableStateOf(false) }
@@ -280,13 +288,19 @@ internal fun ComposerCore(
             onRestore = { back ->
                 val before = value
                 val beforeImages = images
+                val beforeFiles = files
                 val merged = returnedDraft(before.text, beforeImages, back)
                 error = null
                 setText(merged.first)
                 images = merged.second
+                val restored = FileUploads.restore(back.files)
+                files = beforeFiles + restored
                 ({
                     value = before
                     images = beforeImages
+                    // The send goes back to the outbox with its copies.
+                    files = beforeFiles
+                    FileUploads.forget(restored)
                 })
             }
             onCompose = { page, earlier -> setText(composeInto(value.text, page, earlier)) }
@@ -354,7 +368,7 @@ internal fun ComposerCore(
         edit(text.replace(skillTail) { "${it.groupValues[1]}\$${item.name} " })
     }
 
-    val empty = text.isBlank() && images.isEmpty() && computerShots.isEmpty()
+    val empty = text.isBlank() && images.isEmpty() && files.isEmpty() && computerShots.isEmpty()
     val steering = running && !empty
     val target = "${computer.orEmpty()}:${sendTarget ?: draftKey ?: projectId}"
     val retryingScheduled = failedSend?.let { it.sendAt != null && sameDraft(it.draft, ComposeDraft(target, text.trim(), settings, images)) } == true
@@ -367,7 +381,26 @@ internal fun ComposerCore(
             scope.launch { if (finishDictation()) send(delivery, sendAt, input.dictated) }
             return
         }
-        if ((written.isBlank() && images.isEmpty() && computerShots.isEmpty()) || busy) return
+        if ((written.isBlank() && images.isEmpty() && files.isEmpty() && computerShots.isEmpty()) || busy) return
+        val sendingFiles = files
+        val pickedFiles = sendingFiles.mapNotNull { picked[it] }
+        filesRefusal(pickedFiles, client.takeIf { online })?.let {
+            error = it
+            return
+        }
+        // A video still compressing goes once it's done.
+        if (pickedFiles.any { it.phase == FilePhase.Preparing }) {
+            busy = true
+            scope.launch {
+                try {
+                    FileUploads.prepared(sendingFiles)
+                } finally {
+                    busy = false
+                }
+                send(delivery, sendAt, written)
+            }
+            return
+        }
         val held = (overview?.bridge ?: 1) >= Bridge.DRAFTS && hasExtras(shared?.extras)
         val draft = written.trim()
         if (startsWithCommand(draft)) {
@@ -411,6 +444,7 @@ internal fun ComposerCore(
         if (pc != null && key != null) drafts.hold(pc, key)
         setText("")
         val sentImages = images
+        val sentFiles = FileUploads.take(sendingFiles)
         // The draft ignored edits while the send held it: what was typed meanwhile goes in now,
         // before the draft's own update reaches the composer and would clear it.
         fun keepTyped() {
@@ -418,12 +452,14 @@ internal fun ComposerCore(
         }
         scope.launch {
             try {
-                if (!onSend(Composed(attempt, held))) {
+                if (!onSend(Composed(attempt, held, sentFiles))) {
                     if (pc != null && key != null) drafts.release(pc, key)
                     if (value.text.isEmpty()) setText(draft)
                     keepTyped()
                 } else {
                     images = images.filter { it !in sentImages }
+                    files = files.filter { it !in sendingFiles }
+                    FileUploads.forget(sendingFiles)
                     if (pc != null && key != null) drafts.went(pc, key, draft, held)
                     keepTyped()
                 }
@@ -451,6 +487,10 @@ internal fun ComposerCore(
     val pickers = rememberImagePickers(
         onPicked = { picked -> images = (images + picked) },
         onError = { error = it },
+        onFiles = { uris, video ->
+            val failed = unsent.error
+            files = files + FileUploads.pick(appContext, remote, uris, video) { failed.value = it }
+        },
     )
     val stop = running && empty && onStop != null
     val plan = settings.interactionMode == "plan"
@@ -483,8 +523,16 @@ internal fun ComposerCore(
             Modifier.fillMaxWidth().background(c.card, RoundedCornerShape(18.dp)).ring(c.border, RoundedCornerShape(18.dp))
                 .padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 6.dp),
         ) {
-            if (images.isNotEmpty() || computerShots.isNotEmpty()) {
-                ImageStrip(images, computerShots, onRemove = { i -> images = images.filterIndexed { j, _ -> j != i } })
+            if (images.isNotEmpty() || computerShots.isNotEmpty() || files.isNotEmpty()) {
+                ImageStrip(
+                    images, computerShots, onRemove = { i -> images = images.filterIndexed { j, _ -> j != i } },
+                    files = files.mapNotNull { picked[it] },
+                    onRemoveFile = { key ->
+                        FileUploads.remove(key)
+                        files = files - key
+                    },
+                    onRetryFile = { FileUploads.retry(it, remote) },
+                )
             }
             Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp)) {
                 if (text.isEmpty()) Text(placeholder ?: "Message ${agentName(provider)}", color = c.faint, style = RelayTheme.type.base)
@@ -567,6 +615,7 @@ internal fun ComposerCore(
             "Attach",
             listOf(
                 MenuOption("Photo library") { pickers.library() },
+                MenuOption("Files") { pickers.files() },
                 MenuOption("Take a photo") { pickers.camera() },
                 MenuOption("Paste image", "The image you copied last") { pickers.paste() },
             ),

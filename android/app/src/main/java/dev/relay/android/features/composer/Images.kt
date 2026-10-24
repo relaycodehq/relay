@@ -92,9 +92,11 @@ private fun declaresCamera(context: Context) = runCatching {
         .requestedPermissions?.contains(Manifest.permission.CAMERA) == true
 }.getOrDefault(false)
 
-/** The composer's ways in for photos: library, camera, clipboard. Results and failures go to the callbacks. */
+/** The composer's ways in for photos, videos and files: library, camera, clipboard, files. Results and failures go to the callbacks. */
 class ImagePickers internal constructor(
     val library: () -> Unit,
+    /** Any file, which goes as it is. */
+    val files: () -> Unit,
     val camera: () -> Unit,
     val paste: () -> Unit,
     /** Images handed over by the keyboard or a paste into the text field. */
@@ -102,7 +104,12 @@ class ImagePickers internal constructor(
 )
 
 @Composable
-fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String) -> Unit): ImagePickers {
+fun rememberImagePickers(
+    onPicked: (List<Attachment>) -> Unit,
+    onError: (String) -> Unit,
+    /** Videos (to compress) and files, which go by their path on the computer. */
+    onFiles: (List<Uri>, video: Boolean) -> Unit,
+): ImagePickers {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     fun prepareAll(uris: List<Uri>, name: String = "photo", after: () -> Unit = {}) {
@@ -121,7 +128,15 @@ fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String)
             }
         }
     }
-    val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { prepareAll(it) }
+    // Photos go as images, the agent sees them; videos go as files.
+    val many = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { picked ->
+        val (videos, photos) = picked.partition { context.contentResolver.getType(it)?.startsWith("video/") == true }
+        if (videos.isNotEmpty()) onFiles(videos, true)
+        prepareAll(photos)
+    }
+    val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { picked ->
+        if (picked.isNotEmpty()) onFiles(picked, false)
+    }
     var shot by remember { mutableStateOf<Uri?>(null) }
     val take = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = shot ?: return@rememberLauncherForActivityResult
@@ -150,7 +165,10 @@ fun rememberImagePickers(onPicked: (List<Attachment>) -> Unit, onError: (String)
     }
 
     return ImagePickers(
-        library = { many.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+        library = { many.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+        files = {
+            runCatching { documents.launch(arrayOf("*/*")) }.onFailure { onError("Couldn't open your files.") }
+        },
         camera = {
             val needs = declaresCamera(context) &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED

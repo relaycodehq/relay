@@ -22,6 +22,7 @@ import dev.relay.android.remote.model.SentChat
 import dev.relay.android.remote.model.SharedDraft
 import dev.relay.android.remote.model.SubagentList
 import dev.relay.android.remote.model.SubagentRunAnswer
+import dev.relay.android.remote.model.UploadedFile
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -94,6 +95,10 @@ suspend fun RemoteClient.draftOther(key: String, drop: Boolean): SharedDraft? =
 /** Sends through the desktop's composer; [chatId] null starts a thread. From Bridge.DRAFTS. */
 suspend fun RemoteClient.sendDraft(key: String, chatId: String?, send: ProjectChatSend): SentChat =
     call("sendDraft", listOf(JsonPrimitive(key), s(chatId), j(send))).to()
+
+/** A chunk of a file the phone attaches; see remote/files. From Bridge.FILES. */
+suspend fun RemoteClient.uploadFile(id: String, name: String, size: Long, offset: Long, data: String): UploadedFile =
+    call("uploadFile", args(s(id), s(name), n(size), n(offset), s(data))).to()
 
 suspend fun RemoteClient.dictate(request: DictationRequest): DictationHeard = call("dictate", args(j(request))).to()
 

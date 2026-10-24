@@ -156,7 +156,7 @@ fun Composer(
                 images = composed.images.map { it.pasted() },
             )
             state.onSent()
-            outbox.deliver(outboxLink(client), pc, chatId, message, if (composed.held) draftKey else null)
+            outbox.deliver(outboxLink(client), pc, chatId, message, if (composed.held) draftKey else null, composed.files)
             true
         },
     )

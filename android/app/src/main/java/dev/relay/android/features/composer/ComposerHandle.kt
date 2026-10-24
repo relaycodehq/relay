@@ -4,10 +4,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.relay.android.features.composer.logic.ComposeAttempt
+import dev.relay.android.remote.files.AttachedFile
 import dev.relay.android.remote.model.ResumeSettings
 
-/** What the composer hands over to send; `held`: the computer holds part of its draft, so it goes out through its composer. */
-data class Composed(val attempt: ComposeAttempt<Attachment>, val held: Boolean) {
+/**
+ * What the composer hands over to send; `held`: the computer holds part of
+ * its draft, so it goes out through its composer. [files] go up first, as far
+ * as they got already.
+ */
+data class Composed(val attempt: ComposeAttempt<Attachment>, val held: Boolean, val files: List<AttachedFile> = emptyList()) {
     val body get() = attempt.draft.body
     val settings get() = attempt.draft.settings
     val images get() = attempt.draft.images
