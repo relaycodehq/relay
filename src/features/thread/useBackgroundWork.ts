@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ChatSummary } from "../../../shared/projects";
-import { outsideBatch, subagentFanOuts } from "../../../shared/subagents";
+import {
+  outsideBatch,
+  subagentFanOuts,
+  type SubagentRun,
+} from "../../../shared/subagents";
 import { api } from "../../lib/api";
 import { readJson, writeJson } from "../../lib/persisted-store";
 import { usePoll } from "../../lib/poll";
 
 const CLEARED = "subagents-cleared:";
+// One empty list, so the turns that read the runs don't see a new one each render.
+const NO_RUNS: SubagentRun[] = [];
 
 export type BackgroundWork = ReturnType<typeof useBackgroundWork>;
 
@@ -44,7 +50,7 @@ export function useBackgroundWork(
   useEffect(() => {
     if (chat) void agents.refetch();
   }, [running, chat?.pending?.length]);
-  const runs = agents.data ?? [];
+  const runs = agents.data ?? NO_RUNS;
   // Cleared agents leave the indicator, not the thread: their rows in the
   // transcript still open them.
   const clearedKey = CLEARED + chat?.id;

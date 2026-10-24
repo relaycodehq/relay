@@ -4,8 +4,8 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Check } from "lucide-react";
-import type { AgentActivity } from "../../../shared/projects";
-import { plural } from "../../../shared/activity-labels";
+import type { AgentActivity, TraceDropped } from "../../../shared/projects";
+import { plural, summarizeActivity } from "../../../shared/activity-labels";
 import {
   agentKind,
   effortName,
@@ -23,7 +23,7 @@ export const TurnAgents = createContext<
 >(undefined);
 
 /** The turn's agents, in the order it started them, while any still works. */
-export function useWorkingAgents(activity: AgentActivity[]) {
+function useWorkingAgents(activity: AgentActivity[]) {
   const runs = useContext(TurnAgents)?.runs ?? [];
   const started = new Set(
     activity.filter((a) => a.kind === "agent").map((a) => a.id),
@@ -32,8 +32,44 @@ export function useWorkingAgents(activity: AgentActivity[]) {
   return mine.some((r) => r.status === "running") ? mine : [];
 }
 
+/**
+ * A finished turn's heading icon and label, its agents in their place while
+ * any still works. Only turns that started agents render this, so the runs
+ * changing on each poll re-render them alone, not every turn in the thread.
+ */
+export function WorkingAgentsHeading({
+  activity,
+  dropped,
+  icon,
+  label,
+}: {
+  activity: AgentActivity[];
+  dropped: TraceDropped | undefined;
+  icon: ReactNode;
+  label: ReactNode;
+}) {
+  const runs = useWorkingAgents(activity);
+  if (!runs.length)
+    return (
+      <>
+        {icon}
+        {label}
+      </>
+    );
+  const rest = summarizeActivity(
+    activity.filter((a) => a.kind !== "agent"),
+    dropped,
+  );
+  return (
+    <>
+      <TurnAgentStack runs={runs} />
+      <span>{workingAgentsLabel(rest, runs)}</span>
+    </>
+  );
+}
+
 /** "Ran 4 commands · 1 of 3 agents back": the rest of the turn, then its agents. */
-export function workingAgentsLabel(rest: string, runs: SubagentRun[]) {
+function workingAgentsLabel(rest: string, runs: SubagentRun[]) {
   const back = runs.filter((r) => r.status !== "running").length;
   const agents = back
     ? `${back} of ${runs.length} agents back`
@@ -85,7 +121,7 @@ function standing(run: SubagentRun, now: number): ReactNode {
   }
 }
 
-export function TurnAgentStack({ runs }: { runs: SubagentRun[] }) {
+function TurnAgentStack({ runs }: { runs: SubagentRun[] }) {
   const onOpen = useContext(TurnAgents)!.onOpen;
   const [open, setOpen] = useState(false);
   const now = useNow(1000);

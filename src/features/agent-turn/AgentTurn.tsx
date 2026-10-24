@@ -51,11 +51,7 @@ import {
 } from "../../../shared/asked-questions";
 import { AnsweredQuestions } from "./AnsweredQuestions";
 import { StartedChip } from "./StartedThreads";
-import {
-  TurnAgentStack,
-  useWorkingAgents,
-  workingAgentsLabel,
-} from "./TurnAgents";
+import { WorkingAgentsHeading } from "./TurnAgents";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -366,8 +362,6 @@ export function AgentTurn({
   const expanded = presentation?.expanded ?? toggled ?? live;
   const headingMessage = presentation?.summary ?? message;
   const headingTurn = presentation?.summary ? readTurn(headingMessage) : turn;
-  // Agents it sent off can work on after the turn ends.
-  const agents = useWorkingAgents(headingTurn.live ? [] : headingTurn.activity);
   if (!live && !entries.length && !presentation?.summary) return null;
   const headingLive = headingTurn.live;
   const continuation = !!presentation && !presentation.summary;
@@ -393,14 +387,6 @@ export function AgentTurn({
     "Writing"
   ) : heading.kind === "thinking" ? (
     <ThinkingWord seed={headingMessage.id} />
-  ) : agents.length ? (
-    workingAgentsLabel(
-      summarizeActivity(
-        headingTurn.activity.filter((a) => a.kind !== "agent"),
-        headingMessage.traceDropped,
-      ),
-      agents,
-    )
   ) : (
     heading.text
   );
@@ -417,6 +403,22 @@ export function AgentTurn({
             ? iconOf(heading.last)
             : Brain
           : null;
+  const headingIcon = HeaderIcon ? (
+    <HeaderIcon size={14} />
+  ) : (
+    <ThinkingGlyph provider={message.provider} />
+  );
+  const headingLabel = (
+    <span
+      className={
+        headingLive && !expanded && typeof label === "string"
+          ? "live-shine"
+          : undefined
+      }
+    >
+      {label}
+    </span>
+  );
   return (
     <Container
       className={`agent-activity${live ? " live" : ""}${continuation ? " continuation" : ""}`}
@@ -436,22 +438,21 @@ export function AgentTurn({
     >
       {!continuation && (
         <summary className="agent-run-heading">
-          {agents.length ? (
-            <TurnAgentStack runs={agents} />
-          ) : HeaderIcon ? (
-            <HeaderIcon size={14} />
+          {headingTurn.live ||
+          !headingTurn.activity.some((a) => a.kind === "agent") ? (
+            <>
+              {headingIcon}
+              {headingLabel}
+            </>
           ) : (
-            <ThinkingGlyph provider={message.provider} />
+            // Agents it sent off can work on after the turn ends.
+            <WorkingAgentsHeading
+              activity={headingTurn.activity}
+              dropped={headingMessage.traceDropped}
+              icon={headingIcon}
+              label={headingLabel}
+            />
           )}
-          <span
-            className={
-              headingLive && !expanded && typeof label === "string"
-                ? "live-shine"
-                : undefined
-            }
-          >
-            {label}
-          </span>
           <span className="agent-run-time">
             {headingLive ? (
               <WorkingTimer
