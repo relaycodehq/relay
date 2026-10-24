@@ -301,7 +301,7 @@ export class RemoteBridge {
           patch.worktree?.path && !patch.worktree.removedAt
             ? patch.worktree.path
             : this.host.projectPath(patch.projectId),
-        queue: (patch.queue ?? []).map(queuedForPhone),
+        queue: (patch.queue ?? []).map((q) => queuedForPhone(q)),
         scheduled: (patch.scheduled ?? []).map((q) => ({
           ...queuedForPhone(q),
           at: q.at,

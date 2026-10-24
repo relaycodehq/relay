@@ -3,6 +3,7 @@ package dev.relay.android.features.thread
 import dev.relay.android.features.composer.Returned
 import dev.relay.android.features.composer.logic.agentMention
 import dev.relay.android.features.composer.logic.agentMentionPattern
+import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.model.PastedImage
 import dev.relay.android.remote.model.RemoteQueued
 import dev.relay.android.remote.model.ResumeSettings
@@ -30,6 +31,18 @@ fun takenBack(item: RemoteQueued, images: List<PastedImage> = emptyList()): Take
         item.settings?.takeIf { to != "message" }?.copy(provider = to),
     )
 }
+
+/** What waits in the queue list: everything but the steers held a moment, which show as sent. */
+fun waitingInQueue(queue: List<RemoteQueued>?): List<RemoteQueued> = queue.orEmpty().filter { it.held != true }
+
+/** The steers held a moment in this conversation, as the messages they become. */
+fun heldSteers(queue: List<RemoteQueued>?, rootId: String?, now: Long): List<ChatMessage> =
+    queue.orEmpty().filter { it.held == true && it.parentId == rootId }.map {
+        ChatMessage(
+            id = it.id, role = "user", body = it.body, status = "complete", created = it.created ?: now,
+            provider = it.to ?: it.settings?.provider ?: "claude", version = 0, parentId = it.parentId,
+        )
+    }
 
 /** A queued reply taken back on the main screen, bound for its side conversation's composer (mobile/src/remote/taken-back.ts). */
 data class HandedBack(

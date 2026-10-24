@@ -25,6 +25,20 @@ public struct TakenBack: Sendable, Equatable {
     }
 }
 
+/// What waits in the queue list: everything but the steers held a moment, which show as sent.
+public func waitingInQueue(_ queue: [RemoteQueued]?) -> [RemoteQueued] {
+    (queue ?? []).filter { $0.held != true }
+}
+
+/// The steers held a moment in this conversation, as the messages they become.
+public func heldSteers(_ queue: [RemoteQueued]?, rootId: String? = nil, now: Int64) -> [ChatMessage] {
+    (queue ?? []).filter { $0.held == true && $0.parentId == rootId }.map { item in
+        ChatMessage(
+            id: item.id, role: "user", body: item.body, status: "complete", created: item.created ?? now,
+            provider: item.to ?? item.settings?.provider ?? "claude", version: 0, parentId: item.parentId)
+    }
+}
+
 /// The line under a queued message: why it's stuck, or when it goes, and its screenshots.
 /// A paused queue says so on its first message, rather than in a line of its own.
 public func queuedStatus(

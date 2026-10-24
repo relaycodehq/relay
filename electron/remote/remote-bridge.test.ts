@@ -492,6 +492,7 @@ it("tells a phone what a queued message needs to be taken back, but leaves its s
     {
       id: "a",
       body: "@claude look",
+      created: 1,
       images: 1,
       parentId: "root",
       to: "claude",

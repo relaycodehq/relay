@@ -379,6 +379,13 @@ export interface RemoteQueued {
   images?: number;
   /** Why a steer was refused; it holds the queue until dealt with. */
   error?: string;
+  /** When it was sent; older desktops leave it out. */
+  created?: number;
+  /**
+   * A steer held a moment before its agent gets it, to be taken back with ×:
+   * shown as the message it becomes, not in the queue. Older desktops leave it out.
+   */
+  held?: true;
   /** The side conversation it was sent in, by its root; left out for the main one. */
   parentId?: string;
   /** Who answers: an agent, or "message" for a note. */

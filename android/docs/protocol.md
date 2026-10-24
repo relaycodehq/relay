@@ -281,6 +281,7 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - `{id, projectId, title, scope, messages:(ChatMessage|string)[], requests, queuePaused, stopped?, pending?, worktree?, workspaceMoves? /* bridge ≥ 22, shared/workspace-moves.ts */, running, root?, earlier, cost?, queue:RemoteQueued[], scheduled:(RemoteQueued&{at})[], settings?, lastParentId?, hasSend?, sendPending?}`.
   - A string entry in `messages` is the id of a message the phone already holds at that version. Rebuild with `applyChatPatch` (`shared/projects/sync.ts:26-40`); a missing id throws `MissingMessage`.
   - `knownOf` = `{[m.id]: m.version}`.
+  - `RemoteQueued` (`shared/remote.ts`): `{id, body, images?, error?, parentId?, to?, settings?, created?, held?}`. `held:true` is a steer the desktop holds ~3s before its agent gets it: show it as your sent message with a spinner and ×, not in the queue list.
   - `sendId` asks for a receipt: `hasSend` / `sendPending` (used by the outbox, `mobile/src/remote/outbox.ts:180`).
 - **`ChatMessage`** (`shared/projects/messages.ts:82-165`):
   - required: `id, role:"user"|"assistant", body, status:"complete"|"streaming"|"failed"|"cancelled", created, provider, version`;

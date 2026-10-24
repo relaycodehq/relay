@@ -1,5 +1,5 @@
 import { agentMentionPattern } from "./agents";
-import type { ProjectChatSend } from "./projects";
+import { heldSteer, type ProjectChatSend } from "./projects";
 import { recipient, sentAgent } from "./recipient";
 import type { RemoteQueued, RemoteSettings } from "./remote";
 
@@ -10,14 +10,21 @@ type Image = NonNullable<ProjectChatSend["images"]>[number];
  * `images` are what taking it back needs; the screenshots themselves go on
  * request (`projectChatQueuedImages`), a megabyte each.
  */
-export function queuedForPhone(q: {
-  input: ProjectChatSend;
-  error?: string;
-}): RemoteQueued {
+export function queuedForPhone(
+  q: {
+    input: ProjectChatSend;
+    created?: number;
+    steerAt?: number;
+    error?: string;
+  },
+  now = Date.now(),
+): RemoteQueued {
   const { input } = q;
   return {
     id: input.id,
     body: input.body,
+    ...(q.created ? { created: q.created } : {}),
+    ...(heldSteer(q, now) ? { held: true } : {}),
     ...(input.images?.length ? { images: input.images.length } : {}),
     ...(q.error ? { error: q.error } : {}),
     ...(input.parentId ? { parentId: input.parentId } : {}),

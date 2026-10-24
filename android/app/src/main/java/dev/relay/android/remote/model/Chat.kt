@@ -95,6 +95,13 @@ data class RemoteQueued(
     val settings: ResumeSettings? = null,
     /** Only on scheduled ones: when it goes out. */
     val at: Long? = null,
+    /** When it was sent; older desktops leave it out. */
+    val created: Long? = null,
+    /**
+     * A steer held a moment before its agent gets it, to be taken back: it shows as the
+     * message it becomes, not in the queue. Older desktops leave it out.
+     */
+    val held: Boolean? = null,
 )
 
 @Serializable

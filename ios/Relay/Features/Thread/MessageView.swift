@@ -14,6 +14,8 @@ struct MessageView: View {
     var replies = 0
     /// On the main conversation, where a message can be replied to.
     var main = true
+    /// A steer held a moment before its agent gets it: × takes it back into the composer.
+    var takeBack: (() -> Void)?
     @Environment(\.colors) private var colors
     @Environment(\.navigate) private var navigate
     /// Read pictures show under their calls while the trace is open, in the row under it otherwise.
@@ -83,7 +85,25 @@ struct MessageView: View {
                         .font(.caption)
                         .foregroundStyle(colors.faint)
                 }
-                if message.pending != true { UserMessageMenu(chatId: chatId, message: message, replies: main) }
+                // Not read by the agent yet, as on the desktop: held a moment, or waiting for its turn to look.
+                if takeBack != nil || message.unread == true {
+                    Spinner(size: 11)
+                        .padding(.leading, 4)
+                        .accessibilityLabel(takeBack != nil ? "Not sent yet" : "Not read yet")
+                }
+                if let takeBack {
+                    Button(action: takeBack) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(colors.muted)
+                            .frame(width: 28, height: 28)
+                            .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Cancel and return to the composer")
+                } else if message.pending != true {
+                    UserMessageMenu(chatId: chatId, message: message, replies: main)
+                }
             }
             repliesLink
         }

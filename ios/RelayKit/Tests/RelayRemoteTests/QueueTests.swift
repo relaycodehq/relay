@@ -31,6 +31,19 @@ private let settings = #"{"provider":"claude","choice":{"model":"opus"},"runtime
     #expect(back.settings == nil)
 }
 
+@Test func showsASteerHeldAMomentAsTheMessageItBecomes() throws {
+    let queue = [
+        try queued(#"{"id":"s","body":"@codex use the other cache","to":"codex","created":1000,"held":true}"#),
+        try queued(#"{"id":"r","body":"in the reply","created":1000,"held":true,"parentId":"root"}"#),
+        try queued(#"{"id":"q","body":"after that"}"#),
+    ]
+    #expect(waitingInQueue(queue).map(\.id) == ["q"])
+    let held = try #require(heldSteers(queue, now: 5000).first)
+    #expect(heldSteers(queue, now: 5000).count == 1)
+    #expect(held.id == "s" && held.role == "user" && held.created == 1000 && held.provider == "codex")
+    #expect(heldSteers(queue, rootId: "root", now: 5000).map(\.id) == ["r"])
+}
+
 @Test func aFailedSendTakenBackToEditBringsBackWhoItWasFor() throws {
     let picked = ResumeSettings(
         provider: "claude", choice: ModelChoice(model: "opus"), runtimeMode: "full-access", interactionMode: "default")

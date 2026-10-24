@@ -37,7 +37,11 @@ struct ThreadView: View {
     private var projectId: String? { thread?.projectId ?? summary?.projectId ?? made?.projectId }
     /// Replies live in their side conversations. This phone's sends the thread doesn't hold yet
     /// come last, shown at once, before the thread itself has loaded.
-    private var shown: [ChatMessage] { connection.conversation(chatId, rootId: rootId) + connection.outgoing(chatId, rootId: rootId) }
+    /// Steers held a moment show as the messages they become, between the two.
+    private var shown: [ChatMessage] {
+        connection.conversation(chatId, rootId: rootId) + heldSteers(thread?.queue, rootId: rootId, now: nowMs())
+            + connection.outgoing(chatId, rootId: rootId)
+    }
     /// Sent from this phone, which it shows before the computer has it; one typed on the
     /// computer or another phone mustn't pull the thread to its end under the reader.
     private func sentHere(_ message: ChatMessage?) -> Bool {
@@ -52,6 +56,8 @@ struct ThreadView: View {
     @State private var composer = ComposerHandle()
     @State private var recoveredQueueItems: Set<String> = []
     @State private var uncertainTakeBack = false
+    @State private var takeBackFailure: String?
+    @State private var takingBack: Set<String> = []
     /// Marked unread on the way out: a trailing seen mark mustn't clear it.
     @State private var leavingUnread = false
     @State private var notes = ThreadNotesEntry()
@@ -81,10 +87,11 @@ struct ThreadView: View {
                         if rootId == nil, let earlier = thread?.earlier, earlier > 0 {
                             EarlierMessages(chatId: chatId, earlier: earlier)
                         }
+                        let held = Dictionary((thread?.queue ?? []).filter { $0.held == true }.map { ($0.id, $0) }) { a, _ in a }
                         ForEach(shown) { message in
                             MessageView(
                                 chatId: chatId, message: message, root: thread?.root, replies: counts[message.id] ?? 0,
-                                main: rootId == nil)
+                                main: rootId == nil, takeBack: held[message.id].map { item in { takeBackHeld(item) } })
                             if rootId == nil { WorkspaceMoveLine(moves: thread?.workspaceMoves, messageId: message.id) }
                         }
                         if running, let newest = shown.last, newest.role == "user" {
@@ -186,6 +193,13 @@ struct ThreadView: View {
         } message: {
             Text("The computer didn't confirm removal. Check the queue before sending the draft; the original may still be queued or may have gone out.")
         }
+        .alert(
+            "Couldn't change the queue", isPresented: Binding(get: { takeBackFailure != nil }, set: { if !$0 { takeBackFailure = nil } })
+        ) {
+            Button("OK") { takeBackFailure = nil }
+        } message: {
+            Text(takeBackFailure ?? "")
+        }
         .fullScreenCover(item: $viewing) { Lightbox($0, space: pictures) }
         .navigationTitle(rootId != nil ? "Replies" : thread?.title ?? summary?.title ?? made?.title ?? "Thread")
         .navigationSubtitle(headerLine)
@@ -248,6 +262,14 @@ struct ThreadView: View {
         let undo = try composer.restore(text, images, files)
         if let settings { picked = settings }
         return undo
+    }
+
+    private func takeBackHeld(_ item: RemoteQueued) {
+        guard takingBack.insert(item.id).inserted else { return }
+        Task {
+            defer { takingBack.remove(item.id) }
+            do { try await takeBack(item) } catch { takeBackFailure = error.localizedDescription }
+        }
     }
 
     private func takeBack(_ item: RemoteQueued) async throws {

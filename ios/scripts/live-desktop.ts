@@ -41,6 +41,9 @@ const slow = process.argv.includes("--slow");
 const scrollStress = process.argv.includes("--scroll-stress");
 // A thread made from the phone takes a while to load and to take its first message.
 const slowNew = process.argv.includes("--slow-new");
+// --steer-hold <ms>: how long a steer typed into a running answer waits, to be taken back.
+const holdAt = process.argv.indexOf("--steer-hold");
+const steerHold = holdAt > 0 ? Number(process.argv[holdAt + 1]) : 3000;
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 // --state <dir>: keep the pairing and port there, so a restarted stand-in is the same computer.
 const stateAt = process.argv.indexOf("--state");
@@ -629,7 +632,7 @@ const host = {
     const root = t.summary.projectId === site ? "/tmp/site" : "/tmp/relay";
     const last = t.lastInput ?? (seeded ? lastInput : undefined);
     const queued = {
-      queue: (t.queue ?? []).map((input) => ({ input })),
+      queue: (t.queue ?? []).map(({ created, steerAt, ...input }) => ({ input, created, steerAt })),
       scheduled: (t.scheduled ?? []).map(({ at, ...input }) => ({ input, at })),
       ...(t.queuePaused ? { queuePaused: true } : {}),
     };
@@ -974,6 +977,20 @@ function sent(chatId: string, send: any) {
     queueMoved(t);
     return;
   }
+  // A steer typed into a running answer waits a moment, to be taken back, as the desktop's does.
+  if (t.summary.running && send.delivery === "steer" && !send.held) {
+    const created = Date.now();
+    (t.queue ??= []).push({ ...send, created, steerAt: created + steerHold });
+    queueMoved(t);
+    setTimeout(() => {
+      const at = t.queue?.findIndex((q) => q.id === send.id) ?? -1;
+      if (at < 0) return;
+      t.queue!.splice(at, 1);
+      queueMoved(t);
+      sent(chatId, { ...send, held: true });
+    }, steerHold);
+    return;
+  }
   if (t.queuePaused) {
     t.queuePaused = undefined;
     queueMoved(t);
@@ -1017,7 +1034,7 @@ function queueAction(chatId: string, action: string, messageId: string, index?: 
   const [item] = list.splice(at, 1);
   if (action === "move") list.splice(index ?? 0, 0, item);
   queueMoved(t);
-  if (action === "steer") sent(chatId, { ...item, at: undefined, delivery: "steer" });
+  if (action === "steer") sent(chatId, { ...item, at: undefined, steerAt: undefined, delivery: "steer", held: true });
 }
 /** Ends a running answer at once: a steer takes over from it. */
 const cut = new Map<string, () => void>();

@@ -59,13 +59,17 @@ import dev.relay.android.features.thread.logic.stoppedNote
 import dev.relay.android.features.thread.logic.withoutMention
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.model.TurnFileChange
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.remote.files.shownFiles
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.CornerUpLeft
+import io.github.lyxnx.compose.ui.tablericons.outline.X
 
 /** What a message can do in its thread; a missing one isn't offered. */
 @Stable
@@ -91,6 +95,10 @@ class MessageCallbacks(
     val onOpenThread: ((String) -> Unit)? = null,
     /** How far a pending send's files got, while they go up. */
     val uploadPercent: ((String) -> Int?)? = null,
+    /** Steers held a moment before their agent gets them, by id. */
+    val held: Set<String> = emptySet(),
+    /** Takes a held steer back into the composer. */
+    val onTakeBack: ((String) -> Unit)? = null,
 )
 
 internal class MessageViewing(val images: List<LightboxImage>, val index: Int)
@@ -225,13 +233,29 @@ internal fun MessageView(
                 val body = withoutMention(m.body)
                 // A screenshot sent on its own leaves nothing for the bubble to hold.
                 if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
-                // Only the phone's own sends are pending; see the outbox.
-                Text(
-                    if (m.pending == true && m.error == null) on.uploadPercent?.invoke(m.id)?.let { "Uploading $it%" } ?: "Sending…"
-                    else Clock().clock(m.created),
+                val takeBack = on.onTakeBack?.takeIf { m.id in on.held }
+                Row(
                     Modifier.align(Alignment.End),
-                    style = RelayTheme.type.xs, color = c.faint,
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    // Only the phone's own sends are pending; see the outbox.
+                    Text(
+                        if (m.pending == true && m.error == null) on.uploadPercent?.invoke(m.id)?.let { "Uploading $it%" } ?: "Sending…"
+                        else Clock().clock(m.created),
+                        style = RelayTheme.type.xs, color = c.faint,
+                    )
+                    // Not read by the agent yet, as on the desktop: held a moment, or waiting for its turn to look.
+                    if (takeBack != null || m.unread == true) Spinner(
+                        Modifier.semantics { contentDescription = if (takeBack != null) "Not sent yet" else "Not read yet" },
+                        size = 11.dp, color = c.mutedForeground, stroke = 1.5.dp,
+                    )
+                    if (takeBack != null) Icon(
+                        TablerIcons.Outline.X, "Cancel and return to the composer",
+                        Modifier.pressable(onClick = { takeBack(m.id) }),
+                        size = 14.dp, tint = c.mutedForeground,
+                    )
+                }
             } else if (section == MessageSection.Body && block != null) {
                 MarkdownBlockView(block, openPath = openPath, image = showImage, selectable = m.status != "streaming")
             } else if (section == MessageSection.Whole && m.body.isNotBlank()) {

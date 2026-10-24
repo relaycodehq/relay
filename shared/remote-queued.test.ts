@@ -47,6 +47,17 @@ describe("a queued message as the phone hears of it", () => {
     });
     expect(sent).not.toHaveProperty("images");
   });
+  it("tells a steer held for taking back, and when it was sent", () => {
+    const sent = queuedForPhone(
+      { input: input(), created: 1000, steerAt: 4000 },
+      4500,
+    );
+    expect(sent).toMatchObject({ created: 1000, held: true });
+    // One held when Relay restarted waits in the queue like any other.
+    expect(
+      queuedForPhone({ input: input(), steerAt: 4000 }, 60_000),
+    ).not.toHaveProperty("held");
+  });
   it("tells a note from the agent whose settings it carries", () => {
     const note = queuedForPhone({
       input: input({ body: "remember this", to: "message", provider: "codex" }),

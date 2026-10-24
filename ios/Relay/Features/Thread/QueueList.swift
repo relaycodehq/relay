@@ -16,7 +16,7 @@ struct QueueList: View {
     @State private var failure: String?
 
     var body: some View {
-        let queue = thread.queue ?? []
+        let queue = waitingInQueue(thread.queue)
         let later = thread.scheduled ?? []
         if !queue.isEmpty || !later.isEmpty {
             VStack(alignment: .leading, spacing: 6) {

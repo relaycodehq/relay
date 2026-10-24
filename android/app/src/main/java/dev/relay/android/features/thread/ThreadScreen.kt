@@ -184,10 +184,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val outgoing = remember(outboxItems, computer, held) {
         outboxItems.filter { it.computer == computer && it.chatId == id && it.send.id !in held }
     }
-    val listed = remember(all, rootId, outgoing) {
+    // Steers held a moment show as the messages they become, between the two.
+    val heldSteers = remember(thread?.queue, rootId) { heldSteers(thread?.queue, rootId, System.currentTimeMillis()) }
+    val listed = remember(all, rootId, outgoing, heldSteers) {
         val own = rootId?.let { sideConversation(all, it) } ?: mainMessages(all)
         val mine = outgoing.map(::outgoingMessage).filter { it.parentId == rootId }
-        if (mine.isEmpty()) own else own + mine
+        if (mine.isEmpty() && heldSteers.isEmpty()) own else own + heldSteers + mine
     }
     val bodies = remember { ThreadBodyRows() }
     val rows = remember(listed) { bodies.rows(listed) }
@@ -241,8 +243,13 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val settled = summary != null && chatSettled(summary)
     val snoozed = summary?.snoozedUntil?.let { it > System.currentTimeMillis() } == true
 
-    val callbacks = remember(rootId, setupId, running, where, projectId) {
+    val heldIds = remember(heldSteers) { heldSteers.mapTo(HashSet()) { it.id } }
+    // One at a time: a second tap mustn't put it in the composer twice.
+    var takingBack by remember { mutableStateOf<String?>(null) }
+    val callbacks = remember(rootId, setupId, running, where, projectId, heldIds) {
         MessageCallbacks(
+            held = heldIds,
+            onTakeBack = { messageId -> if (takingBack == null) takingBack = messageId },
             onOpenFile = { file, messageId -> actions.openFile(file.path, messageId) },
             // Read from the collected items, so the row follows each chunk.
             uploadPercent = { messageId -> outboxItems.find { it.send.id == messageId }?.let(::uploadPercent) },
@@ -288,6 +295,14 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
             HandedBacks.hand("$id:${taken.parentId}", HandedBack(taken, item.id))
             nav.push(Route.Reply(id, taken.parentId))
         } else takeBack(taken, item.id)
+    }
+    LaunchedEffect(takingBack) {
+        val messageId = takingBack ?: return@LaunchedEffect
+        try {
+            model.thread.value?.queue?.find { it.id == messageId }?.let { editQueued(it) }
+        } finally {
+            takingBack = null
+        }
     }
     // A queued reply taken back on the main screen arrives here, in its side conversation.
     val handedBack = remember { HandedBacks.peek(draftKey) }
@@ -573,7 +588,7 @@ private fun Earlier(earlier: Int, canLoad: Boolean, onLoad: () -> Unit) {
 @Composable
 private fun Queue(t: RemoteChat, running: Boolean, actions: ThreadActions, onEdit: suspend (RemoteQueued) -> Unit) {
     QueueList(
-        t.queue, t.scheduled, running,
+        waitingInQueue(t.queue), t.scheduled, running,
         compacting = t.messages.any { it.compaction == true && it.status == "streaming" },
         paused = t.queuePaused == true,
         onSteer = { actions.queue("steer", it) },

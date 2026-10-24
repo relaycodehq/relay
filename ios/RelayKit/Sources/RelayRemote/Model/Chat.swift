@@ -103,6 +103,11 @@ public struct RemoteQueued: Codable, Sendable, Equatable, Identifiable {
     @Lenient public var settings: ResumeSettings?
     /// Only on scheduled ones: when it goes out.
     public var at: Int64?
+    /// When it was sent; older desktops leave it out.
+    public var created: Int64?
+    /// A steer held a moment before its agent gets it, to be taken back: it shows as the
+    /// message it becomes, not in the queue. Older desktops leave it out.
+    public var held: Bool?
 }
 
 /// A thread list change patched onto the last list (`chatsPatch`).
