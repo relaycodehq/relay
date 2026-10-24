@@ -104,6 +104,10 @@ export const tips: Tip[] = [
   ),
   feature("deep-review", "Deep review sets several agents on the same diff"),
   keys("jump-thread", "{jump-thread} jumps to that thread in Activity"),
+  keys(
+    "next-thread",
+    "Hold {next-thread} or {prev-thread} to run through your threads",
+  ),
   keys("settle", "{settle} marks a thread done, {undo} brings it back"),
   keys("activity", "{activity} shows all your threads at once"),
   keys("terminal", "{terminal} opens this thread's terminal"),

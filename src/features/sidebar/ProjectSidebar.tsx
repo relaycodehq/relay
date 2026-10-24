@@ -223,6 +223,10 @@ export function ProjectSidebar({
         .map((d) => () => onOpen(d.project, undefined, d.id)),
       ...families.cards.map((c) => () => actions.open(c)),
     ],
+    threads: families.cards.map((c) => ({
+      id: c.id,
+      open: () => actions.open(c),
+    })),
     loaded,
     chatId: shown,
     jumping: activity,

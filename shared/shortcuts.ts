@@ -148,6 +148,19 @@ const shortcutCommands = {
     digits: true,
     defaults: one("mod+Digit1"),
   },
+  "next-thread": {
+    title: "Next activity thread",
+    group: "Threads",
+    description: "Hold it to run down the cards.",
+    keywords: "switch step down cycle",
+    defaults: one("mod+alt+ArrowDown"),
+  },
+  "prev-thread": {
+    title: "Previous activity thread",
+    group: "Threads",
+    keywords: "switch step up cycle",
+    defaults: one("mod+alt+ArrowUp"),
+  },
   settle: {
     title: "Settle the open thread",
     group: "Threads",

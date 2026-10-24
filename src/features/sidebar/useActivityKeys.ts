@@ -23,8 +23,9 @@ export function askJump(index: number) {
 }
 
 /**
- * The `settle` shortcut on the open thread, and `jump-thread`'s digits onto
- * Activity's first nine cards while `jumping`. Returns whether their hints
+ * The `settle` shortcut on the open thread, `next-thread` and `prev-thread`
+ * through Activity's cards, and `jump-thread`'s digits onto its first nine
+ * cards while `jumping`. Returns whether their hints
  * show: holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on
  * the first nine cards (or whichever modifiers open them). ⌘ used as part of
  * another shortcut or a ⌘-click never shows them.
@@ -32,6 +33,7 @@ export function askJump(index: number) {
 export function useActivityKeys({
   active,
   cards,
+  threads,
   loaded,
   chatId,
   jumping,
@@ -41,6 +43,8 @@ export function useActivityKeys({
   active: ChatSummary[];
   /** Opens the numbered cards, in order, for `jump-thread`. */
   cards: (() => void)[];
+  /** Activity's thread cards in order, for `next-thread` and `prev-thread`. */
+  threads: { id: string; open: () => void }[];
   /** Every project's list has answered, so `cards` won't fill in further. */
   loaded: boolean;
   /** The open thread. */
@@ -53,6 +57,18 @@ export function useActivityKeys({
   useShortcut("settle", true, () => {
     const c = active.find((a) => a.id === chatId);
     if (c && !c.waiting) settle(c);
+  });
+  const step = (by: 1 | -1) => {
+    // A started thread steps on from its lead's card.
+    const lead = active.find((c) => c.id === chatId)?.startedBy?.chatId;
+    const at = threads.findIndex((t) => t.id === chatId || t.id === lead);
+    threads.at(at < 0 ? (by > 0 ? 0 : -1) : (at + by) % threads.length)?.open();
+  };
+  useShortcut("next-thread", threads.length > 0, () => step(1), {
+    repeat: true,
+  });
+  useShortcut("prev-thread", threads.length > 0, () => step(-1), {
+    repeat: true,
   });
   useEffect(() => {
     let reveal: number | undefined;
