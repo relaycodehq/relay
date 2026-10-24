@@ -22,8 +22,9 @@ Hosted agent sessions can keep running across a Relay restart. After reconnectin
 
 The composer remembers the chosen agent, model, effort, permissions and Build/Plan mode. A leading `@claude`, `@codex` or another built-in agent's mention overrides the selected recipient; **Message only** saves a message without invoking an agent. Switching agents in an existing conversation can ask the outgoing agent for a handoff note so the next one has context; each provider retains its own session where supported.
 
-Fresh threads default to **Full access** and **Build**. The permission picker describes what the selected agent can enforce:
+Fresh threads start on **Auto-accept edits** and **Build**; after that, a new thread starts on the access mode you last used. The permission picker describes what the selected agent can enforce:
 
+- **Read only:** reads and runs read-only commands but changes no files, without MCP servers or Relay's tools.
 - **Supervised:** asks before commands and changes where the provider supports approvals.
 - **Auto-accept edits:** permits edits and asks for other actions where supported.
 - **Auto:** uses the provider's automatic reviewer; agents without one ask.
