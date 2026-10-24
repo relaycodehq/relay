@@ -95,6 +95,10 @@
   color: var(--muted);
   font-size: 11px;
 }
+.queued-message .queued-hold {
+  color: var(--muted);
+  font-size: 12px;
+}
 .queued-message .queued-error {
   color: var(--danger);
 }

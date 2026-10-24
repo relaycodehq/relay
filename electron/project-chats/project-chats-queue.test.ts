@@ -1,5 +1,6 @@
 import { UncertainSteerError } from "../agents/errors";
 import type { ActiveTurns } from "./active";
+import type { ChatQueue } from "./queue";
 import { it, expect, vi } from "vitest";
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -983,4 +984,40 @@ it("keeps an ambiguous steer visible and never queues an automatic duplicate", a
     error: expect.stringContaining("may have received"),
   });
   expect(active.get(chat.id)!.steer).toHaveBeenCalledTimes(1);
+});
+
+it("holds a steer you send for a moment, to be taken back before the agent gets it", async () => {
+  (chats as unknown as { queue: ChatQueue }).queue.steerHoldMs = 200;
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex wait for cancellation"));
+  const active = (chats as unknown as { active: ActiveTurns }).active;
+  await vi.waitFor(() => expect(active.get(chat.id)?.steer).toBeDefined());
+  const steer = vi.fn(async (..._: unknown[]) => {});
+  active.get(chat.id)!.steer = steer;
+  const steered = () => steer.mock.calls.map((call) => call[1]);
+  const send = async (body: string, extra: object = {}) => {
+    const sent = { ...input(body), delivery: "steer" as const, ...extra };
+    await chats.send(chat.id, sent);
+    return sent;
+  };
+
+  const taken = await send("@codex Wrong thread");
+  expect((await chats.get(chat.id)).queue).toEqual([
+    expect.objectContaining({
+      input: expect.objectContaining({ id: taken.id }),
+      steerAt: expect.any(Number),
+    }),
+  ]);
+  expect(steer).not.toHaveBeenCalled();
+  await chats.queueAction(chat.id, "remove", taken.id);
+  // Held as long, and sent after it: the one taken back would have gone first.
+  const kept = await send("@codex Use the other cache");
+  await vi.waitFor(() => expect(steered()).toEqual([kept.id]));
+  expect((await chats.get(chat.id)).queue ?? []).toHaveLength(0);
+
+  // An agent steering through Relay's tools doesn't wait.
+  const fromAgent = await send("@codex From the lead", {
+    fromThread: { id: crypto.randomUUID(), name: "Lead" },
+  });
+  expect(steered()).toEqual([kept.id, fromAgent.id]);
 });

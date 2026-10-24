@@ -3,6 +3,9 @@ import { afterEach, vi } from "vitest";
 // Every checkpoint checks the messages it leaves out: see
 // electron/project-chats/live-turn.ts.
 process.env.RELAY_CHECK_CHECKPOINTS = "1";
+// Steers go to the agent at once, not after the moment people get to take
+// one back; project-chats-queue.test.ts covers that.
+process.env.RELAY_TEST_STEER_HOLD_MS = "0";
 
 // Releases build on a Mac mini that runs the suite niced on two workers, where
 // a condition that holds within 100 ms here can take seconds. A wait returns as

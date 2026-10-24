@@ -65,6 +65,11 @@ const sameChoice = (a: ModelChoice, b: ModelChoice) =>
 
 /** Messages waiting for the thread's running answer, and steering it with one. */
 export class ChatQueue {
+  /** How long a steer someone sent waits before its agent gets it, so they can take it back. */
+  steerHoldMs = Number(process.env.RELAY_TEST_STEER_HOLD_MS ?? 3000);
+  /** Steers waiting out that hold, by message id. */
+  private holding = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private core: ChatCore,
     private schedule: ChatSchedule,
@@ -96,9 +101,39 @@ export class ChatQueue {
         ? replyRoot(chat.messages, input.parentId).id
         : undefined,
     };
-    (chat.queue ??= []).push({ input, created: Date.now() });
+    // An agent's steer, sent through Relay's tools, goes at once.
+    const held =
+      input.delivery === "steer" && !input.fromThread && this.steerHoldMs > 0;
+    (chat.queue ??= []).push({
+      input,
+      created: Date.now(),
+      ...(held ? { steerAt: Date.now() + this.steerHoldMs } : {}),
+    });
     await this.core.storage.save(chat);
-    if (input.delivery === "steer") await this.steer(chat, input.id);
+    if (held) this.hold(id, input.id);
+    else if (input.delivery === "steer") await this.steer(chat, input.id);
+  }
+
+  /** Steers with the message once its hold is over, unless it was taken back or sent meanwhile. */
+  private hold(id: string, messageId: string) {
+    const timer = setTimeout(() => {
+      this.holding.delete(messageId);
+      this.core
+        .control(id, async () => {
+          if (this.core.closing()) return;
+          const chat = await this.core.storage.load(id);
+          if (chat.queue?.some((q) => q.input.id === messageId))
+            await this.steer(chat, messageId);
+        })
+        .catch((e) => console.warn("Could not steer with a held message:", e));
+    }, this.steerHoldMs);
+    timer.unref?.();
+    this.holding.set(messageId, timer);
+  }
+
+  private release(messageId: string) {
+    clearTimeout(this.holding.get(messageId));
+    this.holding.delete(messageId);
   }
 
   /**
@@ -143,7 +178,8 @@ export class ChatQueue {
     const chat = await this.core.storage.load(id);
     if (this.councils.busy(chat)) return;
     const next = chat.queue?.[0];
-    if (!next || chat.queuePaused) return;
+    // A held steer goes once its hold is over, and the rest wait behind it.
+    if (!next || chat.queuePaused || this.holding.has(next.input.id)) return;
     try {
       if (next.compact)
         await this.host.compactNow(
@@ -171,7 +207,9 @@ export class ChatQueue {
     const next = chat.queue?.find((q) => q.input.id === messageId),
       active = this.core.active.get(chat.id);
     if (!next) throw new Error("Queued message not found.");
+    this.release(messageId);
     delete next.error;
+    delete next.steerAt;
     // The message a cold cache held back went out as far as its sender
     // knows; it only waits for the compaction, so nothing jumps ahead of it.
     const held = chat.messages.some(
@@ -287,6 +325,7 @@ export class ChatQueue {
         if (chat.messages.some((m) => m.id === messageId))
           throw new Error("That message already went out.");
         chat.queue = chat.queue?.filter((q) => q.input.id !== messageId);
+        this.release(messageId);
       } else {
         const moving = chat.queue?.find((q) => q.input.id === messageId);
         if (!moving) throw new Error("Queued message not found.");

@@ -17,6 +17,8 @@ interface QueuedChatMessage {
    * sending; the body reads `/compact` and any instructions after it.
    */
   compact?: true;
+  /** A steer someone sent waits until then, to be taken back, before its agent gets it. */
+  steerAt?: number;
 }
 /** Sent with Send later; goes out at `at`, or queues if an answer is running. */
 export interface ScheduledChatMessage extends QueuedChatMessage {

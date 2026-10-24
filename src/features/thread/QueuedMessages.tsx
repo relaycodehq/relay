@@ -1,5 +1,6 @@
 import { BrowserAnnotationChip } from "../images/BrowserAnnotationChip";
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -235,8 +236,31 @@ function QueuedRow({
     </li>
   );
 }
+/** The time, ticking each second until `until`, when the last held steer goes. */
+function useNowUntil(until: number) {
+  const [now, setNow] = useState(Date.now);
+  const [counting, setCounting] = useState(until);
+  // A new hold counts from now, not from whenever the clock last ticked.
+  if (until !== counting) {
+    setCounting(until);
+    setNow(Date.now());
+  }
+  const left = until - now;
+  useEffect(() => {
+    if (left <= 0) return;
+    const tick = setTimeout(() => setNow(Date.now()), left % 1000 || 1000);
+    return () => clearTimeout(tick);
+  }, [left]);
+  return now;
+}
 /** What the queue as a whole waits for. */
-function queueHeading(count: number, paused?: boolean, compacting?: boolean) {
+function queueHeading(
+  count: number,
+  paused?: boolean,
+  compacting?: boolean,
+  steering?: boolean,
+) {
+  if (steering && !paused) return "Steering the answer";
   const what = count > 1 ? `${count} queued` : "Queued";
   if (paused) return count > 1 ? `Paused · ${count} queued` : "Paused";
   if (compacting)
@@ -279,6 +303,9 @@ export function QueuedMessages({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const editKey = useShortcutLabel("edit-queued");
+  const now = useNowUntil(
+    Math.max(0, ...(queue ?? []).map((q) => q.steerAt ?? 0)),
+  );
   const sort = useDragSort(
     queue?.map((q) => q.input.id) ?? [],
     (queue?.length ?? 0) > 1 && !busy,
@@ -301,7 +328,12 @@ export function QueuedMessages({
             ) : (
               <Clock3 size={13} />
             )}
-            {queueHeading(queue.length, paused, compacting)}
+            {queueHeading(
+              queue.length,
+              paused,
+              compacting,
+              queue.every((q) => (q.steerAt ?? 0) > now),
+            )}
           </header>
           <ol
             className="chat-queue-list"
@@ -316,6 +348,14 @@ export function QueuedMessages({
                   order={queue.length > 1 ? index + 1 : undefined}
                   sortable={queue.length > 1 && !busy}
                   text={queued.input.body}
+                  when={
+                    (queued.steerAt ?? 0) > now && (
+                      // Until then the × takes it back.
+                      <span className="queued-hold">
+                        Steers in {Math.ceil((queued.steerAt! - now) / 1000)}s
+                      </span>
+                    )
+                  }
                   justDropped={sort.justDropped}
                   actions={
                     <>
