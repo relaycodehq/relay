@@ -119,11 +119,13 @@ struct ActivityList: View {
         .overlay(alignment: .leading) {
             if compact { Rectangle().fill(colors.border).frame(width: 1).offset(x: -6) }
         }
-        // The same guards as the hold menu: nothing settles while working or asking.
+        // The same guards as the hold menu: nothing settles while asking.
         .swipeActions(edge: .leading) {
-            if swipes && settles(chat) {
-                Button("Settle", systemImage: "checkmark") { swiped(chat, .settle, done: "Settled") }
-                    .tint(colors.accent)
+            if swipes, case let (label, action)? = settle(chat) {
+                Button(label, systemImage: "checkmark") {
+                    swiped(chat, action, done: action == .settle ? "Settled" : "Settles when done")
+                }
+                .tint(colors.accent)
             }
         }
         .swipeActions(edge: .trailing) {
@@ -140,14 +142,18 @@ struct ActivityList: View {
         .contextMenu { holdMenu(chat, now) }
     }
 
-    private func settles(_ chat: RemoteChatSummary) -> Bool { chat.running != true && chat.waiting != true }
+    /// A running thread settles once its answer ends, as the desktop's sidebar does; one asking doesn't.
+    private func settle(_ chat: RemoteChatSummary) -> (String, TriageAction)? {
+        if chat.waiting == true { return nil }
+        return chat.running == true ? ("Settle When Done", .settleWhenDone) : ("Settle", .settle)
+    }
 
     /// A held card's menu: settle, snooze until, mark unread, copy its branch.
     @ViewBuilder
     private func holdMenu(_ chat: RemoteChatSummary, _ now: Int64) -> some View {
-        if settles(chat) {
-            Button { triage(chat, .settle) } label: {
-                Label("Settle", systemImage: "checkmark")
+        if case let (label, action)? = settle(chat) {
+            Button { triage(chat, action) } label: {
+                Label(label, systemImage: "checkmark")
                 Text("Hide it until something new happens")
             }
         }

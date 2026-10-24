@@ -101,7 +101,7 @@ fun ActivityList(
     fun name(chat: RemoteChatSummary) = byId[chat.projectId]?.name ?: "?"
     fun triage(chat: RemoteChatSummary, action: TriageAction) = scope.launch { onTriage(chat, action) }
 
-    /** The same guards as the hold menu: nothing settles while working or asking, nor with a draft that'd keep it here. */
+    /** The same guards as the hold menu: nothing settles while asking, nor with a draft that'd keep it here. */
     fun swipes(chat: RemoteChatSummary): Pair<SwipeAction?, SwipeAction?> {
         if (chat.id in drafted) return null to null
         suspend fun swiped(action: TriageAction, done: String): Boolean {
@@ -111,7 +111,9 @@ fun ActivityList(
             })
             return true
         }
-        val settle = if (chat.running != true && chat.waiting != true) SwipeAction("Settle") { swiped(TriageAction.Settle, "Settled") } else null
+        val settle = settleAction(chat)?.let { (label, action) ->
+            SwipeAction(label) { swiped(action, if (action == TriageAction.Settle) "Settled" else "Settles when done") }
+        }
         val snooze = SwipeAction("Snooze · ${snoozePresets(now).first().label}") {
             // Taken now: `now` only ticks every half minute.
             val at = System.currentTimeMillis()
@@ -283,6 +285,13 @@ private fun InboxZero(filtered: Boolean) {
     }
 }
 
+/** A running thread settles once its answer ends, as the desktop's sidebar does; one asking doesn't. */
+private fun settleAction(chat: RemoteChatSummary): Pair<String, TriageAction>? = when {
+    chat.waiting == true -> null
+    chat.running == true -> "Settle when done" to TriageAction.SettleWhenDone
+    else -> "Settle" to TriageAction.Settle
+}
+
 /** A held card's menu: settle, snooze until, mark unread, copy its branch. */
 @Composable
 private fun HoldMenu(chat: RemoteChatSummary, now: Long, bridge: Int, onTriage: (TriageAction) -> Unit, onCopy: (String) -> Unit, onDismiss: () -> Unit) {
@@ -292,8 +301,9 @@ private fun HoldMenu(chat: RemoteChatSummary, now: Long, bridge: Int, onTriage: 
     }
     Sheet(onDismiss, title = chat.title) {
         Column {
-            if (chat.running != true && chat.waiting != true)
-                ListRow("Settle", subtitle = "Hide it until something new happens", leadingIcon = TablerIcons.Outline.Check, onClick = { pick { onTriage(TriageAction.Settle) } })
+            settleAction(chat)?.let { (label, action) ->
+                ListRow(label, subtitle = "Hide it until something new happens", leadingIcon = TablerIcons.Outline.Check, onClick = { pick { onTriage(action) } })
+            }
             for (p in snoozePresets(now))
                 ListRow("Snooze · ${p.label}", subtitle = wakeLabel(p.until, now), onClick = { pick { onTriage(TriageAction.Snooze(p.until)) } })
             if (bridge >= Bridge.MARKED_UNREAD)

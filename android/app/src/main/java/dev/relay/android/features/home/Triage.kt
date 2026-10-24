@@ -11,6 +11,8 @@ import kotlinx.serialization.json.put
 /** shared/projects/threads.ts's ChatTriage, the subset the phone sends from Home. */
 sealed interface TriageAction {
     data object Settle : TriageAction
+    /** Settles once the running answer ends. */
+    data object SettleWhenDone : TriageAction
     data class Snooze(val until: Long) : TriageAction
     data object Wake : TriageAction
     data object Unsettle : TriageAction
@@ -21,6 +23,7 @@ sealed interface TriageAction {
 fun TriageAction.toJson(): JsonObject = buildJsonObject {
     when (val a = this@toJson) {
         TriageAction.Settle -> put("kind", "settle")
+        TriageAction.SettleWhenDone -> put("kind", "settle-when-done")
         is TriageAction.Snooze -> { put("kind", "snooze"); put("until", a.until) }
         TriageAction.Wake -> put("kind", "wake")
         TriageAction.Unsettle -> put("kind", "unsettle")
