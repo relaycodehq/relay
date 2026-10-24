@@ -41,14 +41,14 @@ fun FilterButton(overview: RemoteOverview, filter: ThreadFilter, onChange: (Thre
     val applied = filter.current(overview).count
     val tint = if (applied > 0) c.accent else c.mutedForeground
     Row(
-        modifier.heightIn(min = 36.dp)
+        modifier.heightIn(min = 40.dp)
             .pressable(onClick = { open = true }, role = Role.Button)
             .semantics { contentDescription = if (applied > 0) "Filter, $applied applied" else "Filter" }
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(TablerIcons.Outline.Filter2, null, tint = tint, size = 18.dp)
+        Icon(TablerIcons.Outline.Filter2, null, tint = tint, size = 20.dp)
         if (applied > 0) Text("$applied", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.SemiBold), color = tint)
     }
     if (open) FilterSheet(overview, filter, onChange) { open = false }

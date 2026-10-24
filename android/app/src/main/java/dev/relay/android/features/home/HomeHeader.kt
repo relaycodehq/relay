@@ -131,17 +131,17 @@ private fun TitleRow(
         }
         ComputerSwitch(if (tab == HomeTab.Activity) "Threads" else "Projects", remote, seen, Modifier.weight(1f), computerRows)
         Row(
-            Modifier.padding(top = 2.dp).then(box).height(44.dp).background(c.popover, CircleShape).border(1.dp, c.border, CircleShape)
-                .padding(horizontal = 4.dp),
+            Modifier.padding(top = 2.dp).then(box).height(52.dp).background(c.popover, CircleShape).border(1.dp, c.border, CircleShape)
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (tab == HomeTab.Activity && overview != null) FilterButton(overview, filter, onFilter)
-            IconButton(TablerIcons.Outline.Search, "Search", onSearch, tint = c.foreground)
+            IconButton(TablerIcons.Outline.Search, "Search", onSearch, size = ButtonSize.Lg, tint = c.foreground)
         }
     }
 }
 
-/** The capsule stretched across: back on the left, what's typed, and a clear once there's something. */
+/** The capsule stretched across: back on the left, what's typed, and a clear that closes once empty. */
 @Composable
 private fun SearchBar(search: HomeSearch, box: Modifier) {
     val c = RelayTheme.colors
@@ -166,6 +166,12 @@ private fun SearchBar(search: HomeSearch, box: Modifier) {
                 cursorBrush = SolidColor(c.foreground),
             )
         }
-        if (search.query.isNotEmpty()) IconButton(TablerIcons.Outline.X, "Clear", { search.onQuery("") }, size = ButtonSize.Sm, tint = c.mutedForeground)
+        val empty = search.query.isEmpty()
+        IconButton(
+            TablerIcons.Outline.X,
+            if (empty) "Close search" else "Clear",
+            { if (empty) search.onOpen(false) else search.onQuery("") },
+            tint = c.mutedForeground,
+        )
     }
 }
