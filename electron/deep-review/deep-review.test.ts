@@ -1115,9 +1115,13 @@ it("reviews a branch in the folder it's checked out in, edits and all, and follo
   expect(
     chats.list(projectId).find((c) => c.id === chat.id)?.reviewFolder,
   ).toEqual({ path: other, branch: "panel" });
-  await vi.waitFor(async () =>
-    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed"),
-  );
+  await vi.waitFor(async () => {
+    expect((await chats.get(chat.id)).findings?.statuses?.F1).toBe("fixed");
+    // The finding reads fixed before the answer that fixed it lets go.
+    expect(
+      chats.list(projectId).find((c) => c.id === chat.id)?.running,
+    ).toBeFalsy();
+  });
   const fix = (await capture()).find((r) =>
     r.prompt?.includes("Fix this finding"),
   );
