@@ -23,7 +23,7 @@ private fun summary(kind: String, n: Int): String = when (kind) {
 }
 
 /**
- * electron/agents/activity.ts relayToolLabels: keep the two the same. The desktop words
+ * electron/relay-mcp/tool-meta.ts relayToolMeta's labels: keep the two the same. The desktop words
  * Relay's own tools when the call is made, so a turn from before a tool had its words
  * still says "relay: add_note"; the phone words those again.
  */
@@ -56,6 +56,14 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "open_preview" to "Opened the preview",
     "screenshot" to "Looked at the preview",
     "console_errors" to "Read the preview's console",
+    "import_sources" to "Looked at what to import",
+    "offer_import" to "Offered what to import",
+    "list_schedules" to "Checked the schedules",
+    "add_schedule" to "Set up a schedule",
+    "update_schedule" to "Changed a schedule",
+    "pause_schedule" to "Paused or resumed a schedule",
+    "remove_schedule" to "Removed a schedule",
+    "run_schedule" to "Test-ran a schedule",
 )
 
 /** A call's label, with Relay's own tools in words even where the desktop sent their raw name. */

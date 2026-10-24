@@ -93,11 +93,13 @@ class TurnWordsTest {
 
     /** The table is copied from the desktop's; this says when the two drift apart. */
     @Test fun relayToolWordsMatchTheDesktops() {
-        val source = File("../../electron/agents/activity.ts")
+        val source = File("../../electron/relay-mcp/tool-meta.ts")
         assumeTrue("needs the repo around the app", source.exists())
-        val table = Regex("relayToolLabels: Record<string, string> = \\{([\\s\\S]*?)\\n\\};").find(source.readText())!!.groupValues[1]
-        val desktop = Regex("(\\w+):\\s*\"([^\"]*)\"").findAll(table).associate { it.groupValues[1] to it.groupValues[2] }
-        assertEquals(desktop, RELAY_TOOL_LABELS)
+        val table = Regex("relayToolMeta: Record<RelayToolName, ToolMeta> = \\{([\\s\\S]*?)\\n\\};").find(source.readText())!!.groupValues[1]
+        val desktop = Regex("(\\w+):\\s*\\{\\s*label:\\s*\"([^\"]*)\"").findAll(table).associate { it.groupValues[1] to it.groupValues[2] }
+        // The phone may keep words for a tool the desktop dropped: older turns still name it.
+        assertTrue(desktop.isNotEmpty())
+        assertEquals(desktop, RELAY_TOOL_LABELS.filterKeys { it in desktop })
     }
 
     @Test fun commentarySplitsRunsAndQuestionsStandAlone() {

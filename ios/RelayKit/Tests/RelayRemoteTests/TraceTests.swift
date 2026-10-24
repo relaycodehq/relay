@@ -66,3 +66,15 @@ struct TraceTests {
         #expect(got == ts["groups"]!.array!)
     }
 }
+
+/// The table is copied from the desktop's; this says when the two drift apart (Android's TurnWordsTest too).
+@Test func relayToolWordsMatchTheDesktops() throws {
+    let source = URL(filePath: #filePath).deletingLastPathComponent().appending(path: "../../../../electron/relay-mcp/tool-meta.ts").standardized
+    guard let text = try? String(contentsOf: source, encoding: .utf8) else { return }
+    let table = try #require(text.firstMatch(of: /relayToolMeta: Record<RelayToolName, ToolMeta> = \{([\s\S]*?)\n\};/)).1
+    var desktop: [String: String] = [:]
+    for row in table.matches(of: /(\w+):\s*\{\s*label:\s*"([^"]*)"/) { desktop[String(row.1)] = String(row.2) }
+    #expect(!desktop.isEmpty)
+    // The phone may keep words for a tool the desktop dropped: older turns still name it.
+    #expect(desktop == relayToolLabels.filter { desktop[$0.key] != nil })
+}

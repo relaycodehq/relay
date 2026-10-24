@@ -173,7 +173,7 @@ public func liveLabel(_ a: AgentActivity) -> String {
     }
 }
 
-/// electron/agents/activity.ts relayToolLabels: keep the two the same. The desktop words
+/// electron/relay-mcp/tool-meta.ts relayToolMeta's labels: keep the two the same. The desktop words
 /// Relay's own tools when the call is made, so a turn from before a tool had its words
 /// still says "relay: add_note"; the phone words those again.
 let relayToolLabels = [
@@ -205,6 +205,14 @@ let relayToolLabels = [
     "open_preview": "Opened the preview",
     "screenshot": "Looked at the preview",
     "console_errors": "Read the preview's console",
+    "import_sources": "Looked at what to import",
+    "offer_import": "Offered what to import",
+    "list_schedules": "Checked the schedules",
+    "add_schedule": "Set up a schedule",
+    "update_schedule": "Changed a schedule",
+    "pause_schedule": "Paused or resumed a schedule",
+    "remove_schedule": "Removed a schedule",
+    "run_schedule": "Test-ran a schedule",
 ]
 
 /// A call's label, with Relay's own tools in words even where the desktop sent their raw name.
