@@ -357,6 +357,13 @@ export function useThreadScroll({
       returning.current = placeInView(scroll.current!);
       setVisible((v) => v + MESSAGE_WINDOW);
     },
+    /** Mounts back far enough to draw message `id`, without moving the view. */
+    mountBackTo(id: string) {
+      const index = shown.findIndex((m) => m.id === id);
+      if (index < 0 || shown.length - index <= visible) return;
+      if (!follow.current) returning.current = placeInView(scroll.current!);
+      setVisible(shown.length - index);
+    },
     jumpTo,
     /** Brings a passage of shown message `id` a third of the way down the
      * view, or the message to the top when the passage starts near it. */

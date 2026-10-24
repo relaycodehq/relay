@@ -262,8 +262,8 @@ const shortcutCommands = {
     title: "Find",
     group: "General",
     description:
-      "Finds text in the diff you last clicked into, or searches pull requests on their page.",
-    keywords: "search filter diff pull requests",
+      "Finds text in the open thread or the diff you last clicked into, or searches pull requests on their page.",
+    keywords: "search filter thread chat messages diff pull requests",
     defaults: one("mod+KeyF"),
   },
   "pr-open": {

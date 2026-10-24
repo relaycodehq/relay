@@ -8,8 +8,8 @@ import {
 } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
-import { IconButton } from "../../../ui/ui";
+import { FindBar } from "../../../ui/FindBar";
+import { meantFor, watchPointer } from "../../../lib/key-target";
 import { matches as pressed, popupOpen } from "../../../lib/shortcuts";
 import {
   diffLines,
@@ -25,28 +25,6 @@ import {
   viewerRoots,
 } from "./find-highlights";
 import "./diff-find.css";
-
-// Clicking code doesn't move focus, so the diff last clicked into is the one
-// the keys mean while nothing else holds focus.
-let lastPointer: EventTarget[] = [];
-let tracking = false;
-function trackPointer() {
-  if (tracking) return;
-  tracking = true;
-  window.addEventListener(
-    "pointerdown",
-    (e) => {
-      lastPointer = e.composedPath();
-    },
-    true,
-  );
-}
-
-function meantFor(frame: HTMLElement, e: KeyboardEvent) {
-  if (e.composedPath().includes(frame)) return true;
-  const focus = document.activeElement;
-  return (!focus || focus === document.body) && lastPointer.includes(frame);
-}
 
 /**
  * ⌘F in a diff: a find bar over it that marks every match the diff shows and
@@ -87,7 +65,7 @@ export function useDiffFind<L>({
   const at = Math.min(current, Math.max(0, count - 1));
 
   useEffect(() => {
-    trackPointer();
+    watchPointer();
     const down = (e: KeyboardEvent) => {
       const element = frame.current;
       if (!element || e.defaultPrevented || e.isComposing || e.repeat) return;
@@ -173,49 +151,21 @@ export function useDiffFind<L>({
     setReveal((n) => n + 1);
   };
   return (
-    <div className="diff-find" role="search">
-      <input
-        ref={input}
-        value={query}
-        placeholder="Find in diff"
-        aria-label="Find in diff"
-        spellCheck={false}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setCurrent(0);
-          setReveal((n) => n + 1);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            step(e.shiftKey ? -1 : 1);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-          }
-        }}
-      />
-      <span className="diff-find-count" aria-live="polite">
-        {!query
-          ? ""
-          : count
-            ? `${at + 1} of ${count}${count >= MAX_MATCHES ? "+" : ""}`
-            : "No results"}
-      </span>
-      <IconButton
-        label="Previous match"
-        disabled={!count}
-        onClick={() => step(-1)}
-      >
-        <ChevronUp size={14} />
-      </IconButton>
-      <IconButton label="Next match" disabled={!count} onClick={() => step(1)}>
-        <ChevronDown size={14} />
-      </IconButton>
-      <IconButton label="Close find" onClick={close}>
-        <X size={14} />
-      </IconButton>
-    </div>
+    <FindBar
+      input={input}
+      className="diff-find"
+      label="Find in diff"
+      query={query}
+      onQuery={(next) => {
+        setQuery(next);
+        setCurrent(0);
+        setReveal((n) => n + 1);
+      }}
+      at={at}
+      count={count}
+      capped={count >= MAX_MATCHES}
+      onStep={step}
+      onClose={close}
+    />
   );
 }

@@ -1,0 +1,15 @@
+/* The find bar floats over the thread's top-left corner, clear of the prompt rail. */
+.thread-find {
+  position: absolute;
+  top: 8px;
+  left: 50px;
+  z-index: 6;
+}
+
+::highlight(relay-thread-find) {
+  background-color: light-dark(#ffe17a, #6e5a10);
+}
+::highlight(relay-thread-find-current) {
+  background-color: light-dark(#ff9f2e, #c77a12);
+  color: light-dark(#000, #fff);
+}

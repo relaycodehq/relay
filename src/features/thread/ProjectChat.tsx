@@ -74,6 +74,7 @@ import { useThreadLinks } from "../linked-folders/useThreadLinks";
 import { NotesChip } from "../notes/NotesChip";
 import { useThreadNotes } from "../notes/useThreadNotes";
 import { KeepBlock, type Keeper } from "../../ui/KeepBlock";
+import { useThreadFind } from "./find/useThreadFind";
 import "./thread.css";
 
 /** What the thread's messages ask the shell's panes to show. */
@@ -292,6 +293,13 @@ export function ProjectChat({
     isEmpty,
   });
   const { scroll, composerDock, scrolledUp, dockHeight, followAnswer } = view;
+  const find = useThreadFind({
+    pane,
+    view,
+    shown,
+    place,
+    enabled: !isEmpty && !agentView,
+  });
   // A note's message may sit in another conversation than the one shown, or
   // under an open subagent: go there first.
   const jumpToNote = (messageId: string) => {
@@ -442,6 +450,7 @@ export function ProjectChat({
           </KeepBlock.Provider>
         </RunCommand.Provider>
       )}
+      {find}
       {!isEmpty && (
         <ThreadTimeline
           listed={thread.listed}

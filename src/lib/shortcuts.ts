@@ -266,16 +266,21 @@ export function useShortcut(
   {
     repeat = false,
     inFields,
+    meant,
   }: {
     repeat?: boolean;
     /** Lets an `outsideFields` command take this press in a text field after all. */
     inFields?: () => boolean;
+    /** Leaves presses it doesn't mean to another listener, or the browser. */
+    meant?: (e: KeyboardEvent) => boolean;
   } = {},
 ) {
   const fire = useRef(onFire);
   fire.current = onFire;
   const fieldsOk = useRef(inFields);
   fieldsOk.current = inFields;
+  const meantHere = useRef(meant);
+  meantHere.current = meant;
   // A field acts on its own keys before they bubble up (the composer's editor
   // takes ⌘Z even with nothing visible to undo), so a command that may take
   // a press in a field hears it first and keeps it from the field.
@@ -290,7 +295,7 @@ export function useShortcut(
       const field = isTypingTarget(e);
       if (bare && field) return;
       if (outsideFields && field && !fieldsOk.current?.()) return;
-      if (popupOpen()) return;
+      if (popupOpen() || meantHere.current?.(e) === false) return;
       e.preventDefault();
       if (capture && field) e.stopPropagation();
       noteUsed(`shortcut:${id}`);

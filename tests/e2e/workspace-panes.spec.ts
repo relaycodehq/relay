@@ -127,7 +127,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     const find = localDiff.getByRole("textbox", { name: "Find in diff" });
     await expect(find).toBeFocused();
     await find.fill("export");
-    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await expect(localDiff.locator(".find-bar-count")).toHaveText("1 of 2");
     await expect
       .poll(() =>
         page.evaluate(() =>
@@ -139,9 +139,9 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       )
       .toBe(2);
     await find.press("Enter");
-    await expect(localDiff.locator(".diff-find-count")).toHaveText("2 of 2");
+    await expect(localDiff.locator(".find-bar-count")).toHaveText("2 of 2");
     await find.press("Shift+Enter");
-    await expect(localDiff.locator(".diff-find-count")).toHaveText("1 of 2");
+    await expect(localDiff.locator(".find-bar-count")).toHaveText("1 of 2");
     await find.press("Escape");
     await expect(find).toHaveCount(0);
     expect(
