@@ -14,11 +14,15 @@ type ReadingPlace = { id: string; offset: number };
  * pixel offset would land somewhere else. Threads left at the bottom have no
  * entry and open pinned there. */
 const readingPlaces = new Map<string, ReadingPlace>();
-/** A thread opens with the latest few messages mounted and fills up to the
- * window on idle, so the first paint isn't waiting on 80 markdown renders. */
-const FIRST_MESSAGES = 20,
+/** A thread opens with the latest few messages mounted, more only if they
+ * don't fill the view, and fills up to the window on idle, so a switch
+ * isn't waiting on 80 markdown renders. */
+const FIRST_MESSAGES = 6,
   MESSAGE_WINDOW = 80,
   MESSAGE_STEP = 20;
+/** The unfolded composer's height in the thread last open. Another thread
+ * opens padded for it, so it needn't render a second time once measured. */
+let lastDockHeight = 0;
 /** A message jumped to lands this far below the top of the view. */
 const JUMP_OFFSET = 12;
 /** How long a message or passage jumped to stays lit, matching their CSS animations. */
@@ -122,7 +126,9 @@ export function useThreadScroll({
     lastTop = useRef(0),
     oldest = useRef<string | undefined>(undefined);
   const [scrolledUp, setScrolledUp] = useState(false);
-  const [dockHeight, setDockHeight] = useState(0);
+  const [dockHeight, setDockHeight] = useState(() =>
+    isEmpty ? 0 : lastDockHeight,
+  );
   useLayoutEffect(() => {
     returning.current = readingPlaces.get(place);
     follow.current = !returning.current;
@@ -152,7 +158,12 @@ export function useThreadScroll({
       follow.current = true;
     }
     returning.current = undefined;
-    if (follow.current) pinToBottom(el);
+    if (!follow.current) return;
+    pinToBottom(el);
+    // Short messages may not reach the top of a tall view: mount more before
+    // it paints, rather than show a gap until the idle fill.
+    if (el.scrollTop <= 0 && shown.length > visible && visible < MESSAGE_WINDOW)
+      setVisible((v) => Math.min(v + FIRST_MESSAGES, MESSAGE_WINDOW));
   }, [messages, rootId, visible]);
   // Up the thread, new messages would push the oldest ones shown out from
   // under the reader: keep showing from the same message until they follow.
@@ -197,6 +208,7 @@ export function useThreadScroll({
         .querySelector(".composer-prompt-input")
         ?.getAnimations()
         .some((a) => a instanceof CSSTransition);
+      if (!isEmpty && !scrolledUp && !folding) lastDockHeight = height;
       setDockHeight((h) =>
         scrolledUp || folding ? Math.max(h, height) : height,
       );
