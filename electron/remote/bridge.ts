@@ -400,6 +400,12 @@ export class RemoteBridge {
         );
       // A phone inspects this computer's agent tools; a third argument would pass it on to another.
       if (method === "agentTools") args = args.slice(0, 2);
+      // A phone's card can lag the live turn; settled while it runs, it settles once it ends. Done already, it's a plain settle.
+      if (
+        method === "triageProjectChat" &&
+        (args[1] as { kind?: unknown } | undefined)?.kind === "settle"
+      )
+        args = [args[0], { kind: "settle-when-done" }];
       let value = await this.host.dispatch(method, args);
       if (method === "projectChatAgent" && value)
         value = forPhoneRun(value as SubagentDetail);

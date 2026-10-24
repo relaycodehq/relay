@@ -516,6 +516,25 @@ it("lets a phone fetch a queued message's screenshots through the desktop", asyn
   ]);
 });
 
+it("settles a phone's settle once the run ends, in case its card lags the live turn", async () => {
+  const { b, dispatched } = bridge();
+  await b.handle("desktop", [
+    "triageProjectChat",
+    [chatId, { kind: "settle" }],
+  ]);
+  await b.handle("desktop", [
+    "triageProjectChat",
+    [chatId, { kind: "unsettle" }],
+  ]);
+  expect(dispatched).toEqual([
+    {
+      method: "triageProjectChat",
+      args: [chatId, { kind: "settle-when-done" }],
+    },
+    { method: "triageProjectChat", args: [chatId, { kind: "unsettle" }] },
+  ]);
+});
+
 it("sends a thread's image shrunk to what the phone shows, through the desktop's own calls", async () => {
   const { b, dispatched } = bridge();
   const shrunk: [unknown, number][] = [];
