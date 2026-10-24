@@ -539,3 +539,16 @@ it("brings the sidebar summary up to date when a compaction finishes", async () 
     expect(summary.updated).toBe((await chats.get(chat.id)).updated);
   });
 });
+it("keeps a steer sent during a cold compaction behind the message it held back", async () => {
+  await compactUnasked();
+  const chat = await answeredLongAgo(2 * 60 * 60_000);
+  await chats.send(chat.id, input("@codex First one"));
+  await chats.send(chat.id, {
+    ...input("@codex Second one"),
+    delivery: "steer",
+  });
+  expect((await chats.get(chat.id)).queue?.map((q) => q.input.body)).toEqual([
+    "@codex First one",
+    "@codex Second one",
+  ]);
+});

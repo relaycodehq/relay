@@ -172,7 +172,18 @@ export class ChatQueue {
       active = this.core.active.get(chat.id);
     if (!next) throw new Error("Queued message not found.");
     delete next.error;
-    chat.queue = [next, ...chat.queue!.filter((q) => q !== next)];
+    // The message a cold cache held back went out as far as its sender
+    // knows; it only waits for the compaction, so nothing jumps ahead of it.
+    const held = chat.messages.some(
+      (m) => m.compaction && m.compactedCold && m.status === "streaming",
+    )
+      ? chat.queue!.slice(0, 1).filter((q) => q !== next)
+      : [];
+    chat.queue = [
+      ...held,
+      next,
+      ...chat.queue!.filter((q) => q !== next && !held.includes(q)),
+    ];
     chat.queuePaused = false;
     if (!active) {
       await this.core.storage.save(chat);
