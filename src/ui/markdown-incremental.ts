@@ -9,6 +9,21 @@ type StablePrefix = {
   nodes: RootContent[];
 };
 
+/** Parsed documents by parser and text, so a thread opened again skips the parse. */
+const kept = new Map<string, Root>();
+const KEPT_CHARS = 2_000_000;
+let keptChars = 0;
+
+function keep(key: string, tree: Root) {
+  kept.set(key, structuredClone(tree));
+  keptChars += key.length;
+  for (const [old] of kept) {
+    if (keptChars <= KEPT_CHARS) break;
+    kept.delete(old);
+    keptChars -= old.length;
+  }
+}
+
 /**
  * Parses only what changed since the last render of a streamed answer: text
  * up to a finished top-level fence and the blank line after it is reused
@@ -17,10 +32,14 @@ type StablePrefix = {
  * differ falls back to one.
  *
  * One call per streaming renderer. The returned plugin owns one cache and
- * may be attached to a new processor on every render.
+ * may be attached to a new processor on every render. With `parser`, naming
+ * what the plugins before it make the parser read, the text a renderer
+ * starts with is also shared with other renderers through `kept`; what
+ * streams in after it isn't, or every token would push out a whole thread.
  */
-export function streamingMarkdownTail(): Plugin<[], Root> {
+export function streamingMarkdownTail(parser?: string): Plugin<[], Root> {
   let cache: StablePrefix | undefined;
+  let first = true;
 
   return function incrementalMarkdown() {
     const parse = this.parser as Parser<Root> | undefined;
@@ -36,6 +55,20 @@ export function streamingMarkdownTail(): Plugin<[], Root> {
       // A trailing \r may become half of a \r\n with the next token, and a
       // BOM is only stripped at the start of a parse.
       if (/[\r\uFEFF]/.test(source)) return parse(source, file);
+
+      const sharing = parser !== undefined && first;
+      first = false;
+      const key = sharing ? `${parser}\0${source}` : "";
+      const known = sharing ? kept.get(key) : undefined;
+      if (known) {
+        // Most recently used last, so it goes last.
+        kept.delete(key);
+        kept.set(key, known);
+        const tree = structuredClone(known);
+        const next = stablePrefix(source, tree.children);
+        if (next) cache = { ...next, nodes: structuredClone(next.nodes) };
+        return tree;
+      }
 
       const prefix = cache;
       if (prefix && source.startsWith(prefix.text)) {
@@ -65,6 +98,7 @@ export function streamingMarkdownTail(): Plugin<[], Root> {
       }
 
       const tree = parse(source, file);
+      if (sharing) keep(key, tree);
       if (hasDefinition(tree)) return tree;
       const next = stablePrefix(source, tree.children);
       if (next) cache = { ...next, nodes: structuredClone(next.nodes) };

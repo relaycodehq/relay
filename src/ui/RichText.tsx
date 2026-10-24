@@ -333,11 +333,11 @@ const MarkdownBlock = memo(function MarkdownBlock({
   const remarkPlugins = useMemo<PluggableList>(
     () =>
       typed
-        ? [remarkGfm, typedSyntax, streamingMarkdownTail()]
+        ? [remarkGfm, typedSyntax, streamingMarkdownTail("typed")]
         : [
             remarkGfm,
             [remarkMath, { singleDollarTextMath: false }],
-            streamingMarkdownTail(),
+            streamingMarkdownTail("answer"),
           ],
     [typed],
   );

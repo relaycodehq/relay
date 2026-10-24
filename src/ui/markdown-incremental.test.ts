@@ -345,3 +345,31 @@ it("leaves a processor without a parser alone", () => {
   expect(() => plugin.call(bare)).not.toThrow();
   expect(bare).toEqual({});
 });
+
+describe("a text opened again", () => {
+  it("renders from the kept tree without parsing, the same as a parse", () => {
+    const source =
+      "Intro with https://relay.dev\n\n" + F + "| a |\n| - |\n| 1 |";
+    const first = render(source, streamingMarkdownTail("kept-same"));
+    const again = render(source, streamingMarkdownTail("kept-same"));
+    expect(again.parses).toEqual([]);
+    expect({ html: again.html, tree: again.tree }).toEqual(plain(source));
+    expect(first.html).toBe(again.html);
+    // Another parser setup reads the same text its own way.
+    expect(render(source, streamingMarkdownTail("kept-other")).parses).toEqual([
+      source,
+    ]);
+  });
+
+  it("keeps only the text a renderer started with, not what streamed in", () => {
+    const streaming = streamingMarkdownTail("kept-stream");
+    render("Hel", streaming);
+    render("Hello", streaming);
+    expect(render("Hel", streamingMarkdownTail("kept-stream")).parses).toEqual(
+      [],
+    );
+    expect(
+      render("Hello", streamingMarkdownTail("kept-stream")).parses,
+    ).toEqual(["Hello"]);
+  });
+});
