@@ -159,13 +159,16 @@ internal fun Hint(text: String, modifier: Modifier = Modifier, color: androidx.c
 
 /**
  * An agent's questions, one at a time. [deferred]: the agent keeps working, so
- * nothing goes out until Send; a tap only picks.
+ * nothing goes out until Send; a tap only picks. [capped]: the parent has a
+ * height cap and the question scrolls within it; in the thread's list there is
+ * none, and a weighted child of an unbounded column measures 0 high.
  */
 @Composable
 fun ColumnScope.Questions(
     questions: List<AgentQuestion>,
     busy: Boolean,
     deferred: Boolean = false,
+    capped: Boolean = true,
     head: (@Composable ColumnScope.() -> Unit)? = null,
     onAnswer: (Map<String, List<String>>) -> Unit,
 ) {
@@ -204,7 +207,7 @@ fun ColumnScope.Questions(
     }
     val c = RelayTheme.colors
     Column(
-        Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+        if (capped) Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()) else Modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         head?.invoke(this)

@@ -111,7 +111,7 @@ private fun Open(chatId: String, message: ChatMessage, group: AsyncAgentQuestion
                     )
                 }, sent)
             })
-        } else if (group.questions.isNotEmpty()) Questions(group.questions, busy, deferred = true) { answers ->
+        } else if (group.questions.isNotEmpty()) Questions(group.questions, busy, deferred = true, capped = false) { answers ->
             run({
                 remote.desktop(
                     "answerProjectChatQuestion", chatId, message.id, group.id,
