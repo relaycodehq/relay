@@ -423,6 +423,109 @@ it.each([false, true])(
   },
 );
 
+it("shows a turn OpenCode starts by itself after a background command ends, which ACP and the service's events never mention", async () => {
+  setScenario({ turn: [{ waitNative: true }, say("WAITING")] });
+  let id = "";
+  const onId = async (sessionID: string) => {
+    id = sessionID;
+  };
+  const onText = vi.fn(),
+    onActivity = vi.fn(),
+    onUsage = vi.fn();
+  let adopted: Promise<string> | undefined;
+  const onUnprompted = vi.fn(async () => {
+    adopted = openCodeRuntime.run(
+      opts({
+        job: { kind: "adopt" },
+        onText,
+        onActivity,
+        onUsage,
+        session: { key: "thread", id, onId },
+      }),
+    );
+    await adopted;
+  });
+  const model = { providerID: "opencode", id: "big-pickle" };
+  const tokens = {
+    input: 10,
+    output: 5,
+    reasoning: 0,
+    cache: { read: 4, write: 1 },
+  };
+  const tool = (callID: string, input: object, metadata: object) => ({
+    type: "tool",
+    id: callID,
+    name: "shell",
+    time: { created: Date.now(), completed: Date.now() },
+    state: { status: "completed", input, content: [], metadata },
+  });
+  const save = (message: object) =>
+    native.messages.get(id)!.push({
+      id: `msg_${native.messages.get(id)!.length}`,
+      time: { created: Date.now() },
+      ...message,
+    });
+
+  const running = openCodeRuntime.run(
+    opts({ session: { key: "thread", onId, onUnprompted } }),
+  );
+  await vi.waitFor(() => expect(native.active.size).toBe(1));
+  save({
+    type: "assistant",
+    agent: "build",
+    model,
+    content: [
+      tool(
+        "launch",
+        { command: "sleep 30", background: true },
+        { status: "running", shellID: "sh_sleep" },
+      ),
+    ],
+    time: { created: Date.now(), completed: Date.now() },
+  });
+  await fetch(native.url + "/fixture/release", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sessionID: id }),
+  });
+  expect(await running).toBe("WAITING");
+  expect(onUnprompted).not.toHaveBeenCalled();
+
+  // Saved by the ACP process's own server; nothing arrives as an event.
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  save({
+    type: "synthetic",
+    text: "<shell id=sh_sleep>done</shell>",
+    metadata: { source: "shell", shellID: "sh_sleep", state: "completed" },
+  });
+  save({
+    type: "assistant",
+    agent: "build",
+    model,
+    content: [
+      tool("check", { command: "curl -s localhost:8420/health" }, { exit: 0 }),
+      { type: "text", text: "The cooldown is over; the download started." },
+    ],
+    time: { created: Date.now(), completed: Date.now() },
+    tokens,
+    cost: 0.03,
+  });
+  await vi.waitFor(() => expect(onUnprompted).toHaveBeenCalledOnce(), {
+    timeout: 5000,
+  });
+  save({ type: "idle", outcome: "succeeded" });
+
+  expect(await adopted).toBe("The cooldown is over; the download started.");
+  expect(onText).toHaveBeenLastCalledWith(
+    "The cooldown is over; the download started.",
+  );
+  expect(onActivity).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "check", status: "complete" }),
+  );
+  expect(onUsage).toHaveBeenCalledOnce();
+  expect(onUnprompted).toHaveBeenCalledOnce();
+}, 15_000);
+
 it("tracks nested subagents, their file edits and cost, and stops only the selected worker", async () => {
   setScenario({ turn: [{ waitNative: true }, say("Done.")] });
   const controls = vi.fn(),

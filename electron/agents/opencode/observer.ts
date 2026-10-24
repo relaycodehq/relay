@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { UncertainSteerError } from "../errors";
-import { guardSteer } from "../turn-kit";
+import { CANCEL_GRACE_MS, cancelledByYou, guardSteer } from "../turn-kit";
 import { SubagentBook } from "../subagent-book";
 import type { AcpAgent } from "../acp/sessions";
 import type { AgentOptions } from "../types";
@@ -26,6 +26,7 @@ import type { NativeClient } from "./client";
 import { messagePages } from "./messages";
 import { splitModel } from "./model-ids";
 import { openCodeSkillContext } from "./skills";
+import { backgroundJobs, SelfTurn } from "./self-turn";
 
 type PendingSteer = {
   chatId?: string;
@@ -37,6 +38,8 @@ type PendingSteer = {
 
 /** How often a steer OpenCode hasn't taken yet is looked for among its messages. */
 const deliveryPoll = 500;
+/** How often a session waiting on a background command is looked at for a turn it starts. */
+const backgroundPoll = 2000;
 
 /** One ACP session's native observations, retained between turns for background children. */
 export class OpenCodeSession {
@@ -73,6 +76,11 @@ export class OpenCodeSession {
   private point?: string;
   private pointAt = 0;
   private buffered: OpenCodeEvent[] = [];
+  /** A turn OpenCode started by itself since Relay's last one. */
+  private self?: SelfTurn;
+  private watching?: Promise<void>;
+  /** Stops the background watch's reads and waits when the session closes. */
+  private closing = new AbortController();
 
   constructor(
     readonly id: string,
@@ -126,6 +134,7 @@ export class OpenCodeSession {
       this.pastCalls.clear();
     }
     this.begun = true;
+    this.self = undefined;
     this.point = undefined;
     this.pointAt = 0;
     this.delivered.clear();
@@ -274,6 +283,7 @@ export class OpenCodeSession {
   }
 
   async ended(answer: string) {
+    this.watchBackground();
     this.watcher?.ended(answer);
     await this.checks.idle();
     // A fork point includes the last message, rather than cutting before the answer.
@@ -288,8 +298,52 @@ export class OpenCodeSession {
     if (last) this.options.session?.onPoint?.(last.id);
   }
 
+  /** Whether OpenCode started a turn by itself that Relay hasn't shown yet. */
+  get selfStarted() {
+    return !!this.self && !this.self.adopted;
+  }
+
+  /** Shows the turn OpenCode started by itself, to its end; Stop interrupts it. */
+  async adopt(options: AgentOptions) {
+    const self = this.self;
+    if (!self || self.adopted)
+      throw new Error("OpenCode has no turn of its own to show.");
+    // Its usage and edits go to this answer.
+    this.options = options;
+    self.show(options);
+    for (const answer of self.answers.values()) this.billSelf(answer);
+    let grace: NodeJS.Timeout | undefined;
+    const stopped = new Promise<never>((_, reject) => {
+      const stop = () => {
+        void this.client.session
+          .interrupt({ sessionID: this.id, resume: false })
+          .catch(() => {});
+        grace = setTimeout(() => reject(cancelledByYou()), CANCEL_GRACE_MS);
+      };
+      if (options.signal.aborted) stop();
+      else options.signal.addEventListener("abort", stop, { once: true });
+    });
+    void stopped.catch(() => {});
+    try {
+      await Promise.race([
+        self.end.promise,
+        stopped,
+        this.events.failed.promise,
+      ]);
+    } finally {
+      clearTimeout(grace);
+      if (this.self === self) this.self = undefined;
+    }
+    if (options.signal.aborted) throw cancelledByYou();
+    await this.ended(self.text).catch((e) =>
+      console.warn("Could not finish OpenCode's turn:", e),
+    );
+    return self.text;
+  }
+
   close() {
     this.working = false;
+    this.closing.abort();
     this.events.close();
     for (const { abort } of this.forms.values()) abort.abort();
     this.book.close();
@@ -714,6 +768,104 @@ export class OpenCodeSession {
         }
         return;
     }
+  }
+
+  /**
+   * While a background command this session launched hasn't reported back,
+   * reads its new messages for a turn OpenCode starts by itself when one
+   * does. Ends once Relay runs a turn here again, or none is left.
+   */
+  private watchBackground() {
+    const { signal } = this.closing;
+    if (this.watching || signal.aborted) return;
+    this.watching = (async () => {
+      const from = this.since;
+      // What's saved after this is OpenCode's own doing: at first, the end of Relay's turn.
+      let seen: number | undefined;
+      try {
+        while (!this.working && !signal.aborted) {
+          const messages = (await this.messagesFrom(from, signal)).reverse();
+          const newest = messages.at(-1)?.time.created ?? from;
+          seen ??=
+            [...messages].reverse().find((m) => m.type === "idle")?.time
+              .created ?? newest;
+          const { launched, reported } = backgroundJobs(messages);
+          if (!this.self) {
+            const woke = messages.find(
+              (m) =>
+                m.time.created > seen! &&
+                (m.type === "synthetic" || m.type === "assistant"),
+            );
+            if (woke) this.startSelf(woke.time.created);
+            else if ([...launched].every((job) => reported.has(job))) return;
+          }
+          if (this.self) {
+            for (const message of messages)
+              if (message.time.created >= this.self.from)
+                this.self.read(message);
+            // Until it's shown, the last turn's answer would get the bill.
+            if (this.self.adopted)
+              for (const answer of this.self.answers.values())
+                this.billSelf(answer);
+            seen = newest;
+          }
+          await delay(backgroundPoll, undefined, { signal });
+        }
+      } catch (error) {
+        if (!signal.aborted)
+          console.warn(
+            "Stopped watching OpenCode's background commands:",
+            error,
+          );
+      } finally {
+        this.watching = undefined;
+      }
+    })();
+  }
+
+  /** The main session's messages saved since `from`, newest first. */
+  private async messagesFrom(from: number, signal: AbortSignal) {
+    const messages: SessionMessageInfo[] = [];
+    for await (const page of messagePages(
+      this.client,
+      { sessionID: this.id, order: "desc", limit: 20 },
+      { signal },
+    )) {
+      messages.push(...page.filter((m) => m.time.created >= from));
+      if (page.some((m) => m.time.created < from)) break;
+    }
+    return messages;
+  }
+
+  private billSelf(
+    message: Extract<SessionMessageInfo, { type: "assistant" }>,
+  ) {
+    this.reached(message.id, message.time.created);
+    if (message.tokens && message.time.completed)
+      this.report(
+        this.id,
+        message.id,
+        message.model,
+        message.tokens,
+        message.cost,
+        message.time.completed,
+      );
+  }
+
+  /** OpenCode went on by itself; Relay shows it as an answer of its own. */
+  private startSelf(from: number) {
+    const self = new SelfTurn(from);
+    this.self = self;
+    // The last turn's check is over; this turn has none.
+    this.watcher = undefined;
+    const show = this.options.session?.onUnprompted;
+    void Promise.resolve()
+      .then(() => show?.())
+      .catch((e) => console.warn("Could not show OpenCode's own turn:", e))
+      .finally(() => {
+        // Nobody showed it; the next one starts clean.
+        if (this.self === self && !self.adopted) this.self = undefined;
+      });
   }
 
   private call(

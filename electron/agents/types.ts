@@ -169,7 +169,7 @@ export interface AgentOptions {
     onId: (id: string) => Promise<void>;
     /** Where the session stands after this turn, for a later `fork`. */
     onPoint?: (at: string) => void;
-    /** Claude started a turn between prompts; show it by running an `adopt` turn. */
+    /** The agent started a turn between prompts (Claude, OpenCode); show it by running an `adopt` turn. */
     onUnprompted?: () => Promise<void>;
   };
 }

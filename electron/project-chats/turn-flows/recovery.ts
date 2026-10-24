@@ -26,9 +26,10 @@ export class TurnRecovery {
     private ends: TurnEndings,
   ) {}
   /**
-   * Claude started a turn itself, e.g. when a background command it launched
-   * finished. It gets its own answer; otherwise it would fill the next
-   * question's slot and push every later answer one message down.
+   * The agent (Claude, OpenCode) started a turn itself, e.g. when a
+   * background command it launched finished. It gets its own answer;
+   * otherwise it would fill the next question's slot and push every later
+   * answer one message down.
    */
   async unprompted(
     chat: ProjectChat,

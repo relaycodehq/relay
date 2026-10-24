@@ -107,6 +107,10 @@ async function runHere(options: AgentOptions) {
   await openCodeCommand();
   if (options.job.kind === "helper")
     return openCodeHelper(client, { ...options, job: options.job });
+  // A turn OpenCode started by itself; one Relay's restart cut off goes through ACP.
+  const self = options.session?.key && sessions.get(options.session.key);
+  if (options.job.kind === "adopt" && self && self.selfStarted)
+    return self.adopt(options);
   const prepared = await fork(options);
   let native: OpenCodeSession | undefined;
   try {
