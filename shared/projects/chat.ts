@@ -20,6 +20,14 @@ interface QueuedChatMessage {
   /** A steer someone sent waits until then, to be taken back, before its agent gets it. */
   steerAt?: number;
 }
+/**
+ * How long a steer past its hold still shows as sent, while the real message
+ * comes. Further past, it's one held when Relay restarted, which waits in the queue.
+ */
+export const steerHeldGrace = 5000;
+/** A steer held a moment for taking back, rather than one waiting in the queue. */
+export const heldSteer = (q: { steerAt?: number }, now = Date.now()) =>
+  q.steerAt !== undefined && q.steerAt + steerHeldGrace > now;
 /** Sent with Send later; goes out at `at`, or queues if an answer is running. */
 export interface ScheduledChatMessage extends QueuedChatMessage {
   at: number;

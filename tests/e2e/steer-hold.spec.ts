@@ -79,34 +79,38 @@ test("holds a steer for a moment, so × takes it back before the agent gets it",
       }),
     ).toBeVisible();
 
+    const mine = (text: string) =>
+      page.getByRole("article", { name: "Your message" }).filter({ hasText: text });
+    // Shown as the steer it becomes, not as a queued message.
     await prompt.fill("Wrong thread, sorry");
     await prompt.press(steerKey);
-    await expect(queue).toContainText("Steering the answer");
-    await expect(queue).toContainText(/Steers in \ds/);
+    const held = mine("Wrong thread, sorry");
+    await expect(held.getByRole("status", { name: "Not sent yet" })).toBeVisible();
+    await expect(queue).toHaveCount(0);
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme });
-      await screenshot(queue, {
+      await screenshot(held, {
         path: `test-results/screenshots/steer-hold-${colorScheme}.png`,
         animations: "disabled",
       });
     }
-    await queue
+    await held
       .getByRole("button", { name: "Cancel and return to the composer" })
       .click();
-    await expect(queue).toHaveCount(0);
+    await expect(held).toHaveCount(0);
     await expect(prompt).toContainText("Wrong thread, sorry");
 
     // One left alone goes once its moment is over.
     await prompt.fill("Use the other cache");
     await prompt.press(steerKey);
-    await expect(queue).toContainText(/Steers in \ds/);
+    const kept = mine("Use the other cache");
+    await expect(kept.getByRole("status", { name: "Not sent yet" })).toBeVisible();
     await expect.poll(steers).toBe(1);
-    await expect(queue).toHaveCount(0);
+    await expect(kept).toHaveCount(1);
     await expect(
-      page.getByRole("article", { name: "Your message" }).filter({
-        hasText: "Use the other cache",
-      }),
-    ).toBeVisible();
+      kept.getByRole("button", { name: "Cancel and return to the composer" }),
+    ).toHaveCount(0);
+    expect(await steers()).toBe(1);
   } finally {
     await app?.close();
     await fixture.close();

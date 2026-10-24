@@ -16,13 +16,16 @@ import {
   X,
 } from "lucide-react";
 import { agentMentionPattern } from "../../../shared/agents";
+import { clock } from "../../../shared/waiting";
 import { wakeLabel } from "../../../shared/chat-activity";
 import { parseCodeReferences } from "../../../shared/code-references";
 import { onlyImageTokens } from "../../../shared/image-refs";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
-import type {
-  ProjectChat as ProjectChatData,
-  ProjectChatSend,
+import {
+  heldSteer,
+  steerHeldGrace,
+  type ProjectChat as ProjectChatData,
+  type ProjectChatSend,
 } from "../../../shared/projects";
 import type { QueueDrop } from "./chat-queue";
 import { compactInstructions } from "../../../shared/commands";
@@ -236,6 +239,62 @@ function QueuedRow({
     </li>
   );
 }
+/**
+ * A steer you sent, shown as the sent message it becomes while it waits a
+ * moment before its agent gets it; until then × takes it back.
+ */
+function HeldSteer({
+  queued,
+  busy,
+  onReturn,
+  projectRoot,
+  onOpenFile,
+}: {
+  queued: NonNullable<ProjectChatData["queue"]>[number];
+  busy: boolean;
+  onReturn: (input: ProjectChatSend) => void;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
+}) {
+  return (
+    <article
+      className="project-message user held-steer"
+      data-message-id={queued.input.id}
+      aria-label="Your message"
+    >
+      <header>
+        <strong>You</strong>
+        <time dateTime={new Date(queued.created).toISOString()}>
+          {clock(queued.created)}
+        </time>
+        <span
+          className="steer-unread muted"
+          role="status"
+          aria-label="Not sent yet"
+          title="Steers the answer in a moment"
+        >
+          <Spinner size={11} steady />
+        </span>
+        <button
+          type="button"
+          className="message-copy steer-take-back"
+          disabled={busy}
+          aria-label="Cancel and return to the composer"
+          title="Cancel and return to the composer"
+          onPointerDown={(e) => e.preventDefault()}
+          onClick={() => onReturn(queued.input)}
+        >
+          <X size={14} />
+        </button>
+      </header>
+      <QueuedBody
+        input={queued.input}
+        projectRoot={projectRoot}
+        onOpenFile={onOpenFile}
+      />
+    </article>
+  );
+}
 /** The time, ticking each second until `until`, when the last held steer goes. */
 function useNowUntil(until: number) {
   const [now, setNow] = useState(Date.now);
@@ -254,13 +313,7 @@ function useNowUntil(until: number) {
   return now;
 }
 /** What the queue as a whole waits for. */
-function queueHeading(
-  count: number,
-  paused?: boolean,
-  compacting?: boolean,
-  steering?: boolean,
-) {
-  if (steering && !paused) return "Steering the answer";
+function queueHeading(count: number, paused?: boolean, compacting?: boolean) {
   const what = count > 1 ? `${count} queued` : "Queued";
   if (paused) return count > 1 ? `Paused · ${count} queued` : "Paused";
   if (compacting)
@@ -270,7 +323,7 @@ function queueHeading(
 
 /** The messages waiting to go: queued behind the answer, reordered by dragging, and scheduled for later. */
 export function QueuedMessages({
-  queue,
+  queue: all,
   paused,
   scheduled,
   running,
@@ -304,8 +357,11 @@ export function QueuedMessages({
   const runningAction = useRunningSendAction();
   const editKey = useShortcutLabel("edit-queued");
   const now = useNowUntil(
-    Math.max(0, ...(queue ?? []).map((q) => q.steerAt ?? 0)),
+    Math.max(0, ...(all ?? []).map((q) => (q.steerAt ?? 0) + steerHeldGrace)),
   );
+  const isHeld = (q: NonNullable<typeof all>[number]) => heldSteer(q, now);
+  const held = all?.filter(isHeld) ?? [];
+  const queue = all?.filter((q) => !isHeld(q));
   const sort = useDragSort(
     queue?.map((q) => q.input.id) ?? [],
     (queue?.length ?? 0) > 1 && !busy,
@@ -313,6 +369,16 @@ export function QueuedMessages({
   );
   return (
     <>
+      {held.map((queued) => (
+        <HeldSteer
+          key={queued.input.id}
+          queued={queued}
+          busy={busy}
+          onReturn={onReturn}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+        />
+      ))}
       {!!queue?.length && (
         <section className="chat-queue" aria-label="Queued messages">
           <header
@@ -328,12 +394,7 @@ export function QueuedMessages({
             ) : (
               <Clock3 size={13} />
             )}
-            {queueHeading(
-              queue.length,
-              paused,
-              compacting,
-              queue.every((q) => (q.steerAt ?? 0) > now),
-            )}
+            {queueHeading(queue.length, paused, compacting)}
           </header>
           <ol
             className="chat-queue-list"
@@ -348,14 +409,6 @@ export function QueuedMessages({
                   order={queue.length > 1 ? index + 1 : undefined}
                   sortable={queue.length > 1 && !busy}
                   text={queued.input.body}
-                  when={
-                    (queued.steerAt ?? 0) > now && (
-                      // Until then the × takes it back.
-                      <span className="queued-hold">
-                        Steers in {Math.ceil((queued.steerAt! - now) / 1000)}s
-                      </span>
-                    )
-                  }
                   justDropped={sort.justDropped}
                   actions={
                     <>

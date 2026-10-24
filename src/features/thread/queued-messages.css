@@ -95,9 +95,12 @@
   color: var(--muted);
   font-size: 11px;
 }
-.queued-message .queued-hold {
-  color: var(--muted);
-  font-size: 12px;
+/* Where a sent message's copy button sits, but showing: it's there for a moment. */
+.project-message.held-steer {
+  content-visibility: visible;
+}
+.project-message.held-steer > header .steer-take-back {
+  opacity: 1;
 }
 .queued-message .queued-error {
   color: var(--danger);
