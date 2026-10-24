@@ -51,6 +51,11 @@ import {
 } from "../../../shared/asked-questions";
 import { AnsweredQuestions } from "./AnsweredQuestions";
 import { StartedChip } from "./StartedThreads";
+import {
+  TurnAgentStack,
+  useWorkingAgents,
+  workingAgentsLabel,
+} from "./TurnAgents";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -359,9 +364,11 @@ export function AgentTurn({
     open || undefined,
   );
   const expanded = presentation?.expanded ?? toggled ?? live;
-  if (!live && !entries.length && !presentation?.summary) return null;
   const headingMessage = presentation?.summary ?? message;
   const headingTurn = presentation?.summary ? readTurn(headingMessage) : turn;
+  // Agents it sent off can work on after the turn ends.
+  const agents = useWorkingAgents(headingTurn.live ? [] : headingTurn.activity);
+  if (!live && !entries.length && !presentation?.summary) return null;
   const headingLive = headingTurn.live;
   const continuation = !!presentation && !presentation.summary;
   const Container = continuation ? "div" : "details";
@@ -386,6 +393,14 @@ export function AgentTurn({
     "Writing"
   ) : heading.kind === "thinking" ? (
     <ThinkingWord seed={headingMessage.id} />
+  ) : agents.length ? (
+    workingAgentsLabel(
+      summarizeActivity(
+        headingTurn.activity.filter((a) => a.kind !== "agent"),
+        headingMessage.traceDropped,
+      ),
+      agents,
+    )
   ) : (
     heading.text
   );
@@ -421,7 +436,9 @@ export function AgentTurn({
     >
       {!continuation && (
         <summary className="agent-run-heading">
-          {HeaderIcon ? (
+          {agents.length ? (
+            <TurnAgentStack runs={agents} />
+          ) : HeaderIcon ? (
             <HeaderIcon size={14} />
           ) : (
             <ThinkingGlyph provider={message.provider} />

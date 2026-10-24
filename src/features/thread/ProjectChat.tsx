@@ -55,6 +55,7 @@ import type {
 } from "../composer/ProjectComposer";
 import { SelectionQuote } from "./SelectionQuote";
 import { SubagentThread } from "../agent-turn/SubagentThread";
+import { TurnAgents } from "../agent-turn/TurnAgents";
 import { ThreadComposer } from "./ThreadComposer";
 import { ThreadHeader } from "./ThreadHeader";
 import { ThreadMessages } from "./ThreadMessages";
@@ -315,6 +316,10 @@ export function ProjectChat({
   });
   const notes = useThreadNotes(chat, handle.setError);
   const chatId = chat?.id;
+  const turnAgents = useMemo(
+    () => ({ runs: background.agents, onOpen: setAgentView }),
+    [background.agents],
+  );
   const keeper = useMemo<Keeper | null>(
     () =>
       chatId
@@ -416,21 +421,23 @@ export function ProjectChat({
         <RunCommand.Provider value={runCommand}>
           <KeepBlock.Provider value={keeper}>
             <QuoteJump.Provider value={jumpToQuote}>
-              <ThreadMessages
-                handle={handle}
-                projectPath={project.path}
-                thread={thread}
-                view={view}
-                councils={councils}
-                actions={actions}
-                queue={queue}
-                worktree={worktree}
-                onResume={() =>
-                  void resume(() => composer.current?.agentSettings())
-                }
-                onSteer={steerFromNote}
-                onCompose={composeFromPage}
-              />
+              <TurnAgents.Provider value={turnAgents}>
+                <ThreadMessages
+                  handle={handle}
+                  projectPath={project.path}
+                  thread={thread}
+                  view={view}
+                  councils={councils}
+                  actions={actions}
+                  queue={queue}
+                  worktree={worktree}
+                  onResume={() =>
+                    void resume(() => composer.current?.agentSettings())
+                  }
+                  onSteer={steerFromNote}
+                  onCompose={composeFromPage}
+                />
+              </TurnAgents.Provider>
             </QuoteJump.Provider>
           </KeepBlock.Provider>
         </RunCommand.Provider>
