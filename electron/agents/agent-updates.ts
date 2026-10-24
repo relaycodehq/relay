@@ -48,6 +48,11 @@ interface AgentPackage {
   native: { args: string[]; owns: (path: string) => boolean };
   /** What Relay runs it through, installed beside it in Relay's own folder. */
   with?: string[];
+  /**
+   * Its background service, which outlives an update on the old version.
+   * Restarted after one when running, as `<cli> service restart`.
+   */
+  service?: true;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -82,6 +87,8 @@ const agentPackages: Record<CliProvider, AgentPackage> = {
       owns: (path) =>
         /\/\.opencode\/bin\/opencode(\.exe)?$/.test(foldPath(path)),
     },
+    // An old one can't read sessions the new version writes (HTTP 500).
+    service: true,
   },
   amp: {
     npm: "@ampcode/cli",
@@ -931,6 +938,7 @@ export class AgentUpdates {
             at: Date.now(),
           },
         });
+      if (agentPackages[provider].service) await this.restartService(provider);
       this.put({
         ...after,
         update: {
@@ -942,6 +950,34 @@ export class AgentUpdates {
       });
     } catch (error) {
       fail(error instanceof Error ? error.message : `Couldn't update ${cli}.`);
+    }
+  }
+
+  /** Brings a running service up on the version just installed; one that's stopped starts on it anyway. */
+  private async restartService(provider: CliProvider) {
+    try {
+      const path = await this.io.find(provider);
+      const status = await this.io.exec(
+        path,
+        ["service", "status"],
+        probeTimeout,
+      );
+      if (status.code !== 0 || status.stdout.trim() === "stopped") return;
+      const restarted = await this.io.exec(
+        path,
+        ["service", "restart"],
+        probeTimeout,
+      );
+      if (restarted.code !== 0)
+        console.warn(
+          `Could not restart ${agents[provider].cli}'s service after the update:`,
+          restarted.output.trim(),
+        );
+    } catch (error) {
+      console.warn(
+        `Could not restart ${agents[provider].cli}'s service after the update:`,
+        error,
+      );
     }
   }
 

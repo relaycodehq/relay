@@ -156,7 +156,7 @@ describe("versions", () => {
 
 /** A machine with one agent CLI, whose update swaps in `next`. */
 function machine(options: {
-  provider: "codex" | "claude";
+  provider: "codex" | "claude" | "opencode";
   path: string;
   real: string;
   version: string;
@@ -169,6 +169,8 @@ function machine(options: {
   packument?: unknown;
   /** The update leaves a stub until the package's postinstall runs, as Bun does. */
   blocksScripts?: boolean;
+  /** Its background service runs, as OpenCode's does. */
+  service?: boolean;
 }) {
   let version = options.version;
   let stub = false;
@@ -194,6 +196,12 @@ function machine(options: {
         return done(`cli ${version}`);
       }
       runs.push([file, ...args]);
+      if (args[0] === "service")
+        return done(
+          args[1] === "status" && !options.service
+            ? "stopped"
+            : "http://127.0.0.1:4096",
+        );
       if (args.at(-1) === "postinstall") {
         stub = false;
         return done("");
@@ -219,6 +227,34 @@ function machine(options: {
 }
 
 describe("AgentUpdates", () => {
+  it("restarts OpenCode's service after updating it, so it runs the new version", async () => {
+    const opencode = {
+      provider: "opencode" as const,
+      path: "/Users/me/.opencode/bin/opencode",
+      real: "/Users/me/.opencode/bin/opencode",
+      version: "2.0.32",
+      next: "2.1.4",
+      tags: { latest: "2.1.4" },
+    };
+    const running = machine({ ...opencode, service: true });
+    await running.updates.check();
+    await running.updates.update("opencode");
+    expect(running.agent("opencode").update).toMatchObject({
+      status: "updated",
+      version: "2.1.4",
+    });
+    expect(running.runs).toEqual([
+      [opencode.path, "upgrade"],
+      [opencode.path, "service", "status"],
+      [opencode.path, "service", "restart"],
+    ]);
+    // A stopped one starts on the new version when it's next asked for.
+    const stopped = machine(opencode);
+    await stopped.updates.check();
+    await stopped.updates.update("opencode");
+    expect(stopped.runs.at(-1)).toEqual([opencode.path, "service", "status"]);
+  });
+
   const bunCodex = {
     provider: "codex" as const,
     path: "/Users/me/.bun/bin/codex",

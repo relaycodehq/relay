@@ -2,10 +2,26 @@ import { execFile } from "node:child_process";
 import { request } from "node:http";
 import { promisify } from "node:util";
 import { executableCommand, findExecutable } from "../../platform/executables";
+import { openCodeVersion } from "./command";
 
 const exec = promisify(execFile);
 
 /** Resolve each operation against the service that owns its current password. */
+/** Services already found to be the installed OpenCode's, by address and version. */
+const current = new Set<string>();
+
+/** Whether the service (its `/api/info`) runs another version than the installed CLI. */
+export function staleService(installed: string, info: string) {
+  const version = /\d+\.\d+\.\d+[\w.-]*/.exec(installed)?.[0];
+  let running: unknown;
+  try {
+    running = (JSON.parse(info) as { version?: unknown }).version;
+  } catch {
+    return false;
+  }
+  return !!version && typeof running === "string" && running !== version;
+}
+
 export async function openCodeEndpoint() {
   const executable = await findExecutable("opencode");
   const cli = async (args: string[]) => {
@@ -31,6 +47,17 @@ export async function openCodeEndpoint() {
     // Unlike `service start`, this does not replace an existing service.
     await cli(["api", "GET", "/api/info"]);
     address = await cli(["service", "status"]);
+  }
+  // A service an older OpenCode started outlives an update Relay didn't run,
+  // and can't read what the new one writes: long histories fail with HTTP 500.
+  const installed = await openCodeVersion();
+  if (!current.has(`${address} ${installed}`)) {
+    const running = await cli(["api", "GET", "/api/info"]);
+    if (staleService(installed, running)) {
+      await cli(["service", "restart"]);
+      address = await cli(["service", "status"]);
+    }
+    current.add(`${address} ${installed}`);
   }
   let url: URL;
   try {
