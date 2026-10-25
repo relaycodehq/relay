@@ -4,12 +4,38 @@ import {
   dropOtherDraft,
   sharedDraftSchema,
   swapOtherDraft,
+  writeBase,
   type DraftChange,
   type DraftDevice,
   type DraftWrite,
   type SharedDraft,
 } from "../../shared/drafts";
 import { writeFileAtomic } from "../util/atomic-write";
+
+/**
+ * A write from a version it missed, for telling a lost answer from a real
+ * clash when a draft comes back. Lengths only: the log goes into reports.
+ */
+function logMissedBase(
+  current: SharedDraft | undefined,
+  write: DraftWrite,
+  by: DraftDevice,
+  after: SharedDraft | null,
+) {
+  const base = writeBase(current, write, by);
+  if (base === "current" || !current) return;
+  const outcome = !after
+    ? "gone"
+    : after.text === current.text
+      ? `kept ${after.text.length} chars`
+      : `now ${after.text.length} chars`;
+  console.info(
+    `[drafts] ${base} write to ${write.key} by ${by}: base ${write.base}, ` +
+      `current ${current.rev} by ${current.by}, written ${write.at - current.at}ms after it, ` +
+      `${write.sent !== undefined ? `sent ${write.sent.length} chars` : `${write.text.length} chars`}, ` +
+      `${outcome}${after?.other && after.other !== current.other ? ", clash kept the other" : ""}`,
+  );
+}
 
 /** Written this long after the last change; a draft changes with every pause in typing. */
 const saveMs = 300;
@@ -54,12 +80,14 @@ export class DraftStore {
   }
 
   write(write: DraftWrite, by: DraftDevice): DraftChange | undefined {
+    const current = this.drafts.get(write.key);
     const { draft, changed } = applyDraftWrite(
-      this.drafts.get(write.key),
+      current,
       write,
       by,
       () => ++this.rev,
     );
+    logMissedBase(current, write, by, draft);
     if (!changed) return;
     return this.set(write.key, draft, write.sent !== undefined);
   }
