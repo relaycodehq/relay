@@ -79,6 +79,10 @@ data class AgentActivity(
     val progress: String? = null,
     val mcp: McpCall? = null,
     val image: String? = null,
+    /** What the call did, read by the desktop from its command or tool. From Bridge.TRACE_TREE. */
+    val actions: List<CallAction>? = null,
+    /** The call wrote code, left out here; `activityWritten` has it. From Bridge.TRACE_TREE. */
+    val wroteCode: Boolean? = null,
 )
 
 @Serializable data class McpCall(val server: String, val tool: String)

@@ -52,6 +52,8 @@ import dev.relay.android.features.thread.logic.duration
 import dev.relay.android.features.thread.logic.groupTrace
 import dev.relay.android.features.thread.logic.isQuestionCall
 import dev.relay.android.features.thread.logic.isStartThreads
+import dev.relay.android.features.thread.logic.leadRow
+import dev.relay.android.features.thread.logic.toldByActions
 import dev.relay.android.features.thread.logic.runShape
 import dev.relay.android.features.thread.logic.liveLabel
 import dev.relay.android.features.thread.logic.plural
@@ -107,7 +109,7 @@ val LocalReadingBack = compositionLocalOf { false }
 val LocalSavedCopy = compositionLocalOf { false }
 
 /** Each agent call's own calls, how to show paths, and whose turn they're in (none for a subagent's own run). */
-private class TraceScope(
+internal class TraceScope(
     val calls: Map<String, List<AgentActivity>>,
     val display: (String) -> String,
     val chatId: String,
@@ -118,7 +120,7 @@ private class TraceScope(
     fun read(path: String) = ImageSource.Read(chatId, messageId, path)
 }
 
-private val LocalTrace = staticCompositionLocalOf { TraceScope(emptyMap(), { it }, "", "") }
+internal val LocalTrace = staticCompositionLocalOf { TraceScope(emptyMap(), { it }, "", "") }
 
 /** Leaves the thread's own folder out of tool labels. */
 fun displayIn(root: String?): (String) -> String {
@@ -196,10 +198,14 @@ fun AgentRun(
                             part is TracePart.Commentary ->
                                 Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
                             part !is TracePart.Run -> Unit
-                            else -> when (runShape(parts, index, live, settled = !live && (toggled != null || !fold.held))) {
-                                RunShape.Live -> OpenBatch(part.activity)
-                                RunShape.Rows -> part.activity.forEach { ToolRow(it) }
-                                RunShape.Group -> ActivityGroup(part.activity)
+                            else -> {
+                                val shape = runShape(parts, index, live, settled = !live && (toggled != null || !fold.held))
+                                when {
+                                    shape == RunShape.Live -> OpenBatch(part.activity)
+                                    toldByActions(part.activity) -> TraceTreeRun(part.activity)
+                                    shape == RunShape.Rows -> part.activity.forEach { ToolRow(it) }
+                                    else -> ActivityGroup(part.activity)
+                                }
                             }
                         }
                     }
@@ -217,7 +223,7 @@ fun AgentRun(
 }
 
 @Composable
-private fun Step(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+internal fun Step(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 26.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -243,7 +249,7 @@ private fun Fold(
 
 /** The picture a call looked at, under its row. */
 @Composable
-private fun Preview(a: AgentActivity, name: String) {
+internal fun Preview(a: AgentActivity, name: String) {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current ?: return
     val path = imagePath(a) ?: return
@@ -260,7 +266,7 @@ private fun CallIcon(a: AgentActivity) {
 }
 
 @Composable
-private fun ToolRow(a: AgentActivity) {
+internal fun ToolRow(a: AgentActivity) {
     val trace = LocalTrace.current
     askedQuestions(a)?.let { return AnsweredQuestions(it) }
     val label = when {
@@ -318,7 +324,7 @@ private fun AnsweredQuestions(questions: List<AskedQuestion>) {
 
 /** A call's output; the desktop sends a long one cut, and the whole of it once the fold opens. */
 @Composable
-private fun Detail(a: AgentActivity) {
+internal fun Detail(a: AgentActivity) {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current
     var whole by remember(a.id) { mutableStateOf<String?>(null) }
@@ -381,6 +387,8 @@ private fun OpenBatch(activity: List<AgentActivity>) {
     // This row changes with every call, so a picture it looked at stays icon-sized
     // here; with nothing folded behind the row, tapping it opens the picture.
     val looked = if (trace.chatId.isNotEmpty()) imageRead(head) else null
+    // A desktop that says what calls did names the head by it: "Reading `a.ts`".
+    val lead = if (head.actions != null) leadRow(head)?.takeUnless(::drawsOwnRow) else null
     val openImage = trace.openImage
     val view = if (!folded && looked != null && openImage != null) ({ openImage(looked) }) else null
     val remote = LocalThreadRemote.current
@@ -392,10 +400,15 @@ private fun OpenBatch(activity: List<AgentActivity>) {
                 else -> Modifier
             },
         ) {
+            val icon = lead?.let { actionIcon(it.action.kind) } ?: kindIcon(head.kind)
             if (looked != null && remote != null) ReadSwatch(remote, trace.read(looked))
-            else Icon(kindIcon(head.kind), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
+            else Icon(icon, null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
             Row(Modifier.weight(1f, fill = false)) {
-                if (running) ShineText(text) else Text(text, maxLines = 1, color = RelayTheme.colors.mutedForeground)
+                when {
+                    lead != null -> ActionLabel(lead, live = running, if (running) Modifier.shine() else Modifier, oneLine = true)
+                    running -> ShineText(text)
+                    else -> Text(text, maxLines = 1, color = RelayTheme.colors.mutedForeground)
+                }
             }
             Progress(head)
             if (folded) Icon(
@@ -404,8 +417,9 @@ private fun OpenBatch(activity: List<AgentActivity>) {
             )
         }
         if (open && calls.isNotEmpty()) SubagentRows(calls)
-        if (open && earlier.isNotEmpty())
-            Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { earlier.forEach { ToolRow(it) } }
+        if (open && earlier.isNotEmpty()) Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) {
+            if (toldByActions(earlier)) TraceTreeRun(earlier) else earlier.forEach { ToolRow(it) }
+        }
     }
 }
 

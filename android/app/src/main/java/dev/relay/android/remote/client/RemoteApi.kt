@@ -23,6 +23,7 @@ import dev.relay.android.remote.model.SharedDraft
 import dev.relay.android.remote.model.SubagentList
 import dev.relay.android.remote.model.SubagentRunAnswer
 import dev.relay.android.remote.model.UploadedFile
+import dev.relay.android.remote.model.WrittenCode
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
@@ -69,6 +70,10 @@ suspend fun RemoteClient.subagentRun(chatId: String, agentId: String, known: Str
 /** A tool call's whole output. From Bridge.ACTIVITY_DETAIL. */
 suspend fun RemoteClient.activityDetail(chatId: String, messageId: String, activityId: String): String? =
     call("activityDetail", args(s(chatId), s(messageId), s(activityId))).takeUnless { it is JsonNull }?.to()
+
+/** The code a call wrote, which the thread left out. From Bridge.TRACE_TREE. */
+suspend fun RemoteClient.activityWritten(chatId: String, messageId: String, activityId: String): List<WrittenCode>? =
+    call("activityWritten", args(s(chatId), s(messageId), s(activityId))).takeUnless { it is JsonNull }?.to()
 
 /** A data URL at most [max] pixels on its longer side. From Bridge.IMAGE. */
 suspend fun RemoteClient.image(source: RemoteImageSource, max: Int): String = call("image", args(j(source), n(max))).to()

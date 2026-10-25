@@ -138,7 +138,7 @@ fun summarizeActivity(activity: List<AgentActivity>, dropped: Map<String, Int>? 
     return "${parts.dropLast(1).joinToString(", ")}, and ${parts.last()}"
 }
 
-private fun baseName(path: String) = path.split("/").lastOrNull { it.isNotEmpty() } ?: path
+fun baseName(path: String) = path.split("/").lastOrNull { it.isNotEmpty() } ?: path
 
 private val commandWrappers = setOf("sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx")
 private val commandSetup = setOf(
