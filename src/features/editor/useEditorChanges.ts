@@ -1,21 +1,13 @@
 import { useMemo } from "react";
-import { unifiedMergeView } from "@codemirror/merge";
 import type { ChangeBaseline } from "./editor-types";
 import type { FileDocument } from "./documents";
 import { changeGutter } from "./change-gutter";
+import { inlineDiff } from "./deleted-lines";
 import { useEditorCompare } from "./useEditorCompare";
 
 /** The change bars and the lines removed since `against`, shown in place. */
 export function inlineChanges(against: string) {
-  return [
-    changeGutter(against),
-    unifiedMergeView({
-      original: against,
-      mergeControls: false,
-      gutter: false,
-      syntaxHighlightDeletions: true,
-    }),
-  ];
+  return [changeGutter(against), inlineDiff(against)];
 }
 
 /**
