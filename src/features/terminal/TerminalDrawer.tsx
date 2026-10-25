@@ -11,6 +11,7 @@ import {
 } from "./terminal-dock";
 import { closeTerminal, terminalFor, terminalKey } from "./thread-terminals";
 import { TerminalView, terminalFolder } from "./TerminalView";
+import { readText, writeText } from "../../lib/persisted-store";
 
 const heightKey = "relay-terminal-height";
 const defaultHeight = 260,
@@ -39,7 +40,7 @@ export function TerminalDrawer({
   useSyncExternalStore(terminal.subscribe, terminal.snapshot);
   const section = useRef<HTMLElement>(null);
   const [height, setHeight] = useState(() => {
-    const stored = Number(localStorage.getItem(heightKey));
+    const stored = Number(readText(heightKey));
     return stored >= minHeight ? stored : defaultHeight;
   });
   const resize = (value: number) => {
@@ -49,7 +50,7 @@ export function TerminalDrawer({
       Math.max(minHeight, Math.min(Math.max(minHeight, room), value)),
     );
     setHeight(next);
-    localStorage.setItem(heightKey, String(next));
+    writeText(heightKey, String(next));
   };
   const add = () => {
     const slot = newTerminalSlot();

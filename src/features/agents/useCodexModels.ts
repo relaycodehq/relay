@@ -7,7 +7,7 @@ import {
   type CodexModel,
 } from "../../../shared/settings";
 import { api } from "../../lib/api";
-import { readJson } from "../../lib/persisted-store";
+import { readJson, writeJson } from "../../lib/persisted-store";
 
 const savedKey = "relay-codex-models";
 function readSaved(): CodexModel[] | undefined {
@@ -31,7 +31,7 @@ const codexModelsQuery = {
   queryKey: ["codex-models"],
   queryFn: async () => {
     const models = await api.agentModels("codex");
-    if (models.length) localStorage.setItem(savedKey, JSON.stringify(models));
+    if (models.length) writeJson(savedKey, models);
     return models;
   },
   staleTime: Infinity,

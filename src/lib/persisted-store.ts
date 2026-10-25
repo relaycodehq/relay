@@ -1,5 +1,24 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+/** What `key` holds as text; null when it's unset or storage is unavailable. */
+export function readText(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/** Saves `value` under `key` as is, or clears it on null; storage that's unavailable or full is no error. */
+export function writeText(key: string, value: string | null) {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // What's kept this way is a convenience; it never blocks the workspace.
+  }
+}
+
 /** What `key` holds, parsed; undefined when it's unset, malformed or storage is unavailable. */
 export function readJson(key: string): unknown {
   try {
@@ -39,20 +58,12 @@ export function useStoredChoice<T extends string>(
   fallback: T,
 ) {
   const [value, setValue] = useState<T>(() => {
-    try {
-      const saved = localStorage.getItem(key);
-      return choices.find((choice) => choice === saved) ?? fallback;
-    } catch {
-      return fallback;
-    }
+    const saved = readText(key);
+    return choices.find((choice) => choice === saved) ?? fallback;
   });
   const choose = (next: T) => {
     setValue(next);
-    try {
-      localStorage.setItem(key, next);
-    } catch {
-      // Still applies until the screen closes.
-    }
+    writeText(key, next);
   };
   return [value, choose] as const;
 }
@@ -71,7 +82,7 @@ export function persistedStore<T>(
   const listeners = new Set<() => void>();
   const read = () => {
     try {
-      return parse(localStorage.getItem(key));
+      return parse(readText(key));
     } catch {
       return parse(null);
     }
@@ -107,13 +118,7 @@ export function persistedStore<T>(
       ),
     set(next: T) {
       current = next;
-      try {
-        const saved = serialize(next);
-        if (saved === null) localStorage.removeItem(key);
-        else localStorage.setItem(key, saved);
-      } catch {
-        // Still applies for this session.
-      }
+      writeText(key, serialize(next));
       notify();
     },
   };

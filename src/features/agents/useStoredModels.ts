@@ -5,7 +5,7 @@ import {
   runnableAgents,
   type AgentProvider,
 } from "../../../shared/agents";
-import { persistedStore } from "../../lib/persisted-store";
+import { persistedStore, readText, writeJson } from "../../lib/persisted-store";
 import type { Category } from "./model-picker-catalog";
 
 const favoritesKey = "relay-model-favorites";
@@ -23,13 +23,7 @@ function parseList(saved: string | null): string[] {
     return [];
   }
 }
-function readList(key: string): string[] {
-  try {
-    return parseList(localStorage.getItem(key));
-  } catch {
-    return [];
-  }
-}
+const readList = (key: string) => parseList(readText(key));
 const favoriteModels = persistedStore(favoritesKey, parseList, JSON.stringify);
 const modelPickerCategory = persistedStore<Category | null>(
   "relay-model-picker-category",
@@ -69,7 +63,7 @@ export function useCustomModels() {
   );
   useEffect(() => {
     for (const [p, ids] of Object.entries(customs))
-      localStorage.setItem(customsKey(p as AgentProvider), JSON.stringify(ids));
+      writeJson(customsKey(p as AgentProvider), ids);
   }, [customs]);
   return [customs, setCustoms] as const;
 }

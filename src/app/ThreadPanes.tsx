@@ -48,6 +48,7 @@ import {
   previewKey,
   usePreviewState,
 } from "../features/browser/previews";
+import { readText, writeText } from "../lib/persisted-store";
 
 /**
  * The working tree's changes, or in a PR thread the PR's Review, which
@@ -118,13 +119,13 @@ export function ThreadChanges({
               pull={pull}
               workspace={where}
               account={review.account}
-              initialFile={localStorage.getItem(reviewFile)}
+              initialFile={readText(reviewFile)}
               slots={slots}
               onEditFile={editFile}
               reveals={opens.changeReveals}
               onPresence={(next) => {
                 view.setViewing(next);
-                if (next.path) localStorage.setItem(reviewFile, next.path);
+                if (next.path) writeText(reviewFile, next.path);
               }}
               onDiscuss={review.onDiscuss}
             />

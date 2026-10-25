@@ -5,7 +5,12 @@ import {
   readUpTo,
 } from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
-import { readJson, writeJson } from "../../lib/persisted-store";
+import {
+  readJson,
+  readText,
+  writeJson,
+  writeText,
+} from "../../lib/persisted-store";
 import { useWindowFocused } from "../../lib/window-focus";
 import { clearArrival, noteArrival } from "../thread/arrival";
 
@@ -37,10 +42,10 @@ export function forgetSeen(gone: string[]) {
 export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
   const focused = useWindowFocused();
   const [since] = useState(() => {
-    const saved = Number(localStorage.getItem("relay-thread-seen-since"));
+    const saved = Number(readText("relay-thread-seen-since"));
     if (saved > 0) return saved;
     const now = Date.now();
-    localStorage.setItem("relay-thread-seen-since", String(now));
+    writeText("relay-thread-seen-since", String(now));
     return now;
   });
   const [seen, setSeen] = useState(savedSeen);

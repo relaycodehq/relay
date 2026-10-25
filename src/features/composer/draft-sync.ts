@@ -38,6 +38,7 @@ import {
   markDraftSent,
   setDraftBody,
 } from "./drafts";
+import { readText, writeJson } from "../../lib/persisted-store";
 
 /** A composer's storage key for a shared draft key, and back. */
 const composerKey = (key: string) => DRAFT_PREFIX + key;
@@ -62,12 +63,7 @@ const META = "relay-draft-sync";
 type Meta = Record<string, { rev?: number; dirty?: number }>;
 let metaRead: { raw: string | null; meta: Meta } = { raw: null, meta: {} };
 function meta(): Meta {
-  let raw: string | null = null;
-  try {
-    raw = localStorage.getItem(META);
-  } catch {
-    // Storage is a convenience here.
-  }
+  const raw = readText(META);
   if (raw === metaRead.raw) return metaRead.meta;
   let parsed: Meta = {};
   try {
@@ -84,11 +80,8 @@ function setMeta(key: string, entry: { rev?: number; dirty?: number } | null) {
   if (entry && (entry.rev !== undefined || entry.dirty !== undefined))
     next[key] = entry;
   else delete next[key];
-  try {
-    localStorage.setItem(META, JSON.stringify(next));
-  } catch {
-    // Unsaved, the next start compares again.
-  }
+  // Unsaved, the next start compares again.
+  writeJson(META, next);
 }
 
 /** What this window last pushed or took for each key, to tell a change from none. */

@@ -39,6 +39,7 @@ import {
 } from "./sketch";
 import "./image-sketch.css";
 import { mac } from "../../lib/mod-key";
+import { readJson, writeJson } from "../../lib/persisted-store";
 
 const PEN_KEY = "relay-sketch-pen";
 interface Pen {
@@ -48,12 +49,7 @@ interface Pen {
   blurSize: number;
 }
 function savedPen(): Pen {
-  let saved: Partial<Pen> = {};
-  try {
-    saved = JSON.parse(localStorage.getItem(PEN_KEY) ?? "{}");
-  } catch {
-    // Falls back to the defaults below.
-  }
+  const saved = (readJson(PEN_KEY) ?? {}) as Partial<Pen>;
   const { tool, color, size, blurSize } = saved;
   return {
     tool: tool === "blur" || tool === "redact" ? tool : "pen",
@@ -118,13 +114,7 @@ export function SketchEditor({
       cancelAnimationFrame(frame.current);
     };
   }, []);
-  useEffect(() => {
-    try {
-      localStorage.setItem(PEN_KEY, JSON.stringify(pen));
-    } catch {
-      // Still applies until the editor closes.
-    }
-  }, [pen]);
+  useEffect(() => writeJson(PEN_KEY, pen), [pen]);
 
   function paint() {
     cancelAnimationFrame(frame.current);

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Splitter } from "./Splitter";
+import { readText, writeText } from "../lib/persisted-store";
 
 export function PaneResizer({
   pane,
@@ -17,7 +18,7 @@ export function PaneResizer({
   const key = `relay-${pane}-width`,
     variable = `--${pane}-width`;
   const [width, setWidth] = useState(() => {
-    const stored = Number(localStorage.getItem(key));
+    const stored = Number(readText(key));
     const value = stored >= min && stored <= max ? stored : initial;
     document.documentElement.style.setProperty(variable, `${value}px`);
     return value;
@@ -26,7 +27,7 @@ export function PaneResizer({
     const next = Math.max(min, Math.min(max, value));
     setWidth(next);
     document.documentElement.style.setProperty(variable, `${next}px`);
-    localStorage.setItem(key, String(next));
+    writeText(key, String(next));
   };
   return (
     <Splitter

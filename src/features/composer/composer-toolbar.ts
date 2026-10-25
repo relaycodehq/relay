@@ -1,5 +1,5 @@
 import { localSwitch } from "../../lib/local-switch";
-import { persistedStore } from "../../lib/persisted-store";
+import { persistedStore, readText } from "../../lib/persisted-store";
 
 /** The composer's controls that can move or hide; Stop and Send stay last. */
 export const toolbarItems = [
@@ -169,11 +169,7 @@ export function parseToolbar(saved: unknown): ToolbarLayout {
 
 // The usage ring had an on/off switch before it could be hidden here.
 function usageWasOff() {
-  try {
-    return localStorage.getItem("relay-usage-ring") === "off";
-  } catch {
-    return false;
-  }
+  return readText("relay-usage-ring") === "off";
 }
 
 const store = persistedStore<ToolbarLayout>(

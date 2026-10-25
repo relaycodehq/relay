@@ -23,6 +23,7 @@ import type { ThreadView } from "../features/thread/useThreadView";
 import { useWorkspacePanes } from "../lib/workspace-panes";
 import type { ThreadWindow } from "../../shared/thread-windows";
 import { projectChatsQuery } from "../lib/workspace-queries";
+import { readText, writeText } from "../lib/persisted-store";
 
 /** What the main pane shows: a project, the Pull requests page or Usage. */
 export type Surface = "project" | "inbox" | "usage" | "processes" | "schedules";
@@ -45,7 +46,7 @@ export function useShellNavigation(
   pinned?: ThreadWindow,
 ) {
   const [selected, setSelected] = useState(
-      () => pinned?.projectId ?? localStorage.getItem("relay-project-id"),
+      () => pinned?.projectId ?? readText("relay-project-id"),
     ),
     [chatId, setOpenChat] = useState<string | null>(pinned?.chatId ?? null);
   /** Somewhere a pinned window doesn't go: the main window shows it instead. */
@@ -66,7 +67,7 @@ export function useShellNavigation(
   /** A page shown instead of a project: Pull requests, Usage, Processes or Schedules. */
   const [surface, setSurface] = useState<Surface>(() => {
     if (pinned) return "project";
-    const saved = localStorage.getItem("relay-surface");
+    const saved = readText("relay-surface");
     return saved === "inbox" ||
       saved === "usage" ||
       saved === "processes" ||
@@ -109,7 +110,7 @@ export function useShellNavigation(
   useEffect(() => {
     if (pinned) panes.switchTo(pinned.chatId);
     else if (project) {
-      localStorage.setItem("relay-project-id", project.id);
+      writeText("relay-project-id", project.id);
       const saved = openThread.load(project.id);
       setChatId(saved || null);
       setDraftScope(loadDraftScope(currentNewThread(project.id)));
@@ -123,7 +124,7 @@ export function useShellNavigation(
       saveDraftScope(draftId, draftScope);
   }, [draftScope, draftId, restoredProject]);
   useEffect(() => {
-    if (!pinned) localStorage.setItem("relay-surface", surface);
+    if (!pinned) writeText("relay-surface", surface);
   }, [surface]);
   useEffect(() => {
     if (project && project.id === restoredProject)

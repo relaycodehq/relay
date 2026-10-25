@@ -30,6 +30,7 @@ import {
 } from "./review-setups";
 import { useClaudeModels } from "../agents/useClaudeModels";
 import { usePoll } from "../../lib/poll";
+import { readText, writeJson, writeText } from "../../lib/persisted-store";
 
 /**
  * Keeps `change` with the unsent review, and the setup it was made with the
@@ -75,10 +76,10 @@ function useSetupDraft(projectId: string, draftId: string) {
     keepReview(projectId, draftId, setup, { focus: text || undefined });
   // Notes were once kept per project; the first review with none takes it.
   useEffect(() => {
-    const old = localStorage.getItem(focusKey(projectId));
+    const old = readText(focusKey(projectId));
     if (old === null || threadStorage(draftId).review.load().focus) return;
     updateReviewDraft(draftId, { focus: old || undefined });
-    localStorage.removeItem(focusKey(projectId));
+    writeText(focusKey(projectId), null);
   }, [projectId, draftId]);
   const update = (patch: Partial<Setup>) => {
     setEdited(true);
@@ -87,7 +88,7 @@ function useSetupDraft(projectId: string, draftId: string) {
   useEffect(() => {
     if (!edited) return;
     updateReviewDraft(draftId, { setup });
-    localStorage.setItem(setupKey(projectId), JSON.stringify(setup));
+    writeJson(setupKey(projectId), setup);
   }, [projectId, draftId, setup, edited]);
   // Until someone picks otherwise, Claude reviews and leads with Opus.
   useEffect(() => {
@@ -145,7 +146,7 @@ function useTargetPick(
   // Once it starts, the branch isn't kept, but the base is: the project's next review goes into the same one.
   const [chosenHead, setHead] = useState(saved.head ?? "");
   const [chosenBase, setBase] = useState(
-    () => saved.base ?? localStorage.getItem(baseKey(projectId)) ?? "",
+    () => saved.base ?? readText(baseKey(projectId)) ?? "",
   );
   const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
     keepReview(projectId, draftId, setup, change);
@@ -185,7 +186,7 @@ function useTargetPick(
     setBase: (name: string) => {
       setBase(name);
       keep({ base: name || undefined });
-      if (name) localStorage.setItem(baseKey(projectId), name);
+      if (name) writeText(baseKey(projectId), name);
     },
     baseChanges: baseChanges.isError ? undefined : baseChanges.data,
     branchList: branches.data,

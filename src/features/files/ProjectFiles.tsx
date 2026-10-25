@@ -20,6 +20,7 @@ import { PaneResizer } from "../../ui/PaneResizer";
 import { ErrorBox, IconButton } from "../../ui/ui";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { usePoll } from "../../lib/poll";
+import { readText, writeText } from "../../lib/persisted-store";
 
 type Selection =
   | { kind: "file"; path: string; line?: number }
@@ -67,7 +68,7 @@ export function ProjectFiles({
   const expansion = useExpanded(where);
   const [selection, setSelection] = useState<Selection | null>(() => {
       const path = filePathSchema.safeParse(
-        localStorage.getItem("relay-project-file:" + where),
+        readText("relay-project-file:" + where),
       ).data;
       return path ? { kind: "file", path } : null;
     }),
@@ -94,8 +95,7 @@ export function ProjectFiles({
     }
   });
   useEffect(() => {
-    if (file) localStorage.setItem("relay-project-file:" + where, file.path);
-    else localStorage.removeItem("relay-project-file:" + where);
+    writeText("relay-project-file:" + where, file?.path ?? null);
     onViewing({ path: file?.path ?? null, viewed: 0, total: 0 });
   }, [file?.path, onViewing]);
   const files = useQuery({

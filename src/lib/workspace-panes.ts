@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { readJson, writeJson } from "./persisted-store";
 
 export type PaneId = "chat" | "changes" | "panel";
 const PANE_IDS: PaneId[] = ["chat", "changes", "panel"];
@@ -64,22 +65,18 @@ const CHAT_ONLY: OpenPanes = {
  * the thread is next seen, so the panel can open them as its tabs.
  */
 const openByThread = (() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(THREADS_KEY) || "[]");
-    return new Map<string, string[]>(
-      Array.isArray(saved)
-        ? saved.filter(
-            (entry): entry is [string, string[]] =>
-              Array.isArray(entry) &&
-              typeof entry[0] === "string" &&
-              Array.isArray(entry[1]) &&
-              entry[1].every((id: unknown) => paneOf(id) !== undefined),
-          )
-        : [],
-    );
-  } catch {
-    return new Map<string, string[]>();
-  }
+  const saved = readJson(THREADS_KEY);
+  return new Map<string, string[]>(
+    Array.isArray(saved)
+      ? saved.filter(
+          (entry): entry is [string, string[]] =>
+            Array.isArray(entry) &&
+            typeof entry[0] === "string" &&
+            Array.isArray(entry[1]) &&
+            entry[1].every((id: unknown) => paneOf(id) !== undefined),
+        )
+      : [],
+  );
 })();
 
 /** Files or History the thread had open as panes before the panel took them. */
@@ -109,16 +106,13 @@ function remember(thread: string, open: OpenPanes) {
     if (openByThread.size <= REMEMBERED_THREADS) break;
     openByThread.delete(oldest);
   }
-  try {
-    localStorage.setItem(THREADS_KEY, JSON.stringify([...openByThread]));
-  } catch {
-    // Still remembered for this session.
-  }
+  writeJson(THREADS_KEY, [...openByThread]);
 }
 
 function restore(): Pick<PaneLayout, "order" | "weights"> {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    const saved = readJson(STORAGE_KEY) as
+      { order?: unknown; weights?: Record<string, unknown> } | undefined;
     const order: PaneId[] = Array.isArray(saved?.order)
       ? panesIn(saved.order)
       : [];
@@ -240,10 +234,7 @@ export function useWorkspacePanes(thread: string) {
   // The row's width, once measured; until then every shown pane fits.
   const [room, setRoom] = useState<number>();
   useEffect(() => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ order: layout.order, weights: layout.weights }),
-    );
+    writeJson(STORAGE_KEY, { order: layout.order, weights: layout.weights });
   }, [layout.order, layout.weights]);
   useEffect(
     () => remember(layout.thread, layout.open),

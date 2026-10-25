@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Bootstrap, SidebarView } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { useShortcut } from "../../lib/shortcuts";
+import { readText, writeText } from "../../lib/persisted-store";
 
 /** Activity or Projects, kept in app data; the `activity` shortcut flips it. */
 export function useSidebarView(initialView?: SidebarView) {
@@ -10,13 +11,9 @@ export function useSidebarView(initialView?: SidebarView) {
   const [view, setView] = useState<SidebarView>(() => {
     if (initialView) return initialView;
     // Preserve the selection from versions that only used browser storage.
-    try {
-      if (localStorage.getItem("relay-sidebar-view") === "activity")
-        return "activity";
-    } catch {
-      // App data remains usable when browser storage isn't.
-    }
-    return "threads";
+    return readText("relay-sidebar-view") === "activity"
+      ? "activity"
+      : "threads";
   });
   const { mutate: saveView, error } = useMutation({
     mutationFn: (next: SidebarView) => api.saveSidebarView(next),
@@ -24,11 +21,7 @@ export function useSidebarView(initialView?: SidebarView) {
       qc.setQueryData<Bootstrap>(["bootstrap"], (boot) =>
         boot ? { ...boot, sidebarView } : boot,
       );
-      try {
-        localStorage.removeItem("relay-sidebar-view");
-      } catch {
-        // The choice has already been saved in app data.
-      }
+      writeText("relay-sidebar-view", null);
     },
   });
   useEffect(() => saveView(view), [view, saveView]);

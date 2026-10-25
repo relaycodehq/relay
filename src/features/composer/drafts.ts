@@ -35,6 +35,7 @@ import {
   onDraftImageCount,
   readDraftImageCounts,
 } from "../images/draft-images";
+import { readText, writeJson, writeText } from "../../lib/persisted-store";
 
 // Chat drafts live outside React state so a keystroke re-renders only the
 // composer that shows the draft, not the whole conversation around it.
@@ -106,12 +107,7 @@ let sentRead: { raw: string | null; marks: Record<string, number> } = {
 };
 
 function sentMarks(): Record<string, number> {
-  let raw: string | null = null;
-  try {
-    raw = localStorage.getItem(SENT);
-  } catch {
-    // Storage is a convenience here.
-  }
+  const raw = readText(SENT);
   if (raw === sentRead.raw) return sentRead.marks;
   let marks: Record<string, number> = {};
   try {
@@ -130,11 +126,8 @@ export function markDraftSent(chatId: string) {
   const marks = Object.entries({ ...sentMarks(), [chatId]: Date.now() })
     .sort(([, a], [, b]) => b - a)
     .slice(0, SENT_KEPT);
-  try {
-    localStorage.setItem(SENT, JSON.stringify(Object.fromEntries(marks)));
-  } catch {
-    // Activity then takes the draft as cleared rather than sent.
-  }
+  // Unsaved, Activity takes the draft as cleared rather than sent.
+  writeJson(SENT, Object.fromEntries(marks));
 }
 
 export const draftSentAt = (chatId: string): number | undefined =>
@@ -279,13 +272,13 @@ export function updateReviewDraft(id: string, change: Partial<ReviewDraft>) {
 
 /** The new thread a project last showed. */
 export function currentNewThread(projectId: string): string {
-  const saved = localStorage.getItem(currentNewThreadKey(projectId));
+  const saved = readText(currentNewThreadKey(projectId));
   return saved && newThreadProject(saved) === projectId
     ? saved
     : newThreadId(projectId);
 }
 export const setCurrentNewThread = (projectId: string, id: string) =>
-  localStorage.setItem(currentNewThreadKey(projectId), id);
+  writeText(currentNewThreadKey(projectId), id);
 
 export const loadDraftLinks = (id: string): LinkedFolder[] =>
   threadStorage(id).links.load();
@@ -365,7 +358,7 @@ export function forgetNewThread(id: string) {
   clearDraftScope(id);
   threadStorage(id).reply.save(null);
   if (isSlot(id)) {
-    localStorage.removeItem(composerSettingsKey(id));
+    writeText(composerSettingsKey(id), null);
     dropThreadDraft(id);
   }
 }
@@ -390,8 +383,8 @@ export function freshNewThread(projectId: string): string {
   for (const id of left) if (!hasDraft(id)) forgetNewThread(id);
   const slot = newThreadId(projectId, Date.now().toString(36));
   // It starts on the settings the project's new threads have.
-  const settings = localStorage.getItem(composerSettingsKey(base));
-  if (settings) localStorage.setItem(composerSettingsKey(slot), settings);
+  const settings = readText(composerSettingsKey(base));
+  if (settings) writeText(composerSettingsKey(slot), settings);
   return slot;
 }
 

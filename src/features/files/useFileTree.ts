@@ -4,6 +4,7 @@ import type { DirListing } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import { visibleDirectories } from "../../lib/file-tree";
 import { usePoll } from "../../lib/poll";
+import { readJson, writeJson } from "../../lib/persisted-store";
 
 export const directoryKey = (where: string, dir?: string) =>
   dir === undefined
@@ -15,18 +16,12 @@ const storageKey = (where: string) => "relay-project-tree:" + where;
 /** Which folders are open in a workspace's tree, kept between sessions. */
 export function useExpanded(where: string) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => {
-    try {
-      const value: unknown = JSON.parse(
-        localStorage.getItem(storageKey(where)) ?? "[]",
-      );
-      return new Set(
-        Array.isArray(value)
-          ? value.filter((v): v is string => typeof v === "string")
-          : [],
-      );
-    } catch {
-      return new Set();
-    }
+    const value = readJson(storageKey(where));
+    return new Set(
+      Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : [],
+    );
   });
   const update = useCallback(
     (change: (set: Set<string>) => void) =>
@@ -38,7 +33,7 @@ export function useExpanded(where: string) {
           [...next].every((p) => current.has(p))
         )
           return current;
-        localStorage.setItem(storageKey(where), JSON.stringify([...next]));
+        writeJson(storageKey(where), [...next]);
         return next;
       }),
     [where],

@@ -3,6 +3,7 @@ import type {
   SettingsEdit,
   SettingsFileState,
 } from "../../shared/settings-file";
+import { readText, writeText } from "./persisted-store";
 
 /**
  * settings.json in the page: read once as it starts, so the first frame
@@ -229,18 +230,12 @@ export function storedBefore<T>(key: string, read: (raw: string) => T) {
   return {
     read() {
       try {
-        const raw = localStorage.getItem(key);
+        const raw = readText(key);
         return raw === null ? undefined : read(raw);
       } catch {
         return undefined;
       }
     },
-    forget() {
-      try {
-        localStorage.removeItem(key);
-      } catch {
-        // Nothing to move then.
-      }
-    },
+    forget: () => writeText(key, null),
   };
 }

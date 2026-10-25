@@ -16,7 +16,7 @@ import {
   type ShortcutOverrides,
 } from "../../shared/shortcuts";
 import { mac } from "./mod-key";
-import { persistedStore } from "./persisted-store";
+import { persistedStore, readJson, writeText } from "./persisted-store";
 import { noteUsed } from "./used";
 
 /**
@@ -32,13 +32,8 @@ const bindingList = z.array(keyComboSchema).max(MAX_BINDINGS);
 const formerIds: Partial<Record<ShortcutId, string>> = { find: "pr-search" };
 
 function legacyDictation(): ShortcutOverrides {
-  try {
-    const saved = localStorage.getItem(LEGACY_DICTATION);
-    const combo = keyComboSchema.safeParse(JSON.parse(saved ?? "null"));
-    return combo.success ? { dictate: [combo.data] } : {};
-  } catch {
-    return {};
-  }
+  const combo = keyComboSchema.safeParse(readJson(LEGACY_DICTATION));
+  return combo.success ? { dictate: [combo.data] } : {};
 }
 
 const store = persistedStore<ShortcutOverrides>(
@@ -164,11 +159,7 @@ export const resetBindings = (id: ShortcutId) => setBindings(id, defaults[id]);
 export const resetAllBindings = () => write({});
 
 function write(next: ShortcutOverrides) {
-  try {
-    localStorage.removeItem(LEGACY_DICTATION);
-  } catch {
-    // Nothing to migrate from then.
-  }
+  writeText(LEGACY_DICTATION, null);
   store.set(next);
 }
 

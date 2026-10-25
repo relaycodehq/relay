@@ -78,6 +78,28 @@ describe("source layout", () => {
     expect(loose("src")).toEqual(["main.tsx", "styles.css"]);
   });
 
+  it("keeps localStorage behind src/lib/persisted-store.ts", () => {
+    // A bare setItem throws when storage is full or turned off, and once
+    // skipped saving a pick to the main process. These need raw access:
+    // drafts are sized and swept by key, and an imported theme that doesn't
+    // fit has to say so.
+    const raw = new Set([
+      "src/lib/persisted-store.ts",
+      "src/lib/thread-storage.ts",
+      "src/lib/imported-themes.ts",
+      "src/features/composer/drafts.ts",
+      "src/features/composer/thread-storage-sweep.ts",
+    ]);
+    const found = sources("src")
+      .filter((file) => !/\.test\.tsx?$/.test(file) && !raw.has(file))
+      .filter((file) =>
+        /\blocalStorage\.(getItem|setItem|removeItem|key|clear|length)\b/.test(
+          readFileSync(join(root, file), "utf8"),
+        ),
+      );
+    expect(found).toEqual([]);
+  });
+
   it("keeps features from importing each other in a circle", () => {
     // Type imports count here: across features they are still a dependency.
     expect(cyclesIn("src/features", false).map(describeCycle)).toEqual([]);

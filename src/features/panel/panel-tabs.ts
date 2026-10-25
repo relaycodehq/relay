@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { legacyTabs } from "../../lib/workspace-panes";
 import { newThreadProject } from "../composer/drafts";
 import { newTerminalSlot } from "../terminal/terminal-dock";
+import { readJson, writeJson, writeText } from "../../lib/persisted-store";
 
 /** What the panel can show. Terminals stack as several tabs; the rest open once. */
 export type Surface = "files" | "history" | "terminal" | "browser" | "device";
@@ -26,7 +27,7 @@ interface PanelState {
 const STORAGE_KEY = "relay-thread-panel-2";
 const REMEMBERED = 200;
 // The first store handed one thread's tabs to every thread seen after it.
-localStorage.removeItem("relay-thread-panel");
+writeText("relay-thread-panel", null);
 
 function tabFor(surface: Surface): PanelTab {
   if (surface !== "terminal") return { key: surface, surface };
@@ -43,7 +44,7 @@ const isTab = (tab: unknown): tab is PanelTab =>
 /** The panel's tabs per thread, least recently used first. */
 const byThread = (() => {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const saved = readJson(STORAGE_KEY);
     return new Map<string, Omit<PanelState, "thread">>(
       Array.isArray(saved)
         ? saved
@@ -74,11 +75,7 @@ const byThread = (() => {
 })();
 
 function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...byThread]));
-  } catch {
-    // Still remembered for this session.
-  }
+  writeJson(STORAGE_KEY, [...byThread]);
 }
 
 function remember({ thread, tabs, front, unseen }: PanelState) {

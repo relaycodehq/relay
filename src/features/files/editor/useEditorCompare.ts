@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { readText, writeText } from "../../../lib/persisted-store";
 
 const KEY = "relay-editor-compare";
 
@@ -9,10 +10,10 @@ const KEY = "relay-editor-compare";
  */
 export function useEditorCompare(inline: boolean, plain: boolean) {
   const [comparing, setComparing] = useState(
-    () => !inline || localStorage.getItem(KEY) === "true",
+    () => !inline || readText(KEY) === "true",
   );
   useEffect(() => {
-    if (inline) localStorage.setItem(KEY, String(comparing));
+    if (inline) writeText(KEY, String(comparing));
   }, [inline, comparing]);
   return [comparing && !plain, () => setComparing((v) => !v)] as const;
 }

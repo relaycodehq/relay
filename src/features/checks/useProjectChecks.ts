@@ -5,6 +5,7 @@ import type { ProjectCheckState } from "../../../shared/checks";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
 import { usePoll } from "../../lib/poll";
+import { readText, writeText } from "../../lib/persisted-store";
 
 /** How long Relay sits in the background before the checker quits to free its memory. */
 const SLEEP_AFTER_MS = 2 * 60_000;
@@ -64,8 +65,8 @@ export function useProjectChecks(
   const [preferenceVersion, setPreferenceVersion] = useState(0);
   const { selection, enabled } = useMemo(
     () => ({
-      selection: localStorage.getItem(preference + ":target") ?? "",
-      enabled: localStorage.getItem(preference) !== "off",
+      selection: readText(preference + ":target") ?? "",
+      enabled: readText(preference) !== "off",
     }),
     [preference, preferenceVersion],
   );
@@ -135,11 +136,11 @@ export function useProjectChecks(
       .catch(() => {});
   }, [identity, enabled, asleep, paused]);
   const toggle = (value: boolean) => {
-    localStorage.setItem(preference, value ? "on" : "off");
+    writeText(preference, value ? "on" : "off");
     setPreferenceVersion((n) => n + 1);
   };
   const choose = (value: string) => {
-    localStorage.setItem(preference + ":target", value);
+    writeText(preference + ":target", value);
     setPreferenceVersion((n) => n + 1);
   };
   const buffer = useCallback(

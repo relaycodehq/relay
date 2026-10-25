@@ -1,3 +1,4 @@
+import { readJson, readText, writeText } from "./persisted-store";
 /**
  * Relay's design tokens. Every theme supplies the same small palette and the
  * rest (soft accent, accent text, code colours) is derived, so a new theme is
@@ -407,14 +408,9 @@ function parseChoice(kind: ThemeKind, saved: unknown): ThemeChoice {
 
 /** What earlier builds kept in localStorage, in any of its formats. */
 export function loadAppearance(): Appearance {
-  let saved: Record<string, unknown> = {};
-  try {
-    saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "{}") ?? {};
-  } catch {
-    // Fall back to defaults.
-  }
+  let saved = (readJson(STORAGE_KEY) ?? {}) as Record<string, unknown>;
   // Earlier builds only stored the light/dark choice under "theme".
-  const legacy = localStorage.getItem("theme");
+  const legacy = readText("theme");
   let mode: AppearanceMode = ["system", "light", "dark"].includes(
     String(saved.mode),
   )
@@ -483,23 +479,12 @@ export function serializeAppearance(value: Appearance) {
 
 /** Whether an earlier build kept an appearance in localStorage. */
 export function hasStoredAppearance() {
-  try {
-    return (
-      localStorage.getItem(STORAGE_KEY) !== null ||
-      localStorage.getItem("theme") !== null
-    );
-  } catch {
-    return false;
-  }
+  return readText(STORAGE_KEY) !== null || readText("theme") !== null;
 }
 
 export function forgetStoredAppearance() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem("theme");
-  } catch {
-    // Nothing to move then.
-  }
+  writeText(STORAGE_KEY, null);
+  writeText("theme", null);
 }
 
 function kindFor(mode: AppearanceMode, systemDark: boolean): ThemeKind {

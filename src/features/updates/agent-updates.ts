@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 import type { AgentVersions } from "../../../shared/agent-updates";
 import type { AgentProvider } from "../../../shared/agents";
 import { errorMessage } from "../../../shared/error-message";
+import { readText, writeText } from "../../lib/persisted-store";
 
 const listeners = new Set<() => void>();
 let versions: AgentVersions | undefined;
@@ -87,21 +88,12 @@ export async function signOutAgent(provider: AgentProvider) {
 const legacyNoticesKey = "relay-agent-update-notices";
 
 async function readAgentUpdateChecks() {
-  let legacy: string | null = null;
-  try {
-    legacy = localStorage.getItem(legacyNoticesKey);
-  } catch {
-    // No storage, nothing to carry over.
-  }
+  const legacy = readText(legacyNoticesKey);
   const on =
     legacy === "off"
       ? await api.saveAgentUpdateChecks(false)
       : await api.agentUpdateChecks();
-  try {
-    localStorage.removeItem(legacyNoticesKey);
-  } catch {
-    // Carried over already; asking again is harmless.
-  }
+  writeText(legacyNoticesKey, null);
   return on;
 }
 

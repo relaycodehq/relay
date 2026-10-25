@@ -8,6 +8,7 @@ import {
   type SavedReviewSetup,
 } from "../../../shared/deep-review";
 import { api } from "../../lib/api";
+import { readText, writeJson } from "../../lib/persisted-store";
 
 export type { SavedReviewSetup };
 export type ReviewSetupChoice = SavedReviewSetup["setup"];
@@ -25,7 +26,7 @@ let cached:
 let version = 0;
 
 function read(): Snapshot {
-  const raw = localStorage.getItem(key);
+  const raw = readText(key);
   if (cached?.raw === raw && cached.version === version) return cached.snapshot;
   let value: unknown;
   try {
@@ -42,7 +43,7 @@ function read(): Snapshot {
   return snapshot;
 }
 function write(entries: SavedReviewSetup[]) {
-  localStorage.setItem(key, JSON.stringify(entries));
+  writeJson(key, entries);
   share(entries);
   changed();
 }

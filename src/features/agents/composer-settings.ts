@@ -13,7 +13,7 @@ import {
   type NewThreadModels,
 } from "../../../shared/new-thread-models";
 import { isAgentProvider, type AgentProvider } from "../../../shared/agents";
-import { readJson } from "../../lib/persisted-store";
+import { readJson, writeJson } from "../../lib/persisted-store";
 import { composerSettingsKey } from "../../lib/thread-storage";
 import {
   readComposerModels,
@@ -67,13 +67,13 @@ const isNewThread = (key: string) => key.startsWith("new:");
 export const cachedNewThreadModels = (): NewThreadModels | undefined =>
   newThreadModelsSchema.safeParse(readJson(newThreadModelsKey)).data;
 export const cacheNewThreadModels = (models: NewThreadModels) =>
-  localStorage.setItem(newThreadModelsKey, JSON.stringify(models));
+  writeJson(newThreadModelsKey, models);
 /** The same for the access a new thread starts on. */
 const newThreadModeKey = "composer-mode:new-thread";
 export const cachedNewThreadRuntimeMode = (): RuntimeMode | undefined =>
   runtimeModeSchema.safeParse(readJson(newThreadModeKey)).data;
 export const cacheNewThreadRuntimeMode = (mode: RuntimeMode) =>
-  localStorage.setItem(newThreadModeKey, JSON.stringify(mode));
+  writeJson(newThreadModeKey, mode);
 /**
  * Where a new thread's composer stands with the agent last picked for one:
  * the one it took up or handed on (unset before the first answer), and the
@@ -145,10 +145,7 @@ export function saveComposerSettings(
   key: string,
   { provider, ...settings }: ComposerSettings,
 ) {
-  localStorage.setItem(
-    composerSettingsKey(key),
-    JSON.stringify({ ...settings, agent: provider }),
-  );
+  writeJson(composerSettingsKey(key), { ...settings, agent: provider });
 }
 /**
  * Hands a new thread's composer settings to the thread it started, on the

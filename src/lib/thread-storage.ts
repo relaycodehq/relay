@@ -37,6 +37,7 @@ import {
   type ReviewDraft,
   type ThreadDraft,
 } from "./thread-draft";
+import { readText, writeText } from "./persisted-store";
 
 export { DRAFT_PREFIX };
 
@@ -358,9 +359,9 @@ export function draftChips(draftKey: string) {
 
 /** The thread a project shows; "" for its unsent one, null before any. */
 export const openThread = {
-  load: (projectId: string) => localStorage.getItem(OPEN_THREAD + projectId),
+  load: (projectId: string) => readText(OPEN_THREAD + projectId),
   save: (projectId: string, id: string | null) =>
-    localStorage.setItem(OPEN_THREAD + projectId, id ?? ""),
+    writeText(OPEN_THREAD + projectId, id ?? ""),
 };
 export const currentNewThreadKey = (projectId: string) =>
   CURRENT_NEW_THREAD + projectId;

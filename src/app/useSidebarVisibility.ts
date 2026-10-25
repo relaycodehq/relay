@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { popupOpen, useShortcut } from "../lib/shortcuts";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { readText, writeText } from "../lib/persisted-store";
 
 /** How close to the window's left edge the pointer peeks a hidden sidebar. */
 const EDGE_PEEK_WIDTH = 12;
@@ -46,10 +47,10 @@ export function useSidebarVisibility(
     else style.removeProperty("--sidebar-room");
   }, [room, need, crowded]);
   const [hiddenAlone, setHiddenAlone] = useState(
-    () => localStorage.getItem("relay-projects-hidden") === "true",
+    () => readText("relay-projects-hidden") === "true",
   );
   const [hiddenBesidePane, setHiddenBesidePane] = useState(() => {
-    const saved = localStorage.getItem(BESIDE_PANE_KEY);
+    const saved = readText(BESIDE_PANE_KEY);
     return saved ? saved === "true" : null;
   });
   // Asked back while crowded: it stays, and a pane yields instead.
@@ -86,11 +87,13 @@ export function useSidebarVisibility(
   };
   useShortcut("sidebar", true, toggle);
   useEffect(() => {
-    localStorage.setItem("relay-projects-hidden", String(hiddenAlone));
+    writeText("relay-projects-hidden", String(hiddenAlone));
   }, [hiddenAlone]);
   useEffect(() => {
-    if (hiddenBesidePane === null) localStorage.removeItem(BESIDE_PANE_KEY);
-    else localStorage.setItem(BESIDE_PANE_KEY, String(hiddenBesidePane));
+    writeText(
+      BESIDE_PANE_KEY,
+      hiddenBesidePane === null ? null : String(hiddenBesidePane),
+    );
   }, [hiddenBesidePane]);
   // Flipping the setting is a fresh answer for side panes.
   const autoHideWas = useRef(autoHide);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { readText, writeText } from "../../lib/persisted-store";
 
 /**
  * The repository the Pull requests page shows, by `repoKey`, which names its
@@ -6,10 +7,7 @@ import { useEffect, useState } from "react";
  */
 export function usePullsRepo() {
   const key = "relay-pulls-repo";
-  const [repo, setRepo] = useState(() => localStorage.getItem(key) || null);
-  useEffect(() => {
-    if (repo) localStorage.setItem(key, repo);
-    else localStorage.removeItem(key);
-  }, [repo]);
+  const [repo, setRepo] = useState(() => readText(key) || null);
+  useEffect(() => writeText(key, repo || null), [repo]);
   return [repo, setRepo] as const;
 }

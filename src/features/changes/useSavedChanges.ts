@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { readJson } from "../../lib/persisted-store";
+import { readJson, writeJson } from "../../lib/persisted-store";
 import { parseSavedChanges, type SelectedChange } from "./working-changes";
 
 /**
@@ -15,8 +15,7 @@ export function useSavedChanges(projectId: string | undefined) {
     [message, setMessage] = useState(saved.message),
     [grouped, setGrouped] = useState(saved.grouped);
   useEffect(() => {
-    if (key)
-      localStorage.setItem(key, JSON.stringify({ selected, message, grouped }));
+    if (key) writeJson(key, { selected, message, grouped });
   }, [key, selected, message, grouped]);
   return { selected, setSelected, message, setMessage, grouped, setGrouped };
 }

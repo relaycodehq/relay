@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { readJson, writeJson } from "../../lib/persisted-store";
 
 /** The shells a thread's dock has as tabs, by slot ("" is the first shell). */
 export interface DockTabs {
@@ -12,23 +13,19 @@ const FIRST: DockTabs = { slots: [""], front: "" };
 
 /** Tabs per thread key; the shells outlive a reload, so the tabs do too. */
 const docks = (() => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return new Map<string, DockTabs>(
-      Array.isArray(saved)
-        ? saved.filter(
-            (entry): entry is [string, DockTabs] =>
-              Array.isArray(entry) &&
-              typeof entry[0] === "string" &&
-              Array.isArray(entry[1]?.slots) &&
-              entry[1].slots.length > 0 &&
-              entry[1].slots.includes(entry[1].front),
-          )
-        : [],
-    );
-  } catch {
-    return new Map<string, DockTabs>();
-  }
+  const saved = readJson(STORAGE_KEY);
+  return new Map<string, DockTabs>(
+    Array.isArray(saved)
+      ? saved.filter(
+          (entry): entry is [string, DockTabs] =>
+            Array.isArray(entry) &&
+            typeof entry[0] === "string" &&
+            Array.isArray(entry[1]?.slots) &&
+            entry[1].slots.length > 0 &&
+            entry[1].slots.includes(entry[1].front),
+        )
+      : [],
+  );
 })();
 /** Whether each thread's dock shows; only for as long as the window lives. */
 const openKeys = new Set<string>();
@@ -55,11 +52,7 @@ export function setDockTabs(key: string, tabs: DockTabs) {
     if (docks.size <= REMEMBERED) break;
     docks.delete(oldest);
   }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...docks]));
-  } catch {
-    // Still remembered for this session.
-  }
+  writeJson(STORAGE_KEY, [...docks]);
   emit();
 }
 
