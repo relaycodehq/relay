@@ -49,12 +49,41 @@ export interface ThreadWindowsState {
   focused: string | null;
 }
 
+/** The calls and events behind threads in windows of their own, and the main window they go back to. */
+export interface ThreadWindowsApi {
+  /** Which threads have windows of their own. */
+  threadWindows(): Promise<ThreadWindowsState>;
+  onThreadWindows(callback: (state: ThreadWindowsState) => void): () => void;
+  /** Pops a thread out into its own window, or brings its window up. */
+  openThreadWindow(projectId: string, chatId: string): Promise<void>;
+  /** Closes a thread's window and shows the thread in the main window. */
+  returnThreadWindow(chatId: string): Promise<void>;
+  /** Shows the main window, on this thread unless it has a window of its own. */
+  openInMainWindow(projectId: string, chatId?: string): Promise<void>;
+  /** The thread the main window was opened to show, once. */
+  takeOpenThread(): Promise<ThreadWindow | null>;
+  /** Shows the main window and runs `command` there, as typed in it. */
+  runInMainWindow(command: MainWindowCommand): Promise<void>;
+  /** The command the main window was opened to run, once. */
+  takeMainWindowCommand(): Promise<MainWindowCommand | null>;
+  /** A command a thread's window asks the main window to run. */
+  onMainWindowCommand(
+    callback: (command: MainWindowCommand) => void,
+  ): () => void;
+  /** This thread's own window was brought up from elsewhere. */
+  onFlashWindow(callback: () => void): () => void;
+  /** A thread to show in the main window, sent as its own window closes. */
+  onOpenThread(callback: (thread: ThreadWindow) => void): () => void;
+  /** A thread that moved to another project, for a window showing it to follow. */
+  onThreadMoved(callback: (thread: ThreadWindow) => void): () => void;
+}
+
 /** Where a popped thread's window was, so a restart opens it there again. */
 export interface SavedThreadWindow extends ThreadWindow {
   bounds: { x: number; y: number; width: number; height: number };
 }
 
-const boundsSchema = z.object({
+export const boundsSchema = z.object({
   x: z.number().int(),
   y: z.number().int(),
   width: z.number().int().min(100).max(20_000),

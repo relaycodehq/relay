@@ -23,7 +23,7 @@ import { Quit } from "./app/quit";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
-import { savedMainWindow, savedThreadWindows } from "../shared/thread-windows";
+import { keepMainWindowPlace, restorePoppedWindows } from "./app/saved-windows";
 import {
   askAboutCrashLoop,
   offerCrashReport,
@@ -615,33 +615,11 @@ app
     // Test runs stay off the user's menubar, as their windows stay off the desktop.
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
       menubar.start();
-    // Test runs park their windows off-screen and size them as each test needs.
-    if (!process.env.RELAY_TEST_DATA)
-      window.keepPlace({
-        load: () => savedMainWindow(loaded.get().mainWindow),
-        save: (place) =>
-          void loaded
-            .update((s) => {
-              s.mainWindow = place;
-            })
-            .catch((e) =>
-              console.warn("Could not save the window's place:", e),
-            ),
-      });
+    keepMainWindowPlace(window, loaded);
     window.clear = loaded.get().glass !== false;
     window.create();
     window.win?.webContents.once("did-finish-load", windowLoaded);
-    window.threads.restore({
-      load: () => savedThreadWindows(loaded.get().threadWindows),
-      save: (windows) =>
-        void loaded
-          .update((s) => {
-            s.threadWindows = windows;
-          })
-          .catch((e) => console.warn("Could not save thread windows:", e)),
-      exists: ({ chatId }) =>
-        !!loaded.get().chats?.some((c) => c.id === chatId),
-    });
+    restorePoppedWindows(window, loaded);
     void login.restoreSaved(loaded);
     app.on("activate", () => {
       if (!window.win) window.create();

@@ -11,6 +11,7 @@ import type { ScheduleApi } from "./schedules";
 import type { TerminalApi } from "./terminals";
 import type { PreviewApi } from "./preview";
 import type { DevicesApi } from "./devices";
+import type { ThreadWindowsApi } from "./thread-windows";
 import type { WorkingTreeApi } from "./working-tree";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
@@ -278,6 +279,7 @@ export interface LocalFile {
 export interface Api
   extends
     WorkingTreeApi,
+    ThreadWindowsApi,
     ProjectApi,
     DevOpsApi,
     PluginsApi,
@@ -817,41 +819,6 @@ export interface Api
   onOpenUrl(callback: (url: string) => void): () => void;
   /** A project to show: `relay <folder>` or a folder dropped on Relay. */
   onOpenProject(callback: (id: string) => void): () => void;
-  /** Which threads have windows of their own. */
-  threadWindows(): Promise<import("./thread-windows").ThreadWindowsState>;
-  onThreadWindows(
-    callback: (state: import("./thread-windows").ThreadWindowsState) => void,
-  ): () => void;
-  /** Pops a thread out into its own window, or brings its window up. */
-  openThreadWindow(projectId: string, chatId: string): Promise<void>;
-  /** Closes a thread's window and shows the thread in the main window. */
-  returnThreadWindow(chatId: string): Promise<void>;
-  /** Shows the main window, on this thread unless it has a window of its own. */
-  openInMainWindow(projectId: string, chatId?: string): Promise<void>;
-  /** The thread the main window was opened to show, once. */
-  takeOpenThread(): Promise<import("./thread-windows").ThreadWindow | null>;
-  /** Shows the main window and runs `command` there, as typed in it. */
-  runInMainWindow(
-    command: import("./thread-windows").MainWindowCommand,
-  ): Promise<void>;
-  /** The command the main window was opened to run, once. */
-  takeMainWindowCommand(): Promise<
-    import("./thread-windows").MainWindowCommand | null
-  >;
-  /** A command a thread's window asks the main window to run. */
-  onMainWindowCommand(
-    callback: (command: import("./thread-windows").MainWindowCommand) => void,
-  ): () => void;
-  /** This thread's own window was brought up from elsewhere. */
-  onFlashWindow(callback: () => void): () => void;
-  /** A thread to show in the main window, sent as its own window closes. */
-  onOpenThread(
-    callback: (thread: import("./thread-windows").ThreadWindow) => void,
-  ): () => void;
-  /** A thread that moved to another project, for a window showing it to follow. */
-  onThreadMoved(
-    callback: (thread: import("./thread-windows").ThreadWindow) => void,
-  ): () => void;
   /** Every draft this computer shares with its phones; see shared/drafts. */
   sharedDrafts(): Promise<import("./drafts").SharedDraft[]>;
   /** This window's edits; each draft as it stands after, null once gone. */
