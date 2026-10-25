@@ -16,7 +16,7 @@ import {
   realpath,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
@@ -37,20 +37,37 @@ function repository(path: string) {
   ]);
 }
 
-/** Has the thread's agent call one of Relay's tools, and resolves to its answer. */
+/**
+ * Has the thread's agent call one of Relay's tools, and resolves to its
+ * answer: the first words after this message. A started thread reporting
+ * back lands in the same thread, as a steer that moves the rest of a
+ * running answer below it, or as a turn of its own after it.
+ */
 async function callTool(page: Page, tool: string, input: unknown) {
-  const answers = page.getByRole("article", { name: "codex answer" });
-  const before = await answers.count();
-  await page
-    .getByLabel("Message project")
-    .fill(`fixture relay ${tool} ${JSON.stringify(input)}`);
+  const said = `fixture relay ${tool} ${JSON.stringify(input)}`;
+  // The same call can be made twice, so this one is told apart by its place.
+  const sent = page
+    .getByRole("article", { name: "Your message" })
+    .filter({ hasText: said });
+  const before = await sent.count();
+  await page.getByLabel("Message project").fill(said);
   await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(sent).toHaveCount(before + 1);
   return async () => {
-    await expect(answers).toHaveCount(before + 1, { timeout: 15000 });
+    const after = sent
+      .nth(before)
+      .locator('xpath=following::article[@aria-label="codex answer"]');
+    const firstWords = async () =>
+      (await after.locator(".markdown").allInnerTexts())
+        .map((text) => text.trim())
+        .find(Boolean) ?? "";
+    // No Stop button can also be the gap between that answer and a report's,
+    // so it has words first, then is read again once nothing runs.
+    await expect.poll(firstWords, { timeout: 15000 }).not.toBe("");
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0, { timeout: 15000 });
-    return (await answers.last().locator(".markdown").innerText()).trim();
+    return firstWords();
   };
 }
 
@@ -96,10 +113,16 @@ test("an agent adds a project only through the user, then starts and messages th
     await page.evaluate(() => {
       document.documentElement.dataset.theme = "dark";
     });
-    // A fresh thread in full access: the tools come with its first session.
-    await expect(
-      page.getByRole("combobox", { name: "Runtime mode", exact: true }),
-    ).toHaveText("Full access");
+    // In full access, which new threads no longer start on, so each card
+    // below shows that it doesn't let the agent past the user. The tools come
+    // with the thread's first session, so it's picked before that.
+    const mode = page.getByRole("combobox", {
+      name: "Runtime mode",
+      exact: true,
+    });
+    await mode.click();
+    await page.getByRole("option", { name: /Full access/ }).click();
+    await expect(mode).toHaveText("Full access");
 
     const listed = JSON.parse(
       await (
@@ -110,9 +133,12 @@ test("an agent adds a project only through the user, then starts and messages th
       expect.objectContaining({ folder: lead, git: true, current: true }),
     ]);
 
-    // Refused before anyone is asked.
+    // Refused before anyone is asked. The app's home is the one the test
+    // launch gives it, not this process's.
     const home = await (
-      await callTool(page, "add_project", { folder: homedir() })
+      await callTool(page, "add_project", {
+        folder: join(root, "data", "home"),
+      })
     )();
     expect(home).toBe("That's the user's home folder.");
     await expect(
@@ -189,6 +215,13 @@ test("an agent adds a project only through the user, then starts and messages th
     );
     await send.getByRole("button", { name: "Always", exact: true }).click();
     expect(await sent()).toBe("Sent.");
+    // Idle again first, or the next one queues behind its answer.
+    await (
+      await callTool(page, "wait_for_threads", {
+        ids: [child.id],
+        timeoutSeconds: 30,
+      })
+    )();
     const again = await (
       await callTool(page, "send_to_thread", {
         id: child.id,

@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("queues and reorders during a turn, stops cleanly, and resumes without consuming a paused queue", async () => {
+test("queues and reorders during a turn, stops cleanly, and picks the paused queue back up after a resume", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-chat-queue-")),
   );
@@ -180,13 +180,24 @@ test("queues and reorders during a turn, stops cleanly, and resumes without cons
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Stop answer", exact: true }),
-    ).toHaveCount(0);
-    await expect(queue).toContainText("Paused");
-    await expect(queue.locator(".queued-message")).toHaveCount(1);
-    await queue.getByRole("button", { name: "Send now", exact: true }).click();
+    // The stop paused the queue; the resumed answer picks it back up, so
+    // the message left waiting goes out after it on its own.
     await expect(queue).toHaveCount(0);
+    await expect(
+      page.getByRole("article", { name: "Your message" }).last(),
+    ).toContainText("Then explain the invalidation");
+    // Its turn reached the agent before the calls are read below.
+    await expect
+      .poll(
+        async () =>
+          (await readFile(capture, "utf8"))
+            .trim()
+            .split("\n")
+            .map((line) => JSON.parse(line))
+            .filter((c) => c.turn)
+            .at(-1)?.turn.input[0].text,
+      )
+      .toContain("Then explain the invalidation");
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),
     ).toHaveCount(0);
