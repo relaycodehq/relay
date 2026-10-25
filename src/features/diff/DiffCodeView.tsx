@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useState, type Ref } from "react";
+import {
+  useEffect,
+  useInsertionEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+  type RefObject,
+} from "react";
 import {
   CodeView,
   type CodeViewHandle,
@@ -60,17 +68,20 @@ function ThemedView<LAnnotation>({
   const { codeSize } = useTypography();
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const endSpace = useEndSpace(container, scrollPastEnd);
+  const steady = useSteadyOptions(options);
+  const itemMetrics = useMemo(() => diffRowMetrics(codeSize), [codeSize]);
+  const layout = useMemo(() => diffLayout(endSpace), [endSpace]);
 
   const fullOptions = useMemo(
     () => ({
-      ...options,
+      ...steady,
       unsafeCSS: unsafeCSSExtra
         ? `${DIFF_THEME_CSS}\n${unsafeCSSExtra}`
         : DIFF_THEME_CSS,
-      itemMetrics: diffRowMetrics(codeSize),
-      layout: diffLayout(endSpace),
+      itemMetrics,
+      layout,
     }),
-    [options, unsafeCSSExtra, codeSize, endSpace],
+    [steady, unsafeCSSExtra, itemMetrics, layout],
   );
 
   const viewProps = {
@@ -83,6 +94,67 @@ function ThemedView<LAnnotation>({
   } as CodeViewProps<LAnnotation, undefined>;
 
   return <CodeView<LAnnotation> {...viewProps} ref={viewerRef} />;
+}
+
+/**
+ * `options` keeping one identity until one of its values changes. Callers
+ * write them inline, and Pierre redraws every line of the view whenever an
+ * option's identity changes, so any re-render of a parent (a pane being
+ * resized, a turn streaming) repainted the whole file. Functions stay the
+ * same function and call the caller's latest one.
+ */
+function useSteadyOptions<T extends object>(options: T | undefined) {
+  const latest = useRef(options);
+  // Insertion effects run before any layout effect, so Pierre's renders in
+  // its own layout effect already call the new functions.
+  useInsertionEffect(() => {
+    latest.current = options;
+  });
+  const [kept, keep] = useState(() => steadyFrom(options, latest));
+  if (sameValues(kept.from, options)) return kept.options;
+  const next = steadyFrom(options, latest);
+  keep(next);
+  return next.options;
+}
+
+function steadyFrom<T extends object>(
+  options: T | undefined,
+  latest: RefObject<T | undefined>,
+) {
+  const call =
+    (key: string) =>
+    (...args: unknown[]) => {
+      const fn = (latest.current as Record<string, unknown> | undefined)?.[key];
+      return typeof fn === "function" ? fn(...args) : undefined;
+    };
+  return {
+    from: options,
+    options:
+      options &&
+      (Object.fromEntries(
+        Object.entries(options).map(([key, value]) => [
+          key,
+          typeof value === "function" ? call(key) : value,
+        ]),
+      ) as T),
+  };
+}
+
+function sameValues(a: object | undefined, b: object | undefined) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const x = a as Record<string, unknown>,
+    y = b as Record<string, unknown>;
+  const keys = Object.keys(x);
+  return (
+    keys.length === Object.keys(y).length &&
+    keys.every(
+      (key) =>
+        key in y &&
+        (x[key] === y[key] ||
+          (typeof x[key] === "function" && typeof y[key] === "function")),
+    )
+  );
 }
 
 function useEndSpace(element: HTMLElement | null, enabled: boolean) {
