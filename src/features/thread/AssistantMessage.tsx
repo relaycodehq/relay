@@ -314,29 +314,15 @@ export function AssistantMessage({
           {stoppedNote(m)}
         </p>
       )}
-      {m.error && m.status !== "cancelled" && (
-        <AgentError
-          error={m.error}
-          interrupted={
-            !!(
-              text?.trim() ||
-              m.activity?.length ||
-              m.trace?.length ||
-              m.changes?.length
-            )
-          }
-          onRetry={onResume}
-          retryDisabled={resumeDisabled}
-        />
-      )}
-      {signInAt &&
-        (m.signIn ||
-          (m.provider === "opencode" && failure?.authenticationRequired)) && (
-          <SignIn
-            provider={m.signIn ?? m.provider}
-            place={{ ...signInAt, directory: projectRoot }}
-          />
-        )}
+      <AnswerFailure
+        message={m}
+        text={text}
+        failure={failure}
+        signInAt={signInAt}
+        projectRoot={projectRoot}
+        onResume={onResume}
+        resumeDisabled={resumeDisabled}
+      />
       {!continues && (
         <MessageActions
           id={m.id}
@@ -351,6 +337,55 @@ export function AssistantMessage({
         />
       )}
     </article>
+  );
+}
+
+/** Why the answer failed, with a retry, and a sign-in when its agent's login is the cause. */
+function AnswerFailure({
+  message: m,
+  text,
+  failure,
+  signInAt,
+  projectRoot,
+  onResume,
+  resumeDisabled,
+}: {
+  message: ChatMessage;
+  /** What the answer shows of its body. */
+  text: string;
+  failure: ReturnType<typeof agentError> | undefined;
+  signInAt?: SignInPlace;
+  projectRoot: string;
+  onResume?: () => void;
+  resumeDisabled?: boolean;
+}) {
+  const loginFailed =
+    !!m.signIn ||
+    (m.provider === "opencode" && !!failure?.authenticationRequired);
+  return (
+    <>
+      {m.error && m.status !== "cancelled" && (
+        <AgentError
+          error={m.error}
+          interrupted={
+            !!(
+              text.trim() ||
+              m.activity?.length ||
+              m.trace?.length ||
+              m.changes?.length
+            )
+          }
+          onRetry={onResume}
+          retryDisabled={resumeDisabled}
+        />
+      )}
+      {signInAt && loginFailed && (
+        <SignIn
+          provider={m.signIn ?? m.provider}
+          place={{ ...signInAt, directory: projectRoot }}
+        />
+      )}
+    </>
   );
 }
 
