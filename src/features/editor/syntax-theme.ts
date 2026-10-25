@@ -1,12 +1,9 @@
 import { HighlightStyle } from "@codemirror/language";
 import { tags as t, type Tag } from "@lezer/highlight";
 import { phpVariable } from "../../lib/code-languages";
+import { firstStyle, type ThemeRule } from "../../lib/textmate-scopes";
 
-/** A TextMate rule from a Shiki theme. */
-export type ThemeRule = {
-  scope?: string | string[];
-  settings?: { foreground?: string; fontStyle?: string };
-};
+export type { ThemeRule };
 
 /**
  * Each group of highlight tags with the TextMate scopes to take its style
@@ -89,49 +86,10 @@ const SCOPES: [Tag[], string[]][] = [
   [[t.invalid], ["invalid"]],
 ];
 
-type Style = { color?: string; fontStyle?: string };
-
-/** The rule's simple selectors. Ones with descendants or exclusions are not supported. */
-const selectorsOf = (rule: ThemeRule) =>
-  (Array.isArray(rule.scope) ? rule.scope : (rule.scope ?? "").split(","))
-    .map((s) => s.trim())
-    .filter((s) => s && !/\s/.test(s));
-
-/**
- * What a theme gives `scope`, as TextMate picks it: the longest selector that
- * is the scope or a prefix of it by whole parts, a later rule winning a tie.
- * Colour and font style are settled separately.
- */
-export function resolveScope(rules: readonly ThemeRule[], scope: string) {
-  let color: [number, string] | undefined;
-  let font: [number, string] | undefined;
-  for (const rule of rules) {
-    const { foreground, fontStyle } = rule.settings ?? {};
-    if (!foreground && fontStyle === undefined) continue;
-    for (const selector of selectorsOf(rule)) {
-      if (scope !== selector && !scope.startsWith(selector + ".")) continue;
-      const score = selector.length;
-      if (foreground && (!color || score >= color[0]))
-        color = [score, foreground];
-      if (fontStyle !== undefined && (!font || score >= font[0]))
-        font = [score, fontStyle];
-    }
-  }
-  return { color: color?.[1], fontStyle: font?.[1] };
-}
-
-const styleFor = (rules: readonly ThemeRule[], scopes: string[]): Style => {
-  for (const scope of scopes) {
-    const style = resolveScope(rules, scope);
-    if (style.color || style.fontStyle) return style;
-  }
-  return {};
-};
-
 /** The theme's token colours as CodeMirror highlighting. */
 export function highlightStyleFor(rules: readonly ThemeRule[]) {
   const specs = SCOPES.flatMap(([tags, scopes]) => {
-    const { color, fontStyle = "" } = styleFor(rules, scopes);
+    const { color, fontStyle = "" } = firstStyle(rules, scopes);
     // Markdown relies on these, so they stay styled even when the theme leaves them plain.
     const italic = /italic/.test(fontStyle) || tags.includes(t.emphasis);
     const bold =
