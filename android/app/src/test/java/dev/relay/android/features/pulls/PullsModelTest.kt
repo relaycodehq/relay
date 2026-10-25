@@ -53,4 +53,14 @@ class PullsModelTest {
         )
         assertNull(verdictOf(reviews))
     }
+
+    @Test fun aCommentAfterAnApprovalLeavesTheApprovalStanding() {
+        val reviews = listOf(
+            review(1, who = 7, "APPROVED", "2026-10-20T10:00:00Z"),
+            review(2, who = 7, "COMMENT", "2026-10-21T10:00:00Z"),
+            review(3, who = 8, "COMMENT", "2026-10-22T10:00:00Z"),
+        )
+        assertEquals("approved", verdictOf(reviews))
+        assertEquals(listOf(3L to "COMMENT", 1L to "APPROVED"), standingReviews(reviews).map { it.id to it.state })
+    }
 }

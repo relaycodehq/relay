@@ -79,6 +79,8 @@ export const phoneDesktopMethods = [
   "search",
   "pull",
   "pullCiStatus",
+  "pullMergeReadiness",
+  "mergePull",
   "files",
   "reviews",
   "discussion",
@@ -261,6 +263,8 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "regenerateProjectChatTitle",
   "search",
   "pullCiStatus",
+  "pullMergeReadiness",
+  "mergePull",
   "submitReview",
   "comment",
 ];

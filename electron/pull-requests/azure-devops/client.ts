@@ -10,10 +10,16 @@ import type {
   Repo,
   Review,
 } from "../../../shared/types";
+import type {
+  MergeMethod,
+  MergeReadiness,
+} from "../../../shared/pull-readiness";
 import { parseAzurePullUrl } from "../../../shared/validation";
 import type { AzureCliToken } from "../../azure-devops/cli-token";
 import { filePair } from "../file-pair";
 import { HostRequests, responseMessage, type RequestOptions } from "../request";
+import { branchRefs } from "./branches";
+import { azureMerge, azureMergeReadiness } from "./merge";
 import {
   ApiError,
   type FetchRequest,
@@ -45,9 +51,9 @@ import {
   type AzLineBlock,
   type AzPull,
   type AzThread,
+  VERSION,
 } from "./shapes";
 
-const VERSION = "api-version=7.1";
 /** File diffs are only served as a preview; without the flag Azure refuses them. */
 const FILE_DIFFS_VERSION = "api-version=7.1-preview.1";
 const MAX_FILE = 2 * 1024 * 1024;
@@ -201,11 +207,11 @@ export class AzureDevOps implements PullHost {
     );
   }
 
-  private repoPath(r: Repo) {
+  repoPath(r: Repo) {
     return `${this.account.server}/${encodeURIComponent(r.owner)}/_apis/git/repositories/${encodeURIComponent(r.name)}`;
   }
 
-  private prPath(r: PullRef) {
+  prPath(r: PullRef) {
     return `${this.repoPath(r)}/pullrequests/${r.number}`;
   }
 
@@ -388,7 +394,7 @@ export class AzureDevOps implements PullHost {
     return { iterations: data.value, latest: data.value.at(-1) };
   }
 
-  private async azurePull(r: PullRef, signal?: AbortSignal) {
+  async azurePull(r: PullRef, signal?: AbortSignal) {
     return (
       await this.request<AzPull>(`${this.prPath(r)}?${VERSION}`, { signal })
     ).data;
@@ -800,6 +806,18 @@ export class AzureDevOps implements PullHost {
     };
   }
 
+  mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    return azureMergeReadiness(this, r);
+  }
+
+  /** The waits between looks at a completion; see `azureMerge`. */
+  completionChecks = [1000, 1000, 2000, 2000, 4000];
+
+  merge(r: PullRef, head: string, method: MergeMethod) {
+    this.forget(r);
+    return azureMerge(this, r, head, method);
+  }
+
   /** Which change each path is in the latest push, which Azure anchors new threads to. */
   private async trackingIds(r: PullRef, latest: AzIteration) {
     const ids: Record<string, number> = {};
@@ -851,29 +869,8 @@ export class AzureDevOps implements PullHost {
     }
   }
 
-  private async heads(r: Repo, filter: string) {
-    const refs: { name: string; objectId: string }[] = [];
-    let continuation = "";
-    for (let page = 0; page < 100; page++) {
-      const query = new URLSearchParams({
-        filter: `heads/${filter}`,
-        $top: "1000",
-        ...(continuation ? { continuationToken: continuation } : {}),
-      });
-      const { data, headers } = await this.request<{
-        value: { name: string; objectId: string }[];
-      }>(`${this.repoPath(r)}/refs?${query}&${VERSION}`);
-      refs.push(...data.value);
-      continuation = headers.get("x-ms-continuationtoken") ?? "";
-      if (!continuation) return refs;
-    }
-    throw new Error(
-      "This repository has too many branches to load safely. Open the PR in Azure DevOps.",
-    );
-  }
-
   async branches(r: Repo) {
-    return (await this.heads(r, "")).map((ref) => ({
+    return (await branchRefs(this, r, "")).map((ref) => ({
       name: ref.name.replace(/^refs\/heads\//, ""),
     }));
   }
@@ -881,7 +878,7 @@ export class AzureDevOps implements PullHost {
   /** The branch's tip, or null when Azure has no such branch. */
   async branchHead(r: Repo, branch: string) {
     // The filter matches by prefix, so `main` also finds `main-old`.
-    const ref = (await this.heads(r, branch)).find(
+    const ref = (await branchRefs(this, r, branch)).find(
       (h) => h.name === `refs/heads/${branch}`,
     );
     return ref ? ref.objectId.toLowerCase() : null;

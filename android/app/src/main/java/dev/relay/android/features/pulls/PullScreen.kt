@@ -17,6 +17,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -41,11 +42,13 @@ import dev.relay.android.ui.IconButton
 import dev.relay.android.ui.Screen
 import dev.relay.android.ui.Sheet
 import dev.relay.android.ui.TextField
+import dev.relay.android.ui.ribbon.RibbonRefreshBox
 import dev.relay.android.ui.theme.RelayTheme
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.Check
 import io.github.lyxnx.compose.ui.tablericons.outline.ExternalLink
 import io.github.lyxnx.compose.ui.tablericons.outline.MessagePlus
+import kotlinx.coroutines.launch
 
 /** Wide enough for the PR beside what it waits on: an unfolded Fold with the sidebar hidden. */
 private val TWO_COLUMNS = 680.dp
@@ -53,8 +56,8 @@ private val TWO_COLUMNS = 680.dp
 private enum class Writing { Comment, Changes, Ask }
 
 /**
- * One pull request: what it is, what it waits on (checks, reviews), the agent buttons that
- * act on that, then its description, files and conversation. A wide pane splits it in two:
+ * One pull request: what it is, what it waits on (checks, reviews, conflicts) with the merge
+ * button, the agent buttons that act on that, then its description, files and conversation. A wide pane splits it in two:
  * the reading on the left, the state and actions on the right.
  */
 @Composable
@@ -70,6 +73,8 @@ fun PullScreen(remote: Remote, route: Route.Pull) {
     val overview by remote.overview.collectAsState()
     val live = rememberLive(remote)
     var writing by rememberSaveable { mutableStateOf<Writing?>(null) }
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     LaunchedEffect(live) { if (live) model.load() }
 
     Screen(
@@ -99,27 +104,43 @@ fun PullScreen(remote: Remote, route: Route.Pull) {
             item("conversation") { DiscussionCard(p.comments) }
         }
         val state: LazyListScope.() -> Unit = {
+            item("merge") {
+                MergeCard(p, busy == "merge") { method ->
+                    // The head on screen now: a reload while this is open mustn't merge one nobody saw.
+                    val head = p.pull.head.sha
+                    model.asks.confirm("${methodLabel(method)} #${p.pull.number}?", "${p.pull.head.ref} into ${p.pull.base.ref}", "Merge") { model.merge(head, method) }
+                }
+            }
             item("agent") {
                 AgentCard(p, project?.name, busy == "agent", onFixCi = { start(fixCiPrompt(p)) }, onAddress = { start(addressReviewPrompt(p)) }, onAsk = { writing = Writing.Ask })
             }
-            item("checks") { ChecksCard(p.ci) }
-            item("reviews") { ReviewsCard(p.reviews) }
             item("threads") { BranchThreadsCard(threads) { nav.openInPane(Route.Thread(it.id)) } }
         }
         val pad = PaddingValues(16.dp)
         val gap = Arrangement.spacedBy(12.dp)
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            if (maxWidth >= TWO_COLUMNS) Row(Modifier.fillMaxSize()) {
-                LazyColumn(Modifier.weight(1.4f).fillMaxSize(), contentPadding = pad, verticalArrangement = gap) {
+        RibbonRefreshBox(refreshing, {
+            refreshing = true
+            scope.launch {
+                try {
+                    model.load()
+                } finally {
+                    refreshing = false
+                }
+            }
+        }, Modifier.weight(1f).fillMaxWidth()) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                if (maxWidth >= TWO_COLUMNS) Row(Modifier.fillMaxSize()) {
+                    LazyColumn(Modifier.weight(1.4f).fillMaxSize(), contentPadding = pad, verticalArrangement = gap) {
+                        item("header") { PullHeader(p.pull) }
+                        reading()
+                    }
+                    Divider(vertical = true)
+                    LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = pad, verticalArrangement = gap) { state() }
+                } else LazyColumn(Modifier.fillMaxSize(), contentPadding = pad, verticalArrangement = gap) {
                     item("header") { PullHeader(p.pull) }
+                    state()
                     reading()
                 }
-                Divider(vertical = true)
-                LazyColumn(Modifier.weight(1f).fillMaxSize(), contentPadding = pad, verticalArrangement = gap) { state() }
-            } else LazyColumn(Modifier.fillMaxSize(), contentPadding = pad, verticalArrangement = gap) {
-                item("header") { PullHeader(p.pull) }
-                state()
-                reading()
             }
         }
         if (p.pull.state == "open" && !p.pull.merged) ReviewBar(

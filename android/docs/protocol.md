@@ -203,6 +203,11 @@ toServer = okm[0..32), toClient = okm[32..64)
 - The file lives in the desktop's paste folder (`<Relay data>/pastes/<id>/<name>`), readable by agents and swept 30 days after nothing names it. The message names it as `` `path` ``, as a desktop file pill does.
 - Ask a desktop below bridge 33 for an update rather than sending files.
 
+### Merging pull requests (bridge 34)
+- `pullMergeReadiness(ref)` → `{status: "clean"|"conflicts"|"blocked"|"unknown", behind: number|null, methods: ("merge"|"squash"|"rebase")[]}`, the repository's preferred method first.
+- `mergePull(ref, head, method)` merges only while the PR's head is still `head`. Azure DevOps answers once its background completion has finished or failed.
+- Offer neither to a desktop below bridge 34; ask for an update instead.
+
 ---
 
 ## 4. Version negotiation and handshake messages (`shared/remote.ts:168-241`, `:723-761`)
@@ -226,6 +231,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 22 | `previewBridge`, `notesBridge`, `workspaceMovesBridge` | `image` with `{kind:"preview"}`; `notesMark` on summaries and `threadNotes` / `tickThreadNote` / `removeThreadNote`; `workspaceMoves` on a thread |
 | 29 | `backgroundBridge` | `{t:"background", on}`: batched events and slower heartbeats while the app is in the background |
 | 33 | `filesBridge` | `uploadFile`: phones attach any file |
+| 34 | `mergeBridge` | `pullMergeReadiness`, `mergePull` |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.

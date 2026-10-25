@@ -88,3 +88,14 @@ data class PullComment(
     val created_at: String = "",
     val html_url: String = "",
 )
+
+/** Whether a PR can merge now (shared/types.ts `MergeReadiness`). */
+@Serializable
+data class MergeReadiness(
+    /** "clean" | "conflicts" | "blocked" | "unknown" */
+    val status: String,
+    /** Commits on the base the head doesn't have; null when the host can't say. */
+    val behind: Int? = null,
+    /** "merge" | "squash" | "rebase", the repository's preferred first. */
+    val methods: List<String> = emptyList(),
+)

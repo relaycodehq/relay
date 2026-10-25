@@ -2,7 +2,9 @@
 // version may use it. Bump `remoteBridgeVersion` when the bridge gains calls.
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 33;
+export const remoteBridgeVersion = 34;
+/** Phones may check whether a pull request merges and merge it (`pullMergeReadiness`, `mergePull`). */
+export const mergeBridge = 34;
 /** Phones may attach any file (`uploadFile`); the message names the copy saved here. */
 export const filesBridge = 33;
 /** Sends may ask for the `read-only` runtime mode, and new threads remember theirs. */

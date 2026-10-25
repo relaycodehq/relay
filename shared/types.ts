@@ -2,6 +2,7 @@ import type { AutoCompact } from "./context-usage";
 import type { MemesState } from "./memes";
 import type { ExtensionRef, ThemeSearchPage, VsCodeTheme } from "./open-vsx";
 import type { ProjectApi } from "./projects";
+import type { PullReadinessApi } from "./pull-readiness";
 import type { DevOpsApi } from "./devops";
 import type { ClockifyApi } from "./clockify";
 import type { PluginsApi } from "./plugins";
@@ -318,6 +319,7 @@ export interface Api
     PreviewApi,
     DevicesApi,
     PhoneRemoteApi,
+    PullReadinessApi,
     ComputersApi {
   inspectSymbol(
     ref: PullRef,
@@ -602,10 +604,6 @@ export interface Api
   ): Promise<Page<Issue>>;
   pull(ref: PullRef): Promise<Pull>;
   /** CI on the pull request's head branch; null when its host reports none. */
-  pullCiStatus(
-    ref: PullRef,
-    branch: string,
-  ): Promise<import("./ci").CiStatus | null>;
   files(ref: PullRef, page: number): Promise<Page<ChangedFile>>;
   blame(ref: PullRef, query: BlameQuery): Promise<LineBlame>;
   contents(

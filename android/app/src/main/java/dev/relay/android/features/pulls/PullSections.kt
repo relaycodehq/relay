@@ -18,8 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.relay.android.features.git.ciLabel
-import dev.relay.android.features.git.ciSummary
 import dev.relay.android.features.home.ThreadRow
 import dev.relay.android.features.home.ago
 import dev.relay.android.features.home.rememberNow
@@ -125,61 +123,54 @@ fun AgentCard(
 
 /** Each workflow's latest run, the failures first; a tap opens its run on the host. */
 @Composable
-fun ChecksCard(ci: CiStatus?) {
+fun CheckRows(ci: CiStatus) {
     val c = RelayTheme.colors
     val uri = LocalUriHandler.current
-    Card(Modifier.fillMaxWidth(), padding = 16.dp, gap = 4.dp) {
-        val summary = ci?.let { ciSummary(it.runs) }
-        CardTitle("Checks", summary?.let { ciLabel(it.state) } ?: ci?.source)
-        if (ci == null || ci.runs.isEmpty()) {
-            Text("No CI reported for this branch.", style = RelayTheme.type.xs, color = c.mutedForeground)
-            return@Card
-        }
-        val order = mapOf("failure" to 0, "running" to 1, "success" to 2)
-        for (run in ci.runs.sortedBy { order[it.state] ?: 3 }) {
-            Row(
-                Modifier.fillMaxWidth().pressable(onClick = { uri.openUri(run.url) }, scale = false).padding(vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CiMark(run.state, 15.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(run.workflow, style = RelayTheme.type.sm, color = c.foreground, maxLines = 1)
-                    run.failedJob?.let { Text(it, style = RelayTheme.type.xs, color = c.destructive, maxLines = 1) }
-                }
-                Icon(TablerIcons.Outline.ChevronRight, null, tint = c.faint, size = 14.dp)
+    val order = mapOf("failure" to 0, "running" to 1, "success" to 2)
+    for (run in ci.runs.sortedBy { order[it.state] ?: 3 }) {
+        Row(
+            Modifier.fillMaxWidth().pressable(onClick = { uri.openUri(run.url) }, scale = false).padding(vertical = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            CiMark(run.state, 15.dp)
+            Column(Modifier.weight(1f)) {
+                Text(run.workflow, style = RelayTheme.type.sm, color = c.foreground, maxLines = 1)
+                run.failedJob?.let { Text(it, style = RelayTheme.type.xs, color = c.destructive, maxLines = 1) }
             }
+            Icon(TablerIcons.Outline.ChevronRight, null, tint = c.faint, size = 14.dp)
         }
     }
 }
 
+/**
+ * Each reviewer's standing review, newest first: their latest approval or change request
+ * as [verdictOf] counts it, else their latest comment. A comment after an approval doesn't undo it.
+ */
+fun standingReviews(reviews: List<PullReview>) = reviews.filter { it.state != "PENDING" }
+    .groupBy { if (it.user.id != 0L) "${it.user.id}" else it.user.login }
+    .map { (_, theirs) ->
+        val verdicts = theirs.filter { (it.state == "APPROVED" || it.state == "REQUEST_CHANGES") && it.dismissed != true }
+        verdicts.ifEmpty { theirs }.maxWith(compareBy({ isoMs(it.submitted_at) }, { it.id }))
+    }
+    .sortedByDescending { isoMs(it.submitted_at) }
+
 /** Each reviewer's standing verdict, newest first, with what they said. */
 @Composable
-fun ReviewsCard(reviews: List<PullReview>) {
+fun ReviewRows(latest: List<PullReview>) {
     val c = RelayTheme.colors
     val now = rememberNow(60_000)
-    val latest = reviews.filter { it.state != "PENDING" }.groupBy { it.user.login }
-        .map { (_, theirs) -> theirs.maxWith(compareBy({ isoMs(it.submitted_at) }, { it.id })) }
-        .sortedByDescending { isoMs(it.submitted_at) }
-    Card(Modifier.fillMaxWidth(), padding = 16.dp, gap = 8.dp) {
-        CardTitle("Reviews", when (verdictOf(reviews)) {
-            "approved" -> "Approved"
-            "changes" -> "Changes requested"
-            else -> null
-        })
-        if (latest.isEmpty()) Text("Nobody has reviewed it yet.", style = RelayTheme.type.xs, color = c.mutedForeground)
-        for (r in latest) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                when (r.state) {
-                    "APPROVED" -> Icon(TablerIcons.Outline.CircleCheck, "Approved", tint = c.additionText, size = 15.dp)
-                    "REQUEST_CHANGES" -> Icon(TablerIcons.Outline.CircleX, "Changes requested", tint = c.destructive, size = 15.dp)
-                    else -> Icon(TablerIcons.Outline.MessageQuestion, "Commented", tint = c.mutedForeground, size = 15.dp)
-                }
-                Text(r.user.login, style = RelayTheme.type.sm.copy(fontWeight = FontWeight.Medium), color = c.foreground)
-                Text(ago(isoMs(r.submitted_at), now), style = RelayTheme.type.xs, color = c.faint)
+    for (r in latest) Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            when (r.state) {
+                "APPROVED" -> Icon(TablerIcons.Outline.CircleCheck, "Approved", tint = c.additionText, size = 15.dp)
+                "REQUEST_CHANGES" -> Icon(TablerIcons.Outline.CircleX, "Changes requested", tint = c.destructive, size = 15.dp)
+                else -> Icon(TablerIcons.Outline.MessageQuestion, "Commented", tint = c.mutedForeground, size = 15.dp)
             }
-            if (r.body.isNotBlank()) Markdown(r.body.trim(), Modifier.padding(start = 23.dp), small = true)
+            Text(r.user.login, style = RelayTheme.type.sm.copy(fontWeight = FontWeight.Medium), color = c.foreground)
+            Text(ago(isoMs(r.submitted_at), now), style = RelayTheme.type.xs, color = c.faint)
         }
+        if (r.body.isNotBlank()) Markdown(r.body.trim(), Modifier.padding(start = 23.dp), small = true)
     }
 }
 

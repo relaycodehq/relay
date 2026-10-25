@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
-import { GitHub, searchQuery } from "./github";
+import { GitHub } from "./github";
+import { githubMergeStatus } from "./github-merge";
+import { searchQuery } from "./github-search";
 import { parseGithubPullUrl } from "../../shared/validation";
 
 const ref = { owner: "o", name: "r", number: 7 };
@@ -284,3 +286,62 @@ it.each([
     );
   },
 );
+
+it("reads GitHub's mergeable_state: a branch rule blocks, failing optional checks don't", () => {
+  expect(githubMergeStatus(true, "clean")).toBe("clean");
+  expect(githubMergeStatus(true, "unstable")).toBe("clean");
+  expect(githubMergeStatus(false, "dirty")).toBe("conflicts");
+  expect(githubMergeStatus(true, "blocked")).toBe("blocked");
+  expect(githubMergeStatus(true, "behind")).toBe("blocked");
+  expect(githubMergeStatus(null, "unknown")).toBe("unknown");
+});
+
+it("offers the merge methods the repository allows and counts commits behind the base", async () => {
+  const client = github({
+    "GET /repos/o/r/pulls/7": () =>
+      json({ ...pull, mergeable: true, mergeable_state: "clean" }),
+    [`GET /repos/o/r/compare/main...${"h".repeat(40)}`]: () =>
+      json({ behind_by: 26 }),
+    "GET /repos/o/r": () =>
+      json({ allow_squash_merge: true, allow_merge_commit: false }),
+  });
+  expect(await client.mergeReadiness(ref)).toEqual({
+    status: "clean",
+    behind: 26,
+    methods: ["squash", "rebase"],
+  });
+});
+
+it("merges only at the head it was shown, and passes on why GitHub refused", async () => {
+  const sent: { path: string; body: any }[] = [];
+  const client = github(
+    {
+      "PUT /repos/o/r/pulls/7/merge": () =>
+        new Response(JSON.stringify({ message: "Head branch was modified" }), {
+          status: 409,
+          headers: { "content-type": "application/json" },
+        }),
+    },
+    sent,
+  );
+  await expect(client.merge(ref, "h".repeat(40), "squash")).rejects.toThrow(
+    "GitHub refused this: Head branch was modified",
+  );
+  expect(sent[0]?.body).toEqual({
+    sha: "h".repeat(40),
+    merge_method: "squash",
+  });
+});
+
+it("offers every merge method when the repository's settings can't be read", async () => {
+  const client = github({
+    "GET /repos/o/r/pulls/7": () =>
+      json({ ...pull, mergeable: true, mergeable_state: "clean" }),
+    "GET /repos/o/r": () => new Response("{}", { status: 403 }),
+  });
+  expect(await client.mergeReadiness(ref)).toMatchObject({
+    status: "clean",
+    behind: null,
+    methods: ["squash", "merge", "rebase"],
+  });
+});
