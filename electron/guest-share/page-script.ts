@@ -42,29 +42,56 @@ export const GUEST_SCRIPT = String.raw`(() => {
       link.addEventListener("click", (e) => { e.preventDefault(); openFile(link.dataset.file); });
   }
 
-  function calls(m) {
-    const box = el("details", "calls");
-    box.append(el("summary", "", m.activities.length + (m.activities.length === 1 ? " tool call" : " tool calls")));
-    for (const a of m.activities) {
+  async function showDetail(row, m, a) {
+    const pre = el("pre", "", "Loading…");
+    row.append(pre);
+    const res = await fetch(base + "/detail/" + m.id + "/" + encodeURIComponent(a.id));
+    pre.textContent = res.ok ? await res.text() : "Not available.";
+  }
+
+  // Refilled in place, so the list stays open and so does any output being read.
+  function fillCalls(box, m) {
+    const activities = m.activities || [];
+    box.hidden = !activities.length;
+    const reading = new Set(Array.from(box.querySelectorAll(".call"), (row) => row.querySelector("pre") ? row.dataset.id : null));
+    box.replaceChildren(el("summary", "", activities.length + (activities.length === 1 ? " tool call" : " tool calls")));
+    for (const a of activities) {
       const row = el("div", "call " + a.status);
+      row.dataset.id = a.id;
       const line = el("div", "call-line" + (a.detail ? " open" : ""));
       line.append(el("span", "kind", kindLabel[a.kind] || a.kind), document.createTextNode(a.label));
       row.append(line);
-      if (a.detail) line.addEventListener("click", async () => {
-        const open = row.querySelector("pre");
-        if (open) return open.remove();
-        const pre = el("pre", "", "Loading…");
-        row.append(pre);
-        const res = await fetch(base + "/detail/" + m.id + "/" + encodeURIComponent(a.id));
-        pre.textContent = res.ok ? await res.text() : "Not available.";
-      });
+      if (a.detail) {
+        line.addEventListener("click", () => {
+          const open = row.querySelector("pre");
+          if (open) return open.remove();
+          showDetail(row, m, a);
+        });
+        if (reading.has(a.id)) showDetail(row, m, a);
+      }
       box.append(row);
     }
-    return box;
+  }
+
+  // New pages are added after the ones showing; moving a frame would reload it.
+  function fillRenders(box, renders) {
+    const showing = Array.from(box.children, (child) => child.dataset.id);
+    const added = renders.slice(showing.length);
+    if (showing.some((id, i) => !renders[i] || renders[i].id !== id)) return box.replaceChildren(...renders.map(renderFrame));
+    box.append(...added.map(renderFrame));
+  }
+
+  function fillShots(box, m) {
+    box.hidden = !((m.images && m.images.length) || m.preview);
+    box.replaceChildren();
+    for (const id of m.images || []) { const img = el("img"); img.dataset.media = id; img.alt = ""; box.append(img); }
+    if (m.preview) { box.append(el("p", "", "Browser preview")); const img = el("img"); img.dataset.media = m.preview; img.alt = "Browser preview"; box.append(img); }
+    hydrate(box);
   }
 
   function renderFrame(r) {
     const box = el("div", "render");
+    box.dataset.id = r.id;
     const head = el("div", "render-head");
     head.append(el("span", "", r.title));
     const frame = document.createElement("iframe");
@@ -98,30 +125,29 @@ export const GUEST_SCRIPT = String.raw`(() => {
   });
 
   function messageNode(m) {
-    const li = el("li", "msg " + m.role + (m.streaming ? " streaming" : ""));
-    li.append(el("div", "msg-from", m.from));
-    if (m.activities && m.activities.length) li.append(calls(m));
-    for (const r of m.renders || []) li.append(renderFrame(r));
-    const body = el("div", "msg-body");
-    body.innerHTML = m.html;
-    li.append(body);
-    if ((m.images && m.images.length) || m.preview) {
-      const shots = el("div", "shots");
-      for (const id of m.images || []) { const img = el("img"); img.dataset.media = id; img.alt = ""; shots.append(img); }
-      if (m.preview) { shots.append(el("p", "", "Browser preview")); const img = el("img"); img.dataset.media = m.preview; img.alt = "Browser preview"; shots.append(img); }
-      li.append(shots);
-    }
-    hydrate(li);
+    const li = el("li");
+    li.append(el("div", "msg-from", m.from), el("details", "calls"), el("div", "renders"), el("div", "msg-body"), el("div", "shots"));
+    updateMessage(li, m, undefined);
     return li;
   }
 
-  function renderMessages(changed) {
+  // Only the parts that changed are rebuilt: a streaming answer leaves its pages and open lists be.
+  function updateMessage(li, m, before) {
+    const same = (key) => before && JSON.stringify(before[key]) === JSON.stringify(m[key]);
+    const part = (cls) => li.querySelector(":scope > ." + cls);
+    li.className = "msg " + m.role + (m.streaming ? " streaming" : "");
+    if (!same("activities")) fillCalls(part("calls"), m);
+    if (!same("renders")) fillRenders(part("renders"), m.renders || []);
+    if (!before || before.html !== m.html) { const body = part("msg-body"); body.innerHTML = m.html; hydrate(body); }
+    if (!same("images") || !same("preview")) fillShots(part("shots"), m);
+  }
+
+  function renderMessages(changed, before) {
     const atEnd = innerHeight + scrollY >= document.body.scrollHeight - 120;
     for (const m of changed) {
       const old = nodes.get(m.id);
-      const node = messageNode(m);
-      nodes.set(m.id, node);
-      if (old) old.replaceWith(node);
+      if (old) updateMessage(old, m, before && before.get(m.id));
+      else nodes.set(m.id, messageNode(m));
     }
     const list = $("messages");
     const order = view.messages.map((m) => m.id);
@@ -175,12 +201,13 @@ export const GUEST_SCRIPT = String.raw`(() => {
   function apply(delta) {
     view.title = delta.title;
     view.running = delta.running;
+    const before = new Map(delta.messages.map((m) => [m.id, messages.get(m.id)]));
     for (const m of delta.messages) messages.set(m.id, m);
     view.messages = delta.order.map((id) => messages.get(id)).filter(Boolean);
     if (delta.files) { view.files = delta.files; renderFiles(); }
     if (delta.suggestions) renderSuggestions(delta.suggestions);
     renderHead();
-    renderMessages(delta.messages);
+    renderMessages(delta.messages, before);
   }
 
   function end() {
