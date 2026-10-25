@@ -165,6 +165,18 @@ export function startThreadSettings(
     ...settings,
     interactionMode: "default",
   });
+  // A composer still open on it would save its frozen picks back over this.
+  for (const listener of threadStartListeners.get(from) ?? []) listener();
+}
+const threadStartListeners = new Map<string, Set<() => void>>();
+/** Calls `listener` when the draft under `key` starts a thread; returns the unsubscribe. */
+export function onThreadStarted(key: string, listener: () => void) {
+  const listeners = threadStartListeners.get(key) ?? new Set();
+  threadStartListeners.set(key, listeners.add(listener));
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) threadStartListeners.delete(key);
+  };
 }
 /**
  * A fork's composer starts on its source thread's models, on the agent of the

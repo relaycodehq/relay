@@ -12,6 +12,7 @@ import {
   composerProvider,
   followLastAgent,
   loadComposerSettings,
+  onThreadStarted,
   saveComposerSettings,
   withSent,
   type AgentFollow,
@@ -89,6 +90,15 @@ export function useComposerSettings({
     setRuntimeMode,
   );
   const [interactionMode, setInteractionMode] = useState(saved.interactionMode);
+  // Started a thread: the draft left here is a new one, on the shared picks.
+  useEffect(
+    () =>
+      onThreadStarted(key, () => {
+        setFrozen(undefined);
+        setInteractionMode("default");
+      }),
+    [key],
+  );
   const [sent, setSent] = useState(saved.sent);
   const sentHere = useRef(new Set<string>());
   const settings: ComposerSettings = {

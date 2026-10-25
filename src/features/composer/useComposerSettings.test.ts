@@ -237,3 +237,21 @@ it("creates the next draft on the shared picks after one starts a thread", () =>
   current = mount(draft);
   expect(current().models.claude?.contextWindow).toBe("200k");
 });
+
+it("lets go of its picks when it starts a thread before its own send renders", () => {
+  follow.lastModels = opus200k;
+  const draft = () => useComposerSettings({ key: "new:p" });
+  let current = mount(draft);
+  update(() =>
+    current().setModels((m) => ({ ...m, claude: onWindow(m.claude!, "1m") })),
+  );
+  // The thread can start before the composer renders the send it noted.
+  update(() => {
+    current().noteSent("first");
+    startThreadSettings("new:p", "thread", "claude");
+  });
+  expect(current().models.claude?.contextWindow).toBe("200k");
+  current.unmount();
+  current = mount(draft);
+  expect(current().models.claude?.contextWindow).toBe("200k");
+});
