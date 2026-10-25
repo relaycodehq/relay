@@ -137,8 +137,6 @@ node scripts/record-readme-demo.mjs   # docs/media/relay-demo.gif, one loop of t
 node scripts/record-teaser.mjs        # test-results/teaser/, 1080p60 (--scale 2 for 4K)
 ```
 
-Copy the teaser to `docs/media/relay-teaser.mp4` when the UI changes.
-
 </details>
 
 ## Troubleshooting
