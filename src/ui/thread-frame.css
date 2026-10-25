@@ -1,0 +1,68 @@
+/* A piece of another thread: a frame around it, titled with it. */
+.thread-frame {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--background) 60%, var(--sidebar));
+}
+.thread-frame > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+  font-size: 12px;
+}
+.thread-frame > header b {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.thread-frame > header > span {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.thread-frame > header > span[data-failed] {
+  color: var(--danger);
+}
+.thread-frame .provider-glyph {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+.thread-frame-open {
+  flex: none;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.thread-frame-open:hover {
+  background: none;
+  color: var(--text);
+}
+.thread-frame-body {
+  padding: 12px 16px 14px;
+}
+.thread-frame-body .markdown {
+  font-size: 13.5px;
+}
+.thread-frame-body .markdown > :first-child {
+  margin-top: 0;
+}
+.thread-frame-body .markdown > :last-child {
+  margin-bottom: 0;
+}
+:root[data-glass-chat] .thread-frame {
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+}
+:root[data-glass-chat] .thread-frame > header {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
