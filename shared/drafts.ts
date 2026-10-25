@@ -181,6 +181,21 @@ export function unsent(draft: string, sent: string) {
 }
 
 /**
+ * How `write` stands to the draft it lands on: from the current version, or
+ * from an older one it missed (`stale`). `own` is an older base whose newer
+ * versions `by` wrote itself: it saw them even if the answer never reached
+ * it, so its write carries on from them rather than clashing.
+ */
+export function writeBase(
+  current: SharedDraft | undefined,
+  write: DraftWrite,
+  by: DraftDevice,
+): "current" | "own" | "stale" {
+  if (!current || write.base >= current.rev) return "current";
+  return current.by === by && current.at <= write.at ? "own" : "stale";
+}
+
+/**
  * The draft as `write`, from `by`, leaves it; `rev` hands out the next rev.
  * Null when there's none left. `changed` is false when nothing moved, so
  * nobody needs telling.
@@ -194,7 +209,7 @@ export function applyDraftWrite(
   const body = draftBody(write);
   const extras =
     by === "desktop" ? compactExtras(write.extras) : current?.extras;
-  const stale = !!current && write.base < current.rev;
+  const stale = !!current && writeBase(current, write, by) === "stale";
   const make = (
     from: DraftBody,
     other: SharedDraft["other"],

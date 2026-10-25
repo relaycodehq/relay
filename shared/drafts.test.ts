@@ -130,6 +130,17 @@ describe("applyDraftWrite", () => {
       expect(next).toBe(current);
     });
 
+    it("is no clash with a screen's own edit whose answer it missed", () => {
+      const { draft: next } = applyDraftWrite(
+        draft({ text: "Fix the login", rev: 5, at: 2000, by: "phone:p1" }),
+        write({ text: "Fix the login page", base: 3, at: 3000 }),
+        "phone:p1",
+        counter(5),
+      );
+      expect(next).toMatchObject({ text: "Fix the login page", rev: 6 });
+      expect(next?.other).toBeUndefined();
+    });
+
     it("is no clash when both wrote the same", () => {
       const current = draft({ rev: 5 });
       const { draft: next } = applyDraftWrite(
@@ -162,6 +173,17 @@ describe("applyDraftWrite", () => {
         counter(5),
       );
       expect(next).toMatchObject({ text: "and the footer", rev: 6 });
+    });
+
+    it("goes when the screen that sent it never heard its last edit land", () => {
+      // The phone's "…the jbl doe" reached the computer, the answer didn't.
+      const { draft: next } = applyDraftWrite(
+        draft({ text: "test what the jbl doe", rev: 5, at: 2000, by: "phone:p1" }),
+        write({ text: "", base: 4, at: 3000, sent: "test what the jbl does right now" }),
+        "phone:p1",
+        counter(5),
+      );
+      expect(next).toBeNull();
     });
 
     it("drops the version a clash kept, once one went", () => {

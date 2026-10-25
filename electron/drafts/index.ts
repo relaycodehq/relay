@@ -86,8 +86,10 @@ export class Drafts {
       ...(chatId ? { chatId } : {}),
       send,
     };
-    // The version that went: a phone may type the next message before this one is out.
+    // The version that went: a phone may type the next message before this one
+    // is out, and the desktop too, so its edits from here on are later than this.
     const base = this.store.get(key)?.rev ?? 0;
+    const at = Date.now();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
         () =>
@@ -105,7 +107,7 @@ export class Drafts {
           // anything written after it was sent stays.
           if (this.store.get(key))
             this.write(
-              { key, text: "", base, at: Date.now(), sent: send.body },
+              { key, text: "", base, at, sent: send.body },
               "desktop",
             );
           resolve(result);
