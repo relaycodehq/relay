@@ -44,6 +44,13 @@ describe("freeFunnelPort", () => {
     expect(freePort(theirs)).toBe(10000);
   });
 
+  it("leaves a port to a serve left running in a terminal", () => {
+    const status = JSON.stringify({
+      Foreground: { session1: { TCP: { 8443: { HTTPS: true } } } },
+    });
+    expect(freePort(status)).toBe(10000);
+  });
+
   it("finds none when every Funnel port serves something else", () => {
     expect(
       freePort(serving({ 443: ["/"], 8443: ["/api"], 10000: ["/"] })),

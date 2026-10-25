@@ -31,11 +31,16 @@ const handlersSchema = z.object({
     .nullish(),
 });
 
-const serveStatusSchema = z.object({
+const serveConfigSchema = z.object({
   TCP: z
     .record(z.string(), z.object({ HTTPS: z.boolean().optional() }).loose())
     .nullish(),
   Web: z.record(z.string(), handlersSchema.loose()).nullish(),
+});
+
+const serveStatusSchema = serveConfigSchema.extend({
+  /** What a `tailscale serve` or `funnel` left running in a terminal serves, by session. */
+  Foreground: z.record(z.string(), serveConfigSchema.loose()).nullish(),
 });
 
 const selfSchema = z.object({
@@ -62,9 +67,15 @@ export function freeFunnelPort(
   host: string,
   target: string,
 ) {
+  const foreground = Object.values(status.Foreground ?? {});
   return FUNNEL_PORTS.find((port) => {
     const tcp = status.TCP?.[String(port)];
     if (tcp && !tcp.HTTPS) return false; // a raw TCP forwarder
+    // Ours is only ever in the background, so anything in a terminal is someone else's.
+    const inTerminal = foreground.some(
+      (config) => config.TCP?.[String(port)] || config.Web?.[`${host}:${port}`],
+    );
+    if (inTerminal) return false;
     const handlers = Object.entries(
       status.Web?.[`${host}:${port}`]?.Handlers ?? {},
     );
