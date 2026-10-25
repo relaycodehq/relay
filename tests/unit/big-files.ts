@@ -56,5 +56,4 @@ export const bigFiles: Record<string, number> = {
   "src/features/thread/WorktreeControls.tsx": 613,
   "src/lib/shortcuts.ts": 502,
   "src/lib/themes.ts": 694,
-  "src/ui/RichText.tsx": 508,
 };
