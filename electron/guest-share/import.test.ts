@@ -77,6 +77,20 @@ describe("importGuestThread", () => {
     expect(shared!.note).toContain("Start one from the sidebar");
   });
 
+  it("moves copied times back when the sharer's clock ran ahead", async () => {
+    const ahead = Date.now() + 10 * 60_000;
+    const { h, created } = await host(() =>
+      Response.json({
+        ...bundle,
+        messages: bundle.messages.map((m, i) => ({ ...m, created: ahead + i })),
+      }),
+    );
+    await importGuestThread(h, projectId, link);
+    const times = created[0]!.messages.map((m) => m.created);
+    expect(Math.max(...times)).toBeLessThan(Date.now());
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+
   it("refuses a link that isn't a guest page before fetching anything", async () => {
     const { h, asked } = await host(() => Response.json(bundle));
     await expect(

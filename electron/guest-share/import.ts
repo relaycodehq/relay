@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, normalize, relative } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import {
   agentName,
   agentProviders,
@@ -55,10 +55,11 @@ export async function importGuestThread(
   const id = randomUUID();
   const folder = host.filesDir(id);
   const saved = await saveFiles(folder, bundle.files);
+  const shift = clockShift(bundle);
   return host.create(projectId, {
     id,
     title: bundle.title || "Shared thread",
-    messages: bundle.messages.map(importedMessage),
+    messages: bundle.messages.map((m) => importedMessage(m, shift)),
     note: importNote(
       bundle,
       saved.length ? { folder, paths: saved } : undefined,
@@ -127,7 +128,8 @@ async function saveFiles(folder: string, files: GuestBundle["files"]) {
   for (const file of files) {
     const target = normalize(join(folder, file.path));
     const rel = relative(folder, target);
-    if (!rel || rel.startsWith("..") || isAbsolute(rel)) continue;
+    const above = rel === ".." || rel.startsWith(`..${sep}`);
+    if (!rel || above || isAbsolute(rel)) continue;
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, file.content, { mode: 0o600 });
     saved.push(rel);
@@ -135,13 +137,26 @@ async function saveFiles(folder: string, files: GuestBundle["files"]) {
   return saved;
 }
 
-function importedMessage(m: GuestBundle["messages"][number]): ChatMessage {
+/**
+ * How far to move the copied messages' times back, so none is later than
+ * now: a sharer's clock running ahead would put this thread's next message
+ * above them.
+ */
+function clockShift(bundle: GuestBundle) {
+  const latest = Math.max(0, ...bundle.messages.map((m) => m.created));
+  return Math.min(0, Date.now() - 1 - latest);
+}
+
+function importedMessage(
+  m: GuestBundle["messages"][number],
+  shift: number,
+): ChatMessage {
   return {
     id: randomUUID(),
     role: m.role,
     body: m.body,
     status: "complete",
-    created: m.created,
+    created: m.created + shift,
     version: 1,
     provider: m.role === "assistant" ? providerNamed(m.from) : "claude",
     imported: true,
