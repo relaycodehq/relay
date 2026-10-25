@@ -114,6 +114,8 @@ export interface GuestActivity {
 
 export interface GuestRender {
   id: string;
+  /** Where its pages load from: an address of their own, so a page never holds the link. */
+  key: string;
   title: string;
   pages: { label?: string; heights?: number[] }[];
 }
@@ -165,14 +167,18 @@ export interface GuestDelta {
   suggestions?: GuestPageView["suggestions"];
 }
 
+/** What a bundle's title and authors may run to; longer ones are cut before sending. */
+export const BUNDLE_TITLE_CHARS = 300;
+export const BUNDLE_AUTHOR_CHARS = 100;
+
 /** What a guest's own Relay downloads to carry the conversation on. */
 export const guestBundleSchema = z.object({
-  title: z.string().max(300),
+  title: z.string().max(BUNDLE_TITLE_CHARS),
   messages: z
     .array(
       z.object({
         role: z.enum(["user", "assistant"]),
-        from: z.string().max(100),
+        from: z.string().max(BUNDLE_AUTHOR_CHARS),
         body: z.string().max(200_000),
         created: z.number(),
       }),

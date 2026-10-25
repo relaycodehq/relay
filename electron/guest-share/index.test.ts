@@ -2,7 +2,10 @@ import { mkdtemp, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GuestShareEvent } from "../../shared/guest-share";
+import {
+  GUEST_SHARE_HOURS,
+  type GuestShareEvent,
+} from "../../shared/guest-share";
 import { RENDER_CSP } from "../../shared/html-render";
 import type {
   ChatMessage,
@@ -11,9 +14,10 @@ import type {
 } from "../../shared/projects";
 import type { SavedGuestShare } from "../app/store-types";
 import { Funnel, type FunnelRun } from "./funnel";
-import { GuestShares } from "./index";
+import { GuestShares, type GuestSharesHost } from "./index";
 
 const threadId = "5b0c3c2e-8f43-4f8e-9a4b-2f4c1e6d7a10";
+const otherThreadId = "0d6b9a3e-2c4f-4a8b-9e1d-7f3a5c2b4e60";
 const renderId = "7d3f2a1b-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
 const png = "data:image/png;base64,iVBORw0KGgo=";
 
@@ -62,7 +66,14 @@ async function world(saved: SavedGuestShare[] = []) {
         role: "assistant",
         body: "Updated [the component](empty.tsx).",
         changes: [{ path: "empty.tsx", additions: 1, deletions: 1 }],
-        renders: [{ id: renderId, title: "Options", pages: [{}], created: 2 }],
+        renders: [
+          {
+            id: renderId,
+            title: "Options",
+            pages: [{ label: "Uses sk-ant-api03-guestsharelabelkey0000" }],
+            created: 2,
+          },
+        ],
         trace: [
           {
             kind: "activity",
@@ -107,11 +118,16 @@ async function world(saved: SavedGuestShare[] = []) {
   // Real time, plus whatever a test skips ahead past the snapshot cache.
   const clock = { skipped: 0 };
   let summariesChanged = () => {};
-  const make = () =>
+  const built = { snapshots: 0 };
+  const make = (over: Partial<GuestSharesHost> = {}) =>
     new GuestShares({
-      thread: async () => structuredClone(thread),
-      summary: (id) => (id === threadId ? summary : undefined),
-      root: async () => root,
+      thread: async (id) => ({ ...structuredClone(thread), id }),
+      summary: (id) =>
+        [threadId, otherThreadId].includes(id) ? { ...summary, id } : undefined,
+      root: async () => {
+        built.snapshots++;
+        return root;
+      },
       media: {
         image: async () => png,
         readImage: async () => png,
@@ -135,9 +151,12 @@ async function world(saved: SavedGuestShare[] = []) {
       port: 0,
       now: () => Date.now() + clock.skipped,
       funnel: new Funnel(noTailscale),
+      ...over,
     });
   return {
     make,
+    root,
+    built,
     thread,
     summary,
     events,
@@ -292,13 +311,19 @@ describe("GuestShares", () => {
     expect(secret).toMatchObject({ label: "cat .env", detail: false });
     expect((await fetch(`${link}/detail/m2/a2`)).status).toBe(404);
     expect(JSON.stringify(view)).not.toContain("hunter2");
-    const render = await fetch(`${link}/render/${renderId}/0`);
+    // Its page loads from an address of its own, which its scripts may read.
+    const shown = view.messages[1].renders[0];
+    const site = link.replace(/\/g\/.+$/, "");
+    expect(shown.key).not.toContain(link.split("/g/")[1]);
+    const render = await fetch(`${site}/r/${shown.key}/0`);
     expect(render.headers.get("content-security-policy")).toBe(RENDER_CSP);
     const renderHtml = await render.text();
     expect(renderHtml).toContain("relayRender");
     expect(renderHtml).not.toContain("guestsharerenderkey");
     expect(view.title).not.toContain("guestsharetitlekey");
-    expect((await fetch(`${link}/render/${renderId}/1`)).status).toBe(404);
+    expect(shown.pages[0].label).not.toContain("guestsharelabelkey");
+    expect((await fetch(`${site}/r/${shown.key}/1`)).status).toBe(404);
+    expect((await fetch(`${link}/render/${renderId}/0`)).status).toBe(404);
   });
 
   it("runs a sent suggestion as a turn in the guest's name, and tells that guest", async () => {
@@ -377,6 +402,104 @@ describe("GuestShares", () => {
     open.push(again);
     expect(await again.share(threadId)).toBeNull();
     expect(store.shares).toEqual([]);
+  });
+
+  it("opens the server once for starts that come together, and keeps it for one a stop races", async () => {
+    const w = await world();
+    const asked: (number | undefined)[] = [];
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let gated = false;
+    const funnel = {
+      async open(port: number | undefined) {
+        asked.push(port);
+        if (gated) await gate;
+        return { public: false as const, reason: "No Tailscale here." };
+      },
+      close: async () => {},
+    } as unknown as Funnel;
+    const shares = w.make({ funnel });
+    open.push(shares);
+    const [a, b] = await Promise.all([
+      shares.start(threadId),
+      shares.start(threadId),
+    ]);
+    expect(a.localUrl).toBe(b.localUrl);
+    expect(asked.every((port) => typeof port === "number")).toBe(true);
+    // Another thread's start waits on Funnel while the first link stops.
+    gated = true;
+    const starting = shares.start(otherThreadId);
+    await expect.poll(() => asked.length).toBe(3);
+    const stopping = shares.stop(threadId);
+    release();
+    await stopping;
+    const other = await starting;
+    expect((await fetch(other.localUrl)).status).toBe(200);
+  });
+
+  it("makes a new link for a thread whose link ran out while the computer slept", async () => {
+    const { shares, link, skip } = await started();
+    skip(GUEST_SHARE_HOURS * 3600_000 + 1000);
+    const again = await shares.start(threadId);
+    expect(again.localUrl).not.toBe(link);
+    expect((await fetch(again.localUrl)).status).toBe(200);
+  });
+
+  it("tells a page following the last link that it's over", async () => {
+    const { shares, link } = await started();
+    const res = await fetch(`${link}/events`);
+    const reader = res.body!.getReader();
+    const stopping = shares.stop(threadId);
+    let text = "";
+    while (!text.includes("event: ended")) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += new TextDecoder().decode(value);
+    }
+    await stopping;
+    expect(text).toContain("event: ended");
+  });
+
+  it("builds the guests' view again only once the thread changed", async () => {
+    const { link, thread, skip, built } = await started();
+    const before = built.snapshots;
+    for (let i = 0; i < 3; i++) {
+      skip(2000);
+      await fetch(`${link}/view`);
+    }
+    expect(built.snapshots).toBe(before);
+    thread.messages.push(message({ id: "m3", seq: 3, body: "One more" }));
+    skip(2000);
+    const view = await (await fetch(`${link}/view`)).json();
+    expect(view.messages).toHaveLength(3);
+    expect(built.snapshots).toBe(before + 1);
+  });
+
+  it("keeps keys out of authors, and files only an aside touched out of the list", async () => {
+    const { link, thread, skip, root } = await started();
+    await writeFile(join(root, "aside.ts"), "export const aside = 1;\n");
+    thread.messages.push(
+      message({
+        id: "m3",
+        seq: 3,
+        author: "Claude in sk-ant-api03-guestshareauthorkey0",
+        body: "From another thread",
+      }),
+      message({
+        id: "m4",
+        seq: 4,
+        role: "assistant",
+        side: true,
+        body: "Looked aside",
+        changes: [{ path: "aside.ts", additions: 1, deletions: 0 }],
+      }),
+    );
+    skip(2000);
+    const view = await (await fetch(`${link}/view`)).json();
+    expect(JSON.stringify(view)).not.toContain("guestshareauthorkey");
+    expect(view.files.map((f: { path: string }) => f.path)).toEqual([
+      "empty.tsx",
+    ]);
   });
 
   it("hands a guest's Relay the conversation and files to carry on", async () => {

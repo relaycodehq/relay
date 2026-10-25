@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
-import type { GuestDelta, GuestPageView } from "../../shared/guest-share";
+import type {
+  GuestDelta,
+  GuestMessage,
+  GuestPageView,
+} from "../../shared/guest-share";
 
 /** What a guest's page already holds, by a hash of each part. */
 export interface GuestBaseline {
@@ -14,9 +18,19 @@ export interface GuestBaseline {
 const hash = (value: unknown) =>
   createHash("sha1").update(JSON.stringify(value)).digest("base64url");
 
+// A snapshot's messages are the same objects for every guest and every tick
+// until the thread changes, so each is hashed once.
+const messageHashes = new WeakMap<GuestMessage, string>();
+
+function messageHash(m: GuestMessage) {
+  let known = messageHashes.get(m);
+  if (known === undefined) messageHashes.set(m, (known = hash(m)));
+  return known;
+}
+
 export function baselineOf(view: GuestPageView): GuestBaseline {
   return {
-    messages: new Map(view.messages.map((m) => [m.id, hash(m)])),
+    messages: new Map(view.messages.map((m) => [m.id, messageHash(m)])),
     order: view.messages.map((m) => m.id).join(),
     files: hash(view.files),
     suggestions: hash(view.suggestions),

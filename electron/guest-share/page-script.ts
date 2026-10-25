@@ -6,6 +6,8 @@
 export const GUEST_SCRIPT = String.raw`(() => {
   const data = JSON.parse(document.getElementById("relay-guest-data").textContent);
   const base = location.pathname.replace(/\/+$/, "");
+  // Renders load from their own address under the site, never under the link's token.
+  const site = base.replace(/\/g\/[^/]+$/, "");
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -101,7 +103,7 @@ export const GUEST_SCRIPT = String.raw`(() => {
     const show = (i) => {
       const heights = r.pages[i].heights;
       if (heights && heights.length) frame.style.height = Math.min(2000, Math.max(80, heights[Math.min(heights.length - 1, 3)])) + "px";
-      frame.src = base + "/render/" + r.id + "/" + i + theme;
+      frame.src = site + "/r/" + r.key + "/" + i + theme;
       head.querySelectorAll("button").forEach((b, j) => b.classList.toggle("on", j === i));
     };
     if (r.pages.length > 1) r.pages.forEach((p, i) => {

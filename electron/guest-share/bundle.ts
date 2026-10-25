@@ -1,6 +1,15 @@
-import type { GuestBundle } from "../../shared/guest-share";
+import {
+  BUNDLE_AUTHOR_CHARS,
+  BUNDLE_TITLE_CHARS,
+  type GuestBundle,
+} from "../../shared/guest-share";
 import { sharedFileText } from "./shared-files";
-import { guestAuthor, guestBody, type GuestSnapshot } from "./snapshot";
+import {
+  guestAuthor,
+  guestBody,
+  withoutHostPaths,
+  type GuestSnapshot,
+} from "./snapshot";
 
 /**
  * The conversation and its shared files as a guest's own Relay carries them
@@ -16,13 +25,14 @@ export async function guestBundle(
     }),
   );
   return {
-    title: snapshot.view.title,
+    // Cut to what an import takes, so a long name doesn't make it refuse the lot.
+    title: snapshot.view.title.slice(0, BUNDLE_TITLE_CHARS),
     messages: snapshot.conversation
       .filter((m) => m.status !== "streaming")
       .map((m) => ({
         role: m.role,
-        from: guestAuthor(m),
-        body: guestBody(m.body),
+        from: guestAuthor(m).slice(0, BUNDLE_AUTHOR_CHARS),
+        body: withoutHostPaths(guestBody(m.body), snapshot.root),
         created: m.created,
       })),
     files: files.flat(),

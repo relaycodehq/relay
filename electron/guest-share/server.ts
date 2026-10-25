@@ -49,6 +49,8 @@ export interface GuestServerHost<L extends ServedLink> {
     link: L,
     input: { guestId: string; name: string; text: string },
   ): string | undefined;
+  /** The live link and render a render's own address stands for. */
+  render(key: string): { link: L; renderId: string } | undefined;
   renderPage(link: L, renderId: string, page: number): Promise<string>;
 }
 
@@ -57,6 +59,8 @@ export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 /** Funnel may or may not strip its mount path, so a link is read from the end. */
 const ROUTE = /\/g\/([A-Za-z0-9_-]{43})(\/[^?]*)?$/;
+/** A render's page, at an address of its own: a page's scripts can read their URL. */
+const RENDER_ROUTE = /\/r\/([A-Za-z0-9_-]{43})\/(\d+)$/;
 const MAX_BODY_BYTES = 16 * 1024;
 /** How often a guest's live connection looks for changes, and pings to stay open. */
 const DELTA_MS = 1000;
@@ -69,6 +73,9 @@ const PING_MS = 20_000;
  */
 export class GuestServer<L extends ServedLink> {
   private server?: Server;
+  private listening?: Promise<void>;
+  /** Pages' live connections, to tell them when their link is over. */
+  private streams = new Set<ServerResponse>();
   /** What each page was served with, so its live connection sends only what changed. */
   private baselines = new Map<string, GuestBaseline>();
 
@@ -78,8 +85,17 @@ export class GuestServer<L extends ServedLink> {
     return (this.server?.address() as AddressInfo | null)?.port;
   }
 
-  async listen(port: number) {
-    if (this.server) return;
+  /** Opens the server once; every caller waits until it's bound. */
+  listen(port: number) {
+    this.listening ??= this.bind(port).catch((e) => {
+      this.server = undefined;
+      this.listening = undefined;
+      throw e;
+    });
+    return this.listening;
+  }
+
+  private async bind(port: number) {
     const server = createServer((req, res) => {
       this.respond(req, res).catch((e) => {
         console.warn("Guest share request failed:", e);
@@ -104,16 +120,25 @@ export class GuestServer<L extends ServedLink> {
     });
   }
 
-  async close() {
+  /** `ended` tells the pages still following a link that it's over before they're cut off. */
+  async close({ ended = false } = {}) {
     const server = this.server;
     this.server = undefined;
+    this.listening = undefined;
     if (!server) return;
+    if (ended) await Promise.all([...this.streams].map(endStream));
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   }
 
   private async respond(req: IncomingMessage, res: ServerResponse) {
     const url = new URL(req.url ?? "/", "http://guest.invalid");
+    const page = url.pathname.match(RENDER_ROUTE);
+    if (page && req.method === "GET") {
+      const render = this.host.render(page[1]!);
+      if (!render) return notFound(res);
+      return this.render(render.link, render.renderId, Number(page[2]), res);
+    }
     const match = url.pathname.match(ROUTE);
     const link = match && this.host.live(match[1]!);
     if (!link) return notFound(res);
@@ -142,8 +167,6 @@ export class GuestServer<L extends ServedLink> {
         return this.detail(link, rest.join("/"), req, res);
       case "media":
         return this.media(link, rest[0] ?? "", req, res);
-      case "render":
-        return this.render(link, rest[0] ?? "", Number(rest[1]), res);
       case "bundle":
         return sendBody(
           req,
@@ -214,8 +237,7 @@ export class GuestServer<L extends ServedLink> {
       if (busy) return;
       busy = true;
       try {
-        if (!this.host.live(link.token))
-          return void res.end("event: ended\ndata: {}\n\n");
+        if (!this.host.live(link.token)) return void endStream(res);
         const change = guestDelta(
           baseline,
           await this.host.page(link, guestId),
@@ -233,7 +255,9 @@ export class GuestServer<L extends ServedLink> {
     void tick();
     const timer = setInterval(() => void tick(), DELTA_MS);
     const ping = setInterval(() => res.write(": ping\n\n"), PING_MS);
+    this.streams.add(res);
     res.on("close", () => {
+      this.streams.delete(res);
       clearInterval(timer);
       clearInterval(ping);
     });
@@ -329,6 +353,15 @@ export class GuestServer<L extends ServedLink> {
     });
     res.end(injectRenderBootstrap(redacted(html)));
   }
+}
+
+/** Tells the page its link is over; settles once that's sent, or soon if the guest isn't reading. */
+function endStream(res: ServerResponse) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, 1000).unref();
+    if (res.writableEnded) return resolve();
+    res.end("event: ended\ndata: {}\n\n", resolve);
+  });
 }
 
 /** The route's parts, decoded; undefined when one isn't valid percent-encoding. */

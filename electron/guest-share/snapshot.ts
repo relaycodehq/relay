@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { isAbsolute, join, normalize, sep } from "node:path";
+import { isAbsolute, join, normalize, parse, sep } from "node:path";
 import { readTurn } from "../../shared/agent-trace";
 import { agentName } from "../../shared/agents";
 import {
@@ -50,6 +50,8 @@ export interface GuestSnapshot {
   contents: GuestShareContents;
   /** The messages the view shows, as the thread holds them, for carrying the conversation on. */
   conversation: ChatMessage[];
+  /** The thread's folder, left out of paths the guest reads. */
+  root: string | null;
 }
 
 /** A guest's page shows this many of the newest messages. */
@@ -68,9 +70,13 @@ export async function guestSnapshot(
   root: string | null,
   media: ThreadMedia,
   endsAt: number,
+  /** The address a render's page is loaded from, which carries no link token. */
+  renderKey: (renderId: string) => string,
 ): Promise<GuestSnapshot> {
   const conversation = guestConversation(thread.messages);
-  const files = await sharedFiles(thread.messages, root);
+  // Asides stay private, and so do the files only they touched.
+  const shown = mainConversation(thread.messages).filter((m) => !isAside(m));
+  const files = await sharedFiles(shown, root);
   const snapshot: GuestSnapshot = {
     view: {
       // Titles start as the first prompt's words, keys and paths included.
@@ -92,8 +98,10 @@ export async function guestSnapshot(
       renders: 0,
     },
     conversation,
+    root,
   };
   const shared = {
+    renderKey,
     byPath: new Map(files.map((f) => [f.absolute, f.id])),
     // A link to a file renders differently once that file is shared.
     key: createHash("sha1")
@@ -132,24 +140,30 @@ function isConversation(m: ChatMessage) {
     m.worktreeCommand ||
     m.resumed ||
     m.handedOver;
-  const aside = m.side || m.asyncQuestionAnswer;
   const empty =
     !m.body.trim() &&
     m.status !== "streaming" &&
     !m.renders?.length &&
     !m.images?.length;
-  return !relayMarker && !aside && !empty;
+  return !relayMarker && !isAside(m) && !empty;
 }
 
+const isAside = (m: ChatMessage) => !!(m.side || m.asyncQuestionAnswer);
+
+/** Another thread's author names it by its title, which can hold anything a title can. */
 export const guestAuthor = (m: ChatMessage) =>
-  m.role === "user" ? (m.author ?? "Host") : agentName(m.provider);
+  m.role === "user" ? redacted(m.author ?? "Host") : agentName(m.provider);
 
 function guestMessage(
   chatId: string,
   m: ChatMessage,
   root: string | null,
   media: ThreadMedia,
-  shared: { byPath: Map<string, string>; key: string },
+  shared: {
+    renderKey: (renderId: string) => string;
+    byPath: Map<string, string>;
+    key: string;
+  },
   snapshot: GuestSnapshot,
 ): GuestMessage {
   const own = (kind: string, key: string) => mediaId(m.id, kind, key);
@@ -157,7 +171,8 @@ function guestMessage(
     string,
     { id: string; kind: "image" | "video" }
   >();
-  if (m.role === "assistant" && root) {
+  // A copied answer naming a path names one on someone else's computer.
+  if (m.role === "assistant" && root && !m.imported) {
     for (const path of answerImagePaths(m.body, root)) {
       const id = own("image", path);
       answerMedia.set(path, { id, kind: "image" });
@@ -175,7 +190,7 @@ function guestMessage(
       });
     }
   }
-  const html = renderedBody(m, shared.key, {
+  const html = renderedBody(m, shared.key, root, {
     media: (src) => {
       if (!root) return undefined;
       const path = localImagePath(src, root) ?? localVideoPath(src, root);
@@ -219,8 +234,12 @@ function guestMessage(
       ? {
           renders: m.renders.map(({ id, title, pages }) => ({
             id,
+            key: shared.renderKey(id),
             title: redacted(title),
-            pages,
+            pages: pages.map(({ label, heights }) => ({
+              ...(label ? { label: redacted(label) } : {}),
+              ...(heights ? { heights } : {}),
+            })),
           })),
         }
       : {}),
@@ -238,7 +257,11 @@ function guestActivities(
   return readTurn(m).activity.map((a) => {
     // A call on a key file keeps its line; what it printed stays here.
     const shown = !!a.detail && !touchesSecrets(a.label);
-    if (shown) snapshot.details.set(`${m.id}/${a.id}`, redacted(a.detail!));
+    if (shown)
+      snapshot.details.set(
+        `${m.id}/${a.id}`,
+        withoutHostPaths(redacted(a.detail!), root),
+      );
     return {
       id: a.id,
       kind: a.kind,
@@ -252,23 +275,36 @@ function guestActivities(
 /** `text` with the thread's folder left out and the home folder as `~`, so guests don't read the host's paths. */
 export function withoutHostPaths(text: string, root: string | null) {
   const inRoot = root ? text.split(`${root}${sep}`).join("") : text;
-  return inRoot.split(homedir()).join("~");
+  const home = homedir();
+  // A home folder at the top of the disk would turn every slash into ~.
+  if (home === parse(home).root) return inRoot;
+  return inRoot.replace(homeFolder(home), "~");
 }
 
-// Markdown is parsed once per version of a message, not on every update.
-const rendered = new Map<string, string>();
+/** The home folder as a whole name: not `/home/al` inside `/home/alex`. */
+function homeFolder(home: string) {
+  const escaped = home.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`${escaped}(?![\\w.-])`, "g");
+}
+
+// Markdown is parsed once per version of a message, not on every update;
+// only its latest version is kept, as a streaming answer has a new one a second.
+const rendered = new Map<string, { key: string; html: string }>();
 
 function renderedBody(
   m: ChatMessage,
   sharedKey: string,
+  root: string | null,
   links: Parameters<typeof guestHtml>[1],
 ) {
-  const key = `${m.id}:${m.version}:${m.status}:${m.body.length}:${sharedKey}`;
-  const cached = rendered.get(key);
-  if (cached !== undefined) return cached;
-  const html = guestHtml(guestBody(m.body), links);
-  if (rendered.size > 5000) rendered.clear();
-  rendered.set(key, html);
+  const key = `${m.version}:${m.status}:${m.body.length}:${sharedKey}:${root}`;
+  const cached = rendered.get(m.id);
+  if (cached?.key === key) return cached.html;
+  // Paths go after links are read, which name files by their full path.
+  const html = withoutHostPaths(guestHtml(guestBody(m.body), links), root);
+  if (rendered.size > 5000) rendered.delete(rendered.keys().next().value!);
+  rendered.delete(m.id);
+  rendered.set(m.id, { key, html });
   return html;
 }
 

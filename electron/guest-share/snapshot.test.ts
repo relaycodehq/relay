@@ -13,4 +13,9 @@ describe("withoutHostPaths", () => {
       "cat ~/.zshrc",
     );
   });
+
+  it("leaves a folder that only starts like the home folder alone", () => {
+    const sibling = `${homedir()}ex/notes.md`;
+    expect(withoutHostPaths(sibling, null)).toBe(sibling);
+  });
 });
