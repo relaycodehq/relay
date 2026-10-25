@@ -59,4 +59,8 @@ export interface RelayEvents {
   "relay:schedules": import("./schedules").Schedule[];
   /** settings.json changed outside the window it goes to. */
   "relay:settings-file": import("./settings-file").SettingsFileState;
+  /** What a language server reports for a file now; the editor shows these as markers. */
+  "relay:lsp-diagnostics": import("./language-servers").LspDiagnosticsEvent;
+  /** A language server starts, loads, downloads, stops or fails. */
+  "relay:lsp-status": import("./language-servers").LspStatusEvent;
 }

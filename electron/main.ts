@@ -23,6 +23,10 @@ import { Quit } from "./app/quit";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
+import {
+  createLanguageServers,
+  type LanguageServers,
+} from "./language-servers";
 import { keepMainWindowPlace, restorePoppedWindows } from "./app/saved-windows";
 import {
   askAboutCrashLoop,
@@ -138,6 +142,8 @@ let agentHosts: AgentHosts | undefined;
 let treeWatch: TreeWatch | undefined;
 /** Which other repositories the windows' threads changed files in; unset until Relay has started. */
 let elsewhereWatch: ElsewhereWatch | undefined;
+/** The language servers behind the editor; unset until Relay has started. */
+let languageServers: LanguageServers | undefined;
 const login = new GiteaLogin(teaTokenFor);
 configureOpenCodeFetch((url, options) =>
   net.fetch(url instanceof Request ? url.url : url.toString(), options),
@@ -217,6 +223,7 @@ const quit = new Quit({
     previews?.dispose({ detach: quit.detaching });
     treeWatch?.dispose();
     elsewhereWatch?.dispose();
+    languageServers?.dispose();
     // Quitting before Relay finished starting skips shutDown.
     void devices?.dispose();
     blame.dispose();
@@ -461,6 +468,16 @@ app
     elsewhereWatch = new ElsewhereWatch({
       changed: (chatId) => window.send("relay:elsewhere", chatId),
     });
+    languageServers = createLanguageServers({
+      dir: join(app.getPath("userData"), "language-servers"),
+      root: (where) => api.placeRoot(where),
+      fetch: (url, init) =>
+        net.fetch(url instanceof Request ? url.url : url.toString(), init),
+      version: app.getVersion(),
+      status: (event) => window.send("relay:lsp-status", event),
+      diagnostics: (event) => window.send("relay:lsp-diagnostics", event),
+      log: (line) => console.warn(line),
+    });
     const projectAdding = new ProjectAdding({
       store: loaded,
       projects,
@@ -501,6 +518,7 @@ app
       dragTray: dragTray(),
       treeWatch,
       elsewhereWatch,
+      languageServers,
       settingsFile: file,
     });
     const dispatch = createDispatch(api);
