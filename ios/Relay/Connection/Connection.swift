@@ -310,6 +310,7 @@ final class Connection {
     }
 
     private func fetchOverview(_ client: RemoteClient) async throws {
+        let asked = drafts.heardCount
         let fresh = try await client.overview()
         guard self.client === client else { return }
         overview = fresh
@@ -319,7 +320,7 @@ final class Connection {
         if let active { cache.save(active, fresh) }
         lookForMissingProjects()
         if status.state == .online, let active {
-            await drafts.online(active, link: ClientDrafts(client: client), overview: fresh)
+            await drafts.online(active, link: ClientDrafts(client: client), overview: fresh, askedAt: asked)
         }
     }
 

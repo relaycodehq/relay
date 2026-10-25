@@ -76,9 +76,9 @@ object Sends {
         // Each fetched overview, not each change of the shown one: a reconnect
         // whose overview equals the saved copy changes nothing there.
         scope.launch {
-            remote.fresh.collect { (computer, client, overview) ->
+            remote.fresh.collect { (computer, client, overview, askedAt) ->
                 if (remote.status.value.state != LinkState.Online || remote.client.value !== client) return@collect
-                drafts.online(computer, draftLink(client), overview)
+                drafts.online(computer, draftLink(client), overview, askedAt)
             }
         }
         // The active computer's copies come off disk, so lists show them before any composer opens.

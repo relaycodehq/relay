@@ -65,7 +65,7 @@ class DraftStoreTest {
         return main[key]!!
     }
 
-    private fun TestScope.store() = DraftStore(null, backgroundScope, now = { currentTime }).also { it.device(pc, "me") }
+    private fun TestScope.store() = DraftStore(null, backgroundScope, now = { currentTime }, ticks = { currentTime }).also { it.device(pc, "me") }
 
     @Test fun `keeps what's typed offline and sends it once the computer is back`() = runTest {
         val drafts = store()
@@ -76,6 +76,24 @@ class DraftStoreTest {
         runCurrent()
         assertEquals("On the train", main[chat]?.text)
         assertEquals("phone:me", main[chat]?.origin)
+    }
+
+    @Test fun `an overview asked for before the draft went doesn't drop it`() = runTest {
+        val drafts = store()
+        drafts.editText(pc, chat, "Typed in flight mode")
+        // Back online: a refresh is asked for before the draft reaches the computer, and answered after.
+        val before = overview()
+        val askedAt = currentTime
+        advanceTimeBy(10)
+        drafts.online(pc, link, overview())
+        runCurrent()
+        assertEquals("Typed in flight mode", main[chat]?.text)
+        drafts.online(pc, link, before, askedAt)
+        assertEquals("Typed in flight mode", drafts.text(pc, chat))
+        // One asked for after it heard does drop it.
+        main.remove(chat)
+        drafts.online(pc, link, overview(), currentTime + 1)
+        assertEquals("", drafts.text(pc, chat))
     }
 
     @Test fun `takes the computer's drafts and drops the ones gone there`() = runTest {

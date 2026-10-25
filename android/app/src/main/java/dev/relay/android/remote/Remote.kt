@@ -55,8 +55,12 @@ data class PairedComputer(
 
 class PairingFailed(message: String) : Exception(message)
 
-/** An overview just fetched from [computer] through [client], not a saved copy. */
-data class FreshOverview(val computer: String, val client: RemoteClient, val overview: RemoteOverview)
+/**
+ * An overview just fetched from [computer] through [client], not a saved copy.
+ * [askedAt] is [System.nanoTime] when it was asked for: what the phone heard
+ * since may be newer than what it lists.
+ */
+data class FreshOverview(val computer: String, val client: RemoteClient, val overview: RemoteOverview, val askedAt: Long)
 
 /**
  * The phone's one live connection and what it knows of each paired computer
@@ -271,10 +275,11 @@ class Remote(
         val client = _client.value ?: return null
         if (client.status.value.state != LinkState.Online) return null
         val heard = withContext(dispatcher) { presenceHeard }
+        val asked = System.nanoTime()
         val fresh = client.overview()
         return withContext(dispatcher) {
             if (live !== client) return@withContext null
-            setFresh(client, fresh, heard)
+            setFresh(client, fresh, heard, asked)
             fresh
         }
     }
@@ -350,10 +355,10 @@ class Remote(
      * event since is newer than the overview (it comes after the reply on the
      * wire), and the desktop tells it again if not.
      */
-    private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int) {
+    private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int, askedAt: Long) {
         val kept = if (heard == presenceHeard) overview else overview.copy(present = livePresent)
         setOverview(kept)
-        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept)) }
+        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept, askedAt)) }
     }
 
     /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -402,8 +407,9 @@ class Remote(
                         val heard = presenceHeard
                         scope.launch {
                             try {
+                                val asked = System.nanoTime()
                                 val fresh = next.overview()
-                                if (live === next) setFresh(next, fresh, heard)
+                                if (live === next) setFresh(next, fresh, heard, asked)
                             } catch (_: Exception) {
                             }
                         }
