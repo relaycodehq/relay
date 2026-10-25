@@ -1,3 +1,4 @@
+import type { Text } from "@codemirror/state";
 import { lspServerFor } from "../../../shared/language-servers";
 import { lsp } from "../language-servers/client";
 import type { FileDocument } from "./documents";
@@ -6,9 +7,23 @@ import type { FileDocument } from "./documents";
 export const servedBy = (doc: FileDocument) =>
   doc.source.kind === "project" && !!lspServerFor(doc.path);
 
-/** Sends the server the text it should answer from. A failure only means it answers from older text. */
-export const tellServerText = (where: string, path: string, text: string) =>
-  lsp.change(where, path, text).catch(() => {});
+/**
+ * The text each file's server last heard from here. An editor's texts never
+ * change in place, so the same one needs no sending: hovers, completions and
+ * jumps would otherwise copy the whole file across the bridge every time.
+ */
+const heard = new Map<string, Text>();
+const fileKey = (where: string, path: string) => `${where}\0${path}`;
+
+/** Sends the server the text it should answer from, unless it has it. A failure only means it answers from older text. */
+export async function tellServerText(where: string, path: string, text: Text) {
+  const key = fileKey(where, path);
+  if (heard.get(key) === text) return;
+  heard.set(key, text);
+  await lsp.change(where, path, text.toString()).catch(() => {
+    if (heard.get(key) === text) heard.delete(key);
+  });
+}
 
 /** The main process debounces too; this keeps big files off the bridge on every keystroke. */
 const CHANGE_DELAY = 120;
@@ -29,6 +44,7 @@ export function syncWithServer(doc: FileDocument) {
   const open = () => {
     if (openedPath || !doc.state) return;
     openedPath = doc.path;
+    heard.set(fileKey(where, openedPath), doc.state.doc);
     void lsp.open(where, openedPath, doc.text()).catch(() => {});
   };
   open();
@@ -42,7 +58,7 @@ export function syncWithServer(doc: FileDocument) {
     heardText = state.doc;
     const path = openedPath;
     clearTimeout(timer);
-    timer = setTimeout(() => void tellServerText(where, path, doc.text()), CHANGE_DELAY);
+    timer = setTimeout(() => void tellServerText(where, path, state.doc), CHANGE_DELAY);
   });
   const offSave = doc.onSave(() => {
     if (openedPath) void lsp.save(where, openedPath).catch(() => {});
@@ -52,6 +68,8 @@ export function syncWithServer(doc: FileDocument) {
     offStatus();
     offState();
     offSave();
-    if (openedPath) void lsp.close(where, openedPath).catch(() => {});
+    if (!openedPath) return;
+    heard.delete(fileKey(where, openedPath));
+    void lsp.close(where, openedPath).catch(() => {});
   });
 }

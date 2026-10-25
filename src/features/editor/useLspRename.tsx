@@ -98,7 +98,7 @@ export function useLspRename({
     const { view, pos } = renaming;
     setRenaming({ ...renaming, busy: true });
     try {
-      await tellServerText(where, doc.path, view.state.sliceDoc());
+      await tellServerText(where, doc.path, view.state.doc);
       const { line, character } = positionAt(view.state.doc, pos);
       const files = await lsp.rename(where, doc.path, line, character, name);
       const outside = await applyEverywhere(doc, where, view, files);

@@ -75,7 +75,7 @@ function hoverDocs(where: string, path: string, onOpen: (target: OpenTarget) => 
   return hoverTooltip(
     async (view, pos) => {
       const { line, character } = positionAt(view.state.doc, pos);
-      await tellServerText(where, path, view.state.sliceDoc());
+      await tellServerText(where, path, view.state.doc);
       const declared = lsp
         .definition(where, path, line, character)
         .then((places) => places[0], () => undefined);
@@ -141,7 +141,7 @@ function completions(where: string, path: string) {
     );
     if (!context.explicit && !word && !afterTrigger) return null;
     const { line, character } = positionAt(context.state.doc, context.pos);
-    await tellServerText(where, path, context.state.sliceDoc());
+    await tellServerText(where, path, context.state.doc);
     if (context.aborted) return null;
     const found = await lsp
       .completion(where, path, line, character)

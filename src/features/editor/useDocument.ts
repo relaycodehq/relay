@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import type { EditorState } from "@codemirror/state";
 import type { FileDocument } from "./documents";
 
 /** The document's status, file, and how it shows its changes. Re-renders when any of them changes, never per keystroke. */
@@ -33,7 +34,11 @@ export function useSettledText(doc: FileDocument, delay = 200) {
   useEffect(() => {
     setText(doc.state ? doc.text() : undefined);
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const settle = () => {
+    let readText = doc.state?.doc;
+    const settle = (state: EditorState) => {
+      // Carets, hovers and folds update the state too; only new text is worth reading again.
+      if (state.doc === readText) return;
+      readText = state.doc;
       clearTimeout(timer);
       timer = setTimeout(() => setText(doc.text()), delay);
     };

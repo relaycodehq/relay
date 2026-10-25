@@ -14,14 +14,14 @@ export async function placesAt(
   pos: number,
 ) {
   // The server counts the position in the text it has heard.
-  await tellServerText(where, path, view.state.sliceDoc());
+  await tellServerText(where, path, view.state.doc);
   const { line, character } = positionAt(view.state.doc, pos);
   return lsp[ask](where, path, line, character).catch(() => []);
 }
 
 /** The symbols the server finds in `doc`, as picker rows. */
 export async function structureOf(where: string, doc: FileDocument) {
-  await tellServerText(where, doc.path, doc.text());
+  if (doc.state) await tellServerText(where, doc.path, doc.state.doc);
   const found = await lsp.documentSymbols(where, doc.path).catch(() => []);
   return structureItems(found.map((symbol) => ({ ...symbol, path: doc.path })));
 }
