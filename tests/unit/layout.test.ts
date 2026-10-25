@@ -7,11 +7,15 @@ import {
   findCycles,
   importsOf,
 } from "./layout-graph";
+import { bigFiles } from "./big-files";
 
 // The folder rules from AGENTS.md ("Where code goes"), checked so they hold
 // without anyone remembering them.
 
 const root = resolve(__dirname, "../..");
+
+/** Lines a source file may have, unless big-files.ts lists it. */
+const FILE_LINE_LIMIT = 500;
 
 function sources(folder: string, kind = /\.(ts|tsx)$/): string[] {
   return readdirSync(join(root, folder), {
@@ -98,6 +102,40 @@ describe("source layout", () => {
         ),
       );
     expect(found).toEqual([]);
+  });
+
+  it("keeps files from growing past their line limit", () => {
+    const lines = (text: string) =>
+      text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+    const sizes = new Map(
+      ["src", "electron", "shared"]
+        .flatMap((folder) => sources(folder))
+        .filter(
+          (file) => !/\.test\.tsx?$/.test(file) && !file.endsWith(".d.ts"),
+        )
+        .map((file) => [file, lines(readFileSync(join(root, file), "utf8"))]),
+    );
+    const problems: string[] = [];
+    for (const [file, size] of sizes) {
+      const ceiling = bigFiles[file] ?? FILE_LINE_LIMIT;
+      if (size > ceiling)
+        problems.push(
+          `${file} has ${size} lines, over its ${ceiling}: split it by what each part does`,
+        );
+    }
+    for (const [file, ceiling] of Object.entries(bigFiles)) {
+      const size = sizes.get(file);
+      if (size === undefined || size <= FILE_LINE_LIMIT)
+        problems.push(
+          `${file} is gone or under the limit: drop it from big-files.ts`,
+        );
+      // Slack for small edits; past it, the room it freed would let it grow back.
+      else if (size < ceiling - 50)
+        problems.push(
+          `${file} shrank to ${size}: lower its ceiling in big-files.ts`,
+        );
+    }
+    expect(problems).toEqual([]);
   });
 
   it("keeps features from importing each other in a circle", () => {
