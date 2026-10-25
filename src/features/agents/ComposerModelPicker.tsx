@@ -462,9 +462,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                       ? ""
                                       : undefined
                                   }
-                                  onClick={() => {
-                                    if (selectedKey === key) select(m);
-                                  }}
                                   data-model-key={key}
                                   value={key}
                                   className="model-picker-row"
