@@ -108,13 +108,13 @@ test("shares a thread with a guest who suggests a message", async () => {
     );
     expect((await suggest("Make it rhyme")).status).toBe(200);
 
-    // Add to message puts the words in the host's own draft; Dismiss drops them.
+    // Edit puts the words in the host's own draft; Dismiss drops them.
     const suggestions = page.getByRole("region", {
       name: "Suggestion from Alex",
     });
     await expect(suggestions).toHaveCount(2);
     await expect(page.locator(".guest-share-live")).toBeVisible();
-    await suggestions.first().getByRole("button", { name: "Add to message" }).click();
+    await suggestions.first().getByRole("button", { name: "Edit" }).click();
     await expect(
       page.locator(".thread-bottom-composer .ProseMirror"),
     ).toContainText("Say 'Start one from the sidebar'");

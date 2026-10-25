@@ -221,9 +221,13 @@ export function turnPrompt({
   ]
     .filter((part) => part.trim())
     .join("\n\n");
+  // A guest's words, which the user chose to send; still the user's thread.
+  const asker = input.guest
+    ? `Request from ${JSON.stringify(input.guest.name)}, a guest the user shared this thread with; the user read it and chose to send it`
+    : "My request";
   const prompt = command
     ? question
-    : `${request ? `My request: ${request}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
+    : `${request ? `${asker}: ${request}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
   return {
     prompt,
     request,

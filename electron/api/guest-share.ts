@@ -1,10 +1,12 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
+import { sentAgent } from "../../shared/recipient";
 import { idSchema } from "../../shared/validation";
 import { seal, unseal } from "../app/login";
 import type { Store } from "../app/store";
 import { GuestShares } from "../guest-share";
 import { Funnel } from "../guest-share/funnel";
+import { lastSend } from "../started-threads/lead-side";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 /** Where the guest server listens first; a worktree's Relay moves it with its other ports. */
@@ -31,6 +33,24 @@ export function guestShareHandlers(ctx: ApiContext) {
       chats.renderPage(threadId, renderId, page),
     onSummaries: (listener) => chats.onSummaries(listener),
     send: (event) => ctx.window.send("relay:guest-share", event),
+    async sendAsGuest(threadId, name, text) {
+      // On what the thread last ran, as a message from another thread would.
+      const previous = lastSend(await chats.get(threadId));
+      const agent = sentAgent(previous);
+      await chats.send(threadId, {
+        id: randomUUID(),
+        body: text,
+        choice: previous.choice,
+        ...(previous.contextWindow
+          ? { contextWindow: previous.contextWindow }
+          : {}),
+        provider: agent,
+        to: agent,
+        runtimeMode: previous.runtimeMode,
+        interactionMode: previous.interactionMode,
+        guest: { name },
+      });
+    },
     saved: {
       load: () => ctx.store.get().guestShares ?? [],
       save: (shares) =>
@@ -47,6 +67,7 @@ export function guestShareHandlers(ctx: ApiContext) {
     startGuestShare: takes([idSchema], (id) => shares.start(id)),
     stopGuestShare: takes([idSchema], (id) => shares.stop(id)),
     guestSuggestions: takes([idSchema], async (id) => shares.waiting(id)),
+    sendGuestSuggestion: takes([idSchema], (id) => shares.send(id)),
     resolveGuestSuggestion: takes(
       [idSchema, z.enum(["drafted", "dismissed"])],
       (id, status) => shares.resolve(id, status),

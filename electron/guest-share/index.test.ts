@@ -88,6 +88,7 @@ async function world(saved: SavedGuestShare[] = []) {
     ],
   } as ProjectChat;
   const events: GuestShareEvent[] = [];
+  const sent: { threadId: string; name: string; text: string }[] = [];
   const store = { shares: saved };
   // Real time, plus whatever a test skips ahead past the snapshot cache.
   const clock = { skipped: 0 };
@@ -110,6 +111,8 @@ async function world(saved: SavedGuestShare[] = []) {
         return () => {};
       },
       send: (event) => void events.push(event),
+      sendAsGuest: async (threadId, name, text) =>
+        void sent.push({ threadId, name, text }),
       saved: {
         load: () => store.shares,
         save: async (shares) => void (store.shares = shares),
@@ -124,6 +127,7 @@ async function world(saved: SavedGuestShare[] = []) {
     thread,
     summary,
     events,
+    sent,
     store,
     changed: () => summariesChanged(),
     skip: (ms: number) => void (clock.skipped += ms),
@@ -246,6 +250,27 @@ describe("GuestShares", () => {
     expect(render.headers.get("content-security-policy")).toBe(RENDER_CSP);
     expect(await render.text()).toContain("relayRender");
     expect((await fetch(`${link}/render/${renderId}/1`)).status).toBe(404);
+  });
+
+  it("runs a sent suggestion as a turn in the guest's name, and tells that guest", async () => {
+    const { shares, sent, link } = await started();
+    expect(
+      (await suggest(link, "guest-alex-1", "Say 'Start one from the sidebar'"))
+        .status,
+    ).toBe(200);
+    const [waiting] = shares.waiting(threadId);
+    expect(waiting).not.toHaveProperty("guestId");
+    await shares.send(waiting!.id);
+    expect(sent).toEqual([
+      { threadId, name: "Alex", text: "Say 'Start one from the sidebar'" },
+    ]);
+    await expect(shares.send(waiting!.id)).rejects.toThrow(/already answered/);
+    const alex = await (await fetch(`${link}/view?guest=guest-alex-1`)).json();
+    expect(alex.suggestions).toEqual([
+      { text: "Say 'Start one from the sidebar'", status: "sent" },
+    ]);
+    const sam = await (await fetch(`${link}/view?guest=guest-sam-22`)).json();
+    expect(sam.suggestions).toEqual([]);
   });
 
   it("brings links and waiting suggestions back after a restart, at the same address", async () => {

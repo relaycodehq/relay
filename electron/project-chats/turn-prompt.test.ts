@@ -132,3 +132,13 @@ it("numbers browser comments after the screenshots of missed messages, which go 
     turnPrompt({ ...input, question: "/review", command: true }).prompt,
   ).toBe("/review");
 });
+
+it("says when the request is a guest's the user chose to send, not the user's own", () => {
+  const input = setup([message("1", "Earlier")]);
+  input.input = { ...input.input, guest: { name: "Alex" } };
+  const { prompt } = turnPrompt(input);
+  expect(prompt).toMatch(
+    /^Request from "Alex", a guest the user shared this thread with; the user read it and chose to send it: Summarize/,
+  );
+  expect(prompt).not.toContain("My request");
+});

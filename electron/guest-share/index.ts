@@ -33,6 +33,8 @@ export interface GuestSharesHost {
   /** Hears that threads may read differently; returns how to stop. */
   onSummaries(listener: () => void): () => void;
   send(event: GuestShareEvent): void;
+  /** Runs a guest's message as a turn in the thread, in the guest's name. */
+  sendAsGuest(threadId: string, name: string, text: string): Promise<void>;
   saved: {
     load(): SavedGuestShare[];
     save(shares: SavedGuestShare[]): Promise<void>;
@@ -145,6 +147,19 @@ export class GuestShares {
 
   waiting(threadId: string) {
     return waitingOf(this.threadLinks.get(threadId)?.suggestions ?? []);
+  }
+
+  /** Runs the suggestion as a turn in its guest's name. */
+  async send(id: string) {
+    const found = this.findSuggestion(id);
+    if (!found || found.suggestion.status !== "waiting")
+      throw new Error("That suggestion was already answered.");
+    await this.host.sendAsGuest(
+      found.link.threadId,
+      found.suggestion.name,
+      found.suggestion.text,
+    );
+    await this.answer(found, "sent");
   }
 
   async resolve(id: string, status: "drafted" | "dismissed") {

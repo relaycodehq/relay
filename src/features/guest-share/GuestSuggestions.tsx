@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { UserRound } from "lucide-react";
+import { errorMessage } from "../../../shared/error-message";
 import type { GuestSuggestion } from "../../../shared/guest-share";
 import { api } from "../../lib/api";
 import { useGuestShare, useGuestSuggestions } from "./useGuestShare";
@@ -9,8 +11,8 @@ const SHOWN = 3;
 
 /**
  * Above the composer of a shared thread: a quiet line saying guests can read
- * it, and what they suggested. Edit puts one in the host's own draft, so
- * it's still the host who sends it.
+ * it, and what they suggested. Send runs one as a turn in the guest's name;
+ * Edit puts it in the host's own draft first.
  */
 export function GuestSuggestions({
   threadId,
@@ -54,6 +56,17 @@ function SuggestionCard({
   suggestion: GuestSuggestion;
   onAdd: (text: string) => void;
 }) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const send = async () => {
+    setSending(true);
+    try {
+      await api.sendGuestSuggestion(suggestion.id);
+    } catch (e) {
+      setError(e);
+      setSending(false);
+    }
+  };
   return (
     <section
       className="guest-suggestion"
@@ -64,6 +77,9 @@ function SuggestionCard({
         <span>{suggestion.name} suggests</span>
       </header>
       <p className="guest-suggestion-text">{suggestion.text}</p>
+      {!!error && (
+        <p className="guest-suggestion-error">{errorMessage(error)}</p>
+      )}
       <footer>
         <button
           type="button"
@@ -75,13 +91,22 @@ function SuggestionCard({
         </button>
         <button
           type="button"
-          className="primary"
+          title="Put it in your message to change it first"
           onClick={() => {
             onAdd(suggestion.text);
             void api.resolveGuestSuggestion(suggestion.id, "drafted");
           }}
         >
-          Add to message
+          Edit
+        </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={sending}
+          title={`Runs it as a turn in ${suggestion.name}'s name`}
+          onClick={() => void send()}
+        >
+          {sending ? "Sending…" : "Send"}
         </button>
       </footer>
     </section>

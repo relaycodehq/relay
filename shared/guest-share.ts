@@ -59,6 +59,8 @@ export interface GuestShareApi {
   stopGuestShare(threadId: string): Promise<void>;
   /** Suggestions still waiting for the host to send or dismiss. */
   guestSuggestions(threadId: string): Promise<GuestSuggestion[]>;
+  /** Runs the suggestion as a turn in the guest's name, with the thread's last settings. */
+  sendGuestSuggestion(id: string): Promise<void>;
   /** Takes it off the list: dismissed, or put in the host's own draft. */
   resolveGuestSuggestion(
     id: string,

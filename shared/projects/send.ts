@@ -75,6 +75,11 @@ export const projectChatSendSchema = z
       })
       .strict()
       .optional(),
+    /** Written by a guest the thread is shared with, sent by the user; see shared/guest-share. */
+    guest: z
+      .object({ name: z.string().trim().min(1).max(40) })
+      .strict()
+      .optional(),
     /** Sent by Relay for one of the user's schedules; see shared/schedules. */
     scheduled: scheduleMessageSchema.optional(),
     /** Answers a page the agent asked with; see PageAnswer. */
@@ -143,6 +148,7 @@ export const sentBy = (
   input: Pick<
     ProjectChatSend,
     | "fromThread"
+    | "guest"
     | "scheduled"
     | "pageAnswer"
     | "asyncQuestionAnswer"
@@ -155,6 +161,7 @@ export const sentBy = (
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),
   ...(input.fromThread?.child ? { fromChild: input.fromThread.child } : {}),
+  ...(input.guest ? { author: input.guest.name } : {}),
   ...(input.scheduled ? { scheduled: input.scheduled } : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
   ...(input.asyncQuestionAnswer ? { asyncQuestionAnswer: true } : {}),
