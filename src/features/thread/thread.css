@@ -158,6 +158,7 @@
 }
 .project-message:hover .message-actions > *,
 .message-actions:focus-within > *,
+.message-actions[data-just-answered] > *,
 .message-actions > .message-pin[aria-pressed="true"] {
   opacity: 1;
 }

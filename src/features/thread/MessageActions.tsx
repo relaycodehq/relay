@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { sentLabel } from "../../../shared/chat-activity";
@@ -41,8 +42,13 @@ export function MessageActions({
   /** Where another agent can check this answer; absent where it can't. */
   secondOpinion?: SecondOpinionTarget;
 }) {
+  const justAnswered = useJustAnswered(pending);
   return (
-    <footer className="message-actions" inert={pending}>
+    <footer
+      className="message-actions"
+      inert={pending}
+      data-just-answered={justAnswered || undefined}
+    >
       {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
       {!!text?.trim() && readingKey && (
         <ReadAloudButton readingKey={readingKey} text={text} />
@@ -82,6 +88,27 @@ export function MessageActions({
       {!!text?.trim() && <PinMessageButton id={id} />}
     </footer>
   );
+}
+
+/** How long the row stays in sight once its answer is done, before it hides until hovered. */
+const SHOWN_AFTER_ANSWER_MS = 2000;
+
+/** True for a moment after the answer finishes streaming; never for one that was done when it mounted. */
+function useJustAnswered(pending: boolean) {
+  const [justAnswered, setJustAnswered] = useState(false);
+  const wasPending = useRef(pending);
+  useEffect(() => {
+    const finished = wasPending.current && !pending;
+    wasPending.current = pending;
+    if (!finished) return;
+    setJustAnswered(true);
+    const hide = setTimeout(
+      () => setJustAnswered(false),
+      SHOWN_AFTER_ANSWER_MS,
+    );
+    return () => clearTimeout(hide);
+  }, [pending]);
+  return justAnswered;
 }
 
 export function CopyMessageButton({
