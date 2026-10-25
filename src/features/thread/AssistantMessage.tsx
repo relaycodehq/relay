@@ -331,7 +331,7 @@ export function AssistantMessage({
           text={text}
           readingKey={m.id}
           sent={m.created}
-          streamed={m.streamed}
+          stats={m}
           cost={m.cost}
           pending={m.status === "streaming"}
           onReply={() => onReply(m)}

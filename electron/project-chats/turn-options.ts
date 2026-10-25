@@ -164,7 +164,9 @@ function answerCallbacks(
     onContext: (usage) => answer.context(usage),
     onCost: (usd) => answer.cost(usd),
     onUsage: (usage) => {
-      if (usage.streamed && !usage.subagent) answer.streamed(usage.streamed);
+      if (usage.subagent) return;
+      answer.tokens(usage.tokens);
+      if (usage.streamed) answer.streamed(usage.streamed);
     },
     onText: (body) => answer.text(body),
     onPlan: (body) => answer.plan(body),

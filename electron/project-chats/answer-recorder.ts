@@ -14,7 +14,12 @@ import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
 import type { ImportOffer } from "../../shared/import-offer";
-import { addStreamed, type Streamed } from "../../shared/usage";
+import {
+  addStreamed,
+  addTokens,
+  type Streamed,
+  type UsageTokens,
+} from "../../shared/usage";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -176,6 +181,15 @@ export class AnswerRecorder {
   streamed(timed: Streamed) {
     if (this.stopped) return;
     this.message.streamed = addStreamed(this.message.streamed, timed);
+    this.changed();
+  }
+
+  /** Adds a request's tokens, so a steer's answer below carries on from zero. */
+  tokens(used: UsageTokens) {
+    if (this.stopped) return;
+    this.message.tokens = this.message.tokens
+      ? addTokens(this.message.tokens, used)
+      : { ...used };
     this.changed();
   }
 

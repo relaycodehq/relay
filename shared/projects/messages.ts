@@ -7,7 +7,7 @@ import type { AgentQuestion } from "../agent-modes";
 import type { AskedQuestion } from "../asked-questions";
 import type { HtmlRender } from "../html-render";
 import type { TurnPreview } from "../preview";
-import type { Streamed } from "../usage";
+import type { Streamed, UsageTokens } from "../usage";
 import type { ResumeSettings } from "./send";
 import type { ElsewhereEdits } from "../elsewhere";
 import type { ImportOffer } from "../import-offer";
@@ -118,6 +118,8 @@ export interface ChatMessage {
   cost?: number;
   /** Local: what the agent itself wrote and how long writing it took, for its speed; subagents aren't in it. */
   streamed?: Streamed;
+  /** Local: the tokens the agent's own requests read and wrote, for its cache hit; subagents aren't in it. */
+  tokens?: UsageTokens;
   /** Local: the model and settings this answer ran on. */
   model?: TurnModel;
   /** Local proposed-plan action. */

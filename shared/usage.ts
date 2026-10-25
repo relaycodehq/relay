@@ -66,6 +66,13 @@ const TIMED_ANSWER = 50;
 export const answerSpeed = (s: Streamed | undefined) =>
   s && s.output >= TIMED_ANSWER ? Math.round(tokensPerSecond(s)) : undefined;
 
+/** The share of an answer's input its model read back from the prompt cache, 0–100; nothing when it read no input. */
+export function cacheHitPercent(t: UsageTokens) {
+  const read = t.input + t.cacheWrite + t.cacheRead;
+  if (!read) return;
+  return (t.cacheRead / read) * 100;
+}
+
 export const addStreamed = (a: Streamed | undefined, b: Streamed): Streamed =>
   a ? { output: a.output + b.output, ms: a.ms + b.ms } : { ...b };
 

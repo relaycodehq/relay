@@ -1,7 +1,6 @@
 import { Check, Copy, Reply, Split } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { sentLabel } from "../../../shared/chat-activity";
-import { answerSpeed, type Streamed } from "../../../shared/usage";
 import { formatCost } from "../../../shared/thread-cost";
 import { useCopy } from "../../lib/useCopy";
 import { PinMessageButton } from "../../ui/KeepBlock";
@@ -10,20 +9,17 @@ import { imageQuery } from "../images/ImagePreview";
 import { messageHtml } from "../images/image-clipboard";
 import { pillMarks, type CopiedPills } from "../composer/prompt/pill-clipboard";
 import type { SentImage } from "./SentPills";
+import { AnswerStats, type AnswerStatsProps } from "./AnswerStats";
 import { SecondOpinionButton } from "../second-opinion/SecondOpinionButton";
 import type { SecondOpinionTarget } from "../second-opinion/second-opinion-ask";
 
-const speedDetail = (s: Streamed) =>
-  `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
-  "of writing; thinking, waiting and tool runs don't count";
-
-/** The row under an agent's answer: copy, read aloud, fork, a second opinion, reply, how fast it wrote, what it cost, when it was sent, and pin. */
+/** The row under an agent's answer: copy, read aloud, fork, a second opinion, reply, how fast it wrote and its cache hit, what it cost, when it was sent, and pin. */
 export function MessageActions({
   id,
   text,
   readingKey,
   sent,
-  streamed,
+  stats,
   cost,
   pending,
   onReply,
@@ -35,7 +31,7 @@ export function MessageActions({
   /** What identifies the answer while it is read aloud. */
   readingKey?: string;
   sent: number;
-  streamed?: Streamed;
+  stats: AnswerStatsProps;
   /** Dollars it cost, where its agent priced it. */
   cost?: number;
   /** While the answer streams the row keeps its height but stays hidden. */
@@ -45,7 +41,6 @@ export function MessageActions({
   /** Where another agent can check this answer; absent where it can't. */
   secondOpinion?: SecondOpinionTarget;
 }) {
-  const speed = answerSpeed(streamed);
   return (
     <footer className="message-actions" inert={pending}>
       {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
@@ -71,11 +66,7 @@ export function MessageActions({
       >
         <Reply size={15} />
       </button>
-      {streamed && speed !== undefined && (
-        <span className="message-speed" title={speedDetail(streamed)}>
-          {speed} tok/s
-        </span>
-      )}
+      <AnswerStats {...stats} />
       {!!cost && cost > 0 && (
         <span className="message-speed" title="What this answer cost, as its agent priced it">
           {formatCost(cost)}

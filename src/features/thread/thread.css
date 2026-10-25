@@ -233,6 +233,20 @@
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+.answer-stats-callout {
+  position: fixed;
+  z-index: 150;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--text);
+  background: var(--toolbar);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 2px 8px #0000001f;
+  pointer-events: none;
+  animation: model-callout-in 120ms ease-out;
+}
 /* A user message's copy sits at the end of its header, so the bubble gains no row. */
 .project-message > header .message-copy {
   margin: -6px -5px -6px auto;
