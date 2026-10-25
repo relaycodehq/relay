@@ -137,3 +137,20 @@ export function CopyMessageButton({
     </button>
   );
 }
+
+/** Opens a message's replies, where it has any. */
+export function RepliesLink({
+  count,
+  onOpen,
+}: {
+  count: number;
+  onOpen: () => void;
+}) {
+  if (!count) return null;
+  return (
+    <button className="thread-replies-link" onClick={onOpen}>
+      <Reply size={13} />
+      {count} {count === 1 ? "reply" : "replies"}
+    </button>
+  );
+}

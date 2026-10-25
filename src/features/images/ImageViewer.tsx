@@ -31,7 +31,12 @@ import {
   type Size,
 } from "./image-zoom";
 import { CopyImageMenu } from "./CopyImageMenu";
-import { imageQuery, useImageSource, type PreviewImage } from "./ImagePreview";
+import {
+  imageQuery,
+  useImageSource,
+  useWorkingImages,
+  type PreviewImage,
+} from "./ImagePreview";
 import { Spinner } from "../../ui/ui";
 import "./image-viewer.css";
 import { mac, revealLabel } from "../../lib/mod-key";
@@ -568,4 +573,20 @@ function FilmstripImage({
       ) : null}
     </button>
   );
+}
+
+/** `all` without the ones that never loaded, and the viewer once one is opened by key. */
+export function useImageViewer(all: PreviewImage[]) {
+  const [viewing, setViewing] = useState<string>();
+  const images = useWorkingImages(all, viewing);
+  const index = images.findIndex((image) => image.key === viewing);
+  const viewer = index >= 0 && (
+    <ImageViewer
+      images={images}
+      index={index}
+      onIndex={(i) => setViewing(images[i].key)}
+      onClose={() => setViewing(undefined)}
+    />
+  );
+  return { images, open: setViewing, viewer };
 }
