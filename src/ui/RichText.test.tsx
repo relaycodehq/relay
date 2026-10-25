@@ -20,6 +20,18 @@ describe("RichText file citations", () => {
     expect(out).not.toContain("codex-file-citation");
   });
 
+  it("shows a project folder's full path on hover", () => {
+    const out = renderToStaticMarkup(
+      <RichText
+        text="Saved in `HousePlanner/`."
+        projectRoot="/Users/me/Projects/"
+        onOpenFile={() => {}}
+      />,
+    );
+    expect(out).toContain('title="/Users/me/Projects/HousePlanner"');
+    expect(out).toContain("HousePlanner</span>");
+  });
+
   it("shows a readable filename without a file opener", () => {
     expect(render(text)).toBe(
       '<div class="markdown"><p>I checked your PDF: <span>source.pdf</span></p></div>',

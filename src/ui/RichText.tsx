@@ -27,12 +27,10 @@ import type { PluggableList, Plugin } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
 import {
   chatFileLink,
-  linesOf,
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import { api } from "../lib/api";
 import { looksLikeColor } from "../lib/color-value";
-import { revealLabel } from "../lib/mod-key";
 import { parentSuffixes } from "../lib/file-icons";
 import { normalizeFileCitations } from "../lib/file-citations";
 import {
@@ -45,7 +43,11 @@ import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { CodeBlock, InlineCommand } from "./CodeBlock";
 import { ColorCode } from "./ColorCode";
-import { FileEntryIcon } from "./FileEntryIcon";
+import {
+  FileLinkChip,
+  FileLinkSuffixes,
+  linkedProjectFiles,
+} from "./FileLinkChip";
 import { MarkdownTable } from "./MarkdownTable";
 import { KeepBlock, KeepBlockButton } from "./KeepBlock";
 import { BlockMath, InlineMath } from "./MathView";
@@ -215,55 +217,6 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
     </blockquote>
   );
 }
-/** Parent folders for file names the message links under several paths. */
-const FileLinkSuffixes = createContext<ReadonlyMap<string, string>>(new Map());
-
-/** Every file a message links or names in inline code. */
-function linkedProjectFiles(text: string, root: string): string[] {
-  const paths = new Set<string>();
-  // Fenced code never becomes a chip; the odd segments are the fences.
-  text.split(/(```[\s\S]*?(?:```|$))/).forEach((segment, index) => {
-    if (index % 2) return;
-    for (const [, href] of segment.matchAll(/\]\(<?([^)\s>]+)/g))
-      if (href) {
-        const target = chatFileLink(href, root);
-        if (target) paths.add(target.path);
-      }
-    for (const [, code] of segment.matchAll(/`([^`\n]+)`/g))
-      if (code) {
-        const target = chatFileLink(code.trim(), root, true);
-        if (target) paths.add(target.path);
-      }
-  });
-  return [...paths];
-}
-
-/** File chip: type icon, file name, and its line or lines when there are some. */
-function FileLinkChip({
-  target,
-  onOpen,
-}: {
-  target: ProjectFileLink;
-  onOpen: (target: ProjectFileLink) => void;
-}) {
-  const suffix = useContext(FileLinkSuffixes).get(target.path);
-  const label = [
-    target.path.split(/[/\\]/).at(-1) || target.path,
-    ...(suffix ? [suffix] : []),
-    ...(target.line ? [`L${linesOf(target, "–")}`] : []),
-  ].join(" · ");
-  return (
-    <button
-      type="button"
-      className="chat-file-link"
-      title={`${target.path}${target.line ? `:${linesOf(target, "-")}` : ""}${target.outside && target.directory ? `\n${revealLabel}` : ""}`}
-      onClick={() => onOpen(target)}
-    >
-      <FileEntryIcon path={target.path} directory={target.directory} />
-      <span className="chat-file-link-label">{label}</span>
-    </button>
-  );
-}
 // The default drops data: and file: URLs; an image may use either, a link may not.
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" &&
@@ -414,9 +367,10 @@ export const RichText = memo(function RichText({
             : null;
         const shown = !target && href ? link?.(href, children) : undefined;
         if (shown !== undefined) return shown;
-        return target ? (
+        return target && projectRoot ? (
           <FileLinkChip
             target={target}
+            root={projectRoot}
             onOpen={(target) => openFile.current?.(target)}
           />
         ) : href && /^(https?:|mailto:)/i.test(href) ? (
@@ -446,9 +400,10 @@ export const RichText = memo(function RichText({
             ? chatFileLink(value, projectRoot, true)
             : null;
         const command = className ? null : inlineCommand(value);
-        return target ? (
+        return target && projectRoot ? (
           <FileLinkChip
             target={target}
+            root={projectRoot}
             onOpen={(target) => openFile.current?.(target)}
           />
         ) : command ? (

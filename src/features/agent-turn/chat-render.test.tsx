@@ -15,8 +15,8 @@ it("renders source links as local code chips and refuses out-of-project file lin
       onOpenFile={() => {}}
     />,
   );
-  expect(html).toContain('title="src/main.ts:9"');
-  expect(html).toContain('title="src/util.ts:3"');
+  expect(html).toContain('title="/Users/test/workspace/src/main.ts:9"');
+  expect(html).toContain('title="/Users/test/workspace/src/util.ts:3"');
   expect(html).not.toContain('href="file:');
   const fenced = renderToStaticMarkup(
     <RichText
@@ -38,7 +38,7 @@ it("shows only inline code through inlineCode, like a finding's F1", () => {
     />,
   );
   expect(html.match(/<b>P1<\/b>/g)).toHaveLength(1);
-  expect(html).toContain('title="src/util.ts:3"');
+  expect(html).toContain('title="/Users/test/workspace/src/util.ts:3"');
 });
 
 it("labels file chips with a type icon, file name, line, and parents only on a clash", () => {
@@ -68,7 +68,9 @@ it("keeps a cited range on the file chip", () => {
     />,
   );
   expect(html).toContain(">turn-changes.ts · L223–226</span>");
-  expect(html).toContain('title="electron/git/turn-changes.ts:223-226"');
+  expect(html).toContain(
+    'title="/Users/test/workspace/electron/git/turn-changes.ts:223-226"',
+  );
 });
 
 it("renders an active turn, then folds its trace after completion", () => {
