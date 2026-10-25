@@ -36,4 +36,5 @@ export const settingsEditSchema = z.object({
   path: z.array(keySchema).min(1).max(5),
   value: z.json().optional(),
 });
+
 export type SettingsEdit = z.infer<typeof settingsEditSchema>;

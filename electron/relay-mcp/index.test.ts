@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { loadRelayMcp, serveRelayTools } from ".";
 
 const closing: (() => unknown)[] = [];
+
 afterEach(async () => {
   for (const close of closing.splice(0)) await close();
   vi.restoreAllMocks();

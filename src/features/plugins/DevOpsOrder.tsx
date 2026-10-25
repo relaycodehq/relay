@@ -22,6 +22,7 @@ interface Props {
 
 const fieldsList = "devops-fields";
 const currentSprint = "Current sprint";
+
 const list = (text: string) => [
   ...new Set(
     text

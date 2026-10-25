@@ -10,6 +10,7 @@ import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 import { ghostId, type ImportOffer } from "../../shared/import-offer";
 
 let dir: string, home: string, chats: ProjectChats, projects: Projects;
+
 beforeEach(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), "relay-import-offer-")));
   home = join(dir, "codex");
@@ -20,6 +21,7 @@ beforeEach(async () => {
   projects = new Projects(store);
   chats = new ProjectChats(store, projects, join(dir, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();

@@ -18,11 +18,13 @@ async function repo(name: string) {
   git(root, "commit", "-qm", "Initial");
   return root;
 }
+
 beforeEach(async () => {
   base = await realpath(await mkdtemp(join(tmpdir(), "relay-elsewhere-")));
   home = await repo("home");
   clone = await repo("clone");
 });
+
 afterEach(async () => {
   await rm(base, { recursive: true, force: true });
 });

@@ -25,6 +25,7 @@ import { gitIn } from "../../tests/fixtures/git-repo";
 let temp: string;
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 const ran = (label: string): AgentActivity => ({
   id: label,
   kind: "command",
@@ -54,6 +55,7 @@ function thread(relayMade: string[] = []) {
 
 // Relay finds Git at startup, so a watcher's first look starts Git at once.
 beforeAll(() => gitExecutable());
+
 beforeEach(async () => {
   temp = await realpath(await mkdtemp(join(tmpdir(), "relay-agent-wt-")));
   root = join(temp, "project");
@@ -70,6 +72,7 @@ beforeEach(async () => {
     "Initial",
   );
 });
+
 afterEach(async () => {
   await rm(temp, { recursive: true, force: true });
 });

@@ -12,11 +12,13 @@ import { tmpdir } from "node:os";
 import { checkNewLinks, expandHome, folderPreview } from "./folder-inspect";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), "relay-links-")));
   await mkdir(join(dir, "backend"));
   await mkdir(join(dir, "web"));
 });
+
 afterEach(async () => rm(dir, { recursive: true, force: true }));
 const link = (path: string) => ({ path, access: "read" as const });
 

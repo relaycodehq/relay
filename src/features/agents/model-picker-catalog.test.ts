@@ -15,6 +15,7 @@ const model = (id: string, more: Partial<AgentModel> = {}): AgentModel => ({
   efforts: [],
   ...more,
 });
+
 const noCustoms = {
   codex: [],
   claude: [],
@@ -24,6 +25,7 @@ const noCustoms = {
   amp: [],
   antigravity: [],
 } as Record<AgentProvider, string[]>;
+
 const catalogs: Partial<Record<AgentProvider, AgentCatalog>> = {
   codex: {
     models: [model("gpt-a"), model("gpt-old", { legacy: true })],
@@ -38,6 +40,7 @@ const catalogs: Partial<Record<AgentProvider, AgentCatalog>> = {
     model: "",
   },
 };
+
 const ids = (rows: PickerModel[]) => rows.map((m) => `${m.provider}:${m.id}`);
 const rowsOf = (over: Partial<Parameters<typeof pickerRows>[1]> = {}) =>
   pickerRows(pickerCatalog(["codex", "opencode"], catalogs, noCustoms), {

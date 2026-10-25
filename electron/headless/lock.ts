@@ -15,6 +15,7 @@ import { recordedAlive, recordProcess } from "./process-identity";
 import { pidAlive as alive } from "../util/pid";
 
 const owned = new Map<string, string>();
+
 process.once("exit", () => {
   for (const [directory, marker] of owned) {
     try {

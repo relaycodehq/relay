@@ -66,6 +66,7 @@ const entities: Record<string, string> = {
   apos: "'",
   nbsp: " ",
 };
+
 export function plainText(html: string) {
   return html
     .replace(/<(br|\/p|\/div|\/li|\/h\d)[^>]*>/gi, "\n")

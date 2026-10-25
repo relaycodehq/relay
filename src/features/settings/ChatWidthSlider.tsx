@@ -40,6 +40,7 @@ export function ChatWidthSlider() {
 }
 
 const windowWidth = () => document.documentElement.clientWidth;
+
 const onResize = (listener: () => void) => {
   window.addEventListener("resize", listener);
   return () => window.removeEventListener("resize", listener);

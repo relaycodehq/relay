@@ -141,6 +141,7 @@ function QueuedBody({
     </>
   );
 }
+
 /** A queued compaction: what it does, and the instructions it carries. */
 function QueuedCompact({ body }: { body: string }) {
   const instructions = compactInstructions(body);
@@ -153,6 +154,7 @@ function QueuedCompact({ body }: { body: string }) {
     </div>
   );
 }
+
 /**
  * One waiting message, shaped like the sent message it will become and dimmed
  * until hovered: its place in line, its buttons where a sent one's copy button
@@ -239,6 +241,7 @@ function QueuedRow({
     </li>
   );
 }
+
 /**
  * A steer you sent, shown as the sent message it becomes while it waits a
  * moment before its agent gets it; until then × takes it back.
@@ -295,6 +298,7 @@ function HeldSteer({
     </article>
   );
 }
+
 /** The time, ticking each second until `until`, when the last held steer goes. */
 function useNowUntil(until: number) {
   const [now, setNow] = useState(Date.now);
@@ -312,6 +316,7 @@ function useNowUntil(until: number) {
   }, [left]);
   return now;
 }
+
 /** What the queue as a whole waits for. */
 function queueHeading(count: number, paused?: boolean, compacting?: boolean) {
   const what = count > 1 ? `${count} queued` : "Queued";

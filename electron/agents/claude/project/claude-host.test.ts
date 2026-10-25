@@ -100,6 +100,7 @@ afterEach(async () => {
   await rm(join(root, "hosts"), { recursive: true, force: true });
   await rm(release, { force: true });
 });
+
 afterAll(() => rm(root, { recursive: true, force: true }));
 
 /** A Relay that started: its own connection to the host. */

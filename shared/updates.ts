@@ -4,6 +4,7 @@ import { z } from "zod";
 export const releasesRepo = "relaycodehq/relay";
 export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
+
 /**
  * Ed25519 public keys (raw 32 bytes, base64) Relay accepts for latest.json.sig,
  * the release build's signature over latest.json's exact bytes. More than one
@@ -14,6 +15,7 @@ export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`
 export const updateKeys: readonly string[] = [
   "83EmHV/Q5V1spYrUP+1S8Kuke5rUt2gAPVQJ1r45YL4=",
 ];
+
 /** The phone app, built with every release; the unversioned name always points at the newest. */
 export const androidAppDownload = `https://github.com/${releasesRepo}/releases/latest/download/Relay-Android.apk`;
 
@@ -31,6 +33,7 @@ export const updateFileSchema = z.object({
   sha512: z.string().regex(/^[A-Za-z0-9+/]{86}==$/),
   size: z.number().int().positive(),
 });
+
 export const manifestSchema = z.object({
   version: z.string().regex(/^\d+\.\d+\.\d+$/),
   published: z.string().optional(),
@@ -40,6 +43,7 @@ export const manifestSchema = z.object({
     updateFileSchema,
   ),
 });
+
 export type UpdateManifest = z.infer<typeof manifestSchema>;
 export type UpdateFile = z.infer<typeof updateFileSchema>;
 

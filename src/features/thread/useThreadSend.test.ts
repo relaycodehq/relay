@@ -20,6 +20,7 @@ beforeEach(() => {
 });
 
 const id = "thread";
+
 const message = buildSend(
   {
     to: "codex",
@@ -29,6 +30,7 @@ const message = buildSend(
   },
   "Review first.ts",
 );
+
 const ref = (path: string): CodeReference => ({
   path,
   start: 1,
@@ -36,6 +38,7 @@ const ref = (path: string): CodeReference => ({
   label: "Working file",
   code: `${path}();`,
 });
+
 const selection: LineQuestion = {
   head: "a".repeat(40),
   base: "b".repeat(40),
@@ -45,6 +48,7 @@ const selection: LineQuestion = {
   side: "additions",
   question: "Why?",
 };
+
 const workItem: WorkItem = {
   id: 1,
   title: "First issue",

@@ -9,12 +9,14 @@ import {
   classifyChanges,
   type ClassificationResult,
 } from "../../electron/triage/classifier";
+
 const cases: {
   path: string;
   before: string;
   after: string;
   expected: string | null;
 }[] = [];
+
 for (const suffix of ["one", "two", "mixed"]) {
   const mixed = suffix === "mixed";
   const before = `export function report${suffix}(logger, failure) {\n  logger.warn(failure);\n  return 3;\n}\n`;
@@ -45,6 +47,7 @@ for (const suffix of ["one", "two", "mixed"]) {
     expected: mixed ? null : "spacing-token",
   });
 }
+
 const prepared = cases.map((c) => {
   const candidate = prepareCandidate(
     {
@@ -63,14 +66,17 @@ const prepared = cases.map((c) => {
   assert.equal(typeof candidate, "object", c.path);
   return candidate as Candidate;
 });
+
 // Put the other examples in a later call to exercise discovery across batches.
 const batches = [
   [...prepared.slice(0, 3), ...prepared.slice(6)],
   prepared.slice(3, 6),
 ];
+
 const known: ClassificationResult["groups"] = [],
   decisions: ClassificationResult["files"] = [];
 let tokens = 0;
+
 for (const batch of batches) {
   const response = await classifyChanges(
     batch,
@@ -90,9 +96,11 @@ for (const batch of batches) {
     }),
   );
 }
+
 const unmatched = prepared.filter(
   (c) => decisions.find((d) => d.path === c.path)?.decision === "normal",
 );
+
 while (unmatched.length && known.length) {
   const response = await classifyChanges(
     takeBatch(unmatched),
@@ -115,7 +123,9 @@ while (unmatched.length && known.length) {
     }),
   );
 }
+
 const groups = new Map<string, string>();
+
 for (const c of cases) {
   const decision = decisions.find((d) => d.path === c.path)!;
   assert.equal(
@@ -131,11 +141,13 @@ for (const c of cases) {
     `${c.path} must reuse its matching pattern across batches`,
   );
 }
+
 assert.equal(
   new Set(groups.values()).size,
   3,
   "Unrelated transformations must not share a broad group",
 );
+
 console.log(
   JSON.stringify({
     passed: cases.length,

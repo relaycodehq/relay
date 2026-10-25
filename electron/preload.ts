@@ -1,12 +1,14 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { ApiMethod } from "../shared/types";
 import type { RelayEvents } from "../shared/events";
+
 /** Calls an Api method in the main process. */
 async function invoke(method: ApiMethod, args: unknown[]) {
   const r = await ipcRenderer.invoke("relay:invoke", method, args);
   if (!r.ok) throw new Error(r.error);
   return r.value;
 }
+
 /**
  * Every Api method the main process handles, asked for once, so a new one
  * needs no change here and `window.relay` is there before the page runs.
@@ -17,6 +19,7 @@ const methods = Object.fromEntries(
     (...args: unknown[]) => invoke(method, args),
   ]),
 );
+
 const subscribe =
   <T = unknown>(channel: string) =>
   (callback: (value: T) => void) => {
@@ -67,6 +70,7 @@ contextBridge.exposeInMainWorld("relay", {
   // file's fonts and theme instead of switching to them a moment later.
   settingsFileAtStart: () => ipcRenderer.sendSync("relay:settings-file-now"),
 });
+
 // Ports can't cross the context bridge; a window message can carry one.
 ipcRenderer.on("relay:dictation-port", (event) => {
   window.postMessage(

@@ -4,11 +4,13 @@ type Task = Extract<ChatPending, { kind: "task" }>;
 type Wakeup = Extract<ChatPending, { kind: "wakeup" }>;
 
 const listeners = new Set<() => void>();
+
 /** Hears when any session's background work or wake-ups may have changed. */
 export function onClaudePending(listener: () => void) {
   listeners.add(listener);
   return () => void listeners.delete(listener);
 }
+
 export const pendingChanged = () => {
   for (const listener of listeners) listener();
 };

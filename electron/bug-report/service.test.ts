@@ -17,6 +17,7 @@ import type { BugReportFields } from "../../shared/bug-report";
 import type { CreatedIssue, Exec, IssueHost } from "./submit";
 
 let root = "";
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "relay-report-"));
   mkdirSync(join(root, "logs"));
@@ -26,6 +27,7 @@ beforeEach(() => {
       "2026-10-13T10:00:01.000Z error token ghp_abcdefghijklmnopqrstuvwxyz0123456789\n",
   );
 });
+
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 const system: SystemInfo = {

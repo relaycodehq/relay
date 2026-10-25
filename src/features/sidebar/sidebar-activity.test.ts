@@ -49,10 +49,12 @@ describe("triaged", () => {
 
 describe("nextAfterSettle", () => {
   const active = ["a", "b", "c"].map((id) => chat({ id }));
+
   it("opens the one below, or above when it was last", () => {
     expect(nextAfterSettle(active, "b")?.id).toBe("c");
     expect(nextAfterSettle(active, "c")?.id).toBe("b");
   });
+
   it("opens the first when the settled one wasn't listed, and none when it was alone", () => {
     expect(nextAfterSettle(active, "x")?.id).toBe("a");
     expect(nextAfterSettle([chat({ id: "a" })], "a")).toBeUndefined();

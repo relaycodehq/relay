@@ -9,10 +9,13 @@ const cost = (usd?: number) => ({
   tokens: { input: 1, cacheWrite: 0, cacheRead: 9000, output: 12 },
   ...(usd === undefined ? {} : { usd }),
 });
+
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-predictions-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 it("weighs the week's guesses against what was sent and what the threads spent", async () => {

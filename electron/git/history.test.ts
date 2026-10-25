@@ -7,14 +7,17 @@ import * as gitCommands from "./git";
 import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 const commit = (message: string) => {
   git("add", "-A");
   git("commit", "-q", "-m", message);
   return git("rev-parse", "HEAD");
 };
+
 beforeEach(async () => {
   root = await tempRepo("relay-history-");
 });
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });

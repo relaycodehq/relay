@@ -66,6 +66,7 @@ describe("AsyncQueue", () => {
 });
 
 type Fake = { busy: boolean; closed: boolean; id: number; close(): void };
+
 function pool() {
   let made = 0;
   const sessions = new HostedSessions<Fake>({
@@ -255,6 +256,7 @@ describe("HostedSessions", () => {
 describe("a host that stops answering", () => {
   let server: Server | undefined;
   let dir: string | undefined;
+
   afterEach(async () => {
     server?.close();
     if (dir) await rm(dir, { recursive: true, force: true });

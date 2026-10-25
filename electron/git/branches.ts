@@ -25,6 +25,7 @@ export async function branchChanges(
   if (tree.branch !== branch) return null;
   return { branch, files: tree.changes.length, lines: tree.lines };
 }
+
 /** The branches work usually merges into: origin's HEAD, then the usual names. */
 export async function baseCandidates(root: string) {
   const originHead = (
@@ -43,6 +44,7 @@ export async function baseCandidates(root: string) {
     ),
   ];
 }
+
 /**
  * Remotes whose base branch shares no history with HEAD: another repository,
  * like the pre-rewrite copy of this one. Judged by the base alone, so an
@@ -71,6 +73,7 @@ async function unrelatedRemotes(
   );
   return new Set(unrelated.filter((r) => r !== null));
 }
+
 export async function branches(root: string): Promise<BranchList> {
   const [current, head, refs, bases, remotes, gone] = await Promise.all([
     git(root, ["branch", "--show-current"]),
@@ -133,6 +136,7 @@ export async function branches(root: string): Promise<BranchList> {
       ),
   };
 }
+
 /**
  * Nothing was ever committed to local branch `name`: its reflog only records
  * it being made or renamed. Without a reflog that's unknown, so false.
@@ -260,6 +264,7 @@ export async function branchCounts(
     branches: Object.fromEntries(entries.filter((e) => e !== null)),
   };
 }
+
 export async function changeBranch(root: string, action: BranchAction) {
   return serializeRepo(root, async () => {
     const state = await branches(root);

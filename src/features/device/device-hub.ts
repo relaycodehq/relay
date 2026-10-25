@@ -28,6 +28,7 @@ export async function showDeviceHub() {
   set(now);
   if (now.status === "stopped") await startDeviceHub();
 }
+
 export const startDeviceHub = () => api.startDeviceHub().then(set);
 /** Its tab closed: the page goes and the hub stops; the devices keep running. */
 export const closeDeviceView = () => void api.closeDeviceView();

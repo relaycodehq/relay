@@ -5,6 +5,7 @@ import { TURN_FOLDS } from "../../lib/thread-storage";
 type Folds = ReturnType<typeof persistedStore<string[]>>;
 // One store per thread, so a thread's own window follows the main one.
 const stores = new Map<string, Folds>();
+
 function foldsOf(chatId: string): Folds {
   let store = stores.get(chatId);
   if (!store) {

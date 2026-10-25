@@ -71,6 +71,7 @@ interface ThreadSource {
 }
 
 let swept = false;
+
 /**
  * Once a launch, drops what's kept for threads and projects that are gone and
  * for unsent slots left empty, screenshots included. Nothing is dropped

@@ -13,6 +13,7 @@ import { treeRows } from "../../lib/file-tree";
 import { useDirectories, useExpanded } from "./useFileTree";
 
 vi.mock("../../lib/api", () => ({ api: { projectDirectory: vi.fn() } }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

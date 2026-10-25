@@ -26,9 +26,11 @@ import { mergedPulls } from "./merged";
 import { HostRequests, type RequestOptions } from "./request";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_FILE = 2 * 1024 * 1024;
+
 /** Pull requests on the connected Gitea server, as its account. */
 export class Gitea implements PullHost {
   private requests: HostRequests;
+
   // Main-process only: the token never crosses the renderer IPC boundary.
   constructor(
     public account: Account,
@@ -37,12 +39,14 @@ export class Gitea implements PullHost {
   ) {
     this.requests = new HostRequests(fetchRequest);
   }
+
   /**
    * Another token when this one is refused. tea's OAuth logins hand out one
    * that expires within hours and refresh it only when asked again.
    */
   renewToken?: () => Promise<string>;
   private renewing?: Promise<string | null>;
+
   /** A token other than the refused `stale`, asked for once however many requests were refused. */
   private async renewed(stale: string): Promise<string | null> {
     if (this.token !== stale) return this.token;
@@ -55,9 +59,11 @@ export class Gitea implements PullHost {
     const fresh = await this.renewing;
     return fresh && fresh !== stale ? fresh : null;
   }
+
   dispose() {
     this.requests.dispose();
   }
+
   request<T>(
     path: string,
     options: RequestOptions = {},
@@ -104,6 +110,7 @@ export class Gitea implements PullHost {
       },
     );
   }
+
   async page<T>(
     path: string,
     page: number,
@@ -131,19 +138,24 @@ export class Gitea implements PullHost {
       ...(total ? { total: Number(total) } : {}),
     };
   }
+
   repo(r: { owner: string; name: string }) {
     return `/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.name)}`;
   }
+
   pr(r: PullRef) {
     return `${this.repo(r)}/pulls/${r.number}`;
   }
+
   headRef(p: Pull) {
     return `refs/pull/${p.number}/head`;
   }
+
   async pull(r: PullRef, signal?: AbortSignal) {
     const p = (await this.request<Pull>(this.pr(r), { signal })).data;
     return { ...p, ...r };
   }
+
   /** Gitea's issue search, narrowed to pulls; `filter` picks your part in them. */
   search(filter: SearchFilter, q: string, state: PullState, page: number) {
     const query = new URLSearchParams({
@@ -154,12 +166,15 @@ export class Gitea implements PullHost {
     });
     return this.page<Issue>(`/repos/issues/search?${query}`, page);
   }
+
   mergedAmong(r: Repo, numbers: number[], signal: AbortSignal) {
     return mergedPulls(this, r, numbers, signal);
   }
+
   files(r: PullRef, page: number, signal?: AbortSignal) {
     return this.page<ChangedFile>(`${this.pr(r)}/files`, page, signal);
   }
+
   /**
    * Paths whose content differs between two commits, like Gitea's own
    * "changed since last view". Null when the server can't say: before 1.27 the
@@ -183,9 +198,11 @@ export class Gitea implements PullHost {
       return null;
     }
   }
+
   reviews(r: PullRef, page: number, signal?: AbortSignal) {
     return this.page<Review>(`${this.pr(r)}/reviews`, page, signal);
   }
+
   async reviewComments(r: PullRef, review: number, signal?: AbortSignal) {
     return (
       await this.request<ReviewComment[]>(
@@ -194,6 +211,7 @@ export class Gitea implements PullHost {
       )
     ).data;
   }
+
   /** The PR's conversation: comments outside any review. */
   discussion(r: PullRef, page: number) {
     return this.page<Discussion>(
@@ -201,6 +219,7 @@ export class Gitea implements PullHost {
       page,
     );
   }
+
   async comment(r: PullRef, body: string) {
     return (
       await this.request(`${this.repo(r)}/issues/${r.number}/comments`, {
@@ -209,6 +228,7 @@ export class Gitea implements PullHost {
       })
     ).data;
   }
+
   async reply(r: PullRef, comment: number, body: string) {
     return (
       await this.request(`${this.pr(r)}/comments/${comment}/replies`, {
@@ -217,12 +237,14 @@ export class Gitea implements PullHost {
       })
     ).data;
   }
+
   async resolveComment(r: PullRef, comment: number, resolved: boolean) {
     await this.request(
       `${this.repo(r)}/pulls/comments/${comment}/${resolved ? "resolve" : "unresolve"}`,
       { method: "POST" },
     );
   }
+
   async contents(
     r: PullRef,
     file: ChangedFile,
@@ -236,6 +258,7 @@ export class Gitea implements PullHost {
       );
     return this.contentsAt(p, file);
   }
+
   // The caller pins immutable blobs and checks the PR revision before/after a scan.
   contentsAt(p: Pull, file: ChangedFile, signal?: AbortSignal) {
     const headRepo = p.head.repo
@@ -253,6 +276,7 @@ export class Gitea implements PullHost {
         ).data,
     );
   }
+
   async submit(
     r: PullRef,
     head: string,
@@ -313,6 +337,7 @@ export class Gitea implements PullHost {
       })
     ).data;
   }
+
   /** A page of the repository's pulls, newest first. */
   pulls(
     r: Repo,
@@ -327,9 +352,11 @@ export class Gitea implements PullHost {
       signal,
     );
   }
+
   async repository(r: Repo) {
     return (await this.request<RepositoryInfo>(this.repo(r))).data;
   }
+
   async hasRepository(r: Repo) {
     const found = await this.request<{ full_name: string }>(this.repo(r)).catch(
       (e: unknown) => {
@@ -344,6 +371,7 @@ export class Gitea implements PullHost {
         `${r.owner}/${r.name}`.toLowerCase()
     );
   }
+
   async branches(r: Repo) {
     const values: { name: string }[] = [];
     for (let page = 1; page <= 100; page++) {
@@ -358,6 +386,7 @@ export class Gitea implements PullHost {
       "This repository has too many branches to load safely. Open the PR in Gitea.",
     );
   }
+
   /** The branch's tip, or null when the server has no such branch. */
   async branchHead(r: Repo, branch: string) {
     try {
@@ -371,6 +400,7 @@ export class Gitea implements PullHost {
       throw e;
     }
   }
+
   /** Gitea marks drafts by a `WIP:` title prefix, which a server may not recognise. */
   async createPull(
     r: Repo,
@@ -391,6 +421,7 @@ export class Gitea implements PullHost {
     ).data;
     return { pull, draftIgnored: draft && !pull.draft };
   }
+
   static async connect(
     server: string,
     token: string,
@@ -406,6 +437,7 @@ export class Gitea implements PullHost {
     client.account = { ...client.account, user, id: `${server}#${user.id}` };
     return client;
   }
+
   parseUrl(url: string): PullRef {
     return {
       ...parsePullUrl(url, this.account.server),

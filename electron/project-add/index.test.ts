@@ -50,6 +50,7 @@ beforeEach(async () => {
   process.env.GIT_CONFIG_NOSYSTEM = "1";
   jobs.length = 0;
 });
+
 afterEach(async () => {
   process.env = { ...saved };
   await rm(dir, { recursive: true, force: true });

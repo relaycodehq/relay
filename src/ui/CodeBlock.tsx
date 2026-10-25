@@ -49,6 +49,7 @@ export function syntaxTheme() {
   const { theme, syntax } = document.documentElement.dataset;
   return syntax ?? (theme === "light" ? "pierre-light" : "pierre-dark");
 }
+
 function subscribeSyntaxTheme(listener: () => void) {
   const observer = new MutationObserver(listener);
   observer.observe(document.documentElement, {

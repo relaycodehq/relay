@@ -5,12 +5,14 @@ import { posix } from "node:path";
 
 export type Source = { path: string; text: string };
 export type Import = { specifier: string; type: boolean };
+
 export type Loop = {
   /** Folders along the loop, the first one repeated at the end. */
   path: string[];
   /** One `a -> b: file -> file` import for each step. */
   examples: string[];
 };
+
 export type Cycle = {
   /** Every folder in the strongly connected group, sorted. */
   folders: string[];

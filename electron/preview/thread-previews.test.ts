@@ -41,6 +41,7 @@ vi.mock("electron", async () => {
   };
   class WebContentsView {
     private bounds = { x: 0, y: 0, width: 1280, height: 800 };
+
     webContents = Object.assign(new EventEmitter(), {
       closed: false,
       url: "",
@@ -71,19 +72,24 @@ vi.mock("electron", async () => {
         },
       },
     });
+
     constructor() {
       mock.views.push(this);
     }
+
     setBackgroundColor() {}
+
     getBounds() {
       return this.bounds;
     }
+
     setBounds(bounds: typeof this.bounds) {
       this.bounds = bounds;
     }
   }
   return { WebContentsView, session: { fromPartition: () => ses } };
 });
+
 vi.mock("./dev-servers", () => ({
   DevServers: class {
     constructor(changed: typeof mock.publish) {
@@ -99,6 +105,7 @@ vi.mock("./dev-servers", () => ({
 }));
 
 const cleanup: ThreadPreviews[] = [];
+
 beforeEach(() => {
   mock.views.length = 0;
   mock.known.clear();
@@ -106,7 +113,9 @@ beforeEach(() => {
   mock.restore.mockReset().mockResolvedValue(undefined);
   mock.ensure.mockClear();
 });
+
 afterEach(() => cleanup.splice(0).forEach((p) => p.dispose()));
+
 function target(chatId: string | null, port = 3000): PreviewTarget {
   return {
     key: chatId ?? "draft:project",
@@ -120,6 +129,7 @@ function target(chatId: string | null, port = 3000): PreviewTarget {
     dev: { port },
   };
 }
+
 function setup(
   resolve: ConstructorParameters<typeof ThreadPreviews>[1] = async (
     _p,
@@ -162,6 +172,7 @@ function fakeWindow() {
     },
   };
 }
+
 const bounds = { x: 0, y: 0, width: 600, height: 400 };
 
 it("lays a popped-out thread's preview over its own window, one per window", async () => {

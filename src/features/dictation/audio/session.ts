@@ -234,6 +234,7 @@ let modelState: DictationState = {
   apple: false,
   parakeet: { status: "missing" },
 };
+
 const modelListeners = new Set<() => void>();
 let modelWatched = false;
 
@@ -259,6 +260,7 @@ function watchModel() {
 }
 
 export const dictationModelState = () => modelState;
+
 export function useDictationModel() {
   watchModel();
   return useSyncExternalStore(

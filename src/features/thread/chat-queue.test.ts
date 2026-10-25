@@ -7,6 +7,7 @@ const order = (moved: ReturnType<typeof moveQueued>) =>
 
 describe("moving a queued message", () => {
   const queue = queued("a", "b", "c");
+
   it("lands before or after the message it's dropped on", () => {
     const after = moveQueued(queue, "a", { id: "c", where: "after" });
     expect(order(after)).toEqual(["b", "c", "a"]);
@@ -15,6 +16,7 @@ describe("moving a queued message", () => {
     expect(order(before)).toEqual(["c", "a", "b"]);
     expect(before?.index).toBe(0);
   });
+
   it("does nothing when the drop leaves it where it was", () => {
     expect(moveQueued(queue, "b", { id: "b", where: "after" })).toBeUndefined();
     expect(

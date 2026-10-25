@@ -31,6 +31,7 @@ vi.mock("../platform/executables");
 
 let root: string, repo: string, store: Store, chats: ProjectChats;
 let projectId: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-continue-")));
   repo = join(root, "repo");
@@ -56,6 +57,7 @@ beforeEach(async () => {
   projectId = (await projects.add(repo, null)).id;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
@@ -63,10 +65,12 @@ afterEach(async () => {
 });
 
 const HOUR = 3_600_000;
+
 const turns = [
   { prompt: "TERMINAL first", answer: "First answer" },
   { prompt: "TERMINAL second", answer: "Second answer" },
 ];
+
 const input = (provider: "claude" | "codex", body: string) => ({
   id: randomUUID(),
   body,
@@ -75,6 +79,7 @@ const input = (provider: "claude" | "codex", body: string) => ({
   interactionMode: "default" as const,
   choice: { ...defaultAISettings.questions, model: "fixture-model" },
 });
+
 const calls = async () =>
   (await readFile(join(root, "capture.jsonl"), "utf8"))
     .trim()

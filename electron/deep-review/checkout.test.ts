@@ -32,6 +32,7 @@ const exists = (path: string) =>
     () => false,
   );
 let head: string;
+
 const scope = (patch: Partial<ReviewScope> = {}): ReviewScope => ({
   target: { kind: "branch", head: "panel", base: "main" },
   label: "panel → main",
@@ -54,6 +55,7 @@ beforeEach(async () => {
   head = git(repo, "rev-parse", "HEAD");
   git(repo, "switch", "-q", "main");
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 it("needs no worktree for the checkout's own branch or a commit", async () => {

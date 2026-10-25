@@ -66,6 +66,7 @@ function keyLeaks(value: unknown, found: string[] = []): string[] {
     }
   return found;
 }
+
 const lines = (text: string) =>
   text
     .split("\n")

@@ -5,6 +5,7 @@ const p = (id: string, folder?: string) => ({
   id,
   ...(folder ? { folder } : {}),
 });
+
 const ids = (list: { id: string }[]) => list.map((x) => x.id);
 
 test("stand-ins go where the sidebar last showed them, real projects as they are now", () => {

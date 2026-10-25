@@ -3,9 +3,11 @@ import { GitHub, GithubSignedOut } from "../pull-requests/github";
 import { GithubLogin } from "./login";
 
 const gh = vi.hoisted(() => ({ token: "old-login", asked: 0 }));
+
 vi.mock("../platform/executables", () => ({
   findExecutable: async () => "gh",
 }));
+
 vi.mock("node:child_process", () => ({
   execFile: (
     _file: string,
@@ -22,6 +24,7 @@ beforeEach(() => {
   gh.token = "old-login";
   gh.asked = 0;
 });
+
 afterEach(() => vi.restoreAllMocks());
 
 const login = () =>

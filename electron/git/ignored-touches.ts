@@ -35,6 +35,7 @@ interface Stored extends IgnoredTouch {
   /** The file before the agent's first write, when `before` is "kept". */
   text?: string;
 }
+
 interface Store {
   head: string;
   touches: Stored[];
@@ -42,6 +43,7 @@ interface Store {
 
 const queue = keyedQueue();
 const storePaths = new Map<string, Promise<string>>();
+
 function storePath(root: string) {
   let path = storePaths.get(root);
   if (!path) {

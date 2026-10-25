@@ -27,6 +27,7 @@ export class TurnCompactions {
     private queue: ChatQueue,
     private ends: TurnEndings,
   ) {}
+
   /**
    * Compacts the provider session behind the newest answer on this branch,
    * or queues compacting it right after the running answer.
@@ -73,6 +74,7 @@ export class TurnCompactions {
       });
     });
   }
+
   /**
    * Compacts before a message that finds a big conversation's prompt cache
    * cold, for a caller holding the thread's control, as Settings say or the
@@ -122,6 +124,7 @@ export class TurnCompactions {
     }
     return true;
   }
+
   /** Compacts now, for a caller already holding the thread's control. */
   async now(
     id: string,

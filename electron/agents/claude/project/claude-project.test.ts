@@ -14,18 +14,21 @@ import type { AgentActivity, ContextUsage } from "../../../../shared/projects";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 let claudeInstall = "1.0.0";
+
 vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
   installStamp: async (path: string) => `${path} ${claudeInstall}`,
 }));
 
 const session_id = "session";
+
 const answer = (text: string) => ({
   type: "assistant",
   parent_tool_use_id: null,
   session_id,
   message: { id: "msg", content: [{ type: "text", text }], usage: {} },
 });
+
 const result = (text: string, origin?: { kind: string }) => ({
   type: "result",
   subtype: "success",
@@ -34,6 +37,7 @@ const result = (text: string, origin?: { kind: string }) => ({
   session_id,
   ...(origin ? { origin } : {}),
 });
+
 const lifecycle = (command_uuid: string, state: string) => ({
   type: "command_lifecycle",
   command_uuid,

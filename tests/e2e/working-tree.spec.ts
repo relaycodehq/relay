@@ -26,7 +26,9 @@ const git = (root: string, ...args: string[]) =>
     encoding: "utf8",
     stdio: ["pipe", "pipe", "pipe"],
   }).trim();
+
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-working-ui-")));
   origin = join(root, "origin.git");
@@ -92,11 +94,13 @@ test.beforeAll(async () => {
     await openPull(page, /Make pull request reviews faster/);
   }
 });
+
 test.afterAll(async () => {
   for (const app of apps) await app.close().catch(() => {});
   await fixture?.close();
   await rm(root, { recursive: true, force: true });
 });
+
 test("reviews local diffs, stages, commits and pushes only on explicit click", async () => {
   const page = pages[0];
   await writeFile(join(repos[0], path), newCode + "\n// local improvement\n");

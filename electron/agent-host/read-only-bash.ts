@@ -29,6 +29,7 @@ export const plain = new Set([
   "egrep",
   "fgrep",
 ]);
+
 export const gitReads = new Set([
   "status",
   "diff",
@@ -50,6 +51,7 @@ export const gitReads = new Set([
   "name-rev",
   "range-diff",
 ]);
+
 /** Subcommands that only read with these flags and nothing else. */
 export const gitListings: Record<string, Set<string>> = {
   branch: new Set([
@@ -66,6 +68,7 @@ export const gitListings: Record<string, Set<string>> = {
   remote: new Set(["-v"]),
   stash: new Set(["list"]),
 };
+
 /** Listings that change something when given no arguments: a bare `git stash` stashes. */
 export const gitBareWrites = new Set(["stash"]);
 
@@ -82,10 +85,12 @@ const respellings = [
   `(?:^|\\s)-[\\w-]*[*?[{]`,
   `\\$(?!['"]?(?:[\\s;&|]|$)|p['"])`,
 ];
+
 const braceList = `\\{[^\\s}]*(?:,|\\.\\.)`;
 export const disguisedFlag = [...respellings, braceList].join("|");
 const respelled = new RegExp(respellings.join("|"));
 const braces = new RegExp(braceList);
+
 // Quotes keep the shell from expanding braces, so `rg -g '*.{ts,tsx}'` reads;
 // with a backslash about, a quote may not be one, so any brace counts.
 const disguised = {
@@ -200,6 +205,7 @@ export const allowedFlags: Record<string, string> = {
     ].join("|")})`,
   ].join("|"),
 };
+
 const flagRules = Object.fromEntries(
   Object.entries(allowedFlags).map(([name, flags]) => [
     name,

@@ -40,11 +40,13 @@ export class LinkSender {
   private seq = 0;
   /** Events for a phone in the background, in order, until the next batch. */
   private batch?: { events: RemoteEvent[]; timer?: ReturnType<typeof setTimeout> };
+
   constructor(
     /** Sends a frame and says how many bytes it took on the wire. */
     private send: (frame: ServerFrame) => number,
     private now = Date.now,
   ) {}
+
   event(event: RemoteEvent) {
     const batch = this.batch;
     if (!batch) return this.deliver(event);
@@ -60,6 +62,7 @@ export class LinkSender {
     batch.events.push(event);
     batch.timer ??= setTimeout(() => this.flush(), backgroundBatchMs);
   }
+
   /** The phone went to the background or came back; back, it gets everything held at once. */
   setBackground(on: boolean) {
     if (on) {
@@ -71,11 +74,13 @@ export class LinkSender {
     this.batch = undefined;
     this.pump();
   }
+
   /** The link closed. */
   close() {
     clearTimeout(this.batch?.timer);
     this.batch = undefined;
   }
+
   private flush() {
     const batch = this.batch;
     if (!batch) return;
@@ -84,6 +89,7 @@ export class LinkSender {
     this.batch = { events: [] };
     for (const event of events) this.deliver(event);
   }
+
   private deliver(event: RemoteEvent) {
     if (event.kind === "chats") return this.sendChats(event.chats);
     if (event.kind !== "message") {
@@ -99,10 +105,12 @@ export class LinkSender {
     this.sent.delete(id);
     this.send({ t: "event", event });
   }
+
   /** The client has the streaming frame numbered `s`. */
   got(s: number) {
     if (this.unacked.delete(s)) this.pump();
   }
+
   private sendChats(chats: RemoteChatSummary[]) {
     const prev = this.chats;
     this.chats = chats;
@@ -114,6 +122,7 @@ export class LinkSender {
     if (patch.set.length || patch.remove.length)
       this.send({ t: "event", event: { kind: "chatsPatch", patch } });
   }
+
   private pump() {
     if (this.batch) return;
     const at = this.now();

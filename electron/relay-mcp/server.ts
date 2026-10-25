@@ -22,10 +22,12 @@ import { errorMessage } from "../../shared/error-message";
 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 type ToolList = typeof relayToolList;
+
 const toolsAt: Record<string, ToolList> = {
   "/mcp": leadToolList,
   [STARTED_PATH]: startedToolList,
 };
+
 const toolsFor = (url: URL) => {
   let tools: ToolList | undefined = toolsAt[url.pathname];
   if (tools && url.searchParams.get(PAGES_PARAM) === "off")
@@ -36,6 +38,7 @@ const toolsFor = (url: URL) => {
     tools = withoutImports(tools);
   return tools;
 };
+
 /**
  * The biggest call the tools allow is show_html at its page cap. A page's
  * chars take up to three bytes each in UTF-8, or two once JSON escapes them,
@@ -61,6 +64,7 @@ type Request = {
   method: string;
   params?: any;
 };
+
 type Response =
   | { jsonrpc: "2.0"; id: string | number | null; result: unknown }
   | {

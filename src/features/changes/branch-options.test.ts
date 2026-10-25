@@ -10,6 +10,7 @@ import { branchOptions, markCheckedOut } from "./branch-options";
 const now = Date.parse("2026-10-16T12:00:00Z");
 const day = 86_400_000;
 type Fixture = BranchRef & BranchCount;
+
 const branch = (name: string, rest: Partial<Fixture>): Fixture => {
   const remote = name.startsWith("origin/");
   return {
@@ -26,6 +27,7 @@ const branch = (name: string, rest: Partial<Fixture>): Fixture => {
     ...rest,
   };
 };
+
 /** The plain list and the counts, as the two calls bring them. */
 const loaded = (
   branches: Fixture[],
@@ -37,6 +39,7 @@ const loaded = (
     branches: Object.fromEntries(branches.map((b) => [b.name, b])),
   },
 ];
+
 const fixtures = [
   branch("main", { sha: "m", current: true, worktree: true, ahead: 0 }),
   branch("origin/main", { sha: "m", ahead: 0 }),

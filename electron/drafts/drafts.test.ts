@@ -9,12 +9,15 @@ import { RemoteBridge, type RemoteHost } from "../remote/bridge";
 import { DraftStore, Drafts } from ".";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-drafts-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const chatId = randomUUID();
+
 const send = (body: string): ProjectChatSend => ({
   id: randomUUID(),
   body,

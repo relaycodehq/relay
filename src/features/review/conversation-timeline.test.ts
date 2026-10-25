@@ -3,6 +3,7 @@ import { conversationTimeline } from "./conversation-timeline";
 import type { Discussion, Review, ReviewComment } from "../../../shared/types";
 
 const user = (login: string) => ({ id: 1, login }) as Review["user"];
+
 const review = (id: number, over: Partial<Review> = {}): Review => ({
   id,
   body: "",
@@ -13,6 +14,7 @@ const review = (id: number, over: Partial<Review> = {}): Review => ({
   comments_count: 0,
   ...over,
 });
+
 const line = (id: number, reviewId: number): ReviewComment => ({
   id,
   body: `line ${id}`,
@@ -25,6 +27,7 @@ const line = (id: number, reviewId: number): ReviewComment => ({
   html_url: "",
   pull_request_review_id: reviewId,
 });
+
 const talk = (id: number, day: number): Discussion => ({
   id,
   body: `talk ${id}`,

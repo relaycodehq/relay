@@ -24,6 +24,7 @@ const flag = (name: string) => {
   const at = process.argv.indexOf(name);
   return at < 0 ? undefined : process.argv[at + 1];
 };
+
 const sdkEntry = flag("--sdk");
 const storeDir = flag("--store");
 
@@ -42,12 +43,14 @@ const write = (message: unknown) =>
 console.log = console.info = console.debug = console.error;
 
 let loaded: Promise<Sdk> | undefined;
+
 const sdk = () => {
   if (!sdkEntry) throw new Error("The worker wasn't told where the SDK is.");
   return (loaded ??= import(pathToFileURL(sdkEntry).href) as Promise<Sdk>);
 };
 
 let listed: Promise<SDKModel[]> | undefined;
+
 async function models() {
   const { Cursor } = await sdk();
   const list = await (listed ??= Cursor.models.list());
@@ -68,6 +71,7 @@ async function modelList(): Promise<CursorModel[]> {
     ),
   }));
 }
+
 const forgetList = (error: unknown): never => {
   listed = undefined;
   throw error;
@@ -202,6 +206,7 @@ function slim(call: any) {
 
 // Text arrives a word at a time; it goes out in bunches, always before what follows it.
 const pending = new Map<string, { text: string; timer?: NodeJS.Timeout }>();
+
 function flush(run: string) {
   const held = pending.get(run);
   if (!held?.text) return;
@@ -401,6 +406,7 @@ const handlers: Handlers = {
 };
 
 const lines = createInterface({ input: process.stdin });
+
 lines.on("line", (line) => {
   let request: CursorRequest;
   try {
@@ -429,6 +435,7 @@ lines.on("line", (line) => {
       }),
   );
 });
+
 // Relay closing our input is how we're told to stop.
 lines.on("close", async () => {
   await Promise.allSettled([...runs.values()].map((run) => run.cancel()));

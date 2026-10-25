@@ -35,6 +35,7 @@ export function ReviewedFile({
     </div>
   );
 }
+
 function ArrowRightIcon() {
   return <ChevronRight size={15} />;
 }

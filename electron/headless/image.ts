@@ -48,21 +48,27 @@ export class HeadlessImage {
   isEmpty() {
     return !this.bytes;
   }
+
   getSize() {
     return { ...this.size };
   }
+
   /** Stays the size it was: there is nothing here to scale it with. */
   resize(_options: { width?: number; height?: number; quality?: string }) {
     return this;
   }
+
   setTemplateImage(_template: boolean) {}
+
   toPNG() {
     return this.bytes ?? Buffer.alloc(0);
   }
+
   /** The original bytes; a caller comparing sizes keeps what it had. */
   toJPEG(_quality: number) {
     return this.bytes ?? Buffer.alloc(0);
   }
+
   toDataURL() {
     return this.bytes
       ? `data:${this.mime};base64,${this.bytes.toString("base64")}`

@@ -30,11 +30,13 @@ import { errorMessage } from "../../../shared/error-message";
 const EXPAND_UP_TO = 5;
 
 type Mode = "revert" | "redo";
+
 type Rewind = (
   paths: string[] | null,
   mode: Mode,
   force: boolean,
 ) => Promise<{ conflicts: string[] }>;
+
 type Prompt =
   | { kind: "confirm" }
   | {

@@ -29,6 +29,7 @@ export class TurnEndings {
     /** Sends the steers the agent missed as the next turn; the caller holds control. */
     private resumeMissed: (id: string) => Promise<void>,
   ) {}
+
   /**
    * Ends a run. The thread goes idle first: the finished answer moved
    * `updated`, and the sidebar summary only catches up once the thread no
@@ -65,6 +66,7 @@ export class TurnEndings {
       })
       .catch((e) => console.warn("Could not send the queued messages:", e));
   }
+
   /** A turn the agent started beside the one holding the thread ended; that one ends the run. */
   rider(chat: ProjectChat, active: ActiveChat) {
     this.core.active.release(chat.id, active);
@@ -74,6 +76,7 @@ export class TurnEndings {
       .syncSummary(chat)
       .catch((e) => console.warn("Could not update the thread's summary:", e));
   }
+
   /**
    * A turn stopped or failed before its agent ran, so no run ends to move a
    * review on: a reviewer's review takes its step here, or would wait for good.
@@ -85,6 +88,7 @@ export class TurnEndings {
         ...(answer ? { answer } : {}),
       });
   }
+
   /**
    * A steer the agent never confirmed reading went to it if its turn finished.
    * A stopped or failed turn drops what the agent hadn't picked up yet.

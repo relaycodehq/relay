@@ -18,6 +18,7 @@ import { join } from "node:path";
 const protocol = vi.hoisted(() => ({
   handler: undefined as undefined | ((request: Request) => Promise<Response>),
 }));
+
 vi.mock("electron", () => ({
   protocol: {},
   session: {
@@ -33,14 +34,17 @@ vi.mock("electron", () => ({
     },
   },
 }));
+
 vi.mock("node:fs/promises", async (actual) => {
   const fs = await actual<typeof import("node:fs/promises")>();
   return { ...fs, open: vi.fn(fs.open) };
 });
+
 import { mediaUrl, serveMedia } from "./index";
 serveMedia();
 let dir: string, root: string, file: string, outside: string;
 let handles: FileHandle[];
+
 beforeEach(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), "relay-media-")));
   root = join(dir, "repo");
@@ -61,11 +65,13 @@ beforeEach(async () => {
   });
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
+
 afterEach(async () => {
   await Promise.all(handles.map((handle) => handle.close().catch(() => {})));
   vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
 });
+
 const get = (url: string, init?: RequestInit) =>
   protocol.handler!(new Request(url, init));
 

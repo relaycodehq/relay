@@ -73,13 +73,16 @@ export function keyRepo(key: string): Repo {
   const [owner, name] = key.slice(bar + 1).split("/");
   return { ...(bar > 0 ? { server: key.slice(0, bar) } : {}), owner, name };
 }
+
 export const pullKey = (r: PullRef) => `${repoKey(r)}#${r.number}`;
+
 const itemRef = (item: Issue): PullRef => ({
   owner: item.repository.owner,
   name: item.repository.name,
   number: item.number,
   ...(item.repository.server ? { server: item.repository.server } : {}),
 });
+
 /** Gitea's answers leave out the server they came from. */
 export const onServer = <T extends Issue>(item: T, server: string): T =>
   item.repository.server
@@ -91,6 +94,7 @@ export interface PullsLocation {
   repo: { key: string; label: string } | null;
   pull: { number: number; title?: string } | null;
 }
+
 /**
  * Where the page is, for the window title: the open PR in its repository,
  * or a repository's page. A project's name stands in for its repository's.
@@ -118,7 +122,9 @@ export function pullsLocation(
     pull: selected ? { number: selected.number, title } : null,
   };
 }
+
 export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
+
 export type PullsPageHandle = {
   /** Leaves the open PR for the board or a project's page. */
   go: (target: PullsTarget) => void;
@@ -328,6 +334,7 @@ function byAttention(a: BoardGroup, b: BoardGroup) {
     a.repo.localeCompare(b.repo)
   );
 }
+
 const latest = (g: BoardGroup) =>
   Math.max(0, ...g.pulls.map((p) => Date.parse(p.updatedAt) || 0));
 const newestFirst = (pulls: BoardPull[]) =>
@@ -361,6 +368,7 @@ export function verdictOf(reviews: Review[]): Verdict | null {
     return "approved";
   return null;
 }
+
 function later(a: Review, b: Review) {
   const at = Date.parse(a.submitted_at),
     bt = Date.parse(b.submitted_at);

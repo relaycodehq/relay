@@ -48,6 +48,7 @@ type File = {
   mtime: number;
   size: number;
 };
+
 type Origin =
   { id: string; cwd: string; terminal: boolean; app?: true } | undefined;
 type SessionFilter = { provider: TerminalAgent; session?: string };

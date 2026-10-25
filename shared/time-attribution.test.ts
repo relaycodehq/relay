@@ -8,12 +8,14 @@ import {
 
 const MIN = 60_000;
 const at = (minutes: number) => minutes * MIN;
+
 const options: AttributionOptions = {
   idleCap: 20 * MIN,
   maxTurn: 3 * 60 * MIN,
   minBlock: 5 * MIN,
   included: (id) => id !== "private",
 };
+
 const minutes = (pieces: TimePiece[]) =>
   pieces.map((p) => [p.projectId ?? p.reason, (p.end - p.start) / MIN]);
 const total = (pieces: TimePiece[], id: string | null) =>

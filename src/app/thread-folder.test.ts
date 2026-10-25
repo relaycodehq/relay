@@ -15,6 +15,7 @@ const thread = (worktree?: ChatWorktree): ChatSummary => ({
   updated: 0,
   worktree,
 });
+
 const made = { path: "/tmp/wt", branch: "relay/wt" };
 
 describe("worktreeThread", () => {
@@ -33,6 +34,7 @@ describe("worktreeThread", () => {
       "worktree was deleted",
     );
   });
+
   it("follows the selected agent-created worktree, while a managed worktree takes priority", () => {
     const agent = {
       ...thread(),
@@ -46,6 +48,7 @@ describe("worktreeThread", () => {
       worktreeThread({ ...agent, worktree: { ...made, removedAt: 1 } }),
     ).toBeUndefined();
   });
+
   it("works in the checkout until the worktree is on disk, and again once it's removed", () => {
     expect(worktreeThread(undefined)).toBeUndefined();
     expect(worktreeThread(thread())).toBeUndefined();
@@ -58,10 +61,12 @@ describe("worktreeThread", () => {
 
 describe("terminalBlocked", () => {
   const project = { kind: "project" } as const;
+
   it("opens in a thread's checkout or its worktree on disk", () => {
     expect(terminalBlocked(thread(), project, "worktree")).toBeUndefined();
     expect(terminalBlocked(thread(made), project, "checkout")).toBeUndefined();
   });
+
   it("waits for a worktree thread's first message to make its folder", () => {
     expect(terminalBlocked(thread({}), project, "checkout")).toMatch(
       /first message makes/,
@@ -70,11 +75,13 @@ describe("terminalBlocked", () => {
       /first message makes/,
     );
   });
+
   it("says a removed worktree comes back with the next message", () => {
     expect(
       terminalBlocked(thread({ ...made, removedAt: 1 }), project, "checkout"),
     ).toMatch(/was removed/);
   });
+
   it("stays shut while the thread is on another computer, its files there", () => {
     const away: ChatSummary = {
       ...thread(made),
@@ -91,6 +98,7 @@ describe("terminalBlocked", () => {
       /files are on macmini/,
     );
   });
+
   it("leaves an unsent PR or review thread in the checkout whatever the picker says", () => {
     const pr = {
       kind: "pr",

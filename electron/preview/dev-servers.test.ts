@@ -30,6 +30,7 @@ const serve = `node -e "require('http').createServer((q,s)=>s.end('ok')).listen(
 
 describe("DevServers", () => {
   const cleanup: (() => void)[] = [];
+
   afterEach(() => cleanup.splice(0).forEach((f) => f()));
 
   it("starts the command on its port, and sleeps it once nobody looked for half an hour", async () => {
@@ -389,6 +390,7 @@ describe.skipIf(process.platform === "win32")(
     let root: string, script: string;
     const opened: AgentHosts[] = [];
     const cleanup: (() => void)[] = [];
+
     beforeAll(async () => {
       root = await realpath(await mkdtemp(join(tmpdir(), "relay-dev-host-")));
       script = join(root, "agent-host.mjs");
@@ -404,6 +406,7 @@ describe.skipIf(process.platform === "win32")(
         },
       });
     });
+
     afterEach(async () => {
       cleanup.splice(0).forEach((f) => f());
       hostAgents(undefined);
@@ -420,6 +423,7 @@ describe.skipIf(process.platform === "win32")(
       }
       await rm(dir, { recursive: true, force: true });
     });
+
     afterAll(() => rm(root, { recursive: true, force: true }));
 
     const alive = (pid: number) => {

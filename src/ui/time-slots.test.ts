@@ -2,6 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { timeSlots } from "./time-slots";
 
 const originalZone = process.env.TZ;
+
 afterAll(() => {
   if (originalZone === undefined) delete process.env.TZ;
   else process.env.TZ = originalZone;

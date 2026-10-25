@@ -11,6 +11,7 @@ import { afterEach, expect, it } from "vitest";
 import { trackRun } from "./last-run";
 
 let dir = "";
+
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 it("counts runs in a row that never quit, until one does", () => {

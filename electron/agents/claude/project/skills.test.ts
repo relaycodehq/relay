@@ -7,12 +7,14 @@ import { discoverClaudeSkills, skillOverrideFiles } from "./skills";
 let root: string;
 let config: string;
 let repo: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-claude-skills-"));
   config = join(root, "claude-home");
   repo = join(root, "repo");
   await mkdir(join(repo, ".git"), { recursive: true });
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 async function skill(dir: string, name: string, frontmatter?: string) {
@@ -24,6 +26,7 @@ async function skill(dir: string, name: string, frontmatter?: string) {
       : `---\n${frontmatter}\n---\n\nBody.\n`,
   );
 }
+
 const userSkills = () => join(config, "skills");
 const projectSkills = () => join(repo, ".claude", "skills");
 

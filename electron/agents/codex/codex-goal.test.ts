@@ -8,6 +8,7 @@ import type { AgentJob, AgentOptions } from "../types";
 import { runCodex } from "./codex";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 vi.mock("../../platform/executables");
+
 afterEach(() => void vi.unstubAllEnvs());
 
 async function run(

@@ -58,6 +58,7 @@ test("finished PRs stay closed on restart, while new commits after an approval r
       .click();
     await expect(page!.getByRole("dialog")).toHaveCount(0);
     const boot = await page!.evaluate(() => window.relay.bootstrap());
+
     test.skip(
       !boot.account?.persistent,
       "System credential storage unavailable",
@@ -181,6 +182,7 @@ test("restores the PR, late-page file and the page's search across reload/restar
     ).toEqual(["1", "2"]);
 
     const boot = await page!.evaluate(() => window.relay.bootstrap());
+
     // A full restart must restore without clicking a PR, including secure saved login.
     test.skip(
       !boot.account?.persistent,

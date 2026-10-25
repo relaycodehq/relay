@@ -14,6 +14,7 @@ let rev = 0;
 const writes: DraftWrite[] = [];
 let hear: ((change: DraftChange) => void) | undefined;
 let readShared = async () => [...main.values()];
+
 function take(write: DraftWrite, by: DraftDevice) {
   const { draft, changed } = applyDraftWrite(
     main.get(write.key),
@@ -25,6 +26,7 @@ function take(write: DraftWrite, by: DraftDevice) {
   else main.delete(write.key);
   return { draft, changed };
 }
+
 /** A phone writes, and the main process tells this window. */
 function phone(write: Omit<DraftWrite, "base" | "at"> & { at?: number }) {
   const { draft, changed } = take(
@@ -44,15 +46,19 @@ const saved = new Set<(key: string, list: DraftImage[]) => void>();
 const metadataListeners = new Set<
   (key: string, value: DraftImageMetadata | undefined) => void
 >();
+
 const metadataOf = (list: DraftImage[]): DraftImageMetadata => ({
   numbers: list.map((i) => i.n),
   loose: list.filter((i) => i.n === undefined).length,
 });
+
 const loadImages = vi.fn(async (key: string) => images.get(key) ?? []);
+
 const readMetadata = vi.fn(
   async () =>
     new Map([...images].map(([key, list]) => [key, metadataOf(list)])),
 );
+
 vi.mock("../images/draft-images", () => ({
   loadDraftImages: (key: string) => loadImages(key),
   saveDraftImages: async (key: string, list: DraftImage[]) => {
@@ -80,6 +86,7 @@ vi.mock("../images/draft-images", () => ({
   readDraftImageCounts: async () => {},
   onDraftImageCount: () => () => {},
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     sharedDrafts: () => readShared(),
@@ -135,6 +142,7 @@ beforeEach(async () => {
   sync = await import("./draft-sync");
   drafts = await import("./drafts");
 });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -144,6 +152,7 @@ async function start() {
   sync.startDraftSync({ takes: true });
   await vi.advanceTimersByTimeAsync(0);
 }
+
 const pause = () => vi.advanceTimersByTimeAsync(400);
 
 function delaySnapshot() {

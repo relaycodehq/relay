@@ -73,11 +73,13 @@ const unwritten = new Map<string, { draft: ThreadDraft; legacy: string[] }>();
 const parsed = new Map<string, { raw: string; draft: ThreadDraft }>();
 // Told each thread whose record this window wrote or removed.
 const recordListeners = new Set<(thread: string) => void>();
+
 /** Hears every thread record this window writes or removes, not other windows'. */
 export function onThreadRecord(listener: (thread: string) => void) {
   recordListeners.add(listener);
   return () => void recordListeners.delete(listener);
 }
+
 const recorded = (thread: string) =>
   recordListeners.forEach((listener) => listener(thread));
 
@@ -154,10 +156,12 @@ export function loadThreadDraft(thread: string): ThreadDraft {
   migrateDrafts();
   return unwritten.get(thread)?.draft ?? readRecord(thread);
 }
+
 export function saveThreadDraft(thread: string, draft: ThreadDraft) {
   migrateDrafts();
   commit(thread, draft, unwritten.get(thread)?.legacy ?? []);
 }
+
 const updateThreadDraft = (
   thread: string,
   change: (draft: ThreadDraft) => ThreadDraft,
@@ -191,6 +195,7 @@ export function readDraftText(key: string): string {
   const at = splitDraftKey(key);
   return at ? bodyOf(loadThreadDraft(at.thread), at.reply).text : "";
 }
+
 export function writeDraftText(key: string, text: string) {
   const at = splitDraftKey(key);
   if (at) updateThreadDraft(at.thread, (d) => withBody(d, at.reply, { text }));
@@ -363,6 +368,7 @@ export const openThread = {
   save: (projectId: string, id: string | null) =>
     writeText(OPEN_THREAD + projectId, id ?? ""),
 };
+
 export const currentNewThreadKey = (projectId: string) =>
   CURRENT_NEW_THREAD + projectId;
 

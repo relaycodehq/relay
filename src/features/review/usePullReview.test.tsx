@@ -17,7 +17,9 @@ vi.mock("../../lib/api", () => ({
     triageState: vi.fn(),
   },
 }));
+
 vi.mock("../checks/useProjectChecks", () => ({ useProjectChecks: () => ({}) }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

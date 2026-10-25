@@ -46,6 +46,7 @@ const TITLE_WAIT_MS = 8000;
 export class TurnSends {
   /** Sends whose message is in and whose answer hasn't started its agent yet. */
   private starts = new Set<Promise<unknown>>();
+
   constructor(
     private core: ChatCore,
     private worktrees: ThreadWorktrees,
@@ -62,6 +63,7 @@ export class TurnSends {
   starting() {
     return [...this.starts];
   }
+
   resume(id: string, settings?: ResumeSettings) {
     return this.core.control(id, async () => {
       // The stop paused the queue behind the answer; carrying it on picks
@@ -83,6 +85,7 @@ export class TurnSends {
       }
     });
   }
+
   /**
    * Resumes a turn stopped to get a waiting steer read, if the agent did
    * miss it. One it picked up just before the stop leaves the thread
@@ -91,6 +94,7 @@ export class TurnSends {
   resumeMissed(id: string) {
     return this.core.control(id, () => this.resumeMissedHeld(id));
   }
+
   /** resumeMissed for a job that already holds the thread's control. */
   async resumeMissedHeld(id: string) {
     await this.core.active.finished(id);
@@ -109,6 +113,7 @@ export class TurnSends {
       return;
     await this.resumeHeld(id);
   }
+
   /** Resume for a job that already holds the thread's control. */
   async resumeHeld(id: string, settings?: ResumeSettings) {
     if (this.core.closing()) throw new Error("Relay is closing.");
@@ -152,6 +157,7 @@ export class TurnSends {
       true,
     );
   }
+
   /** `answer` false keeps the message without a turn, for another computer to answer. */
   async sendNow(
     id: string,
@@ -287,6 +293,7 @@ export class TurnSends {
       throw e;
     }
   }
+
   /** Everything after the message is in: a handoff note if another agent takes over, then the answer. */
   private async start(
     chat: ProjectChat,
@@ -472,6 +479,7 @@ export class TurnSends {
       this.ends.unstarted(chat, input, failed.id);
     }
   }
+
   /**
    * Runs `answer` as the thread's reply to `input`. When it ends the thread
    * goes idle, a deep review moves on, and queued messages go out.
@@ -499,6 +507,7 @@ export class TurnSends {
     // The runner turns agent errors into a failed answer; what's left is a failed save.
     void job.catch((e) => console.warn("Could not save the answer:", e));
   }
+
   /**
    * The lead's first turn in a deep review. It answers the review request,
    * so it has no user message of its own; later turns are ordinary ones.

@@ -4,6 +4,7 @@ import type { ChatSummary, Project } from "../../../shared/projects";
 import { passes, pruneTree } from "./useThreadFilter";
 
 const project = (id: string) => ({ id, name: id }) as Project;
+
 const node = (
   path: string,
   projects: string[],
@@ -34,6 +35,7 @@ describe("pruneTree", () => {
 
 describe("passes", () => {
   const chat = (c: Partial<ChatSummary>) => c as ChatSummary;
+
   it("matches an agent that worked in the thread, not only the latest", () => {
     const f = { projects: [], agents: ["codex" as const] };
     expect(passes(f, "p", chat({ providers: ["claude", "codex"] }))).toBe(true);

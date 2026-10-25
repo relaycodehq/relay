@@ -23,6 +23,7 @@ async function port() {
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return p;
 }
+
 async function stop(child: { pid: number }) {
   try {
     process.kill(child.pid, "SIGTERM");
@@ -30,6 +31,7 @@ async function stop(child: { pid: number }) {
     if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
   }
 }
+
 test("discovers manual servers and opens them at their own localhost address", async () => {
   test.setTimeout(90_000);
   const root = await realpath(

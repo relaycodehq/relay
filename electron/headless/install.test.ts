@@ -15,10 +15,12 @@ import { replaceInstallation } from "./install";
 import { lockPath } from "./lock";
 
 const cleanup: (() => Promise<unknown>)[] = [];
+
 afterEach(async () => {
   vi.restoreAllMocks();
   while (cleanup.length) await cleanup.pop()!();
 });
+
 async function fixture() {
   const dir = await realpath(
     await mkdtemp(join(tmpdir(), "relay-install-test-")),

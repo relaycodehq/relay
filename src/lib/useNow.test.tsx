@@ -3,15 +3,19 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { useNow } from "./useNow";
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
+
 it("stops ticking on blur, catches up on focus and honors disabled clocks", async () => {
   vi.useFakeTimers();
   vi.setSystemTime(0);

@@ -5,6 +5,7 @@ import DiffWorker from "./diff.worker?worker";
 import type { LineEnding } from "./line-endings";
 
 type Request = FilePair & { editable?: boolean };
+
 type Compared = {
   diff?: FileDiffMetadata;
   error?: Error;

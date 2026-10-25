@@ -7,6 +7,7 @@ import {
 } from "./index";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+
 vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));

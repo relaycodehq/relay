@@ -23,8 +23,10 @@ function parseList(saved: string | null): string[] {
     return [];
   }
 }
+
 const readList = (key: string) => parseList(readText(key));
 const favoriteModels = persistedStore(favoritesKey, parseList, JSON.stringify);
+
 const modelPickerCategory = persistedStore<Category | null>(
   "relay-model-picker-category",
   (saved) =>
@@ -33,11 +35,13 @@ const modelPickerCategory = persistedStore<Category | null>(
       : null,
   (category) => category,
 );
+
 function setFavoriteModels(next: SetStateAction<string[]>) {
   favoriteModels.set(
     typeof next === "function" ? next(favoriteModels.get()) : next,
   );
 }
+
 const readCustoms = (p: AgentProvider) =>
   readList(customsKey(p)).filter((id) => modelSchema.safeParse(id).success);
 export type CustomModels = Partial<Record<AgentProvider, string[]>>;

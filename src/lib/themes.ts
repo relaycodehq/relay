@@ -325,6 +325,7 @@ export interface ThemeChoice {
   /** 0–100; DEFAULT_CONTRAST keeps the theme's own. */
   contrast?: number;
 }
+
 /** Drops the colour overrides; a newly picked theme brings its own colours. */
 export const clearedColors = {
   accent: undefined,

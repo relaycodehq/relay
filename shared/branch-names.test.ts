@@ -24,6 +24,7 @@ const git = (...args: string[]) =>
   });
 git("init", "-q");
 git("commit", "-q", "--allow-empty", "-m", "x");
+
 afterAll(() => rmSync(repo, { recursive: true, force: true }));
 
 const gitTakes = (name: string) => {

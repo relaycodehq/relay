@@ -44,7 +44,9 @@ async function agent(scenario: Scenario, profile: Partial<AcpProfile> = {}) {
       .map((line) => JSON.parse(line));
   return { acp, root, sent };
 }
+
 const profiles: AcpProfile[] = [];
+
 afterEach(() => {
   for (const profile of profiles.splice(0)) disposeAcp(profile);
   vi.unstubAllEnvs();
@@ -409,6 +411,7 @@ it("classifies prompt-time authentication refusals so the thread offers sign-in;
     ).rejects.toMatchObject({ name: "AcpRequestError", code });
   }
 });
+
 const editing = {
   toolCallId: "t1",
   title: "Edit a.ts",
@@ -416,11 +419,13 @@ const editing = {
   status: "pending",
   content: [{ type: "diff", path: "/p/a.ts", oldText: "a", newText: "b" }],
 };
+
 const allowOrReject = [
   { optionId: "yes", name: "Allow", kind: "allow_once" },
   { optionId: "always", name: "Always", kind: "allow_always" },
   { optionId: "no", name: "Reject", kind: "reject_once" },
 ];
+
 const modeOption = {
   id: "mode",
   name: "Mode",

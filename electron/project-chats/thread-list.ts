@@ -47,12 +47,15 @@ function awaySummary(
 /** A project's threads as the sidebar lists them: saved summaries, what runs in each now, and how they settle. */
 export class ThreadList {
   constructor(private core: ChatCore) {}
+
   autoSettleDays(): number | null {
     return this.core.prefs().autoSettleDays;
   }
+
   worktreeCleanupDays(): number | null {
     return this.core.prefs().worktreeCleanupDays;
   }
+
   /** How the project's threads settle by themselves, its own settings first. */
   private settling(settings: ProjectSettings | undefined) {
     return {
@@ -63,6 +66,7 @@ export class ThreadList {
       onCommit: !!settings?.settleOnCommit,
     };
   }
+
   list(projectId: string): ChatSummary[] {
     const { settings } = this.core.projects.get(projectId);
     const now = Date.now();
@@ -74,6 +78,7 @@ export class ThreadList {
         : listed;
     });
   }
+
   /** Build each affected project's live list once for a group of status reads. */
   byIds(ids: readonly string[]): Map<string, ChatSummary> {
     const wanted = new Set(ids);
@@ -90,6 +95,7 @@ export class ThreadList {
       ),
     );
   }
+
   /** The threads `leadId`'s agent started, in whichever project. */
   started(leadId: string): ChatSummary[] {
     const ids = (this.core.store.get().chats ?? [])
@@ -97,6 +103,7 @@ export class ThreadList {
       .map((c) => c.id);
     return [...this.byIds(ids).values()];
   }
+
   /** The project's threads as saved, with what runs or waits in each now. */
   private live(projectId: string): ChatSummary[] {
     const chats = (this.core.store.get().chats ?? []).filter(
@@ -191,6 +198,7 @@ export class ThreadList {
           : c;
       });
   }
+
   /** Threads with a worktree on disk, each with when it settled and how long it keeps the worktree after. */
   cleanupCandidates(): CleanupCandidate[] {
     const onDisk = (c: ChatSummary) =>

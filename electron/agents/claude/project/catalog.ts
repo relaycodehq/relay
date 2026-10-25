@@ -70,6 +70,7 @@ export const listClaudeModels = memoWhileStamp(
       "models",
     ),
 );
+
 // Relay owns these (model, effort, threads, context), or they need the
 // terminal, a long-lived loop, or account setup that the app doesn't offer.
 const hiddenCommands = new Set([
@@ -109,7 +110,9 @@ const hiddenCommands = new Set([
   "usage-credits",
   "workflow-launch-exec",
 ]);
+
 type ClaudeProbe = { commands: ProviderCommand[]; defaults?: ClaudeDefaults };
+
 /**
  * Claude's commands for this checkout, as the SDK resolves them, and its
  * skills, as they are on disk.
@@ -127,6 +130,7 @@ export async function listClaudeCommands(root: string) {
     ...listed,
   ];
 }
+
 /** The skills a `$name` in a message for `cwd` may start. */
 export const pickableClaudeSkills = async (cwd: string, account?: string) =>
   new Set(
@@ -140,6 +144,7 @@ export const claudeDefaults = (root: string) =>
   probeClaude(root).then((probe) => probe.defaults ?? null);
 /** A reloaded session may have new skills; the next listing asks Claude again. */
 export const forgetClaudeCommands = () => probeClaude.clear();
+
 const probeClaude = memoByKey<ClaudeProbe>((root) =>
   withProbe(
     {

@@ -10,6 +10,7 @@ import {
 
 const TILT = 0.95;
 const SLAB = 1.4;
+
 const SIDES = [
   [1, 0],
   [0, 1],

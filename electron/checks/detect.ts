@@ -15,6 +15,7 @@ export async function configPath(root: string, path: string) {
     );
   return full;
 }
+
 async function json(
   root: string,
   path: string,

@@ -11,6 +11,7 @@ const key = (
   metaKey: !!mods.meta,
   shiftKey: !!mods.shift,
 });
+
 const combo = (code: string, mods: Partial<KeyCombo> = {}): KeyCombo => ({
   code,
   alt: false,
@@ -22,6 +23,7 @@ const combo = (code: string, mods: Partial<KeyCombo> = {}): KeyCombo => ({
 
 describe("saved shortcuts", () => {
   const saved = new Map<string, string>();
+
   beforeEach(() => {
     saved.clear();
     vi.resetModules();
@@ -33,6 +35,7 @@ describe("saved shortcuts", () => {
       removeItem: (k: string) => saved.delete(k),
     });
   });
+
   afterEach(() => vi.unstubAllGlobals());
   const load = () => import("./shortcuts");
 

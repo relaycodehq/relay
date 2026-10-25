@@ -61,6 +61,7 @@ export const sizes = {
   codeSize: range(10, 18),
   terminalSize: range(9, 20),
 };
+
 const limits = {
   interfaceSize: [9, 22],
   promptSize: [8, 32],
@@ -129,12 +130,14 @@ function parseLegacy(raw: string): Typography {
 const ADVANCED_KEY = "relay-typography-advanced";
 const LEGACY_KEY = "relay-typography";
 const legacy = storedBefore(LEGACY_KEY, parseLegacy);
+
 // The switch only shows rows; it stays with this window's state, not the file.
 const advanced = persistedStore(
   ADVANCED_KEY,
   (saved) => saved === "1",
   (on) => (on ? "1" : null),
 );
+
 const before = legacy.read();
 if (before?.advanced) advanced.set(true);
 

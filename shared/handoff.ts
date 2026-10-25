@@ -174,6 +174,7 @@ export const handoffChatMethods = [
   "closeWatchNote",
   "seePrediction",
 ] as const satisfies readonly ApiMethod[];
+
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];
 
 /**
@@ -215,6 +216,7 @@ export const handoffFolderMethods = [
   "localBlame",
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
+
 /**
  * Calls about a project that lives on another computer (`Project.computer`),
  * its id first, that run on that computer (`projectCall`): its checkout's
@@ -233,7 +235,9 @@ export const remoteProjectMethods = [
   "stopProjectTask",
   "restartProjectTask",
 ] as const satisfies readonly ApiMethod[];
+
 export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];
+
 /**
  * Calls on a live handoff's worktree, the thread's id first, that run there
  * from `folderHandoffBridge` too; so do the files its agents changed in
@@ -246,6 +250,7 @@ export const handoffWorktreeMethods = [
   "threadElsewhereDiff",
   "threadElsewhereCommit",
 ] as const satisfies readonly ApiMethod[];
+
 /**
  * Calls that open or point at a thread's files on this computer's disk. For a
  * live handoff's thread they'd open the copy it left behind, so they're
@@ -257,6 +262,7 @@ export const handoffHereOnlyMethods = [
   "openProjectPath",
   "revealProjectWorktree",
 ] as const satisfies readonly ApiMethod[];
+
 export type HandoffHereOnlyMethod = (typeof handoffHereOnlyMethods)[number];
 export type HandoffMethod =
   | HandoffChatMethod
@@ -430,6 +436,7 @@ export interface HandoffRemoteStatus {
   /** When the running turn started, on this computer's clock. */
   runningSince?: number;
 }
+
 /** Calls a status carries; the peek shows as many. */
 export const remoteRecentCalls = 6;
 
@@ -446,6 +453,7 @@ export interface SshHost {
   hostName?: string;
   user?: string;
 }
+
 /** What reaching a computer over its route found: how fast, and which Relay is there. */
 export interface RouteCheck {
   ms: number;
@@ -454,6 +462,7 @@ export interface RouteCheck {
   /** Why the Relay there doesn't start, as with a Node.js too old for it. */
   broken?: string;
 }
+
 /**
  * How a computer is reached that isn't over the network: a pipe its own
  * command opens, `ssh <host>` with this computer's SSH setup or wsl.exe
@@ -466,6 +475,7 @@ export type ComputerRoute =
  * shell's startup files print ahead of it can be told apart and dropped.
  */
 export const pipeReady = "\0relay-pipe-ready\n";
+
 export const computerRouteSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("ssh"),
@@ -538,6 +548,7 @@ export interface AwayThread {
   /** Failed on its way there or back, without clashing files: the step to try again. */
   retry?: "send" | "return";
 }
+
 /** Settings → Computers: this computer, and each paired one with its threads there. */
 export interface ComputersOverview {
   name: string;

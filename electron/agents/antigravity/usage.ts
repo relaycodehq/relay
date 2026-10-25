@@ -19,9 +19,11 @@ const tokenSchema = z.object({
   refresh_token: z.string().min(1),
   project_id: z.string().optional(),
 });
+
 type Token = z.infer<typeof tokenSchema>;
 export type QuotaCredential = { token: Token; fingerprint: string };
 type Access = { fingerprint: string; token: string; until: number };
+
 const endpoints = [
   "https://daily-cloudcode-pa.googleapis.com",
   "https://cloudcode-pa.googleapis.com",
@@ -125,6 +127,7 @@ export async function readQuotaCredential(
 }
 
 class QuotaAuthError extends Error {}
+
 const unavailable = (message: string): ProviderUsage => ({
   provider: "antigravity",
   windows: [],
@@ -270,6 +273,7 @@ const readers = new Map<
   string,
   ReturnType<typeof createAntigravityUsageReader>
 >();
+
 export function readAntigravityUsage(account = SYSTEM_ACCOUNT) {
   const home =
     account === SYSTEM_ACCOUNT

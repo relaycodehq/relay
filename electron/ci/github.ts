@@ -179,6 +179,7 @@ export class GitHub {
   /** The token the cache was filled under; a private repo's answer must not outlive its login. */
   private cacheToken: string | null = null;
   private failedJobs = new Map<string, string | undefined>();
+
   constructor(
     private fetchRequest: FetchRequest,
     private credentials = new GithubCredentials(),

@@ -32,6 +32,7 @@ const makers: [RegExp, string][] = [
   [/glm|zai/, "Z.ai"],
   [/qwen/, "Alibaba"],
 ];
+
 const makerOf = (model: { id: string; name: string }) => {
   const text = `${model.name} ${model.id}`.toLowerCase().trim();
   return makers.find(([pattern]) => pattern.test(text))?.[1] ?? "Other";

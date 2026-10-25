@@ -14,6 +14,7 @@ import {
 import { promptExtensions } from "./extensions";
 
 const editors: Editor[] = [];
+
 afterEach(() => editors.splice(0).forEach((editor) => editor.destroy()));
 
 /** An unmounted editor reporting its edits and caret moves as the composer hears them. */

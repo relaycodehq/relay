@@ -29,6 +29,7 @@ const schema = getSchema([
   }),
   Quote,
 ]);
+
 const roundTrip = (draft: string, quotes: string[]) =>
   promptText(schema.nodeFromJSON(promptContent(draft, {}, quotes)));
 

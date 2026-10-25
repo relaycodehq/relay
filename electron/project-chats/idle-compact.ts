@@ -38,6 +38,7 @@ export class IdleCompactions {
   /** The newest arm() per thread: an older one's load can finish after it. */
   private arming = new Map<string, symbol>();
   private stopped = false;
+
   constructor(
     private core: ChatCore,
     private host: IdleCompactHost,

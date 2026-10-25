@@ -504,6 +504,7 @@ test("a preview's dev server keeps running while Relay restarts, and quitting st
     process.platform === "win32",
     "On Windows Relay still runs dev servers itself.",
   );
+
   test.setTimeout(90_000);
   const relay = await restartable({});
   try {

@@ -37,6 +37,7 @@ let store: Store, projects: Projects, chats: ProjectChats;
 let projectId: string;
 let events: { chatId: string; message: ChatMessage }[];
 const watchers: FSWatcher[] = [];
+
 function fileSignal(file: string) {
   return new Promise<void>((resolve, reject) => {
     const watcher = watch(dirname(file), () => {
@@ -52,6 +53,7 @@ function fileSignal(file: string) {
     }
   });
 }
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-setup-")));
   repo = join(root, "repo");
@@ -78,6 +80,7 @@ beforeEach(async () => {
     events.push(structuredClone(event)),
   );
 });
+
 afterEach(async () => {
   for (const watcher of watchers.splice(0)) watcher.close();
   await chats?.dispose();
@@ -93,6 +96,7 @@ const input = (body: string) => ({
   interactionMode: "default" as const,
   choice: { ...defaultAISettings.questions, model: "fixture-model" },
 });
+
 const settle = (settings: ProjectSettings) =>
   projects.saveSettings(projectId, { workspace: "worktree", ...settings });
 const answered = (id: string, count: number) =>

@@ -22,6 +22,7 @@ export interface StartedThreadsView {
   threads: ChatSummary[];
   open: (chat: ChatSummary) => void;
 }
+
 export const StartedThreadsContext = createContext<
   StartedThreadsView | undefined
 >(undefined);

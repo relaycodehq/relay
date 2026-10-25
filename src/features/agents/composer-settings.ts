@@ -22,6 +22,7 @@ import {
 } from "./composer-models";
 
 type Provider = AgentProvider | "message";
+
 /** What a chat composer starts from: its agent, each agent's model, its modes. */
 export interface ComposerSettings {
   /** The agent picked here; unset follows the default agent setting. */
@@ -41,6 +42,7 @@ export interface ComposerSettings {
    */
   frozen?: true;
 }
+
 const read = (key: string): any => readJson(composerSettingsKey(key)) ?? null;
 const isProvider = (value: unknown): value is Provider =>
   value === "message" || isAgentProvider(value);
@@ -53,11 +55,13 @@ function pickedProvider(key: string, saved: any): Provider | undefined {
     ? undefined
     : saved.provider;
 }
+
 /** The agent a composer runs: its pick, else the default for its kind. */
 export const composerProvider = (
   picked: Provider | undefined,
   fallback: AgentProvider = "codex",
 ): Provider => picked ?? fallback;
+
 /**
  * Every project's new-thread composer starts on the same models, kept on the
  * desktop and shared with the phone. This copy opens a composer on them at once.
@@ -83,6 +87,7 @@ export interface AgentFollow {
   adopted?: AgentProvider | null;
   known?: Provider;
 }
+
 /**
  * What to do as the last agent (`last`) or the pick here (`picked`) changes:
  * take up an agent picked elsewhere, or hand on one picked here. Its own pick
@@ -101,6 +106,7 @@ export function followLastAgent(
     return { at: { adopted: picked, known: picked }, save: picked };
   return { at: { ...at, known: picked } };
 }
+
 /** Where a composer with nothing saved yet starts from. */
 export interface InheritedSettings {
   /** The composer whose settings it starts on. */
@@ -108,6 +114,7 @@ export interface InheritedSettings {
   /** The agent it starts on, instead of that composer's. */
   provider?: AgentProvider;
 }
+
 /** The settings saved under `key`; with none yet, `inherit`'s, on its agent. */
 export function loadComposerSettings(
   key: string,
@@ -141,12 +148,14 @@ export function loadComposerSettings(
     ...(frozen ? { frozen } : {}),
   };
 }
+
 export function saveComposerSettings(
   key: string,
   { provider, ...settings }: ComposerSettings,
 ) {
   writeJson(composerSettingsKey(key), { ...settings, agent: provider });
 }
+
 /**
  * Hands a new thread's composer settings to the thread it started, on the
  * agent the first message went to. The new-thread composer keeps its models
@@ -168,7 +177,9 @@ export function startThreadSettings(
   // A composer still open on it would save its frozen picks back over this.
   for (const listener of threadStartListeners.get(from) ?? []) listener();
 }
+
 const threadStartListeners = new Map<string, Set<() => void>>();
+
 /** Calls `listener` when the draft under `key` starts a thread; returns the unsubscribe. */
 export function onThreadStarted(key: string, listener: () => void) {
   const listeners = threadStartListeners.get(key) ?? new Set();
@@ -178,6 +189,7 @@ export function onThreadStarted(key: string, listener: () => void) {
     if (!listeners.size) threadStartListeners.delete(key);
   };
 }
+
 /**
  * A fork's composer starts on its source thread's models, on the agent of the
  * answer it was forked from, in Build like any new thread.
@@ -199,6 +211,7 @@ export function forkThreadSettings(
     sent: sent?.id,
   });
 }
+
 /**
  * Opens a composer on what a message was sent with. The choice is the model
  * of the agent it went to, so it goes to that agent's slot; the others keep
@@ -214,10 +227,12 @@ export function saveSentSettings(
     provider,
   });
 }
+
 type SentSettings = Pick<
   ProjectChatSend,
   "provider" | "choice" | "contextWindow" | "runtimeMode" | "interactionMode"
 >;
+
 const withSentModel = (
   settings: ComposerSettings,
   sent: SentSettings,
@@ -232,6 +247,7 @@ const withSentModel = (
   runtimeMode: sent.runtimeMode,
   interactionMode: sent.interactionMode,
 });
+
 /**
  * `settings` on the thread's last message when they don't know of it: it went
  * from the phone, another computer or an agent, or before this window kept

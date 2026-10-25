@@ -15,6 +15,7 @@ const watches = vi.hoisted(() => ({
   /** Runs as a folder is watched; may throw as fs.watch does. */
   onWatch: (_dir: string, _folder: import("node:events").EventEmitter) => {},
 }));
+
 vi.mock("node:fs", async (load) => {
   const fs = await load<typeof import("node:fs")>();
   const { EventEmitter } = await import("node:events");
@@ -42,6 +43,7 @@ vi.mock("node:fs", async (load) => {
 });
 
 let temp: string;
+
 afterEach(async () => {
   watches.made.length = 0;
   watches.onWatch = () => {};
@@ -53,6 +55,7 @@ const open = async () => {
   await mkdir(join(temp, "a", "deep"), { recursive: true });
   await mkdir(join(temp, "b"));
 };
+
 const watching = () =>
   watches.made
     .filter((w) => !w.closed)

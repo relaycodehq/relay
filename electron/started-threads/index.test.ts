@@ -197,6 +197,7 @@ const call = (
   name: string,
   args: unknown,
 ) => threads.handle(chatId, name, args, new AbortController().signal);
+
 const parse = (result: ToolResult) => JSON.parse(resultText(result));
 const ALWAYS =
   "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
@@ -976,6 +977,7 @@ test("usage limits read each agent on the account the thread pinned for it", asy
 });
 
 const folders: string[] = [];
+
 afterEach(async () => {
   for (const f of folders.splice(0)) await rm(f, { recursive: true });
 });
@@ -1750,6 +1752,7 @@ function fakePreviews(capture: () => Promise<unknown>) {
     capture,
   } as any;
 }
+
 const frame = (width: number) => {
   const image = {
     getSize: () => ({ width, height: width / 1.6 }),
@@ -1871,6 +1874,7 @@ const answerOf = (
   version: 1,
   ...extra,
 });
+
 const tick = () => new Promise((r) => setTimeout(r, 50));
 
 /** A thread the lead started, which answered the task the lead gave it. */

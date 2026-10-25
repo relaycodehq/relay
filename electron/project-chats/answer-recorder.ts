@@ -112,6 +112,7 @@ export class AnswerRecorder {
   private offer?: ImportOffer;
   /** Stopped by the user; see `stop`. */
   stopped = false;
+
   constructor(
     private chat: ProjectChat,
     public message: ChatMessage,
@@ -119,11 +120,13 @@ export class AnswerRecorder {
     /** Writes a checkpoint; says how many bytes it wrote, when it knows. */
     private save: () => Promise<number | void> | void,
   ) {}
+
   publish() {
     this.flush = null;
     this.message.version++;
     this.emit(structuredClone(this.message));
   }
+
   changed() {
     this.flush ??= setTimeout(() => this.publish(), 40);
     this.checkpoint ??= setTimeout(() => {
@@ -145,36 +148,43 @@ export class AnswerRecorder {
       });
     }, this.checkpointMs);
   }
+
   text(body: string) {
     if (this.stopped) return;
     this.message.body = body;
     this.changed();
   }
+
   plan(body: string) {
     if (this.stopped) return;
     this.message.proposedPlan = true;
     this.text(body);
   }
+
   context(usage: ContextUsage) {
     this.message.context = usage;
     this.changed();
   }
+
   /** Adds to this answer's cost, so a steer's answer below carries on from zero. */
   cost(usd: number) {
     this.message.cost = (this.message.cost ?? 0) + usd;
     this.changed();
   }
+
   /** Adds a request's timed output, so a steer's answer below carries on from zero. */
   streamed(timed: Streamed) {
     if (this.stopped) return;
     this.message.streamed = addStreamed(this.message.streamed, timed);
     this.changed();
   }
+
   setModel(model: TurnModel) {
     this.model = model;
     this.message.model = model;
     this.changed();
   }
+
   activity(activity: AgentActivity) {
     if (this.stopped) return;
     const trace = (this.message.trace ??= []);
@@ -190,24 +200,28 @@ export class AnswerRecorder {
       trace.push(entry);
     this.changed();
   }
+
   /** A side check flagged something; it can land after the turn ended, on the answer it was about. */
   note(note: WatchNote) {
     if (this.stopped) return;
     (this.message.notes ??= []).push(note);
     this.changed();
   }
+
   /** The message the person would likely send next; the composer offers it while it's the last answer. */
   predict(text: string) {
     if (this.stopped) return;
     this.message.prediction = text;
     this.changed();
   }
+
   /** A page the agent showed with show_html; it sits above the reply. */
   render(render: HtmlRender) {
     if (this.stopped) return;
     (this.message.renders ??= []).push(render);
     this.changed();
   }
+
   /**
    * What the agent offers to import (offer_import), under the reply once it
    * ends; a later offer replaces it. It can list thousands of chats, too many
@@ -217,12 +231,14 @@ export class AnswerRecorder {
     if (this.stopped) return;
     this.offer = offer;
   }
+
   /** The thread's preview as the agent left it, under the reply; a later open replaces it. */
   preview(preview: TurnPreview) {
     if (this.stopped) return;
     this.message.preview = preview;
     this.changed();
   }
+
   /** A page the agent asks with (ask_html): an open question until answered or skipped. */
   askPage(group: AsyncAgentQuestions) {
     if (this.stopped) return;
@@ -230,6 +246,7 @@ export class AnswerRecorder {
     this.chat.updated = Date.now();
     this.changed();
   }
+
   commentary(id: string, text: string | null) {
     if (this.stopped) return;
     const trace = (this.message.trace ??= []);
@@ -243,6 +260,7 @@ export class AnswerRecorder {
     }
     this.changed();
   }
+
   questions(id: string, questions: AgentQuestion[]) {
     if (this.stopped) return;
     const groups = (this.message.questions ??= []);
@@ -253,6 +271,7 @@ export class AnswerRecorder {
     this.chat.updated = Date.now();
     this.changed();
   }
+
   /**
    * The agent read a steering message: the rest of the turn continues below
    * it, so the answer to it doesn't stream into the reply above.
@@ -287,6 +306,7 @@ export class AnswerRecorder {
     this.publish();
     this.changed();
   }
+
   /**
    * The turn ended before the agent read steering message `steerId`. It
    * goes out with the next turn, unless `error` leaves in doubt whether the
@@ -304,6 +324,7 @@ export class AnswerRecorder {
     this.emit(structuredClone(steer));
     this.changed();
   }
+
   /**
    * The user stopped the turn: the answer shows as stopped now, as it stands,
    * rather than once the agent has wound down. What the agent still writes
@@ -316,6 +337,7 @@ export class AnswerRecorder {
     this.message.ended = Date.now();
     this.end();
   }
+
   /** The turn ended with the message's status: what still ran ends with it, and the window hears it now. */
   end() {
     if (this.offer) this.message.importOffer = this.offer;

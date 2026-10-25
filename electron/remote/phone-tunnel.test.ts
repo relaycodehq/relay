@@ -22,6 +22,7 @@ import {
 import type { ProjectTask } from "../../shared/tasks";
 
 const cleanup: (() => unknown)[] = [];
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
 });

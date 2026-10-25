@@ -232,15 +232,18 @@ export class SubagentBook implements SubagentSource {
 /** A runtime's books, one per session key. */
 export class SubagentBooks {
   private books = new Map<string, SubagentBook>();
+
   /** The session's book, made on first use. */
   open(key: string) {
     let book = this.books.get(key);
     if (!book) this.books.set(key, (book = new SubagentBook()));
     return book;
   }
+
   get(key: string): SubagentSource | undefined {
     return this.books.get(key);
   }
+
   /** The session is gone: its agents stop counting as running. */
   drop(key: string) {
     this.books.get(key)?.close();

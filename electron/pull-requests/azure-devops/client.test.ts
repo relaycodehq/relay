@@ -4,11 +4,13 @@ import type { AzChange, AzPull } from "./shapes";
 
 const server = "https://dev.azure.com/sample-org";
 const ref = { server, owner: "Shop", name: "api", number: 7 };
+
 const repository = {
   id: "repo-id",
   name: "api",
   project: { id: "project-id", name: "Shop" },
 };
+
 const pr: AzPull = {
   pullRequestId: 7,
   status: "active",
@@ -19,16 +21,19 @@ const pr: AzPull = {
   targetRefName: "refs/heads/main",
   repository,
 };
+
 const iteration = (id: number) => ({
   id,
   sourceRefCommit: { commitId: `head${id}` },
   targetRefCommit: { commitId: "base" },
   commonRefCommit: { commitId: "base" },
 });
+
 const file = (path: string): AzChange => ({
   changeType: "edit",
   item: { path },
 });
+
 const folder: AzChange = {
   changeType: "add",
   item: { path: "/src", isFolder: true },

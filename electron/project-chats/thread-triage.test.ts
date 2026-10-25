@@ -18,6 +18,7 @@ import { StartedThreads } from "../started-threads";
 import { resultText } from "../relay-mcp";
 
 let root: string, store: Store, chats: ProjectChats, projectId: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-triage-")));
   const repo = join(root, "repo");
@@ -29,6 +30,7 @@ beforeEach(async () => {
   projectId = (await projects.add(repo, null)).id;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   await rm(root, { recursive: true, force: true, maxRetries: 20 });

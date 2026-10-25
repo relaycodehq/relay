@@ -10,6 +10,7 @@ export interface HtmlRender {
   pages: HtmlRenderPage[];
   created: number;
 }
+
 export interface HtmlRenderPage {
   /** Names a variant; absent on a single page. */
   label?: string;
@@ -24,6 +25,7 @@ export interface RenderTarget {
   page: number;
   title: string;
 }
+
 /** How a page's picture is taken: where its frame sits in the window when it fits there whole, else loaded afresh at `width`. */
 export interface RenderShot {
   to: "clipboard" | "file";
@@ -56,6 +58,7 @@ export function composeInto(draft: string, text: string, earlier?: string) {
     return draft.slice(0, at) + text + draft.slice(at + earlier!.length);
   return draft.trim() ? `${draft.trimEnd()}\n\n${text}` : text;
 }
+
 /** The most an ask_html page may hand back through relay.answer(), as JSON. */
 export const ASK_ANSWER_MAX_CHARS = 32_000;
 
@@ -98,6 +101,7 @@ export const RENDER_THEME_VARS = [
   "--font-sans",
   "--font-mono",
 ] as const;
+
 /** Chart colours that read on both themes, as --series-1 … --series-6. */
 const SERIES = {
   light: ["#6565a9", "#2f9e8f", "#d9822b", "#c2577a", "#4a8fd4", "#8a9a3a"],
@@ -108,6 +112,7 @@ export interface RenderTheme {
   scheme: "light" | "dark";
   vars: Record<string, string>;
 }
+
 /** The default light theme, for looking at a page away from the window. */
 export const LIGHT_RENDER_THEME: RenderTheme = {
   scheme: "light",
@@ -129,6 +134,7 @@ export const LIGHT_RENDER_THEME: RenderTheme = {
     "--font-mono": 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   },
 };
+
 export const withSeries = (theme: RenderTheme): RenderTheme => ({
   ...theme,
   vars: {
@@ -246,11 +252,13 @@ export const injectRenderBootstrap = (html: string) =>
   prependToHead(html, `<script>${BOOTSTRAP}</script>`);
 
 const ATTRIBUTES = `(?:\\s+[^\\s"'>/=]+(?:\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s"'>]+))?)*\\s*/?`;
+
 /** What may come before the head and load nothing: the doctype, comments and the `<html>` tag. */
 const BEFORE_HEAD = new RegExp(
   `^(?:\\s+|<!--(?:-?>|[\\s\\S]*?--!?>)|<!doctype[^>]*>|<html${ATTRIBUTES}>)*`,
   "i",
 );
+
 const HEAD = new RegExp(`^<head${ATTRIBUTES}>`, "i");
 
 /**

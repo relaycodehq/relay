@@ -33,8 +33,10 @@ const homeShelves = [
   "Videos",
   "Applications",
 ];
+
 /** Home folders no agent has business in, nor anywhere inside; so are all of home's dot-folders. */
 const homeSecrets = ["Library", "AppData"];
+
 const systemTrees: Partial<Record<NodeJS.Platform, string[]>> = {
   darwin: [
     "/System",
@@ -61,12 +63,14 @@ const systemTrees: Partial<Record<NodeJS.Platform, string[]>> = {
     "/var/lib",
   ],
 };
+
 const windowsTrees = [
   "Windows",
   "Program Files",
   "Program Files (x86)",
   "ProgramData",
 ];
+
 /** Where drives are mounted, and how deep their roots sit below it. */
 const mountShelves: Partial<Record<NodeJS.Platform, [string, number][]>> = {
   darwin: [["/Volumes", 1]],
@@ -77,6 +81,7 @@ const mountShelves: Partial<Record<NodeJS.Platform, [string, number][]>> = {
     ["/mnt", 1],
   ],
 };
+
 /** Not inside, only the folder itself: what's in them is often a checkout. */
 const systemShelves: Partial<Record<NodeJS.Platform, string[]>> = {
   darwin: ["/private/tmp", "/private/var", "/private/var/folders"],

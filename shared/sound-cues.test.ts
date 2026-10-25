@@ -3,6 +3,7 @@ import { pickSound, SoundCues, type SoundCue } from "./sound-cues";
 import type { NewsItem } from "./thread-news";
 
 let seq = 0;
+
 const news = (
   chatId: string,
   kind: NewsItem["kind"],
@@ -22,6 +23,7 @@ describe("SoundCues", () => {
   let heard: SoundCue[][];
   let hears: (chatId: string) => boolean;
   let cues: SoundCues;
+
   beforeEach(() => {
     vi.useFakeTimers();
     heard = [];
@@ -34,6 +36,7 @@ describe("SoundCues", () => {
       },
     });
   });
+
   afterEach(() => vi.useRealTimers());
 
   it("sounds once for threads that land together", async () => {
@@ -77,6 +80,7 @@ describe("SoundCues", () => {
 
 describe("pickSound", () => {
   const app = { finished: "marimba", waiting: "ask" } as const;
+
   it("plays the most urgent cue that has a sound, at the app's volume", () => {
     expect(
       pickSound(

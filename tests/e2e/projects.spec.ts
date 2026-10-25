@@ -24,8 +24,10 @@ import {
   openSurface,
   panelToggle,
 } from "../fixtures/navigation";
+
 const screenshotPng =
   "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAF0lEQVR4nGP4z8BAEiJN9aiGUQ1DSgMAkPn/Afnh+ngAAAAASUVORK5CYII=";
+
 test("matches a project remote, reviews its PR and sends pinned lines into its restored chat", async () => {
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-project-pr-")),
@@ -199,6 +201,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await rm(root, { recursive: true, force: true });
   }
 });
+
 test("opens a local project without sign-in, edits safely, streams an agent conversation and restores it", async () => {
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-project-ui-")),

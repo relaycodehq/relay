@@ -7,6 +7,7 @@ vi.mock("../provider-commands", async (original) => ({
   ...(await original<typeof import("../provider-commands")>()),
   withAppServer: vi.fn(),
 }));
+
 beforeEach(() => vi.clearAllMocks());
 
 it("retains disabled skills in the inventory while excluding them from composer commands", () => {

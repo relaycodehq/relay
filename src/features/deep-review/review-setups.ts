@@ -42,23 +42,28 @@ function read(): Snapshot {
   cached = { raw, version, snapshot };
   return snapshot;
 }
+
 function write(entries: SavedReviewSetup[]) {
   writeJson(key, entries);
   share(entries);
   changed();
 }
+
 /** Agents start reviews with these too, through the deep_review tool. */
 function share(entries: SavedReviewSetup[]) {
   void api
     .saveReviewSetups(entries)
     .catch((e) => console.warn("Could not share the review setups:", e));
 }
+
 /** Hands the main process the setups as they are when the app starts: saved before it kept a copy, or in another window. */
 export const shareReviewSetups = () => share(read().entries);
+
 function changed() {
   version += 1;
   for (const listener of listeners) listener();
 }
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   // Another window ran a review.
@@ -88,6 +93,7 @@ function canonical(setup: ReviewSetupChoice) {
     setup.runChecks,
   ]);
 }
+
 export const sameSetup = (a: ReviewSetupChoice, b: ReviewSetupChoice) =>
   canonical(a) === canonical(b);
 
@@ -151,6 +157,7 @@ export function recordReviewSetup(setup: ReviewSetupChoice, focus: string) {
 function edit(id: string, patch: Partial<SavedReviewSetup>) {
   write(read().entries.map((e) => (e.id === id ? { ...e, ...patch } : e)));
 }
+
 export const renameReviewSetup = (id: string, name: string) =>
   edit(id, { name: name.trim().slice(0, 80) });
 export const pinReviewSetup = (id: string, pinned: boolean) =>

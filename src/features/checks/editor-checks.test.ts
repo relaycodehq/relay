@@ -6,6 +6,7 @@ import type {
 import { checkStatus, problemMarkers } from "./editor-checks";
 
 const counts = { errors: 0, warnings: 0, suggestions: 0 };
+
 const state = (
   status: ProjectCheckState["status"],
   files: ProjectCheckState["files"] = {},

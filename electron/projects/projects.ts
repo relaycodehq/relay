@@ -37,6 +37,7 @@ import {
   decodeText,
   writeWorkingFile,
 } from "../git/working-files";
+
 function repositoryFromRemote(
   raw: string,
   server: string,
@@ -46,6 +47,7 @@ function repositoryFromRemote(
   const repo = repoOf(remote);
   return repo && { server, ...repo };
 }
+
 /**
  * The repository among a folder's remotes, `origin` first, whose site says
  * its host: github.com or an Azure DevOps organization.
@@ -61,7 +63,9 @@ function siteRepository(remotes: string): Project["repository"] {
   }
   return null;
 }
+
 const unique = (values: string[]) => [...new Set(values)];
+
 /** The root of the repository `dir` is in; null when it's in none. */
 export async function repositoryRoot(dir: string) {
   try {
@@ -75,7 +79,9 @@ export async function repositoryRoot(dir: string) {
     throw e;
   }
 }
+
 const knownRoots = new Map<string, { key: string; repository: string }>();
+
 /**
  * `repositoryRoot` for a folder asked about on every project call: kept while
  * its `.git` stays the same. A plain folder is asked each time, since a
@@ -92,6 +98,7 @@ async function knownRepositoryRoot(dir: string) {
   else knownRoots.delete(dir);
   return repository;
 }
+
 /** Marks a folder without Git, so the app leaves out branches, changes and history. */
 const withKind = async (p: Project): Promise<Project> =>
   p.computer
@@ -105,11 +112,13 @@ const withKind = async (p: Project): Promise<Project> =>
       ? p
       : { ...p, plain: true };
 const maxFiles = 50000;
+
 /** A folder to browse: a project's checkout, or a thread's worktree of it. */
 export interface Place {
   root: string;
   plain: boolean;
 }
+
 export class Projects {
   /** Moves a project into `folder`, before `before` (or last in that folder). */
   async move(id: string, folder: string, before: string | null) {
@@ -121,6 +130,7 @@ export class Projects {
         s.projectGroups = unique([...(s.projectGroups ?? []), folder]);
     });
   }
+
   /** Renames a project in the sidebar; its folder on disk stays as it is. */
   async rename(id: string, name: string) {
     this.get(id);
@@ -131,6 +141,7 @@ export class Projects {
     });
     return this.get(id);
   }
+
   /** Replaces what the project does its own way; an empty set follows the app again. */
   async saveSettings(id: string, settings: ProjectSettings) {
     this.get(id);
@@ -141,6 +152,7 @@ export class Projects {
     });
     return withKind(this.get(id));
   }
+
   /** Changes only links, against the latest settings inside the store's write queue. */
   async updateLinks(
     id: string,
@@ -160,12 +172,14 @@ export class Projects {
     });
     return withKind(this.get(id));
   }
+
   /** Group paths in sidebar order; alphabetical until one is dragged. */
   groups() {
     const s = this.store.get();
     const groups = s.projectGroups ?? [];
     return s.projectGroupsOrdered ? groups : sortGroupPaths(groups);
   }
+
   async moveGroup(path: string, before: string | null) {
     if (!path) throw new Error("Choose a group.");
     const groups = this.groups();
@@ -174,17 +188,20 @@ export class Projects {
       s.projectGroupsOrdered = true;
     });
   }
+
   async createGroup(path: string) {
     if (!path) throw new Error("Name the group.");
     await this.store.update((s) => {
       s.projectGroups = unique([...(s.projectGroups ?? []), path]);
     });
   }
+
   /** Renames a group; its subgroups and projects move with it. */
   renameGroup(from: string, to: string) {
     if (!to) throw new Error("Name the group.");
     return this.rebaseGroup(from, to);
   }
+
   /** Hides the project; its folder, threads and worktrees stay for when it's added again. */
   async remove(id: string) {
     this.get(id);
@@ -193,16 +210,19 @@ export class Projects {
       if (p) p.removed = Date.now();
     });
   }
+
   /** The projects removed this way, which `list` leaves out. */
   removedIds() {
     return (this.store.get().projects ?? [])
       .filter((p) => p.removed)
       .map((p) => p.id);
   }
+
   /** Removes a group; what was inside moves up one level. */
   removeGroup(path: string) {
     return this.rebaseGroup(path, parentGroup(path));
   }
+
   private async rebaseGroup(from: string, to: string) {
     if (!from) throw new Error("Choose a group.");
     await this.store.update((s) => {
@@ -219,13 +239,17 @@ export class Projects {
       );
     });
   }
+
   private linkAttempts = new Set<string>();
   readonly changingBranch = new Set<string>();
+
   assertCheckoutAvailable(id: string) {
     if (this.changingBranch.has(id))
       throw new Error("Wait for the branch switch to finish.");
   }
+
   constructor(private store: Store) {}
+
   /** Resolve names at read time so toggling never rewrites saved or custom names. */
   private named(project: Project): Project {
     if (project.scratch || project.automaticName === null) return project;
@@ -248,6 +272,7 @@ export class Projects {
           : projectTitle(original),
     };
   }
+
   async list(client: Gitea | null) {
     // Import existing links without deleting the saved review workspace or progress.
     const known = this.store.get().projects ?? [];
@@ -301,11 +326,13 @@ export class Projects {
         }
     return projects;
   }
+
   get(id: string) {
     const project = this.store.get().projects?.find((p) => p.id === id);
     if (!project) throw new Error("Project not found. Add its folder first.");
     return this.named(project);
   }
+
   /** The project's folder: its repository's root, or a plain folder outside any. */
   async inspect(id: string) {
     const p = this.get(id);
@@ -323,9 +350,11 @@ export class Projects {
       );
     return { root, plain: !repository };
   }
+
   async root(id: string) {
     return (await this.inspect(id)).root;
   }
+
   /** Points the project at `path`, where its folder went; threads and settings stay. */
   async relocate(id: string, path: string) {
     this.get(id);
@@ -346,11 +375,13 @@ export class Projects {
     });
     return withKind(this.get(id));
   }
+
   /** Where the project's processes run. A folder deleted outside Relay still names them, so they can be stopped. */
   async taskFolder(id: string) {
     const { path } = this.get(id);
     return realpath(path).catch(() => path);
   }
+
   /** `exact` refuses a path that resolves elsewhere, as one checked before can by now. */
   async add(path: string, client: Gitea | null, { exact = false } = {}) {
     const root = await realpath(path);
@@ -392,6 +423,7 @@ export class Projects {
     }
     return withKind(this.named(project));
   }
+
   /**
    * A project whose folder is on a paired computer, as that computer added
    * it; the one already made for it comes back, unhidden and with what that
@@ -437,6 +469,7 @@ export class Projects {
     });
     return withKind(this.named(project));
   }
+
   /**
    * A new Scratchpad chat's project. The one whose folder no thread has used
    * yet comes back, so opening and leaving chats doesn't pile up folders.
@@ -471,11 +504,13 @@ export class Projects {
     });
     return withKind(project);
   }
+
   scratchIds() {
     return (this.store.get().projects ?? [])
       .filter((p) => p.scratch)
       .map((p) => p.id);
   }
+
   /**
    * Links a project whose remote is on github.com or Azure DevOps from the
    * remote alone: its address names the host, so there's no account to match
@@ -490,6 +525,7 @@ export class Projects {
     });
     return this.get(id);
   }
+
   async link(id: string, client: Gitea | null) {
     const linked = await this.linkBySite(id);
     if (linked) return withKind(linked);
@@ -517,6 +553,7 @@ export class Projects {
       "No Git remote matches your Gitea account. Add the repository’s remote in Git, then connect again.",
     );
   }
+
   async files({ root, plain }: Place) {
     const names = plain
       ? await folderFiles(root, maxFiles)
@@ -539,9 +576,11 @@ export class Projects {
       );
     return [...new Set(names)].sort();
   }
+
   filePreview({ root }: Place, path: string) {
     return filePreview(root, path);
   }
+
   async file({ root, plain }: Place, path: string) {
     const file = await readWorkingFile(root, path);
     if (!file) throw new Error("This file no longer exists.");
@@ -579,6 +618,7 @@ export class Projects {
       branch,
     };
   }
+
   async save(
     { root, plain }: Place,
     path: string,
@@ -599,6 +639,7 @@ export class Projects {
     });
     return { version: digest(contents) };
   }
+
   async linked(id: string, client: PullHost) {
     const p = this.get(id);
     if (!p.repository || p.repository.server !== client.account.server)

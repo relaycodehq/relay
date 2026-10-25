@@ -62,6 +62,7 @@ export class FileCache<T> {
     string,
     { mtime: number; size: number; value: Promise<T> }
   >();
+
   async get(
     path: string,
     read: (path: string) => Promise<T>,

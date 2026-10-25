@@ -30,6 +30,7 @@ export const worktreeStartSchema = z.union([
   z.object({ on: refNameSchema }).strict(),
   z.object({ thread: z.uuid() }).strict(),
 ]);
+
 export type WorktreeStart = z.infer<typeof worktreeStartSchema>;
 
 type WithWorktree = {
@@ -39,6 +40,7 @@ type WithWorktree = {
   /** Away on another computer; see `ChatSentTo`. */
   sentTo?: unknown;
 };
+
 /** A worktree whose folder is there to work in, not removed or cleaned up. */
 const liveWorktree = (worktree: ChatWorktree | undefined) =>
   !!worktree?.path && !worktree.removedAt && !worktree.cleanedUp;
@@ -165,12 +167,14 @@ export interface ChatWorktree {
   /** Added to its dev servers' ports, handed out as RELAY_PORT_OFFSET; the checkout's is 0. */
   portOffset?: number;
 }
+
 /**
  * Days a settled thread keeps its worktree before Relay removes it; 0 as soon
  * as nothing is going on in it, null never. Off until asked for: removing a
  * folder also takes what Git ignores in it, like a hand-copied `.env`.
  */
 export const DEFAULT_WORKTREE_CLEANUP_DAYS: number | null = null;
+
 export interface AgentWorktree {
   path: string;
   branch?: string;
@@ -189,6 +193,7 @@ export type ActiveAgentWorktree = Pick<
   /** Relay moved the thread in after its agent made it; once that worktree is gone the thread goes back to the project folder. */
   followed?: true;
 };
+
 /**
  * The folder a thread works in changed after it started: it moved into a
  * worktree of its own, its removed worktree was made again, it switched
@@ -212,6 +217,7 @@ export interface WorkspaceMove {
   /** The agent that did it, when one did. */
   by?: AgentProvider;
 }
+
 /**
  * Where a deep review reads and fixes the reviewed code when the project's
  * checkout doesn't have it; `prNumber` is the pull request it holds,
@@ -220,6 +226,7 @@ export interface WorkspaceMove {
 export type ReviewFolder = Pick<ReviewCheckout, "path" | "branch"> & {
   prNumber?: number;
 };
+
 type ThreadWorkspace = {
   worktree?: ChatWorktree;
   agentWorktrees?: AgentWorktree[];
@@ -279,6 +286,7 @@ export function threadWorktree(chat: ThreadWorkspace | undefined) {
       : undefined;
   return selectedAgentWorktree(chat) ?? chat?.activeAgentWorktree;
 }
+
 export interface WorktreeStatus {
   branch?: string;
   /** Its `relay/…` branch waits for the thread's title to be named after it. */
@@ -299,11 +307,13 @@ export interface WorktreeStatus {
   /** A folder Relay didn't make, which it never removes; see `ChatWorktree.adopted`. */
   adopted?: true;
 }
+
 /** The branch a new thread's worktree would be made on, and why it can't, if it can't. */
 export interface WorktreeBranch {
   branch: string;
   problem?: string;
 }
+
 /** Every uncommitted edit in the project folder, with the other threads whose turns changed each. */
 export interface WorktreeMove {
   blocked?: string;

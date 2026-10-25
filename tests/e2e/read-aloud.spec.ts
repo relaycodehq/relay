@@ -9,6 +9,7 @@ import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { screenshot } from "../fixtures/screenshot";
 
 type Heard = { type: string; id: number; samples: number; error?: string };
+
 declare global {
   interface Window {
     heard: Heard[];

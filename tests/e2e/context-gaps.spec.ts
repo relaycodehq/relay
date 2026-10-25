@@ -14,6 +14,7 @@ import { fixtureServer } from "../fixtures/gitea";
 let app: ElectronApplication,
   page: Page,
   fixture: Awaited<ReturnType<typeof fixtureServer>>;
+
 test.beforeAll(async () => {
   fixture = await fixtureServer({ contextGaps: true });
   const env: Record<string, string | undefined> = {
@@ -37,6 +38,7 @@ test.beforeAll(async () => {
   await openPull(page, /Make pull request reviews/);
   await currentFilePicker(page).selectOption("src/lib/cache.ts");
 });
+
 test.afterAll(async () => {
   await app?.close();
   await fixture?.close();

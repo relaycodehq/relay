@@ -16,9 +16,11 @@ import {
 } from "./open-folder";
 
 let dir: string;
+
 beforeEach(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "relay-open-folder-")));
 });
+
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 function projects(listed: Project[], repositories: string[] = []) {
@@ -36,6 +38,7 @@ function projects(listed: Project[], repositories: string[] = []) {
   };
   return { api, added };
 }
+
 const project = (path: string): Project => ({
   id: path,
   path,

@@ -14,10 +14,13 @@ const image = (key: string, load: () => Promise<string>): PreviewImage => ({
   name: `${key}.png`,
   load,
 });
+
 const loaded = image("loaded", async () => "data:image/png;base64,");
+
 const missing = image("missing", async () => {
   throw new Error("ENOENT");
 });
+
 const pending = image("pending", () => new Promise(() => {}));
 
 function Keys({ keep }: { keep?: string }) {

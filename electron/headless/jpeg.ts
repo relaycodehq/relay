@@ -17,6 +17,7 @@ const lumaQuant = [
   103, 77, 24, 35, 55, 64, 81, 104, 113, 92, 49, 64, 78, 87, 103, 121, 120, 101,
   72, 92, 95, 98, 112, 100, 103, 99,
 ];
+
 const chromaQuant = [
   17, 18, 24, 47, 99, 99, 99, 99, 18, 21, 26, 66, 99, 99, 99, 99, 24, 26, 56,
   99, 99, 99, 99, 99, 47, 66, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99,
@@ -29,6 +30,7 @@ const dcLumaCounts = [0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0];
 const dcChromaCounts = [0, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0];
 const dcSymbols = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 const acLumaCounts = [0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 0x7d];
+
 const acLumaSymbols = [
   0x01, 0x02, 0x03, 0x00, 0x04, 0x11, 0x05, 0x12, 0x21, 0x31, 0x41, 0x06, 0x13,
   0x51, 0x61, 0x07, 0x22, 0x71, 0x14, 0x32, 0x81, 0x91, 0xa1, 0x08, 0x23, 0x42,
@@ -44,7 +46,9 @@ const acLumaSymbols = [
   0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7, 0xe8, 0xe9, 0xea, 0xf1, 0xf2, 0xf3, 0xf4,
   0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa,
 ];
+
 const acChromaCounts = [0, 2, 1, 2, 4, 4, 3, 4, 7, 5, 4, 4, 0, 1, 2, 0x77];
+
 const acChromaSymbols = [
   0x00, 0x01, 0x02, 0x03, 0x11, 0x04, 0x05, 0x21, 0x31, 0x06, 0x12, 0x41, 0x51,
   0x07, 0x61, 0x71, 0x13, 0x22, 0x32, 0x81, 0x08, 0x14, 0x42, 0x91, 0xa1, 0xb1,
@@ -73,6 +77,7 @@ function huffmanCodes(counts: number[], symbols: number[]) {
   }
   return codes;
 }
+
 const dcLuma = huffmanCodes(dcLumaCounts, dcSymbols);
 const dcChroma = huffmanCodes(dcChromaCounts, dcSymbols);
 const acLuma = huffmanCodes(acLumaCounts, acLumaSymbols);
@@ -111,6 +116,7 @@ class BitWriter {
   length = 0;
   private current = 0;
   private free = 8;
+
   byte(value: number) {
     if (this.length === this.bytes.length) {
       const grown = new Uint8Array(this.bytes.length * 2);
@@ -119,10 +125,12 @@ class BitWriter {
     }
     this.bytes[this.length++] = value;
   }
+
   word(value: number) {
     this.byte(value >> 8);
     this.byte(value & 0xff);
   }
+
   bits(code: number, length: number) {
     while (length > 0) {
       const take = Math.min(this.free, length);
@@ -133,10 +141,12 @@ class BitWriter {
       if (this.free === 0) this.flushByte();
     }
   }
+
   /** Pads the last byte with ones, as the format asks. */
   align() {
     if (this.free < 8) this.bits((1 << this.free) - 1, this.free);
   }
+
   private flushByte() {
     this.byte(this.current);
     // A 0xFF in the data is followed by a zero, so it can't read as a marker.
@@ -144,6 +154,7 @@ class BitWriter {
     this.current = 0;
     this.free = 8;
   }
+
   result() {
     return Buffer.from(this.bytes.buffer, 0, this.length);
   }

@@ -74,6 +74,7 @@ function combo(mac: boolean, spec: string): KeyCombo {
     shift: has("shift"),
   };
 }
+
 const one =
   (spec: string) =>
   (mac: boolean): KeyCombo[] => [combo(mac, spec)];
@@ -357,6 +358,7 @@ export type MenuShortcutId = {
     ? K
     : never;
 }[ShortcutId];
+
 export const menuShortcutIds = shortcutIds.filter(
   (id): id is MenuShortcutId => !!command(id).menu,
 );

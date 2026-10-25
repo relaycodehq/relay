@@ -12,6 +12,7 @@ import { discoverOpenCodeSkills, openCodeSkillContext } from "./skills";
 
 let root: string;
 let log: string;
+
 const skill = {
   id: "reverse-engineer-anything",
   name: "REA",
@@ -19,6 +20,7 @@ const skill = {
   description: "Reverse engineer an application",
   content: "Read references/native.md before analyzing the supplied binary.",
 };
+
 const scenario = (extra: Record<string, unknown> = {}) =>
   vi.stubEnv(
     "RELAY_ACP_SCENARIO",
@@ -39,6 +41,7 @@ beforeEach(async () => {
   vi.stubEnv("RELAY_ACP_LOG", log);
   scenario();
 });
+
 afterEach(async () => {
   disposeAcp(acpProfiles.opencode);
   setLinkedAgents({});

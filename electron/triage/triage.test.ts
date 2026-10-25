@@ -50,11 +50,13 @@ const file = (filename = "card.ts"): ChangedFile => ({
   deletions: 2,
   changes: 4,
 });
+
 const pair = (a = before, b = after): FilePair => ({
   old: { name: "card.ts", contents: a, cacheKey: "old" },
   next: { name: "card.ts", contents: b, cacheKey: "new" },
   binary: false,
 });
+
 const candidate = (a = before, b = after) =>
   prepareCandidate(file(), pair(a, b));
 
@@ -81,6 +83,7 @@ describe("Generic change evidence", () => {
       );
     },
   );
+
   it("preserves every hunk, including an unrelated edit far from the repeated change", () => {
     const a =
       "oldApi();\n" + "// context\n".repeat(50) + "const timeout = 10;\n";
@@ -91,6 +94,7 @@ describe("Generic change evidence", () => {
     expect(evidence.completePatch).toContain("+newApi()");
     expect(evidence.completePatch).toContain("+const timeout = 30");
   });
+
   it("does not reject generics, parameter decorators, constructor work or compiler directives", () => {
     const a =
       "// @ts-ignore\nclass Card extends Base { constructor(@Inject(DATA) private data: Options) { super(data); this.ready = true; } }";
@@ -98,6 +102,7 @@ describe("Generic change evidence", () => {
       "// @ts-ignore\nclass Card extends Base { private data = inject<Options>(DATA); constructor() { super(); this.ready = true; } }";
     expect(typeof candidate(a, b)).toBe("object");
   });
+
   it("includes added/deleted files and path-only renames", () => {
     expect(
       typeof prepareCandidate(
@@ -118,6 +123,7 @@ describe("Generic change evidence", () => {
     expect(renamed.hunks).toBe(0);
     expect(JSON.parse(renamed.evidence).previousPath).toBe("old.ts");
   });
+
   it("limits unchanged context without ever truncating the changed hunks", () => {
     const a = "// existing content\n".repeat(2000) + "oldApi();\n";
     const result = candidate(a, a.replace("oldApi", "newApi")) as Candidate;
@@ -132,6 +138,7 @@ describe("Generic change evidence", () => {
       "string",
     );
   });
+
   it("attaches the changed base class through relative and alias imports, not unrelated files", () => {
     const baseFile = {
       ...(candidate(
@@ -158,6 +165,7 @@ describe("Generic change evidence", () => {
       ).toEqual(["src/core/base.ts"]);
     }
   });
+
   it("batches every eligible file exactly once, including unique edits, without unbounded context", () => {
     const all = Array.from({ length: 19 }, (_, i) => ({
       ...(candidate(`const n = ${i};`, `const n = ${i + 2};`) as Candidate),
@@ -176,6 +184,7 @@ describe("Generic change evidence", () => {
       all.map((c) => c.path).sort(),
     );
   });
+
   it("sends shared dependency context once without dropping candidate changes", () => {
     const c = candidate() as Candidate;
     const related = { path: "base.ts", completePatch: "shared parent change" };
@@ -205,12 +214,14 @@ describe("Generic change evidence", () => {
     ).toEqual([]);
   });
 });
+
 const definition = {
   pattern: "p1",
   name: "Constructor dependencies → fields",
   description: "Move constructor dependencies into fields.",
   rule: "Replace constructor dependency parameters with equivalent field acquisition and the required import changes; no unrelated edits.",
 };
+
 const answer = (c: Candidate[]): ClassificationResult => ({
   groups: c.some((x) => x.path !== "mixed.ts") ? [definition] : [],
   files: c.map((x) => ({
@@ -228,8 +239,10 @@ const answer = (c: Candidate[]): ClassificationResult => ({
         : Array.from({ length: x.hunks }, (_, i) => i + 1),
   })),
 });
+
 describe("Model decision boundaries", () => {
   const c = candidate() as Candidate;
+
   it("rejects missing, duplicate, invented and partially covered file decisions", () => {
     expect(() => validateResponse(answer([c]), [c])).not.toThrow();
     const good = answer([c]);
@@ -246,6 +259,7 @@ describe("Model decision boundaries", () => {
     ])
       expect(() => validateResponse(value, [c])).toThrow();
   });
+
   it("keeps valid file decisions when another file has incomplete, duplicate or invented hunk coverage", () => {
     const candidates = [
       c,
@@ -271,6 +285,7 @@ describe("Model decision boundaries", () => {
     rejected.files[0].coveredHunks = [];
     expect(validateResponse(rejected, [c]).groups).toEqual([]);
   });
+
   it("recognizes every saved wording of a failed file, back to Luna's", () => {
     for (const reason of [
       incompleteHunksReason("OpenCode"),
@@ -282,6 +297,7 @@ describe("Model decision boundaries", () => {
       expect(failedReason(reason)).toBe(true);
     expect(failedReason("Contains unrelated behavior changes.")).toBe(false);
   });
+
   it("names the agent that grouped the changes when it fails on a file", () => {
     const rejected = answer([c]);
     rejected.files[0].coveredHunks = [];
@@ -289,6 +305,7 @@ describe("Model decision boundaries", () => {
       validateResponse(rejected, [c], [], "discover", "Claude").files[0].reason,
     ).toBe(incompleteHunksReason("Claude"));
   });
+
   it("prevents a later batch from redefining a pattern to absorb unrelated changes", () => {
     const good = answer([c]);
     expect(() => validateResponse(good, [c], [definition])).not.toThrow();
@@ -303,6 +320,7 @@ describe("Model decision boundaries", () => {
       ),
     ).toThrow("changed an existing pattern");
   });
+
   it("normal decisions cannot claim a group or hunk coverage", () => {
     const mixed = { ...c, path: "mixed.ts" };
     const good = answer([mixed]);
@@ -315,6 +333,7 @@ describe("Model decision boundaries", () => {
     ).toThrow();
   });
 });
+
 async function fixture(
   classify = vi.fn<typeof classifyChanges>(async (c: Candidate[]) => ({
     result: answer(c),
@@ -366,6 +385,7 @@ async function fixture(
     setComments: (v: any[]) => (reviewComments = v),
   };
 }
+
 async function finish(f: Awaited<ReturnType<typeof fixture>>) {
   await vi.waitFor(async () =>
     expect((await f.service.state("key", `${base}:${head}`))?.status).toMatch(
@@ -374,6 +394,7 @@ async function finish(f: Awaited<ReturnType<typeof fixture>>) {
   );
   return (await f.service.state("key", `${base}:${head}`))!;
 }
+
 describe("Analysis lifecycle and durable groups", () => {
   it("counts only unresolved validation failures and keeps valid mixed decisions separate", async () => {
     const f = await fixture();
@@ -412,6 +433,7 @@ describe("Analysis lifecycle and durable groups", () => {
       state.result,
     );
   });
+
   it.each(["recovered", "hunks", "batch"] as const)(
     "repairs a legacy warning without reanalyzing or changing decisions: %s",
     async (kind) => {
@@ -449,6 +471,7 @@ describe("Analysis lifecycle and durable groups", () => {
       expect(f.store.get().progress).toEqual({});
     },
   );
+
   it("preserves verified groups and accounts for unchecked files if a later model request fails", async () => {
     const f = await fixture();
     f.files.push(
@@ -470,6 +493,7 @@ describe("Analysis lifecycle and durable groups", () => {
     expect(Object.values(state.result!.ordinary)).toContain("Connection lost");
     expect(f.store.get().progress).toEqual({});
   });
+
   it("reports budget exhaustion and keeps every unchecked file in individual review", async () => {
     const f = await fixture();
     f.files.push(
@@ -498,6 +522,7 @@ describe("Analysis lifecycle and durable groups", () => {
     ).toBe(f.files.length);
     expect(f.store.get().progress).toEqual({});
   });
+
   it.each(["group", "normal"] as const)(
     "clears recovered validation failures when the later decision is %s",
     async (decision) => {
@@ -576,6 +601,7 @@ describe("Analysis lifecycle and durable groups", () => {
       expect(f.store.get().progress).toEqual({});
     },
   );
+
   it("groups only complete matching files, persists results and never marks viewed automatically", async () => {
     const f = await fixture();
     await f.service.start(f.client, ref, "key", head, base);
@@ -614,6 +640,7 @@ describe("Analysis lifecycle and durable groups", () => {
       ),
     ).rejects.toThrow("new commits");
   });
+
   it("excludes drafts, bookmarks and discussions, including new ones before bulk review", async () => {
     const f = await fixture();
     await f.service.start(f.client, ref, "key", head, base);
@@ -657,6 +684,7 @@ describe("Analysis lifecycle and durable groups", () => {
       ),
     ).rejects.toThrow("discussions");
   });
+
   it("groups a file whose only bookmark is on an earlier revision, where it no longer shows", async () => {
     const f = await fixture();
     await f.store.update((s) => {
@@ -689,6 +717,7 @@ describe("Analysis lifecycle and durable groups", () => {
       ),
     ).toEqual(["one.ts", "two.ts"]);
   });
+
   it("pauses a running request with a durable retry queue", async () => {
     const f = await fixture(
       vi.fn(
@@ -715,6 +744,7 @@ describe("Analysis lifecycle and durable groups", () => {
     ).toBe(3);
     expect(f.store.get().progress).toEqual({});
   });
+
   it("discards results if a new commit arrives during analysis", async () => {
     const f = await fixture();
     f.classify.mockImplementation(async (c: Candidate[]) => {
@@ -728,6 +758,7 @@ describe("Analysis lifecycle and durable groups", () => {
     await f.service.start(f.client, ref, "key", head, base);
     expect((await finish(f)).status).toBe("failed");
   });
+
   it("resumes after repeated budget pauses without downloading or classifying successful files twice", async () => {
     const f = await fixture(undefined, { batches: 1 });
     f.files.push(
@@ -771,6 +802,7 @@ describe("Analysis lifecycle and durable groups", () => {
     expect(allDecided.size).toBe(f.files.length);
     expect(f.store.get().progress).toEqual({});
   });
+
   it("keeps discovery rules and a matching queue across an application restart", async () => {
     const classify = vi.fn<typeof classifyChanges>(
       async (c, known, _signal, mode) => ({
@@ -821,6 +853,7 @@ describe("Analysis lifecycle and durable groups", () => {
     );
     expect(done.result!.groups[0].paths).toHaveLength(13);
   });
+
   it("recovers the last completed batch after interruption and retries only the in-flight work", async () => {
     const f = await fixture();
     f.files.push(
@@ -859,6 +892,7 @@ describe("Analysis lifecycle and durable groups", () => {
     );
     expect(f.classify).toHaveBeenCalledTimes(3);
   });
+
   it("retries a failed file fetch while preserving already fetched evidence and decisions", async () => {
     const f = await fixture();
     const original = f.client.contentsAt.bind(f.client);
@@ -875,6 +909,7 @@ describe("Analysis lifecycle and durable groups", () => {
     expect(downloads).toHaveBeenCalledTimes(calls + 1);
     expect(downloads.mock.calls.at(-1)![1].filename).toBe("one.ts");
   });
+
   it("reopens a checkpoint for a file that mentions thousands of paths", async () => {
     const f = await fixture();
     const digits =
@@ -894,6 +929,7 @@ describe("Analysis lifecycle and durable groups", () => {
       "complete",
     );
   });
+
   it("keeps a file too large to fetch in individual review instead of retrying it", async () => {
     const f = await fixture();
     const original = f.client.contentsAt.bind(f.client);
@@ -908,6 +944,7 @@ describe("Analysis lifecycle and durable groups", () => {
     expect(done.resume).toBeFalsy();
     expect(done.result!.ordinary["one.ts"]).toBe("This file is too large.");
   });
+
   it("resumes a legacy partial result while retaining its confirmed groups", async () => {
     const f = await fixture();
     await f.service.start(f.client, ref, "key", head, base);
@@ -937,6 +974,7 @@ describe("Analysis lifecycle and durable groups", () => {
       "mixed.ts",
     ]);
   });
+
   it("does not resume a checkpoint against a changed PR or overwrite a corrupt checkpoint", async () => {
     const f = await fixture(undefined, { batches: 1 });
     f.files.push(
@@ -963,6 +1001,7 @@ describe("Analysis lifecycle and durable groups", () => {
     ).rejects.toThrow("preserved");
     expect(await readFile(path, "utf8")).toBe("{interrupted write");
   });
+
   it("gives recovered and newly discovered groups distinct identities", async () => {
     const f = await fixture();
     await f.service.start(f.client, ref, "key", head, base);

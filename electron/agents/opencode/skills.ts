@@ -9,6 +9,7 @@ import type { AgentSkill } from "../skill-presentation";
 import type { AgentOptions } from "../types";
 
 const exec = promisify(execFile);
+
 const catalogSchema = z.object({
   data: z.array(
     z.object({

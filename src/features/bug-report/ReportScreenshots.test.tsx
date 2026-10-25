@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   image: vi.fn(),
   png: vi.fn(),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     bugReportScreenshot: mocks.read,
@@ -25,11 +26,13 @@ vi.mock("../../lib/api", () => ({
     addBugReportScreenshot: mocks.add,
   },
 }));
+
 vi.mock("./report-screenshot", () => ({
   dataUrl: mocks.dataUrl,
   reportImage: mocks.image,
   reportPng: mocks.png,
 }));
+
 vi.mock("../images/ImageSketch", () => ({
   SketchEditor: ({
     onClose,
@@ -48,14 +51,18 @@ vi.mock("../images/ImageSketch", () => ({
     </button>
   ),
 }));
+
 vi.mock("../../ui/RichText", () => ({ RichText: () => null }));
 vi.mock("../../ui/SettingsCard", () => ({ Segmented: () => null }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let container: HTMLDivElement;
 let client: QueryClient;
+
 const shot = (id: string): BugReportScreenshot => ({
   id,
   name: id,
@@ -63,7 +70,9 @@ const shot = (id: string): BugReportScreenshot => ({
   width: 1,
   height: 1,
 });
+
 const key = (id: string) => ["bug-report-screenshot", id];
+
 function preview(shots: BugReportScreenshot[]): BugReportPreview {
   return {
     draft: {
@@ -96,6 +105,7 @@ function preview(shots: BugReportScreenshot[]): BugReportPreview {
     digest: "digest",
   };
 }
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
@@ -108,12 +118,14 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
 });
+
 afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();
   container.remove();
   vi.useRealTimers();
 });
+
 function report(shots: BugReportScreenshot[], withPreview = true) {
   return (
     <QueryClientProvider client={client}>
@@ -132,6 +144,7 @@ function report(shots: BugReportScreenshot[], withPreview = true) {
     </QueryClientProvider>
   );
 }
+
 async function render(shots: BugReportScreenshot[], withPreview = true) {
   await act(async () => root.render(report(shots, withPreview)));
   await act(async () => vi.advanceTimersByTimeAsync(1));

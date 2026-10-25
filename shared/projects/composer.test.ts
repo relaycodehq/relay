@@ -14,6 +14,7 @@ const send = (id: string, parentId?: string): ProjectChatSend => ({
   interactionMode: "plan",
   ...(parentId ? { parentId } : {}),
 });
+
 const user = (input: ProjectChatSend, created: number): ChatMessage => ({
   id: input.id,
   role: "user",
@@ -26,6 +27,7 @@ const user = (input: ProjectChatSend, created: number): ChatMessage => ({
   ...(input.side ? { side: true } : {}),
   sentSettings: sentSettingsOf(input),
 });
+
 const chat = (messages: ChatMessage[], lastInput?: ProjectChatSend) =>
   ({ messages, lastInput }) as ProjectChat;
 

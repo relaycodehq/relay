@@ -39,6 +39,7 @@ beforeEach(async () => {
   git("commit", "--quiet", "-m", "PR head");
   head = git("rev-parse", "HEAD");
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
@@ -58,6 +59,7 @@ describe("local code editing", () => {
     expect(git("rev-parse", "HEAD")).toBe(head);
     expect((await read()).version).toBe(result.version);
   });
+
   it("rejects an external change without overwriting it", async () => {
     const file = await read();
     await writeFile(join(root, path), "Changed in PhpStorm\n");
@@ -68,6 +70,7 @@ describe("local code editing", () => {
       "Changed in PhpStorm\n",
     );
   });
+
   it("serializes overlapping saves with the same expected version", async () => {
     const file = await read();
     const results = await Promise.allSettled([
@@ -77,6 +80,7 @@ describe("local code editing", () => {
     expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected"]);
     expect(await readFile(join(root, path), "utf8")).toBe("first\n");
   });
+
   it("revalidates the checkout and remote before writing", async () => {
     const file = await read();
     await expect(
@@ -94,6 +98,7 @@ describe("local code editing", () => {
     await expect(save(file.version, "bad")).rejects.toThrow("remote");
     expect(await readFile(join(root, path), "utf8")).toBe(original);
   });
+
   it("rejects symlinks, parent symlinks, hard links and paths outside tracked PR files", async () => {
     const file = await read();
     await rename(join(root, path), join(root, "target.ts"));
@@ -113,6 +118,7 @@ describe("local code editing", () => {
       ).rejects.toThrow();
     expect(await readFile(join(root, "target.ts"), "utf8")).toBe(original);
   });
+
   it("rejects binary, non-UTF8, oversized and read-only writes", async () => {
     const file = await read();
     await chmod(join(root, path), 0o444);

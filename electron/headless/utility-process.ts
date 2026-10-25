@@ -60,6 +60,7 @@ export class HeadlessMessagePort extends EventEmitter {
 export class HeadlessMessageChannel {
   readonly port1 = new HeadlessMessagePort();
   readonly port2 = new HeadlessMessagePort();
+
   constructor() {
     this.port1.peer = this.port2;
     this.port2.peer = this.port1;

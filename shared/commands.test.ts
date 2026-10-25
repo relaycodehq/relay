@@ -18,11 +18,13 @@ describe("relay commands", () => {
       args: "keep the API decisions",
     });
   });
+
   it("rejects unknown commands and arguments to commands without any", () => {
     expect(relayCommand("/status")).toBeNull();
     expect(relayCommand("/files src")).toBeNull();
     expect(relayCommand("please /effort high")).toBeNull();
   });
+
   it("offers values only while the first argument is being typed", () => {
     expect(argumentTrigger("/effort hi")).toEqual({
       name: "effort",
@@ -42,6 +44,7 @@ describe("relay commands", () => {
       inline: false,
     });
   });
+
   it("completes /add-dir paths with spaces in them", () => {
     expect(argumentTrigger("/add-dir ~/My Projects/ap")).toMatchObject({
       name: "add-dir",
@@ -53,6 +56,7 @@ describe("relay commands", () => {
       args: "~/My Projects/api",
     });
   });
+
   it("finds commands typed in the middle of a message", () => {
     expect(commandTrigger("fix the bug /eff")).toMatchObject({
       prefix: "/",
@@ -73,6 +77,7 @@ describe("relay commands", () => {
       inline: false,
     });
   });
+
   it("reads a leading absolute path as text, not a command", () => {
     expect(startsWithCommand("/Users/me/clip.mp4 test")).toBe(false);
     expect(commandTrigger("/Users/me/cl")).toBeNull();

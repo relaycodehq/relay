@@ -8,9 +8,11 @@ import { SettingsFile } from "./settings-file";
 
 let dir: string;
 let file: SettingsFile;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-prefs-"));
 });
+
 afterEach(async () => {
   file?.close();
   await rm(dir, { recursive: true, force: true });

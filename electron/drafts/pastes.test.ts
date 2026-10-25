@@ -5,10 +5,12 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { readPaste, savePaste, setPastesRoot, sweepPastes } from "./pastes";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-pastes-"));
   setPastesRoot(root);
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 it("keeps each paste in a folder of its own under its message's name", async () => {

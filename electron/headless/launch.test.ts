@@ -30,6 +30,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:fs/promises")>();
   return { ...original, rename: vi.fn(original.rename) };
 });
+
 vi.mock("node:child_process", async (importOriginal) => {
   const original = await importOriginal<typeof import("node:child_process")>();
   return {
@@ -39,20 +40,25 @@ vi.mock("node:child_process", async (importOriginal) => {
     }),
   };
 });
+
 vi.mock("./control", async (importOriginal) => {
   const original = await importOriginal<typeof import("./control")>();
   return { ...original, callControl: vi.fn() };
 });
+
 vi.mock("./service", () => ({
   installedService: vi.fn(),
   serviceHome: vi.fn(),
   startService: vi.fn(),
 }));
+
 const cleanup: (() => Promise<unknown>)[] = [];
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
   vi.resetAllMocks();
 });
+
 async function home() {
   const dir = await mkdtemp(join(tmpdir(), "relay-home-"));
   cleanup.push(() => rm(dir, { recursive: true, force: true }));

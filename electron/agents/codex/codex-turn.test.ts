@@ -12,6 +12,7 @@ import type { AgentOptions } from "../types";
 vi.mock("../../platform/executables");
 
 type Wire = Record<string, unknown>;
+
 // Answers like `codex app-server` whose config.toml sets `model_reasoning_effort = "xhigh"`.
 // `said` goes out after turn/start's answer; `ending` replaces the usual turn/completed.
 const fakeCodex = (
@@ -245,6 +246,7 @@ const on = (method: string, params: Wire) => ({
   method,
   params: { threadId: "thread", ...params },
 });
+
 const review = (method: string, type: string, more: Wire = {}) =>
   on(method, { turnId: "turn", item: { id: type, type, ...more } });
 const reviewJob = {

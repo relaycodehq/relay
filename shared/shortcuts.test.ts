@@ -21,6 +21,7 @@ const key = (
   metaKey: !!mods.meta,
   shiftKey: !!mods.shift,
 });
+
 const combo = (code: string, mods: Partial<KeyCombo> = {}): KeyCombo => ({
   code,
   alt: false,
@@ -38,6 +39,7 @@ describe("default shortcuts", () => {
         .defaults(mac)
         .map((c) => ({ id, c })),
     );
+
     it(`never share keys on ${platform}`, () => {
       const clashes = all.flatMap((a, i) =>
         all
@@ -51,6 +53,7 @@ describe("default shortcuts", () => {
       );
       expect(clashes).toEqual([]);
     });
+
     it(`leave the menu's and the OS's keys alone on ${platform}`, () => {
       const taken = all.filter(({ id, c }) =>
         reservedCombos(mac, command(id).outsideFields).some(([r]) =>
@@ -59,6 +62,7 @@ describe("default shortcuts", () => {
       );
       expect(taken.map(({ id }) => id)).toEqual([]);
     });
+
     it(`could each be recorded again on ${platform}`, () => {
       const refused = all.filter(
         ({ id, c }) =>
@@ -76,6 +80,7 @@ describe("default shortcuts", () => {
       );
       expect(refused.map(({ id }) => id)).toEqual([]);
     });
+
     it(`give the menu accelerators it accepts on ${platform}`, () => {
       const menu = Object.fromEntries(
         menuShortcutIds.map((id) => [
@@ -96,6 +101,7 @@ describe("recordCombo", () => {
       recordCombo(key("MetaLeft", { meta: true }), "settle", true),
     ).toEqual({ kind: "wait" });
   });
+
   it("wants a modifier unless the command listens outside text fields", () => {
     expect(recordCombo(key("KeyE"), "settle", true).kind).toBe("invalid");
     expect(recordCombo(key("KeyE", { shift: true }), "settle", true).kind).toBe(
@@ -103,18 +109,21 @@ describe("recordCombo", () => {
     );
     expect(recordCombo(key("KeyE"), "review-next", true).kind).toBe("combo");
   });
+
   it("takes a function key alone", () => {
     expect(recordCombo(key("F5"), "settle", false)).toEqual({
       kind: "combo",
       combo: combo("F5"),
     });
   });
+
   it("keeps plain arrows and Space for moving around", () => {
     expect(recordCombo(key("ArrowDown"), "review-next", true).kind).toBe(
       "invalid",
     );
     expect(recordCombo(key("Space"), "review-next", true).kind).toBe("invalid");
   });
+
   it("leaves Enter, Tab and Esc to their usual jobs", () => {
     expect(recordCombo(key("Enter", { meta: true }), "settle", true).kind).toBe(
       "invalid",
@@ -123,6 +132,7 @@ describe("recordCombo", () => {
       "invalid",
     );
   });
+
   it("lets a command that sends take Enter, with a modifier held", () => {
     expect(
       recordCombo(
@@ -138,6 +148,7 @@ describe("recordCombo", () => {
       recordCombo(key("Tab", { meta: true }), "send-new-thread", true).kind,
     ).toBe("invalid");
   });
+
   it("records a digit family by its modifiers", () => {
     expect(
       recordCombo(
@@ -160,6 +171,7 @@ describe("recordCombo", () => {
 
 describe("overlaps", () => {
   const cmd = combo("Digit1", { meta: true });
+
   it("lets a digit family cover 1 to 9 with the same modifiers", () => {
     expect(overlaps(cmd, true, combo("Digit7", { meta: true }), false)).toBe(
       true,
@@ -171,6 +183,7 @@ describe("overlaps", () => {
       overlaps(cmd, true, combo("Digit7", { meta: true, alt: true }), false),
     ).toBe(false);
   });
+
   it("tells a double press from a single one", () => {
     expect(
       overlaps(combo("Escape", { twice: true }), false, combo("Escape"), false),
@@ -184,6 +197,7 @@ describe("accelerator", () => {
       "Command+Plus",
     );
   });
+
   it("uses each platform's modifier names", () => {
     expect(accelerator(combo("Backquote", { ctrl: true }), true)).toBe(
       "Control+`",
@@ -192,6 +206,7 @@ describe("accelerator", () => {
       "Ctrl+Shift+I",
     );
   });
+
   it("names a key by what the layout types on it", () => {
     // AZERTY: the key where QWERTY has Q types A.
     const azerty = (code: string) => (code === "KeyQ" ? "a" : undefined);
@@ -199,6 +214,7 @@ describe("accelerator", () => {
       "Command+A",
     );
   });
+
   it("has nothing for a double press or an unnamed key", () => {
     expect(accelerator(combo("Escape", { twice: true }), true)).toBeUndefined();
     expect(

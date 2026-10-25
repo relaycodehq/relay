@@ -21,6 +21,7 @@ const presets = [
   preset("c", "codex", "gpt-6-astra", "xhigh", true),
   preset("d", "codex", "gpt-6-astra", "xhigh"),
 ];
+
 const run = (p: QuickPreset) => ({ ...p });
 
 it("names Claude alias presets without rewriting their model or window", () => {
@@ -42,12 +43,14 @@ describe("presetIndex", () => {
     expect(presetIndex(presets, run(presets[1]))).toBe(1);
     expect(presetIndex(presets, run(presets[3]))).toBe(3);
   });
+
   it("keeps the last stepped-to preset when its effort fell back to default", () => {
     const fellBack = { ...run(presets[1]), reasoningEffort: "" as const };
     expect(presetIndex(presets, fellBack, 1)).toBe(1);
     // Without that, the first preset of the model.
     expect(presetIndex(presets, fellBack)).toBe(0);
   });
+
   it("ignores a last preset the composer has moved away from", () => {
     const elsewhere = {
       provider: "opencode" as const,
@@ -65,14 +68,17 @@ describe("stepPreset", () => {
     expect(stepPreset(4, 3, 1)).toBe(3);
     expect(stepPreset(4, 0, -1)).toBe(0);
   });
+
   it("enters the list at the first preset when off it, either way", () => {
     expect(stepPreset(4, -1, 1)).toBe(0);
     expect(stepPreset(4, -1, -1)).toBe(0);
   });
+
   it("goes on round from the ends when wrapping", () => {
     expect(stepPreset(4, 3, 1, true)).toBe(0);
     expect(stepPreset(4, 0, -1, true)).toBe(3);
   });
+
   it("has nowhere to go without presets", () => {
     expect(stepPreset(0, -1, 1)).toBe(-1);
   });
@@ -92,6 +98,7 @@ describe("parseQuickSwitch", () => {
       presets: [presets[0]],
     });
   });
+
   it("drops a corrupt preset list rather than the whole setting", () => {
     const parsed = parseQuickSwitch({
       style: "tab",

@@ -9,6 +9,7 @@ import type { SavedPreview } from "./saved-previews";
 vi.mock("../git/git", () => ({
   currentBranchOr: async (folder: string) => folder.split("/").at(-1),
 }));
+
 afterEach(() => vi.restoreAllMocks());
 
 function setup(

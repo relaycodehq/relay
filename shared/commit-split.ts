@@ -12,12 +12,14 @@ export interface SplitChange {
   additions: number;
   deletions: number;
 }
+
 export interface PlannedCommit {
   message: string;
   changes: number[];
   /** Changes the model left out, gathered so nothing is silently dropped. */
   unplaced?: boolean;
 }
+
 export interface CommitSplitPlan {
   /** The uncommitted changes the plan was made for; applying checks they still match. */
   fingerprint: string;
@@ -26,6 +28,7 @@ export interface CommitSplitPlan {
   /** Who planned it, as Settings words the choice. */
   plannedBy: string;
 }
+
 export const MAX_SPLIT_COMMITS = 40;
 export const commitSplitNoteSchema = z.string().trim().max(2000);
 export const applyCommitSplitSchema = z

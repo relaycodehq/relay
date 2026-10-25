@@ -38,6 +38,7 @@ export interface InstalledAgent {
 }
 
 const versionName = /^[\w.+-]+$/;
+
 const pointerSchema = z.object({
   version: z.string().regex(versionName),
   /** Absent in what Antigravity's own installer wrote. */
@@ -50,6 +51,7 @@ const pointerSchema = z.object({
   name: z.string().optional(),
   icon: z.string().optional(),
 });
+
 type Pointer = z.input<typeof pointerSchema>;
 const pointer = (dir: string) => join(dir, "current.json");
 

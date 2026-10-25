@@ -127,4 +127,5 @@ export function useBranchSync(where: string) {
     runSync,
   };
 }
+
 export type BranchSync = ReturnType<typeof useBranchSync>;

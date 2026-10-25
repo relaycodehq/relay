@@ -14,6 +14,7 @@ export function relativeDate(value: string) {
             day: "numeric",
           });
 }
+
 /** "5m ago" while recent, a bare date once relativeDate gives one. */
 export function timeAgo(value: string) {
   const rel = relativeDate(value);

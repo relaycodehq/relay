@@ -18,6 +18,7 @@ const commandFolders = (root: string) => [
   { dir: join(homedir(), ".cursor", "commands"), source: "personal" as const },
   { dir: join(homedir(), ".claude", "commands"), source: "personal" as const },
 ];
+
 const validName = /^[a-zA-Z0-9_.:-]+$/;
 
 function splitFrontmatter(text: string) {

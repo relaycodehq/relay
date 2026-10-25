@@ -21,11 +21,13 @@ it("turns git's progress lines into one rising fraction", () => {
 });
 
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
+
 vi.mock("../git/git", () => ({
   gitExecutable: async () => "git",
   gitEnv: () => ({}),
   redactCredentials: (text: string) => text,
 }));
+
 it("does not settle a cancelled clone until its process closes", async () => {
   const child = Object.assign(new EventEmitter(), {
     stderr: new PassThrough(),

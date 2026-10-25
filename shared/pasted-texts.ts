@@ -1,4 +1,5 @@
 import { agentProviders } from "./agents";
+
 /** A long paste shown as a pill in the message, standing in for its text. */
 export interface PastedText {
   /** Shown as "Pasted text #n". */

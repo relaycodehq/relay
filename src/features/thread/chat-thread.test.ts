@@ -15,6 +15,7 @@ const message = (
   version: 1,
   ...extra,
 });
+
 const ids = (messages: ChatMessage[]) => messages.map((m) => m.id);
 
 it("files replies to replies under the side question they started from", () => {

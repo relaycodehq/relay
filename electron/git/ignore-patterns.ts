@@ -76,6 +76,7 @@ function segmentSource(glob: string): string | null {
 }
 
 const never = /(?!)/;
+
 const segmentRegex = (glob: string, flags: string) => {
   const source = segmentSource(glob);
   return source === null ? never : new RegExp(`^${source}$`, flags);

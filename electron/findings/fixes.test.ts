@@ -15,12 +15,14 @@ const finding = (id: string): Finding => ({
   files: [],
   reviewers: [],
 });
+
 const thread = (): ThreadFindings => ({
   reports: [
     { findings: [finding("F1"), finding("F2")], dropped: [], messageId: "m" },
   ],
   statuses: {},
 });
+
 const fix = (id: string, fixes?: string[]) =>
   ({ id, fixes }) as ProjectChatSend;
 

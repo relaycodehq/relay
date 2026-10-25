@@ -14,11 +14,13 @@ import {
 } from "../../../shared/subagents";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+
 vi.mock("../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
 
 const session_id = "session";
+
 // Frames as the CLI writes them, trimmed to the fields the tracker reads.
 const call = (
   id: string,
@@ -39,12 +41,14 @@ const call = (
     usage: {},
   },
 });
+
 const says = (id: string, text: string, parent: string) => ({
   type: "assistant",
   parent_tool_use_id: parent,
   session_id,
   message: { id, content: [{ type: "text", text }], usage: {} },
 });
+
 const done = (
   id: string,
   text: string,
@@ -60,12 +64,14 @@ const done = (
   },
   ...extra,
 });
+
 const system = (subtype: string, fields: object) => ({
   type: "system",
   subtype,
   session_id,
   ...fields,
 });
+
 const started = (id: string, task: string, background: boolean) =>
   system("task_started", {
     task_id: task,

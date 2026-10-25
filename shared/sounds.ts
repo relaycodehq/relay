@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { ThreadNews } from "./thread-news";
 
 export type SoundEvent = ThreadNews["kind"];
+
 export const soundEvents = [
   "finished",
   "waiting",
@@ -59,11 +60,13 @@ const builtInIds = soundEvents.flatMap((e) =>
 ) as [BuiltInSoundId, ...BuiltInSoundId[]];
 
 const customPrefix = "custom:";
+
 /** A built-in's id, or `custom:` and the id of a file the user added. */
 export const soundIdSchema = z.union([
   z.enum(builtInIds),
   z.string().regex(/^custom:[0-9a-f-]{36}$/),
 ]);
+
 export type SoundId = z.infer<typeof soundIdSchema>;
 
 export const customSoundId = (id: string): SoundId => `${customPrefix}${id}`;
@@ -119,6 +122,7 @@ export const customSoundExtensions = [
   "aac",
   "flac",
 ] as const;
+
 export type CustomSoundExtension = (typeof customSoundExtensions)[number];
 export const customSoundExtensionSchema = z.enum(customSoundExtensions);
 /** Long enough for any notification sound; a whole song is a mistake. */

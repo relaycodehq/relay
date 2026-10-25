@@ -24,6 +24,7 @@ export interface ProjectTask {
   /** Its processes' memory; only when costs were asked for. */
   mb?: number;
 }
+
 export type TaskKind =
   | "server"
   | "watch"
@@ -144,6 +145,7 @@ const runners = new Set([
   "npx",
   "tsx",
 ]);
+
 /** `/usr/local/bin/node /app/node_modules/.bin/vite --port 5173` → `node vite --port 5173`. */
 export function tidyCommand(line: string): string {
   if (windowsLine(line)) return tidyWindowsCommand(line);
@@ -227,6 +229,7 @@ const serverTools: [RegExp, string][] = [
   [/\bwrangler dev\b/, "Wrangler dev server"],
   [/\belectron\b/, "Electron app"],
 ];
+
 const testTools: [RegExp, string][] = [
   [/\bvitest\b/, "Vitest"],
   [/\bjest\b/, "Jest"],
@@ -238,6 +241,7 @@ const testTools: [RegExp, string][] = [
   [/\bgo test\b/, "Go"],
   [/\bmocha\b/, "Mocha"],
 ];
+
 const script = /\b(npm|pnpm|yarn|bun)(?: run)? ([\w:.-]+)/;
 
 /** Recognise what a command is, so the list reads as "Vite dev server" rather than a command line. */
@@ -331,6 +335,7 @@ export function lastingTask(task: ProjectTask) {
     task.kind === "container"
   );
 }
+
 const taskLine = (task: ProjectTask, chatId: string) => {
   const ports = task.ports.length
     ? ` on ${task.ports.map((p) => `:${p}`).join(" ")}`
@@ -345,12 +350,14 @@ const taskLine = (task: ProjectTask, chatId: string) => {
           : "";
   return `- ${task.title}${ports}${mine}: ${JSON.stringify(task.command.slice(0, 120))}`;
 };
+
 const listed = (tasks: ProjectTask[], chatId: string) => {
   const lines = tasks.slice(0, 12).map((task) => taskLine(task, chatId));
   if (tasks.length > lines.length)
     lines.push(`- …and ${tasks.length - lines.length} more`);
   return lines;
 };
+
 const sameTask = (a: ProjectTask, b: ProjectTask) =>
   a.id === b.id && a.ports.join() === b.ports.join();
 /**

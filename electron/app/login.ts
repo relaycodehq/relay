@@ -39,15 +39,18 @@ export class GiteaLogin {
   private current: Gitea | null = null;
   /** Hears sign-ins and sign-outs, a restored account's too. */
   changed?: () => void;
+
   get client() {
     return this.current;
   }
+
   set client(next: Gitea | null) {
     const fromCli = this.tokenFromCli;
     if (next && fromCli) next.renewToken = () => fromCli(next.account);
     this.current = next;
     this.changed?.();
   }
+
   restore: "idle" | "unlocking" | "failed" = "idle";
   private generation = 0;
 

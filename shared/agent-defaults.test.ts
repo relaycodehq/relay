@@ -9,6 +9,7 @@ import {
 import type { ClaudeModel, CodexModel } from "./settings";
 
 const every = ["low", "medium", "high", "xhigh", "max"] as const;
+
 const claudeModels: ClaudeModel[] = [
   ["opus", "claude-opus-5-5", "Opus 5.5"],
   ["claude-fable-5-1[1m]", "claude-fable-5-1", "Fable 5.1"],
@@ -21,6 +22,7 @@ const claudeModels: ClaudeModel[] = [
   efforts: [...every],
   longContext: true,
 }));
+
 claudeModels.push({
   id: "haiku",
   resolved: "claude-haiku-4-5-20251001",

@@ -14,6 +14,7 @@ vi.mock("../git/repository", () => ({ inspectFolder: vi.fn() }));
 const head = "a".repeat(40),
   base = "b".repeat(40);
 const ref = { owner: "team", name: "repo", number: 7 };
+
 const question = {
   head,
   base,
@@ -23,6 +24,7 @@ const question = {
   side: "additions" as const,
   question: "Why?",
 };
+
 function fixture() {
   const file = {
     filename: "new.ts",
@@ -50,6 +52,7 @@ function fixture() {
   };
   return { client: client as unknown as Gitea, mock: client, file };
 }
+
 describe("Line question evidence", () => {
   it("loads pinned head code and old rename paths from authoritative PR metadata", async () => {
     const { client, mock, file } = fixture();
@@ -74,6 +77,7 @@ describe("Line question evidence", () => {
     expect(old.lines[1].text).toBe("old selected");
     expect(mock.contents).toHaveBeenCalledWith(ref, file, head, base);
   });
+
   it("rejects stale revisions, unknown files and nonexistent lines before a session opens", async () => {
     const { client, mock } = fixture();
     await expect(
@@ -87,6 +91,7 @@ describe("Line question evidence", () => {
       questionContext(client, ref, { ...question, start: 4, end: 4 }),
     ).rejects.toThrow("no longer available");
   });
+
   it("bounds context without truncating selected lines and rejects malformed input", () => {
     const lines = lineExcerpt(
       Array.from({ length: 100 }, (_, i) => `row ${i + 1}`).join("\n"),
@@ -112,6 +117,7 @@ describe("Line question evidence", () => {
         lineQuestionSchema.safeParse({ ...question, ...change }).success,
       ).toBe(false);
   });
+
   it("launches from the inspected root with revision context while preserving dirty files", async () => {
     const { client } = fixture();
     vi.mocked(inspectFolder).mockResolvedValue({
@@ -147,6 +153,7 @@ describe("Line question evidence", () => {
     ).rejects.toThrow("remote does not match");
   });
 });
+
 describe("Model and speed settings", () => {
   it("validates custom IDs and emits explicit speed overrides, including default model", () => {
     expect(aiSettingsSchema.parse(defaultAISettings)).toEqual(
@@ -185,12 +192,14 @@ describe("Model and speed settings", () => {
 describe("Which agents a setting takes", () => {
   const parse = (patch: object) =>
     aiSettingsSchema.safeParse({ ...defaultAISettings, ...patch }).success;
+
   it("lets commit splits use any agent, but not the jobs that open a CLI", () => {
     expect(parse({ splitProvider: "cursor" })).toBe(true);
     expect(parse({ splitProvider: "opencode" })).toBe(true);
     expect(parse({ groupingProvider: "cursor" })).toBe(false);
     expect(parse({ questionsProvider: "cursor" })).toBe(false);
   });
+
   it("only limits Claude's efforts to the ones it lists", () => {
     const split = { model: "", fast: false, reasoningEffort: "minimal" };
     expect(parse({ splitProvider: "cursor", split })).toBe(true);
@@ -235,6 +244,7 @@ describe("Reasoning effort", () => {
       ).toBe(valid);
     }
   });
+
   it("passes the chosen effort exactly once without changing the speed tier", () => {
     const args = codexModelArgs({
       model: "gpt-5.6-luna",

@@ -116,18 +116,22 @@ export class RemoteClient {
   /** What the desktop patches next, from this connection's events: answers still streaming and the thread list. */
   private streaming = new Map<string, ChatMessage>();
   private chats?: RemoteChatSummary[];
+
   constructor(private options: RemoteClientOptions) {
     this.target = options.start;
   }
+
   /** The desktop's name, from the link or the saved credentials. */
   get name() {
     return "link" in this.target ? this.target.link.name : this.target.name;
   }
+
   start() {
     if (!this.closed) return;
     this.closed = false;
     void this.connect();
   }
+
   close() {
     this.closed = true;
     clearTimeout(this.retryTimer);
@@ -135,17 +139,20 @@ export class RemoteClient {
     this.drop("Disconnected.");
     this.setStatus("offline");
   }
+
   /** Which way the link runs now. */
   get route(): { host: string; kind: RouteKind } | undefined {
     return this.status === "online" && this.host
       ? { host: this.host, kind: routeKind(this.host) }
       : undefined;
   }
+
   get routes(): readonly RouteKind[] {
     return (
       ("link" in this.target ? undefined : this.target.routes) ?? defaultRoutes
     );
   }
+
   /** A new order: kept with the credentials, and the link moves if an earlier route answers. */
   setRoutes(routes: RouteKind[]) {
     if ("link" in this.target) return;
@@ -154,6 +161,7 @@ export class RemoteClient {
     this.worse.clear();
     this.tryBetter();
   }
+
   /**
    * Reconnects now instead of waiting out the backoff, e.g. when the app
    * returns to the foreground. A link that went quiet for more than a tick
@@ -177,6 +185,7 @@ export class RemoteClient {
       this.tryBetter();
     }
   }
+
   call<M extends RemoteMethod>(
     method: M,
     ...args: Parameters<RemoteApi[M]>
@@ -189,6 +198,7 @@ export class RemoteClient {
         : (this.options.timeoutMs ?? 15000),
     );
   }
+
   private async request<M extends RemoteMethod>(
     method: M,
     args: unknown[],
@@ -254,6 +264,7 @@ export class RemoteClient {
     }
     return this.exchange(frame, timeoutMs);
   }
+
   private exchange(
     frame: Extract<ClientFrame, { t: "call" | "batch" }>,
     timeoutMs: number,
@@ -274,6 +285,7 @@ export class RemoteClient {
       }
     });
   }
+
   /** One of the desktop's own calls on the phone's allowlist, typed as the desktop's Api. */
   desktop<M extends PhoneDesktopMethod>(
     method: M,
@@ -297,16 +309,19 @@ export class RemoteClient {
         : (this.options.timeoutMs ?? 15000),
     ) as Promise<DesktopCall<M>["result"]>;
   }
+
   private setStatus(status: RemoteStatus, detail?: string) {
     this.status = status;
     this.options.onStatus?.(status, detail);
   }
+
   private get hosts() {
     const t = this.target;
     return "link" in t
       ? { hosts: t.link.hosts, port: t.link.port, key: t.link.key }
       : { hosts: t.hosts, port: t.port, key: t.key };
   }
+
   private connect() {
     const attempt = ++this.attempt;
     this.cancelDials();
@@ -333,6 +348,7 @@ export class RemoteClient {
       },
     });
   }
+
   /**
    * Dials the hosts in order, each a little after the one before unless that
    * one already failed, and keeps the first that signs in. A pairing code
@@ -408,10 +424,12 @@ export class RemoteClient {
     if (!order.length) on.done();
     else launch();
   }
+
   private cancelDials() {
     for (const cancel of this.dials) cancel();
     this.dials.clear();
   }
+
   private scheduleRetry() {
     clearTimeout(this.retryTimer);
     const delay = Math.min(
@@ -420,6 +438,7 @@ export class RemoteClient {
     );
     this.retryTimer = setTimeout(() => void this.connect(), delay);
   }
+
   /** Takes a signed-in link as the connection, the desktop's word on its addresses with it. */
   private attach({ socket, channel, host, frame }: Link) {
     this.socket = socket;
@@ -455,6 +474,7 @@ export class RemoteClient {
     this.watchRoutes();
     this.setStatus("online");
   }
+
   /** While the link runs over a later route than it could, looks for an earlier one now and then. */
   private watchRoutes() {
     clearInterval(this.betterTimer);
@@ -465,6 +485,7 @@ export class RemoteClient {
       this.options.betterRouteMs ?? 60_000,
     );
   }
+
   /** Hosts ahead of the current one in the order, but not those that just lost to it. */
   private better() {
     const order = orderHosts(this.hosts.hosts, this.routes);
@@ -474,6 +495,7 @@ export class RemoteClient {
       (h) => (this.worse.get(h) ?? 0) < cooled,
     );
   }
+
   /**
    * Signs in over an earlier route beside the running link and swaps to it
    * once it's in, so nothing shows as offline. Only between calls: an answer
@@ -507,6 +529,7 @@ export class RemoteClient {
       },
     });
   }
+
   /**
    * One route: connects, opens the channel under the pinned key and signs in.
    * `claim` decides whether the signed-in link is wanted; after that its
@@ -630,6 +653,7 @@ export class RemoteClient {
       quit();
     };
   }
+
   private receive(frame: ServerFrame) {
     if (
       frame.t === "tick" &&
@@ -663,6 +687,7 @@ export class RemoteClient {
       this.setStatus("denied", frame.reason);
     }
   }
+
   private rebuild(event: WireEvent): RemoteEvent | undefined {
     if (event.kind === "messagePatch") {
       const prev = this.streaming.get(event.patch.id);
@@ -688,12 +713,14 @@ export class RemoteClient {
     } else if (event.kind === "chats") this.chats = event.chats;
     return event;
   }
+
   private lost() {
     this.drop("Connection lost.");
     if (this.closed || this.status === "denied") return;
     this.setStatus("offline", "Connection lost.");
     this.scheduleRetry();
   }
+
   private keepAlive(socket: WebSocket) {
     this.heard = Date.now();
     clearTimeout(this.watchdog);
@@ -703,12 +730,14 @@ export class RemoteClient {
       if (this.socket === socket) this.lost();
     }, this.options.staleMs ?? 40000);
   }
+
   private sendFrame(frame: ClientFrame) {
     const compact = (this.bridge ?? 0) >= compactBridge;
     this.socket?.send(
       sealFrame(this.channel!, frame, compact, this.options.codec ?? jsCodec),
     );
   }
+
   private drop(reason: string) {
     clearTimeout(this.watchdog);
     clearInterval(this.betterTimer);

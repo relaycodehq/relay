@@ -11,6 +11,7 @@ let root: string;
 let fixture: Awaited<ReturnType<typeof openCodeAuthFixture>>;
 let scenarioFile: string;
 let log: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-opencode-auth-")));
   fixture = await openCodeAuthFixture();
@@ -26,12 +27,14 @@ beforeEach(async () => {
   );
   setLinkedAgents({ opencode: cli });
 });
+
 afterEach(async () => {
   await fixture.close();
   setLinkedAgents({});
   vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true });
 });
+
 const start = () =>
   openCodeAuth({
     kind: "oauth",

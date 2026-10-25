@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { runWorktreeCommand, type WorktreeEnv } from "./worktree-commands";
 
 let worktree: WorktreeEnv;
+
 beforeEach(async () => {
   const path = await realpath(await mkdtemp(join(tmpdir(), "relay-cmd-")));
   worktree = { path, root: "/checkout", branch: "relay/x", portOffset: 20 };
 });
+
 afterEach(() => rm(worktree.path, { recursive: true, force: true }));
 
 const alive = (pid: number) => {

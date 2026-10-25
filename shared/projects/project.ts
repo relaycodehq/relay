@@ -41,12 +41,14 @@ export interface ProjectComputer {
   /** The folder there has no Git repository. */
   plain?: true;
 }
+
 /** What reading the folder of a project on another computer says here. */
 export const onComputerMessage = (p: Pick<Project, "name" | "computer">) =>
   `${p.name} is on ${p.computer?.name ?? "another computer"}; its folder isn't on this one.`;
 const FOLDER_GONE = "This project’s folder is gone: ";
 /** What reading a project's folder says once the folder was moved or deleted. */
 export const folderGoneMessage = (path: string) => `${FOLDER_GONE}${path}`;
+
 /** The missing folder's path when `error` says the project's folder is gone. */
 export function goneFolder(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error ?? "");
@@ -54,6 +56,7 @@ export function goneFolder(error: unknown): string | null {
     ? message.slice(FOLDER_GONE.length)
     : null;
 }
+
 /** `relay-releases` → `Relay Releases`; letters after the first stay as typed. */
 export const projectTitle = (folder: string) =>
   folder

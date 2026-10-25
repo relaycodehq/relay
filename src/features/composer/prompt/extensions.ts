@@ -16,6 +16,7 @@ export const DRAFT_SYNC = "relayDraftSync";
 // Each accepted transaction's doc is the next one's `before`, so the length
 // before an edit is usually already known and each edit serializes once.
 const lengths = new WeakMap<PMNode, number>();
+
 function textLength(doc: PMNode) {
   let length = lengths.get(doc);
   if (length === undefined) lengths.set(doc, (length = promptText(doc).length));

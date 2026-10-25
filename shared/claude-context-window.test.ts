@@ -26,6 +26,7 @@ describe("Claude context window", () => {
       "claude-fable-5-1",
     );
   });
+
   it("finds the listed model for either window", () => {
     const models = [model("opus"), model("claude-fable-5-1[1m]")];
     expect(findClaudeModel(models, "opus[1m]")?.id).toBe("opus");
@@ -34,6 +35,7 @@ describe("Claude context window", () => {
     );
     expect(findClaudeModel(models, "")).toBeUndefined();
   });
+
   it("offers a 1M model the efforts of the model it runs", () => {
     // As the CLI lists it: no Extra high.
     const sonnet = {

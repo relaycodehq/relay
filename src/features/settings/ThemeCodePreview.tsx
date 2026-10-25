@@ -11,6 +11,7 @@ const before = [
   "  return done.reverse()[0] ?? null;",
   "}",
 ];
+
 const after = [
   "export function latest(thread: Thread) {",
   "  const done = thread.turns.filter(isDone);",
@@ -18,6 +19,7 @@ const after = [
   '  return done.at(-1)?.title ?? "Untitled";',
   "}",
 ];
+
 const changed = (line: number) => line > 0 && line < before.length - 1;
 
 /** A split diff in `look`'s colours, so a theme can be judged on real code. */

@@ -176,6 +176,7 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect(turns[1].turn.input[0].text).toContain("An unlisted choice");
   expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
 });
+
 it("resumes after a question reply without carrying its hidden-response markers into the resume", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -222,6 +223,7 @@ it("sends only messages the renderer doesn't hold at their current version", asy
   expect(rebuilt.messages[1]).toEqual(answer);
   expect(() => applyChatPatch(patch, undefined)).toThrow("missing a message");
 });
+
 it("streams locally, persists final answers, and resumes the same Codex session with selected settings", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2600");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -284,6 +286,7 @@ it("streams locally, persists final answers, and resumes the same Codex session 
     "The cache guard prevents duplicate requests.",
   );
 });
+
 it("runs a Read only turn in Codex's read-only sandbox, never asking", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -305,6 +308,7 @@ it("runs a Read only turn in Codex's read-only sandbox, never asking", async () 
   });
   expect((await chats.get(chat.id)).lastInput?.runtimeMode).toBe("read-only");
 });
+
 it("names a thread from its first message while the answer is still running", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   vi.stubEnv("RELAY_AGENT_TURN_MS", "4000");
@@ -329,6 +333,7 @@ it("names a thread from its first message while the answer is still running", as
   restart(() => {});
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
 });
+
 it("retries a missing title once, not every time the thread is read", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const generate = vi.spyOn(titleHelpers, "generateThreadTitle");
@@ -355,6 +360,7 @@ it("retries a missing title once, not every time the thread is read", async () =
   expect(await titleRuns()).toBe(1);
   expect((await chats.get(chat.id)).title).toBe("Cache guard behavior");
 });
+
 it("retries a title with the answering agent's own model after another agent took over", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -390,6 +396,7 @@ it("retries a title with the answering agent's own model after another agent too
   // Codex can't run Claude's model; it retries with its own settings.
   expect(await models()).not.toContain("claude-model");
 });
+
 it("waits for the first answer to name a thread of only screenshots", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -405,12 +412,14 @@ it("waits for the first answer to name a thread of only screenshots", async () =
     .find((r) => r.turn?.input[0].text.startsWith("Generate a short title"));
   expect(titling.turn.input[0].text).toContain('"answer"');
 });
+
 it("keeps the furthest read mark, and lists it for the desktop and phones", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.markSeen(chat.id, 500);
   await chats.markSeen(chat.id, 300);
   expect(chats.list(projectId).find((c) => c.id === chat.id)?.seenAt).toBe(500);
 });
+
 it("keeps a user's thread name over the prompt excerpt and generated titles", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -432,6 +441,7 @@ it("keeps a user's thread name over the prompt excerpt and generated titles", as
   restart(() => {});
   expect(chats.list(projectId)[0].title).toBe("Cache work");
 });
+
 it("keeps ordinary notes local, cancels a partial answer, and does not duplicate retried messages", async () => {
   const chat = await chats.create(projectId, { kind: "project" }),
     note = input("Consider a cache here.");
@@ -491,6 +501,7 @@ it("keeps ordinary notes local, cancels a partial answer, and does not duplicate
     (await chats.get(chat.id)).messages.filter((m) => m.id === another.id),
   ).toHaveLength(1);
 });
+
 it("lets a message's `to` decide who answers over its body's mention", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, { ...input("@codex later, maybe"), to: "message" });
@@ -512,6 +523,7 @@ it("lets a message's `to` decide who answers over its body's mention", async () 
     contextAgent: "codex",
   });
 });
+
 it("previews only the images a turn read, and only when they really are images", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();
@@ -558,6 +570,7 @@ it("previews only the images a turn read, and only when they really are images",
     "no longer on disk",
   );
 });
+
 it("keeps the images an answer shows as they were, also in a fork", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const shot = join(root, "shot.png");
@@ -582,6 +595,7 @@ it("keeps the images an answer shows as they were, also in a fork", async () => 
   const copied = fork.messages.find((m) => m.body === answer.body)!;
   expect(await chats.files.readImage(fork.id, copied.id, shot)).toBe(shown);
 });
+
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();
@@ -609,6 +623,7 @@ it("recovers an interrupted on-disk stream without discarding its partial answer
   );
   expect(events).toEqual([]);
 });
+
 it("validates selected PR evidence before saving a question and passes exact old-side context to the agent", async () => {
   await chats.dispose();
   const evidence = vi.fn(async () => ({
@@ -674,6 +689,7 @@ it("lists and rolls back only the files a turn's agent changed", async () => {
   await expect(readFile(join(repo, "src", "guard.ts"))).rejects.toThrow();
   expect(await readFile(join(repo, "stray.md"), "utf8")).toBe("Stray.\n");
 });
+
 it("shows the branch a turn left the checkout on, not the one it started on", async () => {
   const repo = join(root, "repo");
   const git = (...args: string[]) =>
@@ -710,6 +726,7 @@ it("shows the branch a turn left the checkout on, not the one it started on", as
     branch: "main",
   });
 });
+
 it("stops during provider initialization without waiting for the RPC timeout", async () => {
   vi.stubEnv("RELAY_AGENT_HOLD_INITIALIZE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -896,6 +913,7 @@ it("settles a quiet thread by itself until it's moved back by hand", async () =>
     vi.useRealTimers();
   }
 });
+
 it("keeps a pinned thread out of auto-settle and keeps when it was first pinned", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -913,6 +931,7 @@ it("keeps a pinned thread out of auto-settle and keeps when it was first pinned"
     vi.useRealTimers();
   }
 });
+
 it("keeps a note closed with I know this as known in its thread, and its line in the known list", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.dispose();

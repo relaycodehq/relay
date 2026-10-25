@@ -24,16 +24,20 @@ vi.mock("../../lib/api", () => ({
     progress: vi.fn(),
   },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 afterEach(() => vi.clearAllMocks());
+
 const account: Account = {
   id: "gitea",
   server: "https://git.example",
   user: { id: 1, login: "me" },
   persistent: true,
 };
+
 const project: Project = {
   id: "project",
   path: "/project",
@@ -41,6 +45,7 @@ const project: Project = {
   added: 0,
   repository: { server: account.server, owner: "team", name: "repo" },
 };
+
 const pull = (
   number: number,
   title: string,
@@ -71,6 +76,7 @@ const pull = (
   base: { ref: "main", sha: "b".repeat(40), repo: null },
   merge_base: "b".repeat(40),
 });
+
 const tick = () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

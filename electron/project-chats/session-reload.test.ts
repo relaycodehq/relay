@@ -25,6 +25,7 @@ const input = (body: string) => ({
   interactionMode: "default" as const,
   choice: { ...defaultAISettings.questions, model: "fixture-model" },
 });
+
 const settled = (id: string, count: number) =>
   vi.waitFor(async () => {
     const { messages } = await chats.get(id);

@@ -8,9 +8,11 @@ import { api } from "../../lib/api";
 import { PullRequestsPage } from "./PullRequestsPage";
 
 vi.mock("../../lib/api", () => ({ api: { search: vi.fn() } }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 afterEach(() => vi.clearAllMocks());
 
 const account: Account = {
@@ -19,6 +21,7 @@ const account: Account = {
   user: { id: 1, login: "me" },
   persistent: true,
 };
+
 const issue = (number: number): Issue => ({
   id: number,
   number,
@@ -38,6 +41,7 @@ const issue = (number: number): Issue => ({
   labels: [],
   pull_request: { merged: false },
 });
+
 const noop = () => {};
 const tick = async () =>
   act(async () => {

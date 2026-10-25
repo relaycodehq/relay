@@ -70,6 +70,7 @@ export interface CursorMethods {
   /** Sends a message into the turn that is running; rejects when it can't go in. */
   steer: { params: { run: string; text: string }; result: null };
 }
+
 export type CursorMethod = keyof CursorMethods;
 
 export interface CursorRequest<M extends CursorMethod = CursorMethod> {

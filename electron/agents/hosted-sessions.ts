@@ -7,6 +7,7 @@ import type { ProcessSpec } from "../agent-host/protocol";
 import { z } from "zod";
 
 let hosts: AgentHosts | undefined;
+
 /** Every agent's sessions run in the agent host from now on, so they outlive a restart of Relay. */
 export function hostAgents(agentHosts: AgentHosts | undefined) {
   hosts = agentHosts;
@@ -47,6 +48,7 @@ export async function foundSessions(
       (providerOf.safeParse(info.meta).data?.provider ?? "claude") === provider,
   );
 }
+
 const providerOf = z.object({ provider: z.string().optional() }).loose();
 
 /**
@@ -93,12 +95,15 @@ export class HostedSessions<Session> {
   get(key: string) {
     return this.live.get(key);
   }
+
   set(key: string, session: Session) {
     this.live.set(key, session);
   }
+
   delete(key: string) {
     return this.live.delete(key);
   }
+
   values() {
     return this.live.values();
   }

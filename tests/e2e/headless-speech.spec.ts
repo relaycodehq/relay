@@ -29,6 +29,7 @@ test("a headless Relay reads answers aloud to a phone, its engine run in a worke
     await readFile("dist-headless/speech-runtime.json", "utf8"),
   );
   const platform = `${process.platform}/${process.arch}`;
+
   test.skip(
     !manifest.onnxruntime.platforms.includes(platform),
     `No onnxruntime for ${platform}.`,

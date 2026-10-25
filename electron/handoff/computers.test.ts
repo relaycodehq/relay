@@ -10,6 +10,7 @@ import { pipeReady } from "../../shared/handoff";
 import type { routeCommand } from "./pipe-route";
 
 const cleanup: (() => Promise<unknown> | unknown)[] = [];
+
 afterEach(async () => {
   for (const step of cleanup.splice(0).reverse()) await step();
 });

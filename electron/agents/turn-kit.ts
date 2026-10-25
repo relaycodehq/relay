@@ -139,6 +139,7 @@ export class TurnText {
   }
 
   private shown = "";
+
   private publish() {
     const next = this.answer();
     if (next === this.shown) return;

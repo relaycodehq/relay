@@ -71,6 +71,7 @@ interface Props {
   /** Embedded in a workspace pane: controls move into the pane header. */
   slots?: PaneSlots;
 }
+
 /** One PR's review: its files' diffs, its conversation and the local changes beside it. */
 export function ReviewWorkspace({
   onDiscuss,

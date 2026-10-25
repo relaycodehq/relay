@@ -133,25 +133,30 @@ export class RemoteServer {
   private timer?: NodeJS.Timeout;
   private ticks = 0;
   constructor(private options: RemoteServerOptions) {}
+
   get port() {
     const address = this.server?.address();
     return typeof address === "object" && address
       ? address.port
       : this.options.port;
   }
+
   get listening() {
     return !!this.server;
   }
+
   /** Devices with an authenticated connection. */
   online() {
     return new Set(
       [...this.connections].flatMap((c) => (c.deviceId ? [c.deviceId] : [])),
     );
   }
+
   /** The address it listens on: Tailscale's, or every one with the local network allowed. */
   get host() {
     return this.server ? this.bound : undefined;
   }
+
   /** With `lan`, devices on the local network may connect as well as the tailnet's. */
   async listen(host: string, lan = false) {
     if (this.server) return;
@@ -190,6 +195,7 @@ export class RemoteServer {
     this.server = server;
     this.timer = setInterval(() => this.tick(), this.options.tickMs ?? 15_000);
   }
+
   async close() {
     clearInterval(this.timer);
     const server = this.server;
@@ -199,6 +205,7 @@ export class RemoteServer {
     if (server)
       await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+
   /** To every device online, or those `to` picks by id and the bridge they speak. */
   broadcast(
     event: RemoteEvent,
@@ -213,6 +220,7 @@ export class RemoteServer {
         if (c.link) c.link.event(event);
         else this.send(c, { t: "event", event });
   }
+
   /**
    * Ends the session of a device removed since it signed in, as the removal
    * can land while its sign-in is still under way and miss `disconnect`.
@@ -223,6 +231,7 @@ export class RemoteServer {
     c.socket.close();
     return false;
   }
+
   /** Ends a revoked device's sessions right away. */
   disconnect(deviceId: string, reason = "This phone was removed in Relay.") {
     for (const c of this.connections)
@@ -231,6 +240,7 @@ export class RemoteServer {
         c.socket.close();
       }
   }
+
   private accept(socket: WebSocket, key: KeyPair, from: string) {
     if (!makeRoom(this.connections, from)) return socket.terminate();
     const c: Connection = { socket, from, alive: true };
@@ -278,6 +288,7 @@ export class RemoteServer {
       void this.receive(c, frame as ClientFrame);
     });
   }
+
   private async receive(c: Connection, frame: ClientFrame) {
     const { devices } = this.options;
     if (!c.deviceId) {
@@ -395,6 +406,7 @@ export class RemoteServer {
       });
     }
   }
+
   /** Only from a signed-in device that said it speaks the tunnel; anyone else isn't a phone of ours. */
   private tunnel(c: Connection, frame: TunnelFrame) {
     if (!c.deviceId || (c.bridge ?? 0) < tunnelBridge)
@@ -413,6 +425,7 @@ export class RemoteServer {
         reason: "Only a paired phone can open ports here.",
       });
   }
+
   private tick() {
     const slow = ++this.ticks % backgroundTickEvery !== 0;
     for (const c of this.connections) {
@@ -429,6 +442,7 @@ export class RemoteServer {
       }
     }
   }
+
   /** The bytes it took on the wire. */
   private send(c: Connection, frame: ServerFrame) {
     if (!c.channel || c.socket.readyState !== c.socket.OPEN) return 0;

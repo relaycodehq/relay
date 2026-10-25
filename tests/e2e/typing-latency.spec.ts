@@ -26,6 +26,7 @@ import { fakeCli } from "../fixtures/fake-cli";
 // RELAY_PERF_VARIANTS='[["label", "css"], …]' tries CSS changes on the same
 // running threads; RELAY_PERF_OUT picks where the JSON goes.
 test.skip(process.env.RELAY_PERF !== "1", "benchmark; set RELAY_PERF=1");
+
 test.setTimeout(240_000);
 
 const TEXT = "the quick brown fox jumps over the lazy dog again";

@@ -176,6 +176,7 @@ export function sessionCallbacks(holder: Asker) {
   };
   return { promptSubmit, canUseTool, onElicitation };
 }
+
 export function hostedHandlers(holder: Asker): HostedHandlers {
   const { promptSubmit, canUseTool, onElicitation } = sessionCallbacks(holder);
   return {

@@ -67,6 +67,7 @@ export class Tunnel {
   private done = false;
   private window: number;
   private maxStreams: number;
+
   constructor(
     private send: (frame: TunnelFrame) => void,
     private options: TunnelOptions,

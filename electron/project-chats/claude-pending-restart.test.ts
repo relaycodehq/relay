@@ -19,6 +19,7 @@ vi.mock("../agents/claude/project", async (actual) => ({
 
 let root: string, store: Store, projects: Projects, chats: ProjectChats;
 let projectId: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-pending-")));
   const repo = join(root, "repo");
@@ -30,6 +31,7 @@ beforeEach(async () => {
   projectId = (await projects.add(repo, null)).id;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
 });
+
 afterEach(async () => {
   vi.useRealTimers();
   vi.mocked(claudePending).mockReset().mockReturnValue([]);
@@ -52,6 +54,7 @@ const task: ChatPending = {
   description: "Run A/B",
   since: 1,
 };
+
 const loop: ChatPending = {
   kind: "wakeup",
   id: "loop",

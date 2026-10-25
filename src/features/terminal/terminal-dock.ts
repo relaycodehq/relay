@@ -27,6 +27,7 @@ const docks = (() => {
       : [],
   );
 })();
+
 /** Whether each thread's dock shows; only for as long as the window lives. */
 const openKeys = new Set<string>();
 const listeners = new Set<() => void>();
@@ -35,6 +36,7 @@ const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => void listeners.delete(listener);
 };
+
 function emit() {
   for (const listener of listeners) listener();
 }

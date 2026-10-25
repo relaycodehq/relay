@@ -13,6 +13,7 @@ import type {
 } from "../../shared/pull-request-create";
 import { errorMessage } from "../../shared/error-message";
 type RepositoryInfo = Awaited<ReturnType<PullHost["repository"]>>;
+
 interface SavedPlan {
   plan: PullRequestPlan;
   root: string;
@@ -23,6 +24,7 @@ interface SavedPlan {
   expires: number;
   result?: CreatedPullRequest;
 }
+
 /** A remote without credentials or a `.git` suffix, for comparing URLs. */
 function identity(raw: string) {
   const u = remoteUrl(raw);
@@ -30,6 +32,7 @@ function identity(raw: string) {
     ? `${u.protocol}//${u.host}${u.pathname.replace(/\.git\/?$/, "").replace(/\/$/, "")}`
     : null;
 }
+
 const asBranchPull = (
   repo: Repo,
   p: Pick<Pull, "number" | "title" | "base" | "html_url">,
@@ -39,6 +42,7 @@ const asBranchPull = (
   base: p.base.ref,
   url: p.html_url,
 });
+
 async function openPulls(client: PullHost, repo: Repo) {
   const values: PullListing[] = [];
   for (let page = 1; page <= 100; page++) {
@@ -50,6 +54,7 @@ async function openPulls(client: PullHost, repo: Repo) {
     "This repository has too many open PRs to load safely. Open the PR on its host.",
   );
 }
+
 export async function branchPulls(
   root: string,
   client: PullHost,
@@ -66,6 +71,7 @@ export async function branchPulls(
     )
     .map((p) => asBranchPull(repo, p));
 }
+
 const remoteHead = (client: PullHost, repo: Repo, branch: string) =>
   client.branchHead(repo, branch);
 async function matchingRemote(
@@ -98,8 +104,10 @@ async function matchingRemote(
   }
   return null;
 }
+
 export class PullRequestCreation {
   private plans = new Map<string, SavedPlan>();
+
   async prepare(
     root: string,
     client: PullHost,
@@ -177,6 +185,7 @@ export class PullRequestCreation {
     });
     return plan;
   }
+
   async create(
     root: string,
     client: PullHost,

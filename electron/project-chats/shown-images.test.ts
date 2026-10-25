@@ -5,9 +5,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { ShownImages } from "./shown-images";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-shown-"));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 it("drops the oldest kept images once they outgrow the cap, and their emptied folders", async () => {

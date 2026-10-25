@@ -3,11 +3,13 @@ import type { StoredAccounts } from "../../../shared/agent-accounts";
 import type { Store } from "../../app/store";
 
 const signedIn = new Set<string>();
+
 vi.mock("./identity", () => ({
   readIdentity: async (provider: string, id: string) => ({
     signedIn: signedIn.has(`${provider}:${id}`),
   }),
 }));
+
 vi.mock("./profiles", () => ({
   accountEnv: () => ({}),
   prepareProfile: async () => "",
@@ -16,6 +18,7 @@ vi.mock("./profiles", () => ({
   usualHome: (provider: string) => `/home/.${provider}`,
   profileDir: (provider: string, id: string) => `/profiles/${provider}/${id}`,
 }));
+
 const { AgentAccounts, accountFor, accountHomes } = await import(".");
 
 function fakeStore(saved: StoredAccounts) {
@@ -29,6 +32,7 @@ function fakeStore(saved: StoredAccounts) {
     },
   } as unknown as Store;
 }
+
 const three: StoredAccounts = {
   accounts: [
     { provider: "claude", id: "default", label: "Personal" },

@@ -12,6 +12,7 @@ const choices = [
   { value: "14", label: "After 2 weeks" },
   { value: "30", label: "After 30 days" },
 ] as const;
+
 type Choice = (typeof choices)[number]["value"];
 
 /** How long a thread stays quiet before it settles by itself; off turns merged-PR settling off too. */

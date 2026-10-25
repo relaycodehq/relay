@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { digestSchema, filePathSchema } from "./validation";
 type CheckProvider = "angular" | "typescript";
+
 export interface CheckTarget {
   id: string;
   label: string;
   config: string;
   provider: CheckProvider;
 }
+
 /** Whether a target's checks can read `path`: scripts, and templates for Angular. */
 export const checksCover = (target: CheckTarget | undefined, path: string) =>
   /\.[cm]?[jt]sx?$/.test(path) ||
@@ -17,6 +19,7 @@ export interface ProjectCheckInfo {
   targets: CheckTarget[];
   note?: string;
 }
+
 /** The checker's heap limit in MB, unless its project sets one. */
 export const CHECKS_MEMORY_MB = 768;
 export const checksMemoryChoices = [512, 768, 1024, 1536, 2048, 4096];
@@ -32,11 +35,13 @@ export interface ProjectDiagnostic {
   code: string;
   message: string;
 }
+
 export interface DiagnosticCounts {
   errors: number;
   warnings: number;
   suggestions: number;
 }
+
 export function diagnosticSummary(counts: DiagnosticCounts) {
   const count = (n: number, label: string) =>
     `${n} ${label}${n === 1 ? "" : "s"}`;
@@ -46,6 +51,7 @@ export function diagnosticSummary(counts: DiagnosticCounts) {
     ...(counts.suggestions ? [count(counts.suggestions, "suggestion")] : []),
   ].join(" · ");
 }
+
 export function diagnosticSeverity(counts: DiagnosticCounts) {
   return counts.errors
     ? "error"
@@ -55,9 +61,11 @@ export function diagnosticSeverity(counts: DiagnosticCounts) {
         ? "info"
         : undefined;
 }
+
 interface CheckedFile extends DiagnosticCounts {
   hash: string;
 }
+
 export interface ProjectCheckState extends DiagnosticCounts {
   id: string;
   head: string;
@@ -79,6 +87,7 @@ export interface ProjectCheckState extends DiagnosticCounts {
   /** The project whose settings hold the limit; absent for a PR folder no project holds. */
   projectId?: string;
 }
+
 export interface SymbolLocation {
   path: string;
   line: number;
@@ -87,6 +96,7 @@ export interface SymbolLocation {
   preview: string;
   hash: string;
 }
+
 export const symbolQuerySchema = z
   .object({
     path: filePathSchema,
@@ -97,6 +107,7 @@ export const symbolQuerySchema = z
   })
   .strict();
 export type SymbolQuery = z.infer<typeof symbolQuerySchema>;
+
 export interface SymbolResult {
   source?: { path: string; text: string; hash: string };
   display: string;

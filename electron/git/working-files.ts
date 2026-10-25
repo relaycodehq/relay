@@ -6,14 +6,17 @@ import { randomUUID } from "node:crypto";
 import { digest } from "../util/hash";
 import { workingPathSchema } from "../../shared/working-tree";
 export const textLimit = 2 * 1024 * 1024;
+
 export interface WorkingFile {
   contents: string;
   hash: string;
   mode: number;
 }
+
 /** Content that isn't editable text (binary, oversized, not UTF-8, a Git LFS pointer), which diffs show as a placeholder. */
 export class NotText extends Error {}
 export const tooLarge = "Text files larger than 2 MiB are not supported here.";
+
 export function decodeText(bytes: Buffer): string {
   if (bytes.length > textLimit) throw new NotText(tooLarge);
   if (bytes.includes(0))
@@ -32,6 +35,7 @@ export function decodeText(bytes: Buffer): string {
     throw new NotText("Git LFS files must be edited in your IDE.");
   return text;
 }
+
 export async function safeWorkingPath(
   root: string,
   path: string,
@@ -64,6 +68,7 @@ export async function safeWorkingPath(
   }
   return full;
 }
+
 export async function readWorkingFile(
   root: string,
   path: string,
@@ -113,10 +118,13 @@ export async function readWorkingFile(
     await handle.close();
   }
 }
+
 const saves = keyedQueue();
+
 export async function flushWorkingFiles() {
   await Promise.allSettled(saves.pending());
 }
+
 export async function writeWorkingFile(
   root: string,
   path: string,

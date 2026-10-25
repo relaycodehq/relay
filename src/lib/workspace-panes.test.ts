@@ -3,6 +3,7 @@ import { fitPanes, paneFrame, panesOf, type PaneId } from "./workspace-panes";
 
 const order: PaneId[] = ["chat", "changes", "panel"];
 const weights = { chat: 1, changes: 2, panel: 3 };
+
 const layout = (...open: PaneId[]) => ({
   order,
   weights,
@@ -20,6 +21,7 @@ describe("paneFrame", () => {
     expect(paneFrame(l, "chat").grow).toBe(1 / 4);
     expect(paneFrame(l, "panel").grow).toBe(3 / 4);
   });
+
   it("resizes a pane against the open pane before it, skipping closed ones", () => {
     const l = layout("chat", "panel");
     expect(paneFrame(l, "chat").previous).toBeUndefined();
@@ -30,6 +32,7 @@ describe("paneFrame", () => {
       previous: undefined,
     });
   });
+
   it("gives a zoomed pane the whole row and hides the rest without closing them", () => {
     const l = {
       ...layout("chat", "changes", "panel"),
@@ -48,10 +51,12 @@ describe("paneFrame", () => {
 
 describe("fitPanes", () => {
   const all: PaneId[] = ["chat", "changes", "panel"];
+
   it("keeps every pane while the row has their minimum widths", () => {
     expect(fitPanes(all, all, 1040)).toBe(all);
     expect(fitPanes(all, all, undefined)).toBe(all);
   });
+
   it("keeps the latest pane and the chat, hiding the least recent other", () => {
     expect(fitPanes(all, ["chat", "changes", "panel"], 800)).toEqual([
       "chat",
@@ -62,6 +67,7 @@ describe("fitPanes", () => {
       "panel",
     ]);
   });
+
   it("gives the latest pane the row before the chat when only one fits", () => {
     expect(fitPanes(["chat", "changes"], all, 560)).toEqual(["changes"]);
     expect(fitPanes(["chat", "panel"], all, 200)).toEqual(["panel"]);
@@ -83,6 +89,7 @@ describe("layouts saved before the panel", () => {
     vi.unstubAllGlobals();
     vi.resetModules();
   });
+
   it("puts the panel where Files was and opens it for threads that had Files or History", async () => {
     const saved: Record<string, string> = {
       "relay-workspace-panes": JSON.stringify({

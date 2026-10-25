@@ -89,6 +89,7 @@ interface GithubPull extends Omit<Pull, "merge_base" | "merged" | "body"> {
   merged?: boolean;
   merged_at: string | null;
 }
+
 interface GithubReviewComment extends Omit<
   ReviewComment,
   "position" | "original_position" | "resolver"
@@ -97,6 +98,7 @@ interface GithubReviewComment extends Omit<
   original_line: number | null;
   side: "LEFT" | "RIGHT" | null;
 }
+
 interface Thread {
   id: string;
   resolvedBy: { login: string; databaseId: number } | null;
@@ -109,7 +111,9 @@ const reviewStates: Record<string, string> = {
   CHANGES_REQUESTED: "REQUEST_CHANGES",
   COMMENTED: "COMMENT",
 };
+
 const reviewEvents: Record<string, string> = { APPROVED: "APPROVE" };
+
 const fileStatuses: Record<string, string> = {
   removed: "deleted",
   changed: "modified",
@@ -125,6 +129,7 @@ const asPull = (p: GithubPull, mergeBase: string): Pull => ({
   deletions: p.deletions ?? 0,
   changed_files: p.changed_files ?? 0,
 });
+
 const asReview = (r: Review): Review => {
   const dismissed = r.state === "DISMISSED";
   return {
@@ -163,6 +168,7 @@ export class GitHub implements PullHost {
       value: Promise<[GithubReviewComment[], Thread[]]>;
     }
   >();
+
   constructor(
     public account: Account,
     private token: string,
@@ -171,6 +177,7 @@ export class GitHub implements PullHost {
   ) {
     this.requests = new HostRequests(fetchRequest);
   }
+
   static async connect(
     fetchRequest: FetchRequest,
     { token, rejected }: GithubCredential,
@@ -199,9 +206,11 @@ export class GitHub implements PullHost {
     };
     return client;
   }
+
   dispose() {
     this.requests.dispose();
   }
+
   request<T>(
     path: string,
     options: RequestOptions & { accept?: string } = {},
@@ -247,6 +256,7 @@ export class GitHub implements PullHost {
       },
     );
   }
+
   async page<T>(
     path: string,
     page: number,
@@ -263,6 +273,7 @@ export class GitHub implements PullHost {
         : null,
     };
   }
+
   private async all<T>(path: string, signal?: AbortSignal) {
     const values: T[] = [];
     for (let page = 1; page <= 100; page++) {
@@ -274,6 +285,7 @@ export class GitHub implements PullHost {
       "This pull request has too much to load safely. Open it on GitHub.",
     );
   }
+
   private async graphql<T>(query: string, variables: Record<string, unknown>) {
     const { data } = await this.request<{
       data?: T;
@@ -285,12 +297,15 @@ export class GitHub implements PullHost {
       );
     return data.data;
   }
+
   repo(r: Repo) {
     return `/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.name)}`;
   }
+
   pr(r: PullRef) {
     return `${this.repo(r)}/pulls/${r.number}`;
   }
+
   /** Where `head` left `base`, which GitHub's pull doesn't say itself. */
   private async mergeBase(r: Repo, base: string, head: string) {
     const key = `${r.owner}/${r.name}:${base}...${head}`;
@@ -304,9 +319,11 @@ export class GitHub implements PullHost {
     this.mergeBases.set(key, data.merge_base_commit.sha);
     return data.merge_base_commit.sha;
   }
+
   headRef(p: Pull) {
     return `refs/pull/${p.number}/head`;
   }
+
   async pull(r: PullRef, signal?: AbortSignal): Promise<Pull> {
     const p = (await this.request<GithubPull>(this.pr(r), { signal })).data;
     return {
@@ -315,6 +332,7 @@ export class GitHub implements PullHost {
       server: GITHUB_SERVER,
     };
   }
+
   /** A page of the repository's pulls, newest first; list entries carry no merge base or counts. */
   async pulls(
     r: Repo,
@@ -339,9 +357,11 @@ export class GitHub implements PullHost {
       })),
     };
   }
+
   mergedAmong(r: Repo, numbers: number[], signal: AbortSignal) {
     return mergedPulls(this, r, numbers, signal);
   }
+
   async search(
     filter: SearchFilter,
     q: string,
@@ -366,6 +386,7 @@ export class GitHub implements PullHost {
       total: data.total_count,
     };
   }
+
   async files(
     r: PullRef,
     page: number,
@@ -384,6 +405,7 @@ export class GitHub implements PullHost {
       })),
     };
   }
+
   /**
    * Paths that differ between two commits. GitHub only compares from the merge
    * base, which is the same thing when `from` is an ancestor of `to`; null
@@ -416,6 +438,7 @@ export class GitHub implements PullHost {
       return null;
     }
   }
+
   async reviews(r: PullRef, page: number, signal?: AbortSignal) {
     const found = await this.page<Review>(
       `${this.pr(r)}/reviews`,
@@ -424,6 +447,7 @@ export class GitHub implements PullHost {
     );
     return { ...found, items: found.items.map(asReview) };
   }
+
   /** The review's comments, the line each sits on, and whether its thread is resolved. */
   async reviewComments(
     r: PullRef,
@@ -452,6 +476,7 @@ export class GitHub implements PullHost {
         };
       });
   }
+
   private discussionOf(r: PullRef, signal?: AbortSignal) {
     const key = this.pr(r);
     const known = this.lineDiscussion.get(key);
@@ -466,6 +491,7 @@ export class GitHub implements PullHost {
       this.lineDiscussion.delete(this.lineDiscussion.keys().next().value!);
     return value;
   }
+
   /** Review threads, which only GraphQL knows; resolving is a thread's, not a comment's. */
   private async threads(r: PullRef): Promise<Thread[]> {
     const threads: Thread[] = [];
@@ -518,6 +544,7 @@ export class GitHub implements PullHost {
     }
     return threads;
   }
+
   /** The PR's conversation: comments outside any review. */
   discussion(r: PullRef, page: number) {
     return this.page<Discussion>(
@@ -525,6 +552,7 @@ export class GitHub implements PullHost {
       page,
     );
   }
+
   async comment(r: PullRef, body: string) {
     return (
       await this.request(`${this.repo(r)}/issues/${r.number}/comments`, {
@@ -533,6 +561,7 @@ export class GitHub implements PullHost {
       })
     ).data;
   }
+
   async reply(r: PullRef, comment: number, body: string) {
     this.lineDiscussion.delete(this.pr(r));
     const { data } = await this.request(
@@ -542,6 +571,7 @@ export class GitHub implements PullHost {
     this.lineDiscussion.delete(this.pr(r));
     return data;
   }
+
   async resolveComment(r: PullRef, comment: number, resolved: boolean) {
     this.lineDiscussion.delete(this.pr(r));
     const thread = (await this.threads(r)).find((t) =>
@@ -554,6 +584,7 @@ export class GitHub implements PullHost {
     );
     this.lineDiscussion.delete(this.pr(r));
   }
+
   async contents(
     r: PullRef,
     file: ChangedFile,
@@ -567,6 +598,7 @@ export class GitHub implements PullHost {
       );
     return this.contentsAt(p, file);
   }
+
   contentsAt(p: Pull, file: ChangedFile, signal?: AbortSignal) {
     // A fork's head commits are reachable from the base repository too.
     return filePair(p, file, async (sha, path) => {
@@ -584,6 +616,7 @@ export class GitHub implements PullHost {
       }
     });
   }
+
   async submit(
     r: PullRef,
     head: string,
@@ -637,9 +670,11 @@ export class GitHub implements PullHost {
       ).data,
     );
   }
+
   async repository(r: Repo) {
     return (await this.request<RepositoryInfo>(this.repo(r))).data;
   }
+
   async hasRepository(r: Repo) {
     const found = await this.request<{ full_name: string }>(this.repo(r)).catch(
       (e: unknown) => {
@@ -653,9 +688,11 @@ export class GitHub implements PullHost {
         `${r.owner}/${r.name}`.toLowerCase()
     );
   }
+
   async branches(r: Repo) {
     return this.all<{ name: string }>(`${this.repo(r)}/branches`);
   }
+
   /** The branch's tip, or null when the server has no such branch. */
   async branchHead(r: Repo, branch: string) {
     try {
@@ -669,6 +706,7 @@ export class GitHub implements PullHost {
       throw e;
     }
   }
+
   async createPull(
     r: Repo,
     input: { head: string; base: string; title: string; body: string },
@@ -682,6 +720,7 @@ export class GitHub implements PullHost {
     ).data;
     return { pull: asPull(p, ""), draftIgnored: false };
   }
+
   parseUrl(url: string) {
     return parseGithubPullUrl(url);
   }

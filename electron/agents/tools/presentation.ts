@@ -38,6 +38,7 @@ export function sourceOf(scope: string | undefined): AgentToolSource {
       return "other";
   }
 }
+
 // Only this page lists Claude's plugin skills; the composer reads Claude's skill folders alone.
 const claudePlugin = (path: string) =>
   /\/\.claude\/plugins\//.test(path.replaceAll("\\", "/"));

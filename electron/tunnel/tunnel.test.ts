@@ -26,6 +26,7 @@ vi.mock("node:zlib", async (actual) => {
 });
 
 const cleanup: (() => unknown)[] = [];
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
 });

@@ -2,17 +2,20 @@ import type { HelperProvider, ReasoningEffort } from "./settings";
 import type { ChangedFile, Progress } from "./types";
 export const TRIAGE_VERSION = 2;
 export const TRIAGE_MODEL = "gpt-5.6-luna";
+
 export interface ChangeGroup {
   id: string;
   name: string;
   description: string;
   paths: string[];
 }
+
 export interface TriageUsage {
   inputTokens: number;
   outputTokens: number;
   batches: number;
 }
+
 export interface TriageResult {
   version: number;
   revision: string;
@@ -30,6 +33,7 @@ export interface TriageResult {
   usage: TriageUsage;
   notice?: string;
 }
+
 export interface TriageState {
   model?: string;
   fast?: boolean;
@@ -51,6 +55,7 @@ export interface TriageState {
   error?: string;
   result?: TriageResult;
 }
+
 export const isAnalyzing = (state?: TriageState | null) =>
   state?.status === "scanning" ||
   state?.status === "classifying" ||

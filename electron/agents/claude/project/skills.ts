@@ -64,6 +64,7 @@ function repositoryRoot(cwd: string) {
 }
 
 type Override = { enabled: boolean; userInvocationOnly: boolean };
+
 const overrideValues: Record<string, Override> = {
   on: { enabled: true, userInvocationOnly: false },
   "name-only": { enabled: true, userInvocationOnly: false },

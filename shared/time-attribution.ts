@@ -15,17 +15,20 @@ export interface TurnRun {
   start: number;
   end: number;
 }
+
 /** A moment the person was on a project: a prompt, an answer read, a thread open. */
 export interface Touch {
   projectId: string;
   chatId?: string;
   at: number;
 }
+
 export interface WorkSpan {
   start: number;
   end: number;
   pauses: { start: number; end?: number }[];
 }
+
 export interface AttributionOptions {
   /** How long a touch keeps its project busy without anything else happening. */
   idleCap: number;
@@ -36,6 +39,7 @@ export interface AttributionOptions {
   /** Projects that are tracked; the rest count as "other". */
   included: (projectId: string) => boolean;
 }
+
 export interface TimePiece {
   /** Null when nobody owns it: idle time, or projects that aren't tracked. */
   projectId: string | null;

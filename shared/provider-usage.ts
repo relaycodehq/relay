@@ -18,12 +18,14 @@ const usageWindowSchema = z.object({
   resetsAt: z.number().nullable(),
   periodMs: z.number().positive(),
 });
+
 const usageCreditsSchema = z.object({
   balance: z.number().min(0),
   unlimited: z.boolean(),
   /** Codex's guess at how many local messages the balance buys, low to high. */
   messages: z.tuple([z.number(), z.number()]).nullish(),
 });
+
 const savedResetsSchema = z.object({
   count: z.number().int().min(1),
   /** How many Codex would apply right now; null when it didn't say. */
@@ -38,6 +40,7 @@ const savedResetsSchema = z.object({
     )
     .max(50),
 });
+
 export const providerUsageSchema = z
   .object({
     provider: usageProviderSchema,
@@ -64,7 +67,9 @@ export type CodexResetResult = {
   /** The account's limits read again afterwards. */
   usage: ProviderUsage;
 };
+
 export type MeterPace = "ok" | "warn" | "hot" | "spent";
+
 export type UsageMeter = {
   kind: UsageKind;
   id?: string;

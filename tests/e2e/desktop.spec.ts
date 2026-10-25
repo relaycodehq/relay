@@ -22,9 +22,11 @@ let app: ElectronApplication,
   fixture: Awaited<ReturnType<typeof fixtureServer>>,
   dataDir: string;
 const screenshots = resolve("test-results/screenshots");
+
 // The tests share one app and build on each other's state, so a failure
 // stops the file instead of the rest failing on a fresh, signed-out app.
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   await mkdir(screenshots, { recursive: true });
   fixture = await fixtureServer();
@@ -45,10 +47,12 @@ test.beforeAll(async () => {
   });
   page.on("pageerror", (e) => console.error("RENDERER ERROR", e));
 });
+
 test.afterAll(async () => {
   await app?.close();
   await fixture?.close();
 });
+
 test("native app: connect, lazy review, inline threads, drafts, restart, large diff", async () => {
   await expect(
     page.getByRole("heading", { name: "Your project. Your conversation." }),

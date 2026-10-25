@@ -10,6 +10,7 @@ import { pasteFile, pasteText } from "./edits";
 
 const content = (text: string) => promptContent(text, {});
 const editors: Editor[] = [];
+
 // Unmounted, as there is no DOM here. Tiptap installs the plugins only as it
 // mounts, so they go in by hand; the limit is one of them.
 const draft = (text: string) => {
@@ -24,6 +25,7 @@ const draft = (text: string) => {
   editors.push(editor);
   return editor;
 };
+
 afterEach(() => editors.splice(0).forEach((editor) => editor.destroy()));
 const type = (editor: Editor, from: number, text: string, to = from) =>
   editor.view.dispatch(editor.state.tr.insertText(text, from, to));

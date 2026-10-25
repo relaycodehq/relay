@@ -58,6 +58,7 @@ function sdkPackage(version: string, extra: Entry[] = []) {
     ...extra,
   ]);
 }
+
 const platformPackage = (version: string) =>
   tarball([
     { name: "package/package.json", body: `{"version":"${version}"}` },
@@ -120,9 +121,11 @@ const lockFor = (
 });
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-cursor-sdk-"));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const mac = { platform: "darwin", arch: "arm64" };

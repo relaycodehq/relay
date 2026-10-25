@@ -10,10 +10,13 @@ const current: { agent: AgentProvider; models: AgentModel[] } = {
   agent: "claude",
   models: [],
 };
+
 vi.mock("../../lib/api", () => ({ api: {} }));
+
 vi.mock("../agents/useAISettings", () => ({
   useAISettings: () => ({ data: { threadProvider: current.agent } }),
 }));
+
 vi.mock("../agents/useCatalogs", () => ({
   useCatalogs: () => ({ modelsOf: () => current.models }),
 }));

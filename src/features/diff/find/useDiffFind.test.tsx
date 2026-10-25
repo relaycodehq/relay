@@ -10,10 +10,12 @@ vi.mock("./diff-find", async (original) => {
   const actual = await original<typeof import("./diff-find")>();
   return { ...actual, diffLines: vi.fn(actual.diffLines) };
 });
+
 vi.mock("../../../lib/shortcuts", () => ({
   matches: (_: string, e: KeyboardEvent) => e.key === "f" && e.ctrlKey,
   popupOpen: () => false,
 }));
+
 vi.mock("../../../ui/ui", () => ({
   IconButton: ({
     label,
@@ -22,18 +24,22 @@ vi.mock("../../../ui/ui", () => ({
     <button aria-label={label} {...props} />
   ),
 }));
+
 vi.mock("./find-highlights", () => ({
   drawnRanges: () => ({ current: [], all: [] }),
   revealAcross: vi.fn(),
   setFindRanges: vi.fn(),
   viewerRoots: () => [],
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const host = document.createElement("div");
 document.body.append(host);
 const root = createRoot(host);
+
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();

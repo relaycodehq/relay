@@ -9,6 +9,7 @@ import { toolText, type RelayToolArgs, type ToolResult } from "../relay-mcp/tool
 import type { lookAtPage, PageLook } from "./look";
 
 export type RenderToolName = "show_html" | "preview_html";
+
 export const renderToolNames = new Set<string>([
   "show_html",
   "preview_html",

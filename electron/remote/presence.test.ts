@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({}));
+
 import {
   Presence,
   type PresenceEvent,

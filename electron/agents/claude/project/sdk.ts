@@ -23,12 +23,14 @@ export async function sdk(): Promise<
       : "@anthropic-ai/claude-agent-sdk";
   return import(specifier);
 }
+
 export type ClaudeStream = ReturnType<
   typeof import("@anthropic-ai/claude-agent-sdk").query
 >;
 export type SDKMessage = import("@anthropic-ai/claude-agent-sdk").SDKMessage;
 /** What Relay prompts a session with; closing it ends the session's input. */
 export type ClaudeInput = AsyncQueue<SDKUserMessage>;
+
 /** The settings the session runs with; `getSettings` is missing from the SDK's types. */
 export async function readSettings(stream: ClaudeStream) {
   const withSettings = stream as ClaudeStream & {
@@ -36,8 +38,10 @@ export async function readSettings(stream: ClaudeStream) {
   };
   return claudeDefaultsFrom(await withSettings.getSettings?.());
 }
+
 // SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
 export const chromeArgs = { chrome: null };
+
 /**
  * Runs `work` on a throwaway Claude session with no prompt and no MCP servers;
  * closed after. `kind` and `account` name it in what `main.log` says about
@@ -76,6 +80,7 @@ export async function withProbe<T>(
     trace.closed();
   }
 }
+
 /** A prompt's screenshots, as the image blocks of a user message. */
 export const claudeImages = (images: AgentOptions["images"]) =>
   Promise.all(

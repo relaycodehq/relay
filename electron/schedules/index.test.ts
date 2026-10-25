@@ -84,6 +84,7 @@ beforeEach(() => {
   // Thursday 29 Oct 2026, 10:00.
   vi.setSystemTime(new Date(2026, 9, 29, 10));
 });
+
 afterEach(() => {
   vi.useRealTimers();
 });

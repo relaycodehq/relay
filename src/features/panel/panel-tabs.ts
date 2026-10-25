@@ -15,6 +15,7 @@ export interface PanelTab {
   /** A terminal tab's shell, one of the thread's. */
   slot?: string;
 }
+
 interface PanelState {
   thread: string;
   tabs: PanelTab[];
@@ -125,6 +126,7 @@ function withBrowser(s: Omit<PanelState, "thread">) {
 /** The mounted panels, by thread, so a reveal reaches the one on screen. */
 const mounted = new Map<string, () => void>();
 let revealing = false;
+
 /** An agent opened its thread's preview: the thread gets a Browser tab. */
 function followReveals() {
   if (revealing) return;

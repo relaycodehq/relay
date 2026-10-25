@@ -4,6 +4,7 @@ import { runClaudeProject } from "./index";
 import type { ThreadGoal } from "../../../../shared/goal";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+
 vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
   installStamp: async (path: string) => `${path} 2.1.288`,
@@ -12,6 +13,7 @@ vi.mock("../../../platform/executables", () => ({
 // Frames as Claude Code 2.1.288 wrote them for `/goal` over the SDK.
 const session_id = "session";
 const objective = "one.txt, two.txt and three.txt exist";
+
 const said = (text: string, model = "claude-haiku-4-5-20251001") => ({
   type: "assistant",
   parent_tool_use_id: null,
@@ -23,6 +25,7 @@ const said = (text: string, model = "claude-haiku-4-5-20251001") => ({
     usage: {},
   },
 });
+
 const unmet = (reason: string) => ({
   type: "user",
   parent_tool_use_id: null,
@@ -35,6 +38,7 @@ const unmet = (reason: string) => ({
     ],
   },
 });
+
 const blockCap = {
   type: "system",
   subtype: "notification",
@@ -42,6 +46,7 @@ const blockCap = {
   text: "A hook blocked the turn from ending 9 consecutive times — overriding and ending turn.",
   session_id,
 };
+
 const result = (text: string) => ({
   type: "result",
   subtype: "success",
@@ -50,6 +55,7 @@ const result = (text: string) => ({
   terminal_reason: "completed",
   session_id,
 });
+
 const started = (uuid: string) => ({
   type: "command_lifecycle",
   command_uuid: uuid,

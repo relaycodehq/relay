@@ -22,6 +22,7 @@ export class ThreadCreate {
     private core: ChatCore,
     private worktrees: Pick<ThreadWorktrees, "inRepoSettled">,
   ) {}
+
   async create(
     projectId: string,
     scope: ChatScope,
@@ -155,6 +156,7 @@ export class ThreadCreate {
     await this.core.storage.add(chat);
     return chatSummary(chat);
   }
+
   /**
    * A new thread holding the conversation up to an answer, side conversation
    * included when the answer is in one. The original keeps its turns' changes

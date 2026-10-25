@@ -12,6 +12,7 @@ beforeEach(async () => {
   vi.stubEnv("HOME", home);
   vi.resetModules();
 });
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   await Promise.all([home, root].map((d) => rm(d, { recursive: true })));
@@ -21,6 +22,7 @@ const write = async (path: string, text: string) => {
   await mkdir(join(path, ".."), { recursive: true });
   await writeFile(path, text);
 };
+
 const load = () => import("./commands");
 
 describe("Cursor commands on disk", () => {

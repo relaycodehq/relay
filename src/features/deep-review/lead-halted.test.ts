@@ -17,6 +17,7 @@ const message = (
   version: 1,
   ...patch,
 });
+
 const request = message("request", "user");
 const lead = message("lead", "assistant", "cancelled");
 

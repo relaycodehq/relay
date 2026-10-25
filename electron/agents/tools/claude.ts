@@ -18,6 +18,7 @@ type ClaudeFiles = {
   settingsFiles: string[];
   managedMcp?: string;
 };
+
 export function claudeFiles(
   cwd: string,
   account = accountFor("claude"),

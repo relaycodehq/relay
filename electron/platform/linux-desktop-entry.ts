@@ -16,6 +16,7 @@ const stringEscapes: Record<string, string> = {
   "\r": "\\r",
   "\t": "\\t",
 };
+
 const escapeString = (value: string) =>
   value.replace(/[\\\n\r\t]/g, (c) => stringEscapes[c]);
 
@@ -27,6 +28,7 @@ const quotedEscapes: Record<string, string> = {
   '"': '\\"',
   "%": "%%",
 };
+
 const escapeQuoted = (value: string) =>
   value.replace(/[\\`$"%]/g, (c) => quotedEscapes[c]);
 

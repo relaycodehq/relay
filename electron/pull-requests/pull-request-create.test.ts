@@ -36,6 +36,7 @@ function head(branch: string) {
     return null;
   }
 }
+
 beforeEach(async () => {
   parent = await realpath(await mkdtemp(join(tmpdir(), "relay-create-pr-")));
   root = join(parent, "repo");
@@ -117,10 +118,12 @@ beforeEach(async () => {
     },
   );
 });
+
 afterEach(async () => {
   client.dispose();
   await rm(parent, { recursive: true, force: true });
 });
+
 const input = (planId: string): CreatePullRequest => ({
   planId,
   base: "main",
@@ -129,6 +132,7 @@ const input = (planId: string): CreatePullRequest => ({
   draft: false,
   push: true,
 });
+
 it("previews without pushing; explicitly pushes only committed content and creates a draft", async () => {
   await writeFile(join(root, "file.ts"), "uncommitted\n");
   const p = await service.prepare(root, client, repo);
@@ -153,6 +157,7 @@ it("previews without pushing; explicitly pushes only committed content and creat
   await service.create(root, client, input(p.id));
   expect(posts).toBe(1);
 });
+
 it("rejects stale checkouts and changed push destinations before any publication", async () => {
   const p = await service.prepare(root, client, repo);
   git("switch", "main");
@@ -174,6 +179,7 @@ it("rejects stale checkouts and changed push destinations before any publication
   );
   expect(posts).toBe(0);
 });
+
 it("requires explicit push consent and ignores another fork's same-named branch", async () => {
   pulls.push({
     number: 99,
@@ -189,6 +195,7 @@ it("requires explicit push consent and ignores another fork's same-named branch"
   expect(head("feature")).toBeNull();
   expect(posts).toBe(0);
 });
+
 it("recovers an uncertain create result without pushing or creating twice", async () => {
   const p = await service.prepare(root, client, repo);
   failPost = true;
@@ -201,6 +208,7 @@ it("recovers an uncertain create result without pushing or creating twice", asyn
   ).toBe(8);
   expect(posts).toBe(1);
 });
+
 it("creates from an already published branch without pushing", async () => {
   git("push", "-q", "origin", "feature");
   const p = await service.prepare(root, client, repo);
@@ -211,6 +219,7 @@ it("creates from an already published branch without pushing", async () => {
   ).toBe(8);
   expect((await branchPulls(root, client, repo))[0].ref.number).toBe(8);
 });
+
 it("finds an Azure push remote however the clone names the organization", async () => {
   const server = "https://dev.azure.com/sample-org";
   const azure = {

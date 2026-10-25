@@ -48,10 +48,12 @@ delete process.env.ELECTRON_RUN_AS_NODE;
 
 const flag = process.argv.indexOf("--relay-agent-host");
 const dir = process.argv[flag + 1];
+
 if (flag < 0 || !dir) {
   console.error("Usage: agent-host --relay-agent-host <registry folder>");
   process.exit(2);
 }
+
 mkdirSync(dir, { recursive: true, mode: 0o700 });
 process.chdir(dir);
 const version = createHash("sha256")
@@ -59,6 +61,7 @@ const version = createHash("sha256")
   .digest("hex")
   .slice(0, 16);
 const logFile = join(dir, `host-${process.pid}.log`);
+
 function log(line: string) {
   try {
     appendFileSync(logFile, `${new Date().toISOString()} ${line}\n`);
@@ -77,6 +80,7 @@ type Ask = {
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
 };
+
 const sessions = new Map<string, HostSession>();
 const asks = new Map<number, Ask>();
 let nextAsk = 1;
@@ -150,6 +154,7 @@ type ToolCall = {
   /** Sent to a Relay that has since gone. */
   delivered: boolean;
 };
+
 const toolCalls = new Map<number, ToolCall>();
 let nextTool = 1;
 /** Calls that only read or wait; anything else may have happened already. */
@@ -464,9 +469,11 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 // Detached, but a terminal that started it may still hang up.
 process.on("SIGHUP", () => {});
+
 process.on("uncaughtException", (error) =>
   log(`uncaught: ${error.stack ?? error.message}`),
 );
+
 process.on("unhandledRejection", (error) =>
   log(`unhandled: ${error instanceof Error ? error.stack : String(error)}`),
 );
@@ -474,6 +481,7 @@ process.on("unhandledRejection", (error) =>
 try {
   if (statSync(logFile).size > 1 << 20) rmSync(logFile);
 } catch {}
+
 server.listen(socketPath, () => {
   const record: HostRecord = {
     pid: process.pid,
@@ -489,4 +497,5 @@ server.listen(socketPath, () => {
   log(`listening, version ${version}`);
   serveTools();
 });
+
 setInterval(settle, 15_000).unref();

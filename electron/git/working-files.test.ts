@@ -16,10 +16,13 @@ vi.mock("node:fs/promises", async (actual) => {
   const fs = await actual<typeof import("node:fs/promises")>();
   return { ...fs, open: vi.fn(fs.open) };
 });
+
 let root: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-working-file-")));
 });
+
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.mocked(open).mockClear();

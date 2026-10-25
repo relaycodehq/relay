@@ -13,6 +13,7 @@ const readOnly = {
   sandbox: "read-only",
   sandboxPolicy: { type: "readOnly" },
 } as const;
+
 const writesWorkspace = {
   sandbox: "workspace-write",
   sandboxPolicy: { type: "workspaceWrite" },

@@ -48,6 +48,7 @@ function flashWhenShown(view: { current: HTMLElement | null }, id: string) {
   };
   requestAnimationFrame(look);
 }
+
 /** The message at the top of the thread's view, and how far below it starts. */
 function placeInView(view: HTMLElement): ReadingPlace | undefined {
   const top = view.getBoundingClientRect().top;
@@ -57,6 +58,7 @@ function placeInView(view: HTMLElement): ReadingPlace | undefined {
       return { id: m.dataset.messageId!, offset: box.top - top };
   }
 }
+
 /** Lay out the message being positioned before reading its geometry. */
 function layoutAnchor(view: HTMLElement, message: Element) {
   // A skipped message still has its estimated height. Restoring inside a
@@ -69,6 +71,7 @@ function layoutAnchor(view: HTMLElement, message: Element) {
   }
   return message.getBoundingClientRect();
 }
+
 /** Scrolls a message back to its place in the view; false if it isn't shown. */
 function scrollToPlace(view: HTMLElement, { id, offset }: ReadingPlace) {
   const message = view.querySelector(`[data-message-id="${CSS.escape(id)}"]`);
@@ -78,6 +81,7 @@ function scrollToPlace(view: HTMLElement, { id, offset }: ReadingPlace) {
   view.scrollTop += delta;
   return true;
 }
+
 function pinToBottom(view: HTMLElement) {
   // Dividers after the answer already have their real height; the last
   // ordinary message is the one whose skipped layout can move its text.

@@ -43,11 +43,13 @@ export type NewsItem = ThreadNews & {
   /** The thread was started by an agent, which is the one waiting on it. */
   byAgent?: true;
 };
+
 /** Where a client is in the computer's news; `epoch` changes when Relay restarts. */
 export interface NewsCursor {
   epoch: string;
   seq: number;
 }
+
 /** What a client missed since its cursor, or no `items` when it's too far behind to say. */
 export type NewsCatchUp = NewsCursor & { items?: NewsItem[] };
 

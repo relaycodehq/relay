@@ -16,9 +16,11 @@ const WINDOWS_ABSOLUTE = /^[A-Za-z]:[/\\]/;
 const EXPLICIT_RELATIVE = /^(?:~\/|\.\/|\.\.\/)/;
 const EXTENSION = /\.[\w-]+$/;
 const WORDS = "[A-Za-z0-9._-]+(?: [A-Za-z0-9._-]+)*";
+
 const RELATIVE_WITH_DIRECTORIES = new RegExp(
   `^${WORDS}(?:/${WORDS})+(?::\\d+(?::\\d+|[-–]\\d+)?)?$`,
 );
+
 const BARE_NAME = new RegExp(`^${WORDS}$`);
 
 function words(list: string) {
@@ -30,6 +32,7 @@ const GENERIC_TLDS = new Set(
     "com net org io dev app ai co edu gov mil info biz xyz me tv cc gg chat cloud site online tech store link",
   ),
 );
+
 // Skipped when a position follows: `foo.pl:3` is a Perl file, not a host.
 const COUNTRY_TLDS = new Set(
   words(

@@ -24,12 +24,14 @@ export const mainWindowCommands = [
   "jump-8",
   "jump-9",
 ] as const;
+
 /** Settings at `settings`, a category of the page, as `openSettings` takes it. */
 export interface SettingsCommand {
   settings: string;
   projectId?: string;
   entryId?: string;
 }
+
 export type MainWindowCommand =
   | (typeof mainWindowCommands)[number]
   | SettingsCommand;

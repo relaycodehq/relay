@@ -20,6 +20,7 @@ const spend = (
   usd,
   requests: 1,
 });
+
 const run = (e: Partial<UsageEntry>): UsageEntry => ({
   at: now,
   ms: 0,
@@ -29,6 +30,7 @@ const run = (e: Partial<UsageEntry>): UsageEntry => ({
   models: {},
   ...e,
 });
+
 const summary = (
   entries: UsageEntry[],
   more: Partial<Parameters<typeof summarizeUsage>[1]> = {},

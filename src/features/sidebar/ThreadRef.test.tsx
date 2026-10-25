@@ -13,6 +13,7 @@ const chat: ChatSummary = {
   branch: "nav-a11y",
   worktree: { branch: "nav-a11y", landed: { at: 2, by: "pr" } },
 };
+
 const render = (value: ChatSummary) =>
   renderToStaticMarkup(<ThreadRef chat={value} />);
 

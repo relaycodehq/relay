@@ -7,6 +7,7 @@ import { ChatSchedule } from "./schedule";
 beforeEach(() => {
   vi.useFakeTimers();
 });
+
 afterEach(() => {
   vi.useRealTimers();
 });

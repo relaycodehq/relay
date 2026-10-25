@@ -6,7 +6,9 @@ import {
   projectFileLink,
   splitOutsidePath,
 } from "./project-file-links";
+
 const root = "/Users/test/workspace";
+
 it("resolves markdown links and inline code file references into the linked project", () => {
   expect(projectFileLink("src/app/main.ts:42", root)).toEqual({
     path: "src/app/main.ts",
@@ -30,6 +32,7 @@ it("resolves markdown links and inline code file references into the linked proj
     directory: false,
   });
 });
+
 it("rejects paths outside the clone and ambiguous prose", () => {
   for (const value of [
     "../secret.ts",
@@ -41,6 +44,7 @@ it("rejects paths outside the clone and ambiguous prose", () => {
   for (const value of ["node.meta", "origin/main", "example.com/index.html"])
     expect(projectFileLink(value, root, true)).toBeNull();
 });
+
 it("keeps link and inline positions, folders and the clone boundary apart", () => {
   expect(projectFileLink("src/a.ts#L10C5", root)).toEqual({
     path: "src/a.ts",
@@ -75,6 +79,7 @@ it("keeps link and inline positions, folders and the clone boundary apart", () =
   expect(projectFileLink("src/a.ts", root + "/")?.path).toBe("src/a.ts");
   expect(projectFileLink("src/a.ts", "")).toBeNull();
 });
+
 it("matches a changed file to the file or folder a link names", () => {
   const file = { path: "src/app", directory: false };
   expect(linksTo(file, "src/app")).toBe(true);
@@ -84,6 +89,7 @@ it("matches a changed file to the file or folder a link names", () => {
   expect(linksTo(folder, "src/apps/main.ts")).toBe(false);
   expect(linksTo(folder, "src/app")).toBe(false);
 });
+
 it("finds the file a bare name or partial path names", () => {
   const paths = [
     "license-report.ts",
@@ -103,6 +109,7 @@ it("finds the file a bare name or partial path names", () => {
   expect(matchLink(link("app/main.ts"), paths)).toEqual(["src/app/main.ts"]);
   expect(matchLink(link("in.ts"), paths)).toEqual([]);
 });
+
 it("links files outside the clone by their absolute path", () => {
   expect(
     chatFileLink("/tmp/wi-stale-operator-account-link.md", root, true),
@@ -123,6 +130,7 @@ it("links files outside the clone by their absolute path", () => {
     directory: false,
   });
 });
+
 it("leaves routes, slashless folders and commands outside the clone as text", () => {
   for (const value of [
     "/api/users.json",
@@ -134,6 +142,7 @@ it("leaves routes, slashless folders and commands outside the clone as text", ()
   ])
     expect(chatFileLink(value, root, true)).toBeNull();
 });
+
 it("links folders outside the clone written with a trailing slash", () => {
   const folder = (path: string) => ({ path, directory: true, outside: true });
   expect(chatFileLink("/tmp/drafts/", root, true)).toEqual(
@@ -149,6 +158,7 @@ it("links folders outside the clone written with a trailing slash", () => {
     folder("/home/me/out"),
   );
 });
+
 it("splits an outside path into its folder and name", () => {
   expect(splitOutsidePath("/tmp/a/b.md")).toEqual({
     folder: "/tmp/a",
@@ -161,6 +171,7 @@ it("splits an outside path into its folder and name", () => {
     name: "x.md",
   });
 });
+
 it("takes a Windows path for an absolute one", () => {
   expect(chatFileLink("C:\\Users\\me\\notes.md", root, true)).toEqual({
     path: "C:\\Users\\me\\notes.md",

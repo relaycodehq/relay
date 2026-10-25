@@ -14,6 +14,7 @@ function keyPair() {
 const feed = Buffer.from(
   JSON.stringify({ version: "0.9.0", files: {} }, null, 2) + "\n",
 );
+
 const release = keyPair();
 const signature = sign(null, feed, release.privateKey).toString("base64");
 

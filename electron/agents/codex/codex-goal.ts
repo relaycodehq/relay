@@ -90,6 +90,7 @@ export class CodexGoalHold {
   private grace?: ReturnType<typeof setTimeout>;
   /** Relay is turning the goal on behind a turn it started; that turn ending first still holds. */
   activating = false;
+
   constructor(
     /** The goal as Codex last reported it; undefined until it does. */
     public goal: ThreadGoal | null | undefined,
@@ -98,46 +99,56 @@ export class CodexGoalHold {
     private release: () => void,
     private graceMs = CONTINUATION_GRACE,
   ) {}
+
   get active() {
     return this.goal?.status === "active";
   }
+
   private get holding() {
     return this.active || this.activating;
   }
+
   /** Between turns: the last one ended and the run waits for Codex's next. */
   get waiting() {
     return !!this.grace;
   }
+
   /** Codex reported the goal changed; one no longer active ends a run waiting for a turn. */
   seen(goal: ThreadGoal | null) {
     this.goal = goal;
     this.onGoal(goal);
     if (!this.holding && this.grace) this.let();
   }
+
   /** A turn completed: true when the run holds for the next one instead of finishing. */
   completed() {
     if (!this.holding) return false;
     this.wait();
     return true;
   }
+
   /** Waits for a turn Codex is about to start, e.g. on a resumed goal. */
   wait() {
     clearTimeout(this.grace);
     this.grace = setTimeout(() => this.let(), this.graceMs);
   }
+
   /** The goal is on, or failed to go on: a turn that ended meanwhile is judged now. */
   activated() {
     this.activating = false;
     if (!this.holding && this.grace) this.let();
   }
+
   /** Codex started the next goal turn. */
   started() {
     this.dispose();
   }
+
   dispose() {
     clearTimeout(this.grace);
     this.grace = undefined;
   }
+
   private let() {
     this.dispose();
     this.release();

@@ -61,6 +61,7 @@ export function wakeClicks() {
 }
 
 const noiseBuffers = new WeakMap<BaseAudioContext, AudioBuffer>();
+
 function noiseOf(ctx: BaseAudioContext) {
   let buffer = noiseBuffers.get(ctx);
   if (!buffer) {

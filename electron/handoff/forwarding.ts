@@ -27,6 +27,7 @@ import type { RemoteStatuses } from "./remote-statuses";
 import { sendFor } from "./transfer";
 
 const chatMethods = new Set<string>(handoffChatMethods);
+
 /**
  * The calls a thread waiting on a setup makes to the setup's agent: talking
  * to it, answering it, stopping it. The rest are about the thread's own
@@ -41,11 +42,13 @@ const setupMethods = new Set<string>([
   "cancelProjectChat",
   "stopProjectChatPending",
 ] satisfies HandoffChatMethod[]);
+
 /** Calls that run there only once the other computer speaks `folderHandoffBridge`. */
 const folderMethods = new Set<string>([
   ...handoffFolderMethods,
   ...handoffWorktreeMethods,
 ]);
+
 const hereOnlyMethods = new Set<string>(handoffHereOnlyMethods);
 const hereOnly = (method: string): method is HandoffHereOnlyMethod =>
   hereOnlyMethods.has(method);

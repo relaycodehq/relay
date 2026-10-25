@@ -24,6 +24,7 @@ const DAY = 24 * HOUR;
 const LOW_PERCENT = 20;
 
 export type RoomTank = { window: UsageWindow; meter: UsageMeter };
+
 export type RoomAccount = {
   provider: AccountProvider;
   id: string;

@@ -12,6 +12,7 @@ export const registryUrl =
   "https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json";
 
 const envSchema = z.record(z.string(), z.string()).optional();
+
 const binarySchema = z.object({
   archive: z.string(),
   cmd: z.string(),
@@ -19,11 +20,13 @@ const binarySchema = z.object({
   env: envSchema,
   sha256: z.string().optional(),
 });
+
 const packageSchema = z.object({
   package: z.string(),
   args: z.array(z.string()).optional(),
   env: envSchema,
 });
+
 export const entrySchema = z.object({
   id: z.string().regex(registryIdPattern),
   name: z.string().min(1).max(80),
@@ -39,6 +42,7 @@ export const entrySchema = z.object({
     uvx: packageSchema.optional(),
   }),
 });
+
 export type RegistryEntry = z.infer<typeof entrySchema>;
 
 /** What Relay gets and runs for one agent on one machine. */
@@ -68,6 +72,7 @@ export function registryTarget(platform: string, arch: string) {
   const cpu = arch === "arm64" ? "aarch64" : arch === "x64" ? "x86_64" : arch;
   return `${os}-${cpu}`;
 }
+
 export const machineTarget = () =>
   registryTarget(process.platform, process.arch);
 
@@ -158,6 +163,7 @@ const unlisted = new Set([
   "antigravity-acp",
   "gemini",
 ]);
+
 export const isListed = (entry: RegistryEntry) => !unlisted.has(entry.id);
 
 /** `entry` as Settings lists it, without its icon. */

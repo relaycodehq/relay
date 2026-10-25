@@ -13,6 +13,7 @@ function setup() {
 
 describe("sharedResource", () => {
   beforeEach(() => vi.useFakeTimers());
+
   afterEach(() => vi.useRealTimers());
 
   it("creates once and shares the instance between users", () => {

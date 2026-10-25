@@ -40,6 +40,7 @@ useProjectChats({
     );
   },
 });
+
 beforeEach(async () => {
   const serving = serveRelayTools(0, {
     verify: (token) => verifyRelayToken(secret, token),
@@ -50,6 +51,7 @@ beforeEach(async () => {
   const { port } = serving.server.address() as { port: number };
   useRelayMcp({ port, secret });
 });
+
 afterEach(async () => {
   useRelayMcp(undefined);
   await closeTools?.();

@@ -86,6 +86,7 @@ import {
   resumeThreads,
   threadServices,
 } from "./startup";
+
 // The name is also the instance lock and the OS credential namespace; set it before
 // Electron initializes Keychain, and restore the display name once ready.
 app.setName("Relay Experimental");
@@ -97,6 +98,7 @@ app.setAppLogsPath(join(app.getPath("userData"), "logs"));
 if (process.env.RELAY_TEST_DATA && process.env.RELAY_TEST_SOUND !== "1")
   app.commandLine.appendSwitch("mute-audio");
 startLog(app.getPath("logs"));
+
 if (
   process.platform === "linux" &&
   !app.commandLine.hasSwitch("password-store")
@@ -104,6 +106,7 @@ if (
   const store = linuxPasswordStore(process.env);
   if (store) app.commandLine.appendSwitch("password-store", store);
 }
+
 // AppKit binds ⌃⌘←/→ to the writing-direction commands and, depending on
 // input-source state, beeps at them before the page sees the key, so the
 // quick switch beeped while working. Allowed, they reach the page instead.
@@ -139,10 +142,13 @@ let treeWatch: TreeWatch | undefined;
 /** Which other repositories the windows' threads changed files in; unset until Relay has started. */
 let elsewhereWatch: ElsewhereWatch | undefined;
 const login = new GiteaLogin(teaTokenFor);
+
 configureOpenCodeFetch((url, options) =>
   net.fetch(url instanceof Request ? url.url : url.toString(), options),
 );
+
 const github = new GithubLogin((url, options) => net.fetch(url, options));
+
 /** The client for a project's repository host; null when it has none Relay can use. */
 const window = new AppWindow({
   quitCancelled: () => quit.cancel(),
@@ -163,18 +169,22 @@ const window = new AppWindow({
     if (window.win) void offerWindowReport(window.win, details);
   },
 });
+
 /** A phone's send of a draft goes to a page; with the window closed, a hidden one. */
 const draftPages = new DraftPages(window);
+
 const menubar = new Menubar(
   () => window.open(),
   () => projectChats?.working() ?? 0,
 );
+
 const keepAwake = new KeepAwake({
   enabled: () =>
     settingsFile ? readPrefs(settingsFile.state().values).keepAwake : true,
   busy: () =>
     (projectChats?.working() ?? 0) > 0 || !!phoneRemote?.expectsCalls(),
 });
+
 const quit = new Quit({
   window,
   started: () => !!store,
@@ -223,7 +233,9 @@ const quit = new Quit({
     login.client?.dispose();
   },
 });
+
 const pullRequestCreation = new PullRequestCreation();
+
 const updater = new Updater((state) => window.send("relay:update", state), {
   // The agent host keeps the agents' work going across the restart.
   runningTasks: () =>
@@ -234,12 +246,14 @@ const updater = new Updater((state) => window.send("relay:update", state), {
     quit.detaching = true;
   },
 });
+
 const devBuild = new DevBuild(
   (stale) => window.send("relay:dev-build", stale),
   {
     quit: (cancelled) => quit.restart(cancelled),
   },
 );
+
 const dictation = new Dictation(
   app.getPath("userData"),
   (state) => window.send("relay:dictation", state),
@@ -253,6 +267,7 @@ const dictation = new Dictation(
     },
   },
 );
+
 const readAloud = new ReadAloud(
   app.getPath("userData"),
   {
@@ -266,6 +281,7 @@ const readAloud = new ReadAloud(
   },
   (state) => window.send("relay:read-aloud-state", state),
 );
+
 const acpAgents = downloadedAgents(
   app.getPath("userData"),
   (url, init) => net.fetch(url, init),
@@ -275,6 +291,7 @@ const acpAgents = downloadedAgents(
     "app.asar.unpacked$1",
   ),
 );
+
 const agentUpdates = new AgentUpdates(
   (state) => window.send("relay:agent-updates", state),
   {
@@ -284,10 +301,12 @@ const agentUpdates = new AgentUpdates(
     registry: registryUpdatesIo(acpAgents),
   },
 );
+
 acpAgents.onChange((state) => {
   window.send("relay:acp-registry", state);
   void agentUpdates.sync();
 });
+
 // The worker runs under the system Node.js, which cannot read inside app.asar.
 const projectChecks = new ProjectChecks(
   join(__dirname, "checks-worker.mjs"),
@@ -296,8 +315,10 @@ const projectChecks = new ProjectChecks(
     "app.asar.unpacked$1",
   ),
 );
+
 const blame = new BlameService();
 const ci = new Ci((url, init) => net.fetch(url, init), github.credentials);
+
 if (!app.requestSingleInstanceLock()) {
   // Opening Relay again only brings the running copy forward.
   console.info("Relay was opened again while already running");
@@ -306,6 +327,7 @@ if (!app.requestSingleInstanceLock()) {
   console.info(`Relay ${app.getVersion()} started`);
   offerCrashReport(watchForCrashes());
 }
+
 const links = new AppLinks(window, () => !!login.client);
 links.listen();
 quit.listen();

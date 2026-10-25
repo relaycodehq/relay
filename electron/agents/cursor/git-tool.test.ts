@@ -17,6 +17,7 @@ beforeEach(async () => {
   git("add", ".");
   git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
 });
+
 afterEach(() => rm(repo, { recursive: true, force: true }));
 
 const said = async (args: unknown) => {

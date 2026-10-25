@@ -20,9 +20,11 @@ let app: ElectronApplication,
   binDir: string,
   testEnv: Record<string, string>;
 const screenshots = resolve("test-results/screenshots");
+
 // The tests share one app and build on each other's state, so a failure
 // stops the file instead of the rest failing on a fresh one.
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   await mkdir(screenshots, { recursive: true });
   fixture = await fixtureServer({ grouping: true });
@@ -67,6 +69,7 @@ process.stdin.on('end',()=>{
   await openInbox(page);
   await openPull(page, /Make pull request reviews/);
 });
+
 test.afterAll(async () => {
   await app?.close();
   await fixture?.close();
@@ -202,6 +205,7 @@ test("groups whole-file migrations, keeps mixed files normal and persists bulk r
     animations: "disabled",
   });
 });
+
 test("stale groups, cancellation and invalid model output never mark files", async () => {
   fixture.setHead("c".repeat(40));
   await page

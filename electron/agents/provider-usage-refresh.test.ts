@@ -3,11 +3,14 @@ import { readProviderUsage } from "./provider-usage";
 
 // As on Windows: paths join with backslashes and nothing is in a keychain.
 vi.mock("node:path", async () => (await vi.importActual("node:path")).win32);
+
 vi.mock("node:os", async (actual) => ({
   ...(await actual<typeof import("node:os")>()),
   homedir: () => "C:\\Users\\me",
 }));
+
 const files = new Map<string, string>();
+
 vi.mock("node:fs/promises", () => ({
   stat: async (path: string) => {
     const text = files.get(path);
@@ -22,7 +25,9 @@ vi.mock("node:fs/promises", () => ({
     files.delete(from);
   },
 }));
+
 const platform = process.platform;
+
 afterEach(() => {
   Object.defineProperty(process, "platform", { value: platform });
   vi.unstubAllEnvs();

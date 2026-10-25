@@ -8,6 +8,7 @@ import {
   openSurface,
   panelToggle,
 } from "../fixtures/navigation";
+
 test("local Angular projects run checks and symbol navigation without a Gitea account", async () => {
   const repo = await languageProject("https://gitea.example.invalid", true),
     data = await mkdtemp(join(tmpdir(), "relay-local-language-ui-"));

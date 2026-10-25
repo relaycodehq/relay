@@ -43,6 +43,7 @@ useProjectChats({
     );
   },
 });
+
 beforeEach(async () => {
   setups = [
     {
@@ -71,6 +72,7 @@ beforeEach(async () => {
   const { port } = serving.server.address() as { port: number };
   useRelayMcp({ port, secret });
 });
+
 afterEach(async () => {
   useRelayMcp(undefined);
   await closeTools?.();
@@ -84,6 +86,7 @@ const input = (body: string) => ({
   interactionMode: "default" as const,
   choice,
 });
+
 const relay = (tool: string, args: object) =>
   input(`@codex fixture relay ${tool} ${JSON.stringify(args)}`);
 

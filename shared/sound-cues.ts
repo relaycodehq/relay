@@ -13,6 +13,7 @@ import type { NewsItem } from "./thread-news";
 /** Threads that land together sound once; this long after one sound, the next waits its turn. */
 const gatherMs = 250;
 const restMs = 1500;
+
 /** The one that sounds when several land together. */
 const urgency: Record<SoundEvent, number> = {
   waiting: 3,

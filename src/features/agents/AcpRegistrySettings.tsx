@@ -19,6 +19,7 @@ const viaNames: Record<RegistryVia, string> = {
   npm: "npm package",
   uv: "Python package, through uv",
 };
+
 const howItComes = (agent: RegistryListing) =>
   !agent.via
     ? "No build for this computer"

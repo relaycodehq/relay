@@ -5,9 +5,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { discoverAntigravitySkills } from "./skills";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-antigravity-skills-"));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const write = async (path: string, text: string) => {

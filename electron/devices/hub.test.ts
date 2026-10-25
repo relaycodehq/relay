@@ -62,6 +62,7 @@ it("puts the SDK's tools first on the hub's PATH", () => {
 
 describe("DeviceHub", () => {
   let hub: DeviceHub | undefined;
+
   afterEach(async () => {
     await hub?.dispose();
     vi.unstubAllEnvs();

@@ -53,6 +53,7 @@ class CodexConnection {
   private release!: () => void;
   /** Why its process went, once it's going. */
   private death?: Promise<Error>;
+
   constructor(
     open: () => Promise<ChildProcessWithoutNullStreams | HostedChild>,
   ) {
@@ -139,6 +140,7 @@ class CodexConnection {
       })
       .catch(fail);
   }
+
   /**
    * A goal turn no run shows, one Codex started after the run let go: it
    * stops, and the goal waits paused for /goal resume rather than working
@@ -156,10 +158,12 @@ class CodexConnection {
       })
       .catch((e) => console.warn("Could not stop a Codex goal turn:", e));
   }
+
   /** Why a call failed: a process that died meanwhile says best, rather than the closed connection its calls saw. */
   failure(error: unknown) {
     return this.death ?? Promise.resolve(error);
   }
+
   /** Sends one thread's notifications and requests to `listen` until the returned function stops it. */
   side(threadId: string, listen: (method: string, params: any) => void) {
     this.sides.set(threadId, listen);
@@ -167,6 +171,7 @@ class CodexConnection {
       this.sides.delete(threadId);
     };
   }
+
   /** The thread it started, kept with a hosted server for the next Relay. */
   keep(started: CodexThreadStarted) {
     this.started = started;
@@ -177,14 +182,17 @@ class CodexConnection {
         account: this.account,
       } satisfies CodexMeta);
   }
+
   /** Marks a turn in the host's log, so a restart knows one was running. */
   mark(mark: "start" | "end") {
     if (this.child instanceof HostedChild) this.child.hosted.mark(mark);
   }
+
   /** Lets through what a server picked up after a restart said meanwhile, once someone listens. */
   resume() {
     if (this.child instanceof HostedChild) this.child.release();
   }
+
   close() {
     if (!this.closed) {
       this.closed = true;
@@ -193,6 +201,7 @@ class CodexConnection {
     }
     return this.done;
   }
+
   private stop() {
     const child = this.child;
     if (!child) return;
@@ -200,18 +209,21 @@ class CodexConnection {
     terminate(child);
   }
 }
+
 function threadOf(params: unknown) {
   const id = (params as { threadId?: unknown } | null)?.threadId;
   return typeof id === "string" ? id : "";
 }
 
 export type { CodexConnection };
+
 const sessions = new HostedSessions<CodexConnection>({
   provider: "codex",
   name: "Codex",
   kind: "process",
   close: (connection) => connection.close(),
 });
+
 export async function acquireCodexConnection(
   key: string | undefined,
   executable: string,
@@ -247,9 +259,11 @@ export async function acquireCodexConnection(
     return connection;
   });
 }
+
 export function closeCodexConnection(key: string) {
   return sessions.close(key);
 }
+
 /** Reads this session only, without starting another process or inference turn. */
 export async function readCodexContext(key: string, usage: ContextUsage) {
   const connection = sessions.get(key);
@@ -262,6 +276,7 @@ export async function readCodexContext(key: string, usage: ContextUsage) {
     connection.started.model ?? "",
   );
 }
+
 /** Relay is restarting: let go of the app servers the agent host keeps running. */
 export function detachCodex() {
   sessions.detach();

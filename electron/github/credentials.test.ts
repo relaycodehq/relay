@@ -4,7 +4,9 @@ import { GithubLogin } from "./login";
 import { GitHub } from "../ci/github";
 
 const repo = { owner: "fixture", name: "repo" };
+
 afterEach(() => vi.restoreAllMocks());
+
 function services() {
   const state = { token: "a", failure: 0 };
   const source = vi.fn(async () => state.token);

@@ -72,6 +72,7 @@ export async function linkAgent(provider: AgentProvider) {
   const next = await api.linkAgent(provider);
   if (next) change(next);
 }
+
 export async function unlinkAgent(provider: AgentProvider) {
   change(await api.unlinkAgent(provider));
 }
@@ -80,6 +81,7 @@ export async function unlinkAgent(provider: AgentProvider) {
 export async function signInAgent(provider: AgentProvider) {
   change(await api.signInAgent(provider));
 }
+
 export async function signOutAgent(provider: AgentProvider) {
   change(await api.signOutAgent(provider));
 }

@@ -26,6 +26,7 @@ type Suggestion = {
   detail?: string;
   icon: ReactNode;
 };
+
 type Kind = "own" | "command" | "skill" | "custom";
 
 const kindOf = (provider: ReviewAgent["provider"], prompt: string): Kind =>

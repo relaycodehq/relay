@@ -61,6 +61,7 @@ afterEach(async () => {
   }
   await rm(join(root, "hosts"), { recursive: true, force: true });
 });
+
 afterAll(() => vi.unstubAllEnvs());
 
 /** A Relay that started: its own connection to the host. */

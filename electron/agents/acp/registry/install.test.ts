@@ -9,6 +9,7 @@ import { binOf, installInto, installedIn, type InstallIo } from "./install";
 const folder = () => mkdtemp(join(tmpdir(), "relay-acp-"));
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 const download = (body: string): InstallIo["fetch"] => async () => new Response(body);
+
 const binary = (archive: string, extra: Partial<AgentPlan> = {}): AgentPlan => ({
   id: "goose",
   version: "1.0.0",

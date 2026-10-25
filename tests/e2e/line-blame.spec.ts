@@ -21,10 +21,12 @@ let app: ElectronApplication,
   base: string,
   head: string;
 const path = "src/hooks/useReview.ts";
+
 const context = Array.from(
   { length: 80 },
   (_, i) => `export const context${i} = ${i};\n`,
 ).join("");
+
 const before =
   "export const retained = 'Alice';\nexport const changed = 'Before';\nexport const removed = 'Old';\n" +
   context +
@@ -35,7 +37,9 @@ const after =
   "export const tail = 'After';\n";
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", root, ...args], { encoding: "utf8" }).trim();
+
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   fixture = await fixtureServer({ code: { before, after } });
   root = await mkdtemp(join(tmpdir(), "relay-blame-ui-repo-"));
@@ -80,6 +84,7 @@ test.beforeAll(async () => {
   await openInbox(page);
   await openPull(page, /Make pull request reviews/);
 });
+
 test.afterAll(async () => {
   await app?.close();
   await fixture?.close();
@@ -89,11 +94,13 @@ test.afterAll(async () => {
       .map((path) => rm(path, { recursive: true, force: true })),
   );
 });
+
 const tooltip = () => page.getByRole("tooltip", { name: "Line history" });
 const number = (side: string, line: number) =>
   page.locator(
     `.diff-wrapper [data-${side}] [data-column-number="${line}"] [data-line-number-content]`,
   );
+
 test("line-number tooltips explain linking and attribute the correct split/unified revision on demand", async () => {
   await number("additions", 2).hover();
   await expect(tooltip()).toContainText(
@@ -179,6 +186,7 @@ test("line-number tooltips explain linking and attribute the correct split/unifi
   expect(git("status", "--porcelain")).toBe("");
   expect(fixture.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
 });
+
 test("local editor uses committed history and does not assign an author to a different local buffer", async () => {
   await writeFile(join(root, path), "// Local insertion\n" + after);
   await page.getByRole("button", { name: "Edit locally", exact: true }).click();

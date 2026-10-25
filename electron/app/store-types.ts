@@ -15,6 +15,7 @@ export interface RemoteDevice {
   tokenHash: string;
   app?: PhoneAppReport;
 }
+
 export interface RemoteSettings {
   enabled?: boolean;
   /** Defaults to true; false explicitly restricts access to the tailnet. */

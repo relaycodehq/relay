@@ -11,6 +11,7 @@ import type { MentionItem } from "./mention-items";
 vi.mock("../../lib/api", () => ({
   api: { projectFilePreview: vi.fn(), projectFile: vi.fn() },
 }));
+
 vi.mock("../../ui/CodeBlock", () => ({
   tokenize: vi.fn(async (code: string) =>
     code.split("\n").map((content) => [{ content }]),
@@ -18,11 +19,14 @@ vi.mock("../../ui/CodeBlock", () => ({
   tokenStyle: () => ({}),
   syntaxTheme: () => "pierre-dark",
 }));
+
 vi.mock("@pierre/diffs", () => ({ getFiletypeFromFileName: () => "text" }));
 vi.mock("../../ui/FileEntryIcon", () => ({ FileEntryIcon: () => null }));
+
 vi.mock("../../ui/MiddleTruncate", () => ({
   MiddleTruncate: ({ text }: { text: string }) => <span>{text}</span>,
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

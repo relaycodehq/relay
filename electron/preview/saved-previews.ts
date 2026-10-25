@@ -5,6 +5,7 @@ const settings = z.object({
   devCommand: z.string().optional(),
   devPort: z.number().int().min(1).max(65535).optional(),
 });
+
 const savedPreview = z.object({
   projectId: z.string(),
   folder: z.string(),

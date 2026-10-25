@@ -67,6 +67,7 @@ export class Computers {
   private online = new Set<(id: string) => void>();
   private offline = new Set<(id: string) => void>();
   private events = new Set<(id: string, event: RemoteEvent) => void>();
+
   constructor(
     private store: Store,
     private seal: (value: string) => Promise<string | null>,
@@ -87,9 +88,11 @@ export class Computers {
   ) {
     options.holders?.onStopped((distro) => this.stopped(distro));
   }
+
   private get saved() {
     return this.store.get().computers ?? [];
   }
+
   /**
    * Connects to every computer, but a WSL distribution only once something
    * needs it, so it isn't woken for nothing; one still held from before a
@@ -120,12 +123,14 @@ export class Computers {
       );
     }
   }
+
   /** Whether threads from here run or wait on a setup on the computer. */
   private workingOn(id: string) {
     return (this.store.get().chats ?? []).some(
       (c) => c.sentTo?.computerId === id && (liveAway(c) || inSetup(c)),
     );
   }
+
   /** `detach`: Relay restarts, and WSL distributions stay held through it. */
   close({ detach = false }: { detach?: boolean } = {}) {
     this.detached = detach;
@@ -138,6 +143,7 @@ export class Computers {
     this.connects.clear();
     if (!detach) this.options.holders?.releaseAll();
   }
+
   list(): PairedComputer[] {
     return this.saved.map((c) => {
       const entry = this.clients.get(c.id);
@@ -161,31 +167,37 @@ export class Computers {
       };
     });
   }
+
   get(id: string) {
     const computer = this.saved.find((c) => c.id === id);
     if (!computer) throw new Error("That computer isn't paired anymore.");
     return computer;
   }
+
   /** A WSL distribution nothing has woken yet counts as online: `connected` wakes it. */
   status(id: string): RemoteStatus {
     if (this.asleep(id)) return "online";
     return this.clients.get(id)?.client.status ?? "offline";
   }
+
   /** Called each time a computer comes online. */
   onOnline(listener: (id: string) => void) {
     this.online.add(listener);
     return () => this.online.delete(listener);
   }
+
   /** Called each time a computer that was online drops. */
   onOffline(listener: (id: string) => void) {
     this.offline.add(listener);
     return () => this.offline.delete(listener);
   }
+
   /** What a computer says by itself: how live handoffs on it move. */
   onEvent(listener: (id: string, event: RemoteEvent) => void) {
     this.events.add(listener);
     return () => this.events.delete(listener);
   }
+
   /** Pairs with the link the other computer shows; pairing the same one again replaces it. */
   async pair(text: string) {
     const link = parsePairingUrl(text);
@@ -195,6 +207,7 @@ export class Computers {
       );
     return this.pairWith(link);
   }
+
   /**
    * Pairs with the Relay a route reaches, over SSH or into WSL: it asks
    * there for a pairing code, and pairs through a pipe.
@@ -218,6 +231,7 @@ export class Computers {
       shim.close();
     }
   }
+
   private async pairWith(
     link: NonNullable<ReturnType<typeof parsePairingUrl>>,
     route?: ComputerRoute,
@@ -292,6 +306,7 @@ export class Computers {
     await this.connectOnce(computer);
     return this.list();
   }
+
   async forget(id: string) {
     this.drop(id);
     this.stoppedIds.delete(id);
@@ -300,6 +315,7 @@ export class Computers {
     });
     return this.list();
   }
+
   /**
    * Whether the computer is a WSL distribution nothing has woken yet: it
    * connects on its first call.
@@ -311,12 +327,14 @@ export class Computers {
       this.saved.find((c) => c.id === id)?.route?.kind === "wsl"
     );
   }
+
   /** Starts a distribution WSL stopped again: the user asked for it. */
   async wake(id: string) {
     this.stoppedIds.delete(id);
     await this.connected(id);
     return this.list();
   }
+
   /** The computer's client once online, waiting a little for a reconnect. */
   async connected(id: string): Promise<RemoteClient> {
     const computer = this.get(id);
@@ -345,6 +363,7 @@ export class Computers {
       `Can't reach ${name}. Is it on, and on this network or Tailscale?`,
     );
   }
+
   /** The handoff ids whose word to this computer didn't get through yet. */
   async setPending(
     id: string,
@@ -359,6 +378,7 @@ export class Computers {
       else delete computer[kind];
     });
   }
+
   /**
    * WSL stopped the distribution, `wsl --shutdown` say. Reconnecting, or the
    * next call from a window still showing one of its projects, would start
@@ -375,6 +395,7 @@ export class Computers {
         this.drop(computer.id);
       }
   }
+
   private drop(id: string) {
     const entry = this.clients.get(id);
     entry?.client.close();
@@ -385,6 +406,7 @@ export class Computers {
     const route = this.saved.find((c) => c.id === id)?.route;
     if (route?.kind === "wsl") this.options.holders?.release(route.distro);
   }
+
   private connectOnce(computer: SavedComputer) {
     const { id } = computer;
     const pending = this.connecting.get(id);
@@ -395,6 +417,7 @@ export class Computers {
     this.connecting.set(id, connecting);
     return connecting;
   }
+
   private async connect(computer: SavedComputer) {
     const { id, route } = computer;
     const ticket = Symbol(id);

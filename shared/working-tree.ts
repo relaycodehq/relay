@@ -4,11 +4,14 @@ import type { AgentProvider } from "./agents";
 import { filePathSchema } from "./validation";
 // Windows also opens .git as ".git.", ".git ", "GIT~1" and ".git::$INDEX_ALLOCATION".
 const dotGit = /^(\.git[. ]*|git~\d+)(:.*)?$/i;
+
 export const workingPathSchema = filePathSchema.refine(
   (p) => !p.includes("\\") && !p.split("/").some((v) => !v || dotGit.test(v)),
   "Unsafe repository path",
 );
+
 export type ChangeArea = "staged" | "unstaged";
+
 export interface WorkingChange {
   path: string;
   previousPath?: string;
@@ -18,6 +21,7 @@ export interface WorkingChange {
   /** Changes whenever this file's diff may have; unset from a Relay before it. */
   stamp?: string;
 }
+
 /** Has a diff between HEAD and the index; untracked files don't. */
 export const isStaged = (c: WorkingChange) =>
   c.index !== " " && c.index !== "?";
@@ -25,6 +29,7 @@ export const isStaged = (c: WorkingChange) =>
 export const isUnstaged = (c: WorkingChange) =>
   c.worktree !== " " || c.conflict;
 export type ChangeKind = "added" | "deleted" | "modified" | "conflict";
+
 /** Porcelain status letter → how the file name is coloured. */
 export function changeKind(code: string, conflict = false): ChangeKind {
   if (conflict) return "conflict";
@@ -32,6 +37,7 @@ export function changeKind(code: string, conflict = false): ChangeKind {
   if (code === "D") return "deleted";
   return "modified";
 }
+
 export interface WorkingTree {
   head: string;
   branch: string;
@@ -58,6 +64,7 @@ export interface WorkingTree {
   /** Gitignored files agents wrote since the last commit; a project's checkout only. */
   ignored?: IgnoredTouch[];
 }
+
 const operationNames: Record<string, string> = {
   MERGE_HEAD: "merge",
   CHERRY_PICK_HEAD: "cherry-pick",
@@ -65,6 +72,7 @@ const operationNames: Record<string, string> = {
   "rebase-merge": "rebase",
   "rebase-apply": "rebase",
 };
+
 /** The Git operation under way as people say it: `MERGE_HEAD` is a "merge". */
 export const operationName = (operation: string) =>
   operationNames[operation] ?? operation;
@@ -73,6 +81,7 @@ export function operationInProgress(operation: string) {
   const name = operationName(operation);
   return `${name.charAt(0).toUpperCase()}${name.slice(1)} in progress`;
 }
+
 /** What the checkout is on: its branch, or the commit a detached HEAD sits at. */
 export const checkoutLabel = (tree: Pick<WorkingTree, "branch" | "head">) =>
   tree.branch ||
@@ -90,6 +99,7 @@ export interface IgnoredTouch {
   /** The rule ignoring it, as `.gitignore:4 .env*.local`. */
   rule?: string;
 }
+
 export const gitActionSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -136,11 +146,14 @@ export const gitActionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("pull"), revision: z.string() }).strict(),
   z.object({ kind: z.literal("fetch") }).strict(),
 ]);
+
 export type GitAction = z.infer<typeof gitActionSchema>;
+
 export interface Commit {
   sha: string;
   subject: string;
 }
+
 /**
  * Rebasing a diverged branch onto its upstream. A conflict changes nothing:
  * it says what came in, what's ours, and which files the first clash stopped on.
@@ -171,6 +184,7 @@ export interface GitInfo {
   version: string | null;
   error: string | null;
 }
+
 export interface WorkingTreeApi {
   workingTree(repo: Repo): Promise<WorkingTree>;
   workingDiff(repo: Repo, path: string, area: ChangeArea): Promise<FilePair>;

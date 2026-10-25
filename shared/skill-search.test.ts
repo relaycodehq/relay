@@ -18,6 +18,7 @@ const skill = (
   skill: true,
   ...extra,
 });
+
 const commands: ProviderCommand[] = [
   { name: "review", description: "Built-in review" },
   { name: "init", description: "Write AGENTS.md" },

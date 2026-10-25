@@ -61,6 +61,7 @@ let layout = new Map<string, string>();
 const layoutListeners = new Set<() => void>();
 
 type LayoutMap = { entries(): IterableIterator<[string, string]> };
+
 async function readLayout() {
   try {
     const keyboard = (
@@ -108,6 +109,7 @@ const usKeys: Record<string, string> = {
   Backquote: "`",
   IntlBackslash: "§",
 };
+
 let defaults = resolveDefaults();
 
 /** A default's key moved to wherever this layout prints its character. */
@@ -173,6 +175,7 @@ export function useBindings(id: ShortcutId) {
 
 // While Settings records a new shortcut, no shortcut does anything else.
 let recording = 0;
+
 export function setRecording(on: boolean) {
   recording = Math.max(0, recording + (on ? 1 : -1));
   void window.relay?.ignoreMenuShortcuts?.(recording > 0)?.catch(() => {});
@@ -184,6 +187,7 @@ type Modifiers = {
   metaKey: boolean;
   shiftKey: boolean;
 };
+
 type KeyEventLike = Modifiers & { code: string };
 
 const sameModifiers = (e: Modifiers, c: KeyCombo) =>
@@ -475,6 +479,7 @@ export function reassign(id: ShortcutId, list: KeyCombo[], combo: KeyCombo) {
 // The app menu (reload, zoom, full screen) lives in the main process; it
 // hears about changed keys, named the way this layout types them.
 let sentMenu = "";
+
 function syncMenu() {
   const menu: Record<string, string[]> = {};
   for (const id of menuShortcutIds)

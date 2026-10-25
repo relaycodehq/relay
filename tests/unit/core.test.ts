@@ -13,10 +13,13 @@ import {
 } from "../../shared/validation";
 import { fixtureServer, HEAD, BASE } from "../fixtures/gitea";
 const cleanup: (() => Promise<void>)[] = [];
+
 afterEach(async () => {
   await Promise.all(cleanup.splice(0).map((f) => f()));
 });
+
 const ref = { owner: "Web", name: "web-store", number: 7 };
+
 describe("URL and command boundaries", () => {
   it("preserves Gitea subpaths and handles file-tab links and deep links", () => {
     const root = "https://git.example.com/gitea";
@@ -32,6 +35,7 @@ describe("URL and command boundaries", () => {
       ),
     ).toEqual(ref);
   });
+
   it("rejects cross-origin and path-prefix confusion", () => {
     for (const url of [
       "https://evil.test/gitea/Web/web-store/pulls/7",
@@ -45,6 +49,7 @@ describe("URL and command boundaries", () => {
     expect(() => normalizeServer("https://user:secret@example.com")).toThrow();
     expect(filePathSchema.safeParse("../secret").success).toBe(false);
   });
+
   it("quotes shell metacharacters, apostrophes, and newlines literally", () => {
     const value = "some ' text $(printf hacked) `whoami`\nnext";
     expect(
@@ -54,6 +59,7 @@ describe("URL and command boundaries", () => {
     ).toBe(value);
   });
 });
+
 describe("Gitea integration", () => {
   it("authenticates, pages metadata and fetches only the selected file", async () => {
     const fixture = await fixtureServer();
@@ -75,6 +81,7 @@ describe("Gitea integration", () => {
       fixture.requests.every((r) => !JSON.stringify(r).includes("test-token")),
     ).toBe(true);
   });
+
   it("maps old/new line positions and rejects stale submissions", async () => {
     const fixture = await fixtureServer();
     cleanup.push(fixture.close);
@@ -104,6 +111,7 @@ describe("Gitea integration", () => {
     );
     expect(fixture.requests.filter((r) => r.method === "POST")).toHaveLength(1);
   });
+
   it("reports authentication failure without exposing tokens", async () => {
     const fixture = await fixtureServer();
     cleanup.push(fixture.close);
@@ -112,6 +120,7 @@ describe("Gitea integration", () => {
     ).rejects.toThrow("invalid or expired");
   });
 });
+
 describe("Network failures", () => {
   it.each([
     ["net::ERR_CERT_AUTHORITY_INVALID", "certificate"],
@@ -129,6 +138,7 @@ describe("Network failures", () => {
     await expect(client).rejects.toThrow(expected);
     await expect(client).rejects.not.toThrow("private-token");
   });
+
   it("reports a caller's cancellation as cancelled, not as a network failure", async () => {
     const client = new Gitea(
       {
@@ -151,6 +161,7 @@ describe("Network failures", () => {
     await expect(request).rejects.toThrow("Request cancelled");
   });
 });
+
 describe("Durable local state", () => {
   it("serializes concurrent updates and survives restart", async () => {
     const dir = await mkdtemp(join(tmpdir(), "relay-store-"));
@@ -170,6 +181,7 @@ describe("Durable local state", () => {
       JSON.parse(await readFile(join(dir, "state.json"), "utf8")).version,
     ).toBe(1);
   });
+
   it("preserves corrupted data instead of silently clearing it", async () => {
     const dir = await mkdtemp(join(tmpdir(), "relay-store-"));
     await writeFile(join(dir, "state.json"), "broken");

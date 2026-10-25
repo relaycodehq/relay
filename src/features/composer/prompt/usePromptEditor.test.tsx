@@ -14,7 +14,9 @@ import { usePromptEditor, type PromptEvents } from "./usePromptEditor";
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const roots: Root[] = [];
+
 afterEach(() => act(() => roots.splice(0).forEach((root) => root.unmount())));
 
 const pills = { content: (text: string) => promptContent(text, {}) };

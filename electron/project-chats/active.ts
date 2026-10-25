@@ -93,6 +93,7 @@ export class ActiveTurns {
   /** Turns whose job settled since the last sweep, and those still held at it. */
   private settled = new Set<ActiveChat>();
   private unreleased = new Set<ActiveChat>();
+
   constructor(
     private changed: (id: string) => void,
     readonly ledger = new TurnLedger(new MemoryTurnStore()),
@@ -101,26 +102,33 @@ export class ActiveTurns {
   get(id: string) {
     return this.turns.get(id);
   }
+
   has(id: string) {
     return this.turns.has(id);
   }
+
   /** A turn the agent started beside the one holding the thread runs. */
   rides(id: string) {
     return this.riders.has(id);
   }
+
   ids() {
     return [...this.turns.keys()];
   }
+
   /** Threads with a turn at work, a turn the agent started beside another included. */
   working() {
     return [...new Set([...this.turns.keys(), ...this.riders.keys()])];
   }
+
   all() {
     return [...this.turns.values()];
   }
+
   get size() {
     return this.turns.size;
   }
+
   requests(id: string) {
     return this.turns.get(id)?.requests.list() ?? [];
   }
@@ -182,6 +190,7 @@ export class ActiveTurns {
     for (const active of this.handles.values())
       if (active.abort === abort) return active;
   }
+
   /** The turn by its ledger id, if this holds it. */
   handle(turnId: string) {
     return this.handles.get(turnId);
@@ -201,6 +210,7 @@ export class ActiveTurns {
       });
     return job;
   }
+
   /**
    * Ends the turns nothing will release: a job that settled a sweep ago with
    * its turn still held, and a turn open in the ledger that nothing holds.
@@ -231,6 +241,7 @@ export class ActiveTurns {
     this.ledger.phase(active.turnId, "running", answerId);
     this.changed(id);
   }
+
   /** The answer is written; the turn saves before it gives the thread back. */
   finishing(id: string, active: ActiveChat) {
     this.ledger.phase(active.turnId, "finishing");
@@ -283,10 +294,12 @@ export class ActiveTurns {
         "",
       ).catch(() => {});
   }
+
   /** Stopped: the answer already shows it, while the agent winds down. */
   stopping(active: ActiveChat) {
     return this.ledger.get(active.turnId)?.phase === "stopping";
   }
+
   /** Its answer shows as finished or stopped; the turn only winds down. */
   windingDown(active: ActiveChat) {
     const phase = this.ledger.get(active.turnId)?.phase;
@@ -333,10 +346,12 @@ export class ActiveTurns {
   sideRunning(key: string) {
     return this.sides.has(key);
   }
+
   /** A side question is being answered in the thread. */
   hasSide(id: string) {
     return [...this.sides.keys()].some((key) => key.startsWith(`${id}:`));
   }
+
   /** A side question's `answer`, running until `job` settles. */
   runSide(
     key: string,
@@ -353,6 +368,7 @@ export class ActiveTurns {
     this.ledger.phase(turn.id, "running", answer.id);
     this.sides.set(key, { turnId: turn.id, abort, job, answer });
   }
+
   sideDone(key: string) {
     const side = this.sides.get(key);
     if (!side) return;
@@ -363,6 +379,7 @@ export class ActiveTurns {
       side.answer.id,
     );
   }
+
   /**
    * A turn that serves `parent` and writes `answer`, such as the outgoing
    * agent's handoff note. Call what this returns when it's done.
@@ -387,6 +404,7 @@ export class ActiveTurns {
       this.ledger.end(turn.id, outcome(answer, stopped), answer.id);
     };
   }
+
   private holds(turnId: string) {
     return (
       this.handles.has(turnId) ||
@@ -394,6 +412,7 @@ export class ActiveTurns {
       [...this.sides.values()].some((s) => s.turnId === turnId)
     );
   }
+
   allSides() {
     return [...this.sides.values()];
   }

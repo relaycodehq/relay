@@ -11,6 +11,7 @@ interface AgentPickCatalog {
   /** Why it couldn't, as opposed to offering none. */
   error?: string;
 }
+
 /** An agent's models; with `computerId`, as that paired computer's copy lists them. */
 export const agentModelsQuery = <P extends AgentProvider>(
   provider: P,
@@ -23,6 +24,7 @@ export const agentModelsQuery = <P extends AgentProvider>(
   staleTime: 60_000,
   retry: false,
 });
+
 /**
  * The models of each agent whose model the composer keeps in `picks`. Asked
  * once a minute at most; opening the picker asks again. A project on a paired

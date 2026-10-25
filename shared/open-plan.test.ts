@@ -4,6 +4,7 @@ import { mainConversation, replyRoots, type ChatMessage } from "./projects";
 import { openPlan } from "./open-plan";
 
 let seq = 0;
+
 const message = (
   id: string,
   role: ChatMessage["role"],

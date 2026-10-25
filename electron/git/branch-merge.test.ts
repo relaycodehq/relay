@@ -17,11 +17,13 @@ const run = (dir: string, ...args: string[]) =>
     stdio: ["pipe", "pipe", "pipe"],
   }).trim();
 const git = (...args: string[]) => run(root, ...args);
+
 const commit = async (file: string, text: string, message: string) => {
   await writeFile(join(root, file), text);
   git("add", file);
   git("commit", "-qm", message);
 };
+
 const merge = async (push = true) => {
   const plan = await mergePlan(root);
   return mergeBranch(root, {
@@ -46,6 +48,7 @@ beforeEach(async () => {
   git("push", "-qu", "origin", "main");
   git("switch", "-qc", "feature");
 });
+
 afterEach(async () => {
   for (const dir of [root, remote, other])
     await rm(dir, { recursive: true, force: true });

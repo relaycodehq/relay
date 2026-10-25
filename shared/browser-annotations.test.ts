@@ -16,6 +16,7 @@ const browser: BrowserAnnotation = {
   rect: { x: 20, y: 30, width: 200, height: 100 },
   viewport: { width: 800, height: 600 },
 };
+
 it.each([
   "",
   "/review",
@@ -36,6 +37,7 @@ it.each([
   };
   expect(agentAsked(input)).toEqual({ provider: "codex", question });
 });
+
 it("sends each comment with its actual image number and separates page evidence from user feedback", () => {
   // A plain screenshot first, then the comment's.
   const prompt = browserAnnotationPrompt("Fix the feedback", [{}, { browser }]);
@@ -49,6 +51,7 @@ it("sends each comment with its actual image number and separates page evidence 
     "Comment 1 (Image #3)",
   );
 });
+
 it("requires a real comment and bounded page evidence before it crosses the desktop API", () => {
   expect(
     browserAnnotationSchema.safeParse({ ...browser, comment: "   " }).success,

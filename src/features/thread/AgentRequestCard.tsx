@@ -15,12 +15,14 @@ import type {
 } from "../../../shared/agent-modes";
 import "./agent-request.css";
 import { errorMessage } from "../../../shared/error-message";
+
 const labels: Record<AgentDecision, string> = {
   accept: "Approve",
   acceptForSession: "Always",
   decline: "Decline",
   cancel: "Cancel",
 };
+
 export function AgentRequestCard({
   chatId,
   request,

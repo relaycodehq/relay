@@ -6,9 +6,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { uploadName, writeUploadChunk } from "./uploads";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-uploads-"));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const file = Buffer.from("0123456789");

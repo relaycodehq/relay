@@ -6,10 +6,12 @@ import { startLog } from "../app/log";
 import { crashedRunLog, keepCrashedRunLog } from "./crash-log";
 
 const { info, warn, error } = console;
+
 const before = {
   monitor: process.listeners("uncaughtExceptionMonitor"),
   rejection: process.listeners("unhandledRejection"),
 };
+
 let dir = "";
 
 afterEach(() => {

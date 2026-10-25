@@ -19,12 +19,14 @@ import { writeFileAtomic } from "../util/atomic-write";
 
 const reasonSchema = z.string().max(1000);
 const pathsSchema = z.array(filePathSchema).max(1000);
+
 const groupSchema = z.object({
   id: z.string().max(100),
   name: z.string().max(80),
   description: z.string().max(600),
   paths: pathsSchema,
 });
+
 const resultSchema = z.object({
   version: z.literal(TRIAGE_VERSION),
   revision: z.string(),
@@ -56,6 +58,7 @@ const resultSchema = z.object({
   }),
   notice: z.string().optional(),
 });
+
 const candidateSchema = z.object({
   path: filePathSchema,
   hunks: z.number().int().min(0).max(2500),
@@ -64,6 +67,7 @@ const candidateSchema = z.object({
   references: z.array(z.string()).max(2500),
   terms: z.array(z.string()).max(256),
 });
+
 const checkpointSchema = z.object({
   version: z.literal(1),
   definitions: z.array(responseSchema.shape.groups.element).max(128),
@@ -93,11 +97,14 @@ const checkpointSchema = z.object({
     .enum(["budget", "paused", "error", "incomplete", "interrupted"])
     .optional(),
 });
+
 export type Checkpoint = z.infer<typeof checkpointSchema>;
+
 export interface SavedAnalysis {
   result: TriageResult;
   checkpoint: Checkpoint;
 }
+
 export const freshCheckpoint = (paths: string[]): Checkpoint => ({
   version: 1,
   definitions: [],
@@ -109,6 +116,7 @@ export const freshCheckpoint = (paths: string[]): Checkpoint => ({
   preservedGroups: [],
   preservedOrdinary: {},
 });
+
 const analysisFile = (dir: string, key: string) =>
   join(
     dir,
@@ -146,13 +154,16 @@ export function pendingWork(c: Checkpoint) {
       .map((x) => x.path),
   };
 }
+
 export const remainingPaths = (c: Checkpoint) => [
   ...new Set(Object.values(pendingWork(c)).flat()),
 ];
+
 export const resumable = (c: Checkpoint): TriageState["resume"] => {
   const remaining = remainingPaths(c).length;
   return remaining ? { remaining, reason: c.stop ?? "interrupted" } : undefined;
 };
+
 export function restoreState(saved: SavedAnalysis): TriageState {
   const { result, checkpoint } = saved,
     resume = resumable(checkpoint);
@@ -282,6 +293,7 @@ export async function readAnalysis(
     );
   }
 }
+
 export async function saveAnalysis(
   dir: string,
   key: string,

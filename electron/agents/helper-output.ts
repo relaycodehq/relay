@@ -19,6 +19,7 @@ export function excerpt(text: string, budget: number) {
 // start in an empty directory. Starting in the checkout made Codex fail on its
 // (denied) AGENTS.md.
 let emptyDirectory: Promise<string> | undefined;
+
 export function emptyCwd() {
   emptyDirectory ??= mkdtemp(join(tmpdir(), "relay-helper-")).catch((e) => {
     emptyDirectory = undefined;

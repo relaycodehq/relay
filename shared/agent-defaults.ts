@@ -26,11 +26,13 @@ export type ClaudeDefaults = {
   /** The settings' per-model `effortLevel`s, by canonical id. */
   modelEfforts: Record<string, ReasoningEffort>;
 };
+
 const level = z
   .enum(["low", "medium", "high", "xhigh", "max"])
   .nullish()
   .catch(undefined);
 const modelId = z.string().max(200).nullish().catch(undefined);
+
 const claudeSettingsSchema = z.object({
   effective: z.object({
     model: modelId,
@@ -42,6 +44,7 @@ const claudeSettingsSchema = z.object({
   }),
   applied: z.object({ model: modelId, effort: level }),
 });
+
 /** Reads what the SDK's `getSettings()` answers; undefined if it can't. */
 export function claudeDefaultsFrom(value: unknown): ClaudeDefaults | undefined {
   const parsed = claudeSettingsSchema.safeParse(value);
@@ -61,6 +64,7 @@ export function claudeDefaultsFrom(value: unknown): ClaudeDefaults | undefined {
     ),
   };
 }
+
 /** The effort the settings give a model, by canonical id; "" leaves its built-in one. */
 export const settingsEffort = (
   defaults: ClaudeDefaults,
@@ -88,10 +92,12 @@ export type CodexDefaults = {
   /** The config's `model_reasoning_effort`; "" runs each model's own. */
   effort: ReasoningEffort;
 };
+
 const codexDefaultModel = (
   defaults: CodexDefaults | undefined,
   models: CodexModel[],
 ) => (defaults ? defaults.model || models.find((m) => m.isDefault)?.id : "");
+
 /** What Default effort runs on `model` ("" for Default's); "" when unknown. */
 export function codexDefaultEffort(
   defaults: CodexDefaults | undefined,
@@ -124,6 +130,7 @@ export function codexAgentDefaults(
     ),
   };
 }
+
 /** Claude's Default as every agent reports it: listed model, effort, per-model efforts. */
 export function claudeAgentDefaults(
   defaults: ClaudeDefaults,

@@ -12,10 +12,12 @@ import { dirname, join } from "node:path";
 import { findProjectIcon, iconHref, imageInfo } from "./project-icon";
 
 let root: string, outside: string;
+
 const put = async (path: string, contents: string | Buffer) => {
   await mkdir(dirname(join(root, path)), { recursive: true });
   await writeFile(join(root, path), contents);
 };
+
 /** A PNG header is all the resolver reads for size. */
 const png = (width: number, height = width, padding = 0) => {
   const bytes = Buffer.alloc(33 + padding);
@@ -26,6 +28,7 @@ const png = (width: number, height = width, padding = 0) => {
   bytes.writeUInt32BE(height, 20);
   return bytes;
 };
+
 const svg = (label: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><title>${label}</title></svg>`;
 const found = async () =>
@@ -36,6 +39,7 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-icon-")));
   outside = await mkdtemp(join(tmpdir(), "relay-icon-outside-"));
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
   await rm(outside, { recursive: true, force: true });

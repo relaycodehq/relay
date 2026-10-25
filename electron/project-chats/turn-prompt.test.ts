@@ -11,6 +11,7 @@ const message = (id: string, body: string): ChatMessage => ({
   provider: "codex",
   version: 1,
 });
+
 function setup(previous: ChatMessage[]): TurnPromptInput {
   const chat: ProjectChat = {
     id: "imported",
@@ -46,6 +47,7 @@ function setup(previous: ChatMessage[]): TurnPromptInput {
     },
   };
 }
+
 it("gives a fresh imported session every message and the whole message body", () => {
   const previous = Array.from({ length: 40 }, (_, i) =>
     message(`${i}`, `Requirement ${i}`),
@@ -61,6 +63,7 @@ it("gives a fresh imported session every message and the whole message body", ()
       .prompt,
   ).toContain(previous[0]!.body);
 });
+
 it("points oversized imports at the complete saved record without silently presenting an excerpt as full history", () => {
   const input = setup([
     message("first", "x".repeat(210000)),
@@ -73,6 +76,7 @@ it("points oversized imports at the complete saved record without silently prese
   expect(prompt).toContain("Recent conversation excerpt");
   expect(prompt.length).toBeLessThan(15000);
 });
+
 it("does not replay imported history to a session that already heard it, or prepend it to commands", () => {
   const input = setup([
     message("first", "EARLIEST"),
@@ -86,6 +90,7 @@ it("does not replay imported history to a session that already heard it, or prep
     turnPrompt({ ...input, question: "/help", command: true }).prompt,
   ).toBe("/help");
 });
+
 it("numbers browser comments after the screenshots of missed messages, which go out first", () => {
   const shot = (id: string) => ({
     id,

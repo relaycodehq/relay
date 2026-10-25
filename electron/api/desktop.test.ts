@@ -10,6 +10,7 @@ vi.mock("electron", () => ({
   nativeTheme: {},
   shell: {},
 }));
+
 vi.mock("../app/menu", () => ({ setApplicationMenu: vi.fn() }));
 
 function contents() {

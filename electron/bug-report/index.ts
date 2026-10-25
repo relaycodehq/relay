@@ -264,6 +264,7 @@ export async function offerWindowReport(
 }
 
 let names: string[] | undefined;
+
 /**
  * The Mac's names besides its host name: "Jana's MacBook Pro" as Sharing
  * shows it, and the Bonjour name. Either can turn up in a log.

@@ -24,6 +24,7 @@ vi.waitFor = ((callback, options) =>
 // every streamed piece once, losing the reader's selection and scroll.
 const repeatedKeys: string[] = [];
 const consoleError = console.error;
+
 console.error = (...args: unknown[]) => {
   if (
     typeof args[0] === "string" &&
@@ -32,6 +33,7 @@ console.error = (...args: unknown[]) => {
     repeatedKeys.push(String(args[1]));
   consoleError(...args);
 };
+
 afterEach(() => {
   if (!repeatedKeys.length) return;
   const keys = [...new Set(repeatedKeys)].join(", ");

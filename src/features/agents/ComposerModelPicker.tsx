@@ -71,12 +71,14 @@ const providerIcons: Record<BuiltinProvider | "message", typeof OpenAI> = {
   antigravity: Antigravity,
   message: MessageSquare,
 };
+
 export function ProviderIcon({ provider }: { provider: MessageProvider }) {
   if (provider !== "message" && isRegistryProvider(provider))
     return <RegistryGlyph provider={provider} className="provider-glyph" />;
   const Glyph = providerIcons[provider];
   return <Glyph className="provider-glyph" aria-hidden />;
 }
+
 /** An agent that can't run where the project does yet. */
 export interface PickerSetup {
   /** What the trigger says instead of the model. */
@@ -88,6 +90,7 @@ export interface PickerSetup {
   /** Shown instead of the agent's search and models; `close` closes the picker. */
   panel: (close: () => void) => ReactNode;
 }
+
 export const ComposerModelPicker = memo(function ComposerModelPicker({
   provider,
   ready = true,

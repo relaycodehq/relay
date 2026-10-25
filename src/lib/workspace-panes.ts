@@ -3,11 +3,13 @@ import { readJson, writeJson } from "./persisted-store";
 
 export type PaneId = "chat" | "changes" | "panel";
 const PANE_IDS: PaneId[] = ["chat", "changes", "panel"];
+
 const DEFAULT_WEIGHTS: Record<PaneId, number> = {
   chat: 0.85,
   changes: 1.6,
   panel: 1.4,
 };
+
 /**
  * The narrowest each pane gets. Panes that can't all have this much yield,
  * the least recently opened first, rather than run past the window's edge.
@@ -20,6 +22,7 @@ export const PANE_MIN: Record<PaneId, number> = {
   changes: 360,
   panel: 360,
 };
+
 /** The room `panes` need side by side. */
 export const roomFor = (panes: PaneId[]) =>
   panes.reduce((sum, id) => sum + PANE_MIN[id], 0);
@@ -35,6 +38,7 @@ const paneOf = (id: unknown): PaneId | undefined =>
 const panesIn = (ids: unknown[]) => [
   ...new Set(ids.map(paneOf).filter((id) => id !== undefined)),
 ];
+
 const STORAGE_KEY = "relay-workspace-panes";
 const THREADS_KEY = "relay-thread-panes";
 const REMEMBERED_THREADS = 200;

@@ -16,6 +16,7 @@ import { newThreadModelsOf, withNewThreadModels } from "./composer-models";
 import { sentModel } from "../../../shared/new-thread-models";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -23,6 +24,7 @@ beforeEach(() => {
     setItem: (key: string, value: string) => store.set(key, value),
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 const sol = {
@@ -30,10 +32,12 @@ const sol = {
   fast: true,
   reasoningEffort: "high" as const,
 };
+
 const modes = {
   runtimeMode: "full-access",
   interactionMode: "default",
 } as const;
+
 const plain = (
   model: string,
   reasoningEffort: "" | "low" | "high" | "max" = "",

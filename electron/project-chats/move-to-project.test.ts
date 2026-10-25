@@ -21,6 +21,7 @@ let closeTools: () => Promise<void>;
 let decision: "accept" | "decline";
 
 useProjectChats();
+
 beforeEach(async () => {
   decision = "accept";
   vi.spyOn(chats, "askInTurn").mockImplementation(async () => ({
@@ -43,6 +44,7 @@ beforeEach(async () => {
   const { port } = serving.server.address() as { port: number };
   useRelayMcp({ port, secret });
 });
+
 afterEach(async () => {
   useRelayMcp(undefined);
   await closeTools?.();

@@ -10,6 +10,7 @@ import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
+
 test("organizes project groups, preserves child expansion across restart, and centers add icons", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-folders-")));
   const env = relayEnv();

@@ -12,6 +12,7 @@ import { api } from "../../lib/api";
 const NONE: ThreadNote[] = [];
 /** The mark each thread's cached notes were last brought up to. */
 const cachedAt = new Map<string, string | undefined>();
+
 export const notesKey = (chatId: string | undefined) => [
   "thread-notes",
   chatId,

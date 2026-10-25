@@ -3,6 +3,7 @@ import { parseSamples, type PerfSample } from "./perf-log";
 import { machineText, performanceFacts } from "./summary";
 
 const t0 = Date.parse("2026-10-14T10:00:00Z");
+
 const sample = (i: number, cpu: number, machineCpu: number): PerfSample => ({
   t: t0 + i * 30_000,
   p: {

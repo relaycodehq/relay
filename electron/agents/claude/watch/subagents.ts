@@ -15,6 +15,7 @@ type Frame = {
   status?: string;
   patch?: { status?: string; is_backgrounded?: boolean };
 };
+
 type Block = {
   type?: string;
   id?: string;

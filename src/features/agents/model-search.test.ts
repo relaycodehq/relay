@@ -13,6 +13,7 @@ const row = (
   shortName,
   ...more,
 });
+
 const codex: [string, string] = ["codex", "Codex"];
 const claude: [string, string] = ["claude", "Claude"];
 const opencode: [string, string] = ["opencode", "OpenCode"];
@@ -27,6 +28,7 @@ describe("rankModelQuery", () => {
     row("GPT-5 Codex", "gpt-5-codex", codex),
     row("o4 Mini", "o4-mini", codex),
   ];
+
   it.each([
     ["", [0, 0, 0, 0]],
     ["  ", [0, 0, 0, 0]],
@@ -51,6 +53,7 @@ describe("rankModelQuery", () => {
     row("Haiku 4.5", "haiku", claude),
     row("Claude default", "", claude),
   ];
+
   it.each([
     ["son", [null, 9, null, null]],
     ["opus", [4, null, null, null]],
@@ -71,6 +74,7 @@ describe("rankModelQuery", () => {
       subProvider: "Google Long context",
     }),
   ];
+
   it.each([
     ["openai", [353, 18, null]],
     ["claude", [9, null, null]],

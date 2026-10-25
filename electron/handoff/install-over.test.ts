@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { installOutput, installRelayOver } from "./install-over";
 
 const box = { kind: "ssh", host: "box" } as const;
+
 /** Runs the line here, as ssh would there. */
 const here = (_route: unknown, line: string): [string, string[]] => [
   "sh",

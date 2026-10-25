@@ -24,6 +24,7 @@ const base = {
   diagnostics: [],
   composer: null,
 };
+
 const at = (list: ReturnType<typeof lineAnnotations>) =>
   list.map((a) => `${a.side}:${a.lineNumber}`);
 

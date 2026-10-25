@@ -217,10 +217,12 @@ function toInstalled(id: string, agent: InstalledAgent): InstalledRegistryAgent 
 }
 
 let registry: AcpRegistry | undefined;
+
 /** Where registry agents go on this machine; set once by the app. */
 export function configureAcpRegistry(next: AcpRegistry) {
   registry = next;
 }
+
 export function acpRegistry() {
   if (!registry) throw new Error("The ACP registry isn't set up in this process.");
   return registry;

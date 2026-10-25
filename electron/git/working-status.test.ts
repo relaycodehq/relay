@@ -9,6 +9,7 @@ import { parseStatusV2, statusArgs } from "./working-status";
 
 let root: string, remote: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 const quiet = (...args: string[]) => {
   try {
     return execFileSync("git", ["-C", root, ...args], {
@@ -88,6 +89,7 @@ beforeEach(async () => {
   git("config", "user.email", "test@example.invalid");
   git("remote", "add", "origin", remote);
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
   await rm(remote, { recursive: true, force: true });

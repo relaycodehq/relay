@@ -25,6 +25,7 @@ import {
 import type { AgentProvider } from "../../shared/projects";
 
 vi.mock("../../electron/platform/executables");
+
 vi.mock("../../electron/agents/antigravity/install", async (original) => ({
   ...(await original<object>()),
   ...(await import("../fixtures/antigravity-stand-in")).antigravityStandIn,
@@ -192,6 +193,7 @@ const freePort = () =>
 let s: Scenario | undefined;
 /** What a recording started beside its scenario, stopped after it. */
 const stops: (() => Promise<void>)[] = [];
+
 afterEach(async () => {
   await s?.dispose();
   s = undefined;
@@ -201,6 +203,7 @@ afterEach(async () => {
 for (const provider of agents as AgentProvider[]) {
   const send = (id: string, body: string, extra = {}) =>
     s!.send(id, body, provider, { choice: recordedChoice(provider), ...extra });
+
   describe(provider, () => {
     it("simple", async () => {
       s = await recording(provider, "simple");
@@ -208,6 +211,7 @@ for (const provider of agents as AgentProvider[]) {
       await send(id, "Reply with exactly the word pong and nothing else.");
       await s.ended(id);
     });
+
     it("tool", async () => {
       s = await recording(provider, "tool");
       const id = await s.thread();
@@ -217,6 +221,7 @@ for (const provider of agents as AgentProvider[]) {
       );
       await s.ended(id);
     });
+
     it("two-turns", async () => {
       s = await recording(provider, "two-turns");
       const id = await s.thread();
@@ -225,6 +230,7 @@ for (const provider of agents as AgentProvider[]) {
       await send(id, "Now reply with exactly the word ping and nothing else.");
       await s.ended(id);
     });
+
     it("stop", async () => {
       s = await recording(provider, "stop");
       const id = await s.thread();

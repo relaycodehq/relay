@@ -26,6 +26,7 @@ const isolateProviderExecutables: (
 ) => () => void = createRequire(import.meta.url)(
   "../fixtures/provider-isolation.cjs",
 );
+
 const {
   isolateProviderHome,
   isolateProviderKeychain,
@@ -36,11 +37,14 @@ const {
     target: { execFile: ReturnType<typeof vi.fn> },
   ): () => void;
 } = createRequire(import.meta.url)("../fixtures/provider-isolation.cjs");
+
 let root: string;
 let restore: (() => void) | undefined;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-provider-fixtures-"));
 });
+
 afterEach(async () => {
   setLinkedAgents({});
   restore?.();

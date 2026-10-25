@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const refreshPath = vi.hoisted(() =>
   vi.fn<(searchedAt: number) => Promise<boolean>>(async () => false),
 );
+
 // Discovery must not pick up the developer's globally installed agents.
 vi.mock("node:fs/promises", async (actual) => {
   const fs = await actual<typeof import("node:fs/promises")>();
@@ -28,6 +29,7 @@ vi.mock("node:fs/promises", async (actual) => {
     },
   };
 });
+
 vi.mock("./shell-path", () => ({ pathReady: async () => {}, refreshPath }));
 
 import {
@@ -66,6 +68,7 @@ async function program(dir: string, name: string, body: string) {
   await chmod(file, 0o755);
   return file;
 }
+
 const working = (name: string) => `echo "${name} 1.2.3"`;
 
 beforeEach(async () => {

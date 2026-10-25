@@ -6,6 +6,7 @@ import {
 } from "./validation";
 
 const wrapped = (url: string) => `relay://open?url=${encodeURIComponent(url)}`;
+
 const ref = {
   owner: "Sample Project",
   name: "web-store",

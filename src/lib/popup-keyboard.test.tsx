@@ -10,7 +10,9 @@ import { bindings, popupOpen, useShortcut } from "./shortcuts";
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root | undefined;
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   root = undefined;

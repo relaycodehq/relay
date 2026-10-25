@@ -29,6 +29,7 @@ const plans = new Map<string, ImportPlan>();
 let shown: string | undefined;
 const listeners = new Set<() => void>();
 const changed = () => listeners.forEach((l) => l());
+
 const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);

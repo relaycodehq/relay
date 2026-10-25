@@ -67,6 +67,7 @@ export const hostedMetaSchema = z
   })
   .loose();
 type HostedMeta = z.infer<typeof hostedMetaSchema>;
+
 /** A thread's Claude Code session, kept between its turns. */
 export type ClaudeSession = {
   options: ClaudeRunOptions;
@@ -177,31 +178,37 @@ export function watchOf(session: ClaudeSession) {
   }
   return session.watch;
 }
+
 export const sessions = new HostedSessions<ClaudeSession>({
   provider: "claude",
   name: "Claude",
   kind: "claude",
   close: closeSession,
 });
+
 traceSessions(() =>
   [...sessions.values()].map((s) => s.account ?? SYSTEM_ACCOUNT),
 );
+
 export function closeSession(session: ClaudeSession) {
   session.input.close();
   session.stream.close();
   session.released?.();
 }
+
 /** The session's options are a turn's own again. */
 export function setOptions(session: ClaudeSession, options: ClaudeRunOptions) {
   session.options = options;
   session.ready?.resolve();
   session.ready = undefined;
 }
+
 export function closeClaudeSession(key: string) {
   const session = sessions.get(key);
   sessions.delete(key);
   if (session) closeSession(session);
 }
+
 /**
  * Moves a live session to new settings instead of restarting it, which
  * would end the background work and wake-ups it holds. False when it can't:
@@ -254,6 +261,7 @@ export async function retune(
     return false;
   }
 }
+
 /** A session for a turn to start. */
 export function newSession(
   options: ClaudeRunOptions,
@@ -277,6 +285,7 @@ export function newSession(
     stream: undefined as unknown as ClaudeStream,
   };
 }
+
 /** Starts the session's Claude Code, in the agent host when there is one. */
 export async function startSession(
   holder: ClaudeSession,
@@ -321,6 +330,7 @@ export async function startSession(
   watchWindow(holder);
   void pump(holder, holder.stream[Symbol.asyncIterator]());
 }
+
 /** Only the CLI knows the model's window (Opus has 1M without a `[1m]` suffix); ask now rather than wait for the first result to report it. */
 function watchWindow(holder: ClaudeSession) {
   void holder.stream
@@ -330,6 +340,7 @@ function watchWindow(holder: ClaudeSession) {
     })
     .catch(() => {});
 }
+
 function openHosted(holder: ClaudeSession, config: Options, key?: string) {
   const { options } = holder;
   const meta: HostedMeta = {
@@ -364,6 +375,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
     }),
   );
 }
+
 function useHosted(holder: ClaudeSession, hosted: HostedQuery) {
   holder.hosted = hosted;
   // It answers every call the session makes of the SDK's query.
@@ -373,6 +385,7 @@ function useHosted(holder: ClaudeSession, hosted: HostedQuery) {
     once: true,
   });
 }
+
 /**
  * Takes back the sessions the agent host kept running while Relay was away.
  * Keys `owns` rejects, and sessions nobody could use, end. Each one comes
@@ -390,6 +403,7 @@ export function reattachClaudeSessions(
       : undefined;
   });
 }
+
 function restoreSession(
   found: FoundSession,
   meta: HostedMeta,

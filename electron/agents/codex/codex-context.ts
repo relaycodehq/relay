@@ -12,6 +12,7 @@ const pageSchema = z.object({
   ),
   nextCursor: z.string().nullable(),
 });
+
 type Item = z.infer<typeof pageSchema>["data"][number]["item"];
 
 const record = (value: unknown): Record<string, unknown> | undefined =>

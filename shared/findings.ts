@@ -8,6 +8,7 @@ import { filePathSchema } from "./validation";
 /** Codex's review scale. */
 const priorities = ["P0", "P1", "P2", "P3"] as const;
 export type Priority = (typeof priorities)[number];
+
 export const priorityMeaning: Record<Priority, string> = {
   P0: "Drop everything to fix",
   P1: "Fix before this merges",
@@ -19,6 +20,7 @@ const findingFileSchema = z.object({
   path: z.string().trim().min(1).max(4096),
   line: z.number().int().positive().max(10_000_000).optional(),
 });
+
 const reviewerNumbersSchema = z
   .array(z.number().int().min(1).max(MAX_REVIEWERS))
   .max(MAX_REVIEWERS)
@@ -32,22 +34,27 @@ const findingSchema = z.object({
   /** How the lead confirmed it. */
   check: z.string().trim().max(600).optional().catch(undefined),
 });
+
 export type Finding = z.infer<typeof findingSchema>;
+
 const droppedFindingSchema = z.object({
   title: z.string().trim().min(1).max(300),
   reason: z.string().trim().max(600).catch(""),
   reviewers: reviewerNumbersSchema,
 });
+
 const reportSchema = z.object({
   findings: z.array(findingSchema).max(50),
   dropped: z.array(droppedFindingSchema).max(50).catch([]),
 });
+
 export type FindingsReport = z.infer<typeof reportSchema>;
 
 export type FindingStatus = "open" | "fixing" | "fixed" | "dismissed";
 
 /** A batch of findings, shown under the answer that listed it. */
 export type PublishedReport = FindingsReport & { messageId: string };
+
 /** What a thread's answers reported, and where each finding stands. */
 export interface ThreadFindings {
   /** In conversation order. */
@@ -70,6 +77,7 @@ export function nextFindingNumber(findings: ThreadFindings | undefined) {
 }
 
 const FENCE = "```relay-findings";
+
 /**
  * Splits a findings block off the end of an answer. Only a block that starts
  * its own line, is closed, and has nothing after it counts: one quoted

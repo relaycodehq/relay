@@ -109,6 +109,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
   await writeFile(log, "");
 });
+
 afterAll(async () => {
   delete process.env.CURSOR_FAKE_LOG;
   await rm(root, { recursive: true, force: true });

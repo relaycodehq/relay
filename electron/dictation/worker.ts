@@ -15,6 +15,7 @@ export type WorkerCommand = {
   ort: string;
   threads: number;
 };
+
 export type WorkerNotice =
   | { type: "loaded" }
   | { type: "failed"; message: string }

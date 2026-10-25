@@ -10,12 +10,14 @@ import { measuredAsk, sessions } from "./session";
 /** An earlier question in a side thread, and what Claude said to it. */
 export type SideExchange = { question: string; response: string };
 type Measured = Awaited<ReturnType<ClaudeMeter["measure"]>>;
+
 type SideAsking = ClaudeStream & {
   askSideQuestion(
     question: string,
     options?: { history?: SideExchange[]; signal?: AbortSignal },
   ): Promise<{ response: string } | null>;
 };
+
 /**
  * Claude Code's `/btw`: one answer from the session's context, with no tools,
  * that never enters its transcript. A live session answers even mid-turn;

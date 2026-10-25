@@ -34,6 +34,7 @@ const configSchema = z.object({
   port: z.number().int().min(1024).max(65535),
   secret: z.string().regex(/^[0-9a-f]{64}$/),
 });
+
 export type RelayMcpConfig = z.infer<typeof configSchema>;
 
 const configFile = (dir: string) => join(dir, "mcp.json");
@@ -124,6 +125,7 @@ export function verifyRelayToken(secret: string, token: string) {
 }
 
 let current: RelayMcpConfig | undefined;
+
 /** Relay found or made its config; threads get the tools from now on. */
 export function useRelayMcp(config: RelayMcpConfig | undefined) {
   current = config;

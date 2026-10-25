@@ -12,6 +12,7 @@ import {
   restart,
   useProjectChats,
 } from "../../tests/fixtures/project-chats-harness";
+
 vi.mock("../platform/executables");
 
 useProjectChats();
@@ -73,6 +74,7 @@ it("asks the outgoing agent for a handoff note before another agent takes over",
   expect(claudePrompt.split("Claude is taking over")).toHaveLength(1);
   expect(claudePrompt).toContain("Explain the cache guard");
 });
+
 it("asks the outgoing agent for a note in a fork it hasn't answered in yet", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
@@ -107,6 +109,7 @@ it("asks the outgoing agent for a note in a fork it hasn't answered in yet", asy
     .find((r) => r.method === "thread/fork");
   expect(forked?.thread).toMatchObject({ threadId: "fixture-thread" });
 });
+
 /** Sends `body` to Claude after Codex's turn, and returns the thread and Claude's prompt. */
 async function switchToClaude(chatId: string, body: string) {
   await chats.send(chatId, { ...input(body), provider: "claude" });
@@ -126,6 +129,7 @@ async function switchToClaude(chatId: string, body: string) {
     .text as string;
   return { chat: await chats.get(chatId), prompt };
 }
+
 it("briefs the new agent itself when a usage limit cut off the outgoing agent's turn", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture usage limit"));
@@ -146,6 +150,7 @@ it("briefs the new agent itself when a usage limit cut off the outgoing agent's 
     "didn't finish (failed: You've hit your usage limit.)",
   );
 });
+
 it("writes the note itself when the outgoing agent runs out while writing it", async () => {
   vi.stubEnv("RELAY_AGENT_NOTE_LIMIT", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -168,6 +173,7 @@ it("writes the note itself when the outgoing agent runs out while writing it", a
   expect(prompt).toContain("Handoff note Relay wrote");
   expect(prompt).toContain("Explain the cache guard");
 });
+
 it("accepts a message for another agent without waiting for the handoff note", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "2000");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -193,6 +199,7 @@ it("accepts a message for another agent without waiting for the handoff note", a
     }),
   );
 });
+
 it("tells an agent coming back what was asked of the other agent meanwhile", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const [body, count] of [
@@ -226,6 +233,7 @@ it("tells an agent coming back what was asked of the other agent meanwhile", asy
     "Claude found the same cache guard.",
   ]);
 });
+
 it("still tells a compacted session the notes left since its last answer", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const settled = (count: number) =>
@@ -251,6 +259,7 @@ it("still tells a compacted session the notes left since its last answer", async
     .find((text) => text.startsWith("My request: Go on"))!;
   expect(prompt).toContain("Keep the old API.");
 });
+
 it("keeps what Claude compacted to beside the compaction, not as its answer", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const settled = (count: number) =>
@@ -272,6 +281,7 @@ it("keeps what Claude compacted to beside the compaction, not as its answer", as
   expect(compaction.body).toBe("");
   expect(compaction.compactSummary).toBe("Summary:\n1. Keep the old API.");
 });
+
 it("compacts when the running answer is done, ahead of what was already queued", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -304,6 +314,7 @@ it("compacts when the running answer is done, ahead of what was already queued",
     expect.stringMatching(/^assistant:/),
   ]);
 });
+
 /** A thread with one Codex answer, saved as if its context was `cacheAge` ms past its last request. */
 const answeredLongAgo = async (cacheAge: number) => {
   const chat = await chats.create(projectId, { kind: "project" });
@@ -323,6 +334,7 @@ const answeredLongAgo = async (cacheAge: number) => {
   restart((e) => events.push(e));
   return chat;
 };
+
 /** Settings → Compaction with both switches on; unset is both off. */
 const compactUnasked = () =>
   store.update((s) => {
@@ -334,6 +346,7 @@ const shape = async (id: string) =>
       ? `compaction${m.compactedCold ? " (cold)" : ""}${m.compactedIdle ? " (idle)" : ""}`
       : `${m.role}:${m.body.slice(0, 12)}`,
   );
+
 it("compacts a big conversation whose cache went cold before the next message", async () => {
   await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);
@@ -354,6 +367,7 @@ it("compacts a big conversation whose cache went cold before the next message", 
     { timeout: 10_000 },
   );
 });
+
 it("sends straight away while the conversation's cache is still warm", async () => {
   const chat = await answeredLongAgo(10 * 60_000);
   await chats.send(chat.id, input("@codex Go on"));
@@ -367,6 +381,7 @@ it("sends straight away while the conversation's cache is still warm", async () 
     expect.stringMatching(/^assistant:/),
   ]);
 });
+
 it("sends to a cold cache as Settings say, unless the message asks otherwise", async () => {
   const answers = async (id: string) =>
     vi.waitFor(
@@ -407,6 +422,7 @@ it("sends to a cold cache as Settings say, unless the message asks otherwise", a
     expect.stringMatching(/^assistant:/),
   ]);
 });
+
 it("compacts a big unread conversation just before its cache goes cold, without bumping the thread", async () => {
   await compactUnasked();
   const chat = await answeredLongAgo(57 * 60_000);
@@ -427,6 +443,7 @@ it("compacts a big unread conversation just before its cache goes cold, without 
   );
   expect((await chats.get(chat.id)).updated).toBe(before.updated);
 });
+
 /** The Codex turns asked for `body`, by the fixture's record of them. */
 const turnsAsking = async (body: string) =>
   (await agentCalls())
@@ -439,6 +456,7 @@ const turnsAsking = async (body: string) =>
           i.type === "text" && i.text?.includes(body),
       ),
     );
+
 it("sends the message anyway when compacting the cold conversation fails", async () => {
   vi.stubEnv("RELAY_FIXTURE_COMPACT_FAILS", "1");
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -470,6 +488,7 @@ it("sends the message anyway when compacting the cold conversation fails", async
     warn.mock.calls.some(([m]) => String(m).includes("cold conversation")),
   ).toBe(true);
 });
+
 it("holds the message back when the cold conversation's compaction is stopped", async () => {
   await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);
@@ -495,6 +514,7 @@ it("holds the message back when the cold conversation's compaction is stopped", 
   expect(saved.queue?.map((q) => q.input.body)).toEqual(["@codex Go on"]);
   expect(await turnsAsking("Go on")).toHaveLength(0);
 });
+
 it("takes a repeated compact's instructions in place of the queued one's", async () => {
   vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -520,6 +540,7 @@ it("takes a repeated compact's instructions in place of the queued one's", async
     "/compact",
   ]);
 });
+
 it("brings the sidebar summary up to date when a compaction finishes", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const finished = () =>
@@ -539,6 +560,7 @@ it("brings the sidebar summary up to date when a compaction finishes", async () 
     expect(summary.updated).toBe((await chats.get(chat.id)).updated);
   });
 });
+
 it("keeps a steer sent during a cold compaction behind the message it held back", async () => {
   await compactUnasked();
   const chat = await answeredLongAgo(2 * 60 * 60_000);

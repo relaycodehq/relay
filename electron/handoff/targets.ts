@@ -53,6 +53,7 @@ export class HandoffTargets {
       error?: string;
     }
   >();
+
   constructor(
     private store: Store,
     private computers: Computers,
@@ -68,10 +69,12 @@ export class HandoffTargets {
       ? targets.map((t) => ({ ...t, problem: "Shared with another thread" }))
       : targets;
   }
+
   /** The paired computers a new thread in the project can start on. */
   forStart(projectId: string): Promise<HandoffTarget[]> {
     return this.inProject(projectId, startHandoffBridge);
   }
+
   /**
    * One paired computer, and its copy of the project; for no project, only
    * whether it's reachable. Either way it must speak `bridge`.
@@ -91,6 +94,7 @@ export class HandoffTargets {
       bridge,
     );
   }
+
   private async inProject(
     projectId: string,
     bridge: number,
@@ -103,12 +107,14 @@ export class HandoffTargets {
       this.computers.list().map((c) => this.targetFor(c, project, bridge)),
     );
   }
+
   private repositoriesOf(projectId: string) {
     return this.projects
       .root(projectId)
       .then(repositoryNames)
       .catch((): string[] => []);
   }
+
   private async targetFor(
     c: ReturnType<Computers["list"]>[number],
     project: { id: string; repositories: string[] } | null,
@@ -194,6 +200,7 @@ export class HandoffTargets {
     this.clones.set(key, clone);
     return clone.job;
   }
+
   /** How far the clone under way has got; undefined when none is, or it failed. */
   cloning(computerId: string, projectId: string) {
     const clone = this.clones.get(`${computerId}/${projectId}`);
@@ -201,6 +208,7 @@ export class HandoffTargets {
       ? { step: clone.step, progress: clone.progress }
       : undefined;
   }
+
   private async cloneThere(
     computerId: string,
     projectId: string,

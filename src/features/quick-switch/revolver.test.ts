@@ -17,6 +17,7 @@ describe("turnCylinder", () => {
     expect(next.motion).toBe("step");
     expect(turnCylinder(next, 2, true, -1, chambers).rot).toBe(start.rot);
   });
+
   it("overspins on past the last preset and lands on the first", () => {
     const last = restingCylinder(5, true, chambers);
     const wrapped = turnCylinder(last, 0, true, 1, chambers);
@@ -25,12 +26,14 @@ describe("turnCylinder", () => {
     expect(wrapped.rot - last.rot).toBe(-60 - 720);
     expect(at(wrapped.rot)).toBe(0);
   });
+
   it("overspins backwards from the first to the last", () => {
     const first = restingCylinder(0, true, chambers);
     const wrapped = turnCylinder(first, 5, true, -1, chambers);
     expect(wrapped.rot - first.rot).toBe(60 + 720);
     expect(at(wrapped.rot)).toBe(5);
   });
+
   it("passes empty chambers when fewer presets than chambers wrap", () => {
     // Four presets in six chambers: from the 4th on to the 1st passes two empties.
     const last = restingCylinder(3, true, chambers);
@@ -38,6 +41,7 @@ describe("turnCylinder", () => {
       -180 - 720,
     );
   });
+
   it("spins a whole turn as it opens", () => {
     const closed = restingCylinder(1, false, chambers);
     const opened = turnCylinder(closed, 2, true, 1, chambers);
@@ -51,6 +55,7 @@ describe("chambersReached", () => {
     expect(chambersReached(3, 5.4, 1)).toEqual({ last: 5, count: 2 });
     expect(chambersReached(3, -0.2, -1)).toEqual({ last: 0, count: 3 });
   });
+
   it("doesn't click again on the bounce back past the stop", () => {
     const over = chambersReached(3, 4.05, 1);
     expect(over).toEqual({ last: 4, count: 1 });

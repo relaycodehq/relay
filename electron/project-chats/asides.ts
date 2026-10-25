@@ -108,6 +108,7 @@ export class SideQuestions {
     this.core.active.runSide(key, provider, answer, abort, job);
     void job.catch(() => {});
   }
+
   private async fromSession(
     chat: ProjectChat,
     answer: ChatMessage,
@@ -158,6 +159,7 @@ export class SideQuestions {
       await this.core.storage.save(chat);
     }
   }
+
   private async inFork(
     chat: ProjectChat,
     answer: ChatMessage,

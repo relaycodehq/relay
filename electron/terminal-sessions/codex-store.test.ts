@@ -7,9 +7,11 @@ import { writeStoredCodexSession } from "../../tests/fixtures/codex-store";
 import { storedCodexHistory, storedCodexSessions } from "./codex-store";
 
 let home: string;
+
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), "relay-codex-store-"));
 });
+
 afterEach(() => rm(home, { recursive: true, force: true }));
 const turns = [{ prompt: "Find the guard", answer: "In cache.ts." }];
 const roots = new Set(["/repo"]);

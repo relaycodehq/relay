@@ -48,9 +48,11 @@ interface MessageText {
   note: string;
   activity: AgentActivity[];
 }
+
 // The timeline is rebuilt on every streamed piece, but only the streaming
 // message is a new object; the rest are read once.
 const texts = new WeakMap<ChatMessage, MessageText>();
+
 function textOf(m: ChatMessage): MessageText {
   let text = texts.get(m);
   if (text) return text;

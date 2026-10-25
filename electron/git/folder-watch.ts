@@ -27,11 +27,13 @@ export interface EachFolderOptions {
 export class WatchPool {
   private used = 0;
   constructor(readonly size: number) {}
+
   take() {
     if (this.used >= this.size) return false;
     this.used++;
     return true;
   }
+
   give(count = 1) {
     this.used = Math.max(0, this.used - count);
   }
@@ -234,6 +236,7 @@ async function watchPool() {
   // Older kernels default to 8192 for every program the user runs.
   return new WatchPool(Math.floor((most > 0 ? most : 8192) / 4));
 }
+
 let pool: Promise<WatchPool> | undefined;
 
 /**

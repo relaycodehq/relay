@@ -27,6 +27,7 @@ const put = async (path: string, contents: string | Buffer = "x") => {
   await mkdir(join(root, path, ".."), { recursive: true });
   await writeFile(join(root, path), contents);
 };
+
 const exists = (path: string) =>
   stat(join(root, path)).then(
     () => true,
@@ -37,6 +38,7 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-project-files-")));
   git("init", "--quiet");
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 describe("listDirectory", () => {

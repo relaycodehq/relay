@@ -33,6 +33,7 @@ const identity = {
   GIT_COMMITTER_NAME: "Relay",
   GIT_COMMITTER_EMAIL: "relay@localhost",
 };
+
 // Git renames objects and refs into place without fsync by default, so an
 // unclean restart could leave empty files under refs/relay that break fetches.
 const durable = [
@@ -41,6 +42,7 @@ const durable = [
   "-c",
   "core.fsyncMethod=fsync",
 ];
+
 const noMonitor = ["-c", "core.fsmonitor=false"];
 const maxFiles = 1000;
 
@@ -196,6 +198,7 @@ export interface TurnClaim {
 }
 
 const pathChar = /[\w.@+~\/-]/;
+
 /** `text` names `path` as a whole path, not as part of a longer one. */
 function names(text: string, path: string) {
   for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
@@ -205,6 +208,7 @@ function names(text: string, path: string) {
   }
   return false;
 }
+
 /** Git lists paths with forward slashes, on Windows too. */
 const gitPath = (path: string) => path.split(sep).join("/");
 /** `cd dir`, `cd "dir"` or `cd 'dir'`, also inside a quoted `zsh -lc "…"`. */

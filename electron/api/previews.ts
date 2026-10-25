@@ -7,6 +7,7 @@ const previewKeySchema = z.union([
   idSchema,
   z.templateLiteral(["draft:", idSchema]),
 ]);
+
 const boundsSchema = z
   .object({
     x: z.number(),

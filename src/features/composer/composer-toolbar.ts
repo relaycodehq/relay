@@ -12,6 +12,7 @@ export const toolbarItems = [
   "usage",
   "mic",
 ] as const;
+
 export type ToolbarItem = (typeof toolbarItems)[number];
 /** "gap" is the spacer: whatever follows it sits on the right. */
 export type ToolbarSlot = ToolbarItem | "gap";
@@ -182,6 +183,7 @@ const store = persistedStore<ToolbarLayout>(
   },
   (layout) => JSON.stringify(layout),
 );
+
 export const composerToolbar = store.get;
 // Settings can drop the access mode's name, leaving its lock alone.
 const accessName = localSwitch("relay-access-name");

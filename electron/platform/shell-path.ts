@@ -191,6 +191,7 @@ function failure(error: unknown) {
 }
 
 let lastWarning: string | undefined;
+
 /** A lookup that keeps missing reads again every few seconds; say each failure once. */
 function warnOnce(message: string) {
   if (message === lastWarning) return;

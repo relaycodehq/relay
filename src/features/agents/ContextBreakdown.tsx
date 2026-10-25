@@ -23,6 +23,7 @@ const slots: Record<string, number> = {
   "Environment notes": 5,
   "Tool calls and results": 2,
 };
+
 const colour = (name: string) =>
   slots[name] ? `var(--context-${slots[name]})` : "var(--muted)";
 

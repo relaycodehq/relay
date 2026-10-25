@@ -26,6 +26,7 @@ export class CodexRequestError extends Error {
 
 type Id = string | number;
 type RpcError = { code: number; message: string; data?: unknown };
+
 type Pending = {
   method: string;
   resolve: (result: unknown) => void;

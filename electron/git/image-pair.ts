@@ -4,6 +4,7 @@ import { extname } from "node:path";
 import { git, gitBytes } from "./git";
 import { safeWorkingPath } from "./working-files";
 import type { FilePair } from "../../shared/types";
+
 const types: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -11,11 +12,13 @@ const types: Record<string, string> = {
   ".gif": "image/gif",
   ".webp": "image/webp",
 };
+
 /** Larger images stay a placeholder rather than crossing IPC as base64. */
 const imageLimit = 10 * 1024 * 1024;
 /** One side of a diff: a git object, or the file on disk. */
 export type FileSource = { name: string } & ({ spec: string } | { disk: true });
 class TooLarge extends Error {}
+
 async function fromGit(root: string, spec: string): Promise<Buffer | null> {
   const size = await git(root, ["cat-file", "-s", spec]).then(
     (stdout) => Number(stdout.trim()),
@@ -25,6 +28,7 @@ async function fromGit(root: string, spec: string): Promise<Buffer | null> {
   if (size > imageLimit) throw new TooLarge();
   return gitBytes(root, ["cat-file", "blob", spec], imageLimit);
 }
+
 async function fromDisk(root: string, path: string): Promise<Buffer | null> {
   const full = await safeWorkingPath(root, path);
   const handle = await open(
@@ -44,6 +48,7 @@ async function fromDisk(root: string, path: string): Promise<Buffer | null> {
     await handle.close();
   }
 }
+
 /**
  * Both sides of a binary change as data URLs, when the file is an image the
  * renderer can show. Absent sides are null; anything unreadable or too big

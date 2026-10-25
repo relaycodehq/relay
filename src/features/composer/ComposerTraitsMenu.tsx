@@ -11,6 +11,7 @@ export type TraitSection = {
   options: { value: string; label: string; short?: string }[];
   onChange: (value: string) => void;
 };
+
 /**
  * Related choices behind one trigger that names them all,
  * e.g. "High · 200k".

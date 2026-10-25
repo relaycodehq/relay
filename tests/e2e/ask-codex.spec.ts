@@ -44,7 +44,9 @@ const launch = async () => {
     };
   }, root);
 };
+
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   fixture = await fixtureServer();
   root = await mkdtemp(join(tmpdir(), "relay-ask-root-"));
@@ -83,6 +85,7 @@ test.beforeAll(async () => {
   await openPull(page, /Make pull request reviews/);
   await mkdir(resolve("test-results/screenshots"), { recursive: true });
 });
+
 test.afterAll(async () => {
   await app?.close();
   await fixture?.close();
@@ -92,6 +95,7 @@ test.afterAll(async () => {
       .map((path) => rm(path, { recursive: true, force: true })),
   );
 });
+
 test("separate models, reasoning effort and Fast toggles persist across restart and stay reachable with hidden sidebars", async () => {
   await page
     .getByRole("button", { name: "Open settings", exact: true })
@@ -223,6 +227,7 @@ test("separate models, reasoning effort and Fast toggles persist across restart 
   ).toBeVisible();
   await page.getByRole("button", { name: "Back to app" }).click();
 });
+
 test("row questions launch safely at the root with old/new revision context and leave review state untouched", async () => {
   test.skip(
     process.platform !== "darwin",

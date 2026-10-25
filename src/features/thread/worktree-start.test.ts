@@ -17,6 +17,7 @@ const ref = (name: string, more: Partial<BranchRef> = {}): BranchRef => ({
   ...(more.remote ? { local: name.slice(name.indexOf("/") + 1) } : {}),
   ...more,
 });
+
 const list: BranchList = {
   current: "dev",
   head: "0".repeat(40),
@@ -31,6 +32,7 @@ const list: BranchList = {
     ref("upstream/vendored", { remote: true, unrelated: true }),
   ],
 };
+
 const pick = (mode: "checkout" | "on" | "off", name: string, locked = false) =>
   pickBranch({ mode, name, list, checkout: "dev", locked });
 

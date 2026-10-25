@@ -9,5 +9,6 @@ const branches = fileSetting<boolean>({
   parse: (saved) => saved !== false,
   serialize: (on) => (on ? undefined : false),
 });
+
 export const useActivityBranches = branches.use;
 export const setActivityBranches = branches.set;

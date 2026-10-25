@@ -12,6 +12,7 @@ import { X, AlertCircle } from "lucide-react";
 import { useReturnFocus } from "../lib/focus-return";
 import { useBackdropClose } from "../lib/backdrop-close";
 import { errorMessage } from "../../shared/error-message";
+
 /**
  * Enter or Space opens a card or shelf row. Keys pressed on its own buttons,
  * or in a menu they open, bubble up here and are left to them.
@@ -22,6 +23,7 @@ export const rowKeys = (open: () => void) => (e: ReactKeyboardEvent) => {
   e.preventDefault();
   open();
 };
+
 export function IconButton({
   label,
   children,
@@ -51,6 +53,7 @@ export function IconButton({
     </button>
   );
 }
+
 export function Modal({
   title,
   onClose,
@@ -108,6 +111,7 @@ export function Modal({
     document.body,
   );
 }
+
 export function ErrorBox({
   error,
   retry,
@@ -125,6 +129,7 @@ export function ErrorBox({
     </div>
   );
 }
+
 // The one spinner: an arc that breathes as it turns, over a faint track.
 export function Spinner({
   size = 14,
@@ -151,6 +156,7 @@ export function Spinner({
     </span>
   );
 }
+
 export function Loading({ text = "Loading…" }: { text?: string }) {
   return (
     <div className="empty small" role="status">
@@ -159,6 +165,7 @@ export function Loading({ text = "Loading…" }: { text?: string }) {
     </div>
   );
 }
+
 export function Avatar({ name }: { name: string }) {
   return (
     <span className="avatar" aria-label={name}>
@@ -166,6 +173,7 @@ export function Avatar({ name }: { name: string }) {
     </span>
   );
 }
+
 export class ErrorBoundary extends Component<
   { children: ReactNode },
   { error?: Error }

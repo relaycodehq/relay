@@ -178,6 +178,7 @@ export class ChatStorage {
   /** The pages answers showed with show_html. */
   readonly renders: RenderFiles;
   readonly shown: ShownImages;
+
   constructor(
     private store: Store,
     private dir: string,

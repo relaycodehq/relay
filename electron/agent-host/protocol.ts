@@ -160,7 +160,9 @@ export interface Asks {
   };
   hook: { args: [event: string, input: unknown]; answer: object };
 }
+
 export type AskName = keyof Asks;
+
 export type AskMessage = {
   [N in AskName]: {
     t: "ask";

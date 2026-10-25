@@ -17,12 +17,15 @@ import {
   reviewCode,
   reviewPath,
 } from "../fixtures/language-project";
+
 let app: ElectronApplication,
   page: Page,
   fixture: Awaited<ReturnType<typeof fixtureServer>>,
   repo: Awaited<ReturnType<typeof languageProject>>;
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
+
 test.describe.configure({ mode: "serial" });
+
 test.beforeAll(async () => {
   fixture = await fixtureServer({
     code: {
@@ -65,6 +68,7 @@ test.beforeAll(async () => {
     .getByRole("button", { name: "Close dialog", exact: true })
     .click();
 });
+
 test.afterAll(async () => {
   await app
     ?.evaluate(({ dialog }) => {
@@ -75,12 +79,14 @@ test.afterAll(async () => {
   await fixture?.close();
   if (repo) await rm(repo.root, { recursive: true, force: true });
 });
+
 const code = () => page.locator(".diff-wrapper [data-additions] [data-line]");
 const greet = () =>
   code()
     .locator("[data-char]")
     .filter({ hasText: /^greet$/ })
     .last();
+
 test("existing project errors show in review; hover, Cmd-click and usages preserve the PR", async () => {
   await expect(page.locator(".file-check-status")).toContainText("1 error", {
     timeout: 30000,
@@ -137,6 +143,7 @@ test("existing project errors show in review; hover, Cmd-click and usages preser
   await expect(page.locator(".file-check-status")).toContainText("1 error");
   expect(fixture.requests.filter((r) => r.method !== "GET")).toHaveLength(0);
 });
+
 test("unsaved editor diagnostics and navigation work, then restore disk diagnostics on discard", async () => {
   await page.getByRole("button", { name: "Edit locally", exact: true }).click();
   const editorDialog = page.getByRole("dialog", { name: /Edit locally/ });
@@ -193,6 +200,7 @@ test("unsaved editor diagnostics and navigation work, then restore disk diagnost
   });
   expect(await readFile(join(repo.root, reviewPath), "utf8")).toBe(reviewCode);
 });
+
 test("disk changes show a local-version warning instead of misaligned inline errors", async () => {
   await writeFile(
     join(repo.root, reviewPath),
@@ -214,6 +222,7 @@ test("disk changes show a local-version warning instead of misaligned inline err
   await settings.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.locator(".file-check-status")).toHaveCount(0);
 });
+
 test("suggestions have their own totals, labels and icons across checks, file badges and the live editor", async () => {
   const text =
     "/** @deprecated Use current instead. */\nfunction legacy() { return 1; }\nexport function inspect(unused: string) { return legacy(); }\n";

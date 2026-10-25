@@ -4,6 +4,7 @@ import { api } from "../../lib/api";
 
 let state: ThreadWindowsState = { open: [], focused: null };
 const listeners = new Set<() => void>();
+
 function set(next: ThreadWindowsState) {
   state = next;
   listeners.forEach((listener) => listener());

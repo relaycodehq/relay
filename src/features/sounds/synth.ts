@@ -52,6 +52,7 @@ function bell(
 }
 
 const noiseBuffers = new WeakMap<BaseAudioContext, AudioBuffer>();
+
 function noiseOf(ctx: BaseAudioContext) {
   let buffer = noiseBuffers.get(ctx);
   if (!buffer) {
@@ -177,30 +178,36 @@ const glass: Partials = [
   [2.32, 0.28, 0.45],
   [4.25, 0.1, 0.2],
 ];
+
 const heldGlass: Partials = [
   [1, 1, 1.6],
   [2.32, 0.25, 0.5],
   [4.25, 0.08, 0.2],
 ];
+
 const marimba: Partials = [
   [1, 1, 0.38],
   [3.99, 0.18, 0.06],
   [10.1, 0.04, 0.02],
 ];
+
 const chime: Partials = [
   [1, 1, 1.5],
   [2.76, 0.35, 0.7],
   [5.4, 0.15, 0.35],
   [8.93, 0.06, 0.18],
 ];
+
 const kalimba: Partials = [
   [1, 1, 0.55],
   [5.4, 0.08, 0.05],
 ];
+
 const heldKalimba: Partials = [
   [1, 1, 0.9],
   [5.4, 0.08, 0.05],
 ];
+
 const metal: Partials = [
   [1, 1, 0.28],
   [2.9, 0.4, 0.12],

@@ -8,6 +8,7 @@ import { agentSignedIn, signInCommand } from "./sign-in";
 vi.mock("../platform/executables");
 
 let dir: string | undefined;
+
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
   dir = undefined;

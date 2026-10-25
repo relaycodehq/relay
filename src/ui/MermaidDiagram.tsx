@@ -33,6 +33,7 @@ function diagramLook() {
     ),
   ].join(" ");
 }
+
 function subscribeLook(listener: () => void) {
   const observer = new MutationObserver(listener);
   observer.observe(document.documentElement, {

@@ -15,6 +15,7 @@ import { UserMessage, type UserMessageProps } from "./UserMessage";
 import { RichText } from "../../ui/RichText";
 import { LineDivider } from "../../ui/LineDivider";
 import "./thread.css";
+
 /** One-line divider where another agent took over, with the outgoing agent's note behind it. */
 function HandoffRow({
   message: m,
@@ -72,6 +73,7 @@ function HandoffRow({
     </div>
   );
 }
+
 /** Message shows `m` as a one-line divider rather than a message. */
 export const drawsLine = (m: ChatMessage) =>
   !m.handedOver &&

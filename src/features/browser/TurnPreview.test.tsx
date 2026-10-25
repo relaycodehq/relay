@@ -10,11 +10,14 @@ const mock = vi.hoisted(() => ({
   current: undefined as PreviewState | undefined,
   navigate: vi.fn(async () => {}),
 }));
+
 vi.mock("../../lib/api", () => ({ api: { navigatePreview: mock.navigate } }));
+
 vi.mock("./previews", () => ({
   previewKey: (_projectId: string, chatId: string) => chatId,
   usePreviewState: () => mock.current,
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;

@@ -3,11 +3,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { usePoll } from "./poll";
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 let root: Root;
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   vi.restoreAllMocks();

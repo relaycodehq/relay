@@ -48,6 +48,7 @@ describe("recallText", () => {
     );
     expect(recallText(body)).toBe("fix this");
   });
+
   it("drops screenshot tokens, which don't come back, but not inside a paste", () => {
     const paste = pasteMarkdown({ n: 1, text: "log [Image #1] line" });
     expect(recallText(`@claude look [Image #1] here${paste}`)).toBe(

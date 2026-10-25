@@ -5,6 +5,7 @@ import { codexRequestFailure } from "./codex-limits";
 
 const missing =
   "invalid paginated history lineage for source-123: missing source rollout";
+
 it.each(["thread/fork", "thread/resume"])(
   "classifies a missing rollout refused by %s before a turn starts",
   (method) => {
@@ -18,6 +19,7 @@ it.each(["thread/fork", "thread/resume"])(
     ).toBe(true);
   },
 );
+
 it.each([
   [-32600, missing, "turn/start"],
   [-32600, missing, "thread/start"],

@@ -11,10 +11,12 @@ const dictation = vi.hoisted(() => ({
   })),
   stop: vi.fn(async () => true),
 }));
+
 vi.mock("../dictation/audio/session", () => ({
   dictationSnapshot: dictation.snapshot,
   stopDictation: dictation.stop,
 }));
+
 beforeEach(() => {
   dictation.snapshot.mockReset().mockReturnValue({ phase: "idle" });
   dictation.stop.mockReset().mockResolvedValue(true);

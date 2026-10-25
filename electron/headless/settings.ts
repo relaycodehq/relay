@@ -302,9 +302,11 @@ function print(s: Snapshot, numbered: boolean) {
 /** Prompts on the terminal; scripts give values on the command line instead. */
 class Ask {
   constructor(private rl: Interface) {}
+
   async text(question: string) {
     return (await this.rl.question(`${question} `)).trim();
   }
+
   async yes(question: string, fallback: boolean) {
     const answer = (
       await this.rl.question(
@@ -315,6 +317,7 @@ class Ask {
       .toLowerCase();
     return answer ? answer.startsWith("y") : fallback;
   }
+
   /** One of `options`, by number; undefined when left empty. */
   async pick<T>(question: string, options: { value: T; label: string }[]) {
     options.forEach((o, i) =>
@@ -329,6 +332,7 @@ class Ask {
       throw new Error(`Choose a number from 1 to ${options.length}.`);
     return picked.value;
   }
+
   /** Typed without showing it, for tokens. */
   async secret(question: string) {
     process.stdout.write(`${question} `);
@@ -355,6 +359,7 @@ const parseDays = (value: string, min: number) => {
     throw new Error(`Give a number of days from ${min} to 90, or "never".`);
   return n;
 };
+
 const parseOn = (value: string) => {
   if (/^(on|yes|true|1)$/i.test(value)) return true;
   if (/^(off|no|false|0)$/i.test(value)) return false;

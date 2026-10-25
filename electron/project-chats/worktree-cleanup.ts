@@ -116,6 +116,7 @@ export class WorktreeCleanup {
   private lastShown = new Map<string, number>();
   /** Threads whose worktree held work or ran something, and when to look again. */
   private recheck = new Map<string, number>();
+
   constructor(
     private core: ChatCore,
     private worktrees: ThreadWorktrees,

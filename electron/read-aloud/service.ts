@@ -44,6 +44,7 @@ export class ReadAloud {
   get supported() {
     return onnxRuntimeInstalled();
   }
+
   private models = new Map<string, ReadAloudModelState>();
   private downloads = new Map<string, AbortController>();
   private worker?: UtilityProcess;

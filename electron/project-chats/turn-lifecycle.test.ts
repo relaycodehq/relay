@@ -12,6 +12,7 @@ import {
 } from "../../tests/fixtures/turn-scenario";
 
 vi.mock("../platform/executables");
+
 vi.mock("../agents/antigravity/install", async (original) => ({
   ...(await original<object>()),
   ...(await import("../../tests/fixtures/antigravity-stand-in"))
@@ -28,11 +29,13 @@ const start = async (options: Omit<ScenarioOptions, "findExecutable"> = {}) =>
     findExecutable: vi.mocked(findExecutable),
     ...options,
   }));
+
 afterEach(async () => {
   await s?.dispose();
   s = undefined;
   vi.restoreAllMocks();
 });
+
 const kinds = (news: { kind: string }[]) => news.map((n) => n.kind);
 const answers = async (id: string) =>
   (await s!.messages(id)).filter((m) => m.role === "assistant");

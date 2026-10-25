@@ -48,6 +48,7 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
 
 let root: string, script: string, claude: string, log: string;
 const opened: AgentHosts[] = [];
+
 beforeAll(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-agent-host-")));
   script = join(root, "agent-host.mjs");
@@ -65,6 +66,7 @@ beforeAll(async () => {
   claude = join(root, "claude");
   await writeFile(claude, cli, { mode: 0o700 });
 });
+
 afterEach(async () => {
   for (const hosts of opened.splice(0)) hosts.detach();
   // Each test's hosts end with it.
@@ -79,6 +81,7 @@ afterEach(async () => {
   }
   await rm(dir, { recursive: true, force: true });
 });
+
 afterAll(() => rm(root, { recursive: true, force: true }));
 
 const hostsFor = () => {
@@ -86,6 +89,7 @@ const hostsFor = () => {
   opened.push(hosts);
   return hosts;
 };
+
 const alive = (pid: number) => {
   try {
     process.kill(pid, 0);
@@ -94,6 +98,7 @@ const alive = (pid: number) => {
     return false;
   }
 };
+
 async function open(
   hosts: AgentHosts,
   canUseTool: () => Promise<Asks["canUseTool"]["answer"]>,
@@ -120,6 +125,7 @@ async function open(
   });
   return query;
 }
+
 async function answerOf(query: HostedQuery) {
   for await (const frame of query)
     if (frame.type === "result") return frame.result as string;

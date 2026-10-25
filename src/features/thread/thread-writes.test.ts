@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   resumeProjectChat: vi.fn(async (..._: unknown[]) => {}),
   projectChatQueueAction: vi.fn(async (..._: unknown[]) => {}),
 }));
+
 vi.mock("../../lib/api", () => ({ api }));
 
 const { useThreadHandle } = await import("./useThreadHandle");
@@ -20,6 +21,7 @@ const { useQueuedMessages } = await import("./useQueuedMessages");
 const chat = { id: "t1" } as ChatSummary;
 const message = { body: "@codex go on", to: "codex" } as ComposedSend;
 const aside = { ...message, side: true } as ComposedSend;
+
 const attachments = {
   codeRefs: [],
   clear: () => {},
@@ -68,6 +70,7 @@ let current:
   ReturnType<typeof mount<ReturnType<typeof threadHooks>>> | undefined;
 let client: QueryClient;
 let selected: Parameters<typeof threadHooks>;
+
 function renderThread(...args: Parameters<typeof threadHooks>) {
   selected = args;
   if (current) current.rerender();
@@ -83,6 +86,7 @@ function renderThread(...args: Parameters<typeof threadHooks>) {
     );
   return current();
 }
+
 function start<T>(
   action: (thread: ReturnType<typeof threadHooks>) => T,
   ...args: Parameters<typeof threadHooks>
@@ -90,6 +94,7 @@ function start<T>(
   const thread = renderThread(...args);
   return update(() => action(thread));
 }
+
 async function complete<T>(promise: Promise<T>) {
   let value!: T;
   await act(async () => {
@@ -97,11 +102,13 @@ async function complete<T>(promise: Promise<T>) {
   });
   return value;
 }
+
 beforeEach(() => {
   current = undefined;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.clearAllMocks();
 });
+
 afterEach(() => client.clear());
 
 describe("a thread's writes", () => {

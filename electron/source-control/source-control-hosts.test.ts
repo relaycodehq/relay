@@ -6,6 +6,7 @@ import type { CliState } from "./clis";
 
 const cli = vi.hoisted(() => ({ state: {} as CliState }));
 vi.mock("electron", () => ({ app: {}, net: {}, safeStorage: {} }));
+
 vi.mock("./clis", async (original) => ({
   ...(await original<typeof import("./clis")>()),
   probeCli: async () => cli.state,
@@ -69,6 +70,7 @@ describe("Azure DevOps in Settings", () => {
     await d.save({ ...defaultDevOpsSettings, ...settings }, pat ? { pat } : {});
     return d;
   }
+
   beforeEach(() => {
     cli.state = { path: "/usr/local/bin/az", version: "2.86.0" };
   });

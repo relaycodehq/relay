@@ -13,6 +13,7 @@ import type { BranchCounts } from "../../shared/branches";
 import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 beforeEach(async () => {
   root = await tempRepo("relay-branches-");
   await writeFile(join(root, "file.ts"), "base\n");
@@ -20,9 +21,11 @@ beforeEach(async () => {
   git("commit", "-qm", "Base");
   git("branch", "feature");
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
+
 describe("a branch's uncommitted changes", () => {
   it("counts staged, unstaged and new files without changing the checkout", async () => {
     await writeFile(join(root, "file.ts"), "staged\n");
@@ -68,6 +71,7 @@ describe("a branch's uncommitted changes", () => {
     expect(await branchChanges(root, "origin/main")).toBeNull();
   });
 });
+
 it("lists branches in a repository with no commits yet", async () => {
   const empty = await realpath(await mkdtemp(join(tmpdir(), "relay-unborn-")));
   try {
@@ -77,10 +81,12 @@ it("lists branches in a repository with no commits yet", async () => {
     await rm(empty, { recursive: true, force: true });
   }
 });
+
 async function run(kind: "create" | "switch", name: string) {
   const { current, head } = await branches(root);
   return changeBranch(root, { kind, name, current, head });
 }
+
 it("lists branches, creates from current HEAD and preserves local edits", async () => {
   const state = await branches(root);
   expect(state.branches[0]).toMatchObject({ name: "main", current: true });
@@ -93,6 +99,7 @@ it("lists branches, creates from current HEAD and preserves local edits", async 
   );
   expect((await run("switch", "refs/heads/main")).current).toBe("main");
 });
+
 it("refuses conflicting local changes without stashing or discarding them", async () => {
   git("switch", "feature");
   await writeFile(join(root, "file.ts"), "other\n");
@@ -105,6 +112,7 @@ it("refuses conflicting local changes without stashing or discarding them", asyn
   expect(git("branch", "--show-current")).toBe("main");
   expect(await readFile(join(root, "file.ts"), "utf8")).toBe("keep me\n");
 });
+
 it("rejects stale selections, invalid names, duplicates and another worktree", async () => {
   const old = await branches(root);
   await run("switch", "refs/heads/feature");
@@ -124,6 +132,7 @@ it("rejects stale selections, invalid names, duplicates and another worktree", a
     /another worktree/,
   );
 });
+
 it("frees a branch whose worktree folder was deleted by hand", async () => {
   const gone = await realpath(await mkdtemp(join(tmpdir(), "relay-gone-")));
   git("worktree", "add", "-q", join(gone, "wt"), "feature");
@@ -134,6 +143,7 @@ it("frees a branch whose worktree folder was deleted by hand", async () => {
   expect(listed?.worktree).toBe(false);
   expect((await run("switch", "refs/heads/feature")).current).toBe("feature");
 });
+
 it("creates a tracking branch for a remote ref and skips symbolic remote HEAD", async () => {
   git("remote", "add", "origin", "/unused");
   git("update-ref", "refs/remotes/origin/remote-feature", "HEAD");
@@ -150,6 +160,7 @@ it("creates a tracking branch for a remote ref and skips symbolic remote HEAD", 
   ).toBe("remote-feature");
   expect(git("config", "branch.remote-feature.remote")).toBe("origin");
 });
+
 it("switches to the local branch a picked remote already has, unless another worktree holds it", async () => {
   git("remote", "add", "origin", "/unused");
   git("update-ref", "refs/remotes/origin/feature", "HEAD");
@@ -180,6 +191,7 @@ it("offers origin's default branch first as the base to merge into", async () =>
     "dev",
   ]);
 });
+
 it("marks a remote with unrelated history, but not one with an orphan branch", async () => {
   const other = await realpath(await mkdtemp(join(tmpdir(), "relay-other-")));
   const at = (dir: string, ...args: string[]) =>
@@ -216,6 +228,7 @@ it("marks a remote with unrelated history, but not one with an orphan branch", a
     await rm(other, { recursive: true, force: true });
   }
 });
+
 it("leaves the counting out of the plain list", async () => {
   expect(Object.keys((await branches(root)).branches[0]).sort()).toEqual([
     "current",
@@ -226,6 +239,7 @@ it("leaves the counting out of the plain list", async () => {
     "worktree",
   ]);
 });
+
 /** This git has %(ahead-behind), which arrived in 2.41. */
 const canCount = () => {
   try {
@@ -235,6 +249,7 @@ const canCount = () => {
     return false;
   }
 };
+
 describe.each([
   ["counting ahead and behind", true],
   ["as git before 2.41 does", false],
@@ -265,6 +280,7 @@ describe.each([
     });
     expect(named("main")!.date).toBeGreaterThan(Date.now() - 60_000);
   });
+
   it("counts a branch that landed on dev as merged, against dev", async () => {
     git("switch", "-q", "-c", "dev");
     await writeFile(join(root, "dev.ts"), "dev\n");
@@ -284,6 +300,7 @@ describe.each([
     expect(named("feature")).toMatchObject({ ahead: 0, against: "main" });
     expect(named("dev")).toMatchObject({ ahead: 0, against: "dev" });
   });
+
   it("tells a worktree's branch with no commits yet from one that was merged", async () => {
     git("worktree", "add", "-q", "-b", "fresh", join(root, "wt-fresh"), "main");
     git("worktree", "add", "-q", "-b", "done", join(root, "wt-done"), "main");

@@ -7,6 +7,7 @@ const look = (logs: PageLook["logs"]): PageLook => ({
   logs,
   scheme: "dark",
 });
+
 const broken = look([
   {
     level: "error",
@@ -20,6 +21,7 @@ function tools(result: PageLook) {
   const t: RenderTools = { look: vi.fn(async () => result), show };
   return { t, show };
 }
+
 const signal = new AbortController().signal;
 const text = (r: Awaited<ReturnType<typeof answerRenderTool>>) =>
   r.content.map((c) => ("text" in c ? c.text : "")).join("");

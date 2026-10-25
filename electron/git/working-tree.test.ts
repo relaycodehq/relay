@@ -20,6 +20,7 @@ import { setGitPath } from "./git";
 import { gitIn } from "../../tests/fixtures/git-repo";
 let root: string, remote: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-git-")));
   remote = await mkdtemp(join(tmpdir(), "relay-origin-"));
@@ -33,10 +34,12 @@ beforeEach(async () => {
   git("commit", "-qm", "Initial");
   git("push", "-qu", "origin", "review");
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
   await rm(remote, { recursive: true, force: true });
 });
+
 it("keeps partially staged work separate, commits only the index, then pushes explicitly", async () => {
   await writeFile(join(root, "code.ts"), "export const a = 2;\n");
   git("add", "code.ts");
@@ -60,6 +63,7 @@ it("keeps partially staged work separate, commits only the index, then pushes ex
   await performGitAction(root, { kind: "push", revision: tree.revision });
   expect((await workingTree(root)).ahead).toBe(0);
 });
+
 it("counts a never-pushed branch's commits as ahead, and pushing sets its upstream", async () => {
   git("switch", "-q", "-c", "feature");
   git("commit", "-q", "--allow-empty", "-m", "One");
@@ -78,6 +82,7 @@ it("counts a never-pushed branch's commits as ahead, and pushing sets its upstre
   });
   expect(tree).toMatchObject({ upstream: "origin/feature", ahead: 0 });
 });
+
 it("commits only the chosen files and leaves the rest of the checkout alone", async () => {
   await writeFile(join(root, "gone.ts"), "x\n");
   git("add", "gone.ts");
@@ -111,6 +116,7 @@ it("commits only the chosen files and leaves the rest of the checkout alone", as
     }),
   ).rejects.toThrow("no longer changed");
 });
+
 it("commits chosen files that were deleted or renamed through the index", async () => {
   await writeFile(join(root, "a.txt"), "a\n");
   await writeFile(join(root, "c.txt"), "c\n");
@@ -134,6 +140,7 @@ it("commits chosen files that were deleted or renamed through the index", async 
   ).toEqual(["D\ta.txt", "R100\tc.txt\td.txt"]);
   expect(tree.changes.map((c) => c.path)).toEqual(["other.ts"]);
 });
+
 it("counts lines the way the commit will: renames by their edits, every untracked file", async () => {
   await writeFile(join(root, "old.ts"), "a\nb\nc\nd\n");
   git("add", ".");
@@ -149,6 +156,7 @@ it("counts lines the way the commit will: renames by their edits, every untracke
     deletions: 1,
   });
 });
+
 it("leaves lockfiles out of the lines unless they are all that changed", async () => {
   await writeFile(join(root, "app.ts"), "a\n");
   await writeFile(join(root, "package-lock.json"), "{\n}\n");
@@ -167,6 +175,7 @@ it("leaves lockfiles out of the lines unless they are all that changed", async (
     generated: { additions: 4, deletions: 0 },
   });
 });
+
 it("works in a repository with no commits yet, first commit included", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {
@@ -197,6 +206,7 @@ it("works in a repository with no commits yet, first commit included", async () 
     await rm(fresh, { recursive: true, force: true });
   }
 });
+
 it("unstages and discards staged files in a repository with no commits yet", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {
@@ -238,6 +248,7 @@ it("unstages and discards staged files in a repository with no commits yet", asy
     await rm(fresh, { recursive: true, force: true });
   }
 });
+
 it("loads and pulls an unborn branch whose upstream already has commits", async () => {
   const fresh = await realpath(await mkdtemp(join(tmpdir(), "relay-fresh-")));
   try {
@@ -268,6 +279,7 @@ it("loads and pulls an unborn branch whose upstream already has commits", async 
     await rm(fresh, { recursive: true, force: true });
   }
 });
+
 it("handles literal odd filenames, renames, deletion and untracked files", async () => {
   const name = ":(glob)* weird\nfile.ts";
   await writeFile(join(root, name), "new\n");
@@ -307,6 +319,7 @@ it("handles literal odd filenames, renames, deletion and untracked files", async
       ?.worktree,
   ).toBe("D");
 });
+
 it("ignores exactly the chosen untracked files, in .gitignore or this clone's exclude", async () => {
   await mkdir(join(root, "logs"));
   const odd = "logs/[a]*? b ";
@@ -356,6 +369,7 @@ it("ignores exactly the chosen untracked files, in .gitignore or this clone's ex
     }),
   ).rejects.toThrow("line break");
 });
+
 it("lists changes after a tracked folder is replaced by a file of its name", async () => {
   await mkdir(join(root, "foo"));
   await writeFile(join(root, "foo", "bar.txt"), "x\n");
@@ -369,6 +383,7 @@ it("lists changes after a tracked folder is replaced by a file of its name", asy
     "foo/bar.txt",
   ]);
 });
+
 it("reads the index side of a file named like an index stage", async () => {
   await writeFile(join(root, "1:notes.txt"), "old\n");
   git("add", ".");
@@ -377,6 +392,7 @@ it("reads the index side of a file named like an index stage", async () => {
   const pair = await workingDiff(root, "1:notes.txt", "unstaged");
   expect([pair.old?.contents, pair.next?.contents]).toEqual(["old\n", "new\n"]);
 });
+
 it("refuses to unstage a conflicted file, which would drop its conflict mark", async () => {
   git("switch", "-qc", "other");
   await writeFile(join(root, "code.ts"), "theirs\n");
@@ -397,6 +413,7 @@ it("refuses to unstage a conflicted file, which would drop its conflict mark", a
     conflict: true,
   });
 });
+
 it("discards back to the index or to HEAD, keeping a copy of each file in the Trash", async () => {
   await writeFile(join(root, "code.ts"), "staged\n");
   git("add", "code.ts");
@@ -460,6 +477,7 @@ it("discards back to the index or to HEAD, keeping a copy of each file in the Tr
   expect(tree.changes.map((c) => c.path)).toEqual(["loose.ts"]);
   expect(trashed).toEqual(["staged\nworking\n", "staged\n", "new\n"]);
 });
+
 it("keeps the staged version too when it differs from the file on disk", async () => {
   await writeFile(join(root, "code.ts"), "staged\n");
   await writeFile(join(root, "gone.ts"), "staged, then deleted\n");
@@ -489,6 +507,7 @@ it("keeps the staged version too when it differs from the file on disk", async (
   );
   expect(tree.changes).toEqual([]);
 });
+
 it("shows changed binary and oversized files as binary instead of failing", async () => {
   await writeFile(join(root, "logo.png"), Buffer.from([0x89, 0x50, 0, 1]));
   await writeFile(join(root, "data.json"), "1".repeat(3 * 1024 * 1024));
@@ -512,6 +531,7 @@ it("shows changed binary and oversized files as binary instead of failing", asyn
   });
   expect(await workingDiff(root, "data.json", "staged")).toEqual(binary);
 });
+
 it("rejects stale state and non-fast-forward pushes without changing the working files", async () => {
   await writeFile(join(root, "code.ts"), "local\n");
   const old = await workingTree(root);
@@ -541,6 +561,7 @@ it("rejects stale state and non-fast-forward pushes without changing the working
   ).rejects.toThrow("Rebase onto origin/review");
   expect(git("rev-parse", "HEAD")).toBe(tree.head);
 });
+
 it.each([false, true])(
   "refreshes remote state after a rejected push without moving the checkout (diverged: %s)",
   async (diverged) => {
@@ -594,6 +615,7 @@ it.each([false, true])(
     }
   },
 );
+
 it("pushes to the branch's push remote and keeps tracking the remote it fetches from", async () => {
   const fork = await mkdtemp(join(tmpdir(), "relay-fork-"));
   try {
@@ -627,6 +649,7 @@ it("pushes to the branch's push remote and keeps tracking the remote it fetches 
     await rm(fork, { recursive: true, force: true });
   }
 });
+
 it("reads push settings as Git does: dotted remotes, branch case, a remote gone", async () => {
   const fork = await mkdtemp(join(tmpdir(), "relay-fork-"));
   try {
@@ -645,6 +668,7 @@ it("reads push settings as Git does: dotted remotes, branch case, a remote gone"
     await rm(fork, { recursive: true, force: true });
   }
 });
+
 it("pushes a branch tracking another name under its own name, as git push would", async () => {
   const onRemote = (ref: string) =>
     execFileSync("git", ["-C", remote, "rev-parse", ref], {
@@ -671,6 +695,7 @@ it("pushes a branch tracking another name under its own name, as git push would"
   await performGitAction(root, { kind: "push", revision: tree.revision });
   expect(onRemote("review")).toBe(git("rev-parse", "HEAD"));
 });
+
 it("hides a token kept in the push remote's address", async () => {
   // Gitea and GitHub both accept a token in place of the user name.
   for (const [url, shown] of [
@@ -691,6 +716,7 @@ it("hides a token kept in the push remote's address", async () => {
     expect((await workingTree(root)).pushUrl).toBe(shown);
   }
 });
+
 it("changes its revision when only the staged part of a changed file moves", async () => {
   await writeFile(join(root, "untouched.ts"), "export const u = 1;\n");
   git("add", "untouched.ts");
@@ -718,6 +744,7 @@ it("changes its revision when only the staged part of a changed file moves", asy
   git("update-index", "-q", "--really-refresh");
   expect((await workingTree(root)).revision).toBe(after.revision);
 });
+
 it("lists the other changes beside an untracked nested repository", async () => {
   // Git reports a nested repository as one "inner/" entry it never looks into.
   await mkdir(join(root, "inner"));
@@ -733,6 +760,7 @@ it("lists the other changes beside an untracked nested repository", async () => 
   });
   expect(tree.changes[0]).toMatchObject({ path: "code.ts", index: "M" });
 });
+
 it("shows Latin-1 files and Git LFS pointers as binary in diffs instead of failing", async () => {
   const lfs =
     "version https://git-lfs.github.com/spec/v1\noid sha256:" +

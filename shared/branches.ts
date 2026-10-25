@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 export interface BranchRef {
   name: string;
   ref: string;
@@ -10,6 +11,7 @@ export interface BranchRef {
   /** On a remote whose history shares nothing with HEAD, so no use as a base. */
   unrelated: boolean;
 }
+
 export interface BranchList {
   current: string;
   head: string;
@@ -17,6 +19,7 @@ export interface BranchList {
   /** Names work usually merges into, most likely first; see `baseCandidates`. */
   bases: string[];
 }
+
 /**
  * Where a branch stands against the bases. Kept apart from `BranchList`
  * because counting walks history, which on a big repository without a
@@ -37,18 +40,21 @@ export interface BranchCount {
   /** A worktree's branch nothing was committed to yet, rather than one that was merged. */
   noCommits?: boolean;
 }
+
 export interface BranchCounts {
   /** The bases that exist, locally or on origin, which the counts are against. */
   compared: string[];
   /** By branch name, as in `BranchRef.name`. */
   branches: Record<string, BranchCount>;
 }
+
 /** Uncommitted changes in the folder a local branch is checked out in. */
 export interface BranchChanges {
   branch: string;
   files: number;
   lines: { additions: number; deletions: number };
 }
+
 export const branchActionSchema = z
   .object({
     kind: z.enum(["switch", "create"]),
@@ -67,6 +73,7 @@ export function localTwin(list: BranchRef[], b: BranchRef) {
   const name = localTwinName(b);
   return list.find((l) => !l.remote && l.name === name);
 }
+
 /** Which of `remotes` remote branch `name` (`origin/…`) is on; the longest, as remotes can hold a `/`. */
 export const remoteOfBranch = (name: string, remotes: string[]) =>
   remotes

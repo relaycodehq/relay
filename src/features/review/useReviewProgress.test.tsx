@@ -10,9 +10,11 @@ import { useReviewProgress } from "./useReviewProgress";
 vi.mock("../../lib/api", () => ({
   api: { progress: vi.fn(), saveProgress: vi.fn() },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 afterEach(() => vi.clearAllMocks());
 
 it("loads and saves each host's drafts separately when the repository and PR number match", async () => {

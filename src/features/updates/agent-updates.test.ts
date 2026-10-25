@@ -4,6 +4,7 @@ const api = {
   agentUpdateChecks: vi.fn(async () => true),
   saveAgentUpdateChecks: vi.fn(async (enabled: boolean) => enabled),
 };
+
 vi.mock("../../lib/api", () => ({ api }));
 
 async function load(saved: Record<string, string>) {

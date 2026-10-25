@@ -16,6 +16,7 @@ import { pasteFileName } from "../../shared/pasted-texts";
 const keepMs = 30 * 24 * 60 * 60 * 1000;
 
 let root: string | undefined;
+
 /** Where pastes too big for a message are kept: Relay's own data folder, set as the app starts. */
 export function setPastesRoot(dir: string) {
   root = dir;

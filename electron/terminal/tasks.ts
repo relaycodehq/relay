@@ -21,11 +21,13 @@ import {
 
 type Proc = ProcessRow;
 const windows = process.platform === "win32";
+
 /** A thread's worktree, whose processes list with the project's. */
 interface Worktree {
   path: string;
   chatId: string;
 }
+
 /** A shell an agent started, followed across reparenting until every process in it exits. */
 interface Tracked {
   id: string;
@@ -64,6 +66,7 @@ function run(file: string, args: string[]) {
     );
   });
 }
+
 /** Linux marks the working folder of a process whose folder was deleted with a suffix. */
 export const liveCwd = (link: string) => link.replace(/ \(deleted\)$/, "");
 const within = (path: string, root: string) =>
@@ -79,6 +82,7 @@ export const agentName = (line: string) => {
   if (name === "node" && /[/\\]codex(\.js)?$/.test(arg ?? ""))
     return "codex" as const;
 };
+
 // Processes that are only incidentally in a project folder: installed apps, system daemons,
 // Git's own helpers and other editors' agents.
 const ignoredOrphans =
@@ -114,10 +118,12 @@ class ProjectTasks {
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
   private roots = new Set<string>();
   private scanning?: { costed: boolean; done: Promise<Proc[]> };
+
   private portLook?: {
     wanted: Set<number>;
     done: Promise<Map<number, number[]>>;
   };
+
   private scanned = 0;
   private last: Proc[] = [];
   /** Relay's terminal shells, and the thread each belongs to. */
@@ -148,6 +154,7 @@ class ProjectTasks {
     this.terminals.set(pid, chatId);
     if (cwd) this.terminalFolders.set(pid, cwd);
   }
+
   untrackTerminal(pid: number) {
     this.terminals.delete(pid);
     this.terminalFolders.delete(pid);
@@ -261,6 +268,7 @@ class ProjectTasks {
   async stop(root: string, id: string, worktrees: Worktree[] = []) {
     void (await this.terminate(root, id, worktrees)).exited;
   }
+
   /** Stops everything running in a folder about to go away, and waits for it. */
   async stopWithin(path: string) {
     const tasks = await this.list(path).catch(() => []);
@@ -393,6 +401,7 @@ class ProjectTasks {
         : undefined;
     return taskNote(lasting, chatId, heard, worktree);
   }
+
   /** A new agent session knows nothing yet: it hears the whole list again. */
   forgetNote(session: string) {
     this.notes.delete(session);
@@ -406,10 +415,12 @@ class ProjectTasks {
     if (!this.costed) this.scanned = 0;
     return this.scan(true);
   }
+
   /** Relay's terminal shells' pids. */
   terminalShells(): ReadonlySet<number> {
     return new Set(this.terminals.keys());
   }
+
   /**
    * The live processes of a listed task, the shell it started from first
    * while it runs. One that exited is left out: its pid may be another's now.
@@ -422,10 +433,12 @@ class ProjectTasks {
       ? [task.root, ...pids.filter((p) => p !== task.root)]
       : pids;
   }
+
   /** The thread and folder an agent CLI was seen running commands for. */
   agentWork(pid: number, started: number) {
     return this.agents.get(`${pid}:${started}`);
   }
+
   /**
    * Where these processes run, where the OS tells (not Windows). Kept per
    * process; one `lsof` call for those not looked up yet.

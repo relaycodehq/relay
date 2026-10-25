@@ -32,6 +32,7 @@ interface Entry {
   files: number;
   changed: number;
 }
+
 /** Each folder's direct entries, `""` being the root; folders end in `/`. */
 export type FileTree = Map<string, Map<string, Entry>>;
 

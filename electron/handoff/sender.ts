@@ -125,6 +125,7 @@ export class Handoffs {
   ): method is HandoffMethod | HandoffHereOnlyMethod {
     return this.forwarding.forwards(method, args);
   }
+
   forward(
     method: HandoffMethod | HandoffHereOnlyMethod,
     args: unknown[],
@@ -132,9 +133,11 @@ export class Handoffs {
   ) {
     return this.forwarding.forward(method, args, here);
   }
+
   runHere(chatId: string) {
     return this.forwarding.runHere(chatId);
   }
+
   dropHeld(chatId: string, sendId: string) {
     return this.forwarding.dropHeld(chatId, sendId);
   }
@@ -143,10 +146,12 @@ export class Handoffs {
   targets(chatId: string): Promise<HandoffTarget[]> {
     return this.places.forThread(summaryOf(this.store, chatId));
   }
+
   /** The paired computers a new thread in the project can start on. */
   startTargets(projectId: string): Promise<HandoffTarget[]> {
     return this.places.forStart(projectId);
   }
+
   /** One paired computer, and its copy of the project; see HandoffTargets. */
   targetOn(computerId: string, projectId: string | null, bridge: number) {
     return this.places.on(computerId, projectId, bridge);
@@ -155,9 +160,11 @@ export class Handoffs {
   views() {
     return this.statuses.views();
   }
+
   overview() {
     return this.statuses.overview();
   }
+
   /** Has the computer update Relay; it restarts, and its link comes back by itself. */
   update(computerId: string) {
     return this.infos.update(computerId);

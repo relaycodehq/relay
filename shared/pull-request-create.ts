@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { PullRef } from "./types";
+
 export interface BranchPull {
   ref: PullRef;
   title: string;
   base: string;
   url: string;
 }
+
 export interface PullRequestPlan {
   id: string;
   branch: string;
@@ -20,6 +22,7 @@ export interface PullRequestPlan {
   dirtyFiles: number;
   commits: { sha: string; subject: string }[];
 }
+
 export const createPullRequestSchema = z
   .object({
     planId: z.uuid(),
@@ -31,6 +34,7 @@ export const createPullRequestSchema = z
   })
   .strict();
 export type CreatePullRequest = z.infer<typeof createPullRequestSchema>;
+
 export interface CreatedPullRequest {
   pull: BranchPull;
   warning?: string;

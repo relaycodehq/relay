@@ -70,4 +70,5 @@ export function useReviewProgress(
     retrySave: () => update((p) => p),
   };
 }
+
 export type ReviewProgressController = ReturnType<typeof useReviewProgress>;

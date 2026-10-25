@@ -47,6 +47,7 @@ const choice = {
   reasoningEffort: "high" as const,
   fast: false,
 };
+
 const config = (patch: Partial<DeepReviewStart> = {}): DeepReviewStart => ({
   target: { kind: "uncommitted" },
   reviewers: [
@@ -82,6 +83,7 @@ describe("/code-review findings", () => {
     );
     expect(reportedFindings("nonsense")).toBeUndefined();
   });
+
   it("writes out findings Claude answered with as JSON", () => {
     const findings = [
       { file: "src/q.ts", line: 3, summary: "Queue drops a message" },
@@ -105,6 +107,7 @@ describe("reviewer tasks", () => {
     head: "b".repeat(40),
     title: "Queue fixes",
   };
+
   it("uses each agent's own review where it can", () => {
     const claude = { provider: "claude" as const, choice };
     const codex = { provider: "codex" as const, choice };
@@ -149,6 +152,7 @@ describe("reviewer tasks", () => {
       ).body,
     ).toBe("@claude /code-review high");
   });
+
   it("reads a branch that isn't checked out from Git, for every agent", () => {
     const other = {
       ...scope,
@@ -191,6 +195,7 @@ describe("reviewer tasks", () => {
       ).codex,
     ).toEqual({ type: "baseBranch", branch: "x" });
   });
+
   it("keeps each agent's own review where the reviewed code is checked out for it", () => {
     const claude = { provider: "claude" as const, choice };
     const codex = { provider: "codex" as const, choice };
@@ -264,6 +269,7 @@ describe("reviewer tasks", () => {
       "with no local branch. Before editing, check with the user where the fixes should go.",
     );
   });
+
   it("gives an agent with no review command Relay's own prompt", () => {
     const opencode = { provider: "opencode" as const, choice };
     const task = reviewerTask(
@@ -276,6 +282,7 @@ describe("reviewer tasks", () => {
     expect(task.body).toContain("git diff HEAD");
     expect(task.body).toContain('"the queue"');
   });
+
   it("asks Cursor with Relay's prompt, which it reads through git", () => {
     const pr = {
       ...scope,
@@ -294,6 +301,7 @@ describe("reviewer tasks", () => {
     expect(body).toContain('"the queue"');
     expect(body).not.toMatch(/bugbot|```diff/i);
   });
+
   it("sends the prompt you picked, with what to review and how to report", () => {
     const uncommitted = { ...scope, target: { kind: "uncommitted" as const } };
     // Another command goes first, where Claude runs it, then the review's scope.
@@ -329,6 +337,7 @@ describe("reviewer tasks", () => {
       ).body,
     ).toMatch(/^@claude \/code-reviewer\n\n/);
   });
+
   it("passes a note after the agent's own command to its review", () => {
     const uncommitted = { ...scope, target: { kind: "uncommitted" as const } };
     // The agent's own command alone is the same as no prompt.
@@ -355,6 +364,7 @@ describe("reviewer tasks", () => {
       codex.codex?.type === "custom" && codex.codex.instructions,
     ).toContain('"the retries"');
   });
+
   it("hands the lead every report as data", () => {
     const prompt = leadPrompt(
       {
@@ -389,6 +399,7 @@ describe("reviewer tasks", () => {
     expect(prompt).toContain("didn't finish");
     expect(prompt).toContain("```relay-findings");
   });
+
   it("hands the lead what a stopped reviewer found, from its notes and finished subagents", () => {
     const stopped = (trace: ChatMessage["trace"]) => ({
       id: randomUUID(),
@@ -473,6 +484,7 @@ describe("reviewer tasks", () => {
       "A subagent reported:\nP1: the queue drops the last item",
     );
   });
+
   it("shares the reports' room between many reviewers, and leaves a few whole", () => {
     const reportsOf = (count: number) => {
       const prompt = leadPrompt(
@@ -511,6 +523,7 @@ describe("reviewer tasks", () => {
     expect(many.every((r: string) => r.length === 5333)).toBe(true);
     expect(many[29]).toMatch(/END30$/);
   });
+
   it("takes up to thirty reviewers", () => {
     const reviewers = (n: number) =>
       Array.from({ length: n }, () => ({ provider: "codex" as const, choice }));
@@ -539,6 +552,7 @@ const capture = () =>
       .split("\n")
       .map((line) => JSON.parse(line)),
   );
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-deep-review-")));
   repo = join(root, "repo");
@@ -571,6 +585,7 @@ beforeEach(async () => {
   projectId = (await projects.add(repo, null)).id;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
@@ -1568,12 +1583,14 @@ describe("what a review covers", () => {
     git(work, "commit", "--quiet", "-m", message);
     return git(work, "rev-parse", "HEAD");
   };
+
   beforeEach(async () => {
     dir = await realpath(await mkdtemp(join(tmpdir(), "relay-review-scope-")));
     work = join(dir, "work");
     execFileSync("git", ["init", "--quiet", "-b", "main", work]);
     await commit("a.ts", "one\n", "Start");
   });
+
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
   it("covers a branch's own commits against its base", async () => {
@@ -1921,6 +1938,7 @@ describe("reviewers in threads of their own", () => {
   const lastBody = async (id: string) =>
     (await chats.get(id)).messages.at(-1)?.body;
   let review: string;
+
   beforeEach(async () => {
     await writeFile(
       join(repo, "src", "queue.ts"),

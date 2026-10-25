@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+
 export function useContentHash(text: string | undefined) {
   const [value, setValue] = useState<{ text: string; hash: string }>();
   useEffect(() => {

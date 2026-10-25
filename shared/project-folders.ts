@@ -38,10 +38,12 @@ export const projectGroupNameSchema = z
 export function joinGroup(parent: string, name: string) {
   return parent ? `${parent}/${name}` : name;
 }
+
 export function parentGroup(path: string) {
   const slash = path.lastIndexOf("/");
   return slash < 0 ? "" : path.slice(0, slash);
 }
+
 /**
  * Moves `path` along with group `from` when that group becomes `to`:
  * renaming passes the new path, ungrouping passes the parent.
@@ -51,12 +53,14 @@ export function rebaseGroup(path: string, from: string, to: string) {
   const rest = path.slice(from.length + 1);
   return rest ? joinGroup(to, rest) : to;
 }
+
 export interface ProjectFolderNode {
   name: string;
   path: string;
   folders: ProjectFolderNode[];
   projects: Project[];
 }
+
 /** Builds the sidebar tree; `groups` adds groups that have no projects yet. */
 export function projectFolderTree(
   projects: Project[],
@@ -100,6 +104,7 @@ export function projectFolderTree(
   sort(root);
   return root;
 }
+
 /** Every group in the tree, in the order it shows them. */
 export function groupPaths(tree: ProjectFolderNode): string[] {
   const paths: string[] = [];
@@ -111,6 +116,7 @@ export function groupPaths(tree: ProjectFolderNode): string[] {
   })(tree);
   return paths;
 }
+
 /** Where a moved project lands: in a group, or beside another project. */
 export type ProjectPlace =
   | { kind: "project"; id: string; where: "before" | "after" }
@@ -137,6 +143,7 @@ export function projectPlacement(
         null);
   return { folder, before };
 }
+
 /**
  * The sibling group `path` goes before when it's dropped beside `target`,
  * by `paths`' order; null puts it after its last sibling.
@@ -154,6 +161,7 @@ export function groupBefore(
       .find((p) => p !== path && parentGroup(p) === parent) ?? null
   );
 }
+
 /**
  * Moves a project into `folder`, placed before `before` or, without one,
  * after the folder's last project. Other projects keep their relative order.
@@ -182,6 +190,7 @@ export function moveProjectInList<T extends Pick<Project, "id" | "folder">>(
   rest.splice(index, 0, moved);
   return rest;
 }
+
 /** Orders group paths by name, level by level, for lists never reordered. */
 export function sortGroupPaths(paths: string[]) {
   return [...paths].sort((a, b) => {
@@ -194,6 +203,7 @@ export function sortGroupPaths(paths: string[]) {
     return x.length - y.length;
   });
 }
+
 /**
  * Moves group `path`, with everything inside it, before sibling `before` or,
  * without one, after its last sibling. Other groups keep their order.

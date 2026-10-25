@@ -20,9 +20,11 @@ export interface CursorSetup {
 }
 
 let setup: CursorSetup | undefined;
+
 export function configureCursor(next: CursorSetup) {
   setup = next;
 }
+
 export function cursorSetup(): CursorSetup {
   if (!setup) throw new Error("Cursor isn't set up in this process.");
   return setup;

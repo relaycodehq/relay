@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
+
 test("shows ahead/behind next to the branch, syncs with its upstream and rebases onto it", async () => {
   const root = await realpath(
       await mkdtemp(join(tmpdir(), "relay-branch-sync-")),

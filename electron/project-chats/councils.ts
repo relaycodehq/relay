@@ -41,6 +41,7 @@ export class Councils {
   private reviews: DeepReviews;
   /** What a deep review does after a turn ends; closing waits for it. */
   private steps = new Set<Promise<void>>();
+
   constructor(
     private core: ChatCore,
     private host: CouncilHost,

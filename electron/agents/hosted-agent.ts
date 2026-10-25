@@ -6,6 +6,7 @@ export abstract class HostedAgent<
   Connection extends JsonRpcConnection,
   Inflight,
 > implements Lease
+
 {
   busy = false;
   /** The turn a restart cut off, for an `adopt` turn to show. */

@@ -78,6 +78,7 @@ import {
 } from "../accounts/AccountSwitch";
 import type { AccountProvider } from "../../../shared/agent-accounts";
 import "./composer.css";
+
 export interface ComposerHandle {
   /** Adds a quote pill from the conversation to the draft and focuses it. */
   insertQuote: (text: string) => void;
@@ -89,8 +90,10 @@ export interface ComposerHandle {
   /** Sends the draft, exactly as the send button does. */
   submit: () => void;
 }
+
 /** What the rest of the window may do with the open thread's composer. */
 export type ComposerControls = Pick<ComposerHandle, "focus" | "submit">;
+
 /** What the strips above the input may send through the composer. */
 export interface ComposerNoticeActions {
   sendGoal: ReturnType<typeof useComposerSend>["sendGoal"];
@@ -120,6 +123,7 @@ export interface ComposerConversation {
   /** The message the agent guessed comes next, offered while the draft is empty. */
   prediction?: NextGuess;
 }
+
 export function ProjectComposer({
   ref,
   projectId,

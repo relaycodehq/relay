@@ -7,19 +7,24 @@ import { useUsageReadings } from "./provider-usage";
 import { api } from "../../lib/api";
 
 const clocks = vi.hoisted(() => new Set<() => void>());
+
 vi.mock("../../lib/while-shown", () => ({
   everyWhileShown: (tick: () => void) => {
     clocks.add(tick);
     return () => clocks.delete(tick);
   },
 }));
+
 vi.mock("../../lib/api", () => ({ api: { providerUsage: vi.fn() } }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let client: QueryClient;
 let latest: ReturnType<typeof useUsageReadings>[];
+
 function Probe({
   slot,
   account,
@@ -32,6 +37,7 @@ function Probe({
   latest[slot] = useUsageReadings([{ provider: "codex", account }], enabled);
   return null;
 }
+
 async function render(accounts: (string | undefined)[], enabled = true) {
   if (!root) {
     root = createRoot(document.createElement("div"));
@@ -48,6 +54,7 @@ async function render(accounts: (string | undefined)[], enabled = true) {
     ),
   );
 }
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   client?.clear();
@@ -55,11 +62,13 @@ afterEach(async () => {
   vi.clearAllMocks();
   expect(clocks.size).toBe(0);
 });
+
 const data = (message: string) => ({
   provider: "codex" as const,
   windows: [],
   message,
 });
+
 async function until(message: string) {
   await act(async () => {
     await vi.waitFor(() =>
@@ -67,6 +76,7 @@ async function until(message: string) {
     );
   });
 }
+
 it("shares default-account reads, one poll and forced refresh across views", async () => {
   let n = 0;
   vi.mocked(api.providerUsage).mockImplementation(async () =>
@@ -88,6 +98,7 @@ it("shares default-account reads, one poll and forced refresh across views", asy
   await until("3");
   expect(api.providerUsage).toHaveBeenCalledTimes(3);
 });
+
 it("does not let a late reading from the previous account replace the selected account", async () => {
   let finish!: (value: ReturnType<typeof data>) => void;
   vi.mocked(api.providerUsage).mockImplementation(async (_p, _f, account) =>
@@ -104,6 +115,7 @@ it("does not let a late reading from the previous account replace the selected a
   expect(latest[0].readings[0].data?.message).toBe("b");
   expect(clocks.size).toBe(1);
 });
+
 it("does not poll a closed picker and keeps previous data after a refresh failure", async () => {
   vi.mocked(api.providerUsage).mockResolvedValue(data("kept"));
   await render(["a"], false);
@@ -143,6 +155,7 @@ it("force refresh bypasses a pending normal read and ignores its late result", a
   await act(async () => finish(data("old")));
   expect(latest[0].readings[0].data?.message).toBe("fresh");
 });
+
 it("a redeemed reset cannot be overwritten by a poll already in flight", async () => {
   let finish!: (value: ReturnType<typeof data>) => void;
   vi.mocked(api.providerUsage).mockImplementation(

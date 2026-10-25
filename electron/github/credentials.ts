@@ -19,6 +19,7 @@ export async function ghToken() {
     return null;
   }
 }
+
 export interface GithubCredential {
   token: string | null;
   rejected(): void;
@@ -29,6 +30,7 @@ export class GithubCredentials {
   private current?: Promise<GithubCredential>;
   private at = 0;
   constructor(private source: () => Promise<string | null> = ghToken) {}
+
   read() {
     if (!this.current || Date.now() - this.at >= RECHECK_MS) {
       this.at = Date.now();
@@ -45,9 +47,11 @@ export class GithubCredentials {
     }
     return this.current;
   }
+
   isCurrent(credential: Promise<GithubCredential>) {
     return this.current === credential;
   }
+
   forget() {
     this.current = undefined;
   }

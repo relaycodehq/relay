@@ -1,6 +1,7 @@
 import { parseDiffFromFile } from "@pierre/diffs";
 import type { FilePair } from "../../../shared/types";
 import { matchLineEndings, type LineEnding } from "./line-endings";
+
 self.onmessage = (event: MessageEvent<FilePair & { editable?: boolean }>) => {
   try {
     const { next } = event.data;

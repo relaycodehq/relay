@@ -56,6 +56,7 @@ beforeEach(async () => {
   git(root, "add", ".");
   git(root, "commit", "-qm", "Initial");
 });
+
 afterEach(async () => {
   await rm(join(root, ".."), { recursive: true, force: true });
 });
@@ -63,6 +64,7 @@ afterEach(async () => {
 async function made(): Promise<MadeWorktree> {
   return createWorktree(root, dir, "Split the store");
 }
+
 const paths = async (worktree: ChatWorktree) =>
   (await worktreeChanges(worktree)).files.map((f) => f.path).sort();
 
@@ -465,6 +467,7 @@ it.each(["node_modules", "node_modules/", "/node_modules/"])(
     expect(git(worktree.path, "status", "--porcelain")).toBe("");
   },
 );
+
 it("links no node_modules the project doesn't ignore", async () => {
   await mkdir(join(root, "node_modules", "left-pad"), { recursive: true });
   const worktree = await made();

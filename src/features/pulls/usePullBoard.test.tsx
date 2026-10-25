@@ -23,9 +23,11 @@ vi.mock("../../lib/api", () => ({
     projectPulls: vi.fn(),
   },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 afterEach(() => vi.clearAllMocks());
 
 const account: Account = {
@@ -34,7 +36,9 @@ const account: Account = {
   user: { id: 1, login: "me" },
   persistent: true,
 };
+
 const accounts = [account];
+
 const issue = (author: string): Issue => ({
   id: 7,
   number: 7,
@@ -214,6 +218,7 @@ it("keeps a project's listing visible while searches or a failed refresh leave i
     await view.close();
   }
 });
+
 const tick = async () =>
   act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

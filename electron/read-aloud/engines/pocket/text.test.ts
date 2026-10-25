@@ -7,6 +7,7 @@ import { SentencePiece } from "./tokenizer";
 const tokenizer = new SentencePiece(
   readFileSync(join(__dirname, "tokenizer.test.model")),
 );
+
 // bundle.json's max_token_per_chunk for english_2026-04.
 const maxTokens = 50;
 

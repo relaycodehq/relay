@@ -221,6 +221,7 @@ export function subscribeSettingsFile(listener: () => void) {
     listeners.delete(listener);
   };
 }
+
 export const settingsFileState = () => state;
 /** Why the last save from this window didn't make it into the file. */
 export const settingsSaveError = () => saveError;

@@ -50,6 +50,7 @@ function planner(autoCompact = { idle: true, cold: true }) {
 beforeEach(() => {
   vi.useFakeTimers();
 });
+
 afterEach(() => {
   vi.useRealTimers();
 });

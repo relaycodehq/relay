@@ -30,6 +30,7 @@ import {
   type SymbolResult,
 } from "../../shared/checks";
 import { LineBuffer } from "../util/line-buffer";
+
 const resultSchema = z.object({
   seq: z.number().int().nonnegative(),
   diagnostics: z
@@ -62,6 +63,7 @@ const resultSchema = z.object({
   message: z.string().max(2000).optional(),
   engine: z.string().max(2000).optional(),
 });
+
 const symbolResultSchema = z.object({
   source: z
     .object({
@@ -87,6 +89,7 @@ const symbolResultSchema = z.object({
   truncated: z.boolean(),
   external: z.boolean(),
 });
+
 type Session = {
   key: string;
   root: string;
@@ -112,6 +115,7 @@ type Session = {
   /** Starts this session again with another heap limit. */
   relimit: (memoryMb: number) => Promise<unknown>;
 };
+
 /**
  * How often a state read looks at the checkout again; the window asks every
  * second. A working tree's checks get their head from the window's working
@@ -120,11 +124,13 @@ type Session = {
  * notices the checkout moving off it: those look every few seconds.
  */
 export const revalidateMs = { tree: 30_000, pull: 3000 };
+
 /** Who holds the checker's heap limit, and the limit it has. */
 export interface CheckLimits {
   projectId?: string;
   memoryMb: number;
 }
+
 export class ProjectChecks {
   /** One checker per folder in use; windows showing the same folder share it. */
   private sessions = new Map<string, Session>();
@@ -136,6 +142,7 @@ export class ProjectChecks {
   >();
   /** Who uses each key's checker, and whether each of them wants it paused. */
   private holders = new Map<string, Map<string, boolean>>();
+
   /**
    * `fallbackTypeScript` is Relay's own typescript.js, used when a project's
    * compiler has no language service API (TypeScript 7 whose server fails).
@@ -144,6 +151,7 @@ export class ProjectChecks {
     private worker: string,
     private fallbackTypeScript?: string,
   ) {}
+
   /**
    * `holder` lets go of the key's checker, which quits once nobody holds it.
    * Without a holder the checker stops for everyone; without a key, every one.
@@ -168,6 +176,7 @@ export class ProjectChecks {
     this.holders.delete(key);
     this.kill(key);
   }
+
   /** Ends the key's checker but keeps its holders, who may start it again. */
   private kill(key: string) {
     this.generations.set(key, (this.generations.get(key) ?? 0) + 1);
@@ -186,6 +195,7 @@ export class ProjectChecks {
     s.process.stdin.end();
     terminate(s.process, { graceMs: 1500 });
   }
+
   /** Restarts the running checks of `projectId` with its new heap limit. */
   relimit(projectId: string, memoryMb: number) {
     for (const s of this.sessions.values()) {
@@ -203,6 +213,7 @@ export class ProjectChecks {
       });
     }
   }
+
   /**
    * Hold rechecks (the language service stays warm) until resumed. A shared
    * checker pauses only once every holder asks it to.
@@ -213,10 +224,12 @@ export class ProjectChecks {
     users.set(holder, paused);
     this.applyPause(key);
   }
+
   private wantsPause(key: string) {
     const users = this.holders.get(key);
     return !!users?.size && [...users.values()].every(Boolean);
   }
+
   private applyPause(key: string) {
     const s = this.sessions.get(key),
       paused = this.wantsPause(key);
@@ -235,6 +248,7 @@ export class ProjectChecks {
       // The worker reports "invalidated" next if anything changed meanwhile.
       s.state.status = s.state.checkedAt ? "ready" : "checking";
   }
+
   async state(key: string, head: string) {
     const s = this.sessions.get(key);
     if (!s || s.state.head !== head) return null;
@@ -259,6 +273,7 @@ export class ProjectChecks {
     }
     return s.state;
   }
+
   private async checkout(
     root: string,
     server: string | null,
@@ -271,6 +286,7 @@ export class ProjectChecks {
       remoteMatches: true,
     };
   }
+
   /**
    * Starts the key's checker for `holder`, or joins the one already running
    * or starting with the same head, target and heap limit.
@@ -290,6 +306,7 @@ export class ProjectChecks {
     users.set(holder, paused);
     return this.open(key, root, server, ref, head, targetId, limits);
   }
+
   private open(
     key: string,
     root: string,
@@ -332,6 +349,7 @@ export class ProjectChecks {
     promise.then(settle, settle);
     return promise;
   }
+
   private async launch(
     key: string,
     root: string,
@@ -542,6 +560,7 @@ export class ProjectChecks {
     });
     return s.state;
   }
+
   async symbol(
     key: string,
     head: string,
@@ -587,6 +606,7 @@ export class ProjectChecks {
       s.process.stdin.write(JSON.stringify({ ...query, requestId }) + "\n");
     });
   }
+
   async update(key: string, head: string, path: string, text: string | null) {
     const s = this.sessions.get(key);
     if (

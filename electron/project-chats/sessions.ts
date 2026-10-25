@@ -29,6 +29,7 @@ export function agentSession(
   const sessions = parentId ? chat.replySessions?.[parentId] : chat.sessions;
   return sessions?.[provider] ?? {};
 }
+
 /** The same, to write to. */
 export function sessionFor(
   chat: ProjectChat,
@@ -40,6 +41,7 @@ export function sessionFor(
     : (chat.sessions ??= {});
   return (sessions[provider] ??= {});
 }
+
 /** Forgets an agent's session, e.g. a fork that broke. */
 export function dropSession(
   chat: ProjectChat,
@@ -62,6 +64,7 @@ function defaultChoice(
     ? codexQuestionChoice(store.aiSettings())
     : { model: "", reasoningEffort: "" as const, fast: false };
 }
+
 /** A hidden turn on an existing session, with the settings that session last ran under. */
 export function sessionInput(
   chat: ProjectChat,
@@ -125,6 +128,7 @@ export class ProviderSessions {
   /** What the threads' agents ran, kept past the sessions that followed them. */
   private archive: SubagentArchive;
   private pendingListeners = new Set<() => void>();
+
   /**
    * Claude's background work and wake-ups show in its threads' summaries;
    * its background agents start and end with them, between turns too.
@@ -136,7 +140,9 @@ export class ProviderSessions {
     }
     for (const listener of this.pendingListeners) listener();
   });
+
   private sweep = setInterval(() => this.closeIdle(), 60_000);
+
   constructor(
     private dir: string,
     private changed: (chatId: string) => void,
@@ -170,24 +176,29 @@ export class ProviderSessions {
     this.keys.add(key);
     this.used.set(key, Date.now());
   }
+
   /** A session the agent host kept through a restart; `open` if a turn was running in it. */
   reattached(key: string, open: boolean) {
     this.keys.add(key);
     this.used.set(key, Date.now());
     if (open) this.resuming.add(key);
   }
+
   isResuming(chatId: string, branch?: string) {
     return this.resuming.has(this.key(chatId, branch));
   }
+
   /** A turn a restart cut off in the thread, on any branch, is yet to be picked up. */
   resumingIn(chatId: string) {
     return [...this.resuming].some(
       (key) => parseSessionKey(key).chatId === chatId,
     );
   }
+
   resumed(key: string) {
     this.resuming.delete(key);
   }
+
   /** A session whose cut-off turn couldn't be picked back up. */
   lost(key: string) {
     this.resuming.delete(key);
@@ -200,6 +211,7 @@ export class ProviderSessions {
       (key) => parseSessionKey(key).chatId === chatId,
     );
   }
+
   private chats() {
     return new Set([...this.keys].map((key) => parseSessionKey(key).chatId));
   }
@@ -326,6 +338,7 @@ export class ProviderSessions {
       }),
     );
   }
+
   /** Every run the thread's live sessions know, whole. */
   private liveRuns(chatId: string): SubagentDetail[] {
     return this.subagentSources(chatId).flatMap(({ provider, source }) =>
@@ -335,6 +348,7 @@ export class ProviderSessions {
       }),
     );
   }
+
   /** Keeps what the thread's live sessions know of their subagents on disk. */
   async keepSubagents(chatId: string) {
     try {
@@ -345,11 +359,13 @@ export class ProviderSessions {
       console.warn("Could not keep a thread's subagents:", error);
     }
   }
+
   /** Before Relay quits or restarts, which ends what follows them. */
   async keepAllSubagents() {
     await Promise.all([...this.chats()].map((id) => this.keepSubagents(id)));
     await Promise.allSettled(this.archive.pending());
   }
+
   /** The subagents started in a thread, its side conversations' too, live or kept. */
   async subagents(chatId: string) {
     const live = this.subagentSources(chatId).flatMap(({ provider, source }) =>
@@ -361,6 +377,7 @@ export class ProviderSessions {
       .map(({ trace: _, report: __, ...run }) => run);
     return [...kept, ...live];
   }
+
   async subagentRun(chatId: string, agentId: string) {
     for (const { provider, source } of this.subagentSources(chatId)) {
       const run = source.detail(agentId);
@@ -369,6 +386,7 @@ export class ProviderSessions {
     const kept = await this.archive.read(chatId);
     return kept.find((run) => run.id === agentId) ?? null;
   }
+
   /** What fills the live provider session on this conversation. */
   contextReport(
     chatId: string,
@@ -382,6 +400,7 @@ export class ProviderSessions {
           Promise.resolve(null))
       : Promise.resolve(null);
   }
+
   async stopSubagent(chatId: string, agentId: string) {
     const found = this.subagentSources(chatId).find(({ source }) =>
       source.detail(agentId),

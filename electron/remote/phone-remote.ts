@@ -49,6 +49,7 @@ const appReportSchema = z
   .strict();
 
 const dictationId = z.number().int().nonnegative();
+
 const dictationSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("start"), id: dictationId }).strict(),
   z
@@ -66,6 +67,7 @@ const dictationSchema = z.discriminatedUnion("type", [
 ]);
 
 const readingId = z.number().int().nonnegative();
+
 const readAloudSchema = z.discriminatedUnion("type", [
   z
     .object({
@@ -131,6 +133,7 @@ export class PhoneRemote {
   /** Where devices reach this computer now: local addresses, then Tailscale's. */
   private hosts: string[] = [];
   private tunnelPorts: TunnelPorts;
+
   constructor(
     store: Store,
     seal: (value: string) => Promise<string | null>,
@@ -217,17 +220,20 @@ export class PhoneRemote {
         this.server.broadcast(event, (id) => id === deviceId),
     });
   }
+
   private isComputer(deviceId: string) {
     return (
       this.devices.list().find((d) => d.id === deviceId)?.kind === "computer"
     );
   }
+
   /** Resumes listening if phone access was on when Relay last quit. */
   async start(defaultEnabled = false) {
     if (defaultEnabled && this.devices.settings.enabled === undefined)
       await this.devices.setEnabled(true);
     if (this.devices.settings.enabled) await this.follow();
   }
+
   /** Keeps the window's theme for phones, and hands a change to those online. */
   async setAppearance(appearance: PhoneAppearance) {
     if (
@@ -242,6 +248,7 @@ export class PhoneRemote {
         (id) => !this.isComputer(id),
       );
   }
+
   /** Tells the phones that know drafts; older ones would take the event for a message. */
   draftChanged(change: DraftChange) {
     if (!this.server.listening) return;
@@ -250,6 +257,7 @@ export class PhoneRemote {
       (id, bridge) => !this.isComputer(id) && bridge >= draftsBridge,
     );
   }
+
   chatEvent(
     event: Parameters<RemoteBridge["chatEvent"]>[0] & { setup?: true },
   ) {
@@ -258,6 +266,7 @@ export class PhoneRemote {
     this.bridge.chatEvent(event);
     this.host.handoffs?.chatEvent?.(event);
   }
+
   /** News the computer decided; older phones read theirs off the thread lists. */
   news(item: NewsItem) {
     if (!this.server.listening) return;
@@ -268,15 +277,18 @@ export class PhoneRemote {
     // A computer hears only of the threads it handed over live, and remaps them.
     this.host.handoffs?.news?.(item);
   }
+
   /** Someone may have come to the computer or left it. */
   presenceChanged() {
     if (this.server.listening) this.bridge.presenceChanged();
   }
+
   chatsEvent(event: ProjectChatsEvent) {
     if (!this.server.listening) return;
     this.bridge.chatsChanged(event.projectId);
     this.host.handoffs?.chatsChanged?.(event.projectId);
   }
+
   async state(): Promise<PhoneRemoteState> {
     const tailnet = await this.tailnet(true);
     const online = this.server.online();
@@ -300,6 +312,7 @@ export class PhoneRemote {
       })),
     };
   }
+
   /** Enables access using the saved network choice, including an explicit LAN off. */
   async setEnabled(enabled: boolean) {
     await this.devices.setEnabled(enabled);
@@ -311,15 +324,18 @@ export class PhoneRemote {
     }
     return this.state();
   }
+
   async setLan(lan: boolean) {
     await this.devices.setLan(lan);
     if (this.devices.settings.enabled) await this.follow();
     return this.state();
   }
+
   /** A paired phone or computer may call in, so this one shouldn't sleep on its own. */
   expectsCalls() {
     return this.server.listening && this.devices.list().length > 0;
   }
+
   /** `pipe`: for a computer that reaches this one over SSH or wsl.exe, which needs no network. */
   async pairing({ pipe = false } = {}): Promise<PhonePairing> {
     if (!this.server.listening) throw new Error("Turn on phone access first.");
@@ -340,6 +356,7 @@ export class PhoneRemote {
       expiresAt,
     };
   }
+
   async revoke(deviceId: string) {
     const computer = this.isComputer(deviceId);
     await this.devices.revoke(deviceId);
@@ -350,6 +367,7 @@ export class PhoneRemote {
     );
     return this.state();
   }
+
   async close() {
     clearInterval(this.watch);
     this.watch = undefined;
@@ -359,6 +377,7 @@ export class PhoneRemote {
     this.host.handoffs?.closeShells?.();
     await this.server.close();
   }
+
   /** Listens now, and keeps up as Tailscale or the local network goes off, comes back or moves. */
   private async follow() {
     if (!this.watch) {
@@ -367,6 +386,7 @@ export class PhoneRemote {
     }
     await this.sync();
   }
+
   /**
    * Listens while phone access is on: on this computer's Tailscale address,
    * or on every address when the local network is allowed too.

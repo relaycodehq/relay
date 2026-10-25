@@ -8,6 +8,7 @@ const model = (id: string, name: string): AgentModel => ({
   description: "",
   efforts: ["low", "medium", "high", "xhigh", "max"],
 });
+
 const claudeModels = [model("opus", "Opus 5.5"), model("sonnet", "Sonnet 5.5")];
 
 describe("turn model", () => {
@@ -23,6 +24,7 @@ describe("turn model", () => {
     expect(turn.fast).toBe(true);
     expect(turnModelLabel(turn)).toBe("Grok 4.7 High Fast");
   });
+
   it("takes the matching window alias's label and default effort for a full id", () => {
     expect(
       resolveTurnModel(
@@ -46,6 +48,7 @@ describe("turn model", () => {
       ),
     ).toMatchObject({ name: "Opus 1M", effort: "max", window: "1M" });
   });
+
   it("resolves a full Claude id's name and effort while keeping its 1M window", () => {
     const choice = {
       model: "claude-opus-5-5[1m]",
@@ -67,6 +70,7 @@ describe("turn model", () => {
     });
     expect(choice.model).toBe("claude-opus-5-5[1m]");
   });
+
   it("names an explicit Claude pick with its 1M window", () => {
     const turn = resolveTurnModel(
       "claude",

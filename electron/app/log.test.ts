@@ -6,10 +6,12 @@ import { startLog } from "./log";
 import { logTo } from "../headless/log";
 
 const { log, info, warn, error } = console;
+
 const before = {
   monitor: process.listeners("uncaughtExceptionMonitor"),
   rejection: process.listeners("unhandledRejection"),
 };
+
 let dir = "";
 
 afterEach(() => {

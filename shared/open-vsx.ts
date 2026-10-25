@@ -482,6 +482,7 @@ function checkResponse(response: Response) {
 class OpenVsxError extends Error {
   /** A retry could work; a page shouldn't quietly drop what failed. */
   readonly busy: boolean;
+
   constructor(message: string, busy: boolean) {
     super(message);
     this.busy = busy;

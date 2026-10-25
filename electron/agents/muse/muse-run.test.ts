@@ -22,6 +22,7 @@ let log = "";
 async function scenario(play: Record<string, unknown>) {
   vi.stubEnv("RELAY_MUSE_SCENARIO", JSON.stringify(play));
 }
+
 const sent = async (): Promise<Sent[]> =>
   (await readFile(log, "utf8").catch(() => ""))
     .split("\n")
@@ -37,6 +38,7 @@ beforeEach(async () => {
     await fakeCli(join(root, "muse"), await readFile(resolve("tests/fixtures/muse-serve.cjs"), "utf8")),
   );
 });
+
 afterEach(async () => {
   disposeMuse();
   forgetMuseModels();

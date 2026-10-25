@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentProvider } from "./agents";
 import { ASK_ANSWER_MAX_CHARS, type HtmlRender } from "./html-render";
+
 export const runtimeModeSchema = z.enum([
   "read-only",
   "approval-required",
@@ -8,11 +9,13 @@ export const runtimeModeSchema = z.enum([
   "auto",
   "full-access",
 ]);
+
 export type RuntimeMode = z.infer<typeof runtimeModeSchema>;
 /** What an agent runs in: Read only reaches it as Supervised with `readOnly` set. */
 export type AgentRuntimeMode = Exclude<RuntimeMode, "read-only">;
 export const interactionModeSchema = z.enum(["default", "plan"]);
 export type InteractionMode = z.infer<typeof interactionModeSchema>;
+
 export const runtimeModes = [
   {
     value: "read-only",
@@ -41,6 +44,7 @@ export const runtimeModes = [
     description: "Runs commands and edits files without asking.",
   },
 ] as const;
+
 /**
  * What a mode means for an agent whose SDK can limit what it does but can't
  * stop to ask, where "Asks before running commands" would be untrue.
@@ -63,6 +67,7 @@ const limitedModes: Partial<
     auto: "Amp asks only where your Amp permission rules say to; otherwise it runs tools without asking.",
   },
 };
+
 /** The modes as `provider` honors them: the same four, described truthfully. */
 export const runtimeModesFor = (provider?: AgentProvider) =>
   runtimeModes.map((mode) => ({
@@ -72,19 +77,23 @@ export const runtimeModesFor = (provider?: AgentProvider) =>
   }));
 /** Where a composer with nothing saved starts. */
 export const defaultRuntimeMode: RuntimeMode = "auto-accept-edits";
+
 /** Older saved choices map to their closest mode; nothing saved, or one this version doesn't know, is the default. */
 export function savedRuntimeMode(value: unknown): RuntimeMode {
   if (value === "ask") return "approval-required";
   if (value === "edit") return "auto-accept-edits";
   return runtimeModeSchema.safeParse(value).data ?? defaultRuntimeMode;
 }
+
 const decisionSchema = z.enum([
   "accept",
   "acceptForSession",
   "decline",
   "cancel",
 ]);
+
 export type AgentDecision = z.infer<typeof decisionSchema>;
+
 export const agentResponseSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("approval"), decision: decisionSchema }).strict(),
   z
@@ -104,7 +113,9 @@ export const agentResponseSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
 export type AgentResponse = z.infer<typeof agentResponseSchema>;
+
 export interface AgentQuestion {
   id: string;
   header?: string;
@@ -115,6 +126,7 @@ export interface AgentQuestion {
   allowCustomAnswer?: boolean;
   options?: { label: string; description?: string; value?: string }[];
 }
+
 export interface AgentRequest {
   id: string;
   kind: "approval" | "question" | "page";
@@ -127,6 +139,7 @@ export interface AgentRequest {
   /** The page an agent asks with (ask_html), saved like show_html's; see shared/html-render. */
   page?: HtmlRender;
 }
+
 export type AskAgentRequest = (
   request: Omit<AgentRequest, "id">,
   signal?: AbortSignal,

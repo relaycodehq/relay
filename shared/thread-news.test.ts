@@ -22,12 +22,14 @@ const chat = (
   provider: "claude",
   ...more,
 });
+
 const list = (...chats: RemoteChatSummary[]) =>
   new Map(chats.map((c) => [c.id, c]));
 const answer = (more: Partial<LastAnswer>): LastAnswer => ({
   body: "",
   ...more,
 });
+
 /** A turn that started at 10. */
 const turn = (
   endedAs: Turn["endedAs"],

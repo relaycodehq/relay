@@ -10,6 +10,7 @@ const snapshotSchema = z.object({
   primary: windowSchema,
   secondary: windowSchema,
 });
+
 const turnErrorSchema = z.object({
   message: z.string().nullish(),
   codexErrorInfo: z.unknown(),

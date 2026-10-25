@@ -6,6 +6,7 @@ const image = {
   mimeType: "image/png",
   dataUrl: "data:image/png;base64,AAAA",
 };
+
 const send = {
   id: "b74407b4-0d67-434d-9da6-7fa8f71f88be",
   body: "Review the screenshots",

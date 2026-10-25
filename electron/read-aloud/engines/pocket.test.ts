@@ -20,9 +20,11 @@ if (skip)
 
 describe.skipIf(Boolean(skip))("Pocket TTS on the real model", () => {
   let model: ReadAloudModel;
+
   beforeAll(async () => {
     model = await pocketTts.load(await import("onnxruntime-node"), dir!, 4);
   });
+
   afterAll(() => model?.release());
 
   it("streams speech for a short line", async () => {

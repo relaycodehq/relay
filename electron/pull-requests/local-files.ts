@@ -9,6 +9,7 @@ import {
 } from "../git/working-files";
 import { digest } from "../util/hash";
 import { gitBytes } from "../git/git";
+
 async function validate(
   root: string,
   server: string,
@@ -39,6 +40,7 @@ async function validate(
     );
   return { full, local };
 }
+
 export async function readLocalFile(
   root: string,
   server: string,
@@ -61,6 +63,7 @@ export async function readLocalFile(
     version: disk.hash,
   };
 }
+
 export async function saveLocalFile(
   root: string,
   server: string,

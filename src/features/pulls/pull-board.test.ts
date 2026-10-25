@@ -43,7 +43,9 @@ const issue = (
     pull_request: { merged: false },
   } as unknown as Issue;
 };
+
 type Searches = Pick<BoardHost, "review" | "assigned" | "created">;
+
 /** The Gitea account's searches, unless `hosts` gives every host's. */
 const input = ({
   review = [],
@@ -56,6 +58,7 @@ const input = ({
   lists: {},
   ...over,
 });
+
 const host = (
   server: string,
   login: string,
@@ -68,6 +71,7 @@ const host = (
   created: [],
   ...searches,
 });
+
 const on = (server: string, item: Issue) =>
   ({ ...item, repository: { ...item.repository, server } }) as Issue;
 

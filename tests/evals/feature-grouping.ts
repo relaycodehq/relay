@@ -5,6 +5,7 @@ import {
   type Candidate,
 } from "../../electron/triage/evidence";
 import { classifyChanges } from "../../electron/triage/classifier";
+
 const cases = [
   {
     path: "counter/counter.ts",
@@ -44,6 +45,7 @@ const cases = [
       "export function reportMixed(log, value) { log.warning(value); return false; }\n",
   },
 ];
+
 const candidates = cases.map(
   (c) =>
     prepareCandidate(
@@ -63,11 +65,13 @@ const candidates = cases.map(
       },
     ) as Candidate,
 );
+
 const response = await classifyChanges(
   candidates,
   [],
   new AbortController().signal,
 );
+
 assert.deepEqual(response.rejectedFiles, []);
 const decisions = new Map(response.result.files.map((f) => [f.path, f]));
 const a = decisions.get("api/one.ts")!,
@@ -85,7 +89,9 @@ assert.equal(
   siblings.length,
   "Feature siblings must have distinct operations",
 );
+
 assert.ok(siblings.every((f) => f.pattern !== a.pattern));
+
 console.log(
   JSON.stringify({
     passed: true,

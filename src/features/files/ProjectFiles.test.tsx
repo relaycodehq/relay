@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   mounted: vi.fn(),
   unmounted: vi.fn(),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     projectFileInfo: mocks.info,
@@ -32,11 +33,14 @@ vi.mock("../../lib/api", () => ({
     projectDirectory: mocks.directory,
   },
 }));
+
 vi.mock("../../ui/PaneResizer", () => ({ PaneResizer: () => null }));
 vi.mock("./FileTree", () => ({ FileTree: () => null }));
+
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: () => ({ getTotalSize: () => 0, getVirtualItems: () => [] }),
 }));
+
 vi.mock("../../ui/ui", () => ({
   ErrorBox: () => null,
   Loading: () => null,
@@ -47,6 +51,7 @@ vi.mock("../../ui/ui", () => ({
     <button aria-label={label} {...props} />
   ),
 }));
+
 vi.mock("./editor/LocalFileEditor", () => ({
   default: function Editor() {
     const [text, setText] = useState("original");
@@ -61,9 +66,11 @@ vi.mock("./editor/LocalFileEditor", () => ({
     );
   },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const project: Project = {
   id: "project",
   path: "/project",
@@ -72,12 +79,14 @@ const project: Project = {
   added: 0,
   plain: true,
 };
+
 const checks = {} as ChecksController;
 const onViewing = () => {};
 let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
 let opens: ReturnType<typeof requestChannel<FileTarget>>;
+
 beforeEach(() => {
   vi.useFakeTimers();
   focusManager.setFocused(true);
@@ -98,6 +107,7 @@ beforeEach(() => {
     }),
   );
 });
+
 afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();
@@ -106,6 +116,7 @@ afterEach(async () => {
   focusManager.setFocused(undefined);
   vi.useRealTimers();
 });
+
 async function render(active: boolean) {
   await act(async () =>
     root.render(
@@ -124,6 +135,7 @@ async function render(active: boolean) {
   );
   await act(async () => vi.advanceTimersByTimeAsync(10));
 }
+
 async function advance(ms: number) {
   await act(async () => vi.advanceTimersByTimeAsync(ms));
 }

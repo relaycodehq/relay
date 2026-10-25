@@ -604,6 +604,7 @@ describe("AgentUpdates checking on its own", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });
+
   afterEach(() => {
     vi.useRealTimers();
   });

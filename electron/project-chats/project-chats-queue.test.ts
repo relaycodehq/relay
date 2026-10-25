@@ -24,6 +24,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
+
 vi.mock("../platform/executables");
 
 useProjectChats();
@@ -308,6 +309,7 @@ it("holds a Send later message until its time, sends it now on request, and keep
   await waitForSummary(chat.id, (summary) => !summary.nextSend);
   expect((await chats.get(chat.id)).messages.at(-1)?.id).toBe(missed.id);
 });
+
 it.each([false, true])(
   "holds a scheduled /btw message until its time, existing side conversation = %s",
   async (reply) => {
@@ -756,11 +758,13 @@ it("resumes Claude's own saved session after restart without mixing Codex's curs
     "Claude found the same cache guard.",
   );
 });
+
 const captured = async () =>
   (await agentCalls())
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line));
+
 it("answers /btw from Claude's session beside its running turn, and remembers the side thread", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -827,6 +831,7 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     },
   ]);
 });
+
 it("fails a /btw question outright when its folder is gone, instead of leaving an answer streaming", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -847,6 +852,7 @@ it("fails a /btw question outright when its folder is gone, instead of leaving a
   ).rejects.toThrow("Folder is gone.");
   expect((await chats.get(chat.id)).messages).toHaveLength(before);
 });
+
 it("refuses a /btw for an agent that can't fork the thread before saving anything", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await expect(
@@ -858,6 +864,7 @@ it("refuses a /btw for an agent that can't fork the thread before saving anythin
   ).rejects.toThrow("Amp can't answer beside the thread.");
   expect((await chats.get(chat.id)).messages).toEqual([]);
 });
+
 it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from the main session", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex wait for cancellation"));
@@ -915,6 +922,7 @@ it("asks /btw of a read-only Codex fork while its turn runs, and keeps it from t
   expect(main).toHaveLength(1);
   expect(JSON.stringify(main[0].turn.input)).not.toContain("which test covers");
 });
+
 it("keeps a handed-over thread's briefing for the retry when its first turn fails", async () => {
   const cli = await findExecutable("codex");
   vi.mocked(findExecutable).mockRejectedValue(

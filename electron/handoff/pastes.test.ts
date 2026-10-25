@@ -20,6 +20,7 @@ import { receivePastes, sendPastes } from "./pastes";
 let root: string;
 let local: string;
 let remote: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-paste-transfer-"));
   local = join(root, "local");
@@ -27,6 +28,7 @@ beforeEach(async () => {
   await Promise.all([mkdir(local), mkdir(remote)]);
   setPastesRoot(local);
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 // Both services in one process: select the receiving desktop's data folder

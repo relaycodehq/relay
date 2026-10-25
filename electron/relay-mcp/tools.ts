@@ -757,6 +757,7 @@ export interface ToolResult {
   )[];
   isError?: boolean;
 }
+
 /** The result's text, its pictures left out. */
 export const resultText = (result: ToolResult) =>
   result.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");

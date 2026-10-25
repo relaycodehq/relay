@@ -16,6 +16,7 @@ describe("process tables", () => {
       line: "/Applications/Relay.app/Contents/MacOS/Relay --flag a b",
     });
   });
+
   it("reads the PowerShell's rows, counters or not", () => {
     const rows = parseWindows(
       "\uFEFF" +

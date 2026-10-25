@@ -5,6 +5,7 @@ import type { Setup } from "./deep-review-setup";
 import { keepReview } from "./useDeepReviewSetup";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -22,6 +23,7 @@ const agent = (provider: string) => ({
   provider,
   choice: { model: "m", reasoningEffort: "high", fast: false },
 });
+
 const setupOf = (kind: Setup["kind"], reviewers: number) =>
   ({
     kind,

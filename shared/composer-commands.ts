@@ -17,6 +17,7 @@ import { supportsFast } from "./model-fit";
 
 /** Who a composer's message goes to; "message" is a note no agent answers. */
 export type ComposerTarget = AgentProvider | "message";
+
 /** What a desktop composer can send to; the phone only sends to agents. */
 export const composerTargets: readonly ComposerTarget[] = [
   ...agentProviders,

@@ -6,6 +6,7 @@ import { openLinuxTerminal } from "./terminal";
 
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("../platform/executables");
+
 beforeEach(() => vi.resetAllMocks());
 
 function spawned(error?: Error) {

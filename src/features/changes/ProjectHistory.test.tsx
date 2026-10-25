@@ -15,18 +15,24 @@ const mocks = vi.hoisted(() => ({
   tree: vi.fn(async () => ({ head: "first" })),
   history: vi.fn(async () => ({ commits: [], more: false })),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: { projectWorkingTree: mocks.tree, projectHistory: mocks.history },
 }));
+
 vi.mock("./CommitChanges", () => ({ CommitChanges: () => null }));
 vi.mock("../../ui/ui", () => ({ ErrorBox: () => null, Loading: () => null }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: Infinity } },
 });
+
 const root = createRoot(document.createElement("div"));
+
 afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();

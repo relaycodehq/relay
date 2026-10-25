@@ -12,13 +12,17 @@ import type { ProviderUsage } from "../../../shared/provider-usage";
 vi.mock("../../lib/api", () => ({
   api: { providerUsage: vi.fn(), redeemCodexReset: vi.fn() },
 }));
+
 vi.mock("../../lib/while-shown", () => ({ everyWhileShown: () => () => {} }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
+
 const reading = (count = 2): ProviderUsage => ({
   provider: "codex",
   message: null,
@@ -27,6 +31,7 @@ const reading = (count = 2): ProviderUsage => ({
     ? { count, usable: 1, credits: [{ id: "first", expiresAt: null }] }
     : null,
 });
+
 function Probe({ account, strip }: { account: string; strip: boolean }) {
   const { readings } = useUsageReadings([{ provider: "codex", account }]);
   const View = strip ? UsageStrip : UsageMeters;
@@ -39,6 +44,7 @@ function Probe({ account, strip }: { account: string; strip: boolean }) {
     />
   );
 }
+
 async function render(account = "work", strip = false, initial = reading()) {
   if (!root) {
     host = document.createElement("div");
@@ -62,6 +68,7 @@ async function render(account = "work", strip = false, initial = reading()) {
     );
   });
 }
+
 const savedResets = (count: number) =>
   host.querySelector(
     `button[aria-label="Reset usage, ${count} saved ${count === 1 ? "reset" : "resets"}"]`,
@@ -73,6 +80,7 @@ async function click(label: string) {
   expect(button, label).toBeDefined();
   await act(async () => button!.click());
 }
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   host?.remove();
@@ -80,6 +88,7 @@ afterEach(async () => {
   root = undefined!;
   vi.clearAllMocks();
 });
+
 it("confirms the selected account, cancels without spending, and refreshes only its reading", async () => {
   await render();
   client.setQueryData(usageKey("codex", "personal"), reading(3));
@@ -103,6 +112,7 @@ it("confirms the selected account, cancels without spending, and refreshes only 
     reading(3),
   );
 });
+
 it("retries a failed request with the same credit and key, even after the list changes", async () => {
   await render();
   vi.mocked(api.redeemCodexReset).mockRejectedValueOnce(new Error("Offline"));
@@ -153,6 +163,7 @@ it("opens full usage details from the strip without a second reset action", asyn
   expect(document.body.textContent).toContain("65,492.713 credits");
   expect(document.body.querySelectorAll(".usage-reset")).toHaveLength(1);
 });
+
 it("refreshes the strip and shared reading after a confirmed reset", async () => {
   await render("work", true);
   await click("Reset usage, 2 saved resets");
@@ -165,6 +176,7 @@ it("refreshes the strip and shared reading after a confirmed reset", async () =>
   expect(savedResets(1)).not.toBeNull();
   expect(client.getQueryData(usageKey("codex", "work"))).toEqual(reading(1));
 });
+
 it("swaps the strip's readings for the credit balance once a limit is spent", async () => {
   await render("work", true, {
     ...reading(),

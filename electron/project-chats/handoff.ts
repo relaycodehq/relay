@@ -35,6 +35,7 @@ function elsewhere(chat: ChatSummary) {
   if (chat.cameFrom?.returnedAt)
     return `This thread went back to ${chat.cameFrom.computer}; it continues there.`;
 }
+
 /** Handed over from another computer and not yet handed back, so that computer is waiting for it. */
 export const awaitsReturn = (chat: ChatSummary) =>
   !!chat.cameFrom && !chat.cameFrom.returnedAt && !chat.cameFrom.abandonedAt;
@@ -42,6 +43,7 @@ export function assertHere(chat: ChatSummary) {
   const away = elsewhere(chat);
   if (away) throw new Error(away);
 }
+
 /**
  * Messages crossing to another computer: new ids, and nothing that points
  * into this one's data (turn snapshots, screenshots, provider sessions).
@@ -52,6 +54,7 @@ export function portableMessages(
 ): ChatMessage[] {
   return relabeled(messages, newIds).messages;
 }
+
 function relabeled(messages: ChatMessage[], newIds: boolean) {
   const ids = new Map(
     messages.map((m) => [m.id, newIds ? randomUUID() : m.id]),
@@ -69,6 +72,7 @@ function relabeled(messages: ChatMessage[], newIds: boolean) {
       })),
   };
 }
+
 /** Messages written here, pointing at the ids the carried ones had where they came from. */
 function pointingBack(
   messages: ChatMessage[],
@@ -80,6 +84,7 @@ function pointingBack(
       : m,
   );
 }
+
 /** What another computer hears of a handed-over thread's latest turn. */
 type HandoffTurn = Pick<
   HandoffRemoteStatus,
@@ -93,6 +98,7 @@ type HandoffTurn = Pick<
   | "question"
   | "runningFor"
 >;
+
 /** A turn's own last calls and latest commentary, trimmed to cross the bridge. */
 function turnPeek(m: ChatMessage): HandoffTurn {
   const { activity } = readTurn(m);
@@ -179,6 +185,7 @@ export class ComputerHandoff {
       await this.core.storage.save(chat);
     });
   }
+
   /** Updates a thread's handoff while it's still `handoffId`; null ends it, keeping the thread here. */
   async updateSentTo(
     id: string,
@@ -193,6 +200,7 @@ export class ComputerHandoff {
     } else delete chat.sentTo;
     await this.core.storage.save(chat);
   }
+
   /**
    * A thread of a project on another computer that computer refused to
    * start: it's new again, to send once more, rather than stuck on its way.
@@ -208,6 +216,7 @@ export class ComputerHandoff {
       await this.core.storage.save(chat);
     });
   }
+
   /**
    * Unlocks a thread that's away, as it was when it left plus anything
    * already handed back, and notes which handoff that was so it can't come
@@ -237,6 +246,7 @@ export class ComputerHandoff {
       return true;
     });
   }
+
   /**
    * Carries on a live thread here without the computer it's on: what
    * mirrored it stays, an answer cut off there ends, and the next turn hears
@@ -275,6 +285,7 @@ export class ComputerHandoff {
       return held;
     });
   }
+
   /**
    * The thread leaves for `computer`: its agent stops and is waited for,
    * writes a handoff note in its own session, and everything in the worktree
@@ -347,6 +358,7 @@ export class ComputerHandoff {
       };
     });
   }
+
   /**
    * The thread's running turn stops for a handoff still readying the
    * computer it goes to. Its queued and scheduled messages stay until it
@@ -355,6 +367,7 @@ export class ComputerHandoff {
   halt(id: string) {
     return this.core.active.halt(id);
   }
+
   private async stop(id: string, chat: ProjectChat) {
     await this.core.active.halt(id);
     if (chat.queue?.length || chat.scheduled?.length) {
@@ -363,12 +376,14 @@ export class ComputerHandoff {
       this.schedule.armSend(id, undefined);
     }
   }
+
   /** The thread a handoff from another computer made here, if it came. */
   handedOver(handoffId: string) {
     return (this.core.store.get().chats ?? []).find(
       (c) => c.cameFrom?.id === handoffId,
     );
   }
+
   /**
    * A thread handed over from another computer, working in `worktree`. Its
    * agent carries on at once, briefed with the note and the user's messages.
@@ -429,6 +444,7 @@ export class ComputerHandoff {
       .catch((e) => console.warn("A handed-over thread couldn't start:", e));
     return chatSummary(chat);
   }
+
   /**
    * A thread nothing answered yet where it was made: its first message, by
    * its own id, starts it here as any thread's first turn. Nothing is
@@ -475,6 +491,7 @@ export class ComputerHandoff {
       );
     return chatSummary(chat);
   }
+
   /**
    * A thread another computer starts in this project's own folder, for a
    * project it shows as its own: it never goes back, and works in the checkout.
@@ -490,6 +507,7 @@ export class ComputerHandoff {
       home: true,
     });
   }
+
   /**
    * A Scratchpad thread whose agent sets up a project another computer is
    * handing a thread to this one for. It counts as come from that computer,
@@ -519,6 +537,7 @@ export class ComputerHandoff {
       .catch((e) => console.warn("A project's setup couldn't start:", e));
     return chatSummary(chat);
   }
+
   /** What a thread that came here wrote since, for its trip back. */
   async handBack(id: string, deviceId: string) {
     const summary = (this.core.store.get().chats ?? []).find(
@@ -558,6 +577,7 @@ export class ComputerHandoff {
       since: came.tip,
     };
   }
+
   /**
    * A thread whose worktree is gone, deleted outside Relay, still has its
    * conversation to hand back, with the commits its branch kept; what was
@@ -582,6 +602,7 @@ export class ComputerHandoff {
       return { chat: structuredClone(chat), root, tip };
     });
   }
+
   /**
    * How the main conversation's latest turn here goes: the start of the
    * latest answer or the error it ended in, and for the peek its last calls,
@@ -627,6 +648,7 @@ export class ComputerHandoff {
       ? { latest: answer.body.trim().slice(0, 300), ...peek }
       : peek;
   }
+
   /** The other computer has the thread back; this copy stays still. */
   async handedBack(id: string) {
     const chat = await this.core.storage.load(id);
@@ -636,6 +658,7 @@ export class ComputerHandoff {
     this.core.sessions.close(id);
     await this.core.storage.save(chat);
   }
+
   /**
    * The computer it came from took the thread back without this one. The
    * copy is no longer owed to it: it carries on here as a thread of its own.
@@ -656,6 +679,7 @@ export class ComputerHandoff {
     came.abandonedAt = Date.now();
     await this.core.storage.save(chat);
   }
+
   /**
    * A thread back from another computer: what was written there joins the
    * conversation, and the next turn hears the note written for the trip.

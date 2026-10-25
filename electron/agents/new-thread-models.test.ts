@@ -8,6 +8,7 @@ import { rememberSent } from "./new-thread-models";
 import type { ProjectChatSend } from "../../shared/projects";
 
 const dirs: string[] = [];
+
 afterEach(async () => {
   await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true })));
 });

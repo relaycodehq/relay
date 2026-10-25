@@ -52,9 +52,11 @@ export class LiveFeed {
   >();
   private settling = new Map<string, NodeJS.Timeout>();
   constructor(private chats: FeedChats) {}
+
   connect(link: FeedLink) {
     this.link = link;
   }
+
   /** The computer the thread came from follows it from now on; what it lacks comes back. */
   async follow(chat: ChatSummary, known?: KnownMessages): Promise<HandoffChat> {
     const [messages, live] = await Promise.all([
@@ -70,6 +72,7 @@ export class LiveFeed {
     });
     return { messages, live };
   }
+
   message(chatId: string, message: ChatMessage) {
     const entry = this.followed.get(chatId);
     if (!entry || !this.link) return;
@@ -86,6 +89,7 @@ export class LiveFeed {
       })
       .catch((e) => console.warn("A live handoff's message didn't go:", e));
   }
+
   /** News of a followed thread is the other computer's to tell there too. */
   news(item: NewsItem) {
     const entry = this.followed.get(item.chatId);
@@ -95,6 +99,7 @@ export class LiveFeed {
       item: { ...item, chatId: entry.handoffId },
     });
   }
+
   changed(projectId: string) {
     if (!this.link || this.settling.has(projectId)) return;
     const timer = setTimeout(() => {
@@ -108,6 +113,7 @@ export class LiveFeed {
     timer.unref?.();
     this.settling.set(projectId, timer);
   }
+
   private async update(chatId: string) {
     const entry = this.followed.get(chatId);
     if (!entry) return;
@@ -126,6 +132,7 @@ export class LiveFeed {
       live,
     });
   }
+
   /** Sends a message, a streaming one at most every `streamMs`. */
   private push(deviceId: string, event: RemoteEvent & { kind: "message" }) {
     const key = event.message.id;

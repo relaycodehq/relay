@@ -20,6 +20,7 @@ const message = (
   version: 1,
   ...extra,
 });
+
 const read = (
   label: string,
   extra: Partial<AgentActivity> = {},

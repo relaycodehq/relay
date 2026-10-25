@@ -28,6 +28,7 @@ async function repo(name: string) {
   git(root, "commit", "-qm", "Initial");
   return root;
 }
+
 const LEAD = "11111111-1111-4111-8111-111111111111",
   HELPER = "22222222-2222-4222-8222-222222222222",
   PORTER = "33333333-3333-4333-8333-333333333333",
@@ -108,6 +109,7 @@ function setup() {
     save,
   };
 }
+
 const handlers = () => setup().h;
 
 beforeEach(async () => {
@@ -118,6 +120,7 @@ beforeEach(async () => {
     for (const f of ["a.ts", "b.ts", "other.ts"])
       await writeFile(join(root, f), "one\nchanged\n");
 });
+
 afterEach(async () => {
   await rm(base, { recursive: true, force: true });
 });

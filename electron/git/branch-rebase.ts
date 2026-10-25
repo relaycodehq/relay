@@ -19,6 +19,7 @@ async function commits(root: string, range: string): Promise<Commit[]> {
       subject: r.slice(r.indexOf(" ") + 1),
     }));
 }
+
 /**
  * Replays the commits `tip` has and `onto` doesn't onto `onto`, in a
  * throwaway worktree so no folder moves: the new tip, or the files the first

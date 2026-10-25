@@ -16,10 +16,12 @@ let found: Promise<string> | undefined;
  * bare `execFile("git")` did: a snapshot taken then can't miss what comes next.
  */
 let resolved: string | undefined;
+
 export function setGitPath(path: string | null) {
   chosen = path;
   found = resolved = undefined;
 }
+
 /** The Git executable to run: the chosen one, else one on PATH or in a usual install folder. */
 export function gitExecutable(): Promise<string> {
   if (found) return found;
@@ -35,6 +37,7 @@ export function gitExecutable(): Promise<string> {
   );
   return current;
 }
+
 async function lookUpGit() {
   const path = chosen;
   if (path) {
@@ -57,6 +60,7 @@ async function lookUpGit() {
     process.env.PATH = [dir, ...paths].filter(Boolean).join(delimiter);
   return git;
 }
+
 /** Git's version line; fails when `path` isn't Git. */
 export async function gitVersion(path: string) {
   let stdout: string;
@@ -75,6 +79,7 @@ export async function gitVersion(path: string) {
     throw new Error("That program isn’t Git.");
   return version;
 }
+
 export async function gitInfo(): Promise<GitInfo> {
   try {
     const path = await gitExecutable();
@@ -93,6 +98,7 @@ export async function gitInfo(): Promise<GitInfo> {
     };
   }
 }
+
 /** Git never prompts, takes optional locks, or reads paths as patterns. */
 export const gitEnv = (extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
   ...process.env,
@@ -102,6 +108,7 @@ export const gitEnv = (extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv => ({
   GCM_INTERACTIVE: "never",
   ...extra,
 });
+
 /** Git may include credential-bearing remote URLs in output and failures. */
 export const redactCredentials = (text: string) =>
   // A token often stands alone in the user name.
@@ -114,6 +121,7 @@ export interface GitOptions {
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
 }
+
 /** Git's failure as the user should see it: its own message, no credentials. */
 export function gitError(e: unknown) {
   const error = e as Error & {
@@ -147,6 +155,7 @@ export function gitError(e: unknown) {
   ].join("\n");
   return new Error(redactCredentials(message).slice(0, 3000));
 }
+
 /** Runs Git in `root`; a timeout as a number is the common case. */
 export async function git(
   root: string,
@@ -265,10 +274,12 @@ export async function conflictedFiles(root: string) {
   ]).catch(() => "");
   return out.split("\0").filter(Boolean);
 }
+
 /** The checked-out branch; empty when HEAD is detached. */
 export async function currentBranch(root: string) {
   return (await git(root, ["branch", "--show-current"])).trim();
 }
+
 /** The checked-out branch, or null when detached or Git can't say. */
 export const currentBranchOrNull = (root: string) =>
   currentBranch(root).then(
@@ -295,6 +306,7 @@ export async function checkedOutOr(
     return { branch: known.branch, commit: known.commit };
   }
 }
+
 /**
  * The repository's worktrees, the main checkout first, with the branch each
  * has checked out; a prunable one's folder is gone, only Git's record is left.
@@ -312,6 +324,7 @@ export async function worktreeList(root: string) {
     return [{ path, ...(branch ? { branch } : {}), prunable }];
   });
 }
+
 /** Git's output as bytes, up to `limit`; past it, the content isn't text Relay shows. */
 export async function gitBytes(
   root: string,

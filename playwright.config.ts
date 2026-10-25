@@ -3,6 +3,7 @@ import { defineConfig } from "@playwright/test";
 // than a desktop, so the same steps get more time there and one retry for a
 // timing blip; a retried test still shows as flaky in the report.
 const ci = !!process.env.CI;
+
 export default defineConfig({
   testDir: "tests/e2e",
   workers: 1,

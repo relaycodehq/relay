@@ -1,6 +1,7 @@
 import { expect, it } from "vitest";
 import type { AgentTool } from "../../../shared/agent-tools";
 import { filterAgentTools } from "./filter";
+
 const items: AgentTool[] = [
   {
     id: "review",
@@ -18,6 +19,7 @@ const items: AgentTool[] = [
     state: "disabled",
   },
 ];
+
 it("combines word and status filters while keeping disabled tools discoverable", () => {
   expect(filterAgentTools(items, "branch REVIEW", "enabled")).toEqual([
     items[0],

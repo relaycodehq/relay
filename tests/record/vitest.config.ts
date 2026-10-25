@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+
 // Records agent transcripts from the real CLIs; never part of the unit run.
 // See tests/fixtures/replays/README.md.
 export default defineConfig({

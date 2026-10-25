@@ -5,9 +5,11 @@ import { agentToolHandlers } from "./agent-tools";
 import { inspectAgentTools } from "../agents/tools";
 import type { ApiContext } from "./context";
 const commands = vi.fn(async () => []);
+
 vi.mock("../agents", () => ({
   agentRuntime: () => ({ commands, knownCommands: async () => undefined }),
 }));
+
 vi.mock("../agents/tools", () => ({
   inspectAgentTools: vi.fn(async () => ({
     skills: { items: [] },
@@ -15,10 +17,12 @@ vi.mock("../agents/tools", () => ({
     checkedAt: 1,
   })),
 }));
+
 beforeEach(() => vi.clearAllMocks());
 const projectId = randomUUID();
 const computerId = randomUUID();
 const remoteId = randomUUID();
+
 function setup() {
   const desktop = vi.fn(async () => ({
     skills: { items: [] },
@@ -50,6 +54,7 @@ function setup() {
     root,
   };
 }
+
 it("validates arguments and resolves the selected project before local inspection, without starting the agent", async () => {
   const { handler, root } = setup();
   await handler([projectId, "codex"]);
@@ -64,6 +69,7 @@ it("validates arguments and resolves the selected project before local inspectio
   expect(commands).not.toHaveBeenCalled();
   expect(() => handler(["/arbitrary/path", "codex"])).toThrow();
 });
+
 it("inspects the paired computer's matched project without falling back to local configuration", async () => {
   const { handler, desktop, root, targetOn } = setup();
   await handler([projectId, "claude", computerId]);
@@ -76,6 +82,7 @@ it("inspects the paired computer's matched project without falling back to local
   expect(root).not.toHaveBeenCalled();
   expect(inspectAgentTools).not.toHaveBeenCalled();
 });
+
 it("refuses an unmatched project or an outdated computer and propagates remote failures", async () => {
   const { handler, desktop, targetOn } = setup();
   targetOn.mockResolvedValueOnce({ id: computerId });

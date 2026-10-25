@@ -10,6 +10,7 @@ import { annotationRuntime } from "./annotation-runtime";
 import { annotationStyle } from "./annotation-style";
 
 const WORLD = 1007;
+
 const changeSchema = z.discriminatedUnion("action", [
   z
     .object({ action: z.literal("save"), annotation: browserAnnotationSchema })

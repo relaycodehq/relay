@@ -138,6 +138,7 @@ export class ProjectChats {
   readonly importOffers: ImportOffers;
   /** Threads moving to another project at their agent's asking. */
   readonly projectMoves: ProjectMoves;
+
   constructor(
     private store: Store,
     projects: Projects,
@@ -342,6 +343,7 @@ export class ProjectChats {
       councils: this.councils,
     });
   }
+
   /**
    * Hears which project's thread list may read differently: a summary saved,
    * a turn claimed or released, a request asked or answered, or Claude's
@@ -350,6 +352,7 @@ export class ProjectChats {
   onSummaries(listener: (projectId: string) => void) {
     return this.storage.onSummaries(listener);
   }
+
   /**
    * Hears each thread written to disk, as a turn ends or its files are
    * rolled back. The thread is Relay's own copy: read it, never change it.
@@ -357,34 +360,43 @@ export class ProjectChats {
   onSaved(listener: (chat: ProjectChat) => void) {
     return this.storage.onSaved(listener);
   }
+
   /** Says a project's list may read differently; every project's, given none. */
   summariesChanged(projectId?: string) {
     this.storage.summariesChanged(projectId);
   }
+
   autoSettleDays() {
     return this.threads.autoSettleDays();
   }
+
   worktreeCleanupDays() {
     return this.threads.worktreeCleanupDays();
   }
+
   list(projectId: string) {
     return this.threads.list(projectId);
   }
+
   private summaryOf(id: string) {
     return this.threads.byIds([id]).get(id);
   }
+
   /** What threads are news of, decided once for every window, menubar and phone. */
   onNews(listener: (item: NewsItem) => void) {
     return this.news.onNews(listener);
   }
+
   /** A thread's answers are over, nothing queued after the last; see TurnNews.onEnd. */
   onAnswersEnd(listener: (turn: Turn) => void) {
     return this.news.onEnd(listener);
   }
+
   /** The news after `cursor`, for a client that was away. */
   newsSince(cursor?: NewsCursor) {
     return this.news.since(cursor);
   }
+
   /**
    * Removes the worktrees of threads settled long enough, where nothing is
    * at work and nothing would be lost; their branches stay.
@@ -395,6 +407,7 @@ export class ProjectChats {
       this.councils.sweepCheckouts((id) => this.reviewDone(id)),
     ]).catch((e) => console.warn("Could not clean up worktrees:", e));
   }
+
   /** A review thread that no longer needs its worktree: deleted, archived or settled, with nothing at work. */
   private reviewDone(id: string) {
     const chats = this.store.get().chats ?? [];
@@ -414,10 +427,12 @@ export class ProjectChats {
       return false;
     }
   }
+
   /** The subagents Claude started in a thread, its side conversations' too. */
   agents(id: string) {
     return this.sessions.subagents(id);
   }
+
   async contextReport(id: string, parentId?: string) {
     const { messages } = await this.storage.load(id);
     const roots = parentId ? replyRoots(messages) : undefined;
@@ -436,12 +451,15 @@ export class ProjectChats {
         )
       : null;
   }
+
   agentRun(id: string, agentId: string) {
     return this.sessions.subagentRun(id, agentId);
   }
+
   stopAgent(id: string, agentId: string) {
     return this.sessions.stopSubagent(id, agentId);
   }
+
   /** Threads whose running answer comes from `provider`. */
   runningOn(provider: AgentProvider) {
     return this.active.ids().flatMap((id) => {
@@ -453,6 +471,7 @@ export class ProjectChats {
         : [];
     });
   }
+
   /**
    * Stops those threads as Stop would, and waits until their agents let go.
    * Returns their ids, for `resumeStopped` once the agent is back.
@@ -463,6 +482,7 @@ export class ProjectChats {
     await Promise.all(ids.map((id) => this.active.finished(id)));
     return ids;
   }
+
   /** Carries on answers Relay stopped itself, as Resume answer would, queue and all. */
   async resumeStopped(ids: string[]) {
     for (const id of ids) {
@@ -476,6 +496,7 @@ export class ProjectChats {
       );
     }
   }
+
   /** Background commands and agents still running, across every thread. */
   runningTasks() {
     return this.sessions
@@ -483,6 +504,7 @@ export class ProjectChats {
       .map((p) => p.item)
       .filter((item) => item.kind === "task");
   }
+
   /**
    * Stops a background task Claude left running, or cancels a wake-up it
    * scheduled.
@@ -490,6 +512,7 @@ export class ProjectChats {
   stopPending(id: string, pendingId: string) {
     return this.schedule.stopPending(id, pendingId);
   }
+
   /**
    * Arms the wake-ups kept when Relay last closed, scheduled messages,
    * resumes after a limit and compactions of idle conversations.
@@ -499,48 +522,62 @@ export class ProjectChats {
     this.limits.armAll();
     this.idle.armAll();
   }
+
   /** Automatic idle compaction was turned on: plans it for threads idle since. */
   armIdleCompactions() {
     if (!this.disposing) this.idle.armAll();
   }
+
   /** Turns off carrying on the answer a usage limit stopped, or back on. */
   setLimitResume(id: string, on: boolean) {
     return this.limits.set(id, on);
   }
+
   resolveStoppedWork(id: string, action: "resume" | "dismiss") {
     return this.schedule.resolveStopped(id, action);
   }
+
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   triage(id: string, triage: ChatTriage) {
     return this.triaging.triage(id, triage);
   }
+
   markSeen(id: string, seenAt: number) {
     return this.triaging.markSeen(id, seenAt);
   }
+
   settleItself(id: string) {
     return this.triaging.settleItself(id);
   }
+
   detach(id: string) {
     return this.triaging.detach(id);
   }
+
   startedThreads(leadId: string) {
     return this.threads.started(leadId);
   }
+
   allowDriving(id: string, on: boolean) {
     return this.triaging.allowDriving(id, on);
   }
+
   setAccount(id: string, provider: AccountProvider, account: string) {
     return this.triaging.setAccount(id, provider, account);
   }
+
   setLinks(id: string, links: LinkedFolder[]) {
     return this.core.control(id, () => this.triaging.setLinks(id, links));
   }
+
   promoteLink(id: string, path: string) {
     return this.core.control(id, () => this.triaging.promoteLink(id, path));
   }
+
   rename(id: string, candidate: string) {
     return this.titles.rename(id, candidate);
   }
+
   create(
     projectId: string,
     scope: ChatScope,
@@ -560,6 +597,7 @@ export class ProjectChats {
       start,
     );
   }
+
   /**
    * A new thread holding the conversation up to an answer, side conversation
    * included when the answer is in one. The original keeps its turns' changes
@@ -568,9 +606,11 @@ export class ProjectChats {
   fork(id: string, messageId?: string) {
     return this.creating.fork(id, messageId);
   }
+
   terminalSessions(projectId: string) {
     return this.terminal.list(projectId);
   }
+
   continueTerminalSession(
     projectId: string,
     pick: TerminalSessionPick,
@@ -580,6 +620,7 @@ export class ProjectChats {
   ) {
     return this.terminal.continue(projectId, pick, workspace, branch, links);
   }
+
   /** News of a thread live on another computer, as that computer told it. */
   handoffNews(
     id: string,
@@ -588,6 +629,7 @@ export class ProjectChats {
   ) {
     this.news.retell({ ...news, chatId: id }, projectId);
   }
+
   /**
    * What waits in the thread now, which isn't saved with it; for a live
    * handoff, what its computer last said, over what's saved here.
@@ -610,9 +652,11 @@ export class ProjectChats {
       folder: (chat) => this.worktrees.root(chat),
     });
   }
+
   resumeDeepReview(id: string, only?: ResumeReview) {
     return this.councils.resumeReview(id, only);
   }
+
   setFinding(
     id: string,
     findingId: string,
@@ -620,6 +664,7 @@ export class ProjectChats {
   ) {
     return marks.setFinding(this.core, id, findingId, status);
   }
+
   /** The same chat object a running turn writes into, so its next publish keeps the note closed. */
   closeWatchNote(
     id: string,
@@ -630,47 +675,59 @@ export class ProjectChats {
   ) {
     return marks.closeWatchNote(this.core, id, messageId, noteId, how, read);
   }
+
   /** What side checks spent in the last `days`, by thread. */
   watchSpend(days: number) {
     return spend.watchSpend(this.core, days);
   }
+
   /** The composer's guesses of the last `days`: what they cost and how often they were sent. */
   predictionSpend(days: number) {
     return spend.predictionSpend(this.core, days);
   }
+
   /** The composer showed a guess, so what's sent next counts for or against it; Escape hides it for good. */
   seePrediction(id: string, messageId: string, how: "shown" | "dismissed") {
     return marks.seePrediction(this.core, id, messageId, how);
   }
+
   /** The notes of the last `days` with what was done with each. */
   watchReview(days: number) {
     return this.watchNotes.review(days);
   }
+
   judgeWatchNotes(days: number) {
     return this.watchNotes.judge(days);
   }
+
   get(id: string): Promise<ProjectChat> {
     return this.reads.get(id);
   }
+
   /** Progress reads use the cached thread, without cloning its history or refreshing Git. */
   status(id: string) {
     return this.reads.status(id);
   }
+
   /** One live summary list per project, even when a tool waits on many threads. */
   statuses(selection: { ids: readonly string[] } | { startedBy: string }) {
     return this.reads.statuses(selection);
   }
+
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
   changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
     return this.reads.changes(id, known);
   }
+
   cost(id: string) {
     return this.reads.cost(id);
   }
+
   /** The screenshots of a queued or scheduled message; it is gone once it has been sent. */
   queuedImages(chatId: string, messageId: string) {
     return this.reads.queuedImages(chatId, messageId);
   }
+
   /**
    * Gives worktree thread `id` its worktree now, holding a copy of the files
    * thread `from` works on, uncommitted edits included; see electron/started-threads.
@@ -682,17 +739,21 @@ export class ProjectChats {
     const source = await this.worktrees.root(await this.storage.load(from));
     return this.worktrees.copyFrom(chat, source, prompt);
   }
+
   hasActiveProject(projectId: string) {
     return this.worktrees.checkoutBusy(projectId);
   }
+
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
     return this.sending.send(id, input, fromRelay);
   }
+
   /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
   startsThereWith(start: (id: string, computerId: string) => Promise<void>) {
     this.sending.starter = start;
   }
+
   /**
    * A new thread's first message, kept with its worktree made but not
    * answered here: another computer starts the thread with it.
@@ -700,15 +761,18 @@ export class ProjectChats {
   firstMessageOnly(id: string, input: ProjectChatSend) {
     return this.sending.firstMessageOnly(id, input);
   }
+
   /** The first message a thread kept for another computer to answer (firstMessageOnly), answered here after all. */
   answerHere(id: string) {
     return this.sending.answerHere(id);
   }
+
   /** Your own message, from the composer or a phone: it unsettles a thread settled while it ran. */
   async sendYours(id: string, input: ProjectChatSend) {
     await this.triaging.sent(id);
     return this.send(id, input);
   }
+
   queueAction(
     id: string,
     action: "remove" | "steer" | "move",
@@ -717,17 +781,21 @@ export class ProjectChats {
   ) {
     return this.queue.action(id, action, messageId, index);
   }
+
   resume(id: string, settings?: ResumeSettings) {
     return this.turns.resume(id, settings);
   }
+
   /** Compacts the provider session behind the newest answer on this branch. */
   compact(id: string, parentId?: string, instructions?: string) {
     return this.compactions.request(id, parentId, instructions);
   }
+
   /** Restarts the thread's agent on its conversation, to load what changed on disk since. */
   reloadSessions(id: string) {
     return reloadSessions(this.core, id);
   }
+
   /**
    * Takes back the agent sessions that kept running while Relay restarted.
    * A turn one was in carries on in the answer it was writing.
@@ -738,10 +806,12 @@ export class ProjectChats {
     this.active.ledger.recover();
     await this.triaging.restarted();
   }
+
   /** Puts right any thread summary a crash left behind its thread. */
   async reconcileSummaries() {
     await this.storage.reconcile(this.store.savedAtLoad);
   }
+
   /** Threads with an answer running now; reviewers count under their parent. */
   working() {
     const chats = new Map((this.store.get().chats ?? []).map((c) => [c.id, c]));
@@ -752,25 +822,31 @@ export class ProjectChats {
       }),
     ).size;
   }
+
   /** Asked for by the window showing the thread, every few seconds while it does. */
   worktreeStatus(id: string) {
     this.cleanup.shown(id);
     return this.worktrees.status(id);
   }
+
   returnedCopy(projectId: string, branch: string, tip: string) {
     return this.worktrees.returnedCopy(projectId, branch, tip);
   }
+
   rerunWorktreeSetup(id: string, messageId: string) {
     return this.worktrees.setup.rerun(id, messageId);
   }
+
   /** What a terminal in the thread's worktree is told, like its agent; nothing in the checkout. */
   async worktreeEnv(id: string) {
     return this.worktrees.setup.env(await this.storage.load(id));
   }
+
   /** The worktrees agents made from project-folder threads. */
   get agentWorkspaces() {
     return this.worktrees.agents;
   }
+
   rewindTurn(
     chatId: string,
     messageId: string,
@@ -780,10 +856,12 @@ export class ProjectChats {
   ) {
     return this.files.rewind(chatId, messageId, paths, mode, force);
   }
+
   /** Retries titles for threads whose first title run failed earlier. */
   ensureTitle(id: string) {
     this.titles.ensure(id);
   }
+
   /**
    * Names the thread again from the whole conversation, on demand, even over
    * a name you typed.
@@ -791,6 +869,7 @@ export class ProjectChats {
   regenerateTitle(id: string) {
     return this.titles.regenerate(id);
   }
+
   /** Asks the user in the thread's running turn, as its agent would; see electron/started-threads. */
   askInTurn(
     id: string,
@@ -799,10 +878,12 @@ export class ProjectChats {
   ) {
     return running.askInTurn(this.core, id, request, signal);
   }
+
   /** Adds a page the thread's agent showed to the answer it is writing; see electron/html-renders. */
   showRender(id: string, render: HtmlRender, pages: string[]) {
     return running.showRender(this.core, id, render, pages);
   }
+
   /** Leaves the thread's preview under the answer its agent is writing; a later open replaces it. */
   showPreview(
     id: string,
@@ -811,14 +892,17 @@ export class ProjectChats {
   ) {
     return running.showPreview(this.core, id, preview, jpeg);
   }
+
   /** Leaves a page the thread's agent asks with (ask_html) in the answer it is writing, as an open question. */
   askWithPage(id: string, page: HtmlRender, html: string, ask: string) {
     return running.askWithPage(this.core, id, page, html, ask);
   }
+
   /** A page an answer showed, as its agent wrote it. */
   renderPage(id: string, renderId: string, page: number) {
     return this.storage.renders.read(id, renderId, page);
   }
+
   respond(id: string, requestId: string, response: AgentResponse) {
     const active = this.active.get(id);
     if (!active) throw new Error("This turn is no longer running.");
@@ -826,6 +910,7 @@ export class ProjectChats {
     if (response.kind === "approval" && response.decision === "cancel")
       return this.cancel(id);
   }
+
   answerQuestion(
     id: string,
     messageId: string,
@@ -834,6 +919,7 @@ export class ProjectChats {
   ) {
     return this.questions.answer(id, messageId, itemId, response);
   }
+
   setQuestionDismissed(
     id: string,
     messageId: string,
@@ -842,6 +928,7 @@ export class ProjectChats {
   ) {
     return this.questions.setDismissed(id, messageId, itemId, dismissed);
   }
+
   /**
    * `steers`: stopped to get a waiting steer read now, so one the agent
    * hasn't picked up goes out as the next turn and the queue carries on
@@ -867,6 +954,7 @@ export class ProjectChats {
     if (chat) await this.councils.stop(chat);
     return chat ? this.storage.save(chat) : undefined;
   }
+
   /**
    * Relay is closing. `detach`: it's restarting, and the agent host keeps
    * the agents' sessions going; running answers are saved as they stand and

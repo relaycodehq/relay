@@ -18,6 +18,7 @@ import {
   useProjectChats,
   tinyPng,
 } from "../../tests/fixtures/project-chats-harness";
+
 vi.mock("../platform/executables");
 
 useProjectChats();
@@ -44,6 +45,7 @@ it("generates a title for Claude conversations, which have no thread-name event"
   );
   expect((await chats.get(chat.id)).messages).toHaveLength(2);
 });
+
 it("shows a turn Claude starts by itself as its own answer, so later answers stay under their questions", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -87,6 +89,7 @@ it("shows a turn Claude starts by itself as its own answer, so later answers sta
     ["assistant", false, "Claude found the same cache guard."],
   ]);
 });
+
 it("steers a turn Claude started by itself", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -135,6 +138,7 @@ it("steers a turn Claude started by itself", async () => {
     ["assistant", "Noted: Use the blue one", false, false],
   ]);
 });
+
 it.each([
   ["reads it mid-turn", "fixture wait for steer", "Looking into it."],
   ["reads it after finishing", "fixture late steer", "Done before your note."],
@@ -185,6 +189,7 @@ it.each([
     );
   },
 );
+
 it("continues Codex's answer below a steering message once Codex reads it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex fixture codex steer"));
@@ -215,6 +220,7 @@ it("continues Codex's answer below a steering message once Codex reads it", asyn
     .map((line) => JSON.parse(line));
   expect(calls.find((c) => c.steer)?.steer.clientUserMessageId).toBe(steer.id);
 });
+
 it("publishes findings in any thread, from a turn Claude started itself too", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -229,11 +235,13 @@ it("publishes findings in any thread, from a turn Claude started itself too", as
     expect(own!.body).not.toContain("relay-findings");
   });
 });
+
 /** An answer that ends with a valid findings block, as the fake agent echoes it. */
 const endsWithFindings = (title: string) =>
   `fixture echo: Found one.\n\n\`\`\`relay-findings\n${JSON.stringify({
     findings: [{ id: "F1", priority: "P2", title, files: [], reviewers: [] }],
   })}\n\`\`\`\nfixture echo end`;
+
 it("publishes no findings from an answer that was stopped", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(
@@ -254,6 +262,7 @@ it("publishes no findings from an answer that was stopped", async () => {
   expect(findings).toBeUndefined();
   expect(messages.at(-1)?.body).toContain("```relay-findings");
 });
+
 it("publishes no findings from a side question's answers", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, input("@codex Explain the cache guard"));
@@ -299,6 +308,7 @@ it("publishes no findings from a side question's answers", async () => {
     id: reply.id,
   });
 });
+
 it("keeps a question's answer under it when Claude's own turn follows it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
@@ -330,6 +340,7 @@ it("keeps a question's answer under it when Claude's own turn follows it", async
     "The background task finished.",
   ]);
 });
+
 it("saves a pasted screenshot outside chat JSON and sends a local image to Codex", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -378,6 +389,7 @@ it("saves a pasted screenshot outside chat JSON and sends a local image to Codex
     }),
   ).rejects.toThrow("Screenshot is invalid");
 });
+
 it("passes a pasted screenshot as an image block to Claude", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -406,6 +418,7 @@ it("passes a pasted screenshot as an image block to Claude", async () => {
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
 });
+
 it("shows the title helper the screenshots sent with a vague message", async () => {
   vi.stubEnv("RELAY_AGENT_NO_TITLE", "1");
   const chat = await chats.create(projectId, { kind: "project" });
@@ -434,6 +447,7 @@ it("shows the title helper the screenshots sent with a vague message", async () 
     source: { type: "base64", media_type: "image/png", data: tinyPng },
   });
 });
+
 it("sends a screenshot on its own without inventing a request", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -467,6 +481,7 @@ it("sends a screenshot on its own without inventing a request", async () => {
     expect(block.text).not.toContain("My request");
   }
 });
+
 it("sends a Claude slash command as the whole prompt so Claude runs it", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
@@ -487,6 +502,7 @@ it("sends a Claude slash command as the whole prompt so Claude runs it", async (
     "/security-review focus on auth",
   );
 });
+
 it("tells a Claude session begun with a command what the thread is about on its next turn", async () => {
   const chat = await chats.create(projectId, {
     kind: "pr",
@@ -512,6 +528,7 @@ it("tells a Claude session begun with a command what the thread is about on its 
   // Nothing came before the command, so its session has heard it all.
   expect(prompts[1]).not.toContain("Conversation updates");
 });
+
 it("tells Claude on its next turn what a command it began with couldn't carry", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   for (const body of [

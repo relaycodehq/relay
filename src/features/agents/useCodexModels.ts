@@ -10,6 +10,7 @@ import { api } from "../../lib/api";
 import { readJson, writeJson } from "../../lib/persisted-store";
 
 const savedKey = "relay-codex-models";
+
 function readSaved(): CodexModel[] | undefined {
   const value = readJson(savedKey);
   const models = Array.isArray(value)
@@ -27,6 +28,7 @@ function readSaved(): CodexModel[] | undefined {
     : [];
   return models.length ? models : undefined;
 }
+
 const codexModelsQuery = {
   queryKey: ["codex-models"],
   queryFn: async () => {
@@ -37,6 +39,7 @@ const codexModelsQuery = {
   staleTime: Infinity,
   retry: false,
 };
+
 /** A paired computer's Codex, for a project there; its list isn't kept here. */
 const remoteCodexModelsQuery = (computerId: string) => ({
   queryKey: ["codex-models", computerId],
@@ -44,6 +47,7 @@ const remoteCodexModelsQuery = (computerId: string) => ({
   staleTime: 5 * 60_000,
   retry: false,
 });
+
 /**
  * The models the signed-in Codex offers. The last list shows at once while
  * Codex is asked again; the built-in list stands in until it has answered.
@@ -63,6 +67,7 @@ export function useCodexModels(computerId?: string) {
     refresh: () => void query.refetch(),
   };
 }
+
 /** The same list outside React, asking Codex only when nothing has yet. */
 export async function codexModels(
   qc: QueryClient,

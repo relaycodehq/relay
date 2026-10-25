@@ -25,6 +25,7 @@ vi.mock("./sdk", () => ({
 let root: string;
 let repo: string;
 const env = process.env.CLAUDE_CONFIG_DIR;
+
 async function skill(dir: string, name: string, frontmatter = `name: ${name}`) {
   await mkdir(join(dir, name), { recursive: true });
   await writeFile(
@@ -32,6 +33,7 @@ async function skill(dir: string, name: string, frontmatter = `name: ${name}`) {
     `---\n${frontmatter}\n---\nBody`,
   );
 }
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-claude-catalog-"));
   repo = join(root, "repo");
@@ -39,6 +41,7 @@ beforeEach(async () => {
   setProfilesRoot(join(root, "profiles"));
   process.env.CLAUDE_CONFIG_DIR = join(root, "usual");
 });
+
 afterEach(async () => {
   if (env === undefined) delete process.env.CLAUDE_CONFIG_DIR;
   else process.env.CLAUDE_CONFIG_DIR = env;

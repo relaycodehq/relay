@@ -20,6 +20,7 @@ interface QueuedChatMessage {
   /** A steer someone sent waits until then, to be taken back, before its agent gets it. */
   steerAt?: number;
 }
+
 /**
  * How long a steer past its hold still shows as sent, while the real message
  * comes. Further past, it's one held when Relay restarted, which waits in the queue.
@@ -32,6 +33,7 @@ export const heldSteer = (q: { steerAt?: number }, now = Date.now()) =>
 export interface ScheduledChatMessage extends QueuedChatMessage {
   at: number;
 }
+
 export interface ProjectChat extends ChatSummary {
   requests?: AgentRequest[];
   queue?: QueuedChatMessage[];
@@ -82,12 +84,15 @@ export interface ProjectChat extends ChatSummary {
   /** The computer it was handed to, readied for it; see shared/handoff. */
   setup?: ThreadSetup;
 }
+
 /** An agent's session on a conversation, and the last message it heard there. */
 export interface AgentSession {
   thread?: string;
   through?: string;
 }
+
 type AgentSessions = Partial<Record<AgentProvider, AgentSession>>;
+
 /**
  * Saves from before the agent registry kept Claude's session and Codex's
  * (`provider…`, or bare on a side conversation) in fields of their own.

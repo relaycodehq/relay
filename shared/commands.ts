@@ -72,6 +72,7 @@ export const relayCommands = [
     args: "<meme>",
   },
 ] as const;
+
 export type RelayCommand = (typeof relayCommands)[number]["name"];
 /** Why a `/btw` can't be asked in a thread that has no answer yet to ask beside. */
 export const asideNeedsAnswer =
@@ -86,6 +87,7 @@ export function sideRefusal(provider: AgentProvider): string | undefined {
   if (agentInfo(provider)?.side) return undefined;
   return `${agentName(provider)} can't answer beside the thread. Pick ${sideAgentsText} to ask a side question.`;
 }
+
 /**
  * Commands the composer applies to its own settings. They also work in the
  * middle of a message, and take only their own text out of it.
@@ -98,13 +100,16 @@ export const composerCommands: readonly RelayCommand[] = [
   "permissions",
   "fast",
 ];
+
 export type ComposerCommand = Extract<
   RelayCommand,
   "provider" | "model" | "effort" | "plan" | "permissions" | "fast"
 >;
+
 export const isComposerCommand = (
   name: RelayCommand,
 ): name is ComposerCommand => composerCommands.includes(name);
+
 export interface ProviderCommand {
   displayName?: string;
   source?:
@@ -119,6 +124,7 @@ export interface ProviderCommand {
    */
   skill?: true;
 }
+
 export interface CommandOption {
   value: string;
   label: string;
@@ -134,6 +140,7 @@ export interface CommandOption {
   /** It names a terminal session, shown with a terminal's icon. */
   terminal?: boolean;
 }
+
 /** Relay commands take arguments only where they declare them. */
 export function relayCommand(
   text: string,
@@ -146,6 +153,7 @@ export function relayCommand(
   if (!command || (args && !("args" in command))) return null;
   return { name: command.name, args };
 }
+
 /**
  * The argument being typed after a command name, e.g. `/effort hi`. `inline`
  * marks one typed after other text, where only composer commands apply.
@@ -165,10 +173,12 @@ export function argumentTrigger(text: string, cursor = text.length) {
     inline: !!before.slice(0, start).trim(),
   };
 }
+
 /** A leading `/` names a command, unless it opens a path like `/Users/me/clip.mp4`. */
 export function startsWithCommand(text: string) {
   return /^\/[^\s/]*(?:\s|$)/.test(text.trim());
 }
+
 /**
  * Slash actions start a message, and composer commands can follow other text
  * (`inline`); $skill references can appear anywhere.

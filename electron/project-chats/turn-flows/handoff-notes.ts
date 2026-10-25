@@ -30,6 +30,7 @@ export class TurnHandoffs {
     private core: ChatCore,
     private runner: TurnRunner,
   ) {}
+
   /**
    * Asks the agent that answered last to brief the one taking over. Best effort:
    * a failed or slow note leaves a marker and the switch proceeds without it.
@@ -81,6 +82,7 @@ export class TurnHandoffs {
     }
     return message;
   }
+
   /**
    * The note Relay writes when the outgoing agent left none, in the place of
    * its failed one if it tried, so the thread shows what the new agent got.

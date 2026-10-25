@@ -30,4 +30,5 @@ export function useRoom() {
   };
   return { accounts, checking, recheck, put };
 }
+
 export type Room = ReturnType<typeof useRoom>;

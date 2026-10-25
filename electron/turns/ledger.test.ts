@@ -8,25 +8,30 @@ import { openTurnStore } from "./store";
 
 let dir: string;
 let ledgers: TurnLedger[];
+
 const open = () => {
   const ledger = openTurnLedger(join(dir, "relay.db"));
   ledgers.push(ledger);
   return ledger;
 };
+
 const heard = (ledger: TurnLedger) => {
   const events: TurnEvent[] = [];
   ledger.onEvent((e) => events.push(e));
   return events;
 };
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-ledger-"));
   ledgers = [];
 });
+
 afterEach(async () => {
   for (const ledger of ledgers) ledger.dispose();
   vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
 });
+
 const answer = { threadId: "t1", kind: "answer", provider: "codex" } as const;
 
 it("numbers what happens to a turn, in order", () => {

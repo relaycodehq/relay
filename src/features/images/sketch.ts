@@ -9,6 +9,7 @@ export interface Point {
   x: number;
   y: number;
 }
+
 export type Shape =
   | { kind: "polyline"; points: Point[]; closed: boolean }
   | { kind: "ellipse"; center: Point; rx: number; ry: number; angle: number };
@@ -24,11 +25,13 @@ export interface Stroke {
   /** Covers the screenshot in solid black, evenly wide; a closed shape covers its whole inside. */
   redact?: boolean;
 }
+
 export interface Sketch {
   width: number;
   height: number;
   strokes: Stroke[];
 }
+
 /** Undo / redo for one screenshot, kept while the draft lives. */
 export interface SketchHistory {
   past: Stroke[][];
@@ -46,6 +49,7 @@ export const sketchColors = [
   "#1a1a1a",
   "#ffffff",
 ];
+
 /** Pen widths in on-screen pixels. */
 export const sketchSizes = [3, 5, 9];
 /** Blur brush widths in on-screen pixels. */

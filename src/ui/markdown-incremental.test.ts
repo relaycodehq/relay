@@ -64,6 +64,7 @@ function streamMatchesFullParse(source: string) {
 
 describe("streamed answers parse like a full parse at every length", () => {
   const lead = "# Answer\n\n" + F;
+
   it.each([
     ["a late definition", lead + "**bold** and [later]\n\n[later]: /target"],
     [

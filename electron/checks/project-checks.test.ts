@@ -21,6 +21,7 @@ import {
 import type { ProjectCheckState, SymbolQuery } from "../../shared/checks";
 const roots: string[] = [];
 const services: ProjectChecks[] = [];
+
 afterEach(async () => {
   services.forEach((s) => s.stop());
   await Promise.all(
@@ -28,7 +29,9 @@ afterEach(async () => {
   );
   services.length = 0;
 });
+
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
+
 // Points the fixture at Relay's own TypeScript 7 (native compiler, no server API).
 async function useTypeScript7(root: string) {
   await rm(join(root, "node_modules"), { recursive: true });
@@ -39,10 +42,12 @@ async function useTypeScript7(root: string) {
       join(root, "node_modules", name),
     );
 }
+
 // Stands in for the TypeScript 5.9 that the build copies into the app.
 const fallbackTypeScript = resolve(
   "tests/fixtures/language-toolchain/node_modules/typescript/lib/typescript.js",
 );
+
 const server = "https://git.example.test/gitea",
   ref = { owner: "Web", name: "web-store", number: 7 };
 async function ready(
@@ -63,6 +68,7 @@ async function ready(
     .toBe(true);
   return state!;
 }
+
 describe("project language support", () => {
   it("detects Angular application/test configs, JSONC references, JS and unsupported projects", async () => {
     const root = await mkdtemp(join(tmpdir(), "relay-detect-"));
@@ -100,6 +106,7 @@ describe("project language support", () => {
       "test.json",
     ]);
   });
+
   it("rejects config traversal, invalid metadata and symlink escape", async () => {
     const root = await mkdtemp(join(tmpdir(), "relay-detect-"));
     const outside = await mkdtemp(join(tmpdir(), "relay-outside-"));
@@ -123,6 +130,7 @@ describe("project language support", () => {
     );
     await expect(detectProject(root)).rejects.toThrow("inside");
   });
+
   it("keeps Windows configuration paths inside the repository", async () => {
     vi.resetModules();
     vi.doMock("node:path", async () => {
@@ -142,6 +150,7 @@ describe("project language support", () => {
       vi.resetModules();
     }
   });
+
   it("checks Angular templates and TS, navigates real symbols, handles unsaved buffers and disk changes without writes", async () => {
     const { root, head, git } = await languageProject(server, true);
     roots.push(root);
@@ -256,6 +265,7 @@ describe("project language support", () => {
     service.stop("pr");
     expect((await service.state("pr", head))?.status).toBe("stopped");
   });
+
   it("rejects wrong checkout, handles cancellation during startup, and stops after checkout changes", async () => {
     const { root, head, git } = await languageProject(server);
     roots.push(root);
@@ -301,6 +311,7 @@ describe("project language support", () => {
       now.mockRestore();
     }
   });
+
   it("leaves a working tree's checkout to the window for 30 s before looking itself", async () => {
     const { root: made, head, git } = await languageProject(server);
     roots.push(made);
@@ -321,6 +332,7 @@ describe("project language support", () => {
       now.mockRestore();
     }
   });
+
   it.each(["typescript", "angular", "typescript 7"] as const)(
     "counts %s suggestions separately and refreshes strictness from config files",
     async (variant) => {
@@ -413,6 +425,7 @@ describe("project language support", () => {
       });
     },
   );
+
   it("keeps accurate totals and prioritizes errors when suggestions exceed the display limit", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);
@@ -453,6 +466,7 @@ describe("project language support", () => {
       suggestions: 1505,
     });
   });
+
   it("checks TypeScript 7 projects through its native language server", async () => {
     const { root, head, git } = await languageProject(server);
     roots.push(root);
@@ -518,6 +532,7 @@ describe("project language support", () => {
     expect(await readFile(join(root, reviewPath), "utf8")).toBe(reviewCode);
     expect(git("status", "--porcelain")).toBe("M src/greeting.ts");
   });
+
   it("checks a project without its own TypeScript with Relay's", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);
@@ -542,6 +557,7 @@ describe("project language support", () => {
       code: "TS2322",
     });
   });
+
   it("falls back to Relay's TypeScript when a TypeScript 7 language server cannot start", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);
@@ -586,6 +602,7 @@ describe("project language support", () => {
       code: "TS2322",
     });
   });
+
   it("reports heap use against the project's limit and restarts when the limit changes", async () => {
     const { root, head } = await languageProject(server);
     roots.push(root);
@@ -615,6 +632,7 @@ describe("project language support", () => {
     expect(second.id).not.toBe(first.id);
     expect(second.projectId).toBe("p1");
   });
+
   it("shares a folder's checker between windows and keeps other folders' running", async () => {
     const { root, head } = await languageProject(server);
     const other = await languageProject(server);

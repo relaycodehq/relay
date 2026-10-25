@@ -26,6 +26,7 @@ export const quickSwitchStyles = [
   "tab",
   "revolver",
 ] as const;
+
 export type QuickSwitchStyle = (typeof quickSwitchStyles)[number];
 
 const presetSchema = z.object({
@@ -37,9 +38,11 @@ const presetSchema = z.object({
   /** The Fast service tier, for agents that have one. */
   fast: z.boolean().catch(false),
 });
+
 export type QuickPreset = z.infer<typeof presetSchema>;
 
 export const maxPresets = 12;
+
 const quickSwitchSchema = z.object({
   enabled: z.boolean().catch(true),
   style: z.enum(quickSwitchStyles).catch("drum"),
@@ -47,6 +50,7 @@ const quickSwitchSchema = z.object({
   sound: z.boolean().catch(true),
   presets: z.array(presetSchema).max(maxPresets).catch([]),
 });
+
 export type QuickSwitch = z.infer<typeof quickSwitchSchema>;
 
 const fallback: QuickSwitch = {
@@ -66,6 +70,7 @@ const quickSwitch = persistedStore<QuickSwitch>(
   (saved) => (saved ? parseQuickSwitch(JSON.parse(saved)) : fallback),
   (value) => JSON.stringify(value),
 );
+
 export const setQuickSwitch = quickSwitch.set;
 export const useQuickSwitch = quickSwitch.use;
 

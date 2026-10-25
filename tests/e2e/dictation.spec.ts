@@ -28,6 +28,7 @@ test("dictates a spoken clip into the composer with the real speech engine", asy
     !modelDir,
     "Set RELAY_DICTATION_MODEL to a downloaded model folder",
   );
+
   test.setTimeout(90000);
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-dictation-")),

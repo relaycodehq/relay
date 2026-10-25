@@ -41,6 +41,7 @@ const frame = (event: unknown, parent: string | null = null) =>
 const HAIKU = "claude-haiku-4-5-20251001";
 const before = totals({ [HAIKU]: usage(953, 232, 11410, 3288, 0.00983) });
 const after = totals({ [HAIKU]: usage(2185, 492, 40806, 4654, 0.01786185) });
+
 const mainRequest = {
   model: HAIKU,
   tokens: { input: 8, output: 103, cacheRead: 14698, cacheWrite: 1137 },

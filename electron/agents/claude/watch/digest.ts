@@ -60,6 +60,7 @@ export class SubagentLog {
   private entries: Entry[] = [];
   /** Entries seen by the last check; a check needs something new. */
   private checked = 0;
+
   constructor(
     readonly id: string,
     readonly label: string,
@@ -69,6 +70,7 @@ export class SubagentLog {
   said(text: string) {
     if (text.trim()) this.entries.push({ kind: "said", text });
   }
+
   called(name: string, input: unknown) {
     const args = (input ?? {}) as Record<string, unknown>;
     this.entries.push(
@@ -77,6 +79,7 @@ export class SubagentLog {
         : { kind: "call", text: callText(name, args) },
     );
   }
+
   failed(output: string) {
     this.entries.push({ kind: "failed", text: output });
   }

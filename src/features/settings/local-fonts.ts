@@ -84,6 +84,7 @@ const describe = (family: string): FontFamily => ({
 });
 
 let canvas: CanvasRenderingContext2D | null | undefined;
+
 function measure(font: string, text: string) {
   canvas ??= document.createElement("canvas").getContext("2d");
   if (!canvas) return 0;

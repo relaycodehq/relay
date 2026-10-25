@@ -204,6 +204,7 @@ describe("chat activity", () => {
 describe("auto-settle", () => {
   const day = 86_400_000;
   const quiet = chat({ updated: 1_000 });
+
   it("settles a thread quiet for the set days, dated to its last activity", () => {
     expect(autoSettledAt(quiet, 1_000 + 3 * day, 3)).toBe(1_000);
     expect(autoSettledAt(quiet, 1_000 + 3 * day - 1, 3)).toBeUndefined();

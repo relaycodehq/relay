@@ -128,10 +128,12 @@ export class PipeShim {
   private server?: Server;
   /** Why the last pipe ended, while none has worked since. */
   failure?: string;
+
   constructor(
     private route: ComputerRoute,
     private command = routeCommand,
   ) {}
+
   /** Starts listening on a free loopback port and returns it. */
   async listen() {
     const server = createServer((socket) => {
@@ -192,6 +194,7 @@ export class PipeShim {
     this.server = server;
     return (server.address() as AddressInfo).port;
   }
+
   close() {
     this.server?.close();
   }

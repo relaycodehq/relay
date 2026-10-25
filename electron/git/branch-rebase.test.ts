@@ -12,6 +12,7 @@ const run = (dir: string, ...args: string[]) =>
     stdio: ["pipe", "pipe", "pipe"],
   }).trim();
 const git = (...args: string[]) => run(root, ...args);
+
 const commitIn = async (
   dir: string,
   file: string,
@@ -22,11 +23,13 @@ const commitIn = async (
   run(dir, "add", file);
   run(dir, "commit", "-qm", message);
 };
+
 /** Someone else pushes `file` to origin/main. */
 const pushElsewhere = async (file: string, text: string) => {
   await commitIn(other, file, text, `Remote ${file}`);
   run(other, "push", "-q");
 };
+
 const rebase = () => rebaseOnUpstream(root, git("rev-parse", "HEAD"));
 
 beforeEach(async () => {
@@ -45,6 +48,7 @@ beforeEach(async () => {
   run(other, "config", "user.name", "Other");
   run(other, "config", "user.email", "other@example.invalid");
 });
+
 afterEach(async () => {
   for (const dir of [root, remote, other])
     await rm(dir, { recursive: true, force: true });

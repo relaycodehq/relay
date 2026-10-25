@@ -13,10 +13,12 @@ import { apiContext } from "../../electron/api/context";
 import type { RemoteEvent } from "../../shared/remote";
 vi.mock("electron", () => ({ shell: {} }));
 let root: string, chats: ProjectChats;
+
 afterEach(async () => {
   await chats?.dispose();
   await rm(root, { recursive: true, force: true, maxRetries: 20 });
 });
+
 it("lists a PR thread whose review is under way on the phone as on the desktop", async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-repro-")));
   const repo = join(root, "repo");

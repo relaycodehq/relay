@@ -16,6 +16,7 @@ export interface CiRepo {
   /** Set for an Azure DevOps remote: the organization, whose project is `owner`. */
   server?: string;
 }
+
 export interface CiReading {
   commit: CiStatus["commit"];
   runs: CiRun[];
@@ -70,6 +71,7 @@ export interface CiHosts {
  */
 export class Ci {
   private github: GitHub;
+
   constructor(
     fetchRequest: FetchRequest,
     credentials = new GithubCredentials(),

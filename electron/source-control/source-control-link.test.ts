@@ -7,11 +7,13 @@ vi.mock("electron", () => ({ app: {}, net: {}, safeStorage: {} }));
 import { resolveCliPath } from "./index";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-cli-path-"));
   await mkdir(join(root, "bin"));
   await writeFile(join(root, "bin", "gh"), "");
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 describe.skipIf(process.platform === "win32")("a typed CLI path", () => {

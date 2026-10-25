@@ -8,6 +8,7 @@ import { fileSetting, storedBefore } from "./settings-file";
  */
 export type SendKey = "enter" | "shift-enter" | "mod-enter";
 const sendKeys: SendKey[] = ["enter", "shift-enter", "mod-enter"];
+
 const sendKey = fileSetting<SendKey>({
   path: ["chat", "sendKey"],
   parse: (saved) =>
@@ -17,11 +18,13 @@ const sendKey = fileSetting<SendKey>({
     sendKeys.includes(raw as SendKey) ? (raw as SendKey) : undefined,
   ),
 });
+
 export const setSendKey = sendKey.set;
 export const useSendKey = sendKey.use;
 
 /** What the send key and button do while an answer is running. */
 export type RunningSendAction = "queue" | "steer";
+
 const runningSendAction = fileSetting<RunningSendAction>({
   path: ["chat", "sendWhileRunning"],
   parse: (saved) => (saved === "steer" ? "steer" : "queue"),
@@ -30,6 +33,7 @@ const runningSendAction = fileSetting<RunningSendAction>({
     raw === "steer" ? "steer" : undefined,
   ),
 });
+
 export const setRunningSendAction = runningSendAction.set;
 export const useRunningSendAction = runningSendAction.use;
 

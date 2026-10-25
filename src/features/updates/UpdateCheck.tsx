@@ -226,6 +226,7 @@ const confettiColors = [
   "#4fc3a1",
   "#6aa7f0",
 ];
+
 const confetti = Array.from({ length: 18 }, (_, i) => {
   const angle = (i / 18) * Math.PI * 2 + (i % 3) * 0.25;
   const reach = 24 + ((i * 13) % 5) * 5;

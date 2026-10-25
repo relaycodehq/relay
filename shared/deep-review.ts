@@ -39,6 +39,7 @@ export const reviewTargetSchema = z.discriminatedUnion("kind", [
     .strict(),
   z.object({ kind: z.literal("pr"), ref: refSchema }).strict(),
 ]);
+
 export type ReviewTarget = z.infer<typeof reviewTargetSchema>;
 
 const reviewAgentSchema = z
@@ -64,6 +65,7 @@ export const ownReviewCommand = (provider: ReviewAgent["provider"]) => {
   const command: string = agents[provider].reviewCommand;
   return command.startsWith("/") ? command : "";
 };
+
 /**
  * A reviewer's prompt as written in the setup: empty or the agent's own
  * review command runs that review, with anything after the command as a note
@@ -126,6 +128,7 @@ export const savedReviewSetupSchema = z.object({
     runChecks: true,
   }),
 });
+
 export type SavedReviewSetup = z.infer<typeof savedReviewSetupSchema>;
 
 /** What a helper agent names a setup from, to find it again later. */
@@ -134,6 +137,7 @@ export const reviewSetupSchema = deepReviewStartSchema.pick({
   lead: true,
   focus: true,
 });
+
 export type ReviewSetup = z.infer<typeof reviewSetupSchema>;
 
 /** What the review covers, as resolved in the checkout when it started. */
@@ -164,6 +168,7 @@ export interface ReviewScope {
    */
   folder?: string;
 }
+
 /** A worktree the review reads from and fixes in. */
 export interface ReviewCheckout {
   path: string;
@@ -210,6 +215,7 @@ export interface DeepReviewState {
    */
   leadAnswer?: string;
 }
+
 /** The thread's latest round: the one Stop, Resume and following its branch act on. */
 export const latestReview = <R>(chat: { reviews?: R[] }) =>
   chat.reviews?.at(-1);
@@ -286,6 +292,7 @@ export interface ReviewerTask {
   /** Codex's own review target, when it runs `/review`. */
   codex?: CodexReviewTarget;
 }
+
 export type CodexReviewTarget =
   | { type: "uncommittedChanges" }
   | { type: "baseBranch"; branch: string }
@@ -294,6 +301,7 @@ export type CodexReviewTarget =
 
 /** Claude's `/code-review` levels; Relay never asks for the paid cloud one. */
 const claudeReviewLevels = ["low", "medium", "high", "xhigh", "max"];
+
 export function claudeReviewLevel(choice: ModelChoice) {
   return claudeReviewLevels.includes(choice.reasoningEffort)
     ? choice.reasoningEffort

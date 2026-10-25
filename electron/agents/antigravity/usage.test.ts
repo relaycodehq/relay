@@ -14,6 +14,7 @@ const credential = (id: string): QuotaCredential => ({
     project_id: "project",
   },
 });
+
 const bucket = (
   bucketId: string,
   window: string,
@@ -25,6 +26,7 @@ const bucket = (
   remainingFraction,
   resetTime,
 });
+
 const summary = {
   groups: [
     {
@@ -38,6 +40,7 @@ const summary = {
     },
   ],
 };
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -45,6 +48,7 @@ const json = (body: unknown, status = 200) =>
   });
 const token = (name: string) => json({ access_token: name, expires_in: 3600 });
 const urlOf = (url: Parameters<typeof fetch>[0]) => String(url);
+
 afterEach(() => vi.restoreAllMocks());
 
 it("keeps the independent Gemini and Claude/GPT windows, and ignores disabled, malformed and unknown cadences", () => {

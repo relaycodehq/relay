@@ -83,16 +83,20 @@ export interface DraftChange {
 }
 
 const id = "[A-Za-z0-9_-]{1,80}";
+
 export const draftKeyPattern = new RegExp(
   `^(?:${id}(?::${id})?|new:${id}(?::[a-z0-9]{1,16})?)$`,
 );
+
 export const draftKeySchema = z.string().regex(draftKeyPattern);
 /** Pastes keep a draft long; this is what fits a sent message and then some. */
 export const maxDraftText = 200_000;
+
 const deviceSchema = z.union([
   z.literal("desktop"),
   z.string().regex(/^phone:[A-Za-z0-9_-]{1,80}$/),
 ]) as z.ZodType<DraftDevice>;
+
 const short = z.string().max(maxDraftText);
 const extrasSchema = z
   .object({
@@ -113,6 +117,7 @@ const bodyShape = {
   files: z.array(z.string().max(4096)).max(500).optional(),
   workspace: chatWorkspaceSchema.optional(),
 };
+
 export const draftWriteSchema = z
   .object({
     key: draftKeySchema,
@@ -363,4 +368,5 @@ export interface HeldSend {
   chatId?: string;
   send: import("./projects").ProjectChatSend;
 }
+
 export type HeldSendResult = { chatId: string } | { error: string };

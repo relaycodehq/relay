@@ -183,6 +183,7 @@ export interface SpeechState {
  */
 export class HeadlessSpeech {
   private setup?: NonNullable<SpeechState["setup"]>;
+
   constructor(
     private runtime: SpeechRuntime,
     private dictation: Dictation,

@@ -188,6 +188,7 @@ const dayChoices = [
   { value: "14", label: "After 2 weeks" },
   { value: "30", label: "After 30 days" },
 ];
+
 const daysLabel = (days: number | null) =>
   days === null
     ? "Never"
@@ -242,6 +243,7 @@ export const cleanupChoices = [
   { value: "14", label: "2 weeks after it settles" },
   { value: "30", label: "30 days after it settles" },
 ];
+
 export const cleanupLabel = (days: number | null) =>
   cleanupChoices.find((c) => c.value === (days === null ? "off" : String(days)))
     ?.label ?? `${days} days after it settles`;

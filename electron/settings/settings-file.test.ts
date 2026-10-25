@@ -25,6 +25,7 @@ beforeEach(async () => {
   await mkdir(dir);
   changes = [];
 });
+
 afterEach(async () => {
   file?.close();
   await rm(root, { recursive: true, force: true });

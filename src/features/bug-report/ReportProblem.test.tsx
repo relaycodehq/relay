@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   discard: vi.fn(),
   onReport: vi.fn(),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     openBugReport: mocks.open,
@@ -22,16 +23,19 @@ vi.mock("../../lib/api", () => ({
     onBugReport: mocks.onReport,
   },
 }));
+
 vi.mock("./ReportScreenshots", () => ({ ReportScreenshots: () => null }));
 vi.mock("./ReportRecording", () => ({ ReportRecording: () => null }));
 vi.mock("./ReportIncluded", () => ({ ReportIncluded: () => null }));
 vi.mock("./ReportTidyUp", () => ({ ReportTidyUp: () => null }));
 vi.mock("./ReportPreview", () => ({ ReportPreview: () => null }));
+
 vi.mock("../../ui/ui", () => ({
   ErrorBox: ({ error }: { error: unknown }) => (
     <div role="alert">{String(error)}</div>
   ),
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -68,6 +72,7 @@ function preview(id: string, title = ""): BugReportPreview {
     digest: "digest",
   };
 }
+
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
@@ -77,9 +82,11 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
 let root: Root;
 let container: HTMLDivElement;
 let changed: () => void;
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.clearAllMocks();
@@ -98,14 +105,17 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
 });
+
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
   vi.useRealTimers();
 });
+
 async function render() {
   await act(async () => root.render(<ReportProblem />));
 }
+
 async function title(value: string) {
   await act(async () => {
     const input = container.querySelector("input")!;
@@ -116,9 +126,11 @@ async function title(value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+
 async function tick() {
   await act(async () => vi.advanceTimersByTimeAsync(350));
 }
+
 async function discard() {
   const click = () =>
     [...container.querySelectorAll("button")]

@@ -13,7 +13,9 @@ import type { DraftImage } from "../../src/features/images/draft-images";
 type StorageWindow = Window & {
   shots: typeof import("../../src/features/images/draft-images");
 };
+
 let source: string;
+
 test.beforeAll(async () => {
   const bundle = await build({
     entryPoints: ["src/features/images/draft-images.ts"],

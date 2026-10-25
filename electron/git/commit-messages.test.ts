@@ -14,6 +14,7 @@ const runs: (AgentOptions & { provider: string })[] = [];
 const plainReply = '{"subject":"Raise the limit","body":""}';
 let reply = plainReply;
 const failing = new Map<string, Error>();
+
 vi.mock("../agents", () => ({
   agentRuntime: (provider: string) => ({
     run: async (options: AgentOptions) => {
@@ -24,11 +25,13 @@ vi.mock("../agents", () => ({
     },
   }),
 }));
+
 const { generateCommitMessage } = await import("./commit-messages");
 const { NotInstalledError } = await import("../platform/executables");
 const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 let root: string;
+
 afterEach(async () => {
   runs.length = 0;
   failing.clear();
@@ -46,6 +49,7 @@ async function changedRepo() {
   git("commit", "-qm", "Initial");
   await writeFile(join(root, "limit.ts"), "export const limit = 2;\n");
 }
+
 const write = (settings: AISettings) =>
   generateCommitMessage(
     root,

@@ -9,10 +9,12 @@ describe("stepEffort", () => {
     expect(stepEffort(levels, "", "high", 1)).toBe("xhigh");
     expect(stepEffort(levels, "", "high", -1)).toBe("medium");
   });
+
   it("stops at the ends", () => {
     expect(stepEffort(levels, "xhigh", "", 1)).toBe("xhigh");
     expect(stepEffort(levels, "low", "", -1)).toBe("low");
   });
+
   it("steps from medium when Default's level isn't offered", () => {
     expect(stepEffort(levels, "", "", 1)).toBe("high");
     expect(stepEffort(levels, "", "max", -1)).toBe("low");

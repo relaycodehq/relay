@@ -19,6 +19,7 @@ const darkAnsi = {
   brightCyan: "#98e2ec",
   brightWhite: "#f2f2f6",
 };
+
 const lightAnsi = {
   black: "#2e2f35",
   red: "#c4314b",

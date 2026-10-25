@@ -20,11 +20,13 @@ import {
 } from "./shapes";
 
 const server = "https://dev.azure.com/sample-org";
+
 const ann: AzIdentity = {
   id: "aaaa-1111",
   displayName: "Ann Example",
   uniqueName: "ann@example.com",
 };
+
 const bob: AzIdentity = { id: "bbbb-2222", displayName: "Bob Sample" };
 const carol: AzIdentity = { id: "cccc-3333", uniqueName: "carol@example.com" };
 const pullPage =

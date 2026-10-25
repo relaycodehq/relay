@@ -14,6 +14,7 @@ const counter = (from = 0) => {
   let n = from;
   return () => ++n;
 };
+
 const write = (change: Partial<DraftWrite>): DraftWrite => ({
   key: "chat-1",
   text: "",
@@ -21,6 +22,7 @@ const write = (change: Partial<DraftWrite>): DraftWrite => ({
   at: 1000,
   ...change,
 });
+
 const draft = (change: Partial<SharedDraft>): SharedDraft => ({
   key: "chat-1",
   text: "Fix the login page",
@@ -213,6 +215,7 @@ it("swaps in the version a clash kept, keeping the other to swap back", () => {
 
 describe("reconcileDrafts", () => {
   const local = (entries: [string, LocalDraft][]) => new Map(entries);
+
   it("takes what changed on the computer while this screen was away", () => {
     const plan = reconcileDrafts(
       local([["chat-1", { body: { text: "old" }, synced: 2 }]]),

@@ -9,6 +9,7 @@ export const defaultChoice: ModelChoice = {
   fast: false,
   reasoningEffort: "",
 };
+
 const fallbackInput = {
   provider: "claude",
   choice: defaultChoice,

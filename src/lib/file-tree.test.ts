@@ -18,6 +18,7 @@ const entry = (
   mtime: 0,
   ignored,
 });
+
 const listings: Record<string, DirListing> = {
   "": {
     entries: [entry("src", "dir"), entry("out", "dir", true), entry("a.md")],

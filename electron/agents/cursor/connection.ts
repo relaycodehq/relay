@@ -88,6 +88,7 @@ export class CursorConnection extends LineConnection {
   listen(run: string, handler: (update: CursorUpdate) => void) {
     this.listeners.set(run, handler);
   }
+
   unlisten(run: string) {
     this.listeners.delete(run);
   }
@@ -98,6 +99,7 @@ export class CursorConnection extends LineConnection {
   }
 
   private cleaning = false;
+
   override close() {
     if (!this.cleaning) {
       this.cleaning = true;
@@ -230,6 +232,7 @@ export function closeCursorConnection(key: string) {
 export function detachCursor() {
   sessions.detach();
 }
+
 export function disposeCursor() {
   sessions.dispose();
 }

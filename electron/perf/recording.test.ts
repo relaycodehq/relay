@@ -10,11 +10,13 @@ const snapshot: SystemSnapshot = {
   cores: 8,
   memory: { totalMb: 16_000, freeMb: 8_000 },
 };
+
 // The first look at the machine, held while a test says so.
 const look = vi.hoisted(() => ({
   held: false,
   release: undefined as undefined | (() => void),
 }));
+
 vi.mock("./snapshot", async (actual) => ({
   ...(await actual<typeof import("./snapshot")>()),
   fullSnapshot: () =>
@@ -26,11 +28,13 @@ vi.mock("./snapshot", async (actual) => ({
 }));
 
 let dir = "";
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "relay-recording-"));
   look.held = false;
   look.release = undefined;
 });
+
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 it("leaves the window's images out of a trace and keeps it valid JSON", () => {

@@ -6,13 +6,16 @@ const chats: { messages: { role: string; body: string }[]; sentTo?: object }[] =
 const drafts = new Map<string, string>();
 const retry = vi.fn();
 vi.mock("../../lib/api", () => ({ api: { retryHandoff: () => retry() } }));
+
 vi.mock("../../lib/chat-events", () => ({
   fetchChat: async () => chats.shift(),
 }));
+
 vi.mock("../composer/drafts", () => ({
   readDraft: (key: string) => drafts.get(key) ?? "",
   writeDraft: (key: string, value: string) => drafts.set(key, value),
 }));
+
 const { retryHandoff } = await import("./retry-handoff");
 const { threadDraftKey } = await import("../../lib/thread-storage");
 const qc = {} as QueryClient;

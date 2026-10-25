@@ -5,12 +5,14 @@ import { afterEach, expect, it } from "vitest";
 import { antigravityHelper } from "./helper";
 
 const roots: string[] = [];
+
 async function home() {
   const root = await mkdtemp(join(tmpdir(), "relay-google-helper-test-"));
   roots.push(root);
   await mkdir(join(root, "config"));
   return root;
 }
+
 afterEach(async () => {
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),

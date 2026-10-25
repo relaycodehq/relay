@@ -97,11 +97,14 @@ export async function storedCodexSessions(
 }
 
 const turnSchema = z.object({ turn_id: z.string(), status: z.string() });
+
 const itemRowSchema = z.object({
   item_json: z.string(),
   created_at_ms: z.number(),
 });
+
 const itemSchema = z.object({ type: z.string(), id: z.string() }).loose();
+
 const messageSchema = z.object({
   text: z.string(),
   phase: z.string().nullish(),

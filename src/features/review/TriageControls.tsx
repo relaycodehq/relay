@@ -4,6 +4,7 @@ import { Layers3, RotateCcw, Pause, Play } from "lucide-react";
 import { Spinner } from "../../ui/ui";
 import { isAnalyzing, type TriageState } from "../../../shared/triage";
 import { agentName } from "../../../shared/agents";
+
 interface Props {
   state?: TriageState | null;
   busy: boolean;
@@ -15,6 +16,7 @@ interface Props {
   individualReason?: string;
   incomplete?: boolean;
 }
+
 export function TriageControls({
   state,
   busy,

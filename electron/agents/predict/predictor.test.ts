@@ -28,6 +28,7 @@ describe("parsePrediction", () => {
     );
     expect(parsePrediction('Sure: {"next":"ship it"}')).toBe("ship it");
   });
+
   it("drops what the person wouldn't type next", () => {
     expect(parsePrediction('{"next":"I\'ll run the tests now"}')).toBeNull();
     expect(parsePrediction('{"next":"Looks good!"}')).toBeNull();
@@ -40,6 +41,7 @@ describe("parsePrediction", () => {
       "looks good, now the phone",
     );
   });
+
   it("is null when it abstains or answers otherwise", () => {
     expect(parsePrediction('{"next":null}')).toBeNull();
     expect(parsePrediction('{"next":"  "}')).toBeNull();

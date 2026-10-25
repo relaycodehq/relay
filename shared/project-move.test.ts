@@ -7,6 +7,7 @@ const list = [
   { id: "c" },
   { id: "d", folder: "Home" },
 ];
+
 const order = (l: { id: string; folder?: string }[]) =>
   l.map((p) => `${p.id}:${p.folder ?? ""}`).join(" ");
 

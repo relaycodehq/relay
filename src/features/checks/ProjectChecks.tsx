@@ -18,6 +18,7 @@ import {
 import { openSettings } from "../../lib/settings-page";
 import { ErrorBox, Modal } from "../../ui/ui";
 import "./checks.css";
+
 function DiagnosticIcon({
   severity,
 }: {
@@ -39,6 +40,7 @@ function DiagnosticIcon({
     />
   );
 }
+
 export function DiagnosticMessage({
   diagnostic: d,
 }: {
@@ -58,6 +60,7 @@ export function DiagnosticMessage({
     </span>
   );
 }
+
 export function ProjectChecksButton({
   checks,
   onOpenFile,

@@ -8,6 +8,7 @@ import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Loading, Modal } from "../../ui/ui";
 import "./create-pull.css";
 import { SearchSelect } from "../../ui/SearchSelect";
+
 /** A PR of the current branch of `where`: the checkout's, or a thread's worktree's. */
 export function CreatePullSheet({
   where,

@@ -40,6 +40,7 @@ export function accountUsageFooter(
     />
   );
 }
+
 function AccountUsageStrip({
   provider,
   accounts,

@@ -35,6 +35,7 @@ const catalogs: ModelCatalogs = {
     },
   ],
 };
+
 // As the phone asks: only agents, no notes.
 const phone = (
   over: Partial<CommandSettings<(typeof agentProviders)[number]>> = {},
@@ -64,6 +65,7 @@ describe("composer commands", () => {
       model: "",
     });
   });
+
   it("switches to the agent whose list has the model, by id or name", () => {
     expect(composerCommand("model", "Opus", phone())).toEqual({
       command: "model",
@@ -81,6 +83,7 @@ describe("composer commands", () => {
       model: "anthropic/sonnet",
     });
   });
+
   it("offers the recipient's models and Default before the others'", () => {
     expect(
       modelCommandOptions("claude", catalogs, { claude: "Opus" }).map(
@@ -94,6 +97,7 @@ describe("composer commands", () => {
       "opencode:anthropic/sonnet",
     ]);
   });
+
   it("takes only the efforts the recipient's model has", () => {
     expect(composerCommand("effort", "High", phone())).toEqual({
       command: "effort",
@@ -129,6 +133,7 @@ describe("composer commands", () => {
       ),
     ).toEqual({ command: "effort", reasoningEffort: "" });
   });
+
   it("sends notes only where the composer offers them", () => {
     expect(composerCommand("provider", "message", phone())).toBe(
       "Choose one of: codex, claude, opencode, cursor, muse, amp, antigravity.",
@@ -147,6 +152,7 @@ describe("composer commands", () => {
       provider: "claude",
     });
   });
+
   it("toggles Plan and Fast, or sets them with on and off", () => {
     expect(composerCommand("plan", "", phone({ plan: true }))).toEqual({
       command: "plan",
@@ -163,6 +169,7 @@ describe("composer commands", () => {
       "Fast mode is only available for Codex and supported Cursor models.",
     );
   });
+
   it("toggles Cursor Fast only on a model that advertises it", () => {
     const settings = phone({
       recipient: "cursor",
@@ -198,6 +205,7 @@ describe("composer commands", () => {
       }),
     ).toEqual({ command: "fast", fast: false });
   });
+
   it("finds permission modes by value or label", () => {
     expect(
       composerCommand("permissions", "Auto-accept edits", phone()),

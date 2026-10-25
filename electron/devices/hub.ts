@@ -118,6 +118,7 @@ export class DeviceHub {
   private get home() {
     return join(this.dir, HUB_VERSION);
   }
+
   private get entry() {
     return join(this.home, "node_modules", PACKAGE, "dist", "server", "cli.mjs");
   }

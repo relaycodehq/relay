@@ -10,6 +10,7 @@ const visible = (text: string) =>
   [...text.replace(/\x1b\[[0-9;]*m/g, "")].length;
 
 type Mark = "ok" | "warn" | "fail" | "off";
+
 const marks: Record<Mark, string> = {
   ok: green("✓"),
   warn: yellow("!"),
@@ -40,6 +41,7 @@ interface Output {
   isTTY?: boolean;
   columns?: number;
 }
+
 interface Input {
   isTTY?: boolean;
   setRawMode?(raw: boolean): unknown;
@@ -58,32 +60,38 @@ export class Screen {
   private rows = 0;
   private hidden = false;
   private guarded = false;
+
   constructor(
     private out: Output = process.stdout,
     private input: Input = process.stdin,
     /** Questions may be asked; off with --yes. */
     private interactive = true,
   ) {}
+
   /** The cursor can move: spinners turn and blocks can be taken back. */
   get live() {
     return !!this.out.isTTY && process.env.TERM !== "dumb";
   }
+
   print(text = "") {
     this.out.write(`${text}\n`);
     const width = this.out.columns || 80;
     for (const line of text.split("\n"))
       this.rows += Math.max(1, Math.ceil(visible(line) / width));
   }
+
   /** Where a block starts; `take` erases everything printed after it. */
   mark() {
     return this.rows;
   }
+
   take(mark: number) {
     const count = this.rows - mark;
     if (!this.live || count <= 0) return;
     this.out.write(`\x1b[${count}F\x1b[0J`);
     this.rows = mark;
   }
+
   /** A turning `label` on its own row until stopped; nothing when not live. */
   spin(label: string) {
     if (!this.live) return { stop() {} };
@@ -103,6 +111,7 @@ export class Screen {
       },
     };
   }
+
   /**
    * A yes/no question on one row, picked with ← → (or y and n) and Enter;
    * it goes once answered, for the row saying what came of it. `fallback`
@@ -148,6 +157,7 @@ export class Screen {
       input.on("data", key);
     });
   }
+
   private cursor(show: boolean) {
     if (show === !this.hidden) return;
     this.hidden = !show;

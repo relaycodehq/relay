@@ -15,9 +15,11 @@ vi.mock("electron", () => ({ app: {}, dialog: {} }));
 const { shimScript } = await import("./shell-command");
 
 let dir: string;
+
 beforeEach(() => {
   dir = realpathSync(mkdtempSync(join(tmpdir(), "relay-shim-")));
 });
+
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 const script = (path: string, body: string) => {

@@ -7,6 +7,7 @@ export const clockifyHosts = {
   use2: { label: "USA", url: "https://use2.clockify.me/api/v1" },
   apse2: { label: "Australia", url: "https://apse2.clockify.me/api/v1" },
 } as const;
+
 export type ClockifyHost = keyof typeof clockifyHosts;
 
 const id = z.string().trim().max(100);
@@ -102,6 +103,7 @@ export interface ClockifyWorkspace {
   id: string;
   name: string;
 }
+
 export interface ClockifyProject {
   id: string;
   name: string;

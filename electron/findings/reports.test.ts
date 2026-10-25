@@ -12,6 +12,7 @@ const finding = (id: string, title = id): Finding => ({
   files: [],
   reviewers: [],
 });
+
 const block = (findings: Finding[]) =>
   `\`\`\`relay-findings\n${JSON.stringify({ findings, dropped: [] })}\n\`\`\``;
 const answer = (
@@ -28,6 +29,7 @@ const answer = (
   body,
   ...patch,
 });
+
 const review = (): DeepReviewState => ({
   request: "request",
   scope: {
@@ -44,6 +46,7 @@ const review = (): DeepReviewState => ({
   runtimeMode: "full-access",
   status: "done",
 });
+
 const thread = (messages: ChatMessage[], deepReview?: DeepReviewState) =>
   ({
     id: "chat",

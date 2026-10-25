@@ -24,6 +24,7 @@ import { errorMessage } from "../../shared/error-message";
 
 const projectMethods = new Set<string>(remoteProjectMethods);
 const hereOnlyMethods = new Set<string>(handoffHereOnlyMethods);
+
 /** The terminal calls about a shell already open, and what the computer it runs on calls them. */
 const shellOps = new Map<string, TerminalOp>([
   ["writeTerminal", "write"],
@@ -33,6 +34,7 @@ const shellOps = new Map<string, TerminalOp>([
   ["prefillTerminal", "prefill"],
   ["prefillSignIn", "prefillSignIn"],
 ]);
+
 /**
  * What the sidebar asks of every project at launch: a WSL distribution asleep
  * isn't woken for it, and gets the last answer, or this.
@@ -51,18 +53,21 @@ export class RemoteProjects {
   private answered = new Map<string, unknown>();
   /** Connections to a Relay new enough for setup calls; an older one may update, so it's asked again. */
   private canAdd = new WeakSet<Client>();
+
   constructor(
     private computers: Computers,
     private projects: Projects,
   ) {
     this.shells = new RemoteShells(computers, (id, run) => this.call(id, run));
   }
+
   /** The folders in `dir` on the computer, `~` its home folder. */
   folders(computerId: string, dir: string): Promise<ComputerFolders> {
     return this.call(computerId, (client) =>
       client.call("computerFolders", dir),
     );
   }
+
   /** Adds the folder on the computer as a project there, and here as one that lives there. */
   async add(computerId: string, path: string) {
     const { id, name } = this.computers.get(computerId);
@@ -79,11 +84,13 @@ export class RemoteProjects {
       },
     );
   }
+
   /** Keep a newly created project here with the identity of its actual computer. */
   adopt(computerId: string, project: Project) {
     const { id, name } = this.computers.get(computerId);
     return this.projects.addRemote({ id, name }, project);
   }
+
   async clone(computerId: string, url: string, into: string) {
     const answer = await this.call(computerId, async (client) => {
       await this.requireAdding(client);
@@ -104,12 +111,14 @@ export class RemoteProjects {
       ),
     };
   }
+
   /** An agent's models as the computer's own copy of it lists them. */
   agentModels(computerId: string, provider: AgentProvider) {
     return this.ask(computerId, "agentModels", provider) as ReturnType<
       Api["agentModels"]
     >;
   }
+
   /** One of `computerCallMethods`, as the computer answers it for itself. */
   ask<M extends ComputerCallMethod>(
     computerId: string,
@@ -121,6 +130,7 @@ export class RemoteProjects {
       return client.call("computerCall", method, args);
     }) as ReturnType<Api[M]>;
   }
+
   private async requireAdding(client: Client) {
     if (this.canAdd.has(client)) return;
     const info = await client.call("computerInfo");
@@ -130,6 +140,7 @@ export class RemoteProjects {
       );
     this.canAdd.add(client);
   }
+
   /** Whether the call is about a project on another computer, by its id. */
   forwards(method: string, args: unknown[]) {
     if (shellOps.has(method)) return this.shells.has(String(args[0]));
@@ -143,6 +154,7 @@ export class RemoteProjects {
       return false;
     return !!this.projectIn(args[0]);
   }
+
   /**
    * Runs the call on the project there. One that opens its folder here is
    * refused; watching it here stops watching whatever was shown before
@@ -181,6 +193,7 @@ export class RemoteProjects {
     if (kept) this.answered.set(kept, answer);
     return answer;
   }
+
   /** Opens the thread's shell in the project's folder there, as `openTerminal` would here. */
   private openShell(project: Project, args: unknown[]) {
     const [, chatId, size, fresh, slot] = args;
@@ -197,6 +210,7 @@ export class RemoteProjects {
       fresh === true,
     );
   }
+
   /** The project a project id or its checkout's workspace id names, when it lives elsewhere. */
   private projectIn(first: unknown): Project | undefined {
     // A thread's workspace id goes with the thread, as a live handoff's.
@@ -208,6 +222,7 @@ export class RemoteProjects {
       return undefined;
     }
   }
+
   private async call<T>(
     computerId: string,
     run: (client: Client) => Promise<T>,

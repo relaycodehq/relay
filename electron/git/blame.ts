@@ -6,6 +6,7 @@ import type { BlameQuery, LineBlame, Repo } from "../../shared/types";
 /** Immutable, single-line lookups. A new hover cancels obsolete Git work. */
 export class BlameService {
   private cache = new Map<string, LineBlame>();
+
   private active?: {
     key: string;
     controller: AbortController;

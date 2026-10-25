@@ -29,6 +29,7 @@ let dir: string,
   chats: ProjectChats,
   projects: Projects,
   store: Store;
+
 beforeEach(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), "relay-project-import-")));
   repo = join(dir, "onboarding");
@@ -41,11 +42,13 @@ beforeEach(async () => {
   projects = new Projects(store);
   chats = new ProjectChats(store, projects, join(dir, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   vi.unstubAllEnvs();
   await rm(dir, { recursive: true, force: true, maxRetries: 20 });
 });
+
 const turns = [
   { prompt: "Inspect the release script", answer: "It signs the build." },
 ];

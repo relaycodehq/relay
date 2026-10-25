@@ -178,6 +178,7 @@ const toolCallFields = {
   rawInput: z.unknown().optional(),
   rawOutput: z.unknown().optional(),
 };
+
 export const toolCallSchema = z.object(toolCallFields).loose();
 export type AcpToolCall = z.infer<typeof toolCallSchema>;
 
@@ -245,6 +246,7 @@ export const updateSchema = z.discriminatedUnion("sessionUpdate", [
     })
     .loose(),
 ]);
+
 export type AcpUpdate = z.infer<typeof updateSchema>;
 
 /** A `session/update`'s update, or undefined for a kind this Relay doesn't know. */
@@ -275,6 +277,7 @@ export type AcpPermissionRequest = z.infer<typeof permissionRequestSchema>;
 export const picked = (optionId: string) => ({
   outcome: { outcome: "selected", optionId },
 });
+
 export const cancelledPermission = { outcome: { outcome: "cancelled" } };
 
 /** JSON-RPC's code for a request that needs the user signed in first. */

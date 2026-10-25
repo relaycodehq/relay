@@ -19,12 +19,14 @@ interface Run {
   started: number;
   ended?: number;
 }
+
 const running = new Set<Run>();
 /** Probes closed lately: one still saving a refresh has left `running` by the time the file changes. */
 let ended: Run[] = [];
 const RECENT = 2 * 60_000;
 
 let sessionAccounts: () => string[] = () => [];
+
 /** How the trace counts the threads' Claude sessions, each by its account. */
 export function traceSessions(accounts: () => string[]) {
   sessionAccounts = accounts;
@@ -32,6 +34,7 @@ export function traceSessions(accounts: () => string[]) {
 
 /** Past the SDK's grace before it kills a closed CLI, which may still be saving a refresh. */
 const SETTLE = 10_000;
+
 /**
  * Marks a probe as running and gives it a debug log to write. Once it has
  * closed, what it said about its sign-in goes to `main.log` and the log is
@@ -157,6 +160,7 @@ export function describeRunning(now = Date.now()) {
 }
 
 const watched = new Map<string, string>();
+
 /**
  * Logs each Claude account's sign-in file once, and every time it changes.
  * Polled, so a file replaced or deleted is still seen. Run again as accounts
@@ -187,6 +191,7 @@ export function watchSavedSignIns() {
 }
 
 const signedOut = new Set<string>();
+
 /**
  * Notes what the CLI said about the account's sign-in. Logged only when it
  * turns: the first "signed out", and getting back in.

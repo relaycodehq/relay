@@ -112,4 +112,5 @@ export function usePullReview(
     ).length,
   };
 }
+
 export type PullReview = ReturnType<typeof usePullReview>;

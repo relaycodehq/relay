@@ -8,9 +8,11 @@ const az = vi.hoisted(() => ({
   failure: undefined as string | undefined,
   asked: [] as string[][],
 }));
+
 vi.mock("../../platform/executables", () => ({
   findExecutable: async () => "az",
 }));
+
 vi.mock("node:child_process", () => ({
   execFile: (
     _file: string,
@@ -44,6 +46,7 @@ beforeEach(() => {
   az.failure = undefined;
   az.asked = [];
 });
+
 afterEach(() => vi.useRealTimers());
 
 type Failure = number | "network" | "sign-in page";

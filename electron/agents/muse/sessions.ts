@@ -291,9 +291,11 @@ async function applySettings(agent: MuseAgent, wanted: MuseSettings) {
 export function closeMuseSession(key: string) {
   return sessions.close(key);
 }
+
 export function detachMuse() {
   sessions.detach();
 }
+
 export function disposeMuse() {
   sessions.dispose();
 }

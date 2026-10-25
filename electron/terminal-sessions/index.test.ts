@@ -27,6 +27,7 @@ vi.mock("./claude", async (actual) => {
 });
 
 let dir: string, repo: string, claude: string, codex: string;
+
 beforeEach(async () => {
   dir = await realpath(await mkdtemp(join(tmpdir(), "relay-terminal-")));
   repo = join(dir, "repo");
@@ -35,6 +36,7 @@ beforeEach(async () => {
   await mkdir(repo);
   vi.mocked(claudeSummary).mockClear();
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const homes =

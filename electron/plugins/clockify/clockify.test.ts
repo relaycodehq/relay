@@ -10,6 +10,7 @@ import type { ChatMessage, ProjectChat } from "../../../shared/projects";
 
 const prompts: string[] = [];
 let reply = "";
+
 vi.mock("../../agents", () => ({
   agentRuntime: () => ({
     run: async (options: AgentOptions) => {
@@ -18,6 +19,7 @@ vi.mock("../../agents", () => ({
     },
   }),
 }));
+
 const { ClockifyPlugin } = await import("./service");
 
 const MIN = 60_000;
@@ -38,6 +40,7 @@ const message = (
   version: 1,
   ...extra,
 });
+
 const chat = (
   id: string,
   projectId: string,

@@ -22,6 +22,7 @@ const project: Project = {
   repository: null,
   added: 1,
 };
+
 // Set up as a team that works in sprints would: the sprint, then priority.
 const settings: DevOpsSettings = {
   ...defaultDevOpsSettings,
@@ -41,6 +42,7 @@ const settings: DevOpsSettings = {
     keywords: { p1: "Licensing, license keys" },
   },
 };
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,

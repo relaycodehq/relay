@@ -19,12 +19,14 @@ let root: string;
 let native: Awaited<ReturnType<typeof openCodeNativeFixture>>;
 let scenario: Record<string, unknown>;
 let log: string;
+
 const say = (text: string) => ({
   update: {
     sessionUpdate: "agent_message_chunk",
     content: { type: "text", text },
   },
 });
+
 const opts = (extra: Partial<AgentOptions> = {}): AgentOptions => ({
   job: { kind: "prompt" },
   cwd: root,
@@ -36,6 +38,7 @@ const opts = (extra: Partial<AgentOptions> = {}): AgentOptions => ({
   onText() {},
   ...extra,
 });
+
 const setScenario = (extra: Record<string, unknown>) => {
   scenario = {
     nativeUrl: native.url,
@@ -46,6 +49,7 @@ const setScenario = (extra: Record<string, unknown>) => {
   };
   vi.stubEnv("RELAY_ACP_SCENARIO", JSON.stringify(scenario));
 };
+
 beforeEach(async () => {
   root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-opencode-native-")),
@@ -62,6 +66,7 @@ beforeEach(async () => {
   vi.stubEnv("RELAY_ACP_LOG", log);
   setScenario({});
 });
+
 afterEach(async () => {
   await openCodeRuntime.dispose?.();
   await native.close();

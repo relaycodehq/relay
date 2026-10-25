@@ -5,6 +5,7 @@ import {
   type AgentResponse,
   type AskAgentRequest,
 } from "../../shared/agent-modes";
+
 /** Pending provider requests are local, transient, and bound to the active turn. */
 export class AgentRequests {
   private closed = false;
@@ -16,14 +17,17 @@ export class AgentRequests {
       reject: (error: Error) => void;
     }
   >();
+
   /** `changed` hears each request asked, answered or dropped. */
   constructor(
     private signal: AbortSignal,
     private changed: () => void = () => {},
   ) {}
+
   list() {
     return structuredClone([...this.pending.values()].map((p) => p.request));
   }
+
   ask: AskAgentRequest = async (request, providerSignal) => {
     if (this.closed) throw new Error("The agent turn ended.");
     const signal = providerSignal
@@ -58,6 +62,7 @@ export class AgentRequests {
       if (signal.aborted) abort();
     });
   };
+
   respond(id: string, value: AgentResponse) {
     const entry = this.pending.get(id);
     if (!entry)
@@ -83,6 +88,7 @@ export class AgentRequests {
     }
     entry.resolve(response);
   }
+
   close() {
     this.closed = true;
     for (const entry of [...this.pending.values()])

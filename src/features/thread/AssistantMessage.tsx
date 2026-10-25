@@ -32,6 +32,7 @@ import { TipPeek } from "../tips/TipPeek";
 import type { QuestionResponse } from "./question-responses";
 
 const hiddenImage = () => null;
+
 /** An image file the agent read or showed in the turn `messageId`, as it is on disk now. */
 function readImage(
   chatId: string,

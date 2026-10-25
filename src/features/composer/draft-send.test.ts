@@ -20,6 +20,7 @@ import {
 const images = new Map<string, DraftImage[]>();
 const sends: (ProjectChatSend & { resolve: () => void })[] = [];
 let lastInput: ProjectChatSend | undefined;
+
 vi.mock("../images/draft-images", () => ({
   loadDraftImages: async (key: string) => images.get(key) ?? [],
   saveDraftImages: async (key: string, list: DraftImage[]) =>
@@ -29,6 +30,7 @@ vi.mock("../images/draft-images", () => ({
   readDraftImageCounts: async () => {},
   onDraftImageCount: () => () => {},
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     aiSettings: async () => defaultAISettings,
@@ -40,6 +42,7 @@ vi.mock("../../lib/api", () => ({
 }));
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   images.clear();
@@ -55,6 +58,7 @@ beforeEach(() => {
     },
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 const project: Project = {
@@ -64,6 +68,7 @@ const project: Project = {
   repository: null,
   added: 1,
 };
+
 const chat: ChatSummary = {
   id: "c1",
   projectId: "p1",
@@ -72,7 +77,9 @@ const chat: ChatSummary = {
   created: 1,
   updated: 1,
 };
+
 const key = "chat-draft:c1";
+
 const shot = (id: string, n: number): DraftImage => ({
   id,
   n,

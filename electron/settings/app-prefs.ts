@@ -33,6 +33,7 @@ const prefs = {
 export type AppPrefs = {
   [K in keyof typeof prefs]: (typeof prefs)[K]["default"];
 };
+
 type Key = keyof AppPrefs;
 const keys = Object.keys(prefs) as Key[];
 

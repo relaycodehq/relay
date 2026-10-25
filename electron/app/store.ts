@@ -97,16 +97,20 @@ interface State {
   progress: Record<string, Progress>;
   workspaces?: Record<string, WorkspaceState>;
 }
+
 export class Store {
   private state: State = { version: 1, folders: {}, progress: {} };
   private queue: Promise<void> = Promise.resolve();
   private writeError: unknown;
+
   async flush() {
     await this.queue;
     if (this.writeError) throw this.writeError;
   }
+
   /** App data; other services keep their files beside state.json. */
   constructor(readonly dir: string) {}
+
   async load() {
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
     try {
@@ -124,15 +128,19 @@ export class Store {
         );
     }
   }
+
   get() {
     return this.state;
   }
+
   /** When state.json was last written before this launch; 0 for a first run. */
   savedAtLoad = 0;
+
   /** The saved AI settings, filled in and checked, or the defaults. */
   aiSettings() {
     return aiSettingsSchema.parse(this.state.aiSettings ?? defaultAISettings);
   }
+
   async update(fn: (s: State) => void) {
     const task = this.queue.then(async () => {
       const next = structuredClone(this.state);

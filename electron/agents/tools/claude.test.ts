@@ -7,6 +7,7 @@ import { inspectClaude } from "./claude";
 let root: string;
 let repo: string;
 let config: string;
+
 const files = () => ({
   configDir: config,
   userFile: join(config, ".claude.json"),
@@ -16,8 +17,10 @@ const files = () => ({
     join(repo, ".claude/settings.local.json"),
   ],
 });
+
 const json = (path: string, value: unknown) =>
   writeFile(path, JSON.stringify(value));
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-agent-tools-"));
   repo = join(root, "repo");
@@ -29,6 +32,7 @@ beforeEach(async () => {
     "---\ndescription: Review the branch\n---\nInstructions",
   );
 });
+
 afterEach(async () => rm(root, { recursive: true, force: true }));
 
 it("resolves local over project over personal, retaining disabled servers and hiding secrets", async () => {

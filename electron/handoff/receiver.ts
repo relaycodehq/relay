@@ -77,6 +77,7 @@ const branchSchema = z
   .max(250)
   .refine((b) => !branchNameProblem(b));
 const repositoriesSchema = z.array(z.string().max(300)).min(1).max(20);
+
 const settingsSchema = projectChatSendSchema.pick({
   provider: true,
   choice: true,
@@ -84,6 +85,7 @@ const settingsSchema = projectChatSendSchema.pick({
   interactionMode: true,
   contextWindow: true,
 });
+
 const setupRequestSchema = z
   .object({
     url: z.string().trim().min(1).max(2000),
@@ -169,6 +171,7 @@ export class HandoffReceiver {
   private shells = new ComputerShells();
   private clones?: CloneRequests;
   private setups?: SetupAgents;
+
   constructor(private host: ReceiverHost) {
     this.feed = new LiveFeed(host.chats);
     const { adding, dispatch } = host;
@@ -189,11 +192,13 @@ export class HandoffReceiver {
         projects: () => this.projects(),
       });
   }
+
   /** How the computers threads came from are reached; the phone remote's server. */
   connect(link: FeedLink) {
     this.feed.connect(link);
     this.shells.connect(link);
   }
+
   /**
    * Ends the shells other computers opened here: the device's, once it's
    * removed, or every one when this Relay is quitting.
@@ -202,22 +207,27 @@ export class HandoffReceiver {
     if (deviceId) this.shells.closeDevice(deviceId);
     else this.shells.closeAll();
   }
+
   /** A message written in a thread here. */
   chatEvent(event: { chatId: string; message: ChatMessage }) {
     this.feed.message(event.chatId, event.message);
   }
+
   /** Something here is news: a finished or failed answer, a thread that needs you. */
   news(item: NewsItem) {
     this.feed.news(item);
   }
+
   /** A project's threads may read differently. */
   chatsChanged(projectId: string) {
     this.feed.changed(projectId);
   }
+
   /** A thread is arriving or going back; an update waits for it. */
   get busy() {
     return this.receiving.size > 0 || this.handingBack.size > 0;
   }
+
   async handle(
     method: ComputerMethod,
     args: unknown[],
@@ -429,6 +439,7 @@ export class HandoffReceiver {
         );
     }
   }
+
   /** A project of this computer's own, not one another computer hosts or a Scratchpad's. */
   private async own(projectId: string) {
     const project = (await this.host.projects()).find(
@@ -437,6 +448,7 @@ export class HandoffReceiver {
     if (!project) throw new Error("This computer has no such project.");
     return project;
   }
+
   /** The folders in `dir`, the ones that are projects here already marked. */
   private async folders(dir: string): Promise<ComputerFolders> {
     const resolved = await realpath(expandHome(dir));
@@ -455,6 +467,7 @@ export class HandoffReceiver {
       }),
     };
   }
+
   /**
    * A thread another computer starts in a project of this one that it shows
    * as its own: its first message runs here as the thread's first turn, in
@@ -480,6 +493,7 @@ export class HandoffReceiver {
     );
     return { chatId: chat.id };
   }
+
   /**
    * Checks for Relay's latest release and, when there is one, downloads it
    * and restarts into it, in the background; the answer is the state as it
@@ -516,6 +530,7 @@ export class HandoffReceiver {
     }
     return state;
   }
+
   private async projects(): Promise<ComputerProject[]> {
     const projects = (await this.host.projects()).filter(
       (p) => !p.plain && !p.scratch && !p.computer,
@@ -531,6 +546,7 @@ export class HandoffReceiver {
       })),
     );
   }
+
   private async describe(
     project: import("../../shared/projects").Project,
   ): Promise<ComputerProject> {
@@ -547,6 +563,7 @@ export class HandoffReceiver {
       ...(project.plain ? { plain: true as const } : {}),
     };
   }
+
   private async upload(
     id: string,
     part: "thread" | "bundle",
@@ -576,6 +593,7 @@ export class HandoffReceiver {
       await handle.close();
     }
   }
+
   private async receive(id: string, device: { id: string; name: string }) {
     const known = this.host.chats.handoffs.handedOver(id);
     if (known) return this.receipt(known.id, known.projectId);
@@ -634,12 +652,14 @@ export class HandoffReceiver {
     await rm(folder, { recursive: true, force: true });
     return this.receipt(chat.id, project.id);
   }
+
   private async receipt(chatId: string, projectId: string) {
     const project = (await this.host.projects()).find(
       (p) => p.id === projectId,
     );
     return { chatId, project: project?.name ?? "" };
   }
+
   private async projectFor(repositories: string[]) {
     const wanted = new Set(repositories.map((r) => r.toLowerCase()));
     for (const p of await this.projects())
@@ -648,6 +668,7 @@ export class HandoffReceiver {
       `No project here has ${repositories[0]}. Clone it and add it to Relay first.`,
     );
   }
+
   /** The sender took the thread back: whatever came is released, whatever's still coming is dropped. */
   private async abandoned(id: string, deviceId: string) {
     // An arrival under way finishes first, so it's the one that's released.
@@ -661,12 +682,14 @@ export class HandoffReceiver {
     }
     await rm(join(this.host.dir, id), { recursive: true, force: true });
   }
+
   private mine(id: string, deviceId: string) {
     const chat = this.host.chats.handoffs.handedOver(id);
     if (!chat || chat.cameFrom?.deviceId !== deviceId)
       throw new Error("This computer has no such thread from you.");
     return chat;
   }
+
   private async status(ids: string[]) {
     const result: Record<string, HandoffRemoteStatus | null> = {};
     for (const id of ids) {
@@ -694,6 +717,7 @@ export class HandoffReceiver {
     }
     return result;
   }
+
   private async handBack(id: string, deviceId: string): Promise<HandBack> {
     const chat = this.mine(id, deviceId);
     const back = await this.host.chats.handoffs.handBack(chat.id, deviceId);
@@ -715,6 +739,7 @@ export class HandoffReceiver {
       bundle: bundle || 0,
     };
   }
+
   private async download(
     id: string,
     part: "thread" | "bundle",

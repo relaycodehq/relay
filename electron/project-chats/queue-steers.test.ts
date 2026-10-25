@@ -14,6 +14,7 @@ const send = (
   choice: { model: "m", reasoningEffort: "high", fast: false },
   ...fields,
 });
+
 const running = send("@codex Fix the cache guard");
 
 it("steers with a follow-up to the same agent on the same settings", () => {

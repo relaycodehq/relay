@@ -11,6 +11,7 @@ export const agentProviders = [
   "amp",
   "antigravity",
 ] as const;
+
 export type BuiltinProvider = (typeof agentProviders)[number];
 /** An agent Relay installed from the ACP registry, by its registry id: `acp:goose`. */
 export type RegistryProvider = `acp:${string}`;
@@ -19,17 +20,21 @@ export type AgentProvider = BuiltinProvider | RegistryProvider;
 
 /** The ACP registry's agent ids. */
 export const registryIdPattern = /^[a-z0-9][a-z0-9-]*$/;
+
 export const registryProviderSchema = z.templateLiteral([
   "acp:",
   z.string().regex(registryIdPattern),
 ]);
+
 export const agentProviderSchema = z.union([
   z.enum(agentProviders),
   registryProviderSchema,
 ]);
+
 export const isRegistryProvider = (
   provider: AgentProvider,
 ): provider is RegistryProvider => provider.startsWith("acp:");
+
 export const registryProvider = (id: string): RegistryProvider => `acp:${id}`;
 export const registryIdOf = (provider: RegistryProvider) => provider.slice(4);
 
@@ -217,6 +222,7 @@ export const agents = {
 const registryNames = new Map<RegistryProvider, string>();
 let runnable: readonly AgentProvider[] = agentProviders;
 const listeners = new Set<() => void>();
+
 /** Tells this process which registry agents are installed and what they're called. */
 export function knowRegistryAgents(
   installed: { provider: RegistryProvider; name: string }[],
@@ -226,10 +232,12 @@ export function knowRegistryAgents(
   runnable = [...agentProviders, ...registryNames.keys()];
   for (const listener of listeners) listener();
 }
+
 export function onRegistryAgents(listener: () => void) {
   listeners.add(listener);
   return () => void listeners.delete(listener);
 }
+
 /**
  * Every agent a thread can run on here: Relay's own, then the registry
  * agents installed. The same array until that changes.
@@ -279,6 +287,7 @@ export function agentInfo(provider: string): AgentInfo | undefined {
     ? registryInfo(provider)
     : agents[provider];
 }
+
 export const agentName = (provider: AgentProvider) =>
   agentInfo(provider)?.name ?? provider;
 /**
@@ -296,6 +305,7 @@ type AgentsWith<K extends keyof AgentInfo> = {
     ? P
     : never;
 }[BuiltinProvider];
+
 /** The agents with field `K` on, and a schema that accepts only them. */
 function agentsWith<K extends keyof AgentInfo>(key: K) {
   const list = agentProviders.filter(
@@ -307,6 +317,7 @@ function agentsWith<K extends keyof AgentInfo>(key: K) {
 /** Agents Relay runs from a CLI it finds; the rest run from what it downloads. */
 export type CliProvider = Exclude<BuiltinProvider, AgentsWith<"sdk">>;
 export type SdkProvider = AgentsWith<"sdk"> | RegistryProvider;
+
 export const isCliProvider = (
   provider: AgentProvider,
 ): provider is CliProvider => !agentInfo(provider)?.sdk;
@@ -316,6 +327,7 @@ const helpers = agentsWith("helper");
 export const helperProviders = helpers.list;
 export type HelperProvider = AgentsWith<"helper">;
 export const helperProviderSchema = helpers.schema;
+
 /**
  * Helper jobs fall back through the other helpers when one is unavailable. The
  * first may be any agent that can answer a prompt with text, such as one that
@@ -325,6 +337,7 @@ export const helperFallbacks = (first: AgentProvider): AgentProvider[] => [
   first,
   ...helperProviders.filter((p) => p !== first),
 ];
+
 /** Agents that report plan usage, see `AgentInfo.usage`. */
 export type UsageProvider = AgentsWith<"usage">;
 export const usageProviders = agentsWith("usage").list;
@@ -379,6 +392,7 @@ export interface AgentModel {
   /** The model id an alias stands for, e.g. `claude-opus-5-5` for Claude's `opus`. */
   resolved?: string;
 }
+
 /** What an agent runs where a thread leaves the model or effort on Default. */
 export interface AgentDefaults {
   /** The listed model Default runs; "" when the agent doesn't say. */

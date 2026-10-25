@@ -20,18 +20,22 @@ vi.mock("node:fs/promises", async (actual) => {
   const fs = await actual<typeof import("node:fs/promises")>();
   return { ...fs, open: vi.fn(fs.open) };
 });
+
 let root: string;
 let projects: Projects;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-edit-file-")));
   projects = new Projects(new Store(root));
   await writeFile(join(root, "file.txt"), "opened\n");
 });
+
 afterEach(async () => {
   vi.restoreAllMocks();
   vi.mocked(open).mockClear();
   await rm(root, { recursive: true, force: true });
 });
+
 const place = () => ({ root, plain: true });
 
 it("checks the disk version twice when saving, without extra existence reads", async () => {

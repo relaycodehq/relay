@@ -12,11 +12,13 @@ const midnight = (date: Date) => {
   day.setHours(0, 0, 0, 0);
   return day;
 };
+
 const addDays = (date: Date, days: number) => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
 };
+
 const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 const timeOf = (at: Date) =>
   at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });

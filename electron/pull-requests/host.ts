@@ -25,8 +25,10 @@ export class ApiError extends Error {
     super(message);
   }
 }
+
 export type PullState = "open" | "closed" | "all";
 export type SearchFilter = "review_requested" | "assigned" | "created" | "all";
+
 export type FetchRequest = (
   url: string,
   options: RequestInit,

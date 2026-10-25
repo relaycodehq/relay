@@ -7,6 +7,7 @@ const az = vi.hoisted(() => ({
 vi.mock("../../platform/executables", () => ({
   findExecutable: async () => "az",
 }));
+
 vi.mock("node:child_process", () => ({
   execFile: (
     _file: string,
@@ -34,6 +35,7 @@ const tenants: Record<string, string> = {
   "https://dev.azure.com/old": "11111111-1111-1111-1111-111111111111",
   "https://dev.azure.com/new": "22222222-2222-2222-2222-222222222222",
 };
+
 const fetchTenant = async (url: string) => {
   const base = url.replace("/_apis/connectionData", "");
   return new Response(null, {

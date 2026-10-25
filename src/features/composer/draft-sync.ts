@@ -62,6 +62,7 @@ const tellShared = () => sharedListeners.forEach((notify) => notify());
 const META = "relay-draft-sync";
 type Meta = Record<string, { rev?: number; dirty?: number }>;
 let metaRead: { raw: string | null; meta: Meta } = { raw: null, meta: {} };
+
 function meta(): Meta {
   const raw = readText(META);
   if (raw === metaRead.raw) return metaRead.meta;
@@ -75,6 +76,7 @@ function meta(): Meta {
   metaRead = { raw, meta: parsed };
   return parsed;
 }
+
 function setMeta(key: string, entry: { rev?: number; dirty?: number } | null) {
   const next = { ...meta() };
   if (entry && (entry.rev !== undefined || entry.dirty !== undefined))

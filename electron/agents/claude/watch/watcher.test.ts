@@ -126,6 +126,7 @@ const launch = (id: string) => ({
     ],
   },
 });
+
 const started = (id: string, background: boolean) => ({
   type: "system",
   subtype: "task_started",
@@ -133,7 +134,9 @@ const started = (id: string, background: boolean) => ({
   tool_use_id: id,
   is_backgrounded: background,
 });
+
 let callId = 0;
+
 const subCall = (parent: string, name: string, input: unknown, text = "") => ({
   type: "assistant",
   parent_tool_use_id: parent,
@@ -144,11 +147,13 @@ const subCall = (parent: string, name: string, input: unknown, text = "") => ({
     ],
   },
 });
+
 const result = (id: string) => ({
   type: "user",
   parent_tool_use_id: null,
   message: { content: [{ type: "tool_result", tool_use_id: id, content: "" }] },
 });
+
 const finished = (id: string) => ({
   type: "system",
   subtype: "task_notification",

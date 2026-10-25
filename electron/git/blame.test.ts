@@ -16,12 +16,14 @@ const context = Array.from(
   { length: 8 },
   (_, i) => `export const unchanged${i} = ${i};\n`,
 ).join("");
+
 const original =
   "export const retained = 1;\nexport const changed = 1;\nexport const removed = 1;\n" +
   context;
 const updated =
   "export const retained = 1;\nexport const changed = 2;\n" + context;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-blame-"));
   roots.push(root);
@@ -43,14 +45,17 @@ beforeEach(async () => {
   git("commit", "--quiet", "-m", "Rename and improve implementation");
   head = git("rev-parse", "HEAD");
 });
+
 afterEach(async () => {
   service.dispose();
   await Promise.all(
     roots.splice(0).map((path) => rm(path, { recursive: true, force: true })),
   );
 });
+
 const blame = (revision: string, path: string, line: number) =>
   service.read(root, server, repo, { revision, path, line });
+
 describe("line blame", () => {
   it("attributes both pinned revisions and renamed/deleted lines without reading working-tree edits", async () => {
     expect(await blame(base, oldPath, 3)).toMatchObject({
@@ -81,6 +86,7 @@ describe("line blame", () => {
     expect(git("diff", "--cached")).toBe("");
     expect(git("rev-parse", "HEAD")).toBe(head);
   });
+
   it("deduplicates lookups, caches immutable results and cancels superseded work", async () => {
     const query = { revision: head, path: newPath, line: 2 };
     const first = service.read(root, server, repo, query);
@@ -96,6 +102,7 @@ describe("line blame", () => {
     service.dispose();
     expect(await pending).toBeInstanceOf(Error);
   });
+
   it("rejects bad inputs, missing history, mismatched repositories and nonexistent lines", async () => {
     for (const input of [
       { revision: "--help", path: newPath, line: 2 },
@@ -115,6 +122,7 @@ describe("line blame", () => {
     git("remote", "set-url", "origin", "https://other.example/private.git");
     await expect(blame(head, newPath, 1)).rejects.toThrow("no longer matches");
   });
+
   it("labels incomplete history in shallow clones", async () => {
     const shallow = await mkdtemp(join(tmpdir(), "relay-blame-shallow-"));
     roots.push(shallow);

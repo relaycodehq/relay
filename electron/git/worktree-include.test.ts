@@ -20,6 +20,7 @@ for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
 let source: string;
 let target: string;
 const git = (...args: string[]) => gitIn(source, ...args);
+
 const put = async (path: string, text = path) => {
   await mkdir(dirname(join(source, path)), { recursive: true });
   await writeFile(join(source, path), text);
@@ -46,6 +47,7 @@ beforeEach(async () => {
   await put("tracked.json", "tracked");
   git("add", ".");
 });
+
 afterEach(async () => {
   await rm(join(source, ".."), { recursive: true, force: true });
 });

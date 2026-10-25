@@ -38,6 +38,7 @@ function trimmed(run: SubagentDetail): SubagentDetail {
 export class SubagentArchive {
   private cache = new Map<string, Saved>();
   private writes = keyedQueue();
+
   constructor(
     private dir: string,
     private now = () => Date.now(),

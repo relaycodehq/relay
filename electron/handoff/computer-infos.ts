@@ -18,6 +18,7 @@ export const outdated = (info: ComputerInfo | null | undefined) =>
 /** Each paired computer's version and update, as it last said; `null` for one too old to say. */
 export class ComputerInfos {
   private infos = new Map<string, { at: number; info: ComputerInfo | null }>();
+
   constructor(
     private computers: Computers,
     /** How long an answer is reused; tests ask every time. */

@@ -6,6 +6,7 @@ import type { SubagentDetail } from "../../shared/subagents";
 
 // One agent whose live session holds subagents until the session closes.
 const live = new Map<string, SubagentDetail[]>();
+
 const source = (key: string) => {
   const runs = live.get(key);
   return (
@@ -16,18 +17,22 @@ const source = (key: string) => {
     }
   );
 };
+
 const runtime = {
   closeSession: async (key: string) => void live.delete(key),
   subagents: source,
   contextReport: vi.fn(async () => null),
 };
+
 const claudeContextReport = vi.fn(async () => null);
+
 vi.mock("../agents", () => ({
   agentRuntime: (provider: string) =>
     provider === "codex" ? runtime : { contextReport: claudeContextReport },
   agentRuntimes: () => [["codex", runtime]],
   everyAgentRuntime: () => [runtime],
 }));
+
 vi.mock("../agents/claude/project", () => ({
   claudePending: () => [],
   onClaudePending: () => () => {},
@@ -54,10 +59,12 @@ const run = (id: string, status: SubagentDetail["status"]): SubagentDetail => ({
 });
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-sessions-"));
   live.clear();
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 it("counts the selected provider and side session only, without reopening a closed session", async () => {

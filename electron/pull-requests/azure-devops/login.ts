@@ -18,6 +18,7 @@ export class AzureLogin {
     string,
     { at: number; client: Promise<AzureDevOps>; header?: string }
   >();
+
   constructor(
     private fetchRequest: FetchRequest,
     private tokens: AzureCliTokens,

@@ -9,9 +9,11 @@ import { runClaude } from "./claude";
 vi.mock("../../platform/executables");
 
 let root: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-claude-print-")));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 /** `claude --print` as it ends a question: the frames it writes, then its result. */
@@ -35,6 +37,7 @@ async function ask(frames: object[]) {
     onText() {},
   }).catch((e) => e);
 }
+
 const failed = (result: string) => ({
   type: "result",
   subtype: "success",

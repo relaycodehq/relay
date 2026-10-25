@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const images = new Map<string, unknown[]>();
+
 vi.mock("../images/draft-images", () => ({
   draftImageKeys: async () => [...images.keys()],
   readDraftImageCounts: async () => {},
@@ -14,6 +15,7 @@ vi.mock("../images/draft-images", () => ({
 }));
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   images.clear();
@@ -28,6 +30,7 @@ beforeEach(() => {
     },
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 // A fresh module each time: it sweeps once per launch.
@@ -49,6 +52,7 @@ const sweep = async (
     },
   });
 };
+
 // What a thread's composers keep: its draft record, with a side conversation
 // `r1`, and the settings of both.
 const draftRecord = (text = "Hi") =>
@@ -64,10 +68,12 @@ const threadKeys = (id: string) => [
   `composer-settings:${id}`,
   `composer-settings:${id}:r1`,
 ];
+
 const seed = (keys: string[], text?: string) => {
   for (const key of keys)
     store.set(key, key.startsWith("relay-draft:") ? draftRecord(text) : "{}");
 };
+
 const unrelated = [
   "theme",
   "relay-thread-panes",

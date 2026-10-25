@@ -38,6 +38,7 @@ export abstract class JsonRpcConnection extends LineConnection {
     error: Record<string, unknown>,
     method: string,
   ): Error;
+
   protected abstract notification(method: string, params: unknown): void;
 
   protected answer(id: RpcId, method: string, _params: unknown) {

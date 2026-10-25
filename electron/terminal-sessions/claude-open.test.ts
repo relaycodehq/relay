@@ -6,9 +6,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { claudeOpen, runningSince } from "./claude-open";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-claude-open-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const list = (home: string, pid: number, entry: object) =>

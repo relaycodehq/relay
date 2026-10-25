@@ -33,6 +33,7 @@ export class SetupMirror {
     };
     await this.saveNow(id);
   }
+
   async update(id: string, change: Partial<Omit<ThreadSetup, "messages">>) {
     const chat = await this.core.storage.load(id);
     if (!chat.setup) return;
@@ -46,6 +47,7 @@ export class SetupMirror {
     chat.setup = { ...chat.setup, ...change };
     await this.saveNow(id);
   }
+
   /** The setup's messages held, by version, so a reconnect sends only what changed. */
   async held(id: string): Promise<KnownMessages> {
     const chat = await this.core.storage.load(id);
@@ -53,6 +55,7 @@ export class SetupMirror {
       (chat.setup?.messages ?? []).map((m) => [m.id, m.version]),
     );
   }
+
   /** A message written in the setup's thread there: added, or in place of the copy held. */
   async mirror(id: string, message: ChatMessage) {
     const chat = await this.core.storage.load(id);
@@ -69,6 +72,7 @@ export class SetupMirror {
     if (message.status === "streaming") this.saveSoon(id);
     else await this.saveNow(id);
   }
+
   /** The setup's thread as written there after a reconnect, those already held named by id. */
   async synced(id: string, messages: (ChatMessage | string)[]) {
     const chat = await this.core.storage.load(id);
@@ -88,6 +92,7 @@ export class SetupMirror {
     for (const m of changed)
       this.core.emit({ chatId: id, message: structuredClone(m), setup: true });
   }
+
   private saveSoon(id: string) {
     if (this.saves.has(id)) return;
     this.saves.set(
@@ -95,6 +100,7 @@ export class SetupMirror {
       setTimeout(() => void this.saveNow(id), saveMs),
     );
   }
+
   private async saveNow(id: string) {
     clearTimeout(this.saves.get(id));
     this.saves.delete(id);
@@ -104,6 +110,7 @@ export class SetupMirror {
       .catch((e) => console.warn("A thread's setup wasn't saved:", e));
     this.core.storage.chatChanged(id);
   }
+
   dispose() {
     for (const timer of this.saves.values()) clearTimeout(timer);
     this.saves.clear();

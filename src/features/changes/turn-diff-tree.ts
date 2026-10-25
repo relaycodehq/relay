@@ -6,6 +6,7 @@ export interface DiffStat {
   additions: number;
   deletions: number;
 }
+
 export type TurnTreeNode =
   | {
       kind: "directory";

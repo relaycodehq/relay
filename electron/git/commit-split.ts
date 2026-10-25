@@ -36,6 +36,7 @@ interface Hunk {
   /** The hunk's lines, each ending in a newline. */
   body: string;
 }
+
 /** A change the split can place, and what committing it takes. */
 interface Unit extends SplitChange {
   /** What the model reads. */

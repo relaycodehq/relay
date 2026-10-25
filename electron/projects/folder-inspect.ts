@@ -94,11 +94,13 @@ export function checkNewLinks(
   before: readonly LinkedFolder[] | undefined,
   own?: string,
 ): Promise<LinkedFolder[]>;
+
 export function checkNewLinks(
   links: readonly LinkedFolder[] | undefined,
   before: readonly LinkedFolder[] | undefined,
   own?: string,
 ): Promise<LinkedFolder[] | undefined>;
+
 export async function checkNewLinks(
   links: readonly LinkedFolder[] | undefined,
   before: readonly LinkedFolder[] | undefined,

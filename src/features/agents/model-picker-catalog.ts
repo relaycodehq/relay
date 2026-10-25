@@ -10,6 +10,7 @@ import type { CustomModels } from "./useStoredModels";
 
 export type MessageProvider = AgentProvider | "message";
 export type Category = MessageProvider | "favorites";
+
 export type PickerModel = {
   provider: MessageProvider;
   id: string;
@@ -20,6 +21,7 @@ export type PickerModel = {
   /** Its section, e.g. the upstream provider an OpenCode model runs on. */
   group?: string;
 };
+
 /** What the picker offers for one agent. */
 export interface AgentCatalog {
   /** Listed by the agent; undefined while loading. */
@@ -29,6 +31,7 @@ export interface AgentCatalog {
   /** Why the agent couldn't list its models, as opposed to offering none. */
   error?: string;
 }
+
 export const providerName = (provider: MessageProvider) =>
   provider === "message" ? "No agent" : agentName(provider);
 const searchWords = (query: string) =>

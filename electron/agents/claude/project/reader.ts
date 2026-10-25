@@ -36,10 +36,12 @@ export class ClaudeTurnReader {
   // Steers Claude hasn't finished with, by the uuid sent with them. Claude
   // reports each one's progress; `state` stays unset on CLIs that don't.
   private steering = new Map<string, { id?: string; state?: string }>();
+
   // The prompt's own progress, on CLIs that report it.
   readonly prompt: { uuid: ReturnType<typeof randomUUID>; state?: string } = {
     uuid: randomUUID(),
   };
+
   // Text followed by a tool call is commentary, not the answer. Keep it out of the body.
   private commentary = new Set<string>();
   // Findings `/code-review` reported to its tool rather than in its answer.

@@ -21,6 +21,7 @@ const eachFolder = vi.hoisted(() => ({
     | ((dir: string) => Promise<import("./folder-watch").FolderWatch>)
     | undefined,
 }));
+
 vi.mock("./folder-watch", async (load) => {
   const real = await load<typeof import("./folder-watch")>();
   return {
@@ -34,6 +35,7 @@ for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
   delete process.env[name];
 
 let temp: string | undefined;
+
 afterEach(async () => {
   eachFolder.instead = undefined;
   vi.useRealTimers();

@@ -4,6 +4,7 @@ import { replaceInstallation } from "./install";
 import { errorMessage } from "../../shared/error-message";
 
 const [root, staged, version] = process.argv.slice(2);
+
 if (!root || !staged || !version) {
   console.error(
     "Expected an installation path, a staged release and a version.",

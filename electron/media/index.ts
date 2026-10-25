@@ -36,6 +36,7 @@ interface Grant {
   root: string;
   full: string;
 }
+
 // Only files a caller checked get a token, so a page can't name any other.
 const byToken = new Map<string, Grant>();
 const byPath = new Map<string, string>();

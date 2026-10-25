@@ -8,6 +8,7 @@ import type { DeepReviewState } from "../../../shared/deep-review";
 import { DeepReviewRequest } from "./Request";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -15,6 +16,7 @@ beforeEach(() => {
     setItem: (key: string, value: string) => store.set(key, value),
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 it("keeps Fast and Standard reviewers on the same model as distinct entries", () => {
@@ -74,6 +76,7 @@ const project: Project = {
   repository: null,
   added: 0,
 };
+
 const setup = () =>
   renderToStaticMarkup(
     <QueryClientProvider client={new QueryClient()}>

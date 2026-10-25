@@ -23,6 +23,7 @@ import { threadStorage, writeDraftText } from "../../lib/thread-storage";
 import type { ChatSummary, Project } from "../../../shared/projects";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -36,6 +37,7 @@ beforeEach(() => {
   });
   window.dispatchEvent(new StorageEvent("storage", { key: null }));
 });
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();

@@ -18,6 +18,7 @@ const before = numbered(20);
 const after = [...before];
 after[2] = "line three, Needle here";
 after.splice(17, 1);
+
 const diff = parseDiffFromFile(
   { name: "a.ts", contents: file(before) },
   { name: "a.ts", contents: file(after) },

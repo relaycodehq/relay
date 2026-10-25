@@ -42,12 +42,14 @@ import { mac } from "../../lib/mod-key";
 import { readJson, writeJson } from "../../lib/persisted-store";
 
 const PEN_KEY = "relay-sketch-pen";
+
 interface Pen {
   tool: "pen" | "blur" | "redact";
   color: string;
   size: number;
   blurSize: number;
 }
+
 function savedPen(): Pen {
   const saved = (readJson(PEN_KEY) ?? {}) as Partial<Pen>;
   const { tool, color, size, blurSize } = saved;

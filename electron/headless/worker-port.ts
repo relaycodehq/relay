@@ -12,26 +12,32 @@ class WorkerPort extends EventEmitter {
   private started = false;
   private closed = false;
   private held: unknown[] = [];
+
   constructor(readonly id: number) {
     super();
   }
+
   postMessage(data: unknown) {
     if (!this.closed) send({ relay: "port", id: this.id, data });
   }
+
   receive(data: unknown) {
     if (this.closed) return;
     if (!this.started) this.held.push(data);
     else setImmediate(() => this.emit("message", { data, ports: [] }));
   }
+
   start() {
     if (this.started) return;
     this.started = true;
     for (const data of this.held.splice(0)) this.receive(data);
   }
+
   close() {
     this.end();
     send({ relay: "close", id: this.id });
   }
+
   /** Closed from either side. */
   end() {
     if (this.closed) return;
@@ -60,6 +66,7 @@ process.on("message", (message: WorkerWire) => {
     ports.get(message.id)?.receive(message.data);
   else if (message.relay === "close") ports.get(message.id)?.end();
 });
+
 // Relay went away: nothing is left to work for.
 process.on("disconnect", () => process.exit(0));
 

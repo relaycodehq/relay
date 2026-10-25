@@ -24,6 +24,7 @@ test("a phone dictates with a headless Relay's speech engine", async () => {
     !modelDir,
     "Set RELAY_DICTATION_MODEL to a downloaded model folder",
   );
+
   test.setTimeout(120_000);
   execFileSync(process.execPath, ["scripts/build-headless.mjs", "9.9.9"]);
   const root = await realpath(
@@ -35,6 +36,7 @@ test("a phone dictates with a headless Relay's speech engine", async () => {
     await readFile("dist-headless/speech-runtime.json", "utf8"),
   );
   const platform = `${process.platform}/${process.arch}`;
+
   test.skip(
     !manifest.onnxruntime.platforms.includes(platform),
     `No speech engine for ${platform}.`,

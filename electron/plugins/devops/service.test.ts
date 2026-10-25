@@ -11,9 +11,11 @@ import { DevOps } from "./service";
 import type { Fetch } from "./client";
 
 const az = vi.hoisted(() => ({ token: "old-login", issued: [] as string[] }));
+
 vi.mock("../../platform/executables", () => ({
   findExecutable: async () => "az",
 }));
+
 vi.mock("node:child_process", () => ({
   execFile: (
     _file: string,

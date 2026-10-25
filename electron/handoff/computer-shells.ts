@@ -22,9 +22,11 @@ export class ComputerShells {
   /** Each device's shells, by device id. */
   private devices = new Map<string, ThreadTerminals>();
   private link?: FeedLink;
+
   connect(link: FeedLink) {
     this.link = link;
   }
+
   private of(deviceId: string) {
     let shells = this.devices.get(deviceId);
     if (!shells) {
@@ -39,12 +41,14 @@ export class ComputerShells {
     }
     return shells;
   }
+
   open(deviceId: string, cwd: string, args: unknown[]): TerminalOpened {
     const key = terminalKeySchema.parse(args[0]);
     const { cols, rows } = terminalSizeSchema.parse(args[1]);
     const fresh = z.boolean().optional().parse(args[2]);
     return this.of(deviceId).open(own(deviceId, key), cwd, cols, rows, fresh);
   }
+
   async call(deviceId: string, op: TerminalOp, key: string, args: unknown[]) {
     const mine = own(deviceId, terminalKeySchema.parse(key));
     const shells = this.of(deviceId);
@@ -89,11 +93,13 @@ export class ComputerShells {
         return shells.adopt(mine, own(deviceId, idSchema.parse(args[0])));
     }
   }
+
   /** The device was removed here: its shells go with it. */
   closeDevice(deviceId: string) {
     this.devices.get(deviceId)?.closeAll();
     this.devices.delete(deviceId);
   }
+
   closeAll() {
     for (const shells of this.devices.values()) shells.closeAll();
     this.devices.clear();

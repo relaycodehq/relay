@@ -14,6 +14,7 @@ import {
 
 const min = 60_000;
 const now = 1_000 * 24 * 60 * min;
+
 const thread = (t: Partial<AwayThread>): AwayThread => ({
   chatId: "t",
   projectId: "p",
@@ -23,6 +24,7 @@ const thread = (t: Partial<AwayThread>): AwayThread => ({
   since: now,
   ...t,
 });
+
 const computer = (c: Partial<Computer>): Computer => ({
   id: "mini",
   name: "Mac mini",

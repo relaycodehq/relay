@@ -22,12 +22,14 @@ import "./git-actions.css";
 import { usePoll } from "../../lib/poll";
 
 type Action = "commit" | "commit_push" | "push" | "merge" | "pr";
+
 export type GitActionsHandle = {
   /** Opens the branch's PR, as the PR button does. */
   openPr: () => void;
   /** Opens the commit sheet with just `paths` ticked, or says why it can't. */
   commit: (paths: string[], chatId?: string) => Promise<void>;
 };
+
 const MAX_COMMIT_FILES = 1000;
 
 /**

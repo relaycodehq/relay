@@ -14,11 +14,13 @@ import { errorMessage } from "../../../../shared/error-message";
 export class ClaudeFrames extends AsyncQueue<SDKMessage> {
   /** Why the stream ended early, when it failed rather than closed. */
   failure?: string;
+
   end(failure?: unknown) {
     if (failure) this.failure = errorMessage(failure);
     super.end();
   }
 }
+
 /**
  * A turn in flight. Claude starts unprompted ones itself, e.g. when a
  * background task ends; `from` is where one began in the host's log.
@@ -28,6 +30,7 @@ export type ClaudeTurn = {
   adopted?: boolean;
   from?: number;
 };
+
 /** Reads the stream for the session's lifetime, not only while a turn is waiting. */
 export async function pump(
   session: ClaudeSession,
@@ -73,6 +76,7 @@ export async function pump(
     pendingChanged();
   }
 }
+
 function restore(session: ClaudeSession, message: SDKMessage) {
   const hook = message as unknown as HookFrame;
   if (hook.type === "relay_hook") {
@@ -83,6 +87,7 @@ function restore(session: ClaudeSession, message: SDKMessage) {
   )
     session.work.track(message.tasks);
 }
+
 function receive(session: ClaudeSession, message: SDKMessage) {
   // The host logs the end-of-turn hook as a frame of its own.
   if ((message as unknown as HookFrame).type === "relay_hook")
@@ -123,6 +128,7 @@ function receive(session: ClaudeSession, message: SDKMessage) {
     });
   session.unprompted = done;
 }
+
 /** Ends the current turn. Frames it didn't consume belong to whatever Claude does next. */
 export function release(session: ClaudeSession) {
   session.turn = undefined;
@@ -130,6 +136,7 @@ export function release(session: ClaudeSession) {
   session.released = undefined;
   for (const frame of session.frames.take()) receive(session, frame);
 }
+
 /** The turn Claude started by itself, for an `adopt` turn to show. */
 export function adopt(session: ClaudeSession | undefined) {
   if (!session?.turn?.unprompted || session.turn.adopted)
@@ -138,6 +145,7 @@ export function adopt(session: ClaudeSession | undefined) {
   turn.adopted = true;
   return turn;
 }
+
 /** A turn cut off by a restart is waiting to be shown. */
 export function holdOpen(session: ClaudeSession, from?: number) {
   session.turn = { unprompted: true, from };
@@ -149,6 +157,7 @@ export function holdOpen(session: ClaudeSession, from?: number) {
   });
   session.unprompted = done;
 }
+
 /** Settles with `done`, or fails once the turn waiting on it is cancelled. */
 export function settled(done: Promise<void>, signal: AbortSignal) {
   return new Promise<void>((resolve, reject) => {

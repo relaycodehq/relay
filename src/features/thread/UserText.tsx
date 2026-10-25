@@ -23,6 +23,7 @@ import "./user-text.css";
 const codeOrToken = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[Image #\d+\]/g;
 // Marks a skill's code span apart from a `$name` the user wrote as code.
 const skillMark = "\uE000";
+
 const tokenAsCode = (text: string, skills: ReadonlySet<string>) => {
   let out = "",
     last = 0;
@@ -42,6 +43,7 @@ const tokenAsCode = (text: string, skills: ReadonlySet<string>) => {
   prose(text.slice(last));
   return out;
 };
+
 const sentToken = /^\[Image #(\d+)\]$/;
 
 type PilledCode =

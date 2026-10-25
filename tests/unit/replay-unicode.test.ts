@@ -13,9 +13,11 @@ import { join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-replay-unicode-"));
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });

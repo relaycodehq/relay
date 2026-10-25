@@ -6,14 +6,17 @@ import type { FetchRequest } from "../pull-requests/host";
 export class GithubLogin {
   private client: Promise<GitHub> | null = null;
   private credential?: Promise<GithubCredential>;
+
   constructor(
     private fetchRequest: FetchRequest,
     readonly credentials = new GithubCredentials(),
   ) {}
+
   refresh() {
     this.credentials.forget();
     this.client = null;
   }
+
   /** Picks up a new `gh auth login`, or a sign-out, within a few minutes. */
   require() {
     const credential = this.credentials.read();
@@ -32,6 +35,7 @@ export class GithubLogin {
     }
     return this.client;
   }
+
   /**
    * Who Relay acts as on GitHub; null without a `gh` login. Throws when `gh`
    * is signed in but GitHub didn't answer, so that isn't shown as signed out.

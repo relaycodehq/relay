@@ -17,6 +17,7 @@ export const SURFACE_LABELS: Record<Surface, string> = {
   browser: "Browser",
   device: "Device",
 };
+
 export const SURFACE_ICONS: Record<Surface, ReactNode> = {
   files: <Files size={13} />,
   history: <GitGraph size={13} />,

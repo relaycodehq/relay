@@ -12,6 +12,7 @@ const files = [
   "electron/main.ts",
   "README.md",
 ];
+
 const first = (query: string) => rankPaths(files, query)[0]?.path;
 
 describe("rankPaths", () => {

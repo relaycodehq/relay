@@ -11,6 +11,7 @@ const png = (width: number, height: number) => {
   bytes.writeUInt32BE(height, 20);
   return bytes;
 };
+
 /** A JPEG with an APP0 segment before its baseline frame header. */
 const jpeg = (width: number, height: number) =>
   Buffer.from([

@@ -75,6 +75,7 @@ export class DraftStore {
   list(): SharedDraft[] {
     return [...this.drafts.values()];
   }
+
   get(key: string) {
     return this.drafts.get(key);
   }

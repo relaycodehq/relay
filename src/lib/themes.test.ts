@@ -11,6 +11,7 @@ import {
 } from "./themes";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -18,6 +19,7 @@ beforeEach(() => {
     setItem: (key: string, value: string) => store.set(key, value),
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 const saved = (value: unknown) =>

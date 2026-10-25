@@ -11,6 +11,7 @@ import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 
 const secret = "a".repeat(64);
 let close: (() => Promise<void>) | undefined;
+
 afterEach(async () => {
   await close?.();
   close = undefined;

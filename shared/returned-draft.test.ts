@@ -4,6 +4,7 @@ import type { ProjectChatSend } from "./projects";
 import { returnedDraft as returned } from "./returned-draft";
 
 let counter = 0;
+
 const returnedDraft = (
   draft: string,
   images: Parameters<typeof returned>[1],
@@ -32,6 +33,7 @@ describe("a queued message back in the composer", () => {
     expect(back.images[0]!.id).toBe("mine");
     expect(back.images[1]!.id).toMatch(/^new-/);
   });
+
   it("takes code references out of the text, but leaves a reply's in it", () => {
     const ref = {
       path: "a.ts",
@@ -46,6 +48,7 @@ describe("a queued message back in the composer", () => {
     const reply = returnedDraft("", [], message(body), true);
     expect(reply).toMatchObject({ body, codeRefs: [] });
   });
+
   it("restores a scheduled side question as /btw so resending stays on the side", () => {
     const side: ProjectChatSend = {
       ...message("@codex Does this support caching?"),
@@ -62,6 +65,7 @@ describe("a queued message back in the composer", () => {
       returnedDraft("", [{ ...shot, id: "mine" }], side, false),
     ).toThrow("Send or clear the current draft");
   });
+
   it("refuses what one message can't hold", () => {
     expect(() =>
       returnedDraft("x".repeat(32000), [], message("more"), false),

@@ -227,6 +227,7 @@ const code = (value: string) => {
   const pad = value.startsWith("`") || value.endsWith("`") ? " " : "";
   return `${fence}${pad}${value.replaceAll("|", "\\|")}${pad}${fence}`;
 };
+
 const longestRun = (text: string) =>
   Math.max(0, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
 

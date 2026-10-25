@@ -47,31 +47,37 @@ import type {
 import type { TriageState } from "./triage";
 import type { PhoneRemoteApi } from "./remote";
 import type { ComputersApi } from "./handoff";
+
 interface User {
   id: number;
   login: string;
   full_name?: string;
 }
+
 export interface Account {
   id: string;
   server: string;
   user: User;
   persistent: boolean;
 }
+
 export interface Repo {
   owner: string;
   name: string;
   /** The host, e.g. `https://github.com`; absent in older saves, which meant the Gitea account's server. */
   server?: string;
 }
+
 export interface PullRef extends Repo {
   number: number;
 }
+
 export interface BlameQuery {
   revision: string;
   path: string;
   line: number;
 }
+
 export interface LineBlame {
   commit: string;
   author: string;
@@ -80,6 +86,7 @@ export interface LineBlame {
   summary: string;
   shallow: boolean;
 }
+
 export interface Issue {
   id: number;
   number: number;
@@ -100,6 +107,7 @@ export interface Issue {
   comments: number;
   pull_request?: { merged: boolean };
 }
+
 interface Branch {
   ref: string;
   sha: string;
@@ -110,6 +118,7 @@ interface Branch {
     clone_url: string;
   } | null;
 }
+
 export interface Pull extends PullRef {
   id: number;
   title: string;
@@ -129,14 +138,17 @@ export interface Pull extends PullRef {
   labels: Issue["labels"];
   comments: number;
 }
+
 type Counts = "additions" | "deletions" | "changed_files";
 /** A PR in a repository's list, which may not say how much it changes. */
 export type PullListing = Omit<Pull, Counts> & Partial<Pick<Pull, Counts>>;
+
 /** A project's pull request as its list shows it: the pull, with the fields an issue search carries. */
 export type ProjectPull = PullListing & {
   repository: Issue["repository"];
   pull_request: { merged: boolean };
 };
+
 export interface ChangedFile {
   filename: string;
   previous_filename?: string;
@@ -147,6 +159,7 @@ export interface ChangedFile {
   deletions: number;
   changes: number;
 }
+
 export interface Review {
   id: number;
   body: string;
@@ -159,6 +172,7 @@ export interface Review {
   dismissed?: boolean;
   stale?: boolean;
 }
+
 export interface ReviewComment {
   id: number;
   body: string;
@@ -172,6 +186,7 @@ export interface ReviewComment {
   pull_request_review_id: number;
   resolver?: User | null;
 }
+
 export interface Discussion {
   id: number;
   body: string;
@@ -179,7 +194,9 @@ export interface Discussion {
   created_at: string;
   html_url: string;
 }
+
 export type Side = "additions" | "deletions";
+
 export interface Draft {
   id: string;
   path: string;
@@ -189,6 +206,7 @@ export interface Draft {
   revision: string;
   createdAt: string;
 }
+
 export interface LineMark {
   id: string;
   path: string;
@@ -197,17 +215,20 @@ export interface LineMark {
   side: Side;
   revision: string;
 }
+
 export interface Progress {
   reviewBody?: string;
   read: Record<string, string>;
   drafts: Draft[];
   marks: LineMark[];
 }
+
 export interface Page<T> {
   items: T[];
   nextPage: number | null;
   total?: number;
 }
+
 export interface FilePair {
   old: { name: string; contents: string; cacheKey: string } | null;
   next: { name: string; contents: string; cacheKey: string } | null;
@@ -217,6 +238,7 @@ export interface FilePair {
   /** relay-media addresses for a binary change to a video; null where the side is absent. */
   videos?: { old: string | null; next: string | null };
 }
+
 export interface LocalFolder {
   path: string;
   branch: string;
@@ -224,6 +246,7 @@ export interface LocalFolder {
   dirty: boolean;
   remoteMatches: boolean;
 }
+
 export type SidebarView = "threads" | "activity";
 
 /** A checkout of Relay's own repository that `npm run dev` can run Relay from. */
@@ -234,11 +257,13 @@ export interface DevCheckout {
   /** Why Relay can't run from it, when it can't. */
   problem?: string;
 }
+
 export interface DevSwitchState {
   /** The checkout this Relay runs from. */
   running: string;
   checkouts: DevCheckout[];
 }
+
 export interface Bootstrap {
   account: Account | null;
   /** Gitea is on in Settings → Integrations; off, nothing offers it. */
@@ -253,6 +278,7 @@ export interface Bootstrap {
   pendingProject?: string;
   workspace: WorkspaceState;
 }
+
 export interface WorkspaceState {
   pull: PullRef | null;
   file: string | null;
@@ -260,6 +286,7 @@ export interface WorkspaceState {
   query: string;
   state: "open" | "closed" | "all";
 }
+
 export const emptyWorkspace = (): WorkspaceState => ({
   pull: null,
   file: null,
@@ -267,6 +294,7 @@ export const emptyWorkspace = (): WorkspaceState => ({
   query: "",
   state: "open",
 });
+
 export interface LocalFile {
   path: string;
   branch: string;
@@ -275,6 +303,7 @@ export interface LocalFile {
   original: string;
   version: string;
 }
+
 export interface Api
   extends
     WorkingTreeApi,
@@ -876,15 +905,18 @@ export interface Api
   /** Saves a paste too big for a message as the draft's nth paste file; its path. */
   savePaste(text: string, n: number): Promise<string>;
 }
+
 /** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */
 export type ApiMethod = Exclude<
   keyof Api,
   `on${string}` | "pathForFile" | "settingsFileAtStart"
 >;
+
 export const emptyProgress = (): Progress => ({
   read: {},
   drafts: [],
   marks: [],
 });
+
 export const revisionOf = (p: Pull) => `${p.merge_base}:${p.head.sha}`;

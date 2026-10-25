@@ -21,6 +21,7 @@ const LISTED_ENTRIES = 50;
 const ENTRY_CHARS = 2000;
 
 export type PreviewToolName = "open_preview" | "screenshot" | "console_errors";
+
 export const previewToolNames = new Set<string>([
   "open_preview",
   "screenshot",

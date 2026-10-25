@@ -16,6 +16,7 @@ import {
 } from "../../shared/working-tree";
 import type { Repo } from "../../shared/types";
 import { headlineStat, statsByKind } from "../../shared/diff-kinds";
+
 /** The rule ignoring each of `paths`, as `.gitignore:4 .env*.local`; paths no rule ignores are left out. */
 export async function ignoreRules(root: string, paths: string[]) {
   const fields = (await checkIgnore(root, paths)).split("\0");
@@ -28,6 +29,7 @@ export async function ignoreRules(root: string, paths: string[]) {
   }
   return rules;
 }
+
 async function checkIgnore(root: string, paths: string[]) {
   if (!paths.length) return "";
   const file = await gitExecutable();
@@ -51,6 +53,7 @@ async function checkIgnore(root: string, paths: string[]) {
     child.stdin?.end(paths.join("\0") + "\0");
   });
 }
+
 export async function gitOperation(root: string): Promise<string | null> {
   const dir = (await gitDirs(root)).gitDir;
   const names = [
@@ -70,6 +73,7 @@ export async function gitOperation(root: string): Promise<string | null> {
   );
   return names.find((_, i) => !!entries[i]) ?? null;
 }
+
 export async function validateRepo(root: string, server: string, repo: Repo) {
   const local = await inspectRepository(root, server, repo);
   if (!local.remoteMatches)
@@ -78,6 +82,7 @@ export async function validateRepo(root: string, server: string, repo: Repo) {
     );
   return local.path;
 }
+
 /**
  * Where `git push` would send the branch: its push remote (`pushRemote`, then
  * `remote.pushDefault`) or else the remote it tracks, under the branch's own
@@ -118,12 +123,14 @@ async function readPushDestination(root: string, branch: string) {
   const url = (await git(root, ["remote", "get-url", "--push", remote])).trim();
   return { remote, url, ref, tracks, label: `${remote}/${ref.slice(11)}` };
 }
+
 export async function pushDestination(root: string, branch: string) {
   if (!branch) return null;
   return destinations(root, `${branch}\0${await configStamp(root)}`, () =>
     readPushDestination(root, branch),
   );
 }
+
 export async function fetchUpstream(root: string, branch: string) {
   // Detached or local-only branches have nothing to fetch.
   const remote = branch
@@ -136,6 +143,7 @@ export async function fetchUpstream(root: string, branch: string) {
   if (!remote || remote === ".") return;
   await git(root, ["fetch", "--prune", "--quiet", remote], 60000);
 }
+
 // Untracked files read for their line counts in one refresh; the rest are
 // read by the next ones, so a big batch of new files adds up over a few polls.
 const untrackedBytesPerRefresh = 32 * 1024 * 1024,
@@ -189,6 +197,7 @@ async function lineCounts(
     partial: untrackedFiles.partial,
   };
 }
+
 /** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */
 export function numstatFiles(output: string) {
   const fields = output.split("\0");
@@ -205,6 +214,7 @@ export function numstatFiles(output: string) {
   }
   return files;
 }
+
 async function untrackedLines(root: string, paths: string[]) {
   const previous = untrackedCache.get(root),
     seen = new Map<string, number>();
@@ -241,6 +251,7 @@ async function untrackedLines(root: string, paths: string[]) {
   else untrackedCache.delete(root);
   return { files, partial };
 }
+
 function textLines(bytes: Buffer | null) {
   // Git counts a file with a NUL byte as binary, with no lines.
   if (!bytes?.length || bytes.includes(0)) return 0;
@@ -249,6 +260,7 @@ function textLines(bytes: Buffer | null) {
     lines++;
   return bytes[bytes.length - 1] === 10 ? lines : lines + 1;
 }
+
 // Each is read again only when what it depends on changed: a refresh while
 // an agent edits files runs `git status` and, for the line counts, `git diff`.
 const destinations = memo<Awaited<ReturnType<typeof readPushDestination>>>();
@@ -427,8 +439,10 @@ async function outgoing(
 }
 
 const queue = keyedQueue();
+
 export async function flushGitOperations() {
   await Promise.allSettled(queue.pending());
 }
+
 export const serializeRepo = <T>(root: string, run: () => Promise<T>) =>
   queue(root, run);

@@ -14,6 +14,7 @@ import { openInFileTree, openSurface } from "../fixtures/navigation";
 import { screenshot } from "../fixtures/screenshot";
 
 const lines = (...text: string[]) => text.map((l) => `${l}\n`).join("");
+
 const committed = Array.from(
   { length: 12 },
   (_, i) => `const line${i + 1} = ${i + 1};`,

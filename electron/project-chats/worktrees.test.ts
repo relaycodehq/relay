@@ -67,6 +67,7 @@ beforeEach(async () => {
     root: async () => undefined,
   });
 });
+
 afterEach(() => rm(temp, { recursive: true, force: true }));
 
 it("waits for the title when Relay picked the name, then moves to it", async () => {

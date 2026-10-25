@@ -45,7 +45,9 @@ type Run = {
   /** What the SDK said it returned, for when none of its text came through. */
   returned?: string;
 };
+
 type Call = Extract<AgentTrace, { kind: "activity" }>;
+
 type Block = {
   type: string;
   id?: string;

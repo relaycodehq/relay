@@ -10,9 +10,11 @@ import type { Projects } from "../projects/projects";
 import type { RemoteClient } from "../../shared/remote-client";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-handoff-notices-"));
 });
+
 afterEach(async () => {
   vi.restoreAllMocks();
   await rm(root, { recursive: true, force: true });

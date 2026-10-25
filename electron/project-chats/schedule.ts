@@ -32,6 +32,7 @@ export class ChatSchedule {
       stopped: ProjectChat["stopped"];
     }
   >();
+
   constructor(
     private core: ChatCore,
     private host: ScheduleHost,

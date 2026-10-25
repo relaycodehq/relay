@@ -91,6 +91,7 @@ export const emptyBody = (): DraftBody => ({
   quotes: [],
   files: [],
 });
+
 export const emptyThreadDraft = (): ThreadDraft => ({
   main: emptyBody(),
   replies: {},
@@ -154,6 +155,7 @@ function readWorkItem(value: unknown): WorkItem | undefined {
     ? item
     : undefined;
 }
+
 const readCodeRefs = (value: unknown): CodeReference[] =>
   Array.isArray(value) ? value.filter(isCodeReference) : [];
 const readScope = (value: unknown) => chatScopeSchema.safeParse(value).data;

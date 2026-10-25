@@ -19,6 +19,7 @@ import {
 import type { AgentProvider } from "../../../shared/agents";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { useAccessNamed } from "./composer-toolbar";
+
 const icons: Record<RuntimeMode, typeof Eye> = {
   "read-only": Eye,
   "approval-required": LockKeyhole,
@@ -26,6 +27,7 @@ const icons: Record<RuntimeMode, typeof Eye> = {
   auto: Sparkles,
   "full-access": LockKeyholeOpen,
 };
+
 const modes: {
   value: InteractionMode;
   label: string;
@@ -45,6 +47,7 @@ const modes: {
     icon: <PencilRuler size={14} />,
   },
 ];
+
 // Permissions and planning are independent controls.
 export const ComposerModeControls = memo(function ComposerModeControls({
   provider,

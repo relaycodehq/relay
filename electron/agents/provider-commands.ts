@@ -19,6 +19,7 @@ import {
   type CodexModel,
 } from "../../shared/settings";
 import type { CodexDefaults } from "../../shared/agent-defaults";
+
 const skillSchema = z.object({
   name: z.string().regex(/^[a-zA-Z0-9_.:-]+$/),
   path: z.string().refine(isAbsolute),
@@ -34,15 +35,18 @@ const skillSchema = z.object({
   description: z.string().optional(),
   shortDescription: z.string().nullable().optional(),
 });
+
 export type CodexSkill = z.infer<typeof skillSchema>;
 /** Codex's skills for a checkout, remembered for a minute. */
 export const codexSkills = memoByKey((root) => discover(root));
+
 function discover(root: string): Promise<CodexSkill[]> {
   return withAppServer(root, "loading skills", async (wire) => {
     const response = await wire.request("skills/list", { cwds: [root] });
     return readCodexSkills(response, root) ?? [];
   });
 }
+
 /**
  * All discovered skills, including disabled ones; the composer filters them
  * later. Undefined when Codex reported nothing for `root`.
@@ -84,10 +88,12 @@ const modelEntrySchema = z.object({
   defaultReasoningEffort: z.string().nullish(),
   isDefault: z.boolean().nullish(),
 });
+
 const modelPageSchema = z.object({
   data: z.array(z.unknown()).max(500),
   nextCursor: z.string().nullish(),
 });
+
 /**
  * Asks the installed CLI which models this account can use, again once it's
  * updated: a new version brings new models.
@@ -142,12 +148,14 @@ export const codexModels = memoWhileStamp(
       return models;
     }),
 );
+
 const configSchema = z.object({
   config: z.object({
     model: z.string().nullish(),
     model_reasoning_effort: z.string().nullish(),
   }),
 });
+
 /** The model and effort Codex's config gives threads in `root` that leave them on Default. */
 export const codexDefaults = memoByKey<CodexDefaults>((cwd) =>
   withAppServer(cwd, "reading its config", async (wire) => {
@@ -162,6 +170,7 @@ export const codexDefaults = memoByKey<CodexDefaults>((cwd) =>
     };
   }),
 );
+
 /**
  * Runs one exchange with a short-lived `codex app-server`, signed in as the
  * account in use unless `env` names another.

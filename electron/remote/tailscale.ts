@@ -17,6 +17,7 @@ const cgnat = (ip: string) => {
   const [a, b] = ip.split(".").map(Number);
   return a === 100 && b! >= 64 && b! <= 127;
 };
+
 const tailscaleV6 = (ip: string) =>
   ip.toLowerCase().startsWith("fd7a:115c:a1e0:");
 
@@ -46,6 +47,7 @@ const peerSchema = z.object({
   OS: z.string(),
   Online: z.boolean().optional(),
 });
+
 const statusSchema = z.object({
   BackendState: z.string(),
   Self: peerSchema

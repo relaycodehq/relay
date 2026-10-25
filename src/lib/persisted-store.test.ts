@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { persistedStore } from "./persisted-store";
 
 const saved = new Map<string, string>();
+
 beforeEach(() => {
   saved.clear();
   vi.stubGlobal("localStorage", {
@@ -10,6 +11,7 @@ beforeEach(() => {
     removeItem: (key: string) => saved.delete(key),
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 const number = (key: string) =>

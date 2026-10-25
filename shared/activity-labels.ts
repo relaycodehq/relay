@@ -112,6 +112,7 @@ const commandWrappers = new Set([
   "pnpx",
   "bunx",
 ]);
+
 const commandSetup = new Set([
   "cd",
   "pushd",
@@ -130,6 +131,7 @@ const commandSetup = new Set([
   "esac",
   "}",
 ]);
+
 // Shell grammar around the commands: `if` and `do` lead into one, while the
 // headers of `for f in …` or `case $x in` run nothing themselves.
 const shellLeads = new Set([
@@ -143,6 +145,7 @@ const shellLeads = new Set([
   "!",
   "{",
 ]);
+
 const shellHeaders = new Set(["for", "case", "select", "function"]);
 
 /** The program a command line is about: "cd app && npx vitest run" is

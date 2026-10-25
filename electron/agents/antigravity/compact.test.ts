@@ -9,15 +9,18 @@ import type { AcpProfile } from "../acp/profiles";
 import type { AgentOptions } from "../types";
 
 const profiles: AcpProfile[] = [];
+
 afterEach(() => {
   for (const profile of profiles.splice(0)) disposeAcp(profile);
 });
+
 const say = (text: string) => ({
   update: {
     sessionUpdate: "agent_message_chunk",
     content: { type: "text", text },
   },
 });
+
 async function fixture(extra: Record<string, unknown> = {}) {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-google-compact-")),

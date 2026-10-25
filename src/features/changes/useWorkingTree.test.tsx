@@ -11,9 +11,11 @@ import { useWorkingDiff, useWorkingTree } from "./useWorkingTree";
 vi.mock("../../lib/api", () => ({
   api: { workingTree: vi.fn(), workingDiff: vi.fn(), gitAction: vi.fn() },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const tree = (branch: string): WorkingTree => ({
   head: "head",
   branch,

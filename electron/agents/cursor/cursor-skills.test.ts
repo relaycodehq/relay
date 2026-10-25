@@ -13,12 +13,14 @@ import { discoverCursorSkills } from "./skills";
 
 let home: string;
 let workspace: string;
+
 beforeEach(async () => {
   home = await realpath(await mkdtemp(join(tmpdir(), "cursor-skills-home-")));
   workspace = await realpath(
     await mkdtemp(join(tmpdir(), "cursor-skills-ws-")),
   );
 });
+
 afterEach(() =>
   Promise.all(
     [home, workspace].map((d) => rm(d, { recursive: true, force: true })),

@@ -16,6 +16,7 @@ const message = (
   version: 1,
   ...extra,
 });
+
 const question = (answerMessageId?: string) => ({
   id: "q",
   questions: [{ id: "visibility", question: "Which visibility?", options: [] }],
@@ -23,11 +24,14 @@ const question = (answerMessageId?: string) => ({
     ? { answerMessageId, answers: { visibility: ["Private"] } }
     : {}),
 });
+
 const first = message("first", {
   questions: [question("reply")],
   activity: [{ id: "web", kind: "web", label: "Search", status: "complete" }],
 });
+
 const reply = message("reply", { role: "user", asyncQuestionAnswer: true });
+
 const next = message("next", {
   created: 90000,
   status: "streaming",

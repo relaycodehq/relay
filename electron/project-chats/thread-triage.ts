@@ -24,6 +24,7 @@ export class ThreadTriage {
     private worktrees: ThreadWorktrees,
     private councils: Councils,
   ) {}
+
   /** Settle/snooze/archive only change sidebar visibility, never the agent. */
   async triage(id: string, triage: ChatTriage) {
     const chat = await this.core.storage.load(id);
@@ -117,6 +118,7 @@ export class ThreadTriage {
       await this.settleStarted(id, now);
     return chatSummary(chat);
   }
+
   /**
    * Called once a run ended and its queue went out: a thread settled while it
    * ran settles for real if nothing is left going, or comes back to Activity
@@ -144,6 +146,7 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     if (chat.settledAt) await this.settleStarted(id, now);
   }
+
   /**
    * Its own agent asks to settle it. Unlike a settle by hand it stays in
    * Activity meanwhile, and settles once this answer and its queue end
@@ -157,6 +160,7 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return true;
   }
+
   /** The user has read its latest answer; a lead reads the threads it started. */
   private read(chat: ProjectChat) {
     return (
@@ -164,6 +168,7 @@ export class ThreadTriage {
       (!chat.markedUnread && (chat.seenAt ?? 0) >= chat.updated)
     );
   }
+
   /**
    * After Relay starts: a quit cut off the runs of threads settled while
    * they ran, and no run ending will look at them again.
@@ -177,6 +182,7 @@ export class ThreadTriage {
         console.warn("Could not settle a thread settled while running:", e),
       );
   }
+
   /** Something runs in the thread now, or is about to go on by itself. */
   private going(chat: ProjectChat) {
     return (
@@ -187,6 +193,7 @@ export class ThreadTriage {
       !!nextSend(chat.scheduled)
     );
   }
+
   /** Your own message to a thread settled while it ran brings it back. */
   async sent(id: string) {
     const chat = await this.core.storage.load(id);
@@ -195,6 +202,7 @@ export class ThreadTriage {
     delete chat.settledAt;
     await this.core.storage.save(chat);
   }
+
   /**
    * Removes the worktree of a thread still archived since `at`, if all of it
    * landed, or anyway when `asked`; then its branch stays.
@@ -206,6 +214,7 @@ export class ThreadTriage {
     else await this.worktrees.dropLanded(chat, at);
     await this.core.storage.save(chat);
   }
+
   /** The threads `id`'s agent started, still listed. */
   private async started(id: string) {
     const ids = (this.core.store.get().chats ?? [])
@@ -213,6 +222,7 @@ export class ThreadTriage {
       .map((c) => c.id);
     return Promise.all(ids.map((c) => this.core.storage.load(c)));
   }
+
   /**
    * Settling a thread settles the threads its agent started that are done
    * too, at the same moment, so undo finds them. One still working, asking
@@ -227,6 +237,7 @@ export class ThreadTriage {
       await this.core.storage.save(child);
     }
   }
+
   /**
    * Makes a started thread its own: its lead's tools no longer reach it and
    * settling the lead leaves it be. Not while the lead works, since a
@@ -245,6 +256,7 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }
+
   /** Lets this thread's agent drive any thread without asking, or takes that back. */
   async allowDriving(id: string, on: boolean) {
     const chat = await this.core.storage.load(id);
@@ -254,6 +266,7 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }
+
   /** Only moves forward, so a device that read less can't mark a thread unread again. */
   async markSeen(id: string, seenAt: number) {
     const chat = await this.core.storage.load(id);
@@ -266,6 +279,7 @@ export class ThreadTriage {
     // Its agent asked to settle it once read.
     if (chat.settleWhenDone && chat.settledAt == null) await this.ended(id);
   }
+
   /** Runs `provider` on another account here, from the thread's next turn. */
   async setAccount(id: string, provider: AccountProvider, account: string) {
     if (accountFor(provider, account) !== account)
@@ -275,6 +289,7 @@ export class ThreadTriage {
     await this.core.storage.save(chat);
     return chatSummary(chat);
   }
+
   /** Project and thread link scopes commit together in the state file. */
   async promoteLink(id: string, path: string) {
     const chat = await this.core.storage.load(id);
@@ -304,6 +319,7 @@ export class ThreadTriage {
       chat: chatSummary(chat),
     };
   }
+
   /** Thread links live in the state file, alongside project links, rather than a second write. */
   async setLinks(id: string, links: LinkedFolder[]) {
     const chat = await this.core.storage.load(id);

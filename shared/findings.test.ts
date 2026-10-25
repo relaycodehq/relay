@@ -21,6 +21,7 @@ describe("findings block", () => {
       { title: "Nit", reason: "Style only", reviewers: [] },
     ]);
   });
+
   it("reads a block whose finding quotes a code fence", () => {
     const { body, report } = extractFindings(
       'See `F1`.\n\n```relay-findings\n{"findings":[{"id":"F1","priority":"P2","title":"Stops at the ``` in a string"}]}\n```',
@@ -30,6 +31,7 @@ describe("findings block", () => {
     ]);
     expect(body).toBe("See `F1`.");
   });
+
   it("keeps an answer whose block isn't a report as it was", () => {
     for (const body of [
       "No findings block here.",
@@ -38,6 +40,7 @@ describe("findings block", () => {
     ])
       expect(extractFindings(body)).toEqual({ body });
   });
+
   it("only takes a block that ends the answer", () => {
     const block = `\`\`\`relay-findings\n${JSON.stringify({ findings: [{ id: "F1", priority: "P2", title: "Short title" }] })}\n\`\`\``;
     expect(extractFindings(`Done.\n\n${block}\n\n`).report).toBeDefined();
@@ -55,6 +58,7 @@ describe("findings block", () => {
     ])
       expect(extractFindings(body)).toEqual({ body });
   });
+
   it("writes a fix request the lead can read", () => {
     expect(
       fixRequest(

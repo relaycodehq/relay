@@ -42,6 +42,7 @@ function stillLast(chat: ProjectChat, message: ChatMessage) {
  */
 export class LimitResumes {
   private timers = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private core: ChatCore,
     private host: LimitResumeHost,

@@ -24,10 +24,12 @@ async function readJson(path: string): Promise<Record<string, unknown> | null> {
     return null;
   }
 }
+
 const text = (record: unknown, key: string) => {
   const value = (record as Record<string, unknown> | null)?.[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 };
+
 const capital = (value: string) => value[0]!.toUpperCase() + value.slice(1);
 
 /** Claude Code's `oauthAccount`: organizationType reads claude_max, claude_pro… */

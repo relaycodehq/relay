@@ -24,6 +24,7 @@ const feedSchema = z.object({
   notes: z.string().max(4000).optional(),
   headless: updateFileSchema.optional(),
 });
+
 type Feed = z.infer<typeof feedSchema>;
 
 /**
@@ -52,6 +53,7 @@ export class HeadlessUpdater {
   private checking?: Promise<UpdateState>;
   private downloading?: Promise<UpdateState>;
   private installing?: Promise<UpdateState>;
+
   constructor(
     private root: string | null,
     private current: string,

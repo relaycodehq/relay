@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { WatchSpendLog } from "./watch-spend";
+
 const spend = {
   kind: "check" as const,
   about: "main" as const,
@@ -11,11 +12,15 @@ const spend = {
   usd: 0.1,
   noted: true,
 };
+
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-watch-spend-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
+
 it.each([false, true])(
   "keeps new checks whole after a missing newline (torn: %s), through reload",
   async (torn) => {
@@ -34,6 +39,7 @@ it.each([false, true])(
     ).toBe(3);
   },
 );
+
 it("retains thirty days on startup without racing queued appends", async () => {
   const path = join(dir, "spend");
   await writeFile(

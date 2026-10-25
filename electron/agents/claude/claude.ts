@@ -13,6 +13,7 @@ import { runAccount } from "../accounts";
 import { RequestUsage } from "./request-usage";
 import { exitedError, stderrTail } from "../errors";
 import { LineBuffer } from "../../util/line-buffer";
+
 export async function runClaude(options: ClaudeRunOptions): Promise<string> {
   const { job } = options;
   // Only one-off jobs run as a bare `--print`; the rest are a thread's session.

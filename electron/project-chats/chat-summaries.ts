@@ -11,15 +11,18 @@ export class ChatSummaryFeed {
   private timer?: ReturnType<typeof setTimeout>;
   /** What each project's list last went out as. */
   private sent = new Map<string, string>();
+
   constructor(
     private list: (projectId: string) => ChatSummary[],
     private send: (event: ProjectChatsEvent) => void,
     private delayMs = 50,
   ) {}
+
   changed(projectId: string) {
     this.due.add(projectId);
     this.timer ??= setTimeout(() => this.flush(), this.delayMs);
   }
+
   flush() {
     clearTimeout(this.timer);
     this.timer = undefined;
@@ -38,6 +41,7 @@ export class ChatSummaryFeed {
       this.send({ projectId, chats });
     }
   }
+
   dispose() {
     clearTimeout(this.timer);
     this.timer = undefined;

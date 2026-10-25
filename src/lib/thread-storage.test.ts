@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const store = new Map<string, string>();
 let refuse: (key: string) => boolean = () => false;
+
 beforeEach(() => {
   store.clear();
   refuse = () => false;
@@ -19,6 +20,7 @@ beforeEach(() => {
     },
   });
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 // A fresh module each time: drafts move to records once a launch.
@@ -35,6 +37,7 @@ const oldKeys = () => {
   store.set("composer-settings:c1", '{"agent":"codex"}');
   store.set("theme", "dark");
 };
+
 const draftKeys = () =>
   [...store.keys()].filter((k) =>
     /^(chat-|skill-|quote-|file-|pasted-|relay-draft)/.test(k),

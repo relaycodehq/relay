@@ -24,6 +24,7 @@ vi.mock("../platform/executables");
 
 let root: string, store: Store, projects: Projects, chats: ProjectChats;
 let projectId: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-turn-races-")));
   const repo = join(root, "repo");
@@ -41,6 +42,7 @@ beforeEach(async () => {
   projectId = (await projects.add(repo, null)).id;
   chats = new ProjectChats(store, projects, join(root, "chats"), () => {});
 });
+
 afterEach(async () => {
   await chats?.dispose();
   vi.restoreAllMocks();

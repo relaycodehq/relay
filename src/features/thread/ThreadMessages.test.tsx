@@ -1,8 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
+
 vi.mock("../../lib/api", () => ({
   api: new Proxy({}, { get: () => async () => undefined }),
 }));
+
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -77,6 +79,7 @@ function thread(messages: ChatMessage[], lastInput?: ProjectChat["lastInput"]) {
 const noop = () => {};
 const rewind = async () => ({ conflicts: [] });
 const queryClient = new QueryClient();
+
 function view(
   messages: ChatMessage[],
   options: {
@@ -141,6 +144,7 @@ function view(
 }
 
 let root: Root | undefined;
+
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;

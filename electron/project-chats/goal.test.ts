@@ -23,6 +23,7 @@ const input = (body: string) => ({
     reasoningEffort: "" as const,
   },
 });
+
 const answered = (id: string) =>
   vi.waitFor(async () => {
     const chat = await chats.get(id);

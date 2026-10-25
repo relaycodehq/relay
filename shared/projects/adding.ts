@@ -57,6 +57,7 @@ export const newProjectSchema = z.object({
   github: z.boolean(),
   private: z.boolean(),
 });
+
 export type NewProject = z.infer<typeof newProjectSchema>;
 
 /** A clone URL from any host, or owner/repo for GitHub; null for anything else. */

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { JsonLines } from "./json-lines";
 const failures = vi.hoisted(() => ({ cutNextAppend: false }));
+
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   return {
@@ -18,11 +19,15 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     },
   };
 });
+
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-json-lines-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
+
 it.each(['{"id":2', '{"id":2}'])(
   "preserves a valid or torn final record and serializes concurrent appends: %s",
   async (last) => {
@@ -38,6 +43,7 @@ it.each(['{"id":2', '{"id":2}'])(
     ]);
   },
 );
+
 it("reloads the boundary after failure so a retry remains durable", async () => {
   const path = join(dir, "log");
   await writeFile(path, '{"id":1}');
@@ -51,6 +57,7 @@ it("reloads the boundary after failure so a retry remains durable", async () => 
   await log.append({ id: 2 });
   expect(await new JsonLines(path).read()).toEqual([{ id: 1 }, { id: 2 }]);
 });
+
 it("serializes retention before appending and preserves file on failed rewrite", async () => {
   const path = join(dir, "log");
   const log = new JsonLines<{ id: number }>(path);

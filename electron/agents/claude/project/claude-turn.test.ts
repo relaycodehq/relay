@@ -10,6 +10,7 @@ import type {
 } from "../../../../shared/agent-modes";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+
 vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
@@ -18,18 +19,21 @@ type Options = NonNullable<Parameters<typeof query>[0]["options"]>;
 type Sent = { uuid: string; message: { content: unknown }; priority?: string };
 
 const session_id = "session";
+
 const lifecycle = (command_uuid: string, state: string) => ({
   type: "command_lifecycle",
   command_uuid,
   state,
   session_id,
 });
+
 const assistant = (id: string, content: object[]) => ({
   type: "assistant",
   parent_tool_use_id: null,
   session_id,
   message: { id, content, usage: {} },
 });
+
 const says = (id: string, text: string) =>
   assistant(id, [{ type: "text", text }]);
 const toolResult = (id: string, content: string) => ({
@@ -41,12 +45,14 @@ const toolResult = (id: string, content: string) => ({
     content: [{ type: "tool_result", tool_use_id: id, content }],
   },
 });
+
 const event = (e: object) => ({
   type: "stream_event",
   parent_tool_use_id: null,
   session_id,
   event: e,
 });
+
 const result = (text: string) => ({
   type: "result",
   subtype: "success",

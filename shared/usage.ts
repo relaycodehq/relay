@@ -25,6 +25,7 @@ export const usageJobs = [
   "plugin",
   "helper",
 ] as const;
+
 export type UsageJob = (typeof usageJobs)[number];
 
 /** Relay's own jobs, by what the page calls them. */
@@ -183,6 +184,7 @@ export type UsageChat = {
 };
 
 const DAY = 24 * 60 * 60_000;
+
 const SPAN: Record<UsageRange, number | null> = {
   "7d": 7,
   "30d": 30,

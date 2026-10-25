@@ -28,6 +28,7 @@ export async function putUsage(
   });
   qc.setQueryData(usageKey(provider, account), usage);
 }
+
 export const usageOptions = (
   provider: UsageProvider,
   account = SYSTEM_ACCOUNT,
@@ -43,6 +44,7 @@ const polling = new WeakMap<
   QueryClient,
   Map<string, { users: number; stop: () => void }>
 >();
+
 function follow(qc: QueryClient, { provider, account }: UsageAccount) {
   let accounts = polling.get(qc);
   if (!accounts) polling.set(qc, (accounts = new Map()));

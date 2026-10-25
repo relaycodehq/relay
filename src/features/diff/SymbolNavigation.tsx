@@ -30,6 +30,7 @@ const inspect = (target: SymbolTarget, query: SymbolQuery) =>
 type Token = TokenEventBase | DiffTokenEventBaseProps;
 type Action = "definition" | "references";
 type Entry = { query: SymbolQuery; result: SymbolResult; id: number };
+
 const queryFor = (
   path: string,
   hash: string,
@@ -42,6 +43,7 @@ const queryFor = (
   column: token.lineCharStart + 1,
   kind,
 });
+
 const identifier = (token: Token) =>
   !("side" in token && token.side === "deletions") &&
   /[\p{L}_$]/u.test(token.tokenText);
@@ -351,6 +353,7 @@ function SymbolResults({
     </>
   );
 }
+
 function SymbolPreview({
   pull,
   location,

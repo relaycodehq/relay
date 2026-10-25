@@ -36,6 +36,7 @@ export function codexServers(response: unknown): AgentToolListing {
     note: "Resolved by Codex for this checkout. Plugin-provided servers and account connectors may be added when a session starts.",
   };
 }
+
 export async function inspectCodex(
   cwd: string,
   env?: Record<string, string>,

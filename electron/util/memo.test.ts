@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { memoByKey, memoOnce } from "./memo";
 
 beforeEach(() => vi.useFakeTimers());
+
 afterEach(() => vi.useRealTimers());
 
 describe("memoByKey", () => {

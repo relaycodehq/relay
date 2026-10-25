@@ -25,6 +25,7 @@ const fake = vi.hoisted(() => ({
   listening: new Map<number, number>(),
   listenLooks: [] as string[],
 }));
+
 vi.mock("../platform/processes", () => ({
   processTable: async ({ usage = false } = {}) => {
     fake.usage.push(usage);
@@ -34,13 +35,16 @@ vi.mock("../platform/processes", () => ({
     fill() {}
   },
 }));
+
 vi.mock("node:os", async (actual) => ({
   ...(await actual<typeof import("node:os")>()),
   cpus: () => Array.from({ length: 12 }, () => ({})),
 }));
+
 vi.mock("node:fs/promises", () => ({
   readlink: async () => fake.cwd,
 }));
+
 vi.mock("node:child_process", () => ({
   // `lsof`: every process asked about works in the project.
   execFile: (
@@ -69,6 +73,7 @@ describe("shellCommand", () => {
     const line = `/bin/zsh -c source /Users/me/.claude/shell-snapshots/snapshot-zsh-1.sh 2>/dev/null || true && setopt NO_EXTENDED_GLOB 2>/dev/null || true && eval 'npm run dev -- --port 5173 && echo '"'"'ok'"'"'' < /dev/null && pwd -P >| /tmp/claude-dd41-cwd`;
     expect(shellCommand(line)).toBe("npm run dev -- --port 5173 && echo 'ok'");
   });
+
   it("reads Codex's login shell, sandboxed or not", () => {
     expect(shellCommand("/bin/zsh -lc npm run dev")).toBe("npm run dev");
     expect(
@@ -77,6 +82,7 @@ describe("shellCommand", () => {
       ),
     ).toBe("pnpm test --watch");
   });
+
   it("ignores processes that aren't shell commands", () => {
     expect(shellCommand("/opt/homebrew/bin/rg --files")).toBeUndefined();
     expect(shellCommand("/bin/zsh -l")).toBeUndefined();
@@ -90,6 +96,7 @@ describe("Windows command lines", () => {
     ).toEqual([String.raw`C:\Program Files\Git\bin\bash.exe`, "-c", String.raw`echo "hi" a\\b`]);
     expect(windowsArgs(String.raw`a "b c"d  e\\"f g"`)).toEqual(["a", "b cd", String.raw`e\f g`]);
   });
+
   it("reads what Git Bash, PowerShell and cmd run", () => {
     expect(
       shellCommand(
@@ -106,6 +113,7 @@ describe("Windows command lines", () => {
     );
     expect(shellCommand(String.raw`"C:\Program Files\nodejs\node.exe" server.js`)).toBeUndefined();
   });
+
   it("shortens their executables", () => {
     expect(
       tidyCommand(
@@ -113,6 +121,7 @@ describe("Windows command lines", () => {
       ),
     ).toBe("node vite --port 5173");
   });
+
   it("finds listening ports in netstat's table, whatever the state is called", () => {
     const out = [
       "  Proto  Local Address          Foreign Address        State           PID",

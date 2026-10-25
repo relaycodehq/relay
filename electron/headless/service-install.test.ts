@@ -8,10 +8,12 @@ const mock = vi.hoisted(() => ({
   commands: [] as string[][],
   failRestart: false,
 }));
+
 vi.mock("node:os", async (original) => ({
   ...(await original<typeof import("node:os")>()),
   homedir: () => mock.home,
 }));
+
 vi.mock("node:child_process", async (original) => ({
   ...(await original<typeof import("node:child_process")>()),
   execFile: (
@@ -29,9 +31,11 @@ vi.mock("node:child_process", async (original) => ({
     );
   },
 }));
+
 import { installService, serviceFile, systemdService } from "./service";
 
 const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+
 afterEach(async () => {
   Object.defineProperty(process, "platform", platform);
   if (mock.home) await rm(mock.home, { recursive: true, force: true });

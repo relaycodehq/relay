@@ -13,6 +13,7 @@ const wrapped = (url: string) => `relay://open?url=${encodeURIComponent(url)}`;
 
 const githubClient = { name: "github" };
 const azureClient = { name: "azure" };
+
 const giteaClient = {
   name: "gitea",
   account: { id: "gitea-account", server: giteaServer },
@@ -21,14 +22,17 @@ const giteaClient = {
 
 let settings: SourceControlSettings | undefined;
 let gitea: { client: typeof giteaClient | null; require(): typeof giteaClient };
+
 let github: {
   require: ReturnType<typeof vi.fn>;
   account: ReturnType<typeof vi.fn>;
 };
+
 let azure: {
   require: ReturnType<typeof vi.fn>;
   account: ReturnType<typeof vi.fn>;
 };
+
 let hosts: PullHosts;
 
 beforeEach(() => {

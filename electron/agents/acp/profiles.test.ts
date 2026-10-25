@@ -9,6 +9,7 @@ afterEach(() => vi.unstubAllEnvs());
 describe("Antigravity's sign-in on disk", () => {
   const antigravity = () => acpProfiles.antigravity.account!();
   let own: string;
+
   beforeEach(async () => {
     const home = await mkdtemp(join(tmpdir(), "relay-antigravity-"));
     own = join(home, "antigravity-acp");

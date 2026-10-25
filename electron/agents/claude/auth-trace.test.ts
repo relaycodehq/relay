@@ -11,10 +11,12 @@ const ACCESS = "sk-ant-oat01-" + "a".repeat(90);
 const REFRESH = "sk-ant-ort01-" + "b".repeat(90);
 
 let dir: string | undefined;
+
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
   dir = undefined;
 });
+
 async function home(contents: string) {
   dir = await mkdtemp(join(tmpdir(), "relay-auth-trace-"));
   await writeFile(join(dir, ".credentials.json"), contents);

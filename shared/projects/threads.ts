@@ -33,10 +33,12 @@ export const chatScopeSchema = z.discriminatedUnion("kind", [
   // What a deep review covers is fixed when it starts; see `reviews`.
   z.object({ kind: z.literal("review") }).strict(),
 ]);
+
 export type ChatScope = z.infer<typeof chatScopeSchema>;
 /** Where a new thread works: the project's own checkout, or a worktree of its own. */
 export const chatWorkspaceSchema = z.enum(["checkout", "worktree"]);
 export type ChatWorkspace = z.infer<typeof chatWorkspaceSchema>;
+
 export interface ChatSummary {
   id: string;
   projectId: string;
@@ -157,6 +159,7 @@ export interface ChatSummary {
   /** Work Claude left running that will start its next turn by itself. */
   pending?: ChatPending[];
 }
+
 export interface StartedBy {
   chatId: string;
   /** The agent that started it. */
@@ -164,6 +167,7 @@ export interface StartedBy {
   /** The user let the lead message it, in another project than the lead's. Saved before drivesThreads; still honoured. */
   sendsApproved?: true;
 }
+
 export interface HeldWakeup {
   id: string;
   prompt: string;
@@ -171,6 +175,7 @@ export interface HeldWakeup {
   /** The reply thread whose Claude session scheduled it. */
   parentId?: string;
 }
+
 export interface LimitResume {
   messageId: string;
   provider: AgentProvider;
@@ -179,6 +184,7 @@ export interface LimitResume {
   /** Turned off for this answer; the thread still offers to turn it back on. */
   off?: true;
 }
+
 /** `parentId` is the side conversation whose Claude session ran it. */
 export type StoppedWork = ChatPending & { parentId?: string };
 export type ChatPending =
@@ -211,6 +217,7 @@ export const chatTriageStateSchema = z
   })
   .strict();
 export type ChatTriageState = z.infer<typeof chatTriageStateSchema>;
+
 export const chatTriageSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("settle") }).strict(),
   z.object({ kind: z.literal("settle-when-done") }).strict(),
@@ -242,4 +249,5 @@ export const chatTriageSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
 export type ChatTriage = z.infer<typeof chatTriageSchema>;

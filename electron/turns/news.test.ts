@@ -19,14 +19,17 @@ const chat = (more: Partial<ChatSummary> = {}) =>
 let queued = false;
 let waiting = false;
 let news: TurnNews | undefined;
+
 afterEach(() => {
   news?.dispose();
   queued = false;
   waiting = false;
   vi.restoreAllMocks();
 });
+
 /** The thread's file as it was just saved. */
 const saved = { id: "t1" } as ProjectChat;
+
 function setup() {
   const ledger = new TurnLedger(new MemoryTurnStore());
   news = new TurnNews(ledger, {

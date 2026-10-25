@@ -3,10 +3,12 @@ import type { TerminalSession } from "../../../shared/terminal-sessions";
 import { matchingSessions, sessionDetail } from "./rows";
 
 const NOW = Date.parse("2026-10-06T12:00:00Z");
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
+
 afterEach(() => vi.useRealTimers());
 
 const session = (over: Partial<TerminalSession> = {}): TerminalSession => ({

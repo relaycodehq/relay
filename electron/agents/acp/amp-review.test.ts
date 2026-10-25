@@ -32,6 +32,7 @@ const reads = [
   "find . -type f -mtime -1 -size +10k -print",
   "tree -L 2 -I node_modules",
 ];
+
 /** Flags the shell hands the command in a form a look at the words misses. */
 const disguised = [
   "git diff '--output=x'",
@@ -54,6 +55,7 @@ const disguised = [
   "tree -ao f",
   "rg '--pre=sh' x",
 ];
+
 const writes = [
   "touch marker.txt",
   "git checkout -- src",

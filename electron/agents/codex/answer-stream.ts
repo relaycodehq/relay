@@ -12,6 +12,7 @@ interface AnswerParams {
     text?: string | null;
   };
 }
+
 /** A turn shows commentary, work and the terminal answer separately.
  * Codex message phases are optional, so an unphased last message is provisional
  * until the next message or turn completion establishes the terminal message. */
@@ -22,10 +23,12 @@ export class CodexAnswerStream {
   >();
   private visibleCommentary = new Map<string, string>();
   answer = "";
+
   constructor(
     private onText: (text: string) => void,
     private onCommentary: (id: string, text: string | null) => void,
   ) {}
+
   update(method: string, params: AnswerParams) {
     if (
       method !== "item/started" &&
@@ -67,12 +70,14 @@ export class CodexAnswerStream {
       this.visibleCommentary.delete(finished);
     }
   }
+
   /** A steer was read: what follows is a new answer, below it. */
   restart() {
     this.messages.clear();
     this.visibleCommentary.clear();
     this.answer = "";
   }
+
   /**
    * Codex went on with a goal in a turn of its own: what the last turn
    * answered stays above as a note, and is forgotten like a finished one.
@@ -87,6 +92,7 @@ export class CodexAnswerStream {
     if (this.answer) this.onText("");
     this.answer = "";
   }
+
   private publish() {
     const entries = [...this.messages.entries()];
     const final =

@@ -207,6 +207,7 @@ export class ThreadTerminal {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);
   };
+
   snapshot = () => this.version;
 
   private output(data: string) {

@@ -43,6 +43,7 @@ const command = [
       `${gitPrefix}${escape(sub)}(?:\\s+${oneOf(flags)}${ends})${gitBareWrites.has(sub) ? "+" : "*"}\\s*`,
   ),
 ].join("|");
+
 const segment = `\\s*(?:${command})\\s*`;
 
 /**
@@ -81,6 +82,7 @@ const readingTools = [
   "shell_command_status",
   "shell_command_kill",
 ];
+
 const refusal =
   "This review only reads the code. Change no files, and run only commands that read, like git diff, git log, rg or cat with no redirects.";
 

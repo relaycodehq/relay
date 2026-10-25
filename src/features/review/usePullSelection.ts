@@ -78,4 +78,5 @@ export function usePullSelection(
     navigation,
   };
 }
+
 export type PullSelection = ReturnType<typeof usePullSelection>;

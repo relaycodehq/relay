@@ -107,6 +107,7 @@ function listed(s: Schedule, name: (id: string) => string | undefined) {
 
 export class ThreadSchedules {
   private projectName: (id: string) => string | undefined;
+
   constructor(private schedules: ScheduleTools) {
     this.projectName = (id) => schedules.projectName(id);
   }

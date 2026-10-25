@@ -20,10 +20,12 @@ let app: ElectronApplication,
   repo: string,
   head: string;
 const path = "src/hooks/useReview.ts";
+
 test.describe.configure({ mode: "serial" });
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
 const git = (...args: string[]) =>
   execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
+
 test.beforeAll(async () => {
   fixture = await fixtureServer();
   repo = await mkdtemp(join(tmpdir(), "relay-editor-repo-"));
@@ -65,6 +67,7 @@ test.beforeAll(async () => {
   await openPull(page, /Make pull request reviews/);
   await expect(page.locator("diffs-container")).toBeVisible();
 });
+
 test.afterAll(async () => {
   await app
     ?.evaluate(({ dialog }) => {

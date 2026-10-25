@@ -19,11 +19,13 @@ export interface AzIdentity {
   uniqueName?: string;
   isContainer?: boolean;
 }
+
 export interface AzReviewer extends AzIdentity {
   /** 10 approved, 5 with suggestions, 0 none, -5 waiting for author, -10 rejected. */
   vote: number;
   hasDeclined?: boolean;
 }
+
 interface AzRepository {
   id: string;
   name: string;
@@ -32,6 +34,7 @@ interface AzRepository {
   sshUrl?: string;
   defaultBranch?: string;
 }
+
 export interface AzPull {
   pullRequestId: number;
   status: "active" | "abandoned" | "completed" | "notSet";
@@ -50,6 +53,7 @@ export interface AzPull {
   repository: AzRepository;
   forkSource?: { repository?: AzRepository };
 }
+
 /** One push to the PR's branch, with where it and its target stood. */
 export interface AzIteration {
   id: number;
@@ -59,22 +63,26 @@ export interface AzIteration {
   targetRefCommit: { commitId: string };
   commonRefCommit?: { commitId: string };
 }
+
 export interface AzChange {
   changeTrackingId?: number;
   changeType: string;
   originalPath?: string;
   item?: { path?: string; isFolder?: boolean; gitObjectType?: string };
 }
+
 export interface AzLineBlock {
   /** `add`, `delete` or `edit`; the numeric enum (1, 2, 3) in some responses. */
   changeType: string | number;
   originalLinesCount: number;
   modifiedLinesCount: number;
 }
+
 interface AzPosition {
   line: number;
   offset: number;
 }
+
 export interface AzComment {
   id: number;
   parentCommentId: number;
@@ -84,6 +92,7 @@ export interface AzComment {
   publishedDate: string;
   isDeleted?: boolean;
 }
+
 export interface AzThread {
   id: number;
   status?: string;
@@ -112,6 +121,7 @@ export function userId(guid: string) {
   }
   return (hash >>> 1) + 1;
 }
+
 export const asUser = (who: AzIdentity) => ({
   id: userId(who.id),
   login: who.uniqueName || who.displayName || "",
@@ -126,6 +136,7 @@ export const commentOf = (id: number) => ({
   thread: Math.floor(id / PER_THREAD),
   comment: id % PER_THREAD,
 });
+
 /** Above every thread id, so a vote's review never reads as a thread's. */
 const voteId = (who: AzIdentity) => 2 ** 40 + userId(who.id);
 

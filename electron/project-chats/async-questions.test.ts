@@ -74,6 +74,7 @@ function fixture() {
     send,
   };
 }
+
 const answer = {
   kind: "question" as const,
   answers: { "0": ["Private"], "1": ["Owner"] },

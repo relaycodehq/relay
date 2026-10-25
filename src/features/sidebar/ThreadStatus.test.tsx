@@ -15,6 +15,7 @@ const thread: ChatSummary = {
   waiting: true,
   asking: true,
 };
+
 it("keeps the working spinner and the input notice together for async questions", () => {
   const mark = renderToStaticMarkup(
     <StatusMark chat={thread} unread={false} now={2} />,

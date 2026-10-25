@@ -18,7 +18,9 @@ const mac: FolderRules = {
   platform: "darwin",
   projects: [{ id: "relay", name: "relay", path: "/Users/ana/code/relay" }],
 };
+
 const verdict = (path: string, rules = mac) => folderVerdict(path, rules);
+
 const refused = (path: string, rules = mac) => {
   const v = verdict(path, rules);
   return v.kind === "refused" ? v.reason : undefined;
@@ -185,6 +187,7 @@ test("Windows refuses drive roots and its system trees, ignoring case", () => {
 });
 
 const made: string[] = [];
+
 afterEach(async () => {
   for (const f of made.splice(0)) await rm(f, { recursive: true });
 });

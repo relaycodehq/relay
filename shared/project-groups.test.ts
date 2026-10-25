@@ -17,6 +17,7 @@ describe("rebaseGroup", () => {
     expect(rebaseGroup("Work/Frontend", "Work", "Job")).toBe("Job/Frontend");
     expect(rebaseGroup("Workshop", "Work", "Job")).toBe("Workshop");
   });
+
   it("ungroups into the parent", () => {
     expect(rebaseGroup("Work", "Work", "")).toBe("");
     expect(rebaseGroup("Work/Frontend", "Work", "")).toBe("Frontend");
@@ -38,6 +39,7 @@ describe("projectFolderTree", () => {
 
 describe("group order", () => {
   const list = ["Home", "Home/Side", "Work", "Work/Web", "Work/Api", "Zoo"];
+
   it("moves a group with everything inside it", () => {
     expect(moveGroupInList(list, "Work", "Home")).toEqual([
       "Work",
@@ -56,6 +58,7 @@ describe("group order", () => {
       "Home/Side",
     ]);
   });
+
   it("keeps a subgroup last inside its parent without a sibling to precede", () => {
     expect(moveGroupInList(list, "Work/Web", null)).toEqual([
       "Home",
@@ -66,14 +69,17 @@ describe("group order", () => {
       "Zoo",
     ]);
   });
+
   it("refuses to move a group out of its parent", () => {
     expect(moveGroupInList(list, "Work/Web", "Home")).toBe(list);
   });
+
   it("places groups the way the list orders them", () => {
     const tree = projectFolderTree([], ["Zoo", "Work/Web", "Home", "Work/Api"]);
     expect(tree.folders.map((f) => f.path)).toEqual(["Zoo", "Work", "Home"]);
     expect(tree.folders[1].folders.map((f) => f.name)).toEqual(["Web", "Api"]);
   });
+
   it("sorts never-dragged groups by name at every level", () => {
     const sorted = sortGroupPaths(["Work b", "Work/Web", "Work/Api", "Home"]);
     const tree = projectFolderTree([], sorted);
@@ -89,6 +95,7 @@ describe("dropping", () => {
     { id: "c" },
     { id: "d", folder: "Work" },
   ];
+
   it("puts a project dropped after another before that one's next groupmate", () => {
     expect(
       projectPlacement(projects, "c", {
@@ -112,6 +119,7 @@ describe("dropping", () => {
       }),
     ).toEqual({ folder: "", before: "c" });
   });
+
   it("skips itself when finding the next groupmate", () => {
     expect(
       projectPlacement(projects, "d", {
@@ -121,6 +129,7 @@ describe("dropping", () => {
       }),
     ).toEqual({ folder: "Work", before: null });
   });
+
   it("puts a project dropped on a group last in it, and ignores unlisted neighbours", () => {
     expect(
       projectPlacement(projects, "a", { kind: "folder", path: "Work" }),
@@ -133,6 +142,7 @@ describe("dropping", () => {
       }),
     ).toBeUndefined();
   });
+
   it("puts a group dropped after a sibling before the next sibling, past its own subgroups", () => {
     const paths = groupPaths(
       projectFolderTree([], ["Home", "Home/Side", "Work", "Work/Web", "Zoo"]),

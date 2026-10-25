@@ -60,6 +60,7 @@ function markdownNodeText(node: unknown): string {
     ? value.children.map(markdownNodeText).join("")
     : "";
 }
+
 /** The fence language of a `pre` node, from its `language-*` code class. */
 function markdownCodeLanguage(node: unknown): string | undefined {
   const code = (node as { children?: unknown[] } | undefined)?.children?.[0] as
@@ -70,8 +71,10 @@ function markdownCodeLanguage(node: unknown): string | undefined {
     .find((name) => name.startsWith("language-"));
   return match?.slice("language-".length).toLowerCase() || undefined;
 }
+
 /** What the block being rendered was parsed from, for its fences to check. */
 const MarkdownSource = createContext("");
+
 /** The markdown `node` was parsed from, cut out of the block's source. */
 function nodeSource(source: string, node?: { position?: Position }) {
   const start = node?.position?.start.offset,
@@ -80,6 +83,7 @@ function nodeSource(source: string, node?: { position?: Position }) {
     ? ""
     : source.slice(start, end);
 }
+
 /** The pin that keeps `node`'s markdown in the thread's notes. */
 function KeepNode({
   node,
@@ -93,10 +97,12 @@ function KeepNode({
     <KeepBlockButton source={nodeSource(source, node)} className={className} />
   );
 }
+
 type ListProps = HTMLAttributes<HTMLElement> & {
   start?: number;
   node?: { position?: Position };
 };
+
 /**
  * A list, with a pin to keep it when it stands at the top level of a thread
  * that keeps notes; its frame takes over the list's margins.
@@ -131,13 +137,16 @@ function MarkdownList({
     </div>
   );
 }
+
 /** How deep the list being rendered is nested, for its bullet. */
 const ListDepth = createContext(0);
 const BULLETS = ["•", "◦", "▪"];
+
 type ItemProps = HTMLAttributes<HTMLLIElement> & {
   node?: unknown;
   marker?: string;
 };
+
 /**
  * A list item whose bullet or number is text, not a `::marker`, so a
  * selection takes it along. aria-hidden keeps it out of what Keep writes,
@@ -175,6 +184,7 @@ function MarkdownItem({ node: _node, marker, children, ...props }: ItemProps) {
     </li>
   );
 }
+
 function MarkdownFence({ node }: { node?: { position?: Position } }) {
   const source = useContext(MarkdownSource);
   const lang = markdownCodeLanguage(node);
@@ -195,6 +205,7 @@ function MarkdownFence({ node }: { node?: { position?: Position } }) {
     />
   );
 }
+
 // Quotes carry a copy button so the quoted text can be lifted without the reply around it.
 function MarkdownQuote({ children }: { children?: ReactNode }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -217,6 +228,7 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
     </blockquote>
   );
 }
+
 // The default drops data: and file: URLs; an image may use either, a link may not.
 const urlTransform: UrlTransform = (url, key, node) =>
   key === "src" &&
@@ -226,6 +238,7 @@ const urlTransform: UrlTransform = (url, key, node) =>
     : defaultUrlTransform(url);
 // GitHub's allowlist, so a README's HTML can't restyle or script the app.
 const htmlPlugins = [rehypeRaw, rehypeSanitize];
+
 /**
  * What someone typed reads as typed: of the block syntax only fences and
  * quotes (the composer's quote pill sends one) are kept, and of the inline
@@ -256,6 +269,7 @@ const typedSyntax: Plugin<[], Root> = function () {
     },
   });
 };
+
 const typedFence =
   /((?<![^\n])[ \t]{0,3}```[\s\S]*?(?:\n[ \t]{0,3}```[^\n]*|$))/;
 /** The parser drops the spaces a line starts with; no-break ones survive it. */
@@ -307,6 +321,7 @@ const MarkdownBlock = memo(function MarkdownBlock({
     </MarkdownSource.Provider>
   );
 });
+
 export const RichText = memo(function RichText({
   text,
   projectRoot,

@@ -25,6 +25,7 @@ export class TurnRecovery {
     private councils: Councils,
     private ends: TurnEndings,
   ) {}
+
   /**
    * The agent (Claude, OpenCode) started a turn itself, e.g. when a
    * background command it launched finished. It gets its own answer;
@@ -76,6 +77,7 @@ export class TurnRecovery {
       else this.ends.rider(chat, active);
     }
   }
+
   /**
    * Takes back the agent sessions that kept running while Relay restarted.
    * A turn one was in carries on in the answer it was writing.
@@ -123,6 +125,7 @@ export class TurnRecovery {
       () => {},
     );
   }
+
   private async unpromptedFor(key: string) {
     const { chatId, branch } = parseSessionKey(key);
     const chat = await this.core.storage.load(chatId);
@@ -133,6 +136,7 @@ export class TurnRecovery {
       branch,
     );
   }
+
   /** Shows the rest of a turn a restart cut off, in the answer it was writing. */
   private async resumeTurn(key: string, provider: AgentProvider) {
     const { chatId, branch } = parseSessionKey(key);

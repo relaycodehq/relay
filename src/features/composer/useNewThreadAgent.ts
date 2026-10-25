@@ -4,6 +4,7 @@ import type { AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 
 const key = ["new-thread-agent"];
+
 export const newThreadAgentQuery = {
   queryKey: key,
   queryFn: () => api.newThreadAgent(),

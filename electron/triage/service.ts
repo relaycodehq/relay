@@ -32,12 +32,14 @@ import {
 } from "./checkpoint";
 
 const freshUsage = () => ({ inputTokens: 0, outputTokens: 0, batches: 0 });
+
 const defaults = {
   inputTokens: 700_000,
   batches: 40,
   evidenceChars: 2_000_000,
   retries: 1,
 };
+
 class RevisionChanged extends Error {}
 
 export class TriageService {
@@ -46,9 +48,11 @@ export class TriageService {
     state: TriageState;
     controller: AbortController;
   };
+
   private last?: { key: string; state: TriageState };
   private starting = false;
   private limits: typeof defaults;
+
   constructor(
     private store: Store,
     private dataDir: string,
@@ -57,9 +61,11 @@ export class TriageService {
   ) {
     this.limits = { ...defaults, ...limits };
   }
+
   cancel() {
     this.active?.controller.abort();
   }
+
   async state(key: string, revision: string): Promise<TriageState | null> {
     const live =
       this.active?.key === key
@@ -71,6 +77,7 @@ export class TriageService {
     const saved = await readAnalysis(this.dataDir, key, revision);
     return saved ? restoreState(saved) : null;
   }
+
   async start(
     client: PullHost,
     ref: PullRef,
@@ -127,6 +134,7 @@ export class TriageService {
       this.starting = false;
     }
   }
+
   async protectedPaths(
     client: PullHost,
     ref: PullRef,
@@ -160,6 +168,7 @@ export class TriageService {
     }
     return protectedPaths;
   }
+
   async groupPaths(
     client: PullHost,
     ref: PullRef,
@@ -192,6 +201,7 @@ export class TriageService {
       );
     return paths;
   }
+
   private async run(
     client: PullHost,
     ref: PullRef,
@@ -465,6 +475,7 @@ export class TriageService {
       }
     }
   }
+
   private result(
     files: ChangedFile[],
     c: Checkpoint,

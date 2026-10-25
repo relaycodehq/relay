@@ -8,6 +8,7 @@ const computerUse = {
   mode: "form" as const,
   requestedSchema: { type: "object", properties: {} },
 };
+
 const signal = new AbortController().signal;
 
 function callbacks(answer: string, options: Partial<ClaudeRunOptions> = {}) {

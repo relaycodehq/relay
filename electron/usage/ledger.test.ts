@@ -22,9 +22,11 @@ const entry = (at: number): UsageEntry => ({
 
 describe("UsageLedger", () => {
   let dir: string;
+
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), "relay-usage-"));
   });
+
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
   it("reads back what it wrote, across a restart", async () => {

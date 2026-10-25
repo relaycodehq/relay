@@ -7,6 +7,7 @@ import { setLinkedAgents } from "../../platform/executables";
 import { openCodeCommand } from "./command";
 
 const roots: string[] = [];
+
 afterEach(async () => {
   setLinkedAgents({});
   await Promise.all(

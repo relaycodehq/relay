@@ -6,6 +6,7 @@ import {
 } from "../../../shared/source-control";
 
 const command = (text: string) => <code className="cli-command">{text}</code>;
+
 const signIns: Partial<Record<SourceControlKind, ReactNode>> = {
   github: (
     <>

@@ -18,6 +18,7 @@ import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 beforeEach(async () => {
   root = await tempRepo("relay-turn-");
   await writeFile(join(root, ".gitignore"), "build/\n");
@@ -26,6 +27,7 @@ beforeEach(async () => {
   git("add", ".");
   git("commit", "-qm", "Initial");
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
@@ -208,6 +210,7 @@ async function agentTurn() {
   await finishTurn(root, id, before!);
   return id;
 }
+
 const read = (path: string) =>
   readFile(join(root, path), "utf8").catch(() => null);
 

@@ -93,6 +93,7 @@ interface Request {
   method: string;
   params: unknown[];
 }
+
 type Response =
   | { id: number; ok: true; value: unknown }
   | { id: number; ok: false; error: string };

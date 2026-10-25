@@ -27,6 +27,7 @@ import {
 } from "./working-tree";
 
 type Kind = Exclude<GitAction["kind"], "fetch">;
+
 interface Act<K extends Kind> {
   root: string;
   action: Extract<GitAction, { kind: K }>;
@@ -301,6 +302,7 @@ function withPreviousPaths(
     ),
   ];
 }
+
 /**
  * Hands a copy of each file on disk to `trash`, so a discard can be undone;
  * discarding staged changes also hands over a staged version that differs
@@ -342,6 +344,7 @@ async function keepCopies(
     );
   }
 }
+
 /** A pattern matching just this path from the repository root. */
 function ignorePattern(path: string) {
   return "/" + path.replace(/[\\*?[]/g, "\\$&").replace(/ $/, "\\ ");

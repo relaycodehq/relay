@@ -7,15 +7,18 @@ import {
 } from "../../shared/remote-batches";
 
 const receivers: MessageBatches[] = [];
+
 afterEach(() => {
   for (const receiver of receivers.splice(0)) receiver.close();
   vi.useRealTimers();
 });
+
 const receiver = () => {
   const result = new MessageBatches();
   receivers.push(result);
   return result;
 };
+
 const first = (batch = 1): MessageBatchFrame => ({
   t: "batch",
   id: 2,
@@ -24,6 +27,7 @@ const first = (batch = 1): MessageBatchFrame => ({
   data: Buffer.alloc(messageBatchBytes, 32).toString("base64url"),
   last: false,
 });
+
 const last = (
   batch = 1,
   method = "desktop",

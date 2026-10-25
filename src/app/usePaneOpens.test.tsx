@@ -16,7 +16,9 @@ vi.mock("../lib/api", () => ({
     revealProjectPath: vi.fn(),
   },
 }));
+
 afterEach(() => vi.clearAllMocks());
+
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (error: unknown) => void;
   const promise = new Promise<T>((ok, fail) => {
@@ -25,6 +27,7 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
+
 const file = (path: string): FileTarget => ({ path, directory: false });
 const tree = (paths: string[]) =>
   ({ changes: paths.map((path) => ({ path })) }) as Awaited<

@@ -20,6 +20,7 @@ const signedOutCodes = [
   16000, 16001, 50020, 50034, 50058, 50076, 50078, 50079, 50132, 50133, 50173,
   65001, 70043, 500133, 700082, 700084,
 ];
+
 /** How `az` says its login is missing or has lapsed; anything else isn't a sign-out. */
 const signedOutWords =
   /az login|interaction_required|invalid_grant|refresh token|MSAL token cache|not logged in|no subscriptions? found/i;

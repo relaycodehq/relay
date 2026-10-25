@@ -13,6 +13,7 @@ import {
   type ModelChoice,
 } from "../../shared/settings";
 import { openLinuxTerminal, openWindowsTerminal } from "../terminal/terminal";
+
 export async function launchCodex(
   dir: string,
   dataDir: string,

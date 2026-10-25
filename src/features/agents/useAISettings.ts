@@ -2,11 +2,13 @@ import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { aiSettingsSchema, type AISettings } from "../../../shared/settings";
 import { api } from "../../lib/api";
+
 export const aiSettingsQuery = {
   queryKey: ["ai-settings"],
   queryFn: () => api.aiSettings(),
   staleTime: Infinity,
 };
+
 export const useAISettings = () => useQuery(aiSettingsQuery);
 
 /**

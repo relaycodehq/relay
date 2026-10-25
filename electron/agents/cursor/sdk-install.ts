@@ -37,6 +37,7 @@ export interface SdkLock {
     }
   >;
 }
+
 export const sdkLock: SdkLock = lockfile;
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;

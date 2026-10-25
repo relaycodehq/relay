@@ -30,6 +30,7 @@ test("a phone dictates with the desktop's speech engine", async () => {
     !modelDir,
     "Set RELAY_DICTATION_MODEL to a downloaded model folder",
   );
+
   test.setTimeout(90000);
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-phone-dictation-")),

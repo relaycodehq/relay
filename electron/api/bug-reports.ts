@@ -25,6 +25,7 @@ const fieldsSchema = z
   })
   .strict();
 const digestSchema = z.string().regex(/^[0-9a-f]{64}$/);
+
 const pngSchema = z.custom<Uint8Array>(
   (b) =>
     b instanceof Uint8Array &&

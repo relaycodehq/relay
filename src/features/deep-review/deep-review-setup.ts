@@ -16,10 +16,12 @@ const claudeAgent = (reasoningEffort: "high" | "xhigh"): ReviewAgent => ({
   // The Opus model fills in once Claude lists its models.
   choice: { model: "", reasoningEffort, fast: false },
 });
+
 const codexAgent = (model: string): ReviewAgent => ({
   provider: "codex",
   choice: { model, reasoningEffort: "high", fast: false },
 });
+
 const defaultPair = [claudeAgent("high"), codexAgent("gpt-5.6-sol")];
 
 export type Setup = ReviewDraftSetup;

@@ -37,6 +37,7 @@ export interface AutoCompact {
   idle: boolean;
   cold: boolean;
 }
+
 export const defaultAutoCompact: AutoCompact = { idle: false, cold: false };
 
 /** The conversation is big enough, and its cache cold, to compact before the next message. */

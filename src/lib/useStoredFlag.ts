@@ -4,6 +4,7 @@ import { persistedStore } from "./persisted-store";
 type Flag = ReturnType<typeof persistedStore<boolean | null>>;
 // One store per key, so every component showing a flag follows its changes.
 const flags = new Map<string, Flag>();
+
 function flag(key: string): Flag {
   let store = flags.get(key);
   if (!store) {

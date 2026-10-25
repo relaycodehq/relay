@@ -20,11 +20,13 @@ import { ErrorBox } from "../../ui/ui";
 import { reloadAccount } from "./useSignIn";
 
 const queryKey = ["source-control"];
+
 const marks: Record<SourceControlKind, ReactNode> = {
   github: <GitHubMark />,
   gitea: <GiteaMark />,
   "azure-devops": <AzureDevOpsMark />,
 };
+
 /** What the switch stops, said once it's off. */
 const offNotes: Record<SourceControlKind, string> = {
   github: "Turned off: Relay doesn't show GitHub CI status.",
@@ -33,12 +35,14 @@ const offNotes: Record<SourceControlKind, string> = {
   "azure-devops":
     "Turned off: Relay doesn't show Azure DevOps pull requests or Pipelines. Work items have a switch of their own further down.",
 };
+
 const fixLabels: Record<SourceControlFix, string> = {
   link: "Link it…",
   connect: "Connect…",
   "sign-in": "Sign in…",
   "set-up": "Set up…",
 };
+
 /** What else follows a host: CI, the tea logins and whose pull requests show. */
 const followers = ["ci-status", "tea-setup", "pull-servers", "host-account"];
 

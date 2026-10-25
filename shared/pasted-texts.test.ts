@@ -16,10 +16,12 @@ const log = Array.from(
   { length: 14 },
   (_, i) => `  at frame${i} (src/app.ts:${i + 1})`,
 ).join("\n");
+
 const pastes: PastedText[] = [
   { n: 1, text: `TypeError: boom\n${log}` },
   { n: 3, text: "```ts\nconst a = 1;\n```\n\ntrailing prose" },
 ];
+
 /** The message as the composer serialises it: pills where they were pasted. */
 const message = (text: string, ...parts: PastedText[]) =>
   (text + parts.map(pasteMarkdown).join("")).trim();
@@ -38,12 +40,14 @@ describe("pasted texts", () => {
       "Look at [paste] and then [paste] done",
     );
   });
+
   it("finds a paste right after the agent mention", () => {
     expect(pastedTexts(`@claude ${message("", pastes[0])}`)).toEqual(
       pastes.slice(0, 1),
     );
     expect(pastedTexts(message("@codex  explain", ...pastes))).toEqual(pastes);
   });
+
   it("reads every paste of a message the attachment version sent", () => {
     // Before pills, pastes followed the text, one blank line apart.
     const body =
@@ -53,6 +57,7 @@ describe("pasted texts", () => {
       { n: 2, text: "two" },
     ]);
   });
+
   it("renumbers pastes in order", () => {
     const renumbered = replacePastedTexts(
       message("Compare", ...pastes),
@@ -63,6 +68,7 @@ describe("pasted texts", () => {
       { ...pastes[1], n: 6 },
     ]);
   });
+
   it("numbers pastes coming into a draft after the draft's own", () => {
     const copied = pasteMarkdown({ n: 1, text: "copied" });
     expect(
@@ -70,12 +76,14 @@ describe("pasted texts", () => {
     ).toEqual([{ n: 4, text: "copied" }]);
     expect(pastesAfter("Compare", copied)).toBe(copied);
   });
+
   it("ignores text that only looks like a paste", () => {
     const typed = "Pasted text #1:\n\n```\nnot fenced apart\n```and then more";
     expect(pastedTexts(typed)).toEqual([]);
     expect(replacePastedTexts(typed, () => "")).toBe(typed);
     expect(pastedTexts("plain")).toEqual([]);
   });
+
   it("sits after code references, which lead the message", () => {
     const withPaste = message("@claude look", ...pastes);
     const sent = codeReferenceMessage(
@@ -86,12 +94,14 @@ describe("pasted texts", () => {
     expect(code.refs).toHaveLength(1);
     expect(pastedTexts(code.body)).toEqual(pastes);
   });
+
   it("attaches huge pastes only", () => {
     expect(isLongPaste("short line")).toBe(false);
     expect(isLongPaste(log)).toBe(false);
     expect(isLongPaste("x".repeat(20_000))).toBe(true);
     expect(isLongPaste("line\n".repeat(200))).toBe(true);
   });
+
   it("sends pastes of 32KB or more as files, counting bytes", () => {
     expect(isFilePaste("x".repeat(32 * 1024 - 1))).toBe(false);
     expect(isFilePaste("x".repeat(32 * 1024))).toBe(true);
@@ -100,6 +110,7 @@ describe("pasted texts", () => {
     expect(isFilePaste("😅".repeat(8192))).toBe(true);
     expect(isFilePaste("😅".repeat(8191))).toBe(false);
   });
+
   it("numbers paste files after those the draft names", () => {
     expect(nextPasteFile("look at this")).toBe(1);
     expect(nextPasteFile("`/data/pastes/a/pasted-text.txt`")).toBe(2);
@@ -110,6 +121,7 @@ describe("pasted texts", () => {
     ).toBe(4);
     expect(nextPasteFile("`/home/me/my-pasted-text.txt`")).toBe(1);
   });
+
   it("cleans line endings and surrounding blank lines, keeping indentation", () => {
     expect(cleanPaste("\r\n\n    indented\r\n  next\r\n\r\n")).toBe(
       "    indented\n  next",

@@ -13,16 +13,19 @@ export interface ImageChip {
   src: string;
   bytes: number;
 }
+
 interface ImageStorage {
   images: Map<number, ImageChip>;
   /** Live pills, redrawn when the screenshots behind them load or change. */
   views: Set<() => void>;
 }
+
 declare module "@tiptap/core" {
   interface Storage {
     relayImage: ImageStorage;
   }
 }
+
 // A screenshot's place in the message; sent as `[Image #n]`, the image itself rides along.
 export const ImageTag = Node.create<object, ImageStorage>({
   name: "relayImage",

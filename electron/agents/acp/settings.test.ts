@@ -17,6 +17,7 @@ function recording() {
   const request = vi.fn(async (..._: unknown[]): Promise<unknown> => ({}));
   return { connection: { request } as unknown as AcpConnection, request };
 }
+
 const choice = (model = "", reasoningEffort: ReasoningEffort | "" = ""): ModelChoice => ({
   model,
   reasoningEffort,

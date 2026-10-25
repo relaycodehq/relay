@@ -6,6 +6,7 @@ const login = vi.hoisted(() => ({ token: null as string | null, asked: 0 }));
 vi.mock("../platform/executables", () => ({
   findExecutable: async () => "gh",
 }));
+
 vi.mock("node:child_process", () => ({
   execFile: (
     _file: string,

@@ -9,6 +9,7 @@ const files = [
   "src/features/composer/ProjectComposer.tsx",
   "src/features/composer/composer.css",
 ];
+
 const changes = new Map([["src/app/App.tsx", "modified" as const]]);
 const tree = fileTree(files, new Set(changes.keys()));
 

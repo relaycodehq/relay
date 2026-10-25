@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../lib/api", () => ({ api: {} }));
+
 import {
   firstSetup,
   nextReviewer,
@@ -11,6 +12,7 @@ import {
 import type { ReviewAgent } from "../../../shared/deep-review";
 
 const store = new Map<string, string>();
+
 beforeEach(() => {
   store.clear();
   vi.stubGlobal("localStorage", {
@@ -19,6 +21,7 @@ beforeEach(() => {
   });
   vi.stubGlobal("addEventListener", () => {});
 });
+
 afterEach(() => vi.unstubAllGlobals());
 
 const choice = {
@@ -26,6 +29,7 @@ const choice = {
   reasoningEffort: "high",
   fast: false,
 } as const;
+
 const codex: ReviewAgent = { provider: "codex", choice };
 
 describe("setup", () => {
@@ -100,6 +104,7 @@ describe("setup", () => {
     expect(nextReviewer([claude])).toEqual(claude);
     expect(nextReviewer([claude, codex])).toEqual(codex);
   });
+
   it("keeps a reviewer's prompt only while it stays on the same agent", () => {
     const reviewers: ReviewAgent[] = [{ ...codex, prompt: "$hunt" }, codex];
     expect(
@@ -128,6 +133,7 @@ describe("target", () => {
     checkedOut?: string,
     usual: string[] = [],
   ) => reviewBranches({ head, base }, branches, usual, checkedOut);
+
   it("reviews against the chosen base, else the repository's, else another branch", () => {
     expect(pick("", "zeta", "feature", ["main"]).base).toBe("zeta");
     expect(pick("", "gone", "feature", ["develop", "main"]).base).toBe(

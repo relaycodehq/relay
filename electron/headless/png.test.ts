@@ -13,11 +13,13 @@ const crcTable = Array.from({ length: 256 }, (_, n) => {
   for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
   return c >>> 0;
 });
+
 const crc = (bytes: Buffer) => {
   let c = 0xffffffff;
   for (const b of bytes) c = crcTable[(c ^ b) & 0xff]! ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 };
+
 const chunk = (name: string, body: Buffer) => {
   const out = Buffer.alloc(12 + body.length);
   out.writeUInt32BE(body.length, 0);

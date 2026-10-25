@@ -10,6 +10,7 @@ export interface Owner {
   /** When its computer started, so a pid reused after a restart isn't taken for it. */
   boot?: number;
 }
+
 export type OwnedTurn = Turn & { owner: Owner };
 
 /** Where the ledger keeps the turns still open and what happened to every turn. */
@@ -56,6 +57,7 @@ export function openTurnStore(path: string | undefined): TurnStore {
 class SqliteTurnStore implements TurnStore {
   private writes = 0;
   private statements;
+
   constructor(private db: DatabaseSync) {
     db.exec(`
       PRAGMA journal_mode = WAL;
@@ -93,6 +95,7 @@ class SqliteTurnStore implements TurnStore {
       open: db.prepare("SELECT owner, pid, boot, data FROM turns"),
     };
   }
+
   write(type: TurnEvent["type"], turn: Turn, owner: Owner) {
     const data = JSON.stringify(turn);
     const s = this.statements;
@@ -110,6 +113,7 @@ class SqliteTurnStore implements TurnStore {
       throw e;
     }
   }
+
   open() {
     return (
       this.statements.open.all() as {
@@ -123,6 +127,7 @@ class SqliteTurnStore implements TurnStore {
       owner: { id: owner, pid, ...(boot === null ? {} : { boot }) },
     }));
   }
+
   close() {
     this.db.close();
   }
@@ -131,13 +136,16 @@ class SqliteTurnStore implements TurnStore {
 export class MemoryTurnStore implements TurnStore {
   private turns = new Map<string, OwnedTurn>();
   private seq = 0;
+
   write(_type: TurnEvent["type"], turn: Turn, owner: Owner) {
     if (turn.phase === "ended") this.turns.delete(turn.id);
     else this.turns.set(turn.id, { ...structuredClone(turn), owner });
     return ++this.seq;
   }
+
   open() {
     return [...this.turns.values()].map((t) => structuredClone(t));
   }
+
   close() {}
 }

@@ -34,6 +34,7 @@ const mirrorSaveMs = 1000;
  */
 export class LiveHandoff {
   private saves = new Map<string, NodeJS.Timeout>();
+
   constructor(
     private core: ChatCore,
     private list: (projectId: string) => ChatSummary[],
@@ -49,6 +50,7 @@ export class LiveHandoff {
       message: mirrorOf(message, chat.carriedIds ?? {}),
     };
   }
+
   /** What was written here since the thread came; those it holds at the same version as their ids. */
   async writtenHere(id: string, known: KnownMessages = {}) {
     const chat = await this.core.storage.load(id);
@@ -61,6 +63,7 @@ export class LiveHandoff {
           : structuredClone(mirrorOf(m, carried)),
       );
   }
+
   /** A call's arguments from the computer the thread came from, carried messages by their ids here. */
   async inbound(id: string, args: unknown[]) {
     const chat = await this.core.storage.load(id);
@@ -80,6 +83,7 @@ export class LiveHandoff {
     };
     return args.map((a) => rename(a, 0));
   }
+
   /** What runs and waits in the thread here, for the computer it came from. */
   async live(id: string): Promise<HandoffLive> {
     const chat = await this.core.storage.load(id);
@@ -119,6 +123,7 @@ export class LiveHandoff {
       sentTo.state !== "sending"
     );
   }
+
   /** The mirrored messages held, by version, so a reconnect sends only what changed. */
   async held(id: string): Promise<KnownMessages> {
     const chat = await this.core.storage.load(id);
@@ -128,6 +133,7 @@ export class LiveHandoff {
       chat.messages.slice(kept).map((m) => [m.id, m.version]),
     );
   }
+
   /** A message written on the computer the thread is on: added, or in place of the copy held. */
   async mirror(id: string, handoffId: string, message: ChatMessage) {
     const chat = await this.core.storage.load(id);
@@ -146,6 +152,7 @@ export class LiveHandoff {
     if (message.status === "streaming") this.saveSoon(chat);
     else await this.saveNow(chat);
   }
+
   /**
    * The thread as the other computer has it after a reconnect: every
    * message after the ones it left with, those already held named by id.
@@ -176,6 +183,7 @@ export class LiveHandoff {
     // Messages gone there can't be said one by one.
     if (chat.messages.length !== before) this.core.storage.chatChanged(id);
   }
+
   /** What the other computer says runs and waits in the thread now. */
   setLive(id: string, live: HandoffLive | undefined) {
     const away = this.core.away;
@@ -192,10 +200,12 @@ export class LiveHandoff {
     else away.delete(id);
     this.core.storage.chatChanged(id);
   }
+
   /** Sends that wait for the computer the thread is live on. */
   async outbox(id: string): Promise<HeldSend[]> {
     return structuredClone((await this.core.storage.load(id)).outbox ?? []);
   }
+
   /** A send waits for the computer the thread is live on to be back. */
   async hold(id: string, handoffId: string, input: ProjectChatSend) {
     const chat = await this.core.storage.load(id);
@@ -205,6 +215,7 @@ export class LiveHandoff {
     chat.outbox = [...(chat.outbox ?? []), { input, at: Date.now() }];
     await this.core.storage.save(chat);
   }
+
   /** Takes every held send out, to go out here instead. */
   async takeOut(id: string): Promise<HeldSend[]> {
     const chat = await this.core.storage.load(id);
@@ -214,6 +225,7 @@ export class LiveHandoff {
     await this.core.storage.save(chat);
     return held;
   }
+
   /**
    * Sends that didn't go out here wait in the thread again, ahead of any
    * held since; the first says why. One that landed after all stays out.
@@ -232,6 +244,7 @@ export class LiveHandoff {
     await this.core.storage.save(chat);
     this.core.storage.chatChanged(id);
   }
+
   /** A held send went out, or was dropped; `error` keeps it, turned down. */
   async settle(id: string, sendId: string, error?: string) {
     const chat = await this.core.storage.load(id);
@@ -243,6 +256,7 @@ export class LiveHandoff {
     await this.core.storage.save(chat);
     this.core.storage.chatChanged(id);
   }
+
   private saveSoon(chat: ProjectChat) {
     if (this.saves.has(chat.id)) return;
     this.saves.set(
@@ -250,6 +264,7 @@ export class LiveHandoff {
       setTimeout(() => void this.saveNow(chat), mirrorSaveMs),
     );
   }
+
   private async saveNow(chat: ProjectChat) {
     clearTimeout(this.saves.get(chat.id));
     this.saves.delete(chat.id);
@@ -257,6 +272,7 @@ export class LiveHandoff {
       .save(chat)
       .catch((e) => console.warn("A live handoff's thread wasn't saved:", e));
   }
+
   dispose() {
     for (const timer of this.saves.values()) clearTimeout(timer);
     this.saves.clear();

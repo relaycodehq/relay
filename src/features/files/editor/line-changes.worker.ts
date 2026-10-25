@@ -5,6 +5,7 @@ import { lineChangesOf, linesOf } from "./line-changes";
  * The committed text comes once, with the first buffer compared to it.
  */
 let committed: string[] = [];
+
 self.onmessage = (
   event: MessageEvent<{ committed?: string; buffer: string }>,
 ) => {

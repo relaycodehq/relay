@@ -13,9 +13,11 @@ export const repoSchema = z.object({
   name,
   server: z.url().max(2048).optional(),
 });
+
 export const refSchema = repoSchema.extend({
   number: z.number().int().positive(),
 });
+
 export const filePathSchema = z
   .string()
   .min(1)
@@ -47,8 +49,10 @@ export const workspaceSchema = z.object({
   query: z.string().max(500),
   state: z.enum(["open", "closed", "all"]),
 });
+
 export const sideSchema = z.enum(["additions", "deletions"]);
 export const bodySchema = z.string().min(1).max(65536);
+
 export const draftSchema = z.object({
   id: z.string().max(100),
   path: filePathSchema,
@@ -58,6 +62,7 @@ export const draftSchema = z.object({
   revision: z.string().max(150),
   createdAt: z.string().max(50),
 });
+
 export const progressSchema = z.object({
   reviewBody: z.string().max(65536).optional(),
   read: z.record(z.string().max(4096), z.string().max(150)),
@@ -75,6 +80,7 @@ export const progressSchema = z.object({
     )
     .max(5000),
 });
+
 export function normalizeServer(input: string): string {
   const u = new URL(input.trim());
   if (
@@ -90,6 +96,7 @@ export function normalizeServer(input: string): string {
   const path = u.pathname.replace(/\/+$/, "");
   return `${u.origin}${path}`;
 }
+
 export function parsePullUrl(input: string, server: string) {
   let u = new URL(input);
   if (u.protocol === "relay:") u = new URL(u.searchParams.get("url") ?? "");
@@ -111,6 +118,7 @@ export function parsePullUrl(input: string, server: string) {
     number: Number(parts[3]),
   });
 }
+
 /** A link as Relay was asked to open it, unwrapped from a `relay:` link. */
 const linkUrl = (input: string) => {
   try {
@@ -122,6 +130,7 @@ const linkUrl = (input: string) => {
     return null;
   }
 };
+
 const githubHost = (input: string) => {
   const u = linkUrl(input);
   return u && urlHostKind(u.href) === "github" ? u : null;
@@ -135,6 +144,7 @@ export function isSitePullUrl(input: string) {
   const u = linkUrl(input);
   return !!u && urlHostKind(u.href) !== "gitea";
 }
+
 /**
  * `https://dev.azure.com/org/project/_git/repo/pullrequest/42`, or the same
  * on the older `org.visualstudio.com`, as a ref on the organization's server.
@@ -165,6 +175,7 @@ export function parseAzurePullUrl(input: string) {
     server: path.server,
   });
 }
+
 /** `https://github.com/owner/name/pull/42`, as a ref that names its server. */
 export function parseGithubPullUrl(input: string) {
   const u = githubHost(input);
@@ -178,6 +189,7 @@ export function parseGithubPullUrl(input: string) {
     server: GITHUB_SERVER,
   });
 }
+
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'"'"'`)}'`;
 }

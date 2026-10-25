@@ -44,6 +44,7 @@ let current: Arrival | undefined;
 /** When each thread's divider faded, this run: what was there then was seen, so going back to it doesn't bring the divider back. */
 const faded = new Map<string, number>();
 const listeners = new Set<() => void>();
+
 function set(next: Arrival | undefined) {
   if (next === current) return;
   current = next;

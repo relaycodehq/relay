@@ -81,9 +81,11 @@ beforeEach(async () => {
   await writeFile(log, "");
   forgetCursorModels();
 });
+
 afterEach(() => {
   delete process.env.CURSOR_FAKE_SIGNED_OUT;
 });
+
 afterAll(async () => {
   delete process.env.CURSOR_FAKE_LOG;
   await rm(dir, { recursive: true, force: true });
@@ -447,6 +449,7 @@ describe("Relay's own tools", () => {
   const calls: { chatId: string; name: string }[] = [];
   let url: string;
   let close: () => Promise<void>;
+
   beforeAll(async () => {
     const serving = serveRelayTools(0, {
       verify: (token) => verifyRelayToken(secret, token),
@@ -460,7 +463,9 @@ describe("Relay's own tools", () => {
     const { port } = serving.server.address() as { port: number };
     url = `http://127.0.0.1:${port}/mcp`;
   });
+
   afterAll(() => close());
+
   beforeEach(() => void (calls.length = 0));
 
   const relayTools = () => ({ url, token: relayToken(secret, "chat-1") });
@@ -637,6 +642,7 @@ describe("where Cursor can't sandbox", () => {
   beforeEach(() => {
     process.env.CURSOR_FAKE_NO_SANDBOX = "1";
   });
+
   afterEach(() => {
     delete process.env.CURSOR_FAKE_NO_SANDBOX;
   });

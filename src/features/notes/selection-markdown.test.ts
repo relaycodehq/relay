@@ -18,12 +18,14 @@ const h = (
     getAttribute: (key) => attrs[key] ?? null,
   };
 };
+
 const text = (value: string): MdNode => ({
   nodeType: 3,
   nodeName: "#text",
   textContent: value,
   childNodes: [],
 });
+
 const fragment = (...kids: MdNode[]): MdNode => ({
   ...h("x", {}, ...kids),
   nodeType: 11,

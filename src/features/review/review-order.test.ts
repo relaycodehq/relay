@@ -8,12 +8,14 @@ const file = (filename: string) => ({
   deletions: 1,
   changes: 2,
 });
+
 const group = (id: string, paths: string[]) => ({
   id,
   name: id,
   description: "",
   paths,
 });
+
 const names = (files: { filename: string }[]) => files.map((f) => f.filename);
 
 it("drops excluded files from groups, and groups left with fewer than two", () => {

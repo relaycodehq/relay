@@ -67,6 +67,7 @@ function untilAborted<T>(value: Promise<T>, signal?: AbortSignal) {
       .finally(() => signal.removeEventListener("abort", abort));
   });
 }
+
 /** How many PRs a text search reads through, as Azure can't search them itself. */
 const SCANNED = 1000;
 /**
@@ -102,6 +103,7 @@ export class AzureDevOps implements PullHost {
     PullState,
     { at: number; value: Promise<AzPull[]> }
   >();
+
   constructor(
     public account: Account,
     /** The signed-in identity, for votes and "is it mine". */
@@ -202,6 +204,7 @@ export class AzureDevOps implements PullHost {
   private repoPath(r: Repo) {
     return `${this.account.server}/${encodeURIComponent(r.owner)}/_apis/git/repositories/${encodeURIComponent(r.name)}`;
   }
+
   private prPath(r: PullRef) {
     return `${this.repoPath(r)}/pullrequests/${r.number}`;
   }
@@ -403,6 +406,7 @@ export class AzureDevOps implements PullHost {
   }
 
   private changedCounts = new Map<string, Promise<number>>();
+
   /**
    * How many files `files` lists for the iteration, which the review and
    * triage check against. An iteration never changes, so it's kept.
@@ -579,6 +583,7 @@ export class AzureDevOps implements PullHost {
       this.threadCache.delete(this.threadCache.keys().next().value!);
     return untilAborted(value, signal);
   }
+
   private forget(r: PullRef) {
     for (const key of this.threadCache.keys())
       if (key.startsWith(`${this.prPath(r)}@`)) this.threadCache.delete(key);

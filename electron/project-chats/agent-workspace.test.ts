@@ -20,6 +20,7 @@ let temp: string,
 let core: ChatCore;
 const git = (...args: string[]) => gitIn(root, ...args);
 const save = vi.fn();
+
 beforeEach(async () => {
   temp = await realpath(
     await mkdtemp(join(tmpdir(), "relay-agent-workspace-")),
@@ -97,6 +98,7 @@ beforeEach(async () => {
     root: async () => undefined,
   });
 });
+
 afterEach(async () => rm(temp, { recursive: true, force: true }));
 
 it("uses the recovered folder for agents, workspace APIs and the terminal, and keeps it out of checkout activity", async () => {

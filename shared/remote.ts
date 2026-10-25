@@ -334,6 +334,7 @@ export interface PhonePalette {
   diffAddition: string;
   diffDeletion: string;
 }
+
 /** The desktop's appearance, so a phone can wear the same theme. */
 export interface PhoneAppearance {
   mode: "system" | "light" | "dark";
@@ -438,6 +439,7 @@ export interface RemoteDiffLine {
   old?: number;
   new?: number;
 }
+
 export interface RemoteDiff {
   path: string;
   binary: boolean;
@@ -534,6 +536,7 @@ export const phoneDesktopMethods = [
   "comment",
   "submitReview",
 ] as const satisfies readonly ApiMethod[];
+
 export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
 
 /**
@@ -554,6 +557,7 @@ export interface PhoneDictationHeard {
   /** The engine is still loading the model; the audio waits for it. */
   loading: boolean;
 }
+
 /** The most base64 one audio call may carry: a second of speech. */
 export const maxDictationChunk = 44_000;
 
@@ -575,6 +579,7 @@ export interface PhoneReadAloudAudio {
   /** Nothing more is coming after this audio. */
   done: boolean;
 }
+
 export const maxReadAloudPull = 3;
 /** The longest answer a phone may ask to hear, in characters. */
 export const maxReadAloudText = 1_000_000;
@@ -763,6 +768,7 @@ export interface RemoteApi {
   /** One of `terminalOps` on a shell `projectTerminal` opened. */
   terminalCall(op: TerminalOp, key: string, args: unknown[]): Promise<unknown>;
 }
+
 /** What a computer does with a shell it opened in a project there, as TerminalApi names it. */
 export const terminalOps = [
   "write",
@@ -773,8 +779,10 @@ export const terminalOps = [
   "prefillSignIn",
   "adopt",
 ] as const;
+
 export type TerminalOp = (typeof terminalOps)[number];
 export type HandoffPart = "thread" | "bundle";
+
 /** The `computerCall`s that set a project up there, from `remoteAddingBridge`. */
 export const computerAddingMethods = [
   "folderPreview",
@@ -783,6 +791,7 @@ export const computerAddingMethods = [
   "createProject",
   "cancelProjectAdding",
 ] as const satisfies readonly ApiMethod[];
+
 /**
  * Calls about a paired computer itself, not one of its projects, that a
  * project living there needs from it (`computerCall`): project setup, its
@@ -797,11 +806,14 @@ export const computerCallMethods = [
   "installAgent",
   "reloadAgentModels",
 ] as const satisfies readonly ApiMethod[];
+
 export type ComputerCallMethod = (typeof computerCallMethods)[number];
+
 /** A folder here as `computerFolders` lists it; `project` when it's one already. */
 export interface ComputerFolder extends FolderEntry {
   project?: { id: string; name: string };
 }
+
 export interface ComputerFolders {
   /** This computer's home folder, which `~` stands for. */
   home: string;
@@ -809,11 +821,13 @@ export interface ComputerFolders {
   dir: string;
   folders: ComputerFolder[];
 }
+
 /** What starts a thread in a project another computer shows as its own. */
 export type HomeThread = Pick<
   HandoffThread,
   "from" | "title" | "scope" | "settings" | "messages"
 >;
+
 /** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
 export interface ComputerProject {
   id: string;
@@ -824,6 +838,7 @@ export interface ComputerProject {
   /** Its folder has no Git repository; from `remoteProjectsBridge`. */
   plain?: true;
 }
+
 /** A clone `cloneProject` started: still going, or the project it made. */
 export type CloneProgress =
   | { done: false; step: string; progress: number | null }
@@ -837,16 +852,19 @@ export interface SetupRequest {
   /** The agent and how it runs, as the thread it's for runs. */
   settings: HandoffSettings;
 }
+
 /** How far a phone's file got; `path`, where the message names it, once all of it is here. */
 export interface UploadedFile {
   received: number;
   path?: string;
 }
+
 /** What a phone uploads per `uploadFile` call, before base64. */
 export const fileUploadChunk = 1024 * 1024;
 /** The largest file a phone may attach. */
 export const maxUploadBytes = 200 * 1024 * 1024;
 export type RemoteMethod = keyof RemoteApi;
+
 /** What a paired computer may call; phones only `updateMethods`. */
 export const computerMethods = [
   "uploadPaste",
@@ -874,7 +892,9 @@ export const computerMethods = [
   "projectTerminal",
   "terminalCall",
 ] as const satisfies readonly RemoteMethod[];
+
 export type ComputerMethod = (typeof computerMethods)[number];
+
 export const remoteMethods = [
   "overview",
   "chat",
@@ -898,13 +918,16 @@ export const remoteMethods = [
   "uploadFile",
   ...computerMethods,
 ] as const satisfies readonly RemoteMethod[];
+
 /** The bridge from which phones may call `updateMethods` too. */
 export const phoneUpdatesBridge = 11;
+
 /** About this Relay itself, so a phone may ask too, from `phoneUpdatesBridge`. */
 export const updateMethods = [
   "computerInfo",
   "updateNow",
 ] as const satisfies readonly ComputerMethod[];
+
 /**
  * Calls that stop an agent, wait for its note or move a repository's worth
  * of Git; a dead link still fails them within a minute, as its ticks stop.
@@ -1112,10 +1135,12 @@ export interface PhoneRemoteState {
     app?: PhoneAppReport;
   }[];
 }
+
 export interface PhonePairing {
   url: string;
   expiresAt: number;
 }
+
 export interface PhoneRemoteApi {
   /** The window's resolved theme, passed on to paired phones. */
   phoneAppearance(appearance: PhoneAppearance): Promise<void>;

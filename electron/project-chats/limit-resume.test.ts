@@ -37,6 +37,7 @@ function planner(resume = vi.fn(async () => {})) {
 beforeEach(() => {
   vi.useFakeTimers();
 });
+
 afterEach(() => {
   vi.useRealTimers();
 });

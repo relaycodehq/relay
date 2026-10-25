@@ -111,6 +111,7 @@ export class StartedThreads {
   private reviews: ThreadReviews | undefined;
   private schedules: ThreadSchedules | undefined;
   private agentChoices: AgentChoices;
+
   constructor(
     private chats: Chats,
     options: {

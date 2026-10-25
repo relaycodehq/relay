@@ -28,6 +28,7 @@ const OWN: Record<AccountProvider, Set<string>> = {
   codex: new Set(["auth.json", ".DS_Store"]),
   antigravity: new Set(),
 };
+
 /** Credentials a profile must not inherit from Relay's own environment. */
 const ENV_CREDENTIALS: Record<AccountProvider, string[]> = {
   claude: [
@@ -46,6 +47,7 @@ const ENV_CREDENTIALS: Record<AccountProvider, string[]> = {
 };
 
 let root: string | undefined;
+
 /** Where profiles live: Relay's own data folder, set as the app starts. */
 export function setProfilesRoot(dir: string) {
   root = dir;

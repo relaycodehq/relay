@@ -104,4 +104,5 @@ export function useReviewTriage(
     setCommentPaths,
   };
 }
+
 export type ReviewTriage = ReturnType<typeof useReviewTriage>;

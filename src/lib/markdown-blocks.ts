@@ -18,6 +18,7 @@ export function fenceClosed(source: string, position?: Position): boolean {
   const closing = new RegExp(`^${opening[0]}{${opening.length},}$`);
   return lines.length > 1 && closing.test(lines[lines.length - 1]!);
 }
+
 /**
  * Whether a `$$` formula in `source` has its closing line yet, as
  * `fenceClosed` says for code; see `normalizeMath` for the shape it takes.
@@ -35,6 +36,7 @@ export function mathClosed(source: string, position?: Position): boolean {
     return fenceClosed(source, position);
   return lines.length > 1 && lines[lines.length - 1] === "$$";
 }
+
 const MATH_FENCE = /^[ \t>]*\$\$[ \t]*$/;
 /**
  * Lines that make every split unsafe, also inside quotes and list items: a

@@ -102,6 +102,7 @@ export class ThreadWorktrees {
   private dropping = new Map<string, Set<Promise<void>>>();
   /** Threads whose first message just made their worktree; nothing runs in it until it's named. */
   readonly unnamed = new Set<string>();
+
   constructor(
     private core: ChatCore,
     /** The folder Relay makes threads' worktrees in. */

@@ -111,6 +111,7 @@ afterEach(async () => {
   await rm(log, { force: true });
   await rm(release, { force: true });
 });
+
 afterAll(() => rm(root, { recursive: true, force: true }));
 
 /** A Relay that started: its own connection to the host. */

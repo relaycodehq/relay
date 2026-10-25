@@ -57,11 +57,13 @@ describe("sendAction", () => {
               : "send";
         expect(sendAction(key(mods), sendKey, action)).toBe(result);
       });
+
       it("ignores Enter while an IME is composing", () => {
         const e = key();
         (e.nativeEvent as { isComposing: boolean }).isComposing = true;
         expect(sendAction(e, "enter", action)).toBeNull();
       });
+
       it("ignores non-Enter keys", () => {
         expect(sendAction({ ...key(), key: "a" }, "enter", action)).toBeNull();
       });

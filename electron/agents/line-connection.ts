@@ -4,6 +4,7 @@ import { HostedChild } from "../agent-host/child";
 
 export type RpcId = string | number;
 export type Settled = { result?: unknown; error?: Error };
+
 type Waiter = {
   method: string;
   resolve: (value: unknown) => void;
@@ -130,14 +131,17 @@ export abstract class LineConnection {
   private get hosted() {
     return this.child instanceof HostedChild ? this.child.hosted : undefined;
   }
+
   /** What the next Relay reads about this process, replacing what it had. */
   keep(meta: unknown) {
     this.hosted?.keep(meta);
   }
+
   /** Marks a turn in the host's log, so a restart knows one was running. */
   mark(mark: "start" | "end") {
     this.hosted?.mark(mark);
   }
+
   /** Lets through what it said while Relay was away, once someone listens. */
   resume() {
     if (this.child instanceof HostedChild) this.child.release();

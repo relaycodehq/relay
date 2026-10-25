@@ -221,9 +221,11 @@ export class ThreadTitles {
   abort() {
     for (const a of this.jobs.values()) a.abort.abort();
   }
+
   running() {
     return [...this.jobs.values()].map((a) => a.job);
   }
+
   writing() {
     return [...this.updates];
   }

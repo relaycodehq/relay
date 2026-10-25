@@ -615,27 +615,35 @@ export class HostedQuery {
   private call(method: string, ...args: unknown[]) {
     return this.connection.call(this.id, method, args, callLimit);
   }
+
   interrupt() {
     return this.call("interrupt");
   }
+
   setModel(model?: string) {
     return this.call("setModel", model);
   }
+
   setPermissionMode(mode: string) {
     return this.call("setPermissionMode", mode);
   }
+
   applyFlagSettings(settings: Record<string, unknown>) {
     return this.call("applyFlagSettings", settings);
   }
+
   getSettings() {
     return this.call("getSettings");
   }
+
   getContextUsage(options?: { detail?: "summary" | "full" }) {
     return this.call("getContextUsage", options);
   }
+
   accountInfo() {
     return this.call("accountInfo");
   }
+
   usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(options?: {
     skipBehaviors?: boolean;
   }) {
@@ -644,6 +652,7 @@ export class HostedQuery {
       options,
     );
   }
+
   /** The signal stays here: an answer that comes too late is dropped. */
   askSideQuestion(
     question: string,
@@ -668,12 +677,15 @@ export class HostedQuery {
       }),
     ]);
   }
+
   stopTask(taskId: string) {
     return this.call("stopTask", taskId);
   }
+
   supportedCommands() {
     return this.call("supportedCommands");
   }
+
   /** A host older than this Relay refuses it. */
   supportedAgents() {
     return this.call("supportedAgents");

@@ -38,6 +38,7 @@ function fakeUpdates() {
 const quick = { firstAfter: 60_000, every: 60_000, poll: 10, waitAtMost: 200 };
 
 beforeEach(() => vi.useFakeTimers());
+
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();

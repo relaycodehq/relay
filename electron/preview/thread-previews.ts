@@ -113,6 +113,7 @@ export class ThreadPreviews {
     string,
     { result: Promise<PreviewState>; controller: AbortController }
   >();
+
   readonly servers = new DevServers((folder, state) => {
     for (const preview of this.previews.values())
       if (

@@ -18,6 +18,7 @@ const keyOf = (app: ImportApp, path: string) =>
 /** One-time project imports. Discovery only reads; selections are revalidated before writes. */
 export class ProjectImports {
   private running = false;
+
   constructor(
     private core: ChatCore,
     private sessions: TerminalSessions,

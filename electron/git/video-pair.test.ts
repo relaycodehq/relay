@@ -25,11 +25,13 @@ let userData: string;
 vi.mock("electron", () => ({ app: { getPath: () => userData } }));
 
 const git = (...args: string[]) => gitIn(root, ...args);
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-video-")));
   userData = await mkdtemp(join(tmpdir(), "relay-video-data-"));
   git("init", "-q", "-b", "main");
 });
+
 afterEach(async () => {
   setGitPath(null);
   vi.restoreAllMocks();

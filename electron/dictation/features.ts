@@ -63,9 +63,11 @@ const bitReversed = (() => {
   }
   return out;
 })();
+
 const cos = Float64Array.from({ length: fftSize / 2 }, (_, i) =>
   Math.cos((2 * Math.PI * i) / fftSize),
 );
+
 const sin = Float64Array.from(
   { length: fftSize / 2 },
   (_, i) => -Math.sin((2 * Math.PI * i) / fftSize),

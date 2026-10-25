@@ -21,6 +21,7 @@ const field = z.object({
     .optional(),
   when: z.unknown().optional(),
 });
+
 const providers = z.object({
   data: z.array(
     z.object({
@@ -39,6 +40,7 @@ const providers = z.object({
     }),
   ),
 });
+
 const attempt = z.object({
   data: z.object({
     attemptID: z.string(),
@@ -50,6 +52,7 @@ const attempt = z.object({
     time: z.object({ expires: z.number() }),
   }),
 });
+
 const status = z.object({
   data: z.discriminatedUnion("status", [
     z.object({ status: z.literal("pending") }),

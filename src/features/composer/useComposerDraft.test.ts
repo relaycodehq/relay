@@ -13,12 +13,14 @@ const savePaste = vi.hoisted(() =>
       : "/data/pastes/x/pasted-text.txt",
   ),
 );
+
 vi.mock("../../lib/api", () => ({
   api: {
     pathForFile: (file: { path?: string }) => file.path ?? "",
     savePaste,
   },
 }));
+
 vi.mock("../images/image-pills", () => ({ useImagePills: () => true }));
 const saved = new Map<string, DraftImage[]>();
 const savedListeners = new Set<(key: string, images: DraftImage[]) => void>();
@@ -27,6 +29,7 @@ let preparing = 0;
 let finishScreenshot: (() => void) | undefined;
 // Pills copied along with a paste; these tests paste none.
 const adoptPills = () => {};
+
 vi.mock("../images/draft-images", () => ({
   isScreenshot: (file: File) => !file.name.endsWith(".pdf"),
   loadDraftImages: async (key: string) => saved.get(key) ?? [],
@@ -93,9 +96,11 @@ async function composer() {
   await flush();
   return draft;
 }
+
 async function settle() {
   await flush();
 }
+
 const state = (draft: Awaited<ReturnType<typeof composer>>) => ({
   shown: draft().images.map((image) => image.id),
   stored: (saved.get(KEY) ?? []).map((image) => image.id),
@@ -414,6 +419,7 @@ const mine = (n: number) => ({
   mimeType: "image/png" as const,
   dataUrl: "data:image/png;base64,AAAA",
 });
+
 const copiedMessage = (
   text: string,
   images: { n?: number; name: string }[],

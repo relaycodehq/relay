@@ -20,6 +20,7 @@ import { revealLabel } from "../../lib/mod-key";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { ImageDiff } from "./ImageDiff";
 import { useDiffFind } from "./find/useDiffFind";
+
 export interface WorkingLineTarget {
   side: Side;
   start: number;
@@ -27,12 +28,15 @@ export interface WorkingLineTarget {
   /** The selected source lines, from the side they were picked on. */
   code: string;
 }
+
 type Viewer = CodeViewHandle<undefined, undefined>;
+
 const splitDiff = persistedStore(
   "relay-diff-split",
   (saved) => saved !== "false",
   (split) => String(split),
 );
+
 /** Side-by-side or inline diffs, shared by every diff and kept across restarts. */
 export const useSplitDiff = () => [splitDiff.use(), splitDiff.set] as const;
 /**
@@ -40,6 +44,7 @@ export const useSplitDiff = () => [splitDiff.use(), splitDiff.set] as const;
  * diff, or one not measured yet, shows inline.
  */
 export const roomForSplit = (width?: number) => !width || width >= 800;
+
 /**
  * Switches every diff between side by side and inline. It reads the width of
  * the header it sits in, which spans the diff: too narrow for side by side,
@@ -76,6 +81,7 @@ export function SplitDiffToggle({
     </span>
   );
 }
+
 export function WorkingDiff({
   pair,
   sideLabels,

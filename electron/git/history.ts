@@ -23,6 +23,7 @@ const refKinds = [
   ["refs/remotes/", "remote"],
   ["refs/tags/", "tag"],
 ] as const;
+
 /** A `--decorate=full` decoration; the full name says what kind of ref it is. */
 function parseRef(value: string): CommitRef | null {
   if (value === "HEAD") return { name: "HEAD", kind: "head" };
@@ -32,6 +33,7 @@ function parseRef(value: string): CommitRef | null {
   if (!match || (match[1] === "remote" && full.endsWith("/HEAD"))) return null;
   return { name: full.slice(match[0].length), kind: head ? "head" : match[1] };
 }
+
 function parseSummary(fields: string[]): CommitSummary {
   const [sha, parents, author, time, refs, subject] = fields;
   return {

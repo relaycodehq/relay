@@ -184,6 +184,7 @@ export type AcpRunObserver = {
   settle(): Promise<void>;
   failure?: Promise<never>;
 };
+
 /** `steered` acknowledges a steer the native API saw read, so its answer goes below it. */
 type Observe = (
   agent: AcpAgent,

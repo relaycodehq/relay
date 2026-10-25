@@ -164,6 +164,7 @@ const imageSourceSchema = z.discriminatedUnion("kind", [
     })
     .strict(),
 ]);
+
 const diffSourceSchema = z.discriminatedUnion("kind", [
   z
     .object({
@@ -193,6 +194,7 @@ const diffSourceSchema = z.discriminatedUnion("kind", [
     .object({ kind: z.literal("worktree"), chatId: idSchema, path: pathSchema })
     .strict(),
 ]);
+
 const signatureSchema = z.string().regex(/^[a-f0-9]{64}$/);
 const maxDiffLines = 3000;
 /** Streaming answers go out at most this often; the phone doesn't need every token. */
@@ -214,10 +216,12 @@ export class RemoteBridge {
   private watching = false;
   /** Unknown until a phone asks for the overview; nothing is watched before that. */
   private projectIds?: string[];
+
   constructor(
     private host: RemoteHost,
     private broadcast: (event: RemoteEvent) => void,
   ) {}
+
   /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
   private api: Omit<
     RemoteApi,
@@ -452,6 +456,7 @@ export class RemoteBridge {
       return changed;
     },
   };
+
   /**
    * A send, once per id: a reconnect may retry before worktree creation
    * finishes, and both await the same one; once it's in, a retry is a no-op
@@ -475,10 +480,12 @@ export class RemoteBridge {
       if (this.sends.get(key) === job) this.sends.delete(key);
     }
   }
+
   private requireDrafts() {
     if (!this.host.drafts) throw new Error("This computer keeps no drafts.");
     return this.host.drafts;
   }
+
   /** `deviceId` is the phone asking, which a draft it writes names. */
   async handle(
     method: RemoteMethod,
@@ -575,6 +582,7 @@ export class RemoteBridge {
         throw new Error("Phones can't do that.");
     }
   }
+
   /** Relays a chat event, holding back streaming updates to one per message every `streamMs`. */
   chatEvent(event: { chatId: string; message: ChatMessage; title?: string }) {
     const next = {
@@ -602,6 +610,7 @@ export class RemoteBridge {
     }
     this.broadcast(next);
   }
+
   /** Follows thread states while a phone is connected. */
   setWatching(watching: boolean) {
     this.watching = watching;
@@ -609,6 +618,7 @@ export class RemoteBridge {
     this.lastChats = "";
     this.lastPresent = undefined;
   }
+
   /** A project's thread list changed; one new since the overview joins the watch. */
   chatsChanged(projectId: string) {
     if (!this.watching || !this.projectIds) return;
@@ -621,6 +631,7 @@ export class RemoteBridge {
       })
       .catch(() => {});
   }
+
   /** Tells phones when a thread starts, finishes, or starts waiting on them. */
   refresh() {
     if (!this.projectIds) return;
@@ -636,20 +647,24 @@ export class RemoteBridge {
     this.broadcast({ kind: "chats", chats });
     if (present === false) this.sendPresence(present);
   }
+
   /** Someone came to the computer or left it: a phone holding news back hands it out. */
   presenceChanged() {
     if (this.watching && this.projectIds) this.sendPresence(this.host.present?.());
   }
+
   private sendPresence(present: boolean | undefined) {
     if (present === undefined || present === this.lastPresent) return;
     this.lastPresent = present;
     this.broadcast({ kind: "presence", present });
   }
+
   dispose() {
     this.setWatching(false);
     for (const held of this.streams.values()) clearTimeout(held.timer);
     this.streams.clear();
   }
+
   /** Where a project on another computer lives, by that computer's name now. */
   private computerOf(computer: ProjectComputer): RemoteProjectComputer {
     const paired = this.host.pairedComputers?.();

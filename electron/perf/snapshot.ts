@@ -46,6 +46,7 @@ export interface PowerReadings {
 /** Turns two `os.cpus()` readings into how busy the machine was between them. */
 export class MachineCpu {
   private last = cpuTimes();
+
   /** 0–100 since the previous call; undefined until time has passed. */
   read() {
     const now = cpuTimes();

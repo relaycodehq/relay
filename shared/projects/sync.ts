@@ -11,6 +11,7 @@ export const knownMessagesSchema = z
 export interface ProjectChatPatch extends Omit<ProjectChat, "messages"> {
   messages: (ChatMessage | string)[];
 }
+
 /** What a caller holding `chat` sends as `known`. */
 export const knownOf = (
   chat: { messages: ChatMessage[] } | undefined,
@@ -22,6 +23,7 @@ export class MissingMessage extends Error {
     this.name = "MissingMessage";
   }
 }
+
 /** Rebuilds a patched chat, reusing the previous message objects it only named. */
 export function applyChatPatch<T extends { messages: ChatMessage[] }>(
   patch: Omit<T, "messages"> & { messages: (ChatMessage | string)[] },

@@ -7,6 +7,7 @@ const entry = (type: string, id: string, fields = {}) => ({
   turnId: "turn",
   item: { type, id, ...fields },
 });
+
 function wire(pages: { data: unknown[]; nextCursor: string | null }[]) {
   let index = 0;
   const request = vi.fn(
@@ -21,6 +22,7 @@ function wire(pages: { data: unknown[]; nextCursor: string | null }[]) {
   };
   return { transport, request };
 }
+
 const usage = { usedTokens: 1_000, maxTokens: 10_000 };
 const sumUsed = (report: Awaited<ReturnType<typeof estimateCodexContext>>) =>
   report!.categories

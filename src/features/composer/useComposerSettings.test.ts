@@ -19,6 +19,7 @@ import { useComposerSettings } from "./useComposerSettings";
 vi.mock("../agents/useAISettings", () => ({
   useAISettings: () => ({ data: defaultAISettings }),
 }));
+
 const follow = vi.hoisted(() => ({
   models: vi.fn(),
   agent: vi.fn(),
@@ -29,15 +30,18 @@ const follow = vi.hoisted(() => ({
   saveAgent: vi.fn(),
   saveMode: vi.fn(),
 }));
+
 vi.mock("./useNewThreadModels", () => ({
   useNewThreadModels: (enabled: boolean) => {
     follow.models(enabled);
     return [follow.lastModels, follow.saveModel];
   },
 }));
+
 vi.mock("./useNewThreadRuntimeMode", () => ({
   useNewThreadRuntimeMode: () => [follow.lastMode, follow.saveMode],
 }));
+
 vi.mock("./useNewThreadAgent", () => ({
   useNewThreadAgent: (enabled: boolean) => {
     follow.agent(enabled);
@@ -52,6 +56,7 @@ beforeEach(() => {
   follow.lastAgent = undefined;
   follow.lastMode = undefined;
 });
+
 const launch: SentComposerSettings = {
   id: "launch",
   provider: "claude",
@@ -174,6 +179,7 @@ const opus = {
   fast: false,
   reasoningEffort: "" as const,
 };
+
 const opus200k: NewThreadModels = {
   claude: { choice: opus, contextWindow: "200k" },
 };

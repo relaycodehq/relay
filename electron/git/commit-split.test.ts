@@ -8,6 +8,7 @@ import { tempRepo } from "../../tests/fixtures/git-repo";
 
 let reply = "";
 const runs: AgentOptions[] = [];
+
 vi.mock("../agents", () => ({
   agentRuntime: () => ({
     run: async (options: AgentOptions) => {
@@ -16,6 +17,7 @@ vi.mock("../agents", () => ({
     },
   }),
 }));
+
 const { applyCommitSplit, parseSplitPlan, planCommitSplit } =
   await import("./commit-split");
 
@@ -37,6 +39,7 @@ beforeEach(async () => {
   git("commit", "-qm", "Initial");
   runs.length = 0;
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const withA = (l: string[]) => [

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { sshHosts } from "./ssh-hosts";
 
 let dir: string | undefined;
+
 afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
   dir = undefined;

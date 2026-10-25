@@ -6,6 +6,7 @@ const apiError = {
   error: "server_error",
   message: { content: [{ type: "text", text: "API Error: overloaded" }] },
 };
+
 const failed = { type: "result" };
 
 it("says the error Claude answered with as the reason its result failed", () => {

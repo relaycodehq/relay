@@ -114,6 +114,7 @@ const builtinRuntimes: Record<BuiltinProvider, AgentRuntime> = {
   amp: counted("amp", acpRuntime("amp")),
   antigravity: counted("antigravity", acpRuntime("antigravity")),
 };
+
 /** Registry agents' runtimes, made as threads or Relay's start ask for them. */
 const registryRuntimes = new Map<RegistryProvider, AgentRuntime>();
 

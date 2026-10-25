@@ -138,6 +138,7 @@ const required: Record<string, string> = {
   noext: builtIn("default"),
   ".somerc": builtIn("default"),
 };
+
 const images = [
   "png",
   "jpg",
@@ -149,6 +150,7 @@ const images = [
   "ico",
   "heic",
 ];
+
 for (const ext of images) required[`a.${ext}`] = builtIn("image");
 
 /** Mounts the sprite into a minimal fake document and returns what it got. */
@@ -170,6 +172,7 @@ function mountSprite() {
   ensureFileIconSprite();
   return mounted;
 }
+
 afterEach(() => vi.unstubAllGlobals());
 
 /** WCAG contrast ratio of two #rrggbb colours. */

@@ -27,6 +27,7 @@ export interface StoredAccount {
   id: string;
   label: string;
 }
+
 export interface StoredAccounts {
   /** In the order the user put each agent's accounts. */
   accounts: StoredAccount[];
@@ -41,6 +42,7 @@ export interface AgentAccount extends StoredAccount {
   /** The subscription, e.g. Max or Plus. */
   plan?: string;
 }
+
 export interface AgentAccountsState {
   accounts: AgentAccount[];
   inUse: Record<AccountProvider, string>;

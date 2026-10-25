@@ -12,6 +12,7 @@ import { CommitSheet } from "./CommitSheet";
 vi.mock("../../lib/api", () => ({
   api: { projectCommitMessage: vi.fn() },
 }));
+
 vi.mock("./CommitModel", () => ({
   useCommitModel: () => ({ own: null }),
   CommitModel: () => null,
@@ -28,6 +29,7 @@ const project: Project = {
   repository: null,
   added: 1,
 };
+
 const tree: WorkingTree = {
   head: "initial",
   branch: "main",
@@ -47,7 +49,9 @@ const tree: WorkingTree = {
   lines: { additions: 5, deletions: 0 },
   outgoing: [],
 };
+
 let root: Root, host: HTMLDivElement, client: QueryClient;
+
 beforeEach(() => {
   vi.mocked(api.projectCommitMessage).mockReset().mockResolvedValue("Draft");
   localStorage.clear();
@@ -57,6 +61,7 @@ beforeEach(() => {
   client = new QueryClient();
   client.setQueryData(["ai-settings"], defaultAISettings);
 });
+
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
@@ -79,12 +84,14 @@ const render = (current: WorkingTree, only?: string[]) =>
     );
   });
 const show = (current: WorkingTree, only = ["a.txt"]) => render(current, only);
+
 const committed = (...paths: string[]): WorkingTree => ({
   ...tree,
   head: paths.join(","),
   revision: paths.join(","),
   changes: tree.changes.filter((c) => !paths.includes(c.path)),
 });
+
 const header = () =>
   document.querySelector(".commit-files-head label")!.textContent;
 const calls = () =>
@@ -166,6 +173,7 @@ const changed = (...paths: string[]): WorkingTree => ({
     conflict: false,
   })),
 });
+
 const box = (path: string) =>
   [...document.querySelectorAll<HTMLLabelElement>(".commit-file")]
     .find((l) => l.title.endsWith(path))!

@@ -62,6 +62,7 @@ export class TurnLedger {
     pid: process.pid,
     boot: bootedAt(),
   };
+
   private open = new Map<string, Turn>();
   /** Turns a Relay that's gone left open; recovered once reattaching is done. */
   private leftOver: OwnedTurn[];
@@ -120,10 +121,12 @@ export class TurnLedger {
   get(id: string): Turn | undefined {
     return this.open.get(id);
   }
+
   /** The thread's open turns, oldest first. */
   inThread(threadId: string): Turn[] {
     return [...this.open.values()].filter((t) => t.threadId === threadId);
   }
+
   onEvent(listener: (event: TurnEvent) => void) {
     this.listeners.add(listener);
     return () => void this.listeners.delete(listener);

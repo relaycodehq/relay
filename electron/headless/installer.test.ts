@@ -20,16 +20,19 @@ const run = promisify(execFile);
 const cleanup: (() => Promise<unknown>)[] = [];
 let bundled: string;
 const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+
 const testKey = Buffer.from(
   publicKey.export({ format: "jwk" }).x!,
   "base64url",
 ).toString("base64");
+
 async function signFeed(path: string) {
   await writeFile(
     `${path}.sig`,
     sign(null, await readFile(path), privateKey).toString("base64"),
   );
 }
+
 beforeAll(async () => {
   const result = await build({
     entryPoints: ["electron/headless/install-command.ts"],
@@ -40,6 +43,7 @@ beforeAll(async () => {
   });
   bundled = result.outputFiles![0]!.text;
 });
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
 });

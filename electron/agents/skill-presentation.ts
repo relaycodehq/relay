@@ -32,6 +32,7 @@ const scopeNames: [Source, string[]][] = [
   ["personal", ["user", "personal"]],
   ["system", ["system"]],
 ];
+
 const sourceOfScope = new Map(
   scopeNames.flatMap(([source, names]) =>
     names.map((name) => [name, source] as const),

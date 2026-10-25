@@ -20,6 +20,7 @@ import {
 
 let dir: string, home: string;
 const saved = { ...process.env };
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-accounts-"));
   home = join(dir, "claude-home");
@@ -32,6 +33,7 @@ beforeEach(async () => {
   process.env.ANTHROPIC_API_KEY = "sk-relay";
   setProfilesRoot(join(dir, "profiles"));
 });
+
 afterEach(async () => {
   process.env = { ...saved };
   await rm(dir, { recursive: true, force: true });

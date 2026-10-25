@@ -56,4 +56,5 @@ export function useThreadAccounts(chatId?: string, pinned?: Pinned) {
     },
   };
 }
+
 export type ThreadAccounts = ReturnType<typeof useThreadAccounts>;

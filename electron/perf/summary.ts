@@ -156,6 +156,7 @@ const processes = (s: PerfSample) => {
   const n = Object.values(s.p).reduce((sum, k) => sum + k.n, 0);
   return `${n} ${n === 1 ? "process" : "processes"}`;
 };
+
 const busiest = (s: PerfSample, key: "cpu" | "mb") =>
   Object.entries(s.p).sort((a, b) => b[1][key] - a[1][key])[0]?.[0] ?? "";
 const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;

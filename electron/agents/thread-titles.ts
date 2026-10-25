@@ -98,6 +98,7 @@ const CONTEXT_BUDGET = 8000;
 const MESSAGE_BUDGET = 2000;
 /** User messages say what the thread is about; answers can't crowd them out. */
 const ANSWER_RESERVE = 2000;
+
 /**
  * What the title helper reads: the first ask, then the latest asks, then the
  * latest answers, within a budget and back in conversation order. Side conversations, handoff notes and compactions aren't

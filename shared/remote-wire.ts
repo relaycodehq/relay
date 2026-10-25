@@ -93,6 +93,7 @@ export function sealTunnel(
 export class OpenedTunnel {
   constructor(readonly frame: TunnelFrame) {}
 }
+
 export const isTunnel = (opened: unknown): opened is OpenedTunnel =>
   opened instanceof OpenedTunnel;
 

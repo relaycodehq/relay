@@ -7,6 +7,7 @@ interface GraphEdge {
   to: number;
   color: number;
 }
+
 export interface GraphRow {
   lane: number;
   color: number;

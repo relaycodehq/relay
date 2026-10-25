@@ -44,6 +44,7 @@ export async function readClaudeUsage(
   noteClaudeSignIn(account, !!usage, "usage", accountHome("claude", account));
   return usage;
 }
+
 async function usageFrom(stream: ClaudeStream, ms: number) {
   const ask = async () => {
     const account = await stream.accountInfo();

@@ -3,6 +3,7 @@ import type { ProjectChatSend } from "./projects";
 import { queuedForPhone, takenBack } from "./remote-queued";
 
 const shot = { name: "s.png", mimeType: "image/png" as const, dataUrl: "d" };
+
 const input = (over: Partial<ProjectChatSend> = {}): ProjectChatSend => ({
   id: "q1",
   body: "@codex look at [Image #1]",
@@ -31,6 +32,7 @@ describe("a queued message as the phone hears of it", () => {
       },
     });
   });
+
   it("names the side conversation, and the error that holds it", () => {
     const sent = queuedForPhone({
       input: input({
@@ -47,6 +49,7 @@ describe("a queued message as the phone hears of it", () => {
     });
     expect(sent).not.toHaveProperty("images");
   });
+
   it("tells a steer held for taking back, and when it was sent", () => {
     const sent = queuedForPhone(
       { input: input(), created: 1000, steerAt: 4000 },
@@ -58,12 +61,14 @@ describe("a queued message as the phone hears of it", () => {
       queuedForPhone({ input: input(), steerAt: 4000 }, 60_000),
     ).not.toHaveProperty("held");
   });
+
   it("tells a note from the agent whose settings it carries", () => {
     const note = queuedForPhone({
       input: input({ body: "remember this", to: "message", provider: "codex" }),
     });
     expect(note.to).toBe("message");
   });
+
   it("works out the recipient from the mention in a message saved without one", () => {
     const { to: _, ...older } = input({
       body: "@claude hi",
@@ -83,6 +88,7 @@ describe("a queued message taken back on the phone", () => {
       settings: item.settings,
     });
   });
+
   it("leaves the composer's own agent alone for a note, which no agent answers", () => {
     const note = queuedForPhone({
       input: input({ body: "remember this", to: "message" }),
@@ -90,12 +96,14 @@ describe("a queued message taken back on the phone", () => {
     expect(takenBack(note).settings).toBeUndefined();
     expect(takenBack(note).body).toBe("remember this");
   });
+
   it("takes an older desktop's item as the body alone, as before", () => {
     expect(takenBack({ id: "q", body: "@claude hi", images: 2 })).toEqual({
       body: "hi",
       images: [],
     });
   });
+
   it("puts the settings on the agent that answers when the text names another", () => {
     const item = queuedForPhone({ input: input() });
     const moved = { ...item, to: "claude" as const };

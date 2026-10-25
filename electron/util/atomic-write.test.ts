@@ -13,9 +13,11 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { writeFileAtomic } from "./atomic-write";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-atomic-write-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 it("leaves no temporary file behind when the rename fails", async () => {

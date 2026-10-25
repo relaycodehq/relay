@@ -62,6 +62,7 @@ export abstract class HostSession {
   end = 0;
   /** Named turns in flight, by where each began. */
   turns = new Map<string, number>();
+
   constructor(
     readonly id: string,
     readonly key: string,

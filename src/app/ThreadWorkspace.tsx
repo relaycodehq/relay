@@ -70,6 +70,7 @@ export function useThreadTools(
     setError,
   };
 }
+
 export type ThreadTools = ReturnType<typeof useThreadTools>;
 
 /**

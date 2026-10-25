@@ -35,6 +35,7 @@ export type ComposerModels = NewThreadModels;
 export const isPickAgent = (provider: string): provider is AgentProvider =>
   isAgentProvider(provider) && provider !== "codex" && provider !== "claude";
 let picks: { of: readonly AgentProvider[]; list: AgentProvider[] } | undefined;
+
 /** The agents in `isPickAgent` this Relay runs; the same array until that changes. */
 export function pickAgents() {
   const runnable = runnableAgents();
@@ -48,7 +49,9 @@ const blankChoice: ModelChoice = {
   fast: false,
   reasoningEffort: "",
 };
+
 const blank: NewThreadModel = { choice: blankChoice };
+
 export const modelOf = (
   models: ComposerModels,
   provider: AgentProvider,

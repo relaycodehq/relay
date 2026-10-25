@@ -20,6 +20,7 @@ import { controlSocket } from "./paths";
 const run = promisify(execFile);
 let bundled: string;
 const cleanup: (() => Promise<unknown>)[] = [];
+
 beforeAll(async () => {
   const result = await build({
     entryPoints: ["electron/headless/cli.ts"],
@@ -32,6 +33,7 @@ beforeAll(async () => {
   });
   bundled = result.outputFiles![0]!.text;
 });
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
 });

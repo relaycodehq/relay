@@ -39,6 +39,7 @@ import { defaultAISettings } from "../../shared/settings";
 import { MessageBatches } from "./message-batches";
 
 const cleanup: (() => Promise<void>)[] = [];
+
 afterEach(async () => {
   vi.useRealTimers();
   while (cleanup.length) await cleanup.pop()!();
@@ -355,6 +356,7 @@ it("defaults to LAN with Tailscale present, and an old pairing learns it on reco
 });
 
 const interfaceHost = lanAddresses(networkInterfaces())[0];
+
 it.skipIf(!interfaceHost)(
   "pairs and reconnects through a real LAN interface with no Tailscale",
   async () => {

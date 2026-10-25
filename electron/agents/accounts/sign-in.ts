@@ -12,6 +12,7 @@ const LOGIN: Record<AccountProvider, string[]> = {
   codex: ["login"],
   antigravity: [],
 };
+
 /** Long enough to find the right browser window and pick an organisation. */
 const TIMEOUT = 10 * 60_000;
 

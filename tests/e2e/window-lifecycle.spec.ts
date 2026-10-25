@@ -240,6 +240,7 @@ test("asynchronous credential storage reads existing encrypted logins and round-
         encrypted: !fresh.includes(Buffer.from("synthetic-test-credential")),
       };
     });
+
     test.skip(result === null, "System credential storage unavailable");
     expect(result).toEqual({
       oldReadable: true,

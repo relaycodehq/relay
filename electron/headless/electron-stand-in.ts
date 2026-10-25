@@ -19,6 +19,7 @@ const unavailable = (what: string) =>
   new Error(`${what} isn't available on a headless Relay.`);
 
 let quitting: (() => void) | undefined;
+
 /** What app.quit() does here: the daemon's own shutdown. */
 export function onAppQuit(handler: () => void) {
   quitting = handler;
@@ -26,13 +27,16 @@ export function onAppQuit(handler: () => void) {
 
 class HeadlessApp extends EventEmitter {
   readonly isPackaged = false;
+
   readonly commandLine = {
     hasSwitch: () => false,
     appendSwitch: () => {},
     getSwitchValue: () => "",
   };
+
   readonly dock = undefined;
   private name = "Relay";
+
   getPath(name: string) {
     const home = relayHome();
     switch (name) {
@@ -55,42 +59,55 @@ class HeadlessApp extends EventEmitter {
         throw unavailable(`The ${name} folder`);
     }
   }
+
   setPath() {}
   setAppLogsPath() {}
+
   getVersion() {
     return headlessVersion;
   }
+
   getName() {
     return this.name;
   }
+
   setName(name: string) {
     this.name = name;
   }
+
   getAppPath() {
     return __dirname;
   }
+
   isReady() {
     return true;
   }
+
   whenReady() {
     return Promise.resolve();
   }
+
   requestSingleInstanceLock() {
     return true;
   }
+
   quit() {
     if (quitting) quitting();
     else process.exit(0);
   }
+
   exit(code = 0) {
     process.exit(code);
   }
+
   relaunch() {}
   show() {}
   focus() {}
+
   setBadgeCount() {
     return false;
   }
+
   setAsDefaultProtocolClient() {
     return false;
   }
@@ -189,6 +206,7 @@ export class ClipboardItem {
  */
 class HeadlessPowerMonitor extends EventEmitter {
   private timer?: NodeJS.Timeout;
+
   override on(event: string, listener: (...args: unknown[]) => void) {
     if (event === "resume" && !this.timer) {
       let last = Date.now();
@@ -201,13 +219,16 @@ class HeadlessPowerMonitor extends EventEmitter {
     }
     return super.on(event, listener);
   }
+
   isOnBatteryPower() {
     return false;
   }
+
   getSystemIdleTime() {
     return 0;
   }
 }
+
 export const powerMonitor = new HeadlessPowerMonitor();
 
 export const powerSaveBlocker = {
@@ -249,12 +270,15 @@ export class BrowserWindow {
   static getAllWindows() {
     return [];
   }
+
   static fromWebContents() {
     return null;
   }
+
   static getFocusedWindow() {
     return null;
   }
+
   constructor() {
     throw unavailable("A window");
   }

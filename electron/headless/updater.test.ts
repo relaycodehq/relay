@@ -15,9 +15,11 @@ import { lockPath } from "./lock";
 import { HeadlessUpdater, installRoot } from "./updater";
 
 let dir: string;
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "relay-headless-update-"));
 });
+
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 function keyPair() {

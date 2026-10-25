@@ -40,41 +40,49 @@ export class SignInUnavailable extends Error {
 export class RemoteDevices {
   private pairing?: { code: string; expiresAt: number; failures: number };
   private keyPair?: KeyPair;
+
   constructor(
     private store: Store,
     private seal: (value: string) => Promise<string | null>,
     private unseal: (value: string) => Promise<string>,
     private now = () => Date.now(),
   ) {}
+
   get settings(): RemoteSettings {
     const saved = this.store.get().phoneRemote;
     // Access is still opt-in. Once enabled, the same Wi-Fi should work unless
     // the user explicitly chose Tailscale only; existing keys/devices stay put.
     return { ...saved, lan: saved?.lan ?? true };
   }
+
   /** Paired devices, those idle for `idleMs` left out. */
   list() {
     return (this.settings.devices ?? []).filter((d) => !this.idle(d));
   }
+
   private idle(device: RemoteDevice) {
     return this.now() - (device.lastSeen ?? device.created) > idleMs;
   }
+
   async setAppearance(appearance: RemoteSettings["appearance"]) {
     await this.store.update((s) => {
       s.phoneRemote = { ...s.phoneRemote, appearance };
     });
   }
+
   async setEnabled(enabled: boolean) {
     await this.store.update((s) => {
       s.phoneRemote = { ...s.phoneRemote, enabled };
     });
     if (!enabled) this.pairing = undefined;
   }
+
   async setLan(lan: boolean) {
     await this.store.update((s) => {
       s.phoneRemote = { ...s.phoneRemote, lan };
     });
   }
+
   /** Made once and kept: phones pin its public half. */
   async key(): Promise<KeyPair> {
     if (this.keyPair) return this.keyPair;
@@ -93,6 +101,7 @@ export class RemoteDevices {
     });
     return (this.keyPair = pair);
   }
+
   /** A fresh single-use code; it replaces any code shown before. */
   newPairing() {
     this.pairing = {
@@ -102,6 +111,7 @@ export class RemoteDevices {
     };
     return { code: this.pairing.code, expiresAt: this.pairing.expiresAt };
   }
+
   async pair(code: string, name: string, kind?: DeviceKind) {
     const open = this.pairing;
     if (!open || open.expiresAt < this.now())
@@ -137,6 +147,7 @@ export class RemoteDevices {
     });
     return { device, token };
   }
+
   /** The device the token belongs to, or undefined. */
   async verify(deviceId: string, token: string) {
     if (!this.holding(deviceId, token)) return;
@@ -153,6 +164,7 @@ export class RemoteDevices {
     // A removal saved while this update waited its turn wins.
     return this.holding(deviceId, token);
   }
+
   /** A connected device is in use, however long it has been since it signed in. */
   async seen(deviceId: string) {
     const device = this.list().find((d) => d.id === deviceId);
@@ -164,16 +176,19 @@ export class RemoteDevices {
       })
       .catch((e) => console.warn("Phone remote: lastSeen wasn't saved:", e));
   }
+
   /** Whether the device is still paired; a removed one's sessions end. */
   paired(deviceId: string) {
     return this.list().some((d) => d.id === deviceId);
   }
+
   private holding(deviceId: string, token: string) {
     const device = this.list().find((d) => d.id === deviceId);
     return device && sameSecret(hash(token), device.tokenHash)
       ? device
       : undefined;
   }
+
   async setApp(deviceId: string, app: PhoneAppReport) {
     const saved = this.list().find((d) => d.id === deviceId);
     if (!saved || JSON.stringify(saved.app) === JSON.stringify(app)) return;
@@ -182,6 +197,7 @@ export class RemoteDevices {
       if (device) device.app = app;
     });
   }
+
   async revoke(deviceId: string) {
     await this.store.update((s) => {
       if (s.phoneRemote?.devices)

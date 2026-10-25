@@ -10,7 +10,9 @@ vi.mock("../platform/executables", () => ({
   findExecutable: async () => "fixture-codex",
   spawnExecutable: vi.fn(),
 }));
+
 vi.mock("../platform/terminate", () => ({ terminate: vi.fn() }));
+
 vi.mock("../agents/accounts", () => ({
   runAccount: async () => ({ env: {} }),
 }));
@@ -29,11 +31,13 @@ const candidate = prepareCandidate(
     binary: false,
   },
 ) as Candidate;
+
 let child: ChildProcess & {
   stdout: PassThrough;
   stderr: PassThrough;
   stdin: PassThrough;
 };
+
 beforeEach(() => {
   child = Object.assign(new ChildProcess(), {
     stdout: new PassThrough(),
@@ -45,6 +49,7 @@ beforeEach(() => {
     setImmediate(() => child.emit("close", null));
   });
 });
+
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();

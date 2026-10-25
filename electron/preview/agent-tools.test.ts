@@ -8,14 +8,17 @@ describe("previewTarget", () => {
       "http://localhost:5173/a?b=1",
     );
   });
+
   it("puts a path on the page's origin", () => {
     expect(previewTarget("/settings", "http://localhost:3000/home")).toBe(
       "http://localhost:3000/settings",
     );
   });
+
   it("needs a page or dev server before a path means anything", () => {
     expect(() => previewTarget("/settings", undefined)).toThrow(/no address/);
   });
+
   it("loads only http and https", () => {
     expect(() => previewTarget("file:///etc/passwd", undefined)).toThrow(
       /only loads http/,
@@ -28,6 +31,7 @@ describe("previewTarget", () => {
 
 describe("consoleText", () => {
   const now = 1_000_000;
+
   it("says when and where each entry came from", () => {
     expect(
       consoleText(
@@ -43,6 +47,7 @@ describe("consoleText", () => {
       ),
     ).toBe("[error] 2 min ago at app.js:3\nboom");
   });
+
   it("keeps the newest entries and cuts long ones", () => {
     const entries = Array.from({ length: 52 }, (_, i) => ({
       level: "warning" as const,
@@ -59,6 +64,7 @@ describe("consoleText", () => {
 
 describe("clipRect", () => {
   const viewport = { width: 800, height: 600 };
+
   it("frames the element with a margin, in whole pixels", () => {
     expect(
       clipRect({
@@ -67,11 +73,13 @@ describe("clipRect", () => {
       }),
     ).toEqual({ x: 92, y: 42, width: 37, height: 27 });
   });
+
   it("keeps the frame inside the viewport", () => {
     expect(
       clipRect({ rect: { x: -40, y: 590, width: 100, height: 50 }, viewport }),
     ).toEqual({ x: 0, y: 582, width: 68, height: 18 });
   });
+
   it("gives the whole page when the element is out of sight", () => {
     expect(
       clipRect({ rect: { x: 0, y: 900, width: 100, height: 20 }, viewport }),

@@ -7,6 +7,7 @@ const microphone = persistedStore(
   (saved) => saved ?? "",
   (deviceId) => deviceId || null,
 );
+
 export const dictationMicrophone = microphone.get;
 export const useDictationMicrophone = microphone.use;
 export const setDictationMicrophone = microphone.set;

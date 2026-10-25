@@ -4,6 +4,7 @@ import { PAGE_QUESTION_ID, type ChatMessage } from "../../../shared/projects";
 vi.mock("../../lib/api", () => ({ api: {} }));
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
 import { AnsweredQuestions } from "../agent-turn/AnsweredQuestions";
+
 const message: ChatMessage = {
   id: "m",
   role: "assistant",
@@ -19,6 +20,7 @@ const message: ChatMessage = {
     },
   ],
 };
+
 it("names the provider and masks answered secret questions", () => {
   const open = renderToStaticMarkup(
     <AsyncQuestionCards chatId="c" message={message} />,

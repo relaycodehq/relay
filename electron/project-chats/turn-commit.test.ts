@@ -23,6 +23,7 @@ beforeEach(async () => {
     await commit(dir, "start");
   }
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
   await rm(other, { recursive: true, force: true });

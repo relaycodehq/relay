@@ -6,9 +6,11 @@ import { writeCodexSession } from "../../tests/fixtures/terminal-sessions";
 import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 
 let home: string;
+
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), "relay-codex-"));
 });
+
 afterEach(() => rm(home, { recursive: true, force: true }));
 
 const turns = [

@@ -131,6 +131,7 @@ export class BugReports {
   >;
   /** A prompt asked for the report before a window could show it. */
   private wanted = false;
+
   private recording?: {
     startedAt: number;
     endsAt: number;
@@ -147,12 +148,15 @@ export class BugReports {
   private get now() {
     return this.deps.now?.() ?? Date.now();
   }
+
   private get file() {
     return join(this.deps.dir, "draft.json");
   }
+
   private shot(id: string) {
     return join(this.deps.dir, "screenshots", `${id}.png`);
   }
+
   private get recordingPath() {
     return join(this.deps.dir, recordingName);
   }
@@ -221,6 +225,7 @@ export class BugReports {
   want() {
     this.wanted = true;
   }
+
   takeWanted() {
     const wanted = this.wanted;
     this.wanted = false;

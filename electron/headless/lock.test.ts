@@ -7,6 +7,7 @@ import { build } from "esbuild";
 import { lockPath } from "./lock";
 
 const cleanup: (() => Promise<unknown>)[] = [];
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
 });

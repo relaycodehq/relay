@@ -54,6 +54,7 @@ const itemSchema = z
   .loose();
 
 const scoped = { threadId: lenient(z.string()) };
+
 const notification = <M extends string, S extends z.ZodRawShape>(
   method: M,
   params: S,
@@ -104,7 +105,9 @@ const notificationSchema = z.discriminatedUnion("method", [
     willRetry: lenient(z.boolean()),
   }),
 ]);
+
 export type CodexNotification = z.infer<typeof notificationSchema>;
+
 const read = new Set<string>(
   notificationSchema.options.map((option) => option.shape.method.value),
 );
@@ -173,6 +176,7 @@ export const userInputRequestSchema = z
   .loose();
 
 const text = z.string().nullish();
+
 const approvalFields = {
   reason: text,
   cwd: text,

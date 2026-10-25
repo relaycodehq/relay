@@ -29,6 +29,7 @@ const capsSchema = z.object({
   /** Answers ACP's `logout`. */
   logout: z.boolean().optional(),
 });
+
 type AcpCaps = z.infer<typeof capsSchema>;
 
 /** A session's settings as the agent last reported them. */
@@ -103,6 +104,7 @@ export class AcpAgent extends HostedAgent<
 const hostedName = (profile: AcpProfile) =>
   profile.hostedAs ?? profile.provider;
 const hosted = new Map<AcpProvider, HostedSessions<AcpAgent>>();
+
 function sessionsOf(profile: AcpProfile) {
   let sessions = hosted.get(profile.provider);
   if (!sessions) {
@@ -319,6 +321,7 @@ export function closeAcpSession(profile: AcpProfile, key: string) {
 export function detachAcp(profile: AcpProfile) {
   sessionsOf(profile).detach();
 }
+
 export function disposeAcp(profile: AcpProfile) {
   sessionsOf(profile).dispose();
 }

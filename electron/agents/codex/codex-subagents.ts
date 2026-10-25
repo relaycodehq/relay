@@ -75,6 +75,7 @@ const finished: Record<string, AgentActivity["status"]> = {
   interrupted: "stopped",
   failed: "failed",
 };
+
 const ended = {
   complete: "completed",
   stopped: "stopped",

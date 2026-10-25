@@ -13,10 +13,12 @@ import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
 
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
+
 const write = async (path: string, text: string) => {
   await mkdir(join(root, path, ".."), { recursive: true });
   await writeFile(join(root, path), text);
 };
+
 beforeEach(async () => {
   root = await tempRepo("relay-ignored-");
   await write(".gitignore", ".env*.local\ngenerated/\nforced.txt\n");
@@ -26,6 +28,7 @@ beforeEach(async () => {
   git("add", "-f", "forced.txt");
   git("commit", "-qm", "Initial");
 });
+
 afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });

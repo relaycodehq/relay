@@ -7,17 +7,22 @@ import { createGithubRepo, githubLogin } from "./github";
 import { git } from "../git/git";
 
 vi.mock("../git/git", () => ({ git: vi.fn(async () => "sample") }));
+
 vi.mock("./github", () => ({
   githubLogin: vi.fn(),
   createGithubRepo: vi.fn(),
 }));
+
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-create-"));
   vi.clearAllMocks();
   vi.mocked(githubLogin).mockResolvedValue({ path: "gh", login: "sample" });
 });
+
 afterEach(async () => rm(dir, { recursive: true, force: true }));
+
 const spec = () => ({
   name: "web",
   location: dir,

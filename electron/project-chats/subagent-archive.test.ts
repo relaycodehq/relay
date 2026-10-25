@@ -6,6 +6,7 @@ import type { SubagentDetail } from "../../shared/subagents";
 import { SubagentArchive } from "./subagent-archive";
 
 const failures = vi.hoisted(() => ({ write: false }));
+
 vi.mock("node:fs/promises", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs/promises")>();
   return {
@@ -19,11 +20,15 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     },
   };
 });
+
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-subagents-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
+
 const run = (id: string): SubagentDetail => ({
   id,
   description: id,

@@ -27,11 +27,13 @@ vi.mock("../git/git", async (actual) => ({
 
 let root: string;
 let projects: Projects;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-file-preview-")));
   projects = new Projects(new Store(root));
   vi.clearAllMocks();
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 const preview = () => projects.filePreview({ root, plain: false }, "file.txt");
 

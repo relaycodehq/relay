@@ -27,10 +27,12 @@ function refusing() {
     onerror: (() => void) | null = null;
     onclose: (() => void) | null = null;
     onmessage: (() => void) | null = null;
+
     constructor() {
       dials.push(Date.now());
       queueMicrotask(() => this.onerror?.());
     }
+
     send() {}
     close() {}
   }

@@ -10,11 +10,13 @@ describe("fitZoom", () => {
       fitZoom({ width: 800, height: 600 }, { width: 1600, height: 900 }),
     ).toBe(1.5);
   });
+
   it("keeps a page taller than the stage at its own size, to scroll", () => {
     expect(
       fitZoom({ width: 800, height: 3000 }, { width: 1600, height: 900 }),
     ).toBe(1);
   });
+
   it("shrinks only a page wider than the stage", () => {
     expect(
       fitZoom({ width: 1000, height: 3000 }, { width: 800, height: 900 }),

@@ -13,6 +13,7 @@ test("the Device surface downloads the hub, streams a booted emulator over the p
     !process.env.RELAY_DEVICE_E2E,
     "Boot an Android Emulator, then set RELAY_DEVICE_E2E=1",
   );
+
   test.setTimeout(300_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-device-"))),
     repo = join(root, "project");
@@ -152,6 +153,7 @@ test("closing the Device tab in one window keeps it live in another", async () =
     !process.env.RELAY_DEVICE_E2E,
     "Boot an Android Emulator, then set RELAY_DEVICE_E2E=1",
   );
+
   test.setTimeout(300_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-device-"))),
     repo = join(root, "project"),

@@ -33,6 +33,7 @@ describe("code references", () => {
       body: "Why is this here?",
     });
   });
+
   it("keeps a leading agent mention first", () => {
     const sent = codeReferenceMessage(refs.slice(0, 1), "@claude explain");
     expect(sent.startsWith("@claude About ")).toBe(true);
@@ -40,6 +41,7 @@ describe("code references", () => {
     expect(parsed.refs).toEqual(refs.slice(0, 1));
     expect(parsed.body).toBe("@claude explain");
   });
+
   it("leaves ordinary messages alone", () => {
     expect(parseCodeReferences("About time: nothing")).toEqual({
       refs: [],

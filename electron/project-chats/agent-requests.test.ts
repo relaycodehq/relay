@@ -11,6 +11,7 @@ it("migrates saved choices without upgrading existing read-only/edit drafts to F
   expect(savedRuntimeMode("read-only")).toBe("read-only");
   expect(savedRuntimeMode("sandboxed")).toBe("auto-accept-edits");
 });
+
 it("rejects unoffered decisions and releases requests when the provider cancels", async () => {
   const turn = new AbortController(),
     provider = new AbortController();
@@ -31,6 +32,7 @@ it("rejects unoffered decisions and releases requests when the provider cancels"
     requests.respond(id, { kind: "approval", decision: "accept" }),
   ).toThrow("no longer");
 });
+
 it("forwards only permissions requested by the harness and scopes grants to the selected duration", async () => {
   const permissions = {
     network: { enabled: true },
@@ -51,6 +53,7 @@ it("forwards only permissions requested by the harness and scopes grants to the 
     ),
   ).toEqual({ permissions: {}, scope: "turn" });
 });
+
 it("rejects unanswered and unknown questions without consuming the pending request", async () => {
   const requests = new AgentRequests(new AbortController().signal);
   const answer = requests.ask({

@@ -14,6 +14,7 @@ export interface PaneSlots {
   title: HTMLElement | null;
   actions: HTMLElement | null;
 }
+
 export const NO_SLOTS: PaneSlots = { title: null, actions: null };
 
 const DRAG_TYPE = "application/x-relay-pane";
@@ -86,6 +87,7 @@ export function PaneToggles({
     </div>
   );
 }
+
 function PaneToggle({
   pane,
   onToggle,

@@ -74,6 +74,7 @@ beforeEach(async () => {
   git(seed, "commit", "-q", "-m", "First");
   git(seed, "push", "-q", "origin", "HEAD:main");
 });
+
 afterEach(async () => {
   while (cleanup.length) await cleanup.pop()!();
   vi.unstubAllEnvs();

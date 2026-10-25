@@ -10,9 +10,11 @@ import { useReviewComments } from "./useReviewComments";
 vi.mock("../../lib/api", () => ({
   api: { reviews: vi.fn(), reviewComments: vi.fn() },
 }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 afterEach(() => vi.clearAllMocks());
 
 const pull = {
@@ -22,6 +24,7 @@ const pull = {
   number: 7,
   head: { sha: "a".repeat(40) },
 } as Pull;
+
 const onPaths = () => {};
 const tick = async () =>
   act(async () => {

@@ -51,6 +51,7 @@ export interface ReadAloudState {
 }
 
 export const readAloudSpeeds = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+
 export const defaultReadAloudSettings: ReadAloudSettings = {
   voices: {},
   speed: 1,

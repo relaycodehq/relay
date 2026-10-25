@@ -25,6 +25,7 @@ const open = async () => {
   changed = [];
   storage.onSummaries((projectId) => changed.push(projectId));
 };
+
 const answer = (body: string): ChatMessage => ({
   id: crypto.randomUUID(),
   role: "assistant",
@@ -34,6 +35,7 @@ const answer = (body: string): ChatMessage => ({
   provider: "codex",
   version: 1,
 });
+
 const thread = (): ProjectChat => ({
   id: crypto.randomUUID(),
   projectId: "p",
@@ -43,6 +45,7 @@ const thread = (): ProjectChat => ({
   updated: 1,
   messages: [],
 });
+
 const listed = (chat: ProjectChat) =>
   store.get().chats!.find((c) => c.id === chat.id)!;
 
@@ -50,6 +53,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-chat-storage-"));
   await open();
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 it("lists each answering agent once, most recently used first, including side conversations", () => {

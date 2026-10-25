@@ -37,6 +37,7 @@ export class Drafts {
     string,
     { request: HeldSend; done: (result: HeldSendResult) => void }
   >();
+
   constructor(
     private store: DraftStore,
     private hooks: {

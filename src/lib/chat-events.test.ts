@@ -16,6 +16,7 @@ const desktop = vi.hoisted(() => ({
   release: () => {},
   setup: undefined as ProjectChat["setup"],
 }));
+
 vi.mock("./api", () => ({
   api: {
     onProjectChats: () => () => {},
@@ -53,6 +54,7 @@ const message = (
   version: 1,
   ...extra,
 });
+
 let qc: QueryClient;
 const shown = () =>
   qc

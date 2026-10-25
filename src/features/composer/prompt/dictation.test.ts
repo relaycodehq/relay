@@ -6,6 +6,7 @@ import { promptContent } from "../prompt-content";
 import { beginDictation, endDictation, updateDictation } from "./dictation";
 
 const editors: Editor[] = [];
+
 // Unmounted, so the plugins go in by hand, as in prompt-limit.test.ts.
 const draft = (text: string) => {
   const editor = new Editor({
@@ -20,7 +21,9 @@ const draft = (text: string) => {
   editors.push(editor);
   return editor;
 };
+
 afterEach(() => editors.splice(0).forEach((editor) => editor.destroy()));
+
 const select = (editor: Editor, word: string) => {
   const from = editor.state.doc.textContent.indexOf(word) + 1;
   editor.view.dispatch(
@@ -29,6 +32,7 @@ const select = (editor: Editor, word: string) => {
     ),
   );
 };
+
 const selected = (editor: Editor) =>
   editor.state.doc.textBetween(
     editor.state.selection.from,

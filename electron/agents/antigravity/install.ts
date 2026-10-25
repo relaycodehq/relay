@@ -96,10 +96,12 @@ export async function installAntigravity(
 }
 
 let setup: { root: string; fetch: Fetch } | undefined;
+
 /** Where Antigravity goes on this machine; set once by the app. */
 export function configureAntigravity(next: { root: string; fetch: Fetch }) {
   setup = next;
 }
+
 function antigravitySetup() {
   if (!setup) throw new Error("Antigravity isn't set up in this process.");
   return setup;

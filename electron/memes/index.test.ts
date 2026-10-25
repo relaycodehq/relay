@@ -7,13 +7,16 @@ import { builtInMemes } from "../../shared/memes";
 vi.mock("../media", () => ({
   mediaUrl: async (full: string) => `relay-media://file/t/${basename(full)}`,
 }));
+
 import { Memes } from ".";
 
 let dir: string, memes: Memes;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-memes-"));
   memes = new Memes(dir);
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 it("offers the built-ins until set up, then shows the pictures an agent saved", async () => {

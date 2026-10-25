@@ -25,6 +25,7 @@ interface Source {
   /** Why a line has no history: every line's, or with `lineAt`, a changed one's. */
   unavailable?: string;
 }
+
 interface Hover {
   key: string;
   line: number;
@@ -34,6 +35,7 @@ interface Hover {
   result?: LineBlame;
   error?: string;
 }
+
 const fromTooltip = (event: SyntheticEvent) =>
   event.nativeEvent
     .composedPath()

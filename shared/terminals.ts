@@ -28,14 +28,17 @@ export const terminalBaseKey = (key: string) => key.split("~")[0]!;
 export const TERMINAL_SLOT = /^[a-z0-9]{1,12}$/;
 
 export const terminalSlotSchema = z.string().regex(TERMINAL_SLOT);
+
 const threadKeySchema = z.union([
   idSchema,
   z.templateLiteral(["draft:", idSchema]),
 ]);
+
 export const terminalKeySchema = z.union([
   threadKeySchema,
   z.templateLiteral([threadKeySchema, "~", terminalSlotSchema]),
 ]);
+
 export const terminalSizeSchema = z.object({
   cols: z.number().int().min(2).max(1000),
   rows: z.number().int().min(1).max(500),

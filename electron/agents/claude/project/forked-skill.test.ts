@@ -7,6 +7,7 @@ import type { AgentActivity } from "../../../../shared/projects";
 import { claudeAgentRun, runClaudeProject } from ".";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
+
 vi.mock("../../../platform/executables", () => ({
   findExecutable: async (name: string) => `/usr/bin/${name}`,
 }));
@@ -23,6 +24,7 @@ beforeEach(async () => {
   await writeFile(join(folder, `${session_id}.jsonl`), "");
   transcript = join(folder, session_id, "subagents", "agent-t1.jsonl");
 });
+
 afterEach(async () => {
   vi.unstubAllEnvs();
   await rm(home, { recursive: true, force: true });
@@ -39,10 +41,12 @@ const bash = {
     },
   ],
 };
+
 const bashDone = {
   role: "user",
   content: [{ type: "tool_result", tool_use_id: "bash", content: "" }],
 };
+
 const answer = { id: "msg-2", content: [{ type: "text", text: "probe done" }] };
 
 // The frames Claude Code 2.1.301 sent for `/probe`, a `context: fork` skill:

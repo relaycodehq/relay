@@ -33,11 +33,14 @@ const store = fileSetting<Appearance>({
     forget: forgetStoredAppearance,
   },
 });
+
 let value: Appearance = store.get();
+
 store.subscribe(() => {
   value = store.get();
   apply();
 });
+
 let resolved: ResolvedAppearance;
 const listeners = new Set<() => void>();
 const media = matchMedia("(prefers-color-scheme: dark)");

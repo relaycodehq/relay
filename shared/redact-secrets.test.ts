@@ -8,6 +8,7 @@ const aws = fake("AK", "IA", "Z7Q2XK4M9WPL3RTB");
 const slack = fake("xo", "xb-", "1234567890-0987654321-AbCdEfGhIjKl");
 const anthropic = fake("sk-", "ant-", "api03-Xy9Wv8Ut7Sr6Qp5On4Ml3Kj2");
 const openai = fake("sk-", "proj-", "Zx8Cv7Bn6Mm5Ll4Kk3Jj2Hh1Gg0");
+
 const jwt = fake(
   "eyJ",
   "hbGciOiJIUzI1NiJ9",
@@ -15,6 +16,7 @@ const jwt = fake(
   "zdWIiOiIxMjM0NTY3ODkwIn0",
   ".dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U",
 );
+
 const pem = [
   fake("-----BEGIN ", "RSA PRIVATE KEY-----"),
   "MIIEowIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun",

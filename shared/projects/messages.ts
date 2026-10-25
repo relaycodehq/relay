@@ -46,11 +46,13 @@ export interface ContextUsage {
   /** When the newest request last touched the provider's prompt cache. */
   cache?: PromptCache;
 }
+
 /** Each cache hit restarts the entry's lifetime, so it goes cold `ttlMs` after `at`. */
 export interface PromptCache {
   at: number;
   ttlMs: number;
 }
+
 /** Local marker: the outgoing agent's note for the one taking over, or Relay's when it couldn't write one. */
 interface AgentHandoff {
   from: AgentProvider;
@@ -60,11 +62,13 @@ interface AgentHandoff {
   /** `from` couldn't write the note, so Relay made it from the thread's record. */
   byRelay?: boolean;
 }
+
 /** What a reloaded session's agent loaded that its old process hadn't, and what it no longer has. */
 export interface NameChanges {
   added: string[];
   removed: string[];
 }
+
 /** Local marker: the agent's process was restarted on the same session. Each list is left out when the agent couldn't say. */
 export interface SessionReload {
   /** The agent rebuilt configuration across all projects in its shared service. */
@@ -72,6 +76,7 @@ export interface SessionReload {
   skills?: NameChanges;
   agents?: NameChanges;
 }
+
 /** Local marker: a project's worktree command ran in the thread's worktree. */
 export interface WorktreeCommandRun {
   /** Setup runs before a new worktree's first turn; teardown before Relay removes it. */
@@ -85,6 +90,7 @@ export interface WorktreeCommandRun {
   /** It ended without exiting by itself. */
   stopped?: "timeout" | "cancelled";
 }
+
 export interface ChatMessage {
   /** The exact composer settings a user message went to its agent with. */
   sentSettings?: ResumeSettings;
@@ -188,11 +194,13 @@ export interface ChatMessage {
   error?: string;
   version: number;
 }
+
 /** A provider session and the point in it (a turn, entry or message) to continue from. */
 export interface ForkPoint {
   thread: string;
   at: string;
 }
+
 export interface TurnFileChange {
   path: string;
   additions: number;
@@ -201,6 +209,7 @@ export interface TurnFileChange {
   /** Local: rolled back by this snapshot, which redo restores from. */
   revertedBy?: string;
 }
+
 export interface ChatImage {
   id: string;
   name: string;
@@ -208,6 +217,7 @@ export interface ChatImage {
   sizeBytes: number;
   browser?: import("../browser-annotations").BrowserAnnotation;
 }
+
 export interface AgentActivity {
   id: string;
   kind: "command" | "file" | "read" | "search" | "web" | "agent" | "tool";
@@ -228,6 +238,7 @@ export interface AgentActivity {
   /** The picture the call made, by absolute path; the turn shows it as an image it read. */
   image?: string;
 }
+
 export type TraceDropped = Partial<
   Record<AgentActivity["kind"] | "failed", number>
 >;
@@ -242,6 +253,7 @@ export function turnImages(message: ChatMessage): string[] {
     : (message.activity ?? []);
   return [...new Set(calls.flatMap((a) => imageRead(a) ?? []))];
 }
+
 /** Sequenced messages in the thread's order, then ones not yet sequenced by when they were made. */
 export const threadOrder = (a: ChatMessage, b: ChatMessage) =>
   a.seq && b.seq

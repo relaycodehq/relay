@@ -25,7 +25,9 @@ export const reasoningEffortSchema = z.enum([
   "max",
   "ultra",
 ]);
+
 export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
+
 export const effortLabels: Record<ReasoningEffort, string> = {
   "": "Codex default",
   none: "None",
@@ -37,6 +39,7 @@ export const effortLabels: Record<ReasoningEffort, string> = {
   max: "Max",
   ultra: "Ultra",
 };
+
 /** What a narrow composer shows instead of `effortLabels`. */
 export const effortShortLabels: Record<ReasoningEffort, string> = {
   "": "Default",
@@ -49,6 +52,7 @@ export const effortShortLabels: Record<ReasoningEffort, string> = {
   max: "Max",
   ultra: "Ultra",
 };
+
 /** A Codex model, as the signed-in `codex app-server` lists it. */
 export type CodexModel = {
   id: string;
@@ -62,13 +66,16 @@ export type CodexModel = {
   /** The model Codex runs when its config names none. */
   isDefault?: boolean;
 };
+
 const commonEfforts: ReasoningEffort[] = ["low", "medium", "high", "xhigh"];
+
 const preset = (
   id: string,
   name: string,
   efforts: ReasoningEffort[],
   legacy = false,
 ): CodexModel => ({ id, name, description: "", efforts, legacy });
+
 /** Offered until Codex lists its models, and whenever it can't. */
 export const fallbackCodexModels: CodexModel[] = [
   preset("gpt-6-astra", "GPT-6-Astra", [...commonEfforts, "max", "ultra"]),
@@ -79,6 +86,7 @@ export const fallbackCodexModels: CodexModel[] = [
   preset("gpt-5.6-luna", "GPT-5.6-Luna", [...commonEfforts, "max"]),
   preset("gpt-5.5", "GPT-5.5", commonEfforts, true),
 ];
+
 export type ClaudeModel = {
   id: string;
   name: string;
@@ -89,6 +97,7 @@ export type ClaudeModel = {
   /** The model id an alias stands for, e.g. `claude-opus-5-5` for `opus`. */
   resolved?: string;
 };
+
 /** Claude Code switches to the 1M context window with a `[1m]` model suffix. */
 export type ClaudeContextWindow = "200k" | "1m";
 export const claudeContextWindow = (model: string): ClaudeContextWindow =>
@@ -97,6 +106,7 @@ export const withClaudeContextWindow = (
   model: string,
   contextWindow: ClaudeContextWindow,
 ) => model.replace(/\[1m\]$/, "") + (contextWindow === "1m" ? "[1m]" : "");
+
 /**
  * The listed model an id refers to, whichever context window it asks for:
  * the CLI lists aliases ("opus") while threads may keep "opus[1m]" or the
@@ -123,6 +133,7 @@ export function findClaudeModel<M extends { id: string; resolved?: string }>(
     ) ?? aliases[0]
   );
 }
+
 /** Levels accepted by `claude --effort` and the Agent SDK. */
 export const claudeEfforts: ReasoningEffort[] = [
   "low",
@@ -131,11 +142,13 @@ export const claudeEfforts: ReasoningEffort[] = [
   "xhigh",
   "max",
 ];
+
 /** A model the CLI didn't list (custom, or the list failed) offers every level. */
 export const claudeEffortsFor = (
   models: readonly Pick<ClaudeModel, "id" | "efforts">[] | undefined,
   id: string,
 ) => findClaudeModel(models, id)?.efforts ?? claudeEfforts;
+
 /** Only efforts Claude accepts; Codex-only levels fall back to its default. */
 export const claudeArgs = (choice: {
   model: string;
@@ -146,6 +159,7 @@ export const claudeArgs = (choice: {
     ? choice.reasoningEffort
     : "",
 });
+
 /** A model Codex didn't list (custom, or the list failed) offers every level. */
 export const reasoningEffortsFor = (
   model: string,
@@ -181,10 +195,12 @@ const effortCheck = {
   message: "Choose a reasoning effort supported by this model.",
   path: ["reasoningEffort"],
 };
+
 export const modelChoiceSchema = choiceSchema.refine(
   (choice) => supportsEffort(choice),
   effortCheck,
 );
+
 const questionChoiceSchema = choiceSchema
   .extend({
     model: z.union([modelSchema, z.literal("")]),
@@ -208,6 +224,7 @@ export const helperPickSchema = z
     path: ["choice", "reasoningEffort"],
   });
 export type HelperPick = z.infer<typeof helperPickSchema>;
+
 /** The helpers someone can switch off; the Clockify timesheet goes with its plugin. */
 export const switchableHelpers = [
   "grouping",
@@ -215,6 +232,7 @@ export const switchableHelpers = [
   "split",
   "commitMessage",
 ] as const;
+
 export type SwitchableHelper = (typeof switchableHelpers)[number];
 // Settings saved before Claude was offered used Codex for both.
 export const aiSettingsSchema = z
@@ -280,6 +298,7 @@ export type ModelChoice = z.infer<typeof modelChoiceSchema>;
 export type AISettings = z.infer<typeof aiSettingsSchema>;
 /** As persisted, possibly from before a field existed; parse before use. */
 export type StoredAISettings = z.input<typeof aiSettingsSchema>;
+
 export const defaultAISettings: AISettings = {
   grouping: { model: "gpt-5.6-luna", fast: false, reasoningEffort: "medium" },
   questions: { model: "", fast: false, reasoningEffort: "" },
@@ -296,10 +315,12 @@ export const defaultAISettings: AISettings = {
   agentOrder: [],
   agentsOff: [],
 };
+
 export const helperOn = (
   settings: Pick<AISettings, "helpersOff"> | undefined,
   helper: SwitchableHelper,
 ) => !settings?.helpersOff?.includes(helper);
+
 /** Why a switched-off helper's job didn't run; the phone shows it as is. */
 export const helperOffMessage = (label: string) =>
   `${label} are off in Settings → AI & agents → Used by Relay.`;
@@ -316,6 +337,7 @@ const modelChoices = [
   ["gpt-6-astra", "Astra"],
   ["gpt-5.5", "GPT-5.5"],
 ] as const;
+
 export const modelName = (id: string) =>
   modelChoices.find(([value]) => value === id)?.[1] ?? (id || "Codex default");
 export const choiceLabel = (

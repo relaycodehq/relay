@@ -43,6 +43,7 @@ export class AcpConnection extends JsonRpcConnection {
   listen(session: string, handler: (update: unknown) => void) {
     this.listeners.set(session, handler);
   }
+
   unlisten(session: string) {
     this.listeners.delete(session);
   }

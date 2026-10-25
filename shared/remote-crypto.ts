@@ -31,15 +31,18 @@ export const publicKeyOf = (secret: Uint8Array) => x25519.getPublicKey(secret);
 export class Channel {
   private sent = 0;
   private received = 0;
+
   constructor(
     private sendKey: Uint8Array,
     private receiveKey: Uint8Array,
   ) {}
+
   seal(plain: string | Uint8Array): Uint8Array {
     return chacha20poly1305(this.sendKey, nonce(this.sent++)).encrypt(
       typeof plain === "string" ? utf8ToBytes(plain) : plain,
     );
   }
+
   /** Throws on a forged, reordered or replayed frame. */
   openBytes(frame: Uint8Array): Uint8Array {
     const plain = chacha20poly1305(
@@ -49,6 +52,7 @@ export class Channel {
     this.received++;
     return plain;
   }
+
   open(frame: Uint8Array): string {
     return decodeUtf8Bytes(this.openBytes(frame));
   }

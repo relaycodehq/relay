@@ -3,6 +3,7 @@ import type { AgentActivity, ChatMessage } from "../../shared/projects";
 import { relayNote } from "./relay-note";
 
 let n = 0;
+
 const message = (m: Partial<ChatMessage>): ChatMessage => ({
   id: `m${++n}`,
   role: "assistant",
@@ -13,6 +14,7 @@ const message = (m: Partial<ChatMessage>): ChatMessage => ({
   version: 1,
   ...m,
 });
+
 const call = (
   kind: AgentActivity["kind"],
   label: string,

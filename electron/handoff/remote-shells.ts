@@ -9,11 +9,13 @@ import { threadTerminals } from "../terminal/thread-terminals";
 import type { Computers } from "./computers";
 
 type Client = Awaited<ReturnType<Computers["connected"]>>;
+
 /** A call to an online computer, its errors in words. */
 type Call = <T>(
   computerId: string,
   run: (client: Client) => Promise<T>,
 ) => Promise<T>;
+
 type Size = { cols: number; rows: number };
 
 interface Shell {
@@ -27,6 +29,7 @@ interface Shell {
 
 export class RemoteShells {
   private shells = new Map<string, Shell>();
+
   constructor(
     computers: Computers,
     private call: Call,
@@ -39,10 +42,12 @@ export class RemoteShells {
     });
     computers.onOnline((id) => void this.reattach(id));
   }
+
   has(key: string) {
     const shell = this.shells.get(key);
     return !!shell && !shell.closing;
   }
+
   async open(
     computer: string,
     projectId: string,
@@ -56,6 +61,7 @@ export class RemoteShells {
     this.shells.set(key, { computer, projectId, size });
     return opened;
   }
+
   /** The draft's shells (`from`) carry over to the thread its first message started. */
   async adopt(computer: string, from: string, chatId: string) {
     const keys = [...this.shells.keys()].filter(
@@ -71,6 +77,7 @@ export class RemoteShells {
       this.shells.set(chatId + key.slice(from.length), shell);
     }
   }
+
   run(op: TerminalOp, key: string, args: unknown[]) {
     const shell = this.shells.get(key)!;
     if (op === "close") return this.close(key, shell);
@@ -80,6 +87,7 @@ export class RemoteShells {
       client.call("terminalCall", op, key, args),
     );
   }
+
   private async close(key: string, shell: Shell) {
     shell.closing = true;
     try {
@@ -91,6 +99,7 @@ export class RemoteShells {
       // Closed once the computer is back; see reattach.
     }
   }
+
   /**
    * The computer is back. What its shells printed while it was away never
    * arrived, and a shell that printed enough waits for acks that never come:

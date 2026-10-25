@@ -235,6 +235,7 @@ async function startsFollowUp(frames: ClaudeFrames) {
   const first = frames.peek();
   return first?.type === "system" && first.subtype === "init";
 }
+
 function userContent(
   text: string,
   images: Awaited<ReturnType<typeof claudeImages>>,
@@ -253,6 +254,7 @@ function userContent(
     { type: "text" as const, text: dispatch.command },
   ];
 }
+
 /** A `$skill` in the prompt, laid out so Claude runs it; undefined sends the prompt as it is. */
 async function skillDispatch(
   prompt: string,

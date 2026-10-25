@@ -191,6 +191,7 @@ export function onDraftImageCount(notify: (key: string) => void) {
 // Thread windows share the database; each tells the others which draft it
 // changed. A channel never hears its own messages, so a window isn't told its own.
 let channel: BroadcastChannel | undefined;
+
 function changes() {
   if (channel || typeof BroadcastChannel === "undefined") return channel;
   channel = new BroadcastChannel("relay-draft-images");
@@ -221,6 +222,7 @@ export function onDraftImagesChanged(listener: (key: string) => void) {
 }
 
 const savedListeners = new Set<(key: string, images: DraftImage[]) => void>();
+
 /** Told each draft this window saved screenshots for, with what it holds now. */
 export function onDraftImagesSaved(
   listener: (key: string, images: DraftImage[]) => void,
@@ -246,6 +248,7 @@ function putImages(
   }
   return value;
 }
+
 function imagesSaved(
   key: string,
   images: DraftImage[],
@@ -281,6 +284,7 @@ export const updateDraftImages = (
 const LIMIT = 800_000;
 /** A screenshot is drawn no longer than this on its long side before compressing. */
 const LONG_SIDE = 2048;
+
 /** Tried in order until one fits: quality goes first, then size. */
 const attempts = [
   { size: 1, quality: 0.88 },
@@ -298,6 +302,7 @@ function asDataUrl(file: Blob): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
 function jpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(

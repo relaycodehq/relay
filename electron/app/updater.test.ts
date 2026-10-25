@@ -8,17 +8,20 @@ vi.mock("electron", () => ({
   app: { isPackaged: false, getVersion: () => "0.1.0", on: vi.fn() },
   net: { fetch: vi.fn() },
 }));
+
 import { app, net } from "electron";
 import { Updater } from "./updater";
 import type { UpdateFile, UpdateState } from "../../shared/updates";
 
 const bytes = Buffer.from("relay update payload ".repeat(4096));
+
 const release = (data = bytes): UpdateFile => ({
   name: "Relay.zip",
   url: "https://example.test/Relay.zip",
   sha512: createHash("sha512").update(data).digest("base64"),
   size: data.length,
 });
+
 /** The download step on its own; which installs can download is platform-gated. */
 const fetchFile = (
   file: UpdateFile,
@@ -40,6 +43,7 @@ function keyPair() {
   const x = publicKey.export({ format: "jwk" }).x!;
   return { privateKey, key: Buffer.from(x, "base64url").toString("base64") };
 }
+
 const testKey = keyPair();
 
 /** An updater on a test feed, for a copy that can replace itself. */
@@ -52,6 +56,7 @@ function checker(emit: (state: UpdateState) => void = () => {}) {
   Object.assign(updater as any, { install: { target: "linux-x64-appimage" } });
   return updater;
 }
+
 const feedBytes = (version: string) =>
   Buffer.from(
     JSON.stringify(
@@ -86,6 +91,7 @@ function answer(
       : (feed ?? new Response(new Uint8Array(bytes))),
   );
 }
+
 /** How many times the feed itself was fetched, leaving out its signature. */
 const feedFetches = () =>
   vi

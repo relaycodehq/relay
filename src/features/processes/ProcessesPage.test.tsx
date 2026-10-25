@@ -12,17 +12,22 @@ import { api } from "../../lib/api";
 import { ProcessesPage } from "./ProcessesPage";
 
 vi.mock("../../lib/api", () => ({ api: { processOverview: vi.fn() } }));
+
 vi.mock("../../ui/ui", () => ({
   ErrorBox: () => null,
   IconButton: () => null,
   Loading: () => null,
 }));
+
 vi.mock("../agents/ComposerModelPicker", () => ({ ProviderIcon: () => null }));
+
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 let root: Root | undefined;
 let client: QueryClient;
+
 afterEach(async () => {
   await act(async () => root?.unmount());
   client?.clear();

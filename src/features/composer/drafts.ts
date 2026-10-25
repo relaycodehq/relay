@@ -78,10 +78,12 @@ export function writeDraft(key: string, value: string) {
 // composer, a phone's send through this computer, so a composer showing it
 // drops the screenshots and attachments it holds from storage that's moved on.
 const takenListeners = new Set<(thread: string) => void>();
+
 export function onDraftTaken(listener: (thread: string) => void) {
   takenListeners.add(listener);
   return () => void takenListeners.delete(listener);
 }
+
 export const draftTaken = (thread: string) =>
   takenListeners.forEach((listener) => listener(thread));
 
@@ -101,6 +103,7 @@ export function setDraftBody(
 // empties, so a thread's own window tells the main one why its draft went.
 const SENT = "relay-draft-sent";
 const SENT_KEPT = 50;
+
 let sentRead: { raw: string | null; marks: Record<string, number> } = {
   raw: null,
   marks: {},
@@ -197,6 +200,7 @@ function readIndex(): string[] {
   }
   return [...new Set([...keys, ...draftsWithImages()])].sort();
 }
+
 const draftKeys = () => (index ??= readIndex());
 
 /**
@@ -216,6 +220,7 @@ function heardFromOtherWindow(event: StorageEvent) {
   if (was?.join("\n") !== index.join("\n"))
     indexListeners.forEach((notify) => notify());
 }
+
 if (typeof window !== "undefined")
   window.addEventListener("storage", heardFromOtherWindow);
 const subscribeIndex = (notify: () => void) => {
@@ -223,6 +228,7 @@ const subscribeIndex = (notify: () => void) => {
   indexListeners.add(notify);
   return () => indexListeners.delete(notify);
 };
+
 /** The storage keys of every draft with text or a screenshot, or set up as a deep review, sorted. */
 export const useDraftKeys = () =>
   useSyncExternalStore(subscribeIndex, draftKeys);
@@ -238,6 +244,7 @@ export function newThreadProject(id: string): string | undefined {
   const match = /^new:([^:]+)(?::[^:]+)?$/.exec(id);
   return match?.[1];
 }
+
 const isSlot = (id: string) => id.split(":").length === 3;
 /**
  * An unsent thread with a deep review set up in it, which is a draft before
@@ -277,6 +284,7 @@ export function currentNewThread(projectId: string): string {
     ? saved
     : newThreadId(projectId);
 }
+
 export const setCurrentNewThread = (projectId: string, id: string) =>
   writeText(currentNewThreadKey(projectId), id);
 
@@ -293,6 +301,7 @@ export function saveDraftScope(id: string, scope: ChatScope) {
   threadStorage(id).scope.save(scope);
   changedRecord(id, was);
 }
+
 /**
  * Drops the scope and the workspace picked for it, as for a fresh thread in
  * the slot. A review set aside there stays for Deep review to be picked again.
@@ -303,6 +312,7 @@ export function resetDraftScope(id: string) {
   clearDraftWorkspace(id);
   changedRecord(id, was);
 }
+
 /** Drops the scope, the workspace picked for it and any review set up. */
 export function clearDraftScope(id: string) {
   const was = isReviewDraft(id);
@@ -320,21 +330,25 @@ export const loadDraftWorkspace = (
   id: string,
   project: Pick<Project, "settings">,
 ): ChatWorkspace => threadStorage(id).workspace.load(projectWorkspace(project));
+
 export const saveDraftWorkspace = (
   id: string,
   workspace: ChatWorkspace,
   project: Pick<Project, "settings">,
 ) => threadStorage(id).workspace.save(workspace, projectWorkspace(project));
+
 export function clearDraftWorkspace(id: string) {
   threadStorage(id).workspace.clear();
   threadStorage(id).branch.save("");
   threadStorage(id).start.save(undefined);
 }
+
 export function saveDraftStart(id: string, start: WorktreeStart | undefined) {
   const was = isReviewDraft(id);
   threadStorage(id).start.save(start);
   changedRecord(id, was);
 }
+
 /** The branch typed for an unsent thread's worktree, when it will work in one. */
 export const draftWorktreeBranch = (
   id: string,

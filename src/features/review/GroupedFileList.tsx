@@ -40,6 +40,7 @@ interface Props {
   plain: boolean;
   onReviewGroup: (group: ChangeGroup, viewed: boolean) => Promise<void>;
 }
+
 export function GroupedFileList({
   checks,
   files,

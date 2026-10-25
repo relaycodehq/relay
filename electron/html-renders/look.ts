@@ -25,6 +25,7 @@ export interface PageLog {
   message: string;
   source?: string;
 }
+
 export interface PageLook {
   /** Content height at each of RENDER_WIDTHS. */
   heights: number[];

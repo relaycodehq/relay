@@ -21,6 +21,7 @@ const WRITTEN: [DiffKind, string][] = [
   ["fixtures", "Fixtures"],
   ["docs", "Docs"],
 ];
+
 const changed = (s: DiffStat) => s.additions > 0 || s.deletions > 0;
 const count = (n: number) => n.toLocaleString();
 // 50 files a page on GitHub: past this the hover would take too long to be worth it.

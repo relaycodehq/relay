@@ -14,6 +14,7 @@ import {
 } from "./thread-draft";
 
 const sha = "a".repeat(40);
+
 const selection = {
   head: sha,
   base: sha,
@@ -23,6 +24,7 @@ const selection = {
   side: "additions" as const,
   question: "Why?",
 };
+
 const ref = { path: "src/b.ts", start: 1, end: 2, label: "HEAD", code: "x" };
 const workItem = { id: 7, title: "Fix it" };
 
