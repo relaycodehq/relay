@@ -4,7 +4,6 @@ import type { AgentProvider } from "../../shared/agents";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
 import type { DeepReviewStart, ResumeReview } from "../../shared/deep-review";
 import type { FindingStatus } from "../../shared/findings";
-import { setFindingStatus } from "../findings";
 import type {
   ChatMessage,
   ChatScope,
@@ -20,18 +19,14 @@ import type {
   WorktreeStart,
 } from "../../shared/projects";
 import {
-  PAGE_QUESTION_ID,
-  replyRoot,
   replyRoots,
   mainConversation,
   threadOrder,
 } from "../../shared/projects";
 import { latestContext } from "../../shared/context-usage";
-import { parseGoalCommand } from "../../shared/goal";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
-import { agentAsked } from "../../shared/recipient";
 import type { LineQuestion } from "../../shared/questions";
 import { everyAgentRuntime } from "../agents";
 import { accountHomes } from "../agents/accounts";
@@ -52,7 +47,7 @@ import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
 import type { ChatCore } from "./core";
 import { Councils } from "./councils";
-import { assertHere, ComputerHandoff } from "./handoff";
+import { ComputerHandoff } from "./handoff";
 import { LiveHandoff } from "./handoff-live";
 import { SetupMirror } from "./handoff-setup";
 import { ChatQueue } from "./queue";
@@ -77,30 +72,22 @@ import { TurnHandoffs } from "./turn-flows/handoff-notes";
 import { TurnRecovery } from "./turn-flows/recovery";
 import { ThreadWorktrees } from "./worktrees";
 import { WorktreeCleanup } from "./worktree-cleanup";
-import { WATCH_KNOWN_LIMIT, type WatchClose } from "../../shared/watch";
+import type { WatchClose } from "../../shared/watch";
 import { WatchReviews } from "./watch-review";
 import { WatchSpendLog } from "./watch-spend";
 import { PredictionLog } from "./prediction-log";
-import { usageLog } from "../usage";
 import { AsyncQuestions } from "./async-questions";
-import { threadCost } from "../../shared/thread-cost";
 import { ProjectImports } from "./project-import";
 import { defaultPrefs, type AppPrefs } from "../settings";
 import { ImportOffers } from "./import-offers";
 import { ProjectMoves } from "./project-move";
-import { chatStatus } from "./status";
+import * as marks from "./answer-marks";
+import { ChatReads } from "./chat-reads";
+import * as running from "./running-answer";
+import { SendRouting } from "./send-routing";
+import * as spend from "./side-spend";
 
 export { chatStatus, type ChatStatus } from "./status";
-
-/** What a first message needs to start its thread on another computer. */
-function startableThere(input: ProjectChatSend, orHere: boolean) {
-  if (input.images?.length)
-    throw new Error(
-      `Screenshots don't go along to another computer yet. Send it without them${orHere ? ", or start it here" : ""}.`,
-    );
-  if (!agentAsked(input))
-    throw new Error("Pick the agent that starts it there.");
-}
 
 /** How often the ledger looks for turns that ended without saying. */
 const LEAK_CHECK_MS = 30_000;
@@ -132,6 +119,8 @@ export class ProjectChats {
   private compactions: TurnCompactions;
   private control = threadControl();
   private questions: AsyncQuestions;
+  private reads: ChatReads;
+  private sending: SendRouting;
   private disposing = false;
   private leakCheck: ReturnType<typeof setInterval>;
   private news: TurnNews;
@@ -194,7 +183,7 @@ export class ProjectChats {
     };
     this.core = core;
     this.questions = new AsyncQuestions(core, (id, input) =>
-      this.sendHeld(id, input),
+      this.sending.held(id, input),
     );
     this.watchNotes = new WatchReviews(
       store,
@@ -242,6 +231,7 @@ export class ProjectChats {
     );
     this.files = new TurnFiles(core, this.worktrees);
     this.threads = new ThreadList(core);
+    this.reads = new ChatReads(core, this.worktrees, this.threads);
     // As the thread's list entry reads it; one handed away waits there, which tells it.
     const waits = (id: string, chat: ProjectChat) =>
       this.active.ledger
@@ -342,6 +332,15 @@ export class ProjectChats {
       this.queue,
       ends,
     );
+    this.sending = new SendRouting(core, {
+      turns: this.turns,
+      worktrees: this.worktrees,
+      schedule: this.schedule,
+      asides: this.asides,
+      queue: this.queue,
+      compactions: this.compactions,
+      councils: this.councils,
+    });
   }
   /**
    * Hears which project's thread list may read differently: a summary saved,
@@ -593,28 +592,6 @@ export class ProjectChats {
    * What waits in the thread now, which isn't saved with it; for a live
    * handoff, what its computer last said, over what's saved here.
    */
-  private waitingIn(chat: ProjectChat) {
-    if (!chat.sentTo?.live && !chat.sentTo?.setup)
-      return { requests: this.active.requests(chat.id) };
-    const {
-      requests = [],
-      queue,
-      scheduled,
-      queuePaused,
-      stopped,
-      limitResume,
-      goal,
-    } = this.core.away?.get(chat.id) ?? {};
-    return {
-      requests,
-      queue,
-      scheduled,
-      queuePaused,
-      stopped,
-      limitResume,
-      goal,
-    };
-  }
   /**
    * A round in the folder the thread works in now. `pull` asks the forge
    * about a pull request; `duringTurn`: the thread's agent asked for it
@@ -641,16 +618,7 @@ export class ProjectChats {
     findingId: string,
     status: Extract<FindingStatus, "open" | "dismissed">,
   ) {
-    return this.core.control(id, async () => {
-      const chat = await this.storage.load(id);
-      const report = setFindingStatus(chat.findings, findingId, status);
-      // The report shows under its answer, which redraws it.
-      const message = chat.messages.find((m) => m.id === report);
-      if (message) message.version++;
-      await this.storage.save(chat);
-      if (message)
-        this.core.emit({ chatId: id, message: structuredClone(message) });
-    });
+    return marks.setFinding(this.core, id, findingId, status);
   }
   /** The same chat object a running turn writes into, so its next publish keeps the note closed. */
   closeWatchNote(
@@ -660,71 +628,19 @@ export class ProjectChats {
     how: WatchClose,
     read = false,
   ) {
-    const known = how === "known";
-    return this.core.control(id, async () => {
-      const chat = await this.storage.load(id);
-      const message = chat.messages.find((m) => m.id === messageId);
-      const note = message?.notes?.find((n) => n.id === noteId);
-      if (!message || !note || note.closed) return;
-      note.closed = true;
-      note.how = how;
-      if (read) note.read = true;
-      if (known) note.known = true;
-      message.version++;
-      await this.storage.save(chat);
-      this.core.emit({ chatId: id, message: structuredClone(message) });
-      if (known)
-        await this.core.store.update((s) => {
-          // The headline alone doesn't say what topic they closed.
-          s.watchKnown = [
-            ...(s.watchKnown ?? []).filter(
-              (t) => t !== note.title && !t.startsWith(`${note.title}: `),
-            ),
-            `${note.title}: ${note.line}`,
-          ].slice(-WATCH_KNOWN_LIMIT);
-        });
-    });
+    return marks.closeWatchNote(this.core, id, messageId, noteId, how, read);
   }
   /** What side checks spent in the last `days`, by thread. */
   watchSpend(days: number) {
-    const titles = new Map(
-      (this.store.get().chats ?? []).map((c) => [c.id, c.title]),
-    );
-    return (
-      this.core.watchSpend?.summary(days, (id) => titles.get(id)) ??
-      Promise.resolve(undefined)
-    );
+    return spend.watchSpend(this.core, days);
   }
   /** The composer's guesses of the last `days`: what they cost and how often they were sent. */
   predictionSpend(days: number) {
-    return (
-      this.core.predictions?.summary(days, async (chats, since) => {
-        let usd = 0;
-        for (const e of await usageLog())
-          if (
-            e.at >= since &&
-            e.job === "thread" &&
-            e.chat &&
-            chats.has(e.chat)
-          )
-            for (const spend of Object.values(e.models)) usd += spend.usd ?? 0;
-        return usd;
-      }) ?? Promise.resolve(undefined)
-    );
+    return spend.predictionSpend(this.core, days);
   }
   /** The composer showed a guess, so what's sent next counts for or against it; Escape hides it for good. */
   seePrediction(id: string, messageId: string, how: "shown" | "dismissed") {
-    return this.core.control(id, async () => {
-      const chat = await this.storage.load(id);
-      const message = chat.messages.find((m) => m.id === messageId);
-      if (!message?.prediction || message.predictionSeen === "dismissed")
-        return;
-      if (message.predictionSeen === how) return;
-      message.predictionSeen = how;
-      message.version++;
-      await this.storage.save(chat);
-      this.core.emit({ chatId: id, message: structuredClone(message) });
-    });
+    return marks.seePrediction(this.core, id, messageId, how);
   }
   /** The notes of the last `days` with what was done with each. */
   watchReview(days: number) {
@@ -733,71 +649,27 @@ export class ProjectChats {
   judgeWatchNotes(days: number) {
     return this.watchNotes.judge(days);
   }
-  async get(id: string): Promise<ProjectChat> {
-    const chat = await this.storage.load(id);
-    await this.worktrees.agents.refresh(chat);
-    return {
-      ...structuredClone(chat),
-      ...structuredClone(this.waitingIn(chat)),
-    };
+  get(id: string): Promise<ProjectChat> {
+    return this.reads.get(id);
   }
   /** Progress reads use the cached thread, without cloning its history or refreshing Git. */
-  async status(id: string) {
-    return (await this.statuses({ ids: [id] }))[0];
+  status(id: string) {
+    return this.reads.status(id);
   }
   /** One live summary list per project, even when a tool waits on many threads. */
-  async statuses(
-    selection: { ids: readonly string[] } | { startedBy: string },
-  ) {
-    const ids =
-      "ids" in selection
-        ? selection.ids
-        : (this.store.get().chats ?? [])
-            .filter(
-              (c) =>
-                c.startedBy?.chatId === selection.startedBy && !c.archivedAt,
-            )
-            .map((c) => c.id);
-    const loaded = new Map(
-      await Promise.all(
-        ids.map(async (id) => [id, await this.storage.load(id)] as const),
-      ),
-    );
-    const summaries = this.threads.byIds(ids);
-    // Explicit IDs retain caller order (and missing-ID errors). Started
-    // threads retain the project grouping and updated order of the sidebar.
-    const ordered = "ids" in selection ? ids : [...summaries.keys()];
-    return ordered.map((id) => {
-      const chat = loaded.get(id)!;
-      const summary = summaries.get(id);
-      if (!summary || summary.archivedAt) throw new Error("Chat not found.");
-      return chatStatus(summary, { ...chat, ...this.waitingIn(chat) });
-    });
+  statuses(selection: { ids: readonly string[] } | { startedBy: string }) {
+    return this.reads.statuses(selection);
   }
   /** Like get, but messages the caller already holds at the same version come back as their ids. */
-  async changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
-    const saved = await this.storage.load(id);
-    await this.worktrees.agents.refresh(saved);
-    const { messages, ...chat } = saved;
-    return {
-      ...structuredClone(chat),
-      messages: messages.map((m) =>
-        known[m.id] === m.version ? m.id : structuredClone(m),
-      ),
-      ...structuredClone(this.waitingIn(saved)),
-    };
+  changes(id: string, known: KnownMessages): Promise<ProjectChatPatch> {
+    return this.reads.changes(id, known);
   }
-  async cost(id: string) {
-    return threadCost((await this.storage.load(id)).messages);
+  cost(id: string) {
+    return this.reads.cost(id);
   }
   /** The screenshots of a queued or scheduled message; it is gone once it has been sent. */
-  async queuedImages(chatId: string, messageId: string) {
-    const chat = await this.storage.load(chatId);
-    const waiting = [...(chat.queue ?? []), ...(chat.scheduled ?? [])].find(
-      (q) => q.input.id === messageId,
-    );
-    if (!waiting) throw new Error("That message is no longer waiting.");
-    return structuredClone(waiting.input.images ?? []);
+  queuedImages(chatId: string, messageId: string) {
+    return this.reads.queuedImages(chatId, messageId);
   }
   /**
    * Gives worktree thread `id` its worktree now, holding a copy of the files
@@ -815,157 +687,27 @@ export class ProjectChats {
   }
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
-    // A thread of a project on another computer starts there with its first
-    // message, from whichever caller sends it. Send later holds it here first.
-    const home = this.homeOf(id);
-    if (home && this.starter && !input.sendAt)
-      return this.startThere(id, input, home);
-    return this.control(id, () => this.sendHeld(id, input, fromRelay));
+    return this.sending.send(id, input, fromRelay);
   }
   /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
-  private starter?: (id: string, computerId: string) => Promise<void>;
   startsThereWith(start: (id: string, computerId: string) => Promise<void>) {
-    this.starter = start;
-  }
-  /** The computer the thread's project lives on, while the thread hasn't gone there yet. */
-  private homeOf(id: string) {
-    const chat = this.store.get().chats?.find((c) => c.id === id);
-    if (!chat || chat.sentTo) return undefined;
-    try {
-      return this.core.projects.get(chat.projectId).computer?.id;
-    } catch {
-      return undefined;
-    }
-  }
-  private async startThere(
-    id: string,
-    input: ProjectChatSend,
-    computerId: string,
-  ) {
-    await this.firstMessageOnly(id, input);
-    // Sent again once it went there: nothing's left to start.
-    if (!this.homeOf(id)) return;
-    try {
-      await this.starter!(id, computerId);
-    } catch (e) {
-      // Refused before it set off: the thread is new again, to send once more.
-      await this.control(id, async () => {
-        const chat = await this.storage.load(id);
-        if (chat.sentTo || chat.messages.some((m) => m.id !== input.id)) return;
-        chat.messages = [];
-        delete chat.lastInput;
-        await this.storage.save(chat);
-      });
-      throw e;
-    }
+    this.sending.starter = start;
   }
   /**
    * A new thread's first message, kept with its worktree made but not
    * answered here: another computer starts the thread with it.
    */
   firstMessageOnly(id: string, input: ProjectChatSend) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
-      // Sent again after the reply got lost.
-      if (chat.messages.some((m) => m.id === input.id)) return;
-      const project = this.core.projects.get(chat.projectId);
-      if (project.computer && chat.messages.length)
-        throw new Error(
-          `This thread hasn't started on ${project.computer.name} yet. Send that once it has.`,
-        );
-      if (
-        chat.messages.length ||
-        (!chat.worktree && !project.computer) ||
-        chat.scope.kind !== "project"
-      )
-        throw new Error(
-          "Only a new thread in a worktree starts on another computer.",
-        );
-      // A project's own computer holds a scheduled one here instead (send).
-      if (input.sendAt)
-        throw new Error(
-          "Send later doesn't start a thread on another computer yet. Send it now, or start it here.",
-        );
-      startableThere(input, !project.computer);
-      await this.turns.sendNow(id, input, false, false);
-      // Named after the message: the title's rename waits for a turn here.
-      this.worktrees.unnamed.delete(id);
-    });
+    return this.sending.firstMessageOnly(id, input);
   }
   /** The first message a thread kept for another computer to answer (firstMessageOnly), answered here after all. */
   answerHere(id: string) {
-    return this.control(id, async () => {
-      const chat = await this.storage.load(id);
-      const input = chat.lastInput;
-      const [first, ...rest] = chat.messages;
-      if (!input || first?.id !== input.id || rest.length) return;
-      chat.messages = [];
-      await this.storage.save(chat);
-      await this.sendHeld(id, input);
-    });
+    return this.sending.answerHere(id);
   }
   /** Your own message, from the composer or a phone: it unsettles a thread settled while it ran. */
   async sendYours(id: string, input: ProjectChatSend) {
     await this.triaging.sent(id);
     return this.send(id, input);
-  }
-  /** A send whose caller already holds the thread's control. */
-  private async sendHeld(
-    id: string,
-    input: ProjectChatSend,
-    fromRelay = false,
-  ) {
-    if (this.disposing) throw new Error("Relay is closing.");
-    const held = await this.storage.load(id);
-    assertHere(held);
-    // Sent again after its answer got lost: don't send it or pick a stopped queue back up.
-    if (
-      held.messages.some((m) => m.id === input.id) ||
-      held.queue?.some((q) => q.input.id === input.id) ||
-      held.scheduled?.some((s) => s.input.id === input.id)
-    )
-      return;
-    if (input.sendAt) {
-      // Held for later, it starts the thread on its project's computer then;
-      // the handoff takes only a thread with nothing else waiting.
-      if (this.homeOf(id)) {
-        if (held.messages.length || held.scheduled?.length)
-          throw new Error(
-            "This thread starts on its project's computer with its first message. Schedule more once it has.",
-          );
-        startableThere(input, false);
-      }
-      return this.schedule.add(id, input);
-    }
-    if (input.side || input.parentId) {
-      const chat = await this.storage.load(id);
-      if (input.side || replyRoot(chat.messages, input.parentId!).side)
-        return this.asides.ask(chat, input);
-    }
-    // Queued, it would wait for the very goal it pauses or clears.
-    const asked = agentAsked(input);
-    const goal = asked && parseGoalCommand(asked.question);
-    const running = this.active.get(id);
-    if (
-      (goal?.type === "pause" || goal?.type === "clear") &&
-      !input.parentId &&
-      running?.goal &&
-      !this.active.stopping(running)
-    )
-      return running.goal(goal.type);
-    // Sent right after a stop: it waits for the agent to let go, rather
-    // than queueing behind the answer the stop paused the queue for.
-    await this.active.finished(id);
-    if (
-      !this.active.has(id) &&
-      !this.councils.busy(await this.storage.load(id))
-    ) {
-      if (await this.compactions.firstIfCold(id, input))
-        return this.queue.sentNow(id, input, fromRelay);
-      await this.turns.sendNow(id, input);
-      return this.queue.sentNow(id, input, fromRelay);
-    }
-    return this.queue.add(id, input);
   }
   queueAction(
     id: string,
@@ -1055,62 +797,23 @@ export class ProjectChats {
     request: Omit<AgentRequest, "id">,
     signal?: AbortSignal,
   ) {
-    const active = this.active.get(id);
-    if (!active)
-      return Promise.reject(
-        new Error("This thread has no running turn to ask in."),
-      );
-    return active.requests.ask(request, signal);
+    return running.askInTurn(this.core, id, request, signal);
   }
   /** Adds a page the thread's agent showed to the answer it is writing; see electron/html-renders. */
-  async showRender(id: string, render: HtmlRender, pages: string[]) {
-    const active = this.active.get(id);
-    if (!active?.render || this.active.windingDown(active))
-      throw new Error("This thread has no running answer to show it in.");
-    await this.storage.renders.save(id, render.id, pages);
-    active.render(render);
+  showRender(id: string, render: HtmlRender, pages: string[]) {
+    return running.showRender(this.core, id, render, pages);
   }
-  /**
-   * Leaves the thread's preview under the answer its agent is writing, with
-   * the page's last frame when one could be drawn. A later open replaces it.
-   */
-  async showPreview(
+  /** Leaves the thread's preview under the answer its agent is writing; a later open replaces it. */
+  showPreview(
     id: string,
     preview: Omit<TurnPreview, "shot">,
     jpeg: Buffer | null,
   ) {
-    const active = this.active.get(id);
-    if (!active?.preview || !active.answerId || this.active.windingDown(active))
-      return;
-    const shot =
-      !!jpeg &&
-      (await this.storage.shown
-        .keepPreviewShot(id, active.answerId(), jpeg)
-        .then(
-          () => true,
-          (e) => {
-            console.warn("Could not keep the preview's frame:", e);
-            return false;
-          },
-        ));
-    active.preview({ ...preview, ...(shot ? { shot } : {}) });
+    return running.showPreview(this.core, id, preview, jpeg);
   }
-  /**
-   * Leaves a page the thread's agent asks with (ask_html) in the answer it is
-   * writing, as an open question: kept like a shown page, answered later
-   * through answerQuestion. `ask` is the plain question for phones too old to
-   * show the page.
-   */
-  async askWithPage(id: string, page: HtmlRender, html: string, ask: string) {
-    const active = this.active.get(id);
-    if (!active?.askPage || this.active.windingDown(active))
-      throw new Error("This thread has no running answer to ask in.");
-    await this.storage.renders.save(id, page.id, [html]);
-    active.askPage({
-      id: page.id,
-      page,
-      questions: [{ id: PAGE_QUESTION_ID, header: "Page", question: ask }],
-    });
+  /** Leaves a page the thread's agent asks with (ask_html) in the answer it is writing, as an open question. */
+  askWithPage(id: string, page: HtmlRender, html: string, ask: string) {
+    return running.askWithPage(this.core, id, page, html, ask);
   }
   /** A page an answer showed, as its agent wrote it. */
   renderPage(id: string, renderId: string, page: number) {
