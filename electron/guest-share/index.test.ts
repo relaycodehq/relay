@@ -18,9 +18,12 @@ const renderId = "7d3f2a1b-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
 const png = "data:image/png;base64,iVBORw0KGgo=";
 
 /** Funnel that is never asked: Tailscale isn't there, so links stay on this computer. */
-const noTailscale = Object.assign(async () => ({ ok: false, output: "" }), {
-  sync: () => {},
-}) satisfies FunnelRun;
+const noTailscale = Object.assign(
+  async () => ({ ok: false, stdout: "", output: "" }),
+  {
+    sync: () => {},
+  },
+) satisfies FunnelRun;
 
 const message = (over: Partial<ChatMessage>): ChatMessage => ({
   id: "m1",

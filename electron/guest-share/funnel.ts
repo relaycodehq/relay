@@ -12,14 +12,23 @@ export const FUNNEL_PATH = "/relay-guest";
 /** The ports Funnel allows, the ones least likely to be in use first. */
 const FUNNEL_PORTS = [8443, 10000, 443] as const;
 
+/** `stdout` alone is the JSON a `--json` command printed; `output` adds stderr's warnings, for telling the user. */
+export interface FunnelResult {
+  ok: boolean;
+  stdout: string;
+  output: string;
+}
+
 export interface FunnelRun {
-  (args: string[], timeoutMs: number): Promise<{ ok: boolean; output: string }>;
+  (args: string[], timeoutMs: number): Promise<FunnelResult>;
   /** The same, blocking, for as the process exits. */
   sync(args: string[]): void;
 }
 
 const handlersSchema = z.object({
-  Handlers: z.record(z.string(), z.unknown()).nullish(),
+  Handlers: z
+    .record(z.string(), z.object({ Proxy: z.string().optional() }).loose())
+    .nullish(),
 });
 
 const serveStatusSchema = z.object({
@@ -34,16 +43,34 @@ const selfSchema = z.object({
   Self: z.object({ DNSName: z.string().optional() }).loose().nullish(),
 });
 
-/** The first Funnel port with no config but ours; undefined when each serves something else. */
-export function freeFunnelPort(statusJson: string, host: string) {
-  const status = serveStatusSchema.parse(JSON.parse(statusJson || "{}"));
+export type ServeStatus = z.infer<typeof serveStatusSchema>;
+
+/** What `tailscale funnel status --json` printed; undefined when it isn't that. */
+export function serveStatusIn(stdout: string): ServeStatus | undefined {
+  // An empty answer is an empty config.
+  const parsed = serveStatusSchema.safeParse(safeJson(stdout.trim() || "{}"));
+  return parsed.data;
+}
+
+/**
+ * The first Funnel port with no config but ours; undefined when each serves
+ * something else. Our path pointing at another server is another Relay's on
+ * this computer, which is someone else's too.
+ */
+export function freeFunnelPort(
+  status: ServeStatus,
+  host: string,
+  target: string,
+) {
   return FUNNEL_PORTS.find((port) => {
     const tcp = status.TCP?.[String(port)];
     if (tcp && !tcp.HTTPS) return false; // a raw TCP forwarder
-    const handlers = Object.keys(
+    const handlers = Object.entries(
       status.Web?.[`${host}:${port}`]?.Handlers ?? {},
     );
-    return handlers.every((path) => path === FUNNEL_PATH);
+    return handlers.every(
+      ([path, handler]) => path === FUNNEL_PATH && handler.Proxy === target,
+    );
   });
 }
 
@@ -65,19 +92,26 @@ export class Funnel {
         public: false,
         reason: "Tailscale isn't installed on this computer.",
       };
-    const parsed = selfSchema.safeParse(safeJson(self.output));
+    const parsed = selfSchema.safeParse(safeJson(self.stdout));
     const host = parsed.data?.Self?.DNSName?.replace(/\.$/, "");
     if (parsed.data?.BackendState !== "Running" || !host)
       return { public: false, reason: "Tailscale isn't connected." };
+    // Without knowing what each port serves, any of them could publish someone's private app.
     const serve = await this.run(["funnel", "status", "--json"], 5000);
-    const port = freeFunnelPort(serve.output, host);
+    const status = serve.ok ? serveStatusIn(serve.stdout) : undefined;
+    if (!status)
+      return {
+        public: false,
+        reason: "Couldn't read what Tailscale already serves on this computer.",
+      };
+    const target = `http://127.0.0.1:${localPort}`;
+    const port = freeFunnelPort(status, host, target);
     if (!port)
       return {
         public: false,
         reason:
           "Every port Funnel allows (443, 8443, 10000) already serves something else.",
       };
-    const target = `http://127.0.0.1:${localPort}`;
     const on = await this.run(
       [
         "funnel",
@@ -147,14 +181,14 @@ let foundCli: string | undefined;
 const runTailscale: FunnelRun = Object.assign(
   async (args: string[], timeoutMs: number) => {
     const cli = (foundCli = await findTailscaleCli());
-    if (!cli) return { ok: false, output: "" };
-    return new Promise<{ ok: boolean; output: string }>((resolve) =>
+    if (!cli) return { ok: false, stdout: "", output: "" };
+    return new Promise<FunnelResult>((resolve) =>
       execFile(
         cli,
         args,
         { timeout: timeoutMs, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
         (error, stdout, stderr) =>
-          resolve({ ok: !error, output: `${stdout}${stderr}` }),
+          resolve({ ok: !error, stdout, output: `${stdout}${stderr}` }),
       ),
     );
   },

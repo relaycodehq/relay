@@ -229,7 +229,10 @@ export class GuestShares {
   private async openFunnel() {
     const reach = await this.reach;
     if (reach?.public) return;
-    this.reach = this.funnel.open(this.server.port!);
+    this.reach = this.funnel.open(this.server.port!).catch((e): GuestReach => {
+      console.warn("Could not open Tailscale Funnel:", e);
+      return { public: false, reason: "Tailscale Funnel didn't answer." };
+    });
     await this.reach;
   }
 

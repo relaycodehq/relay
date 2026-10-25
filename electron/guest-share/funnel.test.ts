@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { Funnel, FUNNEL_PATH, freeFunnelPort, type FunnelRun } from "./funnel";
+import {
+  Funnel,
+  FUNNEL_PATH,
+  freeFunnelPort,
+  serveStatusIn,
+  type FunnelResult,
+  type FunnelRun,
+} from "./funnel";
 
 const host = "laptop.tail1234.ts.net";
+const ours = "http://127.0.0.1:47410";
 
-/** `tailscale funnel status --json` with these paths served per port. */
-const serving = (ports: Record<number, string[]>) =>
+/** `tailscale funnel status --json` with these paths served per port, by `proxy`. */
+const serving = (ports: Record<number, string[]>, proxy = ours) =>
   JSON.stringify({
     TCP: Object.fromEntries(
       Object.keys(ports).map((p) => [p, { HTTPS: true }]),
@@ -13,35 +21,45 @@ const serving = (ports: Record<number, string[]>) =>
       Object.entries(ports).map(([port, paths]) => [
         `${host}:${port}`,
         {
-          Handlers: Object.fromEntries(
-            paths.map((p) => [p, { Proxy: "http://127.0.0.1:3110" }]),
-          ),
+          Handlers: Object.fromEntries(paths.map((p) => [p, { Proxy: proxy }])),
         },
       ]),
     ),
   });
 
+const freePort = (json: string) =>
+  freeFunnelPort(serveStatusIn(json)!, host, ours);
+
 describe("freeFunnelPort", () => {
   it("skips a port someone's own `tailscale serve` uses, since Funnel would publish it too", () => {
-    expect(freeFunnelPort(serving({ 443: ["/"] }), host)).toBe(8443);
+    expect(freePort(serving({ 443: ["/"] }))).toBe(8443);
   });
 
   it("takes a port again when our path is all it serves", () => {
-    expect(freeFunnelPort(serving({ 8443: [FUNNEL_PATH] }), host)).toBe(8443);
+    expect(freePort(serving({ 8443: [FUNNEL_PATH] }))).toBe(8443);
+  });
+
+  it("leaves a port to another Relay whose path points at its own server", () => {
+    const theirs = serving({ 8443: [FUNNEL_PATH] }, "http://127.0.0.1:47411");
+    expect(freePort(theirs)).toBe(10000);
   });
 
   it("finds none when every Funnel port serves something else", () => {
-    const busy = serving({ 443: ["/"], 8443: ["/api"], 10000: ["/"] });
-    expect(freeFunnelPort(busy, host)).toBeUndefined();
+    expect(
+      freePort(serving({ 443: ["/"], 8443: ["/api"], 10000: ["/"] })),
+    ).toBeUndefined();
   });
 
   it("reads an empty config as every port free", () => {
-    expect(freeFunnelPort("{}", host)).toBe(8443);
+    expect(freePort("{}")).toBe(8443);
+    expect(freePort("")).toBe(8443);
   });
 });
 
 /** A Tailscale CLI that answers from a script and records what it was asked. */
-function fakeCli(answers: Record<string, { ok: boolean; output: string }>) {
+function fakeCli(
+  answers: Record<string, Omit<FunnelResult, "stdout"> & { stdout?: string }>,
+) {
   const calls: string[][] = [];
   const run = Object.assign(
     async (args: string[]) => {
@@ -49,7 +67,8 @@ function fakeCli(answers: Record<string, { ok: boolean; output: string }>) {
       const key = Object.keys(answers).find((k) =>
         args.join(" ").startsWith(k),
       );
-      return key ? answers[key]! : { ok: true, output: "" };
+      const answer = key ? answers[key]! : { ok: true, output: "" };
+      return { stdout: answer.output, ...answer };
     },
     { sync: (args: string[]) => void calls.push(args) },
   ) satisfies FunnelRun;
@@ -104,6 +123,34 @@ describe("Funnel", () => {
       reason: "Funnel isn't turned on for this tailnet yet.",
       fixUrl: fix,
     });
+  });
+
+  it("reads the JSON past a version warning on stderr", async () => {
+    const warning =
+      "Warning: client version 1.90.1 != tailscaled server version 1.88.3\n";
+    const status = serving({ 443: ["/"] });
+    const cli = fakeCli({
+      "status --json": { ok: true, stdout: running, output: running + warning },
+      "funnel status --json": {
+        ok: true,
+        stdout: status,
+        output: status + warning,
+      },
+    });
+    await expect(new Funnel(cli.run).open(47410)).resolves.toMatchObject({
+      public: true,
+    });
+  });
+
+  it("publishes nothing when it can't tell what each port serves", async () => {
+    const cli = fakeCli({
+      "status --json": { ok: true, output: running },
+      "funnel status --json": { ok: false, output: "" },
+    });
+    await expect(new Funnel(cli.run).open(47410)).resolves.toMatchObject({
+      public: false,
+    });
+    expect(cli.calls.some((c) => c[1] === "--bg")).toBe(false);
   });
 
   it("doesn't touch Funnel when Tailscale isn't connected", async () => {

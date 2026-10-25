@@ -18,7 +18,9 @@ const GUEST_PORT = 47410 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
 /** Test runs keep their links on this computer: a real Tailscale would publish them. */
 const testFunnel = () =>
   new Funnel(
-    Object.assign(async () => ({ ok: false, output: "" }), { sync: () => {} }),
+    Object.assign(async () => ({ ok: false, stdout: "", output: "" }), {
+      sync: () => {},
+    }),
   );
 
 /** Share with guest: a thread a browser outside Relay can follow and suggest messages to. */
