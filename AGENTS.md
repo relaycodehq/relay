@@ -47,12 +47,18 @@
 - **One job per file, class and function.** A file past ~500 lines, or a
   function past ~80, does several things: split it by what each part does
   (`lead-messages.ts` came out of `started-threads/index.ts` that way), not
-  into arbitrary halves. Files already over 500 are listed with a ceiling in
-  `tests/unit/big-files.ts`; they may shrink, never grow. Lower the ceiling
-  when you shrink one, and never raise it to fit a change.
+  into arbitrary halves. Files and named functions already over are listed
+  with a ceiling in `tests/unit/big-files.ts` and `big-functions.ts`; they
+  may shrink, never grow. Lower the ceiling when you shrink one, and never
+  raise it to fit a change.
+- **When your change trips a ceiling, split before you add.** Take out the
+  part your change grows, or one job the file or function does besides its
+  main one, as a commit of its own with no behaviour change; then make your
+  change in the smaller piece. Not into a `utils` or `helpers` file, and not
+  a sweep of the rest of the file. A file you only read is left as it is.
 - `tests/unit/layout.test.ts` fails when one of these rules is broken, when a
-  file grows past its line limit, or when features, or the folders of
-  `electron/`, import each other in a circle.
+  file or function grows past its line limit, or when features, or the
+  folders of `electron/`, import each other in a circle.
 
 ## Readable code
 
