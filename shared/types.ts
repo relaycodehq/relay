@@ -11,6 +11,7 @@ import type { ScheduleApi } from "./schedules";
 import type { TerminalApi } from "./terminals";
 import type { PreviewApi } from "./preview";
 import type { DevicesApi } from "./devices";
+import type { ProjectSearchApi } from "./project-search";
 import type { ThreadWindowsApi } from "./thread-windows";
 import type { WorkingTreeApi } from "./working-tree";
 import type { LanguageServersApi } from "./language-servers";
@@ -294,6 +295,7 @@ export interface Api
     TerminalApi,
     PreviewApi,
     DevicesApi,
+    ProjectSearchApi,
     PhoneRemoteApi,
     ComputersApi {
   inspectSymbol(

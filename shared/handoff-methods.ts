@@ -58,6 +58,8 @@ export const handoffFolderMethods = [
   "projectCommit",
   "projectCommitDiff",
   "projectFiles",
+  "searchProjectText",
+  "replaceProjectText",
   "projectFileInfo",
   "projectDirectory",
   "projectImage",

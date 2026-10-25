@@ -20,6 +20,7 @@ import { elsewhereHandlers } from "./elsewhere";
 import { languageServerHandlers } from "./language-servers";
 import { localHistoryHandlers } from "./local-history";
 import { projectHandlers } from "./projects";
+import { projectSearchHandlers } from "./project-search";
 import { readAloudHandlers } from "./read-aloud";
 import { renderHandlers } from "./renders";
 import { reviewCheckoutHandlers } from "./review-checkout";
@@ -53,6 +54,7 @@ export function createDispatch(
     projectHandlers(ctx),
     languageServerHandlers(ctx),
     localHistoryHandlers(ctx),
+    projectSearchHandlers(ctx),
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
