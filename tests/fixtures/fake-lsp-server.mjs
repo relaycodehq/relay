@@ -8,6 +8,7 @@
 //   FAKE_LSP_BAD_INIT     answer `initialize` with an error
 //   FAKE_LSP_REAL         name files by their real path, as clangd does through a symlink
 //   FAKE_LSP_HOVER        answer every hover with this Markdown
+//   FAKE_LSP_HOVER_FILE   once this file exists, answer hovers with its Markdown instead
 //   FAKE_LSP_SLOW_DEFINITION  answer definitions this many ms late
 import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, basename } from "node:path";
@@ -16,6 +17,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const log = (entry) =>
   process.env.FAKE_LSP_LOG &&
   appendFileSync(process.env.FAKE_LSP_LOG, JSON.stringify(entry) + "\n");
+
+const hoverText = (position) => {
+  const file = process.env.FAKE_LSP_HOVER_FILE;
+  if (file && existsSync(file)) return readFileSync(file, "utf8");
+  return process.env.FAKE_LSP_HOVER ?? `hover ${position.line}:${position.character}`;
+};
 
 let starts = 1;
 if (process.env.FAKE_LSP_STARTS) {
@@ -82,7 +89,7 @@ const handlers = {
     return {
       contents: {
         kind: "markdown",
-        value: process.env.FAKE_LSP_HOVER ?? `hover ${position.line}:${position.character}`,
+        value: hoverText(position),
       },
       range: here(position.line, position.character),
     };
