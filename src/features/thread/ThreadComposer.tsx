@@ -25,7 +25,7 @@ import type { ThreadWorktree } from "./useThreadWorktree";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { useCacheExpired } from "../agents/auto-compact";
-import { compactsCold } from "../../../shared/context-usage";
+import { worthCompactingCold } from "../../../shared/context-usage";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
 import { SetupLine } from "../handoff/SetupLine";
 import { inSetup, liveAway } from "../../../shared/handoff";
@@ -161,6 +161,70 @@ function ThreadBranch({
   return picker;
 }
 
+/**
+ * Compacting first, offered by Send when a message now would find a big
+ * conversation's prompt cache cold. Main's firstIfCold makes the same call.
+ */
+function offerToCompact({
+  chat,
+  root,
+  saved,
+  shown,
+  context,
+  compacting,
+}: {
+  chat: ThreadHandle["chat"];
+  root: ChatThread["root"];
+  saved: ChatThread["history"]["data"];
+  shown: ChatMessage[];
+  context: SessionCommands["context"];
+  compacting: boolean;
+}) {
+  if (!chat || !context || compacting) return undefined;
+  const sideQuestion = !!root?.side;
+  // The computer it's handed to may not know `compact`.
+  const handedOff = !!chat.sentTo;
+  // Compacting first would jump ahead of messages already queued.
+  const queueWaiting = !!saved?.queue?.length || !!saved?.queuePaused;
+  // Compacting resumes the session of the agent that answered last.
+  const lastAnswerer = shown.findLast((m) => m.role === "assistant")?.provider;
+  const sessions = root ? saved?.replySessions?.[root.id] : saved?.sessions;
+  const canResume =
+    lastAnswerer === context.provider && !!sessions?.[context.provider]?.thread;
+  if (sideQuestion || handedOff || queueWaiting || !canResume) return undefined;
+  if (!worthCompactingCold(context.usage, Date.now())) return undefined;
+  return { provider: context.provider, tokens: context.usage.usedTokens };
+}
+
+/** What the empty composer says: where the thread is, or what's going on in it. */
+function composerPlaceholder({
+  chat,
+  root,
+  reviewing,
+  running,
+  pending,
+  scratch,
+}: {
+  chat: ThreadHandle["chat"];
+  root: ChatThread["root"];
+  reviewing: boolean;
+  running: boolean;
+  pending: BackgroundWork["pending"];
+  scratch: boolean;
+}) {
+  const away = chat && awayPlaceholder(chat);
+  if (away) return away;
+  if (root?.side)
+    return `Ask ${agentName(root.provider)} a follow-up on the side…`;
+  if (reviewing) return "Reviewers are at work. Messages wait for the lead…";
+  if (!running && pending?.some((p) => p.kind === "task"))
+    return "Message Claude, its background work keeps going…";
+  if (!running && pending)
+    return "Message Claude now, or wait for it to check back…";
+  if (scratch) return "Ask anything…";
+  return undefined;
+}
+
 /** The guess the last answer left, while it is the last word and wasn't put away. */
 function nextGuess(view: ChatMessage[]) {
   const last = view.at(-1);
@@ -261,27 +325,17 @@ export function ThreadComposer({
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
   const cost = useMemo(() => threadCost(shown), [shown]);
   const cacheExpired = useCacheExpired(context?.usage.cache);
-  // As the server decides in firstIfCold: a side question, or one behind
-  // queued messages, goes as is.
-  const cold =
-    chat &&
-    context &&
-    cacheExpired &&
-    !root?.side &&
-    // Sent on to the computer it's handed to, which may not know `compact`.
-    !chat.sentTo &&
-    !compacting &&
-    !history.data?.queue?.length &&
-    !history.data?.queuePaused &&
-    // Compacting resumes the session of the agent that answered last.
-    shown.findLast((m) => m.role === "assistant")?.provider ===
-      context.provider &&
-    !!(root ? history.data?.replySessions?.[root.id] : history.data?.sessions)?.[
-      context.provider
-    ]?.thread &&
-    compactsCold(context.usage, Date.now())
-      ? { provider: context.provider, tokens: context.usage.usedTokens }
-      : undefined;
+  // useCacheExpired renders again once the cache runs out.
+  const compactOffer = cacheExpired
+    ? offerToCompact({
+        chat,
+        root,
+        saved: history.data,
+        shown,
+        context,
+        compacting,
+      })
+    : undefined;
   const chatId = chat?.id;
   const counter = useMemo(
     () =>
@@ -295,36 +349,33 @@ export function ThreadComposer({
   );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;
-  // A side thread doesn't wait for the main answer, nor queue behind it, and
-  // the thread's Stop is for its own turn, not a /btw answer beside it.
-  // Waiting on a setup there, it talks to that setup's agent: its answer is
-  // what runs, and the agent it was sent to is the one the composer picks.
+  // While a thread handed to another computer waits on its setup, the
+  // composer talks to the setup's agent: its answer is what runs.
   const setup = chat && inSetup(chat) ? history.data?.setup : undefined;
   const setupRunning = !!setup?.messages.some((m) => m.status === "streaming");
-  const waiting = root?.side ? false : mainRunning || reviewing || setupRunning;
-  const held =
-    busy ||
-    (!!chat && history.isPending) ||
-    worktree.unavailable ||
-    (!!chat?.sentTo && !liveAway(chat) && !inSetup(chat)) ||
-    !!chat?.cameFrom?.returnedAt;
+  // A /btw side question doesn't wait or queue behind the main answer, and
+  // the thread's Stop isn't for it.
+  const answerComing =
+    !root?.side && (mainRunning || reviewing || setupRunning);
+  const loading = !!chat && history.isPending;
+  // On another computer and not followed live from here.
+  const awayElsewhere = !!chat?.sentTo && !liveAway(chat) && !inSetup(chat);
+  // Handed back to the computer it came from.
+  const handedBack = !!chat?.cameFrom?.returnedAt;
+  const sendBlocked =
+    busy || loading || worktree.unavailable || awayElsewhere || handedBack;
   // Read on ↑ only, so streaming answers don't rebuild it.
   const shownNow = useRef(shown);
   shownNow.current = shown;
   const sent = useCallback(() => sentHistory(shownNow.current), []);
-  const placeholder =
-    (chat && awayPlaceholder(chat)) ??
-    (root?.side
-      ? `Ask ${agentName(root.provider)} a follow-up on the side…`
-      : reviewing
-        ? "Reviewers are at work. Messages wait for the lead…"
-        : !running && pending?.some((p) => p.kind === "task")
-          ? "Message Claude, its background work keeps going…"
-          : !running && pending
-            ? "Message Claude now, or wait for it to check back…"
-            : project.scratch
-              ? "Ask anything…"
-              : undefined);
+  const placeholder = composerPlaceholder({
+    chat,
+    root,
+    reviewing,
+    running,
+    pending,
+    scratch: !!project.scratch,
+  });
   return (
     <ProjectComposer
       ref={ref}
@@ -346,8 +397,8 @@ export function ThreadComposer({
           : undefined,
       }}
       conversation={{
-        running: waiting,
-        busy: held,
+        running: answerComing,
+        busy: sendBlocked,
         agent: chat && threadContextAgent(chat),
         lastSent:
           (setup &&
@@ -362,7 +413,7 @@ export function ThreadComposer({
           running || root || !predictions.data ? undefined : nextGuess(shown),
         chatId: chat?.id,
         accounts: chat?.accounts,
-        cold,
+        compactOffer,
       }}
       context={
         <>
@@ -416,7 +467,7 @@ export function ThreadComposer({
             worktree={worktree}
             checkout={checkout}
             unsent={!chat && scope.kind === "project" && !project.computer}
-            disabled={waiting || held}
+            disabled={answerComing || sendBlocked}
             onStartThread={onStartThread}
           />
           {!project.computer && (

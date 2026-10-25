@@ -3,7 +3,7 @@ import { replyRoot } from "../../../shared/projects";
 import { agentAsked } from "../../../shared/recipient";
 import { agentName, agentInfo } from "../../../shared/agents";
 import {
-  compactsCold,
+  worthCompactingCold,
   defaultAutoCompact,
   latestContext,
 } from "../../../shared/context-usage";
@@ -106,7 +106,7 @@ export class TurnCompactions {
       held.provider !== asked.provider ||
       latestAnswer(chat, parentId)?.provider !== asked.provider ||
       !agentSession(chat, asked.provider, parentId).thread ||
-      !compactsCold(held.usage, Date.now())
+      !worthCompactingCold(held.usage, Date.now())
     )
       return false;
     await this.queue.add(id, {

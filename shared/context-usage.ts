@@ -40,7 +40,7 @@ export interface AutoCompact {
 export const defaultAutoCompact: AutoCompact = { idle: false, cold: false };
 
 /** The conversation is big enough, and its cache cold, to compact before the next message. */
-export function compactsCold(usage: ContextUsage, now: number) {
+export function worthCompactingCold(usage: ContextUsage, now: number) {
   return (
     !!usage.cache &&
     now >= usage.cache.at + usage.cache.ttlMs &&

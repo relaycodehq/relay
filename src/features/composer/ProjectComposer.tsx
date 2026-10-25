@@ -111,11 +111,11 @@ export interface ComposerConversation {
   /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
   chatId?: string;
   /**
-   * A message to this agent finds a big conversation's prompt cache cold:
-   * Send compacts first or not as Settings say, and a button beside it does
-   * the other.
+   * Compacting first, offered when a message to this agent would find a big
+   * conversation's prompt cache cold: Send does as Settings say, and the box
+   * beside it flips that.
    */
-  cold?: { provider: AgentProvider; tokens: number };
+  compactOffer?: { provider: AgentProvider; tokens: number };
   accounts?: Partial<Record<AccountProvider, string>>;
   /** The message the agent guessed comes next, offered while the draft is empty. */
   prediction?: NextGuess;
@@ -273,11 +273,11 @@ export function ProjectComposer({
     sendCompacts,
   );
   // A command means what it says, after an @mention too; the server sends it as is.
-  const cold =
+  const compactOffer =
     sendCompacts !== undefined &&
-    conversation.cold?.provider === to &&
+    conversation.compactOffer?.provider === to &&
     !/^\s*\//.test(draft.text.trim().replace(agentMentionPattern, ""))
-      ? conversation.cold
+      ? conversation.compactOffer
       : undefined;
   const settingCommands = useSettingCommands({
     state: composer,
@@ -357,7 +357,8 @@ export function ProjectComposer({
       after,
       flipCompact = false,
     }: ComposerSubmitOptions = {}) {
-      const pick = cold && !running ? compactFirst !== flipCompact : undefined;
+      const pick =
+        compactOffer && !running ? compactFirst !== flipCompact : undefined;
       return composerSend.send({
         steer,
         sendAt,
@@ -382,7 +383,7 @@ export function ProjectComposer({
             return !!at && at.start === 0 && at.end === 0 && onEditQueued();
           }
         : undefined,
-      alternateCompact: !!cold && !running,
+      alternateCompact: !!compactOffer && !running,
       sendKey,
       runningAction,
       send: sending.send,
@@ -610,17 +611,17 @@ export function ProjectComposer({
                     onStop={() => onStop(false)}
                   />
                 )}
-                {cold && !running && (
+                {compactOffer && !running && (
                   <label
                     className="composer-compact-first"
-                    title={`Compact ${formatTokens(cold.tokens)} tokens before this message, as the cache went cold · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)} sends the other way`}
+                    title={`Compact ${formatTokens(compactOffer.tokens)} tokens before this message, as the cache went cold · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)} sends the other way`}
                   >
                     <input
                       type="checkbox"
                       checked={compactFirst}
                       onChange={(e) => setCompactFirst(e.target.checked)}
                     />
-                    Compact {formatTokens(cold.tokens)} first
+                    Compact {formatTokens(compactOffer.tokens)} first
                   </label>
                 )}
                 {(!running ||
@@ -630,8 +631,8 @@ export function ProjectComposer({
                   <SendButton
                     disabled={sending.disabled}
                     compactsFirst={
-                      !!cold && !running && compactFirst
-                        ? cold.tokens
+                      !!compactOffer && !running && compactFirst
+                        ? compactOffer.tokens
                         : undefined
                     }
                     running={running}
