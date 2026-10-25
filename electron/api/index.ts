@@ -18,6 +18,7 @@ import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { elsewhereHandlers } from "./elsewhere";
 import { languageServerHandlers } from "./language-servers";
+import { localHistoryHandlers } from "./local-history";
 import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
 import { renderHandlers } from "./renders";
@@ -51,6 +52,7 @@ export function createDispatch(
     checkHandlers(ctx),
     projectHandlers(ctx),
     languageServerHandlers(ctx),
+    localHistoryHandlers(ctx),
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),

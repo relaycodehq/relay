@@ -40,6 +40,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { videoMime } from "../../shared/project-files";
 import { mediaUrl } from "../media";
+import { saveKept } from "../local-history";
 import { agentRuntime } from "../agents";
 import {
   createEntry,
@@ -407,8 +408,12 @@ export function projectHandlers(ctx: ApiContext) {
         digestSchema,
         textSchema,
       ],
-      async (where, path, head, version, contents) =>
-        projects.save(await fileRoot(where), path, head, version, contents),
+      async (where, path, head, version, contents) => {
+        const place = await fileRoot(where);
+        return saveKept(place.root, path, contents, () =>
+          projects.save(place, path, head, version, contents),
+        );
+      },
     ),
     projectCiStatus: takes(
       [idSchema, idSchema.nullish()],

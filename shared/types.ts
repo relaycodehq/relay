@@ -14,6 +14,7 @@ import type { DevicesApi } from "./devices";
 import type { ThreadWindowsApi } from "./thread-windows";
 import type { WorkingTreeApi } from "./working-tree";
 import type { LanguageServersApi } from "./language-servers";
+import type { LocalHistoryApi } from "./local-history";
 import type { AISettings, ClaudeModel, CodexModel } from "./settings";
 import type { ProviderUsage } from "./provider-usage";
 import type { AgentProvider, UsageProvider } from "./agents";
@@ -280,6 +281,7 @@ export interface LocalFile {
 export interface Api
   extends
     WorkingTreeApi,
+    LocalHistoryApi,
     ThreadWindowsApi,
     LanguageServersApi,
     ProjectApi,
