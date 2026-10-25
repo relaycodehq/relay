@@ -59,10 +59,10 @@ it("backs off after 20 guesses nobody sent, until one is", async () => {
   await writeFile(path, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
   const log = new PredictionLog(path);
   expect((await log.summary(7, async () => 0)).backingOff).toBe(true);
-  const turns = Array.from({ length: 20 }, () => log.allows());
+  const turns = Array.from({ length: 20 }, () => log.backoffAllows());
   expect(turns.filter(Boolean)).toHaveLength(2);
   log.sent("a", "go with B", "go with B");
-  expect(log.allows()).toBe(true);
+  expect(log.backoffAllows()).toBe(true);
   expect((await log.summary(7, async () => 0)).backingOff).toBe(false);
 });
 
@@ -76,9 +76,9 @@ it("keeps backing off from the first turn after a start, counting sends made mea
   }));
   await writeFile(path, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
   const log = new PredictionLog(path);
-  const first = log.allows();
+  const first = log.backoffAllows();
   log.sent("a", "go with B", "no, revert it");
   await expect(first).resolves.toBe(true);
   expect((await log.summary(7, async () => 0)).backingOff).toBe(true);
-  expect(log.allows()).toBe(false);
+  expect(log.backoffAllows()).toBe(false);
 });

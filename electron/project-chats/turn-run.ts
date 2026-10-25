@@ -96,8 +96,8 @@ interface TurnState {
   abort: AbortController;
   answer: AnswerRecorder;
   provider: AgentProvider;
-  /** The side conversation it answers in, if any. */
-  branch?: string;
+  /** The message whose replies it answers in; unset in the main conversation. */
+  replyTo?: string;
   sessionKey: string;
   account?: string;
   fork?: Fork;
@@ -109,6 +109,19 @@ interface TurnState {
 }
 
 /** Runs one agent turn in a thread, recording its answer as it streams. */
+/** The user's next move is already decided, so a guessed message would be in the way. */
+function nextMoveIsSet(answer: ChatMessage, chat: ProjectChat) {
+  const planWaiting = !!answer.proposedPlan;
+  const questionWaiting = !!answer.questions?.some(
+    (q) => !q.answers && !q.answerMessageId && !q.dismissed,
+  );
+  // A queued message goes out next anyway.
+  const queuedMessageNext =
+    !chat.queuePaused &&
+    !!chat.queue?.some((q) => !q.compact && !q.input.parentId && !q.input.side);
+  return planWaiting || questionWaiting || queuedMessageNext;
+}
+
 export class TurnRunner {
   constructor(
     private core: ChatCore,
@@ -166,8 +179,8 @@ export class TurnRunner {
       active.importOffer = (offer) => answer.importOffer(offer);
       active.answerId = () => answer.message.id;
     }
-    const branch = input.parentId ?? undefined;
-    const sessionKey = this.core.sessions.key(chat.id, branch);
+    const replyTo = input.parentId ?? undefined;
+    const sessionKey = this.core.sessions.key(chat.id, replyTo);
     this.core.sessions.add(sessionKey);
     const provider = message.provider;
     // A thread keeps the account it started on, and the one a limit moved it
@@ -185,7 +198,7 @@ export class TurnRunner {
       void turnModel(provider, input, root).then((model) =>
         answer.setModel(model),
       );
-    const sessionId = agentSession(chat, provider, branch).thread;
+    const sessionId = agentSession(chat, provider, replyTo).thread;
     // A side thread forks the main one whole, its running turn included.
     const main = agentSession(chat, provider).thread;
     const fork: Fork | undefined =
@@ -195,7 +208,7 @@ export class TurnRunner {
           ? !sessionId && main
             ? { point: { thread: main, at: "" } }
             : undefined
-          : forkFor(chat, provider, branch);
+          : forkFor(chat, provider, replyTo);
     const t: TurnState = {
       chat,
       root,
@@ -205,7 +218,7 @@ export class TurnRunner {
       abort,
       answer,
       provider,
-      branch,
+      replyTo,
       sessionKey,
       account,
       fork,
@@ -217,7 +230,7 @@ export class TurnRunner {
       const options = await this.options(t, prompt, sessionId, snapshot);
       await snapshot.start(
         rules.resumesSnapshot,
-        branch
+        replyTo
           ? undefined
           : async () =>
               chat.worktree
@@ -256,7 +269,7 @@ export class TurnRunner {
     sessionId: string | undefined,
     snapshot: TurnSnapshot,
   ) {
-    const { chat, root, input, turn, rules, abort, answer, provider, branch } =
+    const { chat, root, input, turn, rules, abort, answer, provider, replyTo } =
       t;
     // Each agent session hears about running processes on its own.
     const noteKey = JSON.stringify([t.sessionKey, provider]);
@@ -296,12 +309,12 @@ export class TurnRunner {
         active.goal = control.goal;
         active.retune = control.retune;
       },
-      ...(!branch && chat.goal?.provider === provider
+      ...(!replyTo && chat.goal?.provider === provider
         ? { goal: chat.goal }
         : {}),
       onGoal: (goal: ThreadGoal | null) => {
         // A goal belongs to the main conversation; side ones run their own.
-        if (branch || rules.side) return;
+        if (replyTo || rules.side) return;
         const before = chat.goal;
         if (goal) chat.goal = goal;
         else delete chat.goal;
@@ -358,7 +371,7 @@ export class TurnRunner {
         mimeType: image.mimeType,
       })),
       onTitle: (title: string) => {
-        if (!branch) this.titles.heard(chat, answer.message, title);
+        if (!replyTo) this.titles.heard(chat, answer.message, title);
       },
       onActivity: (activity: AgentActivity) => {
         if (activity.kind === "command" && activity.status === "running")
@@ -397,10 +410,10 @@ export class TurnRunner {
           t.point = at;
         },
         onId: async (id: string) => {
-          sessionFor(chat, provider, branch).thread = id;
+          sessionFor(chat, provider, replyTo).thread = id;
           await this.core.storage.save(chat);
         },
-        onUnprompted: () => this.host.unprompted(chat, root, provider, branch),
+        onUnprompted: () => this.host.unprompted(chat, root, provider, replyTo),
       },
     };
   }
@@ -413,15 +426,13 @@ export class TurnRunner {
   private watch({ chat, turn, rules, answer, provider }: TurnState) {
     const scope = this.core.prefs().watchThreads;
     const known = this.core.store.get().watchKnown ?? [];
-    if (
-      scope === "off" ||
-      (provider !== "claude" &&
-        provider !== "codex" &&
-        provider !== "opencode") ||
-      (turn.kind !== "reply" && turn.kind !== "adopt") ||
-      rules.side ||
-      chat.reviewer
-    )
+    const agentCanWatch =
+      provider === "claude" || provider === "codex" || provider === "opencode";
+    // An answer in the thread, or one Relay adopted, not a compaction or a /btw side question.
+    const threadAnswer =
+      (turn.kind === "reply" || turn.kind === "adopt") && !rules.side;
+    const isReviewer = !!chat.reviewer;
+    if (scope === "off" || !agentCanWatch || !threadAnswer || isReviewer)
       return;
     const threadNotes = chat.messages.flatMap((m) => m.notes ?? []);
     return {
@@ -438,8 +449,8 @@ export class TurnRunner {
   }
 
   /** A message sent past a guess the composer showed counts for or against guessing. */
-  private judgeGuess({ chat, turn, rules, input, branch }: TurnState) {
-    if (turn.kind !== "reply" || branch || rules.side) return;
+  private judgeGuess({ chat, turn, rules, input, replyTo }: TurnState) {
+    if (turn.kind !== "reply" || replyTo || rules.side) return;
     const at = chat.messages.findIndex((m) => m.id === input.id);
     const before = chat.messages
       .slice(0, Math.max(0, at))
@@ -465,35 +476,22 @@ export class TurnRunner {
     rules,
     answer,
     provider,
-    branch,
+    replyTo,
   }: TurnState): AgentPredict | undefined {
-    if (
-      !this.core.store.get().composerPredictions ||
-      (provider !== "claude" && provider !== "codex") ||
-      turn.kind !== "reply" ||
-      rules.side ||
-      branch ||
-      chat.reviewer ||
-      // An agent drives it over Relay's tools: nobody sits at its composer.
-      chat.startedBy
-    )
+    const predictionsOn = !!this.core.store.get().composerPredictions;
+    const agentCanGuess = provider === "claude" || provider === "codex";
+    // A plain answer in the main conversation: not a compaction, a /btw side question or a reply thread.
+    const normalAnswer = turn.kind === "reply" && !rules.side && !replyTo;
+    // Reviewers and threads another agent started have nobody at the composer.
+    const someoneAtComposer = !chat.reviewer && !chat.startedBy;
+    if (!predictionsOn || !agentCanGuess || !normalAnswer || !someoneAtComposer)
       return;
     return {
       request: turn.request ?? "",
-      // Not while a plan or a question waits on them: that's their next move.
       allows: () =>
-        !answer.message.proposedPlan &&
-        !answer.message.questions?.some(
-          (q) => !q.answers && !q.answerMessageId && !q.dismissed,
-        ) &&
-        // A queued message goes out next anyway.
-        !(
-          !chat.queuePaused &&
-          chat.queue?.some(
-            (q) => !q.compact && !q.input.parentId && !q.input.side,
-          )
-        ) &&
-        (this.core.predictions?.allows() ?? true),
+        !nextMoveIsSet(answer.message, chat) &&
+        // Guesses nobody sends back off to one turn in ten.
+        (this.core.predictions?.backoffAllows() ?? true),
       onPrediction: (text) => answer.predict(text),
       onAsked: (asked) => this.core.predictions?.asked(chat.id, asked),
     };
@@ -504,7 +502,7 @@ export class TurnRunner {
     t: TurnState,
     options: Awaited<ReturnType<TurnRunner["options"]>>,
   ) {
-    const { chat, turn, abort, provider, branch, fork } = t;
+    const { chat, turn, abort, provider, replyTo, fork } = t;
     const runtime = agentRuntime(provider);
     const run = () =>
       runtime.run({ ...options, contextWindow: t.input.contextWindow });
@@ -520,7 +518,7 @@ export class TurnRunner {
         throw error;
       // A refused resume/fork never started a turn. Recover once from
       // Relay's own record, without repeating any agent work.
-      dropSession(chat, provider, branch);
+      dropSession(chat, provider, replyTo);
       await runtime.closeSession(t.sessionKey);
       if (fork?.from) delete fork.from.forkPoint;
       if (chat.fromTerminal) chat.fromTerminal.how = "text";
@@ -594,7 +592,7 @@ export class TurnRunner {
       // A fork that failed may have left a broken session. Drop it and the
       // fork point: sending again starts over with the conversation as text.
       if (fork) {
-        dropSession(chat, provider, t.branch);
+        dropSession(chat, provider, t.replyTo);
         await agentRuntime(provider).closeSession(t.sessionKey);
         if (fork.from) delete fork.from.forkPoint;
       }
@@ -613,13 +611,13 @@ export class TurnRunner {
 
   /** However the turn went: settles the thread, saves it, and lets the sidebar know. */
   private async end(t: TurnState, committed: boolean) {
-    const { chat, input, turn, rules, answer, provider, branch } = t;
+    const { chat, input, turn, rules, answer, provider, replyTo } = t;
     const ended = answer.message;
     if (turn.kind === "reply")
       settleFixes(chat.findings, input.id, ended.status === "complete");
     if (ended.status !== "failed") {
       if (rules.advancesSession(ended))
-        sessionFor(chat, provider, branch).through = ended.id;
+        sessionFor(chat, provider, replyTo).through = ended.id;
       if (turn.kind === "reply") turn.briefed?.();
     }
     // A stopped answer ended when it was stopped, not when its agent let go.
@@ -636,7 +634,7 @@ export class TurnRunner {
     // The agents the turn ran outlive the session that followed them.
     void this.core.sessions.keepSubagents(chat.id);
     if (t.limit) this.host.limited(chat.id, ended.id, t.limit);
-    if (ended.status === "complete" && rules.titles && !branch && t.first)
+    if (ended.status === "complete" && rules.titles && !replyTo && t.first)
       this.titles.generate(chat, input.choice, ended);
   }
 }

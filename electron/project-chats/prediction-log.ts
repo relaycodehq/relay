@@ -39,7 +39,7 @@ export class PredictionLog {
    * Whether a turn that earns a guess gets one. After a long run of guesses
    * nobody sent, only one turn in ten does, until one of them is sent.
    */
-  allows(): boolean | Promise<boolean> {
+  backoffAllows(): boolean | Promise<boolean> {
     if (this.unused === undefined)
       return this.streak().then(
         () => this.allowed(),
