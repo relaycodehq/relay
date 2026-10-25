@@ -4,56 +4,40 @@
 // thread may read any other; a lead drives its own, and any other once the
 // user lets it, and a started thread only reads, so nothing starts threads of
 // threads.
-import { sliceWhole } from "../../shared/truncate";
-import { randomUUID } from "node:crypto";
-import { setTimeout as delay } from "node:timers/promises";
 import { ThreadReads } from "./thread-reads";
-import { LeadMessages, type Delivered, type Sender } from "./lead-messages";
+import { LeadMessages } from "./lead-messages";
 import { ProjectAccess, type AgentProjects } from "./project-access";
 import { ThreadPages } from "./thread-pages";
-import { json, localTime } from "./tool-output";
+import { head, json, localTime } from "./tool-output";
 import {
   listReviewSetups,
   reviewRound,
   type ThreadReviews,
 } from "./thread-reviews";
+import { Approvals } from "./approvals";
+import { HandoffTool, type ThreadHandoffs } from "./handoff-tool";
+import { leadSide } from "./lead-side";
+import { NoteTools } from "./note-tools";
+import { ThreadDriving } from "./thread-driving";
+import { ThreadStarts } from "./thread-starts";
 import {
   agentName,
   usageProviders,
-  type AgentProvider,
   type UsageProvider,
 } from "../../shared/agents";
-import { hasAccounts, pinnedAccount } from "../../shared/agent-accounts";
-import { fitModel } from "../../shared/model-fit";
+import { pinnedAccount } from "../../shared/agent-accounts";
 import { AgentChoices, type ThreadAgents } from "./thread-agents";
 import { ThreadSchedules, type ScheduleTools } from "./thread-schedules";
 import { resetsIn, type ProviderUsage } from "../../shared/provider-usage";
-import {
-  projectChatSendSchema,
-  type ChatMessage,
-  type ChatSummary,
-  type ProjectChat,
-  type ProjectChatSend,
-} from "../../shared/projects";
-import { sentAgent } from "../../shared/recipient";
-import {
-  handoffBlocked,
-  inSetup,
-  type HandoffChatMethod,
-  type HandoffTarget,
-} from "../../shared/handoff";
-import { noteForAgent } from "../../shared/thread-notes";
-import type { ModelChoice } from "../../shared/settings";
+import type { ProjectChat } from "../../shared/projects";
 import type { ToolHandler } from "../agent-host/client";
-import { promptTitle } from "../agents/thread-titles";
 import { readProviderUsage } from "../agents/provider-usage";
-import { chatStatus, type ProjectChats } from "../project-chats";
+import type { ProjectChats } from "../project-chats";
 import type { ThreadPreviews } from "../preview";
 import type { RenderTools } from "../html-renders";
 import {
   relayToolSchemas,
   toolText,
-  STARTED_LIMIT,
   startedTools,
   type RelayToolArgs,
   type RelayToolName,
@@ -61,21 +45,11 @@ import {
 import { errorMessage } from "../../shared/error-message";
 
 export { localTime } from "./tool-output";
+export { EARLY_FAILURE_MS } from "./thread-starts";
 export type { AgentProjects } from "./project-access";
+export type { ThreadHandoffs } from "./handoff-tool";
 export type { ThreadReviews } from "./thread-reviews";
 export type { ScheduleTools } from "./thread-schedules";
-
-const DRIVE_ALWAYS =
-  "Always lets this thread start, message, stop and settle any thread in any project without asking again. Reading needs no permission.";
-/** How long start_threads watches new threads for one that fails as it starts, as Relay serves it. */
-export const EARLY_FAILURE_MS = 10_000;
-const EARLY_POLL_MS = 250;
-const FAILED_AT_ONCE =
-  "It failed as it started; nothing is working on it. Fix the cause, often the agent or model, and start it again, or tell the user.";
-const FAILED_SETTLED =
-  "It failed as it started, so Relay settled it: it's out of the user's Activity and they can bring it back. Fix the cause, often the agent or model, and start a new thread, or tell the user.";
-const hasWork = (m: ChatMessage) =>
-  !!m.body.trim() || !!m.trace?.length || !!m.activity?.length;
 
 type Chats = Pick<
   ProjectChats,
@@ -103,38 +77,6 @@ type Chats = Pick<
   onAnswersEnd?: ProjectChats["onAnswersEnd"];
 };
 
-/** Moving threads to the user's other computers, as the thread header does. */
-export interface ThreadHandoffs {
-  /** Whether the call is for a thread live on another computer, so runs there. */
-  forwards(method: string, args: unknown[]): boolean;
-  forward(method: HandoffChatMethod, args: unknown[]): Promise<unknown>;
-  targets(chatId: string): Promise<HandoffTarget[]>;
-  handOff(chatId: string, computerId: string): Promise<void>;
-  bringBack(chatId: string): Promise<void>;
-  /** Once the handoff or bringing back under way is over, however it went. */
-  finished(chatId: string): Promise<void>;
-}
-
-const defaultChoice: ModelChoice = {
-  model: "",
-  fast: false,
-  reasoningEffort: "",
-};
-const fallbackInput = {
-  provider: "claude",
-  choice: defaultChoice,
-  runtimeMode: "approval-required",
-  interactionMode: "default",
-} satisfies Partial<ProjectChatSend>;
-
-/** The main conversation's answers, newest last. */
-const answers = (chat: ProjectChat) =>
-  chat.messages.filter((m) => m.role === "assistant" && !m.parentId);
-
-/** The start of what the user is asked about. */
-const head = (text: string, limit = 600) =>
-  text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
-
 /** Keeps each validated tool name paired with its own schema output. */
 type ToolCall = {
   [N in RelayToolName]: { name: N; input: RelayToolArgs<N> };
@@ -157,15 +99,18 @@ export class StartedThreads {
   private readUsage: ReadUsage;
   private projects: ProjectAccess;
   private reads: ThreadReads;
+  private approvals: Approvals;
+  private starts: ThreadStarts;
+  private driving: ThreadDriving;
+  private handoffs: HandoffTool;
+  private notes: NoteTools;
   private leads: LeadMessages;
   private pages: ThreadPages;
-  private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
   private reportProblem: ReportProblem | undefined;
   private reviews: ThreadReviews | undefined;
   private schedules: ThreadSchedules | undefined;
   private agentChoices: AgentChoices;
-  private failureWatchMs: number;
   constructor(
     private chats: Chats,
     options: {
@@ -192,11 +137,40 @@ export class StartedThreads {
     this.readUsage = options.readUsage ?? readProviderUsage;
     this.projects = new ProjectAccess(options.projects);
     this.reads = new ThreadReads(chats, this.projects);
+    this.approvals = new Approvals(chats);
+    this.agentChoices = new AgentChoices(options.agents);
+    this.starts = new ThreadStarts(
+      chats,
+      this.reads,
+      this.projects,
+      this.agentChoices,
+      this.approvals,
+      options.failureWatchMs ?? 0,
+    );
+    this.driving = new ThreadDriving(
+      chats,
+      this.reads,
+      this.projects,
+      this.approvals,
+      options.handoffs,
+    );
+    this.handoffs = new HandoffTool(
+      this.reads,
+      this.projects,
+      this.approvals,
+      options.handoffs,
+    );
+    this.notes = new NoteTools(
+      chats,
+      this.reads,
+      this.projects,
+      this.approvals,
+    );
     this.leads = new LeadMessages(
       chats,
       this.reads,
-      (lead, body, from) => this.sendToLead(lead, body, from),
-      (chat) => this.leadSide(chat).from,
+      (lead, body, from) => this.driving.sendToLead(lead, body, from),
+      (chat) => leadSide(chat).from,
     );
     chats.onAnswersEnd?.((turn) => {
       this.leads
@@ -206,15 +180,12 @@ export class StartedThreads {
         );
     });
     this.pages = new ThreadPages(chats, options);
-    this.handoffs = options.handoffs;
     this.restart = options.restart;
     this.reportProblem = options.reportProblem;
     this.reviews = options.reviews;
     this.schedules = options.schedules
       ? new ThreadSchedules(options.schedules)
       : undefined;
-    this.agentChoices = new AgentChoices(options.agents);
-    this.failureWatchMs = options.failureWatchMs ?? 0;
   }
 
   /** Answers one tool call made by the agent in `chatId`. */
@@ -251,7 +222,7 @@ export class StartedThreads {
     const { name: tool, input } = { name, input: parsed.data } as ToolCall;
     switch (tool) {
       case "start_threads":
-        return this.start(lead, input, signal);
+        return this.starts.startThreads(lead, input, signal);
       case "list_threads":
         return json(await this.reads.list(lead));
       case "find_threads":
@@ -259,34 +230,34 @@ export class StartedThreads {
       case "read_thread":
         return this.reads.read(input);
       case "send_to_thread":
-        return this.sendTo(lead, input, signal);
+        return this.driving.sendTo(lead, input, signal);
       case "wait_for_threads":
         return this.reads.wait(lead, input, signal);
       case "stop_thread":
-        return this.stop(lead, input.id, signal);
+        return this.driving.stop(lead, input.id, signal);
       case "message_lead":
         return this.leads.message(lead, input.message);
       case "hand_off_thread":
-        return this.handOff(lead, input, signal);
+        return this.handoffs.handOff(lead, input, signal);
       case "settle_thread":
-        if (input.id === lead.id) return this.settleSelf(lead);
-        return this.settle(lead, input.id, signal);
+        if (input.id === lead.id) return this.driving.settleSelf(lead);
+        return this.driving.settle(lead, input.id, signal);
       case "settle_this_thread":
-        return this.settleSelf(lead);
+        return this.driving.settleSelf(lead);
       case "wake_this_thread":
-        return this.wakeLater(lead, input);
+        return this.driving.wakeLater(lead, input);
       case "usage_limits":
         return json(await this.usage(lead));
       case "list_agents":
         return json(
-          await this.agentChoices.list(this.leadSide(lead).agent, input.agent),
+          await this.agentChoices.list(leadSide(lead).agent, input.agent),
         );
       case "list_notes":
-        return this.listNotes(lead, input);
+        return this.notes.listNotes(lead, input);
       case "add_note":
-        return this.addNote(lead, input, signal);
+        return this.notes.addNote(lead, input, signal);
       case "tick_note":
-        return this.tickNote(lead, input, signal);
+        return this.notes.tickNote(lead, input, signal);
       case "move_to_worktree":
         return json(await this.chats.worktrees.enter(lead.id, input));
       case "deep_review":
@@ -308,7 +279,7 @@ export class StartedThreads {
         return this.moveToProject(lead, input.project, signal);
       case "add_project":
         return this.projects.add(input, (title, detail) =>
-          this.approve(lead, title, detail, signal, true),
+          this.approvals.ask(lead, title, detail, signal, true),
         );
       case "restart_relay":
         return this.restartRelay(lead, input, signal);
@@ -365,7 +336,7 @@ export class StartedThreads {
       );
     const problem = await moves.blocked(lead.id, target.id);
     if (problem) return toolText(problem, true);
-    const approved = await this.approve(
+    const approved = await this.approvals.ask(
       lead,
       `Move this thread to “${target.name}”?`,
       `${target.path}\nThe conversation carries on there with its agents. Nothing is copied: files stay where they are. Agents in this thread can read and change everything in this folder.`,
@@ -388,10 +359,10 @@ export class StartedThreads {
   private schedule(lead: ProjectChat, call: ToolCall, signal: AbortSignal) {
     const schedules = this.schedules;
     if (!schedules) return toolText("This Relay can't run schedules.", true);
-    const { last, agent } = this.leadSide(lead);
+    const { last, agent } = leadSide(lead);
     const defaults = { agent, choice: last.choice, runtimeMode: last.runtimeMode };
     const always = (title: string, detail: string) =>
-      this.approve(lead, title, detail, signal, true);
+      this.approvals.ask(lead, title, detail, signal, true);
     switch (call.name) {
       case "list_schedules":
         return schedules.list();
@@ -405,71 +376,11 @@ export class StartedThreads {
         return schedules.remove(call.input);
       case "run_schedule":
         return schedules.run(call.input, (title, detail) =>
-          this.approve(lead, title, detail, signal),
+          this.approvals.ask(lead, title, detail, signal),
         );
       default:
         throw new Error(`${call.name} isn't a schedule tool.`);
     }
-  }
-
-  /**
-   * Whether the user lets the lead start or message a thread of its own: a
-   * new turn spends usage and may edit the project. A lead with full access
-   * or leave to drive threads may, unless `always`.
-   */
-  private async approve(
-    lead: ProjectChat,
-    title: string,
-    detail: string,
-    signal: AbortSignal,
-    always = false,
-  ) {
-    if (!always && (lead.drivesThreads || this.fullAccess(lead))) return true;
-    const response = await this.chats.askInTurn(
-      lead.id,
-      {
-        kind: "approval",
-        title,
-        detail,
-        decisions: ["accept", "decline", "cancel"],
-      },
-      signal,
-    );
-    return response.kind === "approval" && response.decision === "accept";
-  }
-
-  /**
-   * Whether the user lets the lead drive a thread beyond its own in its
-   * project. Full access doesn't: it was given for the lead's own folder.
-   * Always keeps the leave on the lead, so it asks only once.
-   */
-  private async drive(
-    lead: ProjectChat,
-    title: string,
-    detail: string,
-    signal: AbortSignal,
-  ) {
-    if (lead.drivesThreads) return true;
-    const response = await this.chats.askInTurn(
-      lead.id,
-      {
-        kind: "approval",
-        title,
-        detail: [detail, DRIVE_ALWAYS].filter(Boolean).join("\n\n"),
-        decisions: ["accept", "acceptForSession", "decline", "cancel"],
-      },
-      signal,
-    );
-    if (response.kind !== "approval") return false;
-    if (response.decision === "acceptForSession")
-      await this.chats.allowDriving(lead.id, true);
-    return (
-      response.decision === "accept" || response.decision === "acceptForSession"
-    );
-  }
-
-  private fullAccess(lead: ProjectChat) {
-    return this.leadSide(lead).last.runtimeMode === "full-access";
   }
 
   /** A deep review round in the lead's own thread; its reviewers run on the user's accounts, so it asks as starting threads does. */
@@ -482,7 +393,7 @@ export class StartedThreads {
       return toolText("This Relay can't run deep reviews.", true);
     const { name, config } = reviewRound(this.reviews, lead, input);
     const count = config.reviewers.length;
-    const approved = await this.approve(
+    const approved = await this.approvals.ask(
       lead,
       `Start a deep review with ${count === 1 ? "1 reviewer" : `${count} reviewers`}?`,
       [
@@ -517,7 +428,7 @@ export class StartedThreads {
         "This Relay doesn't run under npm run dev, so it can't restart itself.",
         true,
       );
-    const approved = await this.approve(
+    const approved = await this.approvals.ask(
       lead,
       "Restart Relay?",
       // One line: the agent's text can't forge more of the card.
@@ -535,422 +446,6 @@ export class StartedThreads {
     return toolText(
       "Relay is restarting. Its tools answer again in a few seconds; a call before then may fail.",
     );
-  }
-
-  /**
-   * A thread the lead may drive. `mine`: it started it. `sends`: it may
-   * message it as freely as one in its own project.
-   */
-  private async target(lead: ProjectChat, id: string) {
-    if (id === lead.id)
-      throw new Error("That's this thread; these tools drive other threads.");
-    const mine = this.reads.children(lead).some((c) => c.id === id);
-    const found = await this.reads.thread(id);
-    const elsewhere =
-      found.chat.projectId !== lead.projectId
-        ? ((await this.projects.real()).find(
-            (p) => p.id === found.chat.projectId,
-          )?.name ?? "another project")
-        : undefined;
-    return {
-      ...found,
-      mine,
-      sends: mine && (!elsewhere || !!found.chat.startedBy?.sendsApproved),
-      where: elsewhere ? ` in “${elsewhere}”` : "",
-    };
-  }
-
-  private refused(what: string) {
-    return toolText(
-      `The user didn't let you ${what}. Ask them what they want instead.`,
-      true,
-    );
-  }
-
-  private async stop(lead: ProjectChat, id: string, signal: AbortSignal) {
-    const { chat, mine, where } = await this.target(lead, id);
-    if (
-      !mine &&
-      !(await this.drive(lead, `Stop “${chat.title}”${where}?`, "", signal))
-    )
-      return this.refused("stop it");
-    // One waiting on a setup there has its agent stopped already; the
-    // setup's own agent is the user's to stop.
-    if (!inSetup(chat) && this.handoffs?.forwards("cancelProjectChat", [id])) {
-      await this.handoffs.forward("cancelProjectChat", [id]);
-      return toolText(`Stopped on ${chat.sentTo!.computer}.`);
-    }
-    await this.chats.cancel(id);
-    return toolText("Stopped.");
-  }
-
-  /**
-   * Hands a thread to another computer, or brings it back with `to` "here",
-   * as the thread header does. The user always confirms: the agent there
-   * runs on what's there, and the thread's agent here stops for its note.
-   */
-  private async handOff(
-    lead: ProjectChat,
-    { id, to }: RelayToolArgs<"hand_off_thread">,
-    signal: AbortSignal,
-  ) {
-    const handoffs = this.handoffs;
-    if (!handoffs)
-      return toolText(
-        "This Relay can't hand threads to other computers.",
-        true,
-      );
-    const { summary, chat, where } = await this.target(lead, id);
-    if (to?.toLowerCase() === "here")
-      return this.bringBack(lead, handoffs, summary, chat, where, signal);
-    if (summary.sentTo)
-      return toolText(`It's on ${summary.sentTo.computer} already.`, true);
-    const blocked = handoffBlocked(summary);
-    if (blocked) return toolText(blocked, true);
-    const targets = await handoffs.targets(id);
-    if (!targets.length)
-      return toolText(
-        "No other computer is paired with this Relay. The user pairs one in Settings → Computers.",
-        true,
-      );
-    const picked = to
-      ? targets.filter((t) => t.name.toLowerCase() === to.toLowerCase())
-      : targets.filter((t) => t.project);
-    const target = picked.length === 1 ? picked[0]! : undefined;
-    if (!target?.project) {
-      const listed = targets
-        .map(
-          (t) =>
-            `- ${t.name}: ${t.project ? `can take it, into ${t.project.name}` : t.problem}`,
-        )
-        .join("\n");
-      return toolText(
-        `${
-          target
-            ? `${target.name} can't take it.`
-            : to
-              ? `No paired computer is named "${to}".`
-              : picked.length
-                ? "Several computers can take it; name one in `to`."
-                : "No paired computer can take it now."
-        }\n${listed}`,
-        true,
-      );
-    }
-    const approved = await this.approve(
-      lead,
-      `Hand “${chat.title}”${where} off to ${target.name}?`,
-      `Its agent stops and writes a handoff note, everything in its worktree is committed, and it carries on in ${target.project.name} on ${target.name}. Ignored files such as .env stay here.`,
-      signal,
-      true,
-    );
-    if (!approved) return this.refused("hand it off");
-    await handoffs.handOff(id, target.id);
-    await handoffs.finished(id);
-    const sentTo = (await this.reads.thread(id)).summary.sentTo;
-    if (!sentTo || sentTo.error)
-      return toolText(
-        `It didn't go to ${target.name}${sentTo?.error ? `: ${sentTo.error}` : "."}`,
-        true,
-      );
-    return toolText(
-      sentTo.live
-        ? `It runs on ${target.name} now. send_to_thread, stop_thread, read_thread and wait_for_threads reach it there.`
-        : `It's on ${target.name} now. That Relay is too old to follow from here, so it can't be messaged until it's brought back.`,
-    );
-  }
-
-  private async bringBack(
-    lead: ProjectChat,
-    handoffs: ThreadHandoffs,
-    summary: ChatSummary,
-    chat: ProjectChat,
-    where: string,
-    signal: AbortSignal,
-  ) {
-    const { sentTo } = summary;
-    if (!sentTo) return toolText("It's here already.", true);
-    const approved = await this.approve(
-      lead,
-      `Bring “${chat.title}”${where} back from ${sentTo.computer}?`,
-      `Its work on ${sentTo.computer} stops, the agent there writes a handoff note and commits, and the thread carries on here.`,
-      signal,
-      true,
-    );
-    if (!approved) return this.refused("bring it back");
-    await handoffs.bringBack(chat.id);
-    await handoffs.finished(chat.id);
-    const after = (await this.reads.thread(chat.id)).summary.sentTo;
-    if (after)
-      return toolText(
-        `It didn't come back from ${sentTo.computer}${after.error ? `: ${after.error}` : "."}`,
-        true,
-      );
-    return toolText("It's back here.");
-  }
-
-  private async settle(lead: ProjectChat, id: string, signal: AbortSignal) {
-    const { summary, chat, mine, where } = await this.target(lead, id);
-    const { status } = chatStatus(summary, chat);
-    if (status === "working" || status === "needs-input")
-      return toolText(
-        status === "working"
-          ? "It's still working: wait for it or stop it first."
-          : "It's waiting on the user's input.",
-        true,
-      );
-    if (summary.settledAt) return toolText("Already settled.");
-    if (
-      !mine &&
-      !(await this.drive(lead, `Settle “${chat.title}”${where}?`, "", signal))
-    )
-      return this.refused("settle it");
-    await this.chats.triage(id, { kind: "settle" });
-    return toolText("Settled.");
-  }
-
-  /** The lead's own thread, once this answer ends; see ThreadTriage.settleItself. */
-  private async settleSelf(lead: ProjectChat) {
-    if (!(await this.chats.settleItself(lead.id)))
-      return toolText("Already settled.");
-    return toolText(
-      lead.startedBy
-        ? "It settles once this answer ends cleanly."
-        : "It settles once this answer ends cleanly and the user has read it.",
-    );
-  }
-
-  /** The agent's message to itself, held like Send later until its time. */
-  private async wakeLater(
-    lead: ProjectChat,
-    { minutes, prompt }: RelayToolArgs<"wake_this_thread">,
-  ) {
-    const at = Date.now() + minutes * 60_000;
-    const { last, agent } = this.leadSide(lead);
-    await this.chats.send(lead.id, {
-      id: randomUUID(),
-      body: prompt,
-      choice: last.choice,
-      ...(last.contextWindow ? { contextWindow: last.contextWindow } : {}),
-      provider: agent,
-      to: agent,
-      runtimeMode: last.runtimeMode,
-      interactionMode: last.interactionMode,
-      fromThread: { id: lead.id, name: `${agentName(agent)}'s wake-up` },
-      sendAt: at,
-    });
-    return toolText(
-      `It goes out at ${localTime(at)} as your next message here. The user sees it waiting and can send it early or cancel it.`,
-    );
-  }
-
-  /** Who the lead's messages say they're from, and on what it last ran. */
-  private leadSide(lead: ProjectChat) {
-    const last = lead.lastInput ?? { ...fallbackInput, body: "", id: lead.id };
-    const agent = sentAgent(last);
-    return {
-      last,
-      agent,
-      from: {
-        id: lead.id,
-        name: `${agentName(agent)} in ${lead.title}`.slice(0, 300),
-      },
-    };
-  }
-
-  private async start(
-    lead: ProjectChat,
-    { project, detached, threads }: RelayToolArgs<"start_threads">,
-    signal: AbortSignal,
-  ) {
-    const elsewhere =
-      project && project !== lead.projectId
-        ? (await this.projects.real()).find((p) => p.id === project)
-        : undefined;
-    if (project && project !== lead.projectId && !elsewhere)
-      return toolText("There's no such project; see list_projects.", true);
-    // The lead's uncommitted work belongs to another repository.
-    if (elsewhere && threads.some((t) => t.uncommitted === true))
-      return toolText(
-        "`uncommitted` only works in your own project; leave it out for another one.",
-        true,
-      );
-    const { last, agent: caller, from } = this.leadSide(lead);
-    const refused = await this.agentChoices.refusal(
-      threads.map((t) => ({
-        ...t,
-        model:
-          t.model ?? ((t.agent ?? caller) === caller ? last.choice.model : ""),
-        fast: t.fast ?? ((t.agent ?? caller) === caller && last.choice.fast),
-      })),
-      caller,
-    );
-    if (refused) return toolText(refused, true);
-    const working = this.reads.children(lead).filter((c) => c.running).length;
-    if (!detached && working + threads.length > STARTED_LIMIT)
-      return toolText(
-        `${working} of your threads are working; at most ${STARTED_LIMIT} may at once. Wait for some to finish first.`,
-        true,
-      );
-    const count = `${threads.length} thread${threads.length === 1 ? "" : "s"}`;
-    const listed = threads
-      .map(
-        (t, i) =>
-          `${i + 1}. ${agentName(t.agent ?? caller)}${t.model ? ` (${t.model})` : ""}${t.readOnly ? ", read only" : t.worktree === false ? ", in the checkout" : ""}${t.plan ? ", plans first" : ""}\n${head(t.prompt)}`,
-      )
-      .join("\n\n");
-    const title = `Start ${count}${detached ? " of their own" : ""}${elsewhere ? ` in “${elsewhere.name}”` : ""}?`;
-    const approved =
-      elsewhere || detached
-        ? await this.drive(
-            lead,
-            title,
-            elsewhere
-              ? `In ${elsewhere.path}${this.fullAccess(lead) ? ", with full access: edits and commands run without asking" : ""}.\n\n${listed}`
-              : listed,
-            signal,
-          )
-        : await this.approve(lead, title, listed, signal);
-    if (!approved)
-      return toolText(
-        "The user didn't start these threads. Ask them what they want instead.",
-        true,
-      );
-    const started: { id?: string; [key: string]: unknown }[] = [];
-    for (const spec of threads) {
-      const agent: AgentProvider = spec.agent ?? caller;
-      const same = agent === caller;
-      const model =
-        spec.model !== undefined ||
-        spec.effort !== undefined ||
-        spec.fast !== undefined
-          ? {
-              choice: {
-                model: spec.model ?? (same ? last.choice.model : ""),
-                fast: spec.fast ?? (same && last.choice.fast),
-                reasoningEffort:
-                  spec.effort ?? (same ? last.choice.reasoningEffort : ""),
-              },
-              ...(same && last.contextWindow
-                ? { contextWindow: last.contextWindow }
-                : {}),
-            }
-          : same
-            ? {
-                choice: last.choice,
-                ...(last.contextWindow
-                  ? { contextWindow: last.contextWindow }
-                  : {}),
-              }
-            : { choice: defaultChoice };
-      const fitted = fitModel(agent, model);
-      const account = hasAccounts(agent) ? lead.accounts?.[agent] : undefined;
-      const send = projectChatSendSchema.safeParse({
-        id: randomUUID(),
-        body: spec.prompt,
-        choice: fitted.choice,
-        ...(fitted.contextWindow
-          ? { contextWindow: fitted.contextWindow }
-          : {}),
-        provider: agent,
-        to: agent,
-        runtimeMode: spec.readOnly ? "read-only" : last.runtimeMode,
-        interactionMode: spec.plan ? "plan" : "default",
-        ...(account ? { account } : {}),
-        fromThread: from,
-      } satisfies ProjectChatSend);
-      if (!send.success) {
-        started.push({
-          error: send.error.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; "),
-        });
-        continue;
-      }
-      try {
-        const chat = await this.create(
-          lead,
-          elsewhere?.id ?? lead.projectId,
-          spec.worktree ?? (spec.readOnly ? false : undefined),
-          detached ? undefined : caller,
-        );
-        // A worktree made from the commit alone would miss the work in progress it's about.
-        const copied =
-          chat.worktree && !elsewhere && spec.uncommitted !== false
-            ? await this.chats.worktreeFrom(chat.id, lead.id, spec.prompt)
-            : undefined;
-        await this.chats.send(chat.id, send.data);
-        started.push({
-          id: chat.id,
-          title: promptTitle(spec.prompt),
-          agent,
-          ...(spec.plan ? { plan: true } : {}),
-          ...(spec.readOnly ? { readOnly: true } : {}),
-          ...(elsewhere ? { project: elsewhere.name } : {}),
-          ...(detached ? { detached: true } : {}),
-          worktree: !!chat.worktree,
-          ...(copied ? { uncommittedFilesCopied: copied } : {}),
-        });
-      } catch (error) {
-        started.push({
-          error: errorMessage(error),
-        });
-      }
-    }
-    const failed = await this.failedAtOnce(
-      started.flatMap((t) => (t.id ? [t.id] : [])),
-      signal,
-    );
-    return json(
-      started.map((t) => {
-        const dead = t.id ? failed.get(t.id) : undefined;
-        if (!dead) return t;
-        return {
-          ...t,
-          failed: dead.error,
-          ...(dead.settled ? { settled: true } : {}),
-          note: dead.settled ? FAILED_SETTLED : FAILED_AT_ONCE,
-        };
-      }),
-    );
-  }
-
-  /**
-   * Watches new threads until each shows work or fails, so one that fails
-   * as it starts, like on a model its account lacks, is reported failed and
-   * settled once its run lets go, rather than left dead in Activity.
-   */
-  private async failedAtOnce(ids: string[], signal: AbortSignal) {
-    const failed = new Map<string, { error: string; settled: boolean }>();
-    const until = Date.now() + this.failureWatchMs;
-    let open = ids;
-    while (open.length && !signal.aborted && Date.now() < until) {
-      await delay(Math.min(EARLY_POLL_MS, until - Date.now()), undefined, {
-        signal,
-      }).catch(() => {});
-      const still: string[] = [];
-      for (const id of open) {
-        // Gone already, as the user may delete it: nothing to report.
-        const found = await this.reads.thread(id).catch(() => undefined);
-        if (!found) continue;
-        const { summary, chat } = found;
-        const last = answers(chat).at(-1);
-        if (last?.status === "failed") {
-          // Settling waits for its run to let go of it.
-          const settled =
-            chatStatus(summary, chat).status === "failed" &&
-            (await this.chats.triage(id, { kind: "settle" }).then(
-              () => true,
-              () => false,
-            ));
-          failed.set(id, { error: last.error ?? "It failed.", settled });
-          if (!settled) still.push(id);
-        } else if (!last || (last.status === "streaming" && !hasWork(last)))
-          still.push(id);
-      }
-      open = still;
-    }
-    return failed;
   }
 
   /** Each agent's limits on the accounts the calling thread uses. */
@@ -982,216 +477,5 @@ export class StartedThreads {
         };
       }),
     );
-  }
-
-  /**
-   * A worktree unless asked otherwise or the project isn't a repository.
-   * Without the starting agent it's a thread of its own, not under the lead.
-   */
-  private async create(
-    lead: ProjectChat,
-    projectId: string,
-    worktree: boolean | undefined,
-    agent: AgentProvider | undefined,
-  ) {
-    const startedBy = agent ? { chatId: lead.id, agent } : undefined;
-    const scope = { kind: "project" } as const;
-    if (worktree === false)
-      return this.chats.create(projectId, scope, "checkout", startedBy);
-    try {
-      return await this.chats.create(projectId, scope, "worktree", startedBy);
-    } catch (error) {
-      if (worktree === true) throw error;
-      return this.chats.create(projectId, scope, "checkout", startedBy);
-    }
-  }
-
-  /** The thread whose notes a call means: the one named, or the caller's own. */
-  private async notesOf(lead: ProjectChat, thread?: string) {
-    if (!thread || thread === lead.id) return lead;
-    return this.chats.get(thread).catch(() => {
-      throw new Error("There's no such thread; see find_threads.");
-    });
-  }
-
-  private async listNotes(
-    lead: ProjectChat,
-    { thread }: RelayToolArgs<"list_notes">,
-  ) {
-    const chat = await this.notesOf(lead, thread);
-    const notes = await this.chats.notes.list(chat.id);
-    return json({
-      ...(chat.id === lead.id ? {} : { thread: chat.title }),
-      notes: notes.map(noteForAgent),
-    });
-  }
-
-  /**
-   * The thread whose notes a change goes into. Another thread's take the same
-   * leave as driving it: what is kept there is the first thing read_thread
-   * hands any agent reading it.
-   */
-  private async notesToChange(
-    lead: ProjectChat,
-    thread: string | undefined,
-    what: string,
-    detail: string,
-    signal: AbortSignal,
-  ) {
-    if (!thread || thread === lead.id) return lead;
-    if (lead.startedBy)
-      throw new Error(
-        "A thread started by another thread keeps notes only in its own.",
-      );
-    const { chat, mine, where } = await this.target(lead, thread);
-    if (
-      !mine &&
-      !(await this.drive(
-        lead,
-        `${what} “${chat.title}”${where}?`,
-        detail,
-        signal,
-      ))
-    )
-      return undefined;
-    return chat;
-  }
-
-  private async addNote(
-    lead: ProjectChat,
-    { text, thread }: RelayToolArgs<"add_note">,
-    signal: AbortSignal,
-  ) {
-    const chat = await this.notesToChange(
-      lead,
-      thread,
-      "Keep a note in",
-      head(text),
-      signal,
-    );
-    if (!chat) return this.refused("keep this there");
-    const note = await this.chats.notes.add(chat.id, {
-      text,
-      by: this.leadSide(lead).agent,
-    });
-    return toolText(
-      `Kept as ${note.id}${chat.id === lead.id ? "" : ` in “${chat.title}”`}.`,
-    );
-  }
-
-  private async tickNote(
-    lead: ProjectChat,
-    { note, item, done = true, thread }: RelayToolArgs<"tick_note">,
-    signal: AbortSignal,
-  ) {
-    const chat = await this.notesToChange(
-      lead,
-      thread,
-      `${done ? "Tick" : "Untick"} item ${item} of ${note} in`,
-      "",
-      signal,
-    );
-    if (!chat) return this.refused(`${done ? "tick" : "untick"} it`);
-    await this.chats.notes.tick(chat.id, note, item, done);
-    return toolText(`${done ? "Ticked" : "Unticked"} ${note} item ${item}.`);
-  }
-
-  private async sendTo(
-    lead: ProjectChat,
-    { id, message, steer }: RelayToolArgs<"send_to_thread">,
-    signal: AbortSignal,
-  ) {
-    const { chat, sends, where } = await this.target(lead, id);
-    if (!chat.lastInput) return toolText("That thread hasn't started yet.", true);
-    const title = `${steer ? "Steer" : "Send to"} “${chat.title}”${where}?`;
-    const approved = sends
-      ? await this.approve(lead, title, head(message), signal)
-      : await this.drive(lead, title, head(message), signal);
-    if (!approved) return this.refused("send this");
-    const sent = await this.deliver(
-      chat,
-      this.messageTo(chat, message, this.leadSide(lead).from, !!steer),
-    );
-    if (sent.away)
-      return toolText(
-        sent.held
-          ? `${sent.away} is offline; it goes out once it's back.`
-          : `Sent; it runs on ${sent.away}.`,
-      );
-    if (!sent.working) return toolText("Sent.");
-    return toolText(
-      steer
-        ? "Steered; it reads it mid-answer."
-        : "Queued; it goes out when its current answer ends. To reach it mid-answer, send with steer.",
-    );
-  }
-
-  /** A started thread's message to its lead: a steer while it works, so it hears now. */
-  private async sendToLead(
-    lead: ProjectChat,
-    body: string,
-    from: Sender,
-  ): Promise<Delivered> {
-    const { summary, chat } = await this.reads.thread(lead.id);
-    const { status } = chatStatus(summary, chat);
-    const sent = await this.deliver(
-      chat,
-      this.messageTo(chat, body, from, status === "working"),
-    );
-    return {
-      steered: status === "working",
-      queued: status === "needs-input",
-      ...(sent.away ? { away: sent.away } : {}),
-    };
-  }
-
-  /** A message to `chat` from another thread's agent, on what `chat` last ran. */
-  private messageTo(
-    chat: ProjectChat,
-    body: string,
-    from: Sender,
-    steer: boolean,
-  ): ProjectChatSend {
-    const previous = chat.lastInput ?? {
-      ...fallbackInput,
-      body: "",
-      id: chat.id,
-    };
-    const agent = sentAgent(previous);
-    return {
-      id: randomUUID(),
-      body,
-      choice: previous.choice,
-      ...(previous.contextWindow
-        ? { contextWindow: previous.contextWindow }
-        : {}),
-      provider: agent,
-      to: agent,
-      runtimeMode: previous.runtimeMode,
-      interactionMode: previous.interactionMode,
-      ...(steer ? { delivery: "steer" as const } : {}),
-      fromThread: from,
-    };
-  }
-
-  /** Sends to a thread here, or on the computer it was handed off to. */
-  private async deliver(chat: ProjectChat, send: ProjectChatSend) {
-    // A send to one waiting on a setup would reach the setup's agent instead.
-    if (inSetup(chat))
-      throw new Error(
-        `“${chat.title}” is on its way to ${chat.sentTo!.computer}, which is still being set up for it. Try again once it's there.`,
-      );
-    if (this.handoffs?.forwards("sendProjectChat", [chat.id, send])) {
-      await this.handoffs.forward("sendProjectChat", [chat.id, send]);
-      const held = (await this.chats.liveHandoff.outbox(chat.id)).some(
-        (h) => h.input.id === send.id,
-      );
-      return { away: chat.sentTo!.computer, held, working: false };
-    }
-    // Read now: approving may have taken long enough for the answer to end.
-    const now = await this.reads.thread(chat.id);
-    const working = chatStatus(now.summary, now.chat).status === "working";
-    await this.chats.send(chat.id, send);
-    return { working };
   }
 }

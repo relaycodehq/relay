@@ -1,7 +1,12 @@
+import { sliceWhole } from "../../shared/truncate";
 import { toolText } from "../relay-mcp";
 
 export const json = (value: unknown) =>
   toolText(JSON.stringify(value, null, 1));
+
+/** The start of what the user is asked about. */
+export const head = (text: string, limit = 600) =>
+  text.length > limit ? `${sliceWhole(text, 0, limit)}…` : text;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
