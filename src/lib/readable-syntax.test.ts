@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { resolveTheme } from "@pierre/diffs";
 import "./readable-syntax";
-import { contrastRatio, readableSyntaxBase, themesFor } from "./themes";
+import { readableSyntaxBase } from "./builtin-themes";
+import { contrastRatio, themesFor } from "./themes";
 
 const light = themesFor("light").map((t) => [t.name, t.light!] as const);
 

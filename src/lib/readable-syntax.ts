@@ -8,9 +8,9 @@ import {
   resolveTheme,
   type ThemeRegistrationResolved,
 } from "@pierre/diffs";
+import { readableSyntaxBase } from "./builtin-themes";
 import {
   luminance,
-  readableSyntaxBase,
   themesFor,
   withContrast,
   type Palette,

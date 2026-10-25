@@ -53,5 +53,4 @@ export const bigFiles: Record<string, number> = {
   "src/features/thread/QueuedMessages.tsx": 580,
   "src/features/thread/ThreadComposer.tsx": 555,
   "src/features/thread/WorktreeControls.tsx": 613,
-  "src/lib/themes.ts": 693,
 };
