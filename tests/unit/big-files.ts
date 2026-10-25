@@ -38,7 +38,7 @@ export const bigFiles: Record<string, number> = {
   "shared/types.ts": 920,
   "src/features/add-project/AddProjectPalette.tsx": 579,
   "src/features/agent-turn/AgentTurn.tsx": 645,
-  "src/features/agents/ComposerModelPicker.tsx": 608,
+  "src/features/agents/ComposerModelPicker.tsx": 562,
   "src/features/agents/ContextWindowMeter.tsx": 575,
   "src/features/bug-report/ReportProblem.tsx": 506,
   "src/features/composer/ProjectComposer.tsx": 675,
