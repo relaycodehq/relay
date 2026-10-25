@@ -762,6 +762,14 @@ final class Connection {
         return try await client.activityDetail(chatId: chatId, messageId: message, activityId: activity)
     }
 
+    /// The code a call wrote, which the thread leaves out.
+    func activityWritten(_ chatId: String, message: String, activity: String) async throws -> [WrittenCode]? {
+        guard let client else { throw PairingError("Not connected.") }
+        return try await client.activityWritten(chatId: chatId, messageId: message, activityId: activity)
+    }
+
+    var canOpenWritten: Bool { (overview?.bridge ?? 0) >= Bridge.traceTree }
+
     func stop(_ chatId: String) async throws {
         try await client?.cancelProjectChat(chatId: chatId)
     }

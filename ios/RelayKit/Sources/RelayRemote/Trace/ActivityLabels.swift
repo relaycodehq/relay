@@ -97,10 +97,6 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
     return parts.dropLast().joined(separator: ", ") + ", and " + parts.last!
 }
 
-private func baseName(_ path: String) -> String {
-    path.split(separator: "/").last.map(String.init) ?? path
-}
-
 private let commandWrappers: Set<String> = ["sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx"]
 private let commandSetup: Set<String> = [
     "cd", "pushd", "popd", "export", "unset", "set", "source", ".", "true", "[", "[[", "test", "done", "fi", "esac", "}",
@@ -189,6 +185,8 @@ let relayToolLabels = [
     "settle_this_thread": "Settles this thread when done",
     "wake_this_thread": "Set a wake-up",
     "move_to_worktree": "Moved the thread to its own worktree",
+    "move_to_project": "Moved the thread to another project",
+    "message_lead": "Messaged its lead",
     "deep_review": "Started a deep review",
     "list_review_setups": "Listed review setups",
     "list_notes": "Read the notes",

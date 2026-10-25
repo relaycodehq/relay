@@ -68,10 +68,21 @@ struct TurnTrace: View {
             let (head, earlier) = batchHead(activity)
             if !earlier.isEmpty {
                 Fold(label: summarizeActivity(earlier)) {
-                    ForEach(earlier) { row($0, turn) }
+                    if saysWhatItDid(earlier) {
+                        CallPieces(calls: earlier, context: context(turn))
+                    } else {
+                        ForEach(earlier) { row($0, turn) }
+                    }
                 }
             }
-            row(head, turn)
+            if saysWhatItDid([head]) {
+                // The call working now, in its own words: "Searching `x` in src".
+                ForEach(rowsOf([head])) { ActionRow(rows: [$0], context: context(turn)) }
+            } else {
+                row(head, turn)
+            }
+        } else if saysWhatItDid(activity) {
+            CallPieces(calls: activity, context: context(turn))
         } else if activity.count == 1 || (alone && !turn.live) {
             ForEach(activity) { row($0, turn) }
         } else {
@@ -79,6 +90,10 @@ struct TurnTrace: View {
                 ForEach(activity) { row($0, turn) }
             }
         }
+    }
+
+    private func context(_ turn: Turn) -> CallContext {
+        CallContext(chatId: chatId, messageId: message.id, root: root, looked: looked, subagentCalls: turn.calls)
     }
 
     private func row(_ a: AgentActivity, _ turn: Turn) -> some View {

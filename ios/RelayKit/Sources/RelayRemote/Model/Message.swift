@@ -73,6 +73,10 @@ public struct AgentActivity: Codable, Sendable, Equatable, Identifiable {
     public var progress: String?
     public var mcp: McpCall?
     public var image: String?
+    /// What the call did, read by the desktop from its command or tool; from `Bridge.traceTree`.
+    public var actions: [CallAction]?
+    /// The call wrote code, left out of the thread; `activityWritten` has it.
+    public var wroteCode: Bool?
 }
 
 public struct McpCall: Codable, Sendable, Equatable {

@@ -67,7 +67,7 @@ struct ToolRow: View {
                             .font(.footnote)
                         }
                     } else if let detail, !detail.isEmpty {
-                        Detail(text: detail)
+                        ToolOutput(text: detail)
                     }
                 }
                 .padding(.leading, 24)
@@ -129,7 +129,8 @@ struct ToolRow: View {
     }
 }
 
-private struct Detail: View {
+/// A call's output in a box that scrolls both ways and stops growing at a few lines.
+struct ToolOutput: View {
     let text: String
 
     var body: some View {

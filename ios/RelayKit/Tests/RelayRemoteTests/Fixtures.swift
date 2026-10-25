@@ -15,6 +15,8 @@ enum Fixtures {
     static let misc = load("ts-misc")
     /// ios/scripts/trace-fixtures.ts: shared/activity-labels and agent-trace on sample turns.
     static let trace = load("ts-trace")
+    /// scripts/trace-tree-fixtures.ts: shared/trace-tree on sample runs whose calls carry `actions`.
+    static let traceTree = load("ts-trace-tree")
 }
 
 func hex(_ bytes: Data) -> String { bytes.map { String(format: "%02x", $0) }.joined() }

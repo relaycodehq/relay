@@ -32,6 +32,8 @@ public enum Bridge {
     public static let workspaceMoves = 22
     /// Port tunnel frames (Tunnel/) and `sites`.
     public static let tunnel = 23
+    /// A thread's calls say what they did (`actions`) and whether they wrote code; `activityWritten`.
+    public static let traceTree = 35
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22

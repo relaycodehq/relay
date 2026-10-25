@@ -532,6 +532,49 @@ const previewChat = seeded && thread(relay, "Is the preview up?", 12, [
   message("assistant", `It is, at http://localhost:${devServer}/about. Have a look.`, 12),
 ]);
 
+// A turn whose calls group by what they did (shared/trace-tree), with code an edit and a write kept.
+if (seeded) {
+  const said = (text: string) => ({ kind: "commentary", id: id(), text });
+  const did = (a: any) => ({ kind: "activity", id: a.id, activity: a });
+  const bash = "/tmp/relay/electron/agent-host/read-only-bash.ts";
+  const trace = [
+    did(step(`grep -n "\\.sb-age\\b" src/features/sidebar/sidebar.css; grep -n ".agent-run-time {" src/features/sidebar/sidebar.css`)),
+    said("Pulling up the rg allowlist F4 wrote:"),
+    did(step(`grep -n "rg\\b\\|rgFlags" ${bash} | head -20`)),
+    did(step(`grep -rl "Activity" /tmp/audit/scripts/B /tmp/audit/scripts/B/cmd 2>/dev/null | head -3; grep -rh "Activity" /tmp/audit/scripts/B/cmd/*.mjs | head`)),
+    did(step(bash, "read", { detail: "export const rgFlags = [\n  \"help\",\n];" })),
+    did(step(`grep -n "Activity" -B2 -A6 /tmp/audit/scripts/B/cmd/run15.mjs | head -30`)),
+    said("The list is already fairly broad. Diffing it against every flag the installed ripgrep supports:"),
+    did(step("/tmp/f9/c8-views.mjs", "file", {
+      detail: "File created successfully at: /tmp/f9/c8-views.mjs",
+      written: [{ kind: "whole", path: "/tmp/f9/c8-views.mjs", content: `import { readFileSync } from "node:fs";\n\n// Every flag rg --help names.\nconst help = readFileSync("/tmp/rgflags.txt", "utf8");\nconst flags = help.match(/--[a-z-]+/g) ?? [];\nconsole.log(flags.length, "flags");` }],
+    })),
+    did(step("sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs", "command", { detail: "142 flags" })),
+    did(step("rg --version | head -1; rg --help | grep -oE '\\-\\-[a-z-]+' > /tmp/rgflags.txt", "command", { detail: "ripgrep 14.1.1" })),
+    did(step("cd /tmp && for f in hidden follow; do rg --no-$f x rgneg; done")),
+    did(step("npx tsx /tmp/rgcheck.mts 2>&1 | head", "command", { detail: "missing: --no-pcre2-unicode" })),
+    did(step("npx tsx /tmp/rgneg.mts | head -2")),
+    did(step("sed -n 160,180p src/features/sidebar/ProjectSidebar.tsx")),
+    did(step(bash, "file", {
+      written: [{ kind: "swap", path: bash, edits: [{
+        old: `  "unrestricted", "glob-case-insensitive", "no-require-git", "pretty",\n  "max-columns-preview", "no-unicode", "debug", "trace", "version",\n  "help",`,
+        new: `  "unrestricted", "glob-case-insensitive", "no-require-git", "pretty",\n  "max-columns-preview", "no-unicode", "debug", "trace", "version",\n  "help", "mmap", "stop-on-nonmatch", "auto-hybrid-regex",\n  "no-pcre2-unicode",\n  // The negations only turn a behaviour back off.\n  "no-hidden", "no-follow", "no-text", "no-binary",`,
+      }] }],
+    })),
+    said("Only the dangerous ones are still denied. Checking it:"),
+    did(step("npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -20", "command", { detail: " FAIL  electron/agent-host/read-only-bash.test.ts > lets reads through\n Test Files  1 failed (1)" })),
+    did(step("npm run typecheck", "command", { detail: "tc 0" })),
+    did(step("npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -3", "command", { detail: " Test Files  1 passed (1)" })),
+  ];
+  thread(relay, "Tighten the rg allowlist", 1, [
+    message("user", "Can rg take every read-only flag it has?", 4),
+    message("assistant", "It can now: every read-only flag is allowed and the negations too.", 1, {
+      ended: now - 1 * min, created: now - 4 * min, trace,
+      activity: trace.flatMap((e: any) => (e.kind === "activity" ? [e.activity] : [])),
+    }),
+  ]);
+}
+
 // Files, tasks, the working tree, notes and the updater (live-desktop-files.ts).
 const extras = filesFixture({ seeded, root, now, min, relay, site, bridge: remoteBridgeVersion, threads: threads as any, thread, message, step, devTask, changed: (p) => changed(p) });
 

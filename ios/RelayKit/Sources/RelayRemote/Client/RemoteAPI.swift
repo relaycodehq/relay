@@ -31,6 +31,12 @@ public extension RemoteClient {
         try await call("activityDetail", [.string(chatId), .string(messageId), .string(activityId)]).string
     }
 
+    /// The code a call wrote, per file; nil when it wrote none. From `Bridge.traceTree`.
+    func activityWritten(chatId: String, messageId: String, activityId: String) async throws -> [WrittenCode]? {
+        let written = try await call("activityWritten", [.string(chatId), .string(messageId), .string(activityId)])
+        return written.isNull ? nil : try written.decode()
+    }
+
     /// From `Bridge.phoneUpdates`.
     func computerInfo() async throws -> ComputerInfo {
         try await call("computerInfo").decode()
