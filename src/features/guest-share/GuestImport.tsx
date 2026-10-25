@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
@@ -14,6 +15,7 @@ export function GuestImport({
   projects,
   current,
   onOpen,
+  onAddProject,
   onClose,
 }: {
   link: string;
@@ -21,13 +23,17 @@ export function GuestImport({
   projects: Project[] | undefined;
   current: string | null;
   onOpen: (projectId: string, chatId: string) => void;
+  /** Hides the picker while adding; it comes back with the new project listed. */
+  onAddProject: () => void;
   onClose: () => void;
 }) {
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<unknown>();
-  const copyInto = async (project: Project) => {
+  const qc = useQueryClient();
+  const copyInto = async (destination: () => Promise<Project>) => {
     setCopying(true);
     try {
+      const project = await destination();
       const thread = await api.importGuestThread(project.id, link);
       onClose();
       onOpen(project.id, thread.id);
@@ -48,16 +54,21 @@ export function GuestImport({
         )}
       </Modal>
     );
-  const scratch = projects?.find((p) => p.scratch);
+  // A Scratchpad folder of its own, as a new Scratchpad thread gets.
+  const newScratch = async () => {
+    const project = await api.createScratch();
+    await qc.invalidateQueries({ queryKey: ["projects"] });
+    return project;
+  };
   return (
     <NewThreadPicker
       title="Continue shared thread in…"
       // A project on another computer would need the thread started there.
       projects={projects?.filter((p) => !p.scratch && !p.computer)}
       current={current}
-      onSelect={(p) => void copyInto(p)}
-      onAdd={onClose}
-      onScratch={() => scratch && void copyInto(scratch)}
+      onSelect={(p) => void copyInto(async () => p)}
+      onAdd={onAddProject}
+      onScratch={() => void copyInto(newScratch)}
       onClose={onClose}
     />
   );

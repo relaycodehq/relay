@@ -451,12 +451,13 @@ export default function ProjectShell() {
           onClose={() => setChoosePR(false)}
         />
       )}
-      {links.guestLink && (
+      {links.guestLink && !starts.adding && (
         <GuestImport
           link={links.guestLink}
           projects={projects.data}
           current={project?.id ?? null}
           onOpen={openChatById}
+          onAddProject={() => starts.addProject()}
           onClose={links.closeGuest}
         />
       )}
