@@ -4,6 +4,7 @@ import {
   useEffect,
   useImperativeHandle,
   useState,
+  type ComponentProps,
   type Ref,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +18,7 @@ import type {
 } from "../../shared/types";
 import { api } from "../lib/api";
 import {
+  projectFor,
   pullsLocation,
   type PullsLocation,
   type PullsPageHandle,
@@ -25,7 +27,13 @@ import { useShortcut } from "../lib/shortcuts";
 import { usePullReview } from "../features/review/usePullReview";
 import { usePullSelection } from "../features/review/usePullSelection";
 import { usePullsRepo } from "../features/pulls/usePullsRepo";
-import { accountOn } from "../features/pulls/usePullHosts";
+import {
+  accountOn,
+  signInCommand,
+  type usePullHosts,
+} from "../features/pulls/usePullHosts";
+import { NoPullHost } from "../features/pulls/NoPullHost";
+import { pullHostName } from "../../shared/source-control";
 import { useSavedWorkspace } from "../features/pulls/useSavedWorkspace";
 import { useStoredFlag } from "../lib/useStoredFlag";
 // In the order ReviewSurface imported them, so their stylesheets keep their place in the
@@ -262,5 +270,74 @@ function LocalNote({
         </>
       )}
     </span>
+  );
+}
+
+/**
+ * Pull requests in place of a project: the page over the hosts you're
+ * signed in to, or how to connect one while there's none.
+ */
+export function PullRequestsArea({
+  hosts,
+  accountId,
+  pageRef,
+  projects,
+  onConnectGitea,
+  ...page
+}: Pick<
+  ComponentProps<typeof PullsSurface>,
+  | "initialWorkspace"
+  | "incomingLink"
+  | "onOpenInProject"
+  | "onOpenProject"
+  | "onAddProject"
+  | "onLocation"
+> & {
+  hosts: ReturnType<typeof usePullHosts>;
+  /** The Gitea account's id; the page keeps its place per account. */
+  accountId?: string;
+  pageRef: Ref<PullsPageHandle>;
+  projects: Project[];
+  /** Absent while Gitea is off in Settings → Integrations. */
+  onConnectGitea?: () => void;
+}) {
+  if (hosts.accounts.length)
+    return (
+      <PullsSurface
+        key={accountId ?? "hosts"}
+        ref={pageRef}
+        accounts={hosts.accounts}
+        hostError={pullsHostError(hosts)}
+        onRecheckHosts={hosts.recheck}
+        projects={projects}
+        projectOf={(repo) => projectFor(projects, repo)}
+        {...page}
+      />
+    );
+  if (hosts.pending) return <Loading />;
+  return (
+    <NoPullHost
+      servers={hosts.servers}
+      error={hosts.error}
+      checking={hosts.checking}
+      onRecheck={hosts.recheck}
+      onConnectGitea={onConnectGitea}
+    />
+  );
+}
+
+/** Why some pull requests are missing: a host that didn't answer, or one not signed in. */
+function pullsHostError({
+  error,
+  signedOut,
+}: Pick<ReturnType<typeof usePullHosts>, "error" | "signedOut">) {
+  if (error)
+    return new Error(
+      `${error.host} didn't answer, so its pull requests are missing: ${error.message}`,
+    );
+  const host = signedOut[0];
+  if (!host) return undefined;
+  return new Error(
+    `Not signed in to ${pullHostName(host)}, so its pull requests are missing. Run ${signInCommand(host)} in a terminal, then try again.`,
   );
 }

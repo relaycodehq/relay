@@ -1,22 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
-import { pullHostName } from "../../shared/source-control";
 import { api } from "../lib/api";
 import { fitHeader } from "./header-fit";
 import {
   NavigationLockProvider,
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
-import { projectFor } from "../features/pulls/pull-board";
 import { useReportRequests } from "../features/bug-report/useReportRequests";
-import {
-  onOpenSettings,
-  openSettings,
-  SIDEBAR_WIDTH,
-  type SettingsCategory,
-} from "../lib/settings-page";
+import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
 import { onAddProjectRequest } from "../lib/add-project-request";
 import { useShortcut } from "../lib/shortcuts";
@@ -24,15 +16,13 @@ import { adoptDraftTerminal } from "../features/terminal/thread-terminals";
 import { useIncomingLinks } from "./useIncomingLinks";
 import { useOpenedFolders } from "./useOpenedFolders";
 import { useNewThreads } from "./useNewThreads";
-import { memeSetupDraft } from "../features/memes/meme-setup";
 import { useProjects } from "./useProjects";
 import { usePullsPage } from "../features/pulls/usePullsPage";
-import { signInCommand, usePullHosts } from "../features/pulls/usePullHosts";
-import { NoPullHost } from "../features/pulls/NoPullHost";
+import { usePullHosts } from "../features/pulls/usePullHosts";
 import { ConnectHost } from "../features/pulls/ConnectHost";
 import { useSettingsPage } from "../features/settings/useSettingsPage";
 import { sameSpot, useShellSpot, type ShellSpot } from "./shell-spot";
-import { useShellNavigation, type Surface } from "./useShellNavigation";
+import { useShellNavigation } from "./useShellNavigation";
 import { roomFor } from "../lib/workspace-panes";
 import {
   useSidebarVisibility,
@@ -40,7 +30,10 @@ import {
 } from "./useSidebarVisibility";
 import { useSignIn } from "../features/settings/useSignIn";
 import { useThreadView } from "../features/thread/useThreadView";
-import { PullsSurface } from "./PullsSurface";
+import { PullRequestsArea } from "./PullsSurface";
+import { useShellCommands } from "./useShellCommands";
+import { useThreadOpening } from "./useThreadOpening";
+import { useToolPages } from "./useToolPages";
 import type { GitActionsHandle } from "../features/changes/GitActions";
 import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
@@ -55,7 +48,6 @@ import {
   SchedulesPage,
   SchedulesTitle,
 } from "../features/schedules/SchedulesPage";
-import { onOpenSchedule } from "../lib/open-schedule";
 import {
   ProcessesPage,
   ProcessesTitle,
@@ -69,21 +61,12 @@ import {
 } from "./ThreadWorkspace";
 import { PopOutButton } from "../features/thread-windows/ThreadWindowButtons";
 import { ThreadElsewhere } from "../features/thread-windows/ThreadElsewhere";
-import {
-  hasOwnWindow,
-  useHasOwnWindow,
-} from "../features/thread-windows/thread-windows";
-import {
-  jumpDigitOf,
-  type MainWindowCommand,
-  type ThreadWindow,
-} from "../../shared/thread-windows";
-import { askJump } from "../features/sidebar/useActivityKeys";
+import { useHasOwnWindow } from "../features/thread-windows/thread-windows";
 import { SignInDialog } from "../features/settings/SignInDialog";
 import { ErrorBox, Loading } from "../ui/ui";
 import { useUndoShortcut } from "./useUndoShortcut";
 import "./shell.css";
-import { bootstrapQuery, projectChatsQuery } from "../lib/workspace-queries";
+import { bootstrapQuery } from "../lib/workspace-queries";
 const NO_PROJECTS: Project[] = [];
 
 export default function ProjectShell() {
@@ -116,34 +99,8 @@ export default function ProjectShell() {
   const usage = nav.surface === "usage";
   const processes = nav.surface === "processes";
   const schedules = nav.surface === "schedules";
-  // Leaving Usage, Processes or Schedules goes back to the page it was opened from.
-  const pageFrom = useRef<Surface>("project");
-  function togglePage(page: "usage" | "processes" | "schedules", stay = false) {
-    if (lock.blocked()) return;
-    if (nav.surface === page) {
-      if (!stay) nav.setSurface(pageFrom.current);
-      return;
-    }
-    if (
-      nav.surface !== "usage" &&
-      nav.surface !== "processes" &&
-      nav.surface !== "schedules"
-    )
-      pageFrom.current = nav.surface;
-    nav.setSurface(page);
-  }
-  const toggleUsage = () => togglePage("usage");
-  const toggleProcesses = () => togglePage("processes");
-  const toggleSchedules = () => togglePage("schedules");
-  // A scheduled run's message leads to its schedule.
-  const [scheduleShown, setScheduleShown] = useState<string>();
-  useEffect(
-    () =>
-      onOpenSchedule((id) => {
-        setScheduleShown(id);
-        togglePage("schedules", true);
-      }),
-  );
+  const { toggleUsage, toggleProcesses, toggleSchedules, scheduleShown } =
+    useToolPages(nav, lock);
   // Pull requests, Usage or Processes instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
@@ -200,19 +157,16 @@ export default function ProjectShell() {
   useShortcut("settings", true, () => settings.show());
   useShortcut("new-thread", !elsewhere && !error, starts.pick);
   useShortcut("new-scratch", true, () => void starts.scratch());
-  function runCommand(command: RelayCommand) {
-    if (lock.blocked()) return false;
-    if (command === "openpr") gitActions.current?.openPr();
-    else if ((command === "new" || command === "clear") && project?.scratch)
-      void starts.scratch();
-    else if ((command === "new" || command === "clear") && project)
-      navigate(project, undefined, true);
-    else if (command === "files" || command === "changes")
-      opens.openCode(command);
-    else if (command === "meme") void starts.scratchDraft(memeSetupDraft);
-    else return false;
-    return true;
-  }
+  const { open, openChatById } = useThreadOpening(nav, projects, setError);
+  const runCommand = useShellCommands({
+    nav,
+    lock,
+    gitActions,
+    starts,
+    opens,
+    loaded: !!projects.data,
+    setError,
+  });
   async function linkProject() {
     if (!project) return;
     const id = project.id;
@@ -225,78 +179,6 @@ export default function ProjectShell() {
       }
     });
   }
-  /**
-   * Opens `c`, or brings its own window up when it has one. Pass `here`
-   * to show it in this window regardless, as one coming back does.
-   */
-  function open(p: Project, c?: ChatSummary, fresh?: true | string) {
-    if (c && !fresh && hasOwnWindow(c.id))
-      void api.openThreadWindow(p.id, c.id).catch(setError);
-    else navigate(p, c, fresh);
-  }
-  /** A thread known only by its ids, as Settings and Usage name one. */
-  function openChatById(
-    projectId: string,
-    chatId: string,
-    then?: () => void,
-    here = false,
-  ) {
-    const p = projects.data?.find((p) => p.id === projectId);
-    if (!p) return;
-    void qc
-      .query(projectChatsQuery(projectId))
-      .then((list) => {
-        const next = list.find((c) => c.id === chatId);
-        if (!next) return;
-        if (here) navigate(p, next);
-        else open(p, next);
-        then?.();
-      })
-      .catch(setError);
-  }
-  const loaded = !!projects.data;
-  // A thread back from its own window shows here, even before its window
-  // has finished closing; the one that opened this window waits for it to load.
-  useEffect(() => {
-    if (!loaded) return;
-    const show = (t: ThreadWindow | null) =>
-      t && openChatById(t.projectId, t.chatId, undefined, true);
-    void api.takeOpenThread().then(show).catch(setError);
-    return api.onOpenThread(show);
-  }, [loaded]);
-  // A thread its agent moved to another project goes along while it shows,
-  // into a project the agent may have only just added.
-  const followMoved = useStableCallback(async (t: ThreadWindow) => {
-    if (t.chatId !== nav.chatId) return;
-    const listed = projects.data?.some((p) => p.id === t.projectId)
-      ? projects.data
-      : (await projects.refetch()).data;
-    const p = listed?.find((p) => p.id === t.projectId);
-    if (!p) return;
-    const list = await qc.query({ ...projectChatsQuery(p.id), staleTime: 0 });
-    const next = list.find((c) => c.id === t.chatId);
-    if (next) navigate(p, next);
-  });
-  useEffect(
-    () => api.onThreadMoved((t) => void followMoved(t).catch(setError)),
-    [followMoved],
-  );
-  // Asked from a thread's own window, which has no Scratchpad or Activity.
-  const runAsked = useStableCallback((command: MainWindowCommand | null) => {
-    if (command === "meme") runCommand(command);
-    else if (typeof command === "object" && command)
-      openSettings(
-        command.settings as SettingsCategory,
-        command.projectId,
-        command.entryId,
-      );
-    else if (command) askJump(jumpDigitOf(command) - 1);
-  });
-  useEffect(() => {
-    if (!loaded) return;
-    void api.takeMainWindowCommand().then(runAsked).catch(setError);
-    return api.onMainWindowCommand(runAsked);
-  }, [loaded]);
   const pullsHosts = usePullHosts(boot.data?.account, projects.data, [
     links.azureServer,
     boot.data?.workspace.pull?.server,
@@ -306,6 +188,148 @@ export default function ProjectShell() {
   const account = boot.data.account;
   // Off in Settings → Integrations, nothing offers to connect it.
   const gitea = boot.data.gitea;
+  const workspace = boot.data.workspace;
+  /** The titlebar's middle for the page that's open. */
+  function surfaceTitle() {
+    switch (nav.surface) {
+      case "inbox":
+        return (
+          <PullsTitle
+            where={pullsPage.where}
+            onNav={pullsPage.go}
+            onLeave={() => !lock.blocked() && nav.setInbox(false)}
+          />
+        );
+      case "usage":
+        return <UsageTitle onBack={toggleUsage} />;
+      case "processes":
+        return <ProcessesTitle onBack={toggleProcesses} />;
+      case "schedules":
+        return <SchedulesTitle onBack={toggleSchedules} />;
+      case "project":
+        return (
+          <ProjectTitle
+            project={project}
+            chat={chat}
+            review={reviewOf(chat)}
+            onError={setError}
+          />
+        );
+    }
+  }
+
+  /** The page that's open, kept mounted but hidden under Settings. */
+  function surfaceBody() {
+    switch (nav.surface) {
+      case "inbox":
+        return (
+          <div className="project-legacy" hidden={settings.open}>
+            <PullRequestsArea
+              hosts={pullsHosts}
+              accountId={account?.id}
+              pageRef={pullsPage.page}
+              initialWorkspace={workspace}
+              incomingLink={links.incoming}
+              projects={projects.data ?? NO_PROJECTS}
+              onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
+              onOpenProject={(p) => navigate(p)}
+              onAddProject={(repo) => void pullsPage.addProject(repo)}
+              onLocation={pullsPage.setWhere}
+              onConnectGitea={
+                gitea ? () => void signIn.withAccount() : undefined
+              }
+            />
+          </div>
+        );
+      case "usage":
+        return (
+          <div className="project-legacy" hidden={settings.open}>
+            <UsagePage onOpenChat={openChatById} />
+          </div>
+        );
+      case "processes":
+        return (
+          <div className="project-legacy" hidden={settings.open}>
+            <ProcessesPage onOpenChat={openChatById} />
+          </div>
+        );
+      case "schedules":
+        return (
+          <div className="project-legacy" hidden={settings.open}>
+            <SchedulesPage
+              projects={projects.data ?? NO_PROJECTS}
+              projectId={nav.selected ?? undefined}
+              initial={scheduleShown}
+              onOpenChat={openChatById}
+            />
+          </div>
+        );
+      case "project":
+        if (!project)
+          return (
+            <NoProject
+              hidden={settings.open}
+              onAdd={() => starts.addProject()}
+              onScratch={() => void starts.scratch()}
+            />
+          );
+        if (chat && poppedOut)
+          return (
+            <ThreadElsewhere
+              key={chat.id}
+              chat={chat}
+              projectName={project.name}
+              hidden={settings.open}
+              onError={setError}
+            />
+          );
+        return (
+          <ThreadWorkspace
+            tools={tools}
+            project={project}
+            projects={realProjects}
+            allProjects={projects.data ?? NO_PROJECTS}
+            everyThread={everyThread}
+            composer={composer}
+            gitActions={gitActions}
+            hidden={settings.open}
+            onChoosePR={
+              project.repository || account
+                ? () => {
+                    if (!lock.blocked()) setChoosePR(true);
+                  }
+                : undefined
+            }
+            onCommand={runCommand}
+            onStartThread={starts.start}
+            onCreated={async (c) => {
+              const from: ShellSpot = {
+                projectId: project.id,
+                chatId: null,
+                draftId,
+                surface: "project",
+              };
+              if (!c.worktree && sameSpot(spotNow(), from))
+                adoptDraftTerminal(project.id, c.id);
+              await openCreated(c, from);
+            }}
+            onOpened={(c) =>
+              openCreated(c, {
+                projectId: project.id,
+                chatId: chat?.id ?? null,
+                draftId,
+                surface: "project",
+              })
+            }
+            onAddProject={() => starts.addProject()}
+            onScratch={() => void starts.scratch()}
+            onSettings={settings.show}
+            onLinkProject={gitea ? () => void linkProject() : undefined}
+          />
+        );
+    }
+  }
+
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
@@ -323,25 +347,8 @@ export default function ProjectShell() {
               <span className="breadcrumb-slash">/</span>
               <strong>{settings.where}</strong>
             </div>
-          ) : inbox ? (
-            <PullsTitle
-              where={pullsPage.where}
-              onNav={pullsPage.go}
-              onLeave={() => !lock.blocked() && nav.setInbox(false)}
-            />
-          ) : usage ? (
-            <UsageTitle onBack={toggleUsage} />
-          ) : processes ? (
-            <ProcessesTitle onBack={toggleProcesses} />
-          ) : schedules ? (
-            <SchedulesTitle onBack={toggleSchedules} />
           ) : (
-            <ProjectTitle
-              project={project}
-              chat={chat}
-              review={reviewOf(chat)}
-              onError={setError}
-            />
+            surfaceTitle()
           )}
           <span className="spacer" />
           {!settings.open && !elsewhere && project && !poppedOut && (
@@ -400,125 +407,7 @@ export default function ProjectShell() {
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>
-        {inbox ? (
-          <div className="project-legacy" hidden={settings.open}>
-            {pullsHosts.accounts.length ? (
-              <PullsSurface
-                // The page's saved place is the Gitea account's, if any.
-                key={account?.id ?? "hosts"}
-                ref={pullsPage.page}
-                accounts={pullsHosts.accounts}
-                hostError={
-                  pullsHosts.error
-                    ? new Error(
-                        `${pullsHosts.error.host} didn't answer, so its pull requests are missing: ${pullsHosts.error.message}`,
-                      )
-                    : pullsHosts.signedOut[0] &&
-                      new Error(
-                        `Not signed in to ${pullHostName(pullsHosts.signedOut[0])}, so its pull requests are missing. Run ${signInCommand(pullsHosts.signedOut[0])} in a terminal, then try again.`,
-                      )
-                }
-                onRecheckHosts={pullsHosts.recheck}
-                initialWorkspace={boot.data.workspace}
-                incomingLink={links.incoming}
-                projects={projects.data ?? NO_PROJECTS}
-                projectOf={(repo) =>
-                  projectFor(projects.data ?? NO_PROJECTS, repo)
-                }
-                onOpenInProject={(p, ref) => void prs.openInProject(p, ref)}
-                onOpenProject={(p) => navigate(p)}
-                onAddProject={(repo) => void pullsPage.addProject(repo)}
-                onLocation={pullsPage.setWhere}
-              />
-            ) : pullsHosts.pending ? (
-              <Loading />
-            ) : (
-              <NoPullHost
-                servers={pullsHosts.servers}
-                error={pullsHosts.error}
-                checking={pullsHosts.checking}
-                onRecheck={pullsHosts.recheck}
-                onConnectGitea={
-                  gitea ? () => void signIn.withAccount() : undefined
-                }
-              />
-            )}
-          </div>
-        ) : usage ? (
-          <div className="project-legacy" hidden={settings.open}>
-            <UsagePage onOpenChat={openChatById} />
-          </div>
-        ) : processes ? (
-          <div className="project-legacy" hidden={settings.open}>
-            <ProcessesPage onOpenChat={openChatById} />
-          </div>
-        ) : schedules ? (
-          <div className="project-legacy" hidden={settings.open}>
-            <SchedulesPage
-              projects={projects.data ?? NO_PROJECTS}
-              projectId={nav.selected ?? undefined}
-              initial={scheduleShown}
-              onOpenChat={openChatById}
-            />
-          </div>
-        ) : !project ? (
-          <NoProject
-            hidden={settings.open}
-            onAdd={() => starts.addProject()}
-            onScratch={() => void starts.scratch()}
-          />
-        ) : chat && poppedOut ? (
-          <ThreadElsewhere
-            key={chat.id}
-            chat={chat}
-            projectName={project.name}
-            hidden={settings.open}
-            onError={setError}
-          />
-        ) : (
-          <ThreadWorkspace
-            tools={tools}
-            project={project}
-            projects={realProjects}
-            allProjects={projects.data ?? NO_PROJECTS}
-            everyThread={everyThread}
-            composer={composer}
-            gitActions={gitActions}
-            hidden={settings.open}
-            onChoosePR={
-              project.repository || account
-                ? () => {
-                    if (!lock.blocked()) setChoosePR(true);
-                  }
-                : undefined
-            }
-            onCommand={runCommand}
-            onStartThread={starts.start}
-            onCreated={async (c) => {
-              const from: ShellSpot = {
-                projectId: project.id,
-                chatId: null,
-                draftId,
-                surface: "project",
-              };
-              if (!c.worktree && sameSpot(spotNow(), from))
-                adoptDraftTerminal(project.id, c.id);
-              await openCreated(c, from);
-            }}
-            onOpened={(c) =>
-              openCreated(c, {
-                projectId: project.id,
-                chatId: chat?.id ?? null,
-                draftId,
-                surface: "project",
-              })
-            }
-            onAddProject={() => starts.addProject()}
-            onScratch={() => void starts.scratch()}
-            onSettings={settings.show}
-            onLinkProject={gitea ? () => void linkProject() : undefined}
-          />
-        )}
+        {surfaceBody()}
         {settings.open && (
           <Settings
             account={account ?? null}
