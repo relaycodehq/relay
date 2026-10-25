@@ -10,12 +10,14 @@ import { imageQuery } from "../images/ImagePreview";
 import { messageHtml } from "../images/image-clipboard";
 import { pillMarks, type CopiedPills } from "../composer/prompt/pill-clipboard";
 import type { SentImage } from "./SentPills";
+import { SecondOpinionButton } from "../second-opinion/SecondOpinionButton";
+import type { SecondOpinionTarget } from "../second-opinion/second-opinion-ask";
 
 const speedDetail = (s: Streamed) =>
   `${s.output.toLocaleString("en-US")} tokens in ${(s.ms / 1000).toFixed(1)} s ` +
   "of writing; thinking, waiting and tool runs don't count";
 
-/** The row under an agent's answer: copy, read aloud, fork, reply, how fast it wrote, what it cost, when it was sent, and pin. */
+/** The row under an agent's answer: copy, read aloud, fork, a second opinion, reply, how fast it wrote, what it cost, when it was sent, and pin. */
 export function MessageActions({
   id,
   text,
@@ -26,6 +28,7 @@ export function MessageActions({
   pending,
   onReply,
   onFork,
+  secondOpinion,
 }: {
   id: string;
   text?: string;
@@ -39,6 +42,8 @@ export function MessageActions({
   pending: boolean;
   onReply: () => void;
   onFork?: () => void;
+  /** Where another agent can check this answer; absent where it can't. */
+  secondOpinion?: SecondOpinionTarget;
 }) {
   const speed = answerSpeed(streamed);
   return (
@@ -57,6 +62,7 @@ export function MessageActions({
           <Split size={15} />
         </button>
       )}
+      {secondOpinion && <SecondOpinionButton target={secondOpinion} />}
       <button
         type="button"
         title="Reply to message"

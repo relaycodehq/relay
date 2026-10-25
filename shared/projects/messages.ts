@@ -182,6 +182,8 @@ export interface ChatMessage {
   fromChild?: import("./send").ChildSays;
   /** Local: Relay sent this message for one of the user's schedules. */
   scheduled?: import("../schedules").ScheduleMessage;
+  /** Local: it asks for a second opinion on this; the body is the prompt its agent got. */
+  secondOpinion?: import("../second-opinion").SecondOpinionAsked;
   seq?: number;
   parentId?: string | null;
   pending?: boolean;

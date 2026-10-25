@@ -166,6 +166,8 @@ export interface StartedBy {
   agent: AgentProvider;
   /** The user let the lead message it, in another project than the lead's. Saved before drivesThreads; still honoured. */
   sendsApproved?: true;
+  /** The user asked it for a second opinion on this answer of the lead's, by message id. */
+  secondOpinionOn?: string;
 }
 
 export interface HeldWakeup {

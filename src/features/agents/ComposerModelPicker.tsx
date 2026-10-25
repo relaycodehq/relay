@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { Popover } from "@base-ui/react/popover";
@@ -105,6 +106,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   account,
   computer,
   setup,
+  trigger,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -140,6 +142,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   computer?: { id: string; name: string };
   /** Set while an agent can't run yet, with the way to set it up. */
   setup?: (provider: AgentProvider) => PickerSetup | undefined;
+  /** Opens the picker in place of the button naming the model, like an icon among an answer's actions. */
+  trigger?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -275,22 +279,26 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         }
       }}
     >
-      <Popover.Trigger
-        type="button"
-        className="composer-control composer-model-trigger"
-        aria-label={label ? `${label} model` : "Choose model and provider"}
-        title={triggerName}
-        disabled={!ready}
-        data-setup={pending ? "" : undefined}
-      >
-        {pending?.busy ? (
-          <Spinner size={16} steady />
-        ) : (
-          <ProviderIcon provider={provider} />
-        )}
-        <span>{triggerName}</span>
-        <ChevronDown size={12} />
-      </Popover.Trigger>
+      {trigger ? (
+        <Popover.Trigger render={trigger} />
+      ) : (
+        <Popover.Trigger
+          type="button"
+          className="composer-control composer-model-trigger"
+          aria-label={label ? `${label} model` : "Choose model and provider"}
+          title={triggerName}
+          disabled={!ready}
+          data-setup={pending ? "" : undefined}
+        >
+          {pending?.busy ? (
+            <Spinner size={16} steady />
+          ) : (
+            <ProviderIcon provider={provider} />
+          )}
+          <span>{triggerName}</span>
+          <ChevronDown size={12} />
+        </Popover.Trigger>
+      )}
       <Popover.Portal container={container}>
         <Popover.Positioner
           className="composer-popup-positioner"

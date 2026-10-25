@@ -28,6 +28,8 @@ import { AgentImageStrip } from "../images/AgentImageStrip";
 import { useImageViewer } from "../images/ImageViewer";
 import { MessageActions, RepliesLink } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
+import { SecondOpinionCards } from "../second-opinion/SecondOpinionCards";
+import { secondOpinionTarget } from "../second-opinion/second-opinion-ask";
 import { TipPeek } from "../tips/TipPeek";
 import type { QuestionResponse } from "./question-responses";
 
@@ -334,6 +336,15 @@ export function AssistantMessage({
           pending={m.status === "streaming"}
           onReply={() => onReply(m)}
           onFork={onFork && (() => onFork(m))}
+          secondOpinion={secondOpinionTarget(chatId, m)}
+        />
+      )}
+      {!continues && (
+        <SecondOpinionCards
+          chatId={chatId}
+          answer={m}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
         />
       )}
     </article>

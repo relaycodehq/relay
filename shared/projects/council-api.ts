@@ -7,10 +7,19 @@ import type {
   SavedReviewSetup,
 } from "../deep-review";
 import type { FindingStatus } from "../findings";
+import type { SecondOpinionAgent } from "../second-opinion";
 
-/** Deep reviews, run inside a thread. */
+/** Deep reviews, run inside a thread, and second opinions on one answer. */
 export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** Asks `agent` for a second opinion on answer `answerId`, in a read-only thread of its own. */
+  askSecondOpinion(
+    id: string,
+    answerId: string,
+    agent: SecondOpinionAgent,
+  ): Promise<void>;
+  /** Sends a finished second opinion, thread `id`, to the agent whose answer it checked. */
+  sendSecondOpinion(id: string): Promise<void>;
   /** A short name for a deep review setup, written by a helper agent; null when none could. */
   nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
   /** The setups the deep review sheet lists, for the deep_review tool to pick from. */

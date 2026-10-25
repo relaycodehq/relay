@@ -14,6 +14,7 @@ import {
 import { UserMessage, type UserMessageProps } from "./UserMessage";
 import { RichText } from "../../ui/RichText";
 import { LineDivider } from "../../ui/LineDivider";
+import { SecondOpinionAsked } from "../second-opinion/SecondOpinionAsked";
 import "./thread.css";
 
 /** One-line divider where another agent took over, with the outgoing agent's note behind it. */
@@ -111,6 +112,8 @@ export const Message = memo(function Message({
       </LineDivider>
     );
   if (m.role === "user" && (m.asyncQuestionAnswer || m.pageAnswer)) return null;
+  if (m.role === "user" && m.secondOpinion)
+    return <SecondOpinionAsked {...props} asked={m.secondOpinion} />;
   if (m.role === "user" && m.fromChild)
     return (
       <ChildThreadMessage

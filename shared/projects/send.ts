@@ -8,6 +8,7 @@ import { filePathSchema, idSchema } from "../validation";
 import { recipient } from "../recipient";
 import { browserAnnotationSchema } from "../browser-annotations";
 import { scheduleMessageSchema } from "../schedules";
+import { secondOpinionAskedSchema } from "../second-opinion";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z
@@ -77,6 +78,8 @@ export const projectChatSendSchema = z
       .optional(),
     /** Sent by Relay for one of the user's schedules; see shared/schedules. */
     scheduled: scheduleMessageSchema.optional(),
+    /** Asks for a second opinion on this; see shared/second-opinion. */
+    secondOpinion: secondOpinionAskedSchema.optional(),
     /** Answers a page the agent asked with; see PageAnswer. */
     pageAnswer: z
       .object({
@@ -138,12 +141,13 @@ export function sentSettingsOf(
   };
 }
 
-/** A message's sending thread or schedule, question/page response markers, and skill pills. */
+/** A message's sending thread or schedule, what it asks a second opinion on, question/page response markers, and skill pills. */
 export const sentBy = (
   input: Pick<
     ProjectChatSend,
     | "fromThread"
     | "scheduled"
+    | "secondOpinion"
     | "pageAnswer"
     | "asyncQuestionAnswer"
     | "questionMessageId"
@@ -156,6 +160,7 @@ export const sentBy = (
     : {}),
   ...(input.fromThread?.child ? { fromChild: input.fromThread.child } : {}),
   ...(input.scheduled ? { scheduled: input.scheduled } : {}),
+  ...(input.secondOpinion ? { secondOpinion: input.secondOpinion } : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
   ...(input.asyncQuestionAnswer ? { asyncQuestionAnswer: true } : {}),
   ...(input.questionMessageId
