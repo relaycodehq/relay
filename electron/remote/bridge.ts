@@ -264,30 +264,26 @@ export class RemoteBridge {
     },
     chat: async (id, known, history = remoteHistory, sendId) => {
       const key = sendId === undefined ? undefined : sendKey(id, sendId);
-      const sending = () => key !== undefined && this.sends.has(key);
-      const inFlight = sendId !== undefined && sending();
+      const dispatching = () => key !== undefined && this.sends.has(key);
+      // Asked before reading the chat too: a send that lands while it's read
+      // may be missing from what was read.
+      const dispatchingBefore = dispatching();
       const patch = await this.host.chat(id, known);
       const cost = await this.host.cost?.(id);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
       const last = patch.lastInput;
-      const sendPending = inFlight || (sendId !== undefined && sending());
       return {
         id: patch.id,
         projectId: patch.projectId,
         title: patch.title,
         scope: patch.scope,
-        ...(sendId !== undefined
-          ? {
-              sendPending,
-              hasSend:
-                sendPending ||
-                (key !== undefined && this.acceptedSends.has(key)) ||
-                patch.messages.some(
-                  (m) => (typeof m === "string" ? m : m.id) === sendId,
-                ) ||
-                patch.queue?.some((q) => q.input.id === sendId) === true ||
-                patch.scheduled?.some((s) => s.input.id === sendId) === true,
-            }
+        ...(sendId !== undefined && key !== undefined
+          ? this.sendReceipt(
+              patch,
+              sendId,
+              key,
+              dispatchingBefore || dispatching(),
+            )
           : {}),
         messages: patch.messages
           .slice(-history)
@@ -661,6 +657,29 @@ export class RemoteBridge {
     return {
       name: shortHost(now?.name ?? computer.name),
       ...(paired && !now ? { gone: true as const } : {}),
+    };
+  }
+
+  /**
+   * Whether the phone's send `sendId` reached the thread: still being
+   * dispatched, or in its messages, queue or schedule. A queued message the
+   * user took back no longer carries its id, so accepted sends count too.
+   */
+  private sendReceipt(
+    patch: ProjectChatPatch,
+    sendId: string,
+    key: string,
+    dispatching: boolean,
+  ) {
+    const accepted = this.acceptedSends.has(key);
+    const inMessages = patch.messages.some(
+      (m) => (typeof m === "string" ? m : m.id) === sendId,
+    );
+    const queued = !!patch.queue?.some((q) => q.input.id === sendId);
+    const scheduled = !!patch.scheduled?.some((s) => s.input.id === sendId);
+    return {
+      sendPending: dispatching,
+      hasSend: dispatching || accepted || inMessages || queued || scheduled,
     };
   }
 
