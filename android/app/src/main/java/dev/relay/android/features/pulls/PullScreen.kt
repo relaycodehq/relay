@@ -53,8 +53,8 @@ private val TWO_COLUMNS = 680.dp
 private enum class Writing { Comment, Changes, Ask }
 
 /**
- * One pull request: what it is, what it waits on (checks, reviews), the agent buttons that
- * act on that, then its description, files and conversation. A wide pane splits it in two:
+ * One pull request: what it is, what it waits on (checks, reviews, conflicts) with the merge
+ * button, the agent buttons that act on that, then its description, files and conversation. A wide pane splits it in two:
  * the reading on the left, the state and actions on the right.
  */
 @Composable
@@ -99,11 +99,14 @@ fun PullScreen(remote: Remote, route: Route.Pull) {
             item("conversation") { DiscussionCard(p.comments) }
         }
         val state: LazyListScope.() -> Unit = {
+            item("merge") {
+                MergeCard(p, busy == "merge") { method ->
+                    model.asks.confirm("${methodLabel(method)} #${p.pull.number}?", "${p.pull.head.ref} into ${p.pull.base.ref}", "Merge") { model.merge(method) }
+                }
+            }
             item("agent") {
                 AgentCard(p, project?.name, busy == "agent", onFixCi = { start(fixCiPrompt(p)) }, onAddress = { start(addressReviewPrompt(p)) }, onAsk = { writing = Writing.Ask })
             }
-            item("checks") { ChecksCard(p.ci) }
-            item("reviews") { ReviewsCard(p.reviews) }
             item("threads") { BranchThreadsCard(threads) { nav.openInPane(Route.Thread(it.id)) } }
         }
         val pad = PaddingValues(16.dp)
