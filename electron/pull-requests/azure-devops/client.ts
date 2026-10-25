@@ -16,6 +16,7 @@ import { parseAzurePullUrl } from "../../../shared/validation";
 import type { AzureCliToken } from "../../azure-devops/cli-token";
 import { filePair } from "../file-pair";
 import { HostRequests, responseMessage, type RequestOptions } from "../request";
+import { sleep } from "../../util/sleep";
 import {
   ApiError,
   type FetchRequest,
@@ -835,17 +836,39 @@ export class AzureDevOps implements PullHost {
       methods: ["squash", "merge", "rebase"],
     };
   }
+  /**
+   * The waits between looks at a completion, which Azure finishes in the
+   * background and can still fail there.
+   */
+  completionChecks = [1000, 1000, 2000, 2000, 4000];
   async merge(r: PullRef, head: string, method: MergeMethod) {
     this.forget(r);
-    await this.request(`${this.prPath(r)}?${VERSION}`, {
-      method: "PATCH",
-      body: {
-        status: "completed",
-        // Azure refuses the completion when the source has moved past this.
-        lastMergeSourceCommit: { commitId: head },
-        completionOptions: { mergeStrategy: azureStrategies[method] },
-      },
-    });
+    let pr = (
+      await this.request<AzPull>(`${this.prPath(r)}?${VERSION}`, {
+        method: "PATCH",
+        body: {
+          status: "completed",
+          // Azure refuses the completion when the source has moved past this.
+          lastMergeSourceCommit: { commitId: head },
+          completionOptions: { mergeStrategy: azureStrategies[method] },
+        },
+      })
+    ).data;
+    for (const wait of [...this.completionChecks, null]) {
+      if (pr.status === "completed") return;
+      if (pr.mergeFailureMessage)
+        throw new Error(`Azure DevOps couldn't merge it: ${pr.mergeFailureMessage}`);
+      if (pr.mergeStatus === "conflicts")
+        throw new Error("Azure DevOps couldn't merge it: it conflicts with the target branch.");
+      if (pr.mergeStatus === "rejectedByPolicy")
+        throw new Error("Azure DevOps couldn't merge it: a branch policy rejected it.");
+      if (wait === null) break;
+      await sleep(wait);
+      pr = await this.azurePull(r);
+    }
+    throw new Error(
+      "Azure DevOps took the merge but hasn't completed it yet. A branch policy may still hold it back; refresh in a moment.",
+    );
   }
 
   /** Which change each path is in the latest push, which Azure anchors new threads to. */

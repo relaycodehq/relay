@@ -25,7 +25,8 @@ import {
   type SearchFilter,
 } from "./host";
 import { mergedPulls } from "./merged";
-import { HostRequests, type RequestOptions } from "./request";
+import { sleep } from "../util/sleep";
+import { HostRequests, responseMessage, type RequestOptions } from "./request";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_FILE = 2 * 1024 * 1024;
 
@@ -112,7 +113,7 @@ export class Gitea implements PullHost {
           }
         }
         if (!response.ok) {
-          await response.body?.cancel();
+          const message = await responseMessage(response);
           throw new ApiError(
             response.status,
             response.status === 401
@@ -123,7 +124,10 @@ export class Gitea implements PullHost {
                   ? "Not found, or your token cannot access this repository."
                   : response.status === 429
                     ? "Gitea is rate limiting requests. Wait a moment, then retry."
-                    : `Gitea returned HTTP ${response.status}. Please retry.`,
+                    : [405, 409, 422].includes(response.status) && message
+                      ? `Gitea refused this: ${message}`
+                      : `Gitea returned HTTP ${response.status}. Please retry.`,
+            message,
           );
         }
         return response;
@@ -339,14 +343,28 @@ export class Gitea implements PullHost {
       })
     ).data;
   }
+  /**
+   * The waits before asking again about a PR Gitea calls unmergeable: it
+   * says so while it is still checking for conflicts, too.
+   */
+  mergeableRechecks = [750, 1500];
   async mergeReadiness(r: PullRef): Promise<MergeReadiness> {
-    const [p, repository] = await Promise.all([
-      this.request<Pull & { mergeable: boolean }>(this.pr(r)),
+    const read = async () =>
+      (await this.request<Pull & { mergeable: boolean }>(this.pr(r))).data;
+    const [first, repository] = await Promise.all([
+      read(),
       this.request<GiteaMergeSettings>(this.repo(r)),
     ]);
+    let p = first;
+    for (const wait of this.mergeableRechecks) {
+      if (p.mergeable || p.draft) break;
+      await sleep(wait);
+      p = await read();
+    }
     return {
-      status: p.data.mergeable ? "clean" : "conflicts",
-      behind: await this.behind(r, p.data).catch(() => null),
+      // A draft isn't mergeable either; the draft flag says why.
+      status: p.mergeable ? "clean" : p.draft ? "blocked" : "conflicts",
+      behind: await this.behind(r, p).catch(() => null),
       methods: giteaMergeMethods(repository.data),
     };
   }
@@ -373,9 +391,13 @@ export class Gitea implements PullHost {
         body: { Do: method, head_commit_id: head },
       });
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409)
+      if (!(e instanceof ApiError)) throw e;
+      if (e.status === 409 && e.reason === "head out of date")
         throw new Error("A new commit arrived. Refresh before merging.");
-      if (e instanceof ApiError && e.status === 405)
+      // Conflicts come back as Gitea's git output, which has no message.
+      if (e.status === 409 && !e.reason)
+        throw new Error("It conflicts with the base branch now.");
+      if (e.status === 405 && !e.reason)
         throw new Error(
           "Gitea won't merge this yet: it has conflicts, or the branch's rules want more checks or approvals.",
         );

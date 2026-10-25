@@ -53,6 +53,8 @@ export interface AzPull {
     | "succeeded"
     | "rejectedByPolicy"
     | "failure";
+  /** Why the last completion's merge failed, when it did. */
+  mergeFailureMessage?: string;
   reviewers?: AzReviewer[];
   labels?: { id: string; name: string; active?: boolean }[];
   repository: AzRepository;

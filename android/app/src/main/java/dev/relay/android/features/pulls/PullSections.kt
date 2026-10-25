@@ -143,9 +143,16 @@ fun CheckRows(ci: CiStatus) {
     }
 }
 
-/** Each reviewer's latest review, newest first. */
-fun latestReviews(reviews: List<PullReview>) = reviews.filter { it.state != "PENDING" }.groupBy { it.user.login }
-    .map { (_, theirs) -> theirs.maxWith(compareBy({ isoMs(it.submitted_at) }, { it.id })) }
+/**
+ * Each reviewer's standing review, newest first: their latest approval or change request
+ * as [verdictOf] counts it, else their latest comment. A comment after an approval doesn't undo it.
+ */
+fun standingReviews(reviews: List<PullReview>) = reviews.filter { it.state != "PENDING" }
+    .groupBy { if (it.user.id != 0L) "${it.user.id}" else it.user.login }
+    .map { (_, theirs) ->
+        val verdicts = theirs.filter { (it.state == "APPROVED" || it.state == "REQUEST_CHANGES") && it.dismissed != true }
+        verdicts.ifEmpty { theirs }.maxWith(compareBy({ isoMs(it.submitted_at) }, { it.id }))
+    }
     .sortedByDescending { isoMs(it.submitted_at) }
 
 /** Each reviewer's standing verdict, newest first, with what they said. */

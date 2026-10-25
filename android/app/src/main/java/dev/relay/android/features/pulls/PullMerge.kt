@@ -60,10 +60,14 @@ fun MergeCard(page: PullPage, busy: Boolean, onMerge: (method: String) -> Unit) 
     Card(Modifier.fillMaxWidth(), padding = 0.dp, gap = 0.dp) {
         ChecksLine(page, checksOpen) { checksOpen = !checksOpen }
         if (checksOpen && page.ci != null) Column(Modifier.padding(start = 42.dp, end = 16.dp, bottom = 6.dp)) { CheckRows(page.ci) }
-        val latest = latestReviews(page.reviews)
+        val latest = standingReviews(page.reviews)
         ReviewsLine(page, latest, reviewsOpen) { reviewsOpen = !reviewsOpen }
         if (reviewsOpen && latest.isNotEmpty()) Column(Modifier.padding(start = 42.dp, end = 16.dp, bottom = 6.dp)) { ReviewRows(latest) }
         if (!open) return@Card
+        if (!page.merges) {
+            Line(icon = { Icon(TablerIcons.Outline.CircleDashed, null, tint = RelayTheme.colors.faint, size = 18.dp) }, title = "Update Relay on your computer to merge", trailing = null)
+            return@Card
+        }
         ConflictsLine(page.readiness, pull.base.ref)
         Divider()
         MergeButton(page.readiness, pull.draft, busy, onMerge)

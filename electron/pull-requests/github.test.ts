@@ -327,3 +327,16 @@ it("merges only at the head it was shown, and passes on why GitHub refused", asy
   );
   expect(sent[0]?.body).toEqual({ sha: "h".repeat(40), merge_method: "squash" });
 });
+
+it("offers every merge method when the repository's settings can't be read", async () => {
+  const client = github({
+    "GET /repos/o/r/pulls/7": () =>
+      json({ ...pull, mergeable: true, mergeable_state: "clean" }),
+    "GET /repos/o/r": () => new Response("{}", { status: 403 }),
+  });
+  expect(await client.mergeReadiness(ref)).toMatchObject({
+    status: "clean",
+    behind: null,
+    methods: ["squash", "merge", "rebase"],
+  });
+});

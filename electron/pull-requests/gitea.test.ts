@@ -141,3 +141,51 @@ it("offers Gitea's allowed merge methods with the repository's default first", (
     "rebase",
   ]);
 });
+
+/** A Gitea that answers from `routes`, keyed by method and API path without the query. */
+function routed(routes: Record<string, () => Response>) {
+  const fetch = async (url: string, options: RequestInit) => {
+    const path = new URL(url).pathname.replace("/api/v1", "");
+    const route = routes[`${options.method ?? "GET"} ${path}`];
+    return route ? route() : new Response("{}", { status: 404 });
+  };
+  const gitea = new Gitea(account, "token", fetch);
+  gitea.mergeableRechecks = [0, 0];
+  return gitea;
+}
+const ref = { owner: "o", name: "r", number: 7 };
+const pr = (mergeable: boolean) =>
+  Response.json({
+    mergeable,
+    draft: false,
+    base: { ref: "main" },
+    merge_base: "m",
+  });
+
+it("asks again while Gitea is still checking a PR, and believes a no that lasts", async () => {
+  const answers = [false, true];
+  const checking = routed({
+    "GET /repos/o/r/pulls/7": () => pr(answers.shift() ?? true),
+    "GET /repos/o/r": () => Response.json({}),
+  });
+  expect((await checking.mergeReadiness(ref)).status).toBe("clean");
+
+  let asked = 0;
+  const conflicted = routed({
+    "GET /repos/o/r/pulls/7": () => (asked++, pr(false)),
+    "GET /repos/o/r": () => Response.json({}),
+  });
+  expect((await conflicted.mergeReadiness(ref)).status).toBe("conflicts");
+  expect(asked).toBe(3);
+});
+
+it.each([
+  [409, { message: "head out of date" }, "A new commit arrived. Refresh before merging."],
+  [409, { Style: "squash", StdErr: "CONFLICT (content)" }, "It conflicts with the base branch now."],
+  [405, { message: "User not allowed to merge PR" }, "Gitea refused this: User not allowed to merge PR"],
+])("says why Gitea refused a merge (%i %j)", async (status, body, said) => {
+  const gitea = routed({
+    "POST /repos/o/r/pulls/7/merge": () => Response.json(body, { status }),
+  });
+  await expect(gitea.merge(ref, "h", "squash")).rejects.toThrow(said);
+});

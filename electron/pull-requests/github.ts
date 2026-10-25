@@ -152,6 +152,8 @@ export function githubMergeStatus(
   return "clean";
 }
 
+type MergeFlags = Partial<Record<`allow_${string}`, boolean>>;
+
 /** `gh` has no GitHub login, as opposed to GitHub not answering. */
 export class GithubSignedOut extends Error {
   constructor() {
@@ -655,19 +657,22 @@ export class GitHub implements PullHost {
     );
   }
   async mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    // The allow_ flags only come to those who may change them; missing, all are offered.
+    const settings = this.request<MergeFlags>(this.repo(r)).then(
+      ({ data }) => data,
+      (): MergeFlags => ({}),
+    );
     const p = (
       await this.request<
         GithubPull & { mergeable: boolean | null; mergeable_state: string }
       >(this.pr(r))
     ).data;
-    const [compared, repository] = await Promise.all([
+    const [compared, allowed] = await Promise.all([
       this.request<{ behind_by: number }>(
         `${this.repo(r)}/compare/${encodeURIComponent(p.base.ref)}...${p.head.sha}?per_page=1`,
       ).catch(() => null),
-      this.request<Partial<Record<`allow_${string}`, boolean>>>(this.repo(r)),
+      settings,
     ]);
-    // The allow_ flags only come to those who may change them; missing, all are offered.
-    const allowed = repository.data;
     return {
       status: githubMergeStatus(p.mergeable, p.mergeable_state),
       behind: compared?.data.behind_by ?? null,

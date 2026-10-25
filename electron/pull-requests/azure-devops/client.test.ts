@@ -397,3 +397,20 @@ it("accepts a raw text success without treating it as a sign-in page", async () 
   expect(rejected).not.toHaveBeenCalled();
   expect(refused).not.toHaveBeenCalled();
 });
+
+it("follows a completion Azure finishes in the background to how it ended", async () => {
+  const run = async (answers: Partial<AzPull>[]) => {
+    const { azure } = client({ "": () => ({ ...pr, ...answers.shift() }) });
+    azure.completionChecks = [0, 0];
+    return azure.merge(ref, "head2", "squash");
+  };
+  await expect(
+    run([{ mergeStatus: "queued" }, { mergeStatus: "queued" }, { status: "completed" }]),
+  ).resolves.toBeUndefined();
+  await expect(
+    run([{ mergeStatus: "queued" }, { mergeFailureMessage: "TF401192: blocked" }]),
+  ).rejects.toThrow("Azure DevOps couldn't merge it: TF401192: blocked");
+  await expect(run([{ mergeStatus: "queued" }])).rejects.toThrow(
+    "hasn't completed it yet",
+  );
+});

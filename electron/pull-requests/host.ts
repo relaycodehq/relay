@@ -23,6 +23,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The host's own reason, when its error came with one. */
+    public reason?: string,
   ) {
     super(message);
   }
