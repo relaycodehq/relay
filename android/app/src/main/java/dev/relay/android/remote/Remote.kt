@@ -142,6 +142,10 @@ class Remote(
 
     val paired: Boolean get() = _client.value != null
 
+    private val _stopped = MutableStateFlow(false)
+    /** Stopped by hand: the link is closed and stays closed until [resume]. */
+    val stopped: StateFlow<Boolean> = _stopped.asStateFlow()
+
     private var live: RemoteClient? = null
     /** Starts true: the app may be opened by a notification's worker with nothing on screen. */
     private var background = true
@@ -249,6 +253,17 @@ class Remote(
     fun setNetwork(up: Boolean) = synchronized(backgroundLock) {
         networkUp = up
         live?.setNetwork(up)
+    }
+
+    /** Closes the link, pairings kept, and starts no other until [resume]. */
+    fun stop() {
+        _stopped.value = true
+        scope.launch { live?.close() }
+    }
+
+    fun resume() {
+        if (!_stopped.compareAndSet(true, false)) return
+        scope.launch { live?.start() }
     }
 
     /** A fresh overview, when online. */
@@ -439,7 +454,7 @@ class Remote(
         _client.value = next
         _status.value = next.status.value
         if (start is RemoteStart.Pair) pairing?.client = next
-        next.start()
+        if (!_stopped.value) next.start()
         return next
     }
 }

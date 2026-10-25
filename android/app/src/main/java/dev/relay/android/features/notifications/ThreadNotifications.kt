@@ -144,7 +144,8 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         })
 
         scope.launch {
-            combine(remote.client, _on) { client, on -> client != null && on }.collect { enabled.value = it }
+            combine(remote.client, _on, remote.stopped) { client, on, stopped -> client != null && on && !stopped }
+                .collect { enabled.value = it }
         }
         scope.launch { enabled.collect { if (it) askOnce() } }
 

@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import dev.relay.android.ui.ListInset
 import io.github.lyxnx.compose.ui.tablericons.outline.DeviceMobile
 import io.github.lyxnx.compose.ui.tablericons.outline.License
+import io.github.lyxnx.compose.ui.tablericons.outline.Power
 import androidx.compose.ui.platform.LocalContext
 import dev.relay.android.features.dictation.DictationEngine
 import dev.relay.android.features.dictation.DictationEngines
@@ -52,10 +53,11 @@ fun SettingsScreen(
     setTheme: (ThemeMode) -> Unit,
     /** Outlives this screen, for a switch or unpair that navigates away. */
     scope: CoroutineScope,
+    stopRelay: () -> Unit,
 ) {
     val nav = LocalNavigator.current
     Screen("Settings", onBack = nav.backAction) {
-        SettingsList(remote, updates, notifications, lock, themeMode, setTheme, scope)
+        SettingsList(remote, updates, notifications, lock, themeMode, setTheme, scope, stopRelay)
     }
 }
 
@@ -69,6 +71,7 @@ fun SettingsList(
     themeMode: ThemeMode,
     setTheme: (ThemeMode) -> Unit,
     scope: CoroutineScope,
+    stopRelay: () -> Unit,
     bottom: Dp = 24.dp,
 ) {
     val nav = LocalNavigator.current
@@ -103,6 +106,13 @@ fun SettingsList(
                     subtitleLines = 3,
                 )
                 LatestAppRows(updates)
+                ListRow(
+                    "Stop Relay",
+                    subtitle = "Disconnects from $name and stays off until you open Relay again. Pairings and settings are kept.",
+                    leadingIcon = TablerIcons.Outline.Power,
+                    subtitleLines = 3,
+                    onClick = stopRelay,
+                )
                 ListRow(
                     "Open-source licences",
                     leadingIcon = TablerIcons.Outline.License,

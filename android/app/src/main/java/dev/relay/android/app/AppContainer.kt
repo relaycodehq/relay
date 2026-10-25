@@ -77,6 +77,11 @@ class AppContainer(context: Context) {
         dictation.beforeStart = { r.stop() }
     }
 
+    val relayStop = RelayStop(app, remote) {
+        readAloud.stop()
+        dictation.stop()
+    }
+
     val lock = AppLock(File(app.filesDir, "app-lock.bin"))
 
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))

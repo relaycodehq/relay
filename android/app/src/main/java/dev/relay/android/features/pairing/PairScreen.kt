@@ -89,7 +89,7 @@ private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's
  * pairing going through. A relay-remote:// link (`link`) asks before pairing.
  */
 @Composable
-fun PairScreen(remote: Remote, link: String?) {
+fun PairScreen(remote: Remote, link: String?, stopRelay: () -> Unit) {
     val nav = LocalNavigator.current
     val context = LocalContext.current
     val uri = LocalUriHandler.current
@@ -245,6 +245,13 @@ fun PairScreen(remote: Remote, link: String?) {
                                 Text("Get Tailscale", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium))
                                 Icon(TablerIcons.Outline.ExternalLink, null, tint = c.mutedForeground, size = 12.dp)
                             }
+                            // Paired, it's in Settings; with nothing paired this is the only way to stop.
+                            if (computers.isEmpty()) Text(
+                                "Stop Relay",
+                                Modifier.pressable(stopRelay, role = Role.Button).padding(vertical = 4.dp),
+                                style = RelayTheme.type.xs,
+                                color = c.mutedForeground,
+                            )
                         }
                     }
                     Shown(face == PairingScan.Face.Paired, away = 46.dp) {
