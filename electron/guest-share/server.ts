@@ -10,6 +10,7 @@ import {
   type GuestPageView,
 } from "../../shared/guest-share";
 import { injectRenderBootstrap, RENDER_CSP } from "../../shared/html-render";
+import { redacted } from "../../shared/redact-secrets";
 import {
   baselineKey,
   baselineOf,
@@ -116,7 +117,9 @@ export class GuestServer<L extends ServedLink> {
     const match = url.pathname.match(ROUTE);
     const link = match && this.host.live(match[1]!);
     if (!link) return notFound(res);
-    const [action = "", ...rest] = (match![2] ?? "").split("/").filter(Boolean);
+    const segments = pathSegments(match![2] ?? "");
+    if (!segments) return notFound(res);
+    const [action = "", ...rest] = segments;
     const guestId = url.searchParams.get("guest") ?? "";
     if (req.method === "POST" && action === "suggest")
       return this.suggest(link, req, res);
@@ -319,7 +322,16 @@ export class GuestServer<L extends ServedLink> {
       "Content-Security-Policy": RENDER_CSP,
       "Cache-Control": "no-store",
     });
-    res.end(injectRenderBootstrap(html));
+    res.end(injectRenderBootstrap(redacted(html)));
+  }
+}
+
+/** The route's parts, decoded; undefined when one isn't valid percent-encoding. */
+function pathSegments(path: string) {
+  try {
+    return path.split("/").filter(Boolean).map(decodeURIComponent);
+  } catch {
+    return undefined;
   }
 }
 

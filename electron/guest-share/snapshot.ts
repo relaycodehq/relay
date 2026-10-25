@@ -73,7 +73,8 @@ export async function guestSnapshot(
   const files = await sharedFiles(thread.messages, root);
   const snapshot: GuestSnapshot = {
     view: {
-      title: thread.title,
+      // Titles start as the first prompt's words, keys and paths included.
+      title: withoutHostPaths(redacted(thread.title), root),
       running: !!thread.running,
       endsAt,
       messages: [],
@@ -218,7 +219,7 @@ function guestMessage(
       ? {
           renders: m.renders.map(({ id, title, pages }) => ({
             id,
-            title,
+            title: redacted(title),
             pages,
           })),
         }

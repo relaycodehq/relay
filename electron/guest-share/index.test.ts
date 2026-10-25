@@ -45,7 +45,7 @@ async function world(saved: SavedGuestShare[] = []) {
   );
   const summary = {
     id: threadId,
-    title: "Empty state cleanup",
+    title: "Empty state cleanup with sk-ant-api03-guestsharetitlekey000",
     updated: 1,
   } as ChatSummary;
   const thread = {
@@ -86,6 +86,17 @@ async function world(saved: SavedGuestShare[] = []) {
               detail: "DATABASE_PASSWORD=hunter2hunter2",
             },
           },
+          {
+            kind: "activity",
+            id: "agent:t1",
+            activity: {
+              id: "agent:t1",
+              kind: "agent",
+              label: "Check the copy",
+              status: "complete",
+              detail: "Copy reads fine",
+            },
+          },
         ],
       }),
     ],
@@ -108,7 +119,7 @@ async function world(saved: SavedGuestShare[] = []) {
         turnVideoPath: async () => join(root, "missing.mp4"),
       },
       renderPage: async () =>
-        "<!doctype html><html><head></head><body>hi</body></html>",
+        "<!doctype html><html><head></head><body>hi sk-ant-api03-guestsharerenderkey00</body></html>",
       onSummaries: (listener) => {
         summariesChanged = listener;
         return () => {};
@@ -272,6 +283,10 @@ describe("GuestShares", () => {
     expect(await (await fetch(`${link}/detail/m2/a1`)).text()).toBe(
       "12 passed",
     );
+    const subagent = encodeURIComponent("agent:t1");
+    expect(await (await fetch(`${link}/detail/m2/${subagent}`)).text()).toBe(
+      "Copy reads fine",
+    );
     // A call on a key file shows its line, never what it printed.
     const secret = view.messages[1].activities[1];
     expect(secret).toMatchObject({ label: "cat .env", detail: false });
@@ -279,7 +294,10 @@ describe("GuestShares", () => {
     expect(JSON.stringify(view)).not.toContain("hunter2");
     const render = await fetch(`${link}/render/${renderId}/0`);
     expect(render.headers.get("content-security-policy")).toBe(RENDER_CSP);
-    expect(await render.text()).toContain("relayRender");
+    const renderHtml = await render.text();
+    expect(renderHtml).toContain("relayRender");
+    expect(renderHtml).not.toContain("guestsharerenderkey");
+    expect(view.title).not.toContain("guestsharetitlekey");
     expect((await fetch(`${link}/render/${renderId}/1`)).status).toBe(404);
   });
 
