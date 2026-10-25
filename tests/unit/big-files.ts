@@ -26,7 +26,7 @@ export const bigFiles: Record<string, number> = {
   "electron/pull-requests/azure-devops/client.ts": 907,
   "electron/pull-requests/github.ts": 685,
   "electron/relay-mcp/tools.ts": 777,
-  "electron/remote/bridge.ts": 845,
+  "electron/remote/bridge.ts": 796,
   "electron/terminal/tasks.ts": 798,
   "electron/triage/classifier.ts": 579,
   "electron/triage/service.ts": 561,
