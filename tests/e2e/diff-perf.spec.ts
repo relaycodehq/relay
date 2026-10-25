@@ -16,11 +16,19 @@ import { frames } from "../fixtures/renderer-measure";
 
 // A benchmark, not a check: how long a pull request's big diff takes to show
 // and to colour, what the renderer holds afterwards, and how scrolling it
-// runs. Opt in with RELAY_PERF=1; RELAY_PERF_OUT picks the folder for the JSON.
+// runs. Opt in with RELAY_PERF=1; RELAY_PERF_OUT picks the folder for the JSON,
+// RELAY_PERF_LOOK the appearance (dark, light or darcula; dark by default).
 test.skip(process.env.RELAY_PERF !== "1", "benchmark; set RELAY_PERF=1");
 test.setTimeout(300_000);
 
 const out = process.env.RELAY_PERF_OUT ?? join(tmpdir(), "relay-diff-perf");
+
+const looks: Record<string, object> = {
+  dark: { mode: "dark" },
+  light: { mode: "light" },
+  darcula: { mode: "dark", dark: { theme: "darcula" } },
+};
+const look = looks[process.env.RELAY_PERF_LOOK ?? "dark"];
 
 /** A TypeScript file of about `lines` lines, varied enough to highlight like real code. */
 function typescript(lines: number, edited: boolean) {
@@ -108,6 +116,12 @@ test("a pull request's big diffs: open, colour, memory and scrolling", async () 
     code: { before: typescript(4000, false), after: typescript(4000, true) },
   });
   const data = await mkdtemp(join(tmpdir(), "relay-diff-perf-"));
+  // A test Relay keeps its settings.json in its data folder.
+  await mkdir(join(data, "config"), { recursive: true });
+  await writeFile(
+    join(data, "config", "settings.json"),
+    JSON.stringify({ appearance: look }),
+  );
   const app = await electron.launch({
     env: { ...relayEnv(), RELAY_TEST_DATA: data },
   });
@@ -115,6 +129,11 @@ test("a pull request's big diffs: open, colour, memory and scrolling", async () 
   try {
     const page = await app.firstWindow();
     page.on("dialog", () => {});
+    // A diff that never draws usually says why here.
+    page.on("console", (message) => {
+      if (message.type() === "error") console.log("RENDERER", message.text());
+    });
+    page.on("pageerror", (error) => console.log("RENDERER", error.message));
     await openSignIn(page);
     await page
       .getByLabel("Gitea server", { exact: true })
@@ -123,15 +142,9 @@ test("a pull request's big diffs: open, colour, memory and scrolling", async () 
       .getByLabel("Personal access token", { exact: true })
       .fill("test-token");
     await page.getByRole("button", { name: "Connect to Gitea" }).click();
-    // Dark, whose syntax themes every highlighter ships, so they compare like for like.
-    await page
-      .getByRole("button", { name: "Open settings", exact: true })
-      .first()
-      .click();
-    await page.getByRole("radio", { name: "Dark", exact: true }).click();
-    await page
-      .getByRole("button", { name: "Back to app", exact: true })
-      .click();
+    results.syntax = await page.evaluate(
+      () => document.documentElement.dataset.syntax,
+    );
     await openInbox(page);
     await openPull(page, /Make pull request reviews/);
     // Something small first, so the timings below are the big files', not the first-start costs.
