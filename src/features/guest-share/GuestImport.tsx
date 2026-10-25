@@ -52,7 +52,8 @@ export function GuestImport({
   return (
     <NewThreadPicker
       title="Continue shared thread in…"
-      projects={projects?.filter((p) => !p.scratch)}
+      // A project on another computer would need the thread started there.
+      projects={projects?.filter((p) => !p.scratch && !p.computer)}
       current={current}
       onSelect={(p) => void copyInto(p)}
       onAdd={onClose}

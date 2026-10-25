@@ -80,6 +80,8 @@ export function turnPrompt({
     : previous
         .slice(known + 1)
         .filter((m) => m.missed && m.provider === provider);
+  // A thread copied from a shared one hears that conversation once, in its note.
+  const sharedNote = !command && !parent ? chat.sharedNote : undefined;
   const updates = previous
     .slice(known + 1)
     .filter(
@@ -90,7 +92,8 @@ export function turnPrompt({
         !m.handoff &&
         !m.handedOver &&
         !m.reload &&
-        !m.worktreeCommand,
+        !m.worktreeCommand &&
+        !(sharedNote && m.imported),
     );
   // A side conversation told as text keeps its message in view, with a little of what led to it.
   const focus = parent ? updates.indexOf(parent) : -1;
@@ -175,7 +178,10 @@ export function turnPrompt({
               : `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
       : "";
   const setupNote = !command && !parent ? chat.setupNote : undefined;
-  const setup = setupNote ? `\n\n${setupNote}` : "";
+  const setup = [setupNote, sharedNote]
+    .filter(Boolean)
+    .map((note) => `\n\n${note}`)
+    .join("");
   // What the prompt told the agent is crossed off only once it went
   // through: a failed turn leaves it for the next one.
   const briefed = () => {
@@ -186,6 +192,7 @@ export function turnPrompt({
       else delete chat.checkoutNotes;
     }
     if (setupNote && chat.setupNote === setupNote) delete chat.setupNote;
+    if (sharedNote && chat.sharedNote === sharedNote) delete chat.sharedNote;
     if (moved && chat.movedIn) {
       chat.movedIn.owed = chat.movedIn.owed.filter((k) => k !== heardKey);
       if (!chat.movedIn.owed.length) delete chat.movedIn;

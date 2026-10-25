@@ -80,15 +80,37 @@ async function downloadBundle(
   });
   if (res.status === 404) throw new Error("That link has ended.");
   if (!res.ok) throw new Error(`The shared thread answered ${res.status}.`);
-  if (Number(res.headers.get("content-length") ?? 0) > MAX_BUNDLE_BYTES)
-    throw new Error("That shared thread is too big to copy.");
-  const text = await res.text();
-  if (text.length > MAX_BUNDLE_BYTES)
+  const text = await textUpTo(res, MAX_BUNDLE_BYTES);
+  if (text === undefined)
     throw new Error("That shared thread is too big to copy.");
   const parsed = guestBundleSchema.safeParse(parseJson(text));
   if (!parsed.success)
     throw new Error("That doesn't look like a shared Relay thread.");
   return parsed.data;
+}
+
+/**
+ * The body as text, read until `max` bytes; undefined past that. Counted as
+ * it arrives, since a header can leave the size out or understate it once
+ * decompressed.
+ */
+async function textUpTo(res: Response, max: number) {
+  if (Number(res.headers.get("content-length") ?? 0) > max) return undefined;
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > max) {
+      await reader.cancel();
+      return undefined;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function parseJson(text: string): unknown {

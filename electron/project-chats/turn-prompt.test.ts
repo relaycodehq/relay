@@ -142,3 +142,17 @@ it("says when the request is a guest's the user chose to send, not the user's ow
   );
   expect(prompt).not.toContain("My request");
 });
+
+it("tells a thread copied from a shared one its conversation once, in the note", () => {
+  const copied = { ...message("1", "Copied answer"), imported: true as const };
+  const input = setup([copied, message("2", "My own follow-up")]);
+  delete input.chat.fromTerminal;
+  input.chat.sharedNote = "The shared conversation: Copied answer";
+  const first = turnPrompt(input);
+  expect(first.prompt.split("Copied answer")).toHaveLength(2);
+  expect(first.prompt).toContain("My own follow-up");
+  first.briefed();
+  expect(input.chat.sharedNote).toBeUndefined();
+  // Once the note has gone, a fresh session hears them as any history.
+  expect(turnPrompt(input).prompt).toContain("Copied answer");
+});

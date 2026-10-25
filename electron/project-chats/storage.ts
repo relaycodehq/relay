@@ -80,6 +80,7 @@ export function chatSummary({
   scopeHeard,
   movedIn,
   setupNote,
+  sharedNote,
   reviews,
   findings: _findings,
   handover,
@@ -95,18 +96,13 @@ export function chatSummary({
   asking,
   ...summary
 }: ProjectChat): ChatSummary {
-  const latest = [...messages].reverse().find((m) => m.role === "assistant");
+  const answers = [...messages].reverse().filter((m) => m.role === "assistant");
+  const latest = answers[0];
   const provider = latest?.provider;
   const model = latest?.model?.name;
   const holder = contextAgent(messages.filter((m) => !m.parentId));
   const providers = [
-    ...new Set(
-      [...messages]
-        .reverse()
-        .flatMap((m) =>
-          m.role === "assistant" && m.provider ? [m.provider] : [],
-        ),
-    ),
+    ...new Set(answers.flatMap((m) => (m.provider ? [m.provider] : []))),
   ];
   const next = nextSend(scheduled);
   const mark = queueMark({ queue, queuePaused, scheduled });

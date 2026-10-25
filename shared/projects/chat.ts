@@ -67,6 +67,8 @@ export interface ProjectChat extends ChatSummary {
   };
   /** Local: how the worktree's setup went, for the next turn's agent, when it failed or recovered. */
   setupNote?: string;
+  /** Local: where a thread copied from someone's shared one came from, and its conversation, for the first turn's agent. */
+  sharedNote?: string;
   /** Deep review rounds, oldest first; see shared/deep-review. */
   reviews?: DeepReviewState[];
   /** Findings the thread's answers published; see shared/findings. */

@@ -244,7 +244,11 @@ export class ThreadCreate {
       note: string;
     },
   ) {
-    this.core.projects.get(projectId);
+    // Its messages would have to start it there, and a thread there starts with one.
+    if (this.core.projects.get(projectId).computer)
+      throw new Error(
+        "A shared thread carries on in a project on this computer.",
+      );
     const chat: ProjectChat = {
       id: shared.id,
       projectId,
@@ -254,7 +258,7 @@ export class ThreadCreate {
       created: Date.now(),
       updated: Date.now(),
       messages: shared.messages,
-      setupNote: shared.note,
+      sharedNote: shared.note,
     };
     await this.core.storage.add(chat);
     return chatSummary(chat);

@@ -97,4 +97,19 @@ describe("importGuestThread", () => {
       /shared Relay thread/,
     );
   });
+
+  it("stops reading a body that runs past the limit without saying its size", async () => {
+    let sent = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        sent++;
+        controller.enqueue(new Uint8Array(1024 * 1024));
+      },
+    });
+    const { h } = await host(() => new Response(endless));
+    await expect(importGuestThread(h, projectId, link)).rejects.toThrow(
+      /too big/,
+    );
+    expect(sent).toBeLessThan(45);
+  });
 });
