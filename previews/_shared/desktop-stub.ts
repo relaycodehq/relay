@@ -199,6 +199,7 @@ const stub: Partial<Api> = {
   }),
   onAgentAccounts: () => () => {},
   onAutoCompact: () => () => {},
+  onTerminal: () => () => {},
 };
 
 window.relay = new Proxy(stub as Api, {
