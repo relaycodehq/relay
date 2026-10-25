@@ -47,6 +47,24 @@ class ImagesTest {
             answerImagePaths(body, root))
     }
 
+    @Test fun readsABareImagePathWithSpaces() {
+        val body = "![shot](/Users/me/Library/Application Support/Relay/shot.png)"
+        assertEquals(listOf("/Users/me/Library/Application Support/Relay/shot.png"), answerImagePaths(body, root))
+        assertEquals("![shot](</Users/me/Library/Application Support/Relay/shot.png>)", bracketSpacedImagePaths(body))
+    }
+
+    @Test fun leavesCodeAndOtherDestinationsUnbracketed() {
+        val untouched = listOf(
+            "![plain](/tmp/shot.png) ![done](</tmp/my shot.png>)",
+            "A [link](/tmp/a b.png) and ![doc](/tmp/a b.pdf)",
+            "`![code](/tmp/a b.png)`",
+            "```md",
+            "![fenced](/tmp/a b.png)",
+            "```",
+        ).joinToString("\n")
+        assertEquals(untouched, bracketSpacedImagePaths(untouched))
+    }
+
     private fun read(id: String, path: String, status: String = "complete") =
         AgentTrace("activity", id, activity = AgentActivity(id, "read", path, status))
 

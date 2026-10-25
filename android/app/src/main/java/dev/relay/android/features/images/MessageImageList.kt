@@ -47,8 +47,15 @@ private val IMAGE_FILE = Regex("""\.(?:png|jpe?g|gif|webp)$""", RegexOption.IGNO
 /** An image Relay can show, by its name. */
 fun isImagePath(path: String) = IMAGE_FILE.containsMatchIn(path)
 
-// A destination in <angle brackets> may hold spaces, like a macOS app data path.
-private val MARKDOWN_IMAGE = Regex("""!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+))(?:\s+["'][^"'\n]*["'])?\s*\)""")
+// A destination in <angle brackets> may hold spaces, like a macOS app data
+// path. Agents often leave the brackets out, so a bare one with spaces counts
+// too when it ends in a file Relay shows.
+private val MARKDOWN_IMAGE = Regex(
+    """!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+)|([^\s<>()][^<>()\n]*?\.(?:png|jpe?g|gif|webp|mp4|m4v|webm|mov)))(?:\s+["'][^"'\n]*["'])?\s*\)""",
+    RegexOption.IGNORE_CASE,
+)
+private val FENCE_OPEN = Regex("^[ \t>]*(`{3,}|~{3,})")
+private val CODE_SPAN = Regex("`+[^`]*`+")
 private val SCHEME = Regex("^[a-z][a-z\\d+.-]*:", RegexOption.IGNORE_CASE)
 private val DRIVE = Regex("^[a-z]:[\\\\/]", RegexOption.IGNORE_CASE)
 private val FILE_URL = Regex("^file://", RegexOption.IGNORE_CASE)
@@ -107,8 +114,43 @@ fun localImagePath(src: String, root: String): String? {
 /** The local image files an answer embeds, so only those can be read for it. */
 fun answerImagePaths(body: String, root: String): List<String> =
     MARKDOWN_IMAGE.findAll(body).mapNotNull { m ->
-        localImagePath(m.groupValues[1].ifEmpty { m.groupValues[2] }, root)
+        val src = m.groupValues.drop(1).first { it.isNotEmpty() }
+        localImagePath(src, root)
     }.distinct().toList()
+
+/**
+ * Puts angle brackets around an image path with spaces, so commonmark reads
+ * `![shot](/Library/Application Support/shot.png)` as an image and not as
+ * text. Code fences and code spans are left as they are.
+ */
+fun bracketSpacedImagePaths(text: String): String {
+    if ("![" !in text) return text
+    var fence: Regex? = null
+    return text.split("\n").joinToString("\n") { line ->
+        val open = FENCE_OPEN.find(line)?.groupValues?.get(1)
+        when {
+            fence != null -> line.also { if (fence!!.containsMatchIn(line)) fence = null }
+            open != null -> line.also { fence = Regex("^[ \\t>]*${open[0]}{${open.length},}[ \\t]*$") }
+            else -> outsideCodeSpans(line, ::bracketSpaced)
+        }
+    }
+}
+
+private fun outsideCodeSpans(line: String, change: (String) -> String): String {
+    val out = StringBuilder()
+    var from = 0
+    for (span in CODE_SPAN.findAll(line)) {
+        out.append(change(line.substring(from, span.range.first))).append(span.value)
+        from = span.range.last + 1
+    }
+    return out.append(change(line.substring(from))).toString()
+}
+
+private fun bracketSpaced(text: String): String = MARKDOWN_IMAGE.replace(text) { m ->
+    val spaced = m.groups[3] ?: return@replace m.value
+    val at = spaced.range.first - m.range.first
+    m.value.substring(0, at) + "<" + spaced.value + ">" + m.value.substring(at + spaced.value.length)
+}
 
 /** The picture a call looked at or made, by path. */
 fun imagePath(a: AgentActivity): String? = a.image ?: a.label.takeIf { a.kind == "read" && isImagePath(it) }

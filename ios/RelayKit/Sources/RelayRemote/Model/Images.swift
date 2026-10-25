@@ -37,9 +37,15 @@ public func isImagePath(_ path: String) -> Bool {
     path.range(of: #"\.(?:png|jpe?g|gif|webp)$"#, options: [.regularExpression, .caseInsensitive]) != nil
 }
 
-// A destination in <angle brackets> may hold spaces, like a macOS app data path.
+// A destination in <angle brackets> may hold spaces, like a macOS app data
+// path. Agents often leave the brackets out, so a bare one with spaces counts
+// too when it ends in a file Relay shows.
 private let markdownImage = try! NSRegularExpression(
-    pattern: #"!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+))(?:\s+["'][^"'\n]*["'])?\s*\)"#)
+    pattern:
+        #"!\[[^\]\n]*]\(\s*(?:<([^<>\n]+)>|([^\s<>()]+)|([^\s<>()][^<>()\n]*?\.(?:png|jpe?g|gif|webp|mp4|m4v|webm|mov)))(?:\s+["'][^"'\n]*["'])?\s*\)"#,
+    options: .caseInsensitive)
+private let fenceOpen = try! NSRegularExpression(pattern: "^[ \t>]*(`{3,}|~{3,})")
+private let codeSpan = try! NSRegularExpression(pattern: "`+[^`]*`+")
 
 private func matches(_ text: String, _ pattern: String) -> Bool {
     text.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil
@@ -79,13 +85,57 @@ public func answerImagePaths(_ body: String, root: String) -> [String] {
     let text = body as NSString
     var seen = Set<String>()
     return markdownImage.matches(in: body, range: NSRange(location: 0, length: text.length)).compactMap { match in
-        let bracketed = match.range(at: 1)
-        let src = text.substring(with: bracketed.location != NSNotFound ? bracketed : match.range(at: 2))
+        let found = (1...3).map { match.range(at: $0) }.first { $0.location != NSNotFound }!
+        let src = text.substring(with: found)
         guard let path = localImagePath(src, root: root),
             seen.insert(path).inserted
         else { return nil }
         return path
     }
+}
+
+/// Puts angle brackets around an image path with spaces, so the Markdown parser reads
+/// `![shot](/Library/Application Support/shot.png)` as an image and not as text. Code
+/// fences and code spans are left as they are.
+public func bracketSpacedImagePaths(_ text: String) -> String {
+    guard text.contains("![") else { return text }
+    var fence: NSRegularExpression?
+    return text.components(separatedBy: "\n").map { line in
+        let whole = NSRange(location: 0, length: (line as NSString).length)
+        if let closing = fence {
+            if closing.firstMatch(in: line, range: whole) != nil { fence = nil }
+            return line
+        }
+        if let open = fenceOpen.firstMatch(in: line, range: whole) {
+            let marker = (line as NSString).substring(with: open.range(at: 1))
+            fence = try? NSRegularExpression(pattern: "^[ \\t>]*\(marker.prefix(1)){\(marker.count),}[ \\t]*$")
+            return line
+        }
+        return outsideCodeSpans(line, bracketSpaced)
+    }.joined(separator: "\n")
+}
+
+private func outsideCodeSpans(_ line: String, _ change: (String) -> String) -> String {
+    let text = line as NSString
+    var out = "", from = 0
+    for span in codeSpan.matches(in: line, range: NSRange(location: 0, length: text.length)) {
+        out += change(text.substring(with: NSRange(location: from, length: span.range.location - from)))
+        out += text.substring(with: span.range)
+        from = NSMaxRange(span.range)
+    }
+    return out + change(text.substring(from: from))
+}
+
+private func bracketSpaced(_ part: String) -> String {
+    let text = NSMutableString(string: part)
+    let images = markdownImage.matches(in: part, range: NSRange(location: 0, length: text.length))
+    // Back to front, so an insertion doesn't move the ranges still to come.
+    for match in images.reversed() where match.range(at: 3).location != NSNotFound {
+        let spaced = match.range(at: 3)
+        text.insert(">", at: NSMaxRange(spaced))
+        text.insert("<", at: spaced.location)
+    }
+    return text as String
 }
 
 /// The picture a call looked at or made, by path.

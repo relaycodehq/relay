@@ -1,5 +1,7 @@
 package dev.relay.android.features.markdown
 
+import dev.relay.android.features.images.bracketSpacedImagePaths
+
 /**
  * Parses an answer as it streams in without starting over each time: the
  * blocks before the last one that starts after a blank line can't change when
@@ -14,7 +16,7 @@ class MarkdownCache {
     fun blocks(markdown: String): List<MdBlock> = positioned(markdown).map { it.block }
 
     fun positioned(markdown: String): List<MarkdownBlock> {
-        val next = normalizeMath(markdown)
+        val next = normalizeMath(bracketSpacedImagePaths(markdown))
         if (next == text && placed.isNotEmpty()) return blocks
         val (keep, offset, line) = reusable(next)
         placed = placed.subList(0, keep) + parseBlocks(next.substring(offset), line)

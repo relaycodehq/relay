@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   answerImagePaths,
   answerVideoPaths,
+  bracketSpacedImagePaths,
   localImagePath,
 } from "./answer-images";
 
@@ -49,4 +50,30 @@ it("keeps videos apart from images, so each is read only its own way", () => {
     "/work/relay/out/demo.MP4",
     "/tmp/x.mov",
   ]);
+});
+
+it("reads a bare image path with spaces, as agents write app data paths", () => {
+  const body =
+    "![shot](/Users/me/Library/Application Support/Relay/shot.png) and ![x](/tmp/a b.mov)";
+  expect(answerImagePaths(body, root)).toEqual([
+    "/Users/me/Library/Application Support/Relay/shot.png",
+  ]);
+  expect(answerVideoPaths(body, root)).toEqual(["/tmp/a b.mov"]);
+});
+
+it("brackets image paths with spaces so the parser sees an image", () => {
+  expect(
+    bracketSpacedImagePaths(
+      "See ![app support](/Library/Application Support/shot.PNG) here",
+    ),
+  ).toBe("See ![app support](</Library/Application Support/shot.PNG>) here");
+  const untouched = [
+    "![plain](/tmp/shot.png) ![done](</tmp/my shot.png>)",
+    "A [link](/tmp/a b.png) and ![doc](/tmp/a b.pdf)",
+    "`![code](/tmp/a b.png)`",
+    "```md",
+    "![fenced](/tmp/a b.png)",
+    "```",
+  ].join("\n");
+  expect(bracketSpacedImagePaths(untouched)).toBe(untouched);
 });

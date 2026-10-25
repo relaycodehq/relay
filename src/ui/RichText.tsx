@@ -38,6 +38,7 @@ import {
   markdownBlocks,
   mathClosed,
 } from "../lib/markdown-blocks";
+import { bracketSpacedImagePaths } from "../../shared/answer-images";
 import { normalizeMath } from "../../shared/math-delimiters";
 import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
@@ -413,7 +414,7 @@ export const RichText = memo(function RichText({
   const citedBlocks = useRef<ReadonlyMap<string, string>>(new Map());
   const blocks = useMemo(() => {
     const split = markdownBlocks(
-      typed ? keepIndent(text) : normalizeMath(text),
+      typed ? keepIndent(text) : normalizeMath(bracketSpacedImagePaths(text)),
     );
     if (typed || html) return split;
     const last = citedBlocks.current,
