@@ -1,0 +1,4 @@
+# Whitespace-only sweeps; `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips them locally.
+
+# style: put a blank line between multi-line declarations
+46b6bdf7c581c42a32d38851fef1a6eabc33d28f

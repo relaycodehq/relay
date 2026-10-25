@@ -99,6 +99,12 @@ not a call for interfaces and factories.
   don't copy their voice into new code.
 - **One word per idea.** Not `lead`, `caller` and `from` for the same thread,
   nor `branch` for a reply thread in an app about Git branches (`replyTo`).
+- **A blank line between things you read one at a time.** Functions, class
+  members and top-level statements get one whenever either side spans more
+  than a line, and so does every `it`/`describe` block; one-line fields,
+  imports and an overload's signatures stay together. Prettier keeps blank
+  lines but never adds them, so `tests/unit/layout.test.ts` checks this one
+  (`tests/unit/blank-lines.ts` says exactly where).
 - **Tidy what you touch.** When you change a function, leave it reading like
   this; don't sweep files you aren't working in.
 

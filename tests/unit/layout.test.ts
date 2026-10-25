@@ -8,6 +8,7 @@ import {
   importsOf,
 } from "./layout-graph";
 import { bigFiles } from "./big-files";
+import { missingBlankLines } from "./blank-lines";
 
 // The folder rules from AGENTS.md ("Where code goes"), checked so they hold
 // without anyone remembering them.
@@ -136,6 +137,20 @@ describe("source layout", () => {
         );
     }
     expect(problems).toEqual([]);
+  });
+
+  it("puts a blank line between functions, members and test blocks", () => {
+    const missing = ["src", "electron", "shared", "tests"]
+      .flatMap((folder) => sources(folder))
+      .filter((file) => !file.endsWith(".d.ts") && !file.includes("fixtures/"))
+      .flatMap((file) => {
+        const text = readFileSync(join(root, file), "utf8");
+        const testFile = /\.test\.tsx?$/.test(file) || file.startsWith("tests");
+        return missingBlankLines(text, testFile).map(
+          (line) => `${file}:${line + 1} needs a blank line above it`,
+        );
+      });
+    expect(missing).toEqual([]);
   });
 
   it("keeps features from importing each other in a circle", () => {
