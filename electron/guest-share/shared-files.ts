@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { open, readFile, stat } from "node:fs/promises";
+import { open, readFile, realpath, stat } from "node:fs/promises";
 import {
   basename,
   isAbsolute,
@@ -21,6 +21,8 @@ export interface SharedFile {
   /** As the guest reads it: relative to the thread's folder, or under another repository's name. */
   path: string;
   absolute: string;
+  /** Where `absolute` leads once links are followed: the file that is read. */
+  real: string;
   bytes: number;
   changed: boolean;
 }
@@ -43,8 +45,13 @@ export async function sharedFiles(
   root: string | null,
 ): Promise<SharedFile[]> {
   const places = workPlaces(messages, root);
+  const realRoots = await Promise.all(
+    places.map((p) => realpath(p.root).catch(() => undefined)),
+  );
   const picked: SharedFile[] = [];
   const seen = new Set<string>();
+  /** Files already picked, by where their paths lead. */
+  const pickedReal = new Set<string>();
   let bytes = 0;
   for (const { absolute, changed } of candidates(messages, root)) {
     if (picked.length >= MAX_SHARED_FILES) break;
@@ -52,7 +59,12 @@ export async function sharedFiles(
     seen.add(absolute);
     const place = places.find((p) => inside(p.root, absolute));
     if (!place || mayHoldSecrets(absolute)) continue;
-    const size = await textFileSize(absolute);
+    // A link's own name and folder say nothing of the file it leads to.
+    const real = await realpath(absolute).catch(() => undefined);
+    if (!real || pickedReal.has(real) || mayHoldSecrets(real)) continue;
+    if (!realRoots.some((r) => r && inside(r, real))) continue;
+    pickedReal.add(real);
+    const size = await textFileSize(real);
     if (size === undefined || bytes + size > MAX_SHARED_BYTES) continue;
     bytes += size;
     const path = relative(place.root, absolute).split(sep).join("/");
@@ -60,6 +72,7 @@ export async function sharedFiles(
       id: fileId(absolute),
       path: place.label ? `${place.label}/${path}` : path,
       absolute,
+      real,
       bytes: size,
       changed,
     });
@@ -69,7 +82,10 @@ export async function sharedFiles(
 
 /** A shared file's text as the guest reads it, with secrets redacted. */
 export async function sharedFileText(file: SharedFile) {
-  const text = await readFile(file.absolute, "utf8");
+  // The checked file, unless a link has been put in its way since.
+  if ((await realpath(file.absolute)) !== file.real)
+    throw new Error("The shared file moved.");
+  const text = await readFile(file.real, "utf8");
   return redacted(text.slice(0, MAX_SHARED_BYTES));
 }
 

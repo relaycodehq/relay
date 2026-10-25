@@ -1,4 +1,11 @@
-import { mkdir, mkdtemp, realpath, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -86,6 +93,29 @@ describe("sharedFiles", () => {
     expect((await sharedFiles(messages, root)).map((f) => f.path)).toEqual([
       "ok.ts",
     ]);
+  });
+
+  it("follows links before deciding: one leading out of the folder or to a key file stays private", async () => {
+    const root = await folder({ ".env": "KEY=1", "real.ts": "ok" });
+    const outside = await folder({ "notes.txt": "private" });
+    await symlink(join(outside, "notes.txt"), join(root, "notes.md"));
+    await symlink(join(root, ".env"), join(root, "config.ts"));
+    await symlink(join(root, "real.ts"), join(root, "alias.ts"));
+    const messages = [
+      answer({
+        changes: ["notes.md", "config.ts", "alias.ts"].map((path) => ({
+          path,
+          additions: 1,
+          deletions: 0,
+        })),
+      }),
+    ];
+    const files = await sharedFiles(messages, root);
+    expect(files.map((f) => f.path)).toEqual(["alias.ts"]);
+    // Swapped for a link after it was picked, it isn't read.
+    await rm(join(root, "alias.ts"));
+    await symlink(join(outside, "notes.txt"), join(root, "alias.ts"));
+    await expect(sharedFileText(files[0]!)).rejects.toThrow();
   });
 
   it("leaves out pictures the agent only looked at", async () => {
