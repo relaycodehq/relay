@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findExecutable } from "../platform/executables";
@@ -25,16 +25,15 @@ export async function guestVideo(path: string): Promise<string | undefined> {
     "relay-guest-videos",
     `${createHash("sha256").update(`${path}:${info.mtimeMs}:${info.size}`).digest("hex").slice(0, 24)}.mp4`,
   );
+  // Only a finished copy is ever at `out`; one being made is waited for.
   const made = await stat(out).catch(() => undefined);
   if (made?.isFile())
     return made.size <= MAX_GUEST_VIDEO_BYTES ? out : undefined;
-  const squeezing = pending.get(out) ?? squeeze(path, out);
+  const making = pending.get(out);
+  if (making) return making;
+  const squeezing = squeeze(path, out).finally(() => pending.delete(out));
   pending.set(out, squeezing);
-  try {
-    return await squeezing;
-  } finally {
-    pending.delete(out);
-  }
+  return squeezing;
 }
 
 const pending = new Map<string, Promise<string | undefined>>();
@@ -62,7 +61,8 @@ async function squeeze(path: string, out: string) {
   if (kbps < MIN_KBPS) return undefined;
   const video = kbps - AUDIO_KBPS;
   await mkdir(join(tmpdir(), "relay-guest-videos"), { recursive: true });
-  await run(
+  const part = `${out}.${process.pid}.part`;
+  const encoded = await run(
     ffmpeg,
     [
       "-y",
@@ -88,12 +88,23 @@ async function squeeze(path: string, out: string) {
       `${AUDIO_KBPS}k`,
       "-movflags",
       "+faststart",
-      out,
+      "-f",
+      "mp4",
+      part,
     ],
     10 * 60_000,
-  ).catch(() => "");
-  const made = await stat(out).catch(() => undefined);
-  return made && made.size <= MAX_GUEST_VIDEO_BYTES ? out : undefined;
+  ).then(
+    () => true,
+    () => false,
+  );
+  const made = encoded ? await stat(part).catch(() => undefined) : undefined;
+  if (!made) {
+    await rm(part, { force: true });
+    return undefined;
+  }
+  // Kept even when too big, so the next guest isn't made to wait for it again.
+  await rename(part, out);
+  return made.size <= MAX_GUEST_VIDEO_BYTES ? out : undefined;
 }
 
 function run(program: string, args: string[], timeout = 15_000) {

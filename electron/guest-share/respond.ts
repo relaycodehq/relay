@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { brotliCompressSync, constants, gzipSync } from "node:zlib";
+import { pipeline } from "node:stream";
+import { promisify } from "node:util";
+import { brotliCompress, constants, gzip } from "node:zlib";
 
 export const SECURITY_HEADERS = {
   "Referrer-Policy": "no-referrer",
@@ -13,15 +15,17 @@ export const SECURITY_HEADERS = {
 /** Bodies under this go out as they are; compressing them saves nothing. */
 const COMPRESS_FROM = 1024;
 
-// The same body is compressed once, at brotli's best, however many guests
-// fetch it. Keyed by its hash, so a changed thread is a new entry.
-const compressed = new Map<string, { br: Buffer; gzip: Buffer }>();
+// The same body is compressed once per encoding, off the main thread, however
+// many guests fetch it. Keyed by its hash, so a changed thread is a new entry.
+const compressed = new Map<string, Promise<Buffer>>();
+const brotliAsync = promisify(brotliCompress);
+const gzipAsync = promisify(gzip);
 
 /**
  * Sends `body` brotli-compressed where the browser takes it (all current
  * ones do), gzip otherwise, with an ETag so an unchanged one is a 304.
  */
-export function sendBody(
+export async function sendBody(
   req: IncomingMessage,
   res: ServerResponse,
   body: string,
@@ -37,7 +41,7 @@ export function sendBody(
     String(req.headers["accept-encoding"] ?? ""),
     raw.length,
   );
-  const sent = encoding ? compressedBody(etag, raw)[encoding] : raw;
+  const sent = encoding ? await compressedBody(etag, raw, encoding) : raw;
   res.writeHead(200, {
     ...SECURITY_HEADERS,
     ...headers,
@@ -56,22 +60,24 @@ function encodingFor(accepts: string, size: number) {
   return undefined;
 }
 
-function compressedBody(etag: string, raw: Buffer) {
-  const cached = compressed.get(etag);
+function compressedBody(etag: string, raw: Buffer, encoding: "br" | "gzip") {
+  const key = `${encoding}:${etag}`;
+  const cached = compressed.get(key);
   if (cached) return cached;
-  const made = {
-    br: brotliCompressSync(raw, {
-      params: {
-        // 11 is the smallest but slow past a few hundred KB; 9 is within a few percent.
-        [constants.BROTLI_PARAM_QUALITY]: raw.length > 256 * 1024 ? 9 : 11,
-        [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
-        [constants.BROTLI_PARAM_SIZE_HINT]: raw.length,
-      },
-    }),
-    gzip: gzipSync(raw, { level: 9 }),
-  };
+  const made =
+    encoding === "br"
+      ? brotliAsync(raw, {
+          params: {
+            // 11 costs ~1ms per KB; past 64KB, 9 is within a few percent at a fraction of it.
+            [constants.BROTLI_PARAM_QUALITY]: raw.length > 64 * 1024 ? 9 : 11,
+            [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+            [constants.BROTLI_PARAM_SIZE_HINT]: raw.length,
+          },
+        })
+      : gzipAsync(raw, { level: 9 });
+  made.catch(() => compressed.delete(key));
   if (compressed.size >= 64) compressed.delete(compressed.keys().next().value!);
-  compressed.set(etag, made);
+  compressed.set(key, made);
   return made;
 }
 
@@ -92,7 +98,7 @@ export async function sendFile(
   };
   if (!range) {
     res.writeHead(200, { ...headers, "Content-Length": String(size) });
-    return void createReadStream(path).pipe(res);
+    return streamFile(path, res);
   }
   const start = range[1]
     ? Number(range[1])
@@ -108,7 +114,20 @@ export async function sendFile(
     "Content-Range": `bytes ${start}-${end}/${size}`,
     "Content-Length": String(end - start + 1),
   });
-  createReadStream(path, { start, end }).pipe(res);
+  streamFile(path, res, { start, end });
+}
+
+/** Streams the file, closing both ends when either fails or the guest goes. */
+function streamFile(
+  path: string,
+  res: ServerResponse,
+  range?: { start: number; end: number },
+) {
+  pipeline(createReadStream(path, range), res, (e) => {
+    // A guest seeking or leaving closes the response early.
+    if (e && e.code !== "ERR_STREAM_PREMATURE_CLOSE")
+      console.warn("Guest share file failed:", e);
+  });
 }
 
 export function sendJson(res: ServerResponse, status: number, body: object) {

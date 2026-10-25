@@ -255,7 +255,7 @@ export class GuestServer<L extends ServedLink> {
   ) {
     const detail = (await this.host.snapshot(link)).details.get(key);
     if (detail === undefined) return notFound(res);
-    sendBody(req, res, detail, plain);
+    return sendBody(req, res, detail, plain);
   }
 
   private async media(
