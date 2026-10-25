@@ -29,14 +29,23 @@ export async function guestVideo(path: string): Promise<string | undefined> {
   const made = await stat(out).catch(() => undefined);
   if (made?.isFile())
     return made.size <= MAX_GUEST_VIDEO_BYTES ? out : undefined;
+  // A copy that couldn't be made isn't tried again for every guest; a changed file is a new name.
+  if (failed.has(out)) return undefined;
   const making = pending.get(out);
   if (making) return making;
-  const squeezing = squeeze(path, out).finally(() => pending.delete(out));
+  const squeezing = squeeze(path, out)
+    .catch(() => undefined)
+    .then((made) => {
+      if (!made) failed.add(out);
+      return made;
+    })
+    .finally(() => pending.delete(out));
   pending.set(out, squeezing);
   return squeezing;
 }
 
 const pending = new Map<string, Promise<string | undefined>>();
+const failed = new Set<string>();
 
 async function squeeze(path: string, out: string) {
   const [ffmpeg, ffprobe] = await Promise.all([
