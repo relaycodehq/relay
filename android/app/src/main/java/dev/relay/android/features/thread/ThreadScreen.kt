@@ -185,7 +185,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
         outboxItems.filter { it.computer == computer && it.chatId == id && it.send.id !in held }
     }
     // Steers held a moment show as the messages they become, between the two.
-    val heldSteers = remember(thread?.queue, rootId) { heldSteers(thread?.queue, rootId, System.currentTimeMillis()) }
+    val heldSteers = remember(thread?.queue, rootId, all) { heldSteers(thread?.queue, rootId, all, System.currentTimeMillis()) }
     val listed = remember(all, rootId, outgoing, heldSteers) {
         val own = rootId?.let { sideConversation(all, it) } ?: mainMessages(all)
         val mine = outgoing.map(::outgoingMessage).filter { it.parentId == rootId }

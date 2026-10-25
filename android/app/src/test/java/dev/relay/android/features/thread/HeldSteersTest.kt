@@ -16,9 +16,15 @@ class HeldSteersTest {
             queued("""{"id":"q","body":"after that"}"""),
         )
         assertEquals(listOf("q"), waitingInQueue(queue).map { it.id })
-        val held = heldSteers(queue, rootId = null, now = 5000)
+        val held = heldSteers(queue, rootId = null, messages = emptyList(), now = 5000)
         assertEquals(listOf("s"), held.map { it.id })
         assertEquals(listOf("user", 1000L, "codex"), held.first().let { listOf(it.role, it.created, it.provider) })
-        assertEquals(listOf("r"), heldSteers(queue, rootId = "root", now = 5000).map { it.id })
+        assertEquals(listOf("r"), heldSteers(queue, rootId = "root", messages = emptyList(), now = 5000).map { it.id })
+    }
+
+    @Test fun leavesOutASteerTheThreadAlreadyHolds() {
+        val queue = listOf(queued("""{"id":"s","body":"use the other cache","created":1000,"held":true}"""))
+        val landed = heldSteers(queue, rootId = null, messages = emptyList(), now = 5000)
+        assertEquals(emptyList<String>(), heldSteers(queue, rootId = null, messages = landed, now = 5000).map { it.id })
     }
 }

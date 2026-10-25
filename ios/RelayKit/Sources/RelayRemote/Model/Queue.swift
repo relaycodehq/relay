@@ -30,9 +30,11 @@ public func waitingInQueue(_ queue: [RemoteQueued]?) -> [RemoteQueued] {
     (queue ?? []).filter { $0.held != true }
 }
 
-/// The steers held a moment in this conversation, as the messages they become.
-public func heldSteers(_ queue: [RemoteQueued]?, rootId: String? = nil, now: Int64) -> [ChatMessage] {
-    (queue ?? []).filter { $0.held == true && $0.parentId == rootId }.map { item in
+/// The steers held a moment in this conversation, as the messages they become. One the
+/// thread already holds is left out: the message keeps the steer's id, so it would show twice.
+public func heldSteers(_ queue: [RemoteQueued]?, rootId: String? = nil, messages: [ChatMessage], now: Int64) -> [ChatMessage] {
+    let landed = Set(messages.map(\.id))
+    return (queue ?? []).filter { $0.held == true && $0.parentId == rootId && !landed.contains($0.id) }.map { item in
         ChatMessage(
             id: item.id, role: "user", body: item.body, status: "complete", created: item.created ?? now,
             provider: item.to ?? item.settings?.provider ?? "claude", version: 0, parentId: item.parentId)
