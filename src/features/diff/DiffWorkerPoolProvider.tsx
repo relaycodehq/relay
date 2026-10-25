@@ -4,6 +4,7 @@ import { WorkerPoolManager } from "@pierre/diffs/worker";
 import DiffWorker from "@pierre/diffs/worker/worker.js?worker";
 import { useSyntaxThemes } from "../../lib/appearance";
 import { sharedResource } from "./shared-pool";
+import { HIGHLIGHTER } from "./highlighting";
 import { errorMessage } from "../../../shared/error-message";
 
 type SyntaxThemes = ReturnType<typeof useSyntaxThemes>;
@@ -25,7 +26,7 @@ const pool = sharedResource(
       },
       {
         theme: themesForNewPool,
-        preferredHighlighter: "shiki-js",
+        preferredHighlighter: HIGHLIGHTER,
         useTokenTransformer: true,
         tokenizeMaxLineLength: 1000,
       },

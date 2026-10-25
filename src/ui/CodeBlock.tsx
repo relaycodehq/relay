@@ -10,7 +10,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import type { DiffsHighlighter, ThemedToken } from "@pierre/diffs";
+import type { ThemedToken } from "@pierre/diffs";
 import {
   Check,
   ClipboardCheck,
@@ -25,22 +25,16 @@ import { useCopy } from "../lib/useCopy";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { useFlash } from "../lib/useFlash";
 
-// Tokenizing a block from scratch runs on the main thread; past this it stays plain.
-const MAX_HIGHLIGHT_LENGTH = 40_000;
-// Streaming grows the block every token; tokenize new lines at most this often.
+// Tokenizing runs on the main thread; past this a block stays plain.
+const MAX_HIGHLIGHT_LENGTH = 200_000;
+// Streaming grows the block every token; tokenize it at most this often.
 const HIGHLIGHT_THROTTLE_MS = 120;
-
-type GrammarState = NonNullable<
-  ReturnType<DiffsHighlighter["codeToTokens"]>["grammarState"]
->;
 
 export interface Highlighted {
   code: string;
   lang: string;
   theme: string;
   lines: ThemedToken[][];
-  /** Where the grammar stood after the last line, to carry on from there. */
-  grammar?: GrammarState;
 }
 
 // Read from the attributes applyToDocument sets on <html>, so the markdown
@@ -59,9 +53,13 @@ function subscribeSyntaxTheme(listener: () => void) {
 }
 
 async function highlighter(lang: string, theme: string) {
-  // Loaded lazily so the markdown renderer doesn't pull Shiki in up front.
+  // Loaded lazily so the markdown renderer doesn't pull the lexers in up front.
   const { getSharedHighlighter } = await import("@pierre/diffs");
-  return getSharedHighlighter({ themes: [theme], langs: [lang] });
+  return getSharedHighlighter({
+    themes: [theme],
+    langs: [lang],
+    preferredHighlighter: "highlights",
+  });
 }
 
 export async function tokenize(code: string, lang: string, theme: string) {
@@ -69,38 +67,13 @@ export async function tokenize(code: string, lang: string, theme: string) {
     .tokens;
 }
 
-/**
- * Tokenizes `code`, and when `prior` holds its first lines, only the lines
- * after them: a streamed block costs the same per pass however long it gets.
- */
+/** Tokenizes the whole of `code`; the Highlights lexers are quick enough to redo a streamed block each pass. */
 export async function highlight(
   code: string,
   lang: string,
   theme: string,
-  prior: Highlighted | null,
 ): Promise<Highlighted> {
-  const shiki = await highlighter(lang, theme);
-  if (
-    prior?.grammar &&
-    prior.lang === lang &&
-    prior.theme === theme &&
-    code.startsWith(prior.code + "\n")
-  ) {
-    const more = shiki.codeToTokens(code.slice(prior.code.length + 1), {
-      lang,
-      theme,
-      grammarState: prior.grammar,
-    });
-    return {
-      code,
-      lang,
-      theme,
-      lines: [...prior.lines, ...more.tokens],
-      grammar: more.grammarState,
-    };
-  }
-  const { tokens, grammarState } = shiki.codeToTokens(code, { lang, theme });
-  return { code, lang, theme, lines: tokens, grammar: grammarState };
+  return { code, lang, theme, lines: await tokenize(code, lang, theme) };
 }
 
 export function tokenStyle(token: ThemedToken): CSSProperties | undefined {
@@ -230,8 +203,8 @@ export const CodeBlock = memo(function CodeBlock({
     [code, lang, closed],
   );
   const enabled = !!lang && !!theme && code.length <= MAX_HIGHLIGHT_LENGTH;
-  // While the fence is open only whole lines are tokenized: the grammar state
-  // after a finished line is what the next pass carries on from.
+  // While the fence is open only whole lines are tokenized, so a half-typed
+  // token doesn't flash the wrong colour.
   const target = closed
     ? code
     : code.slice(0, Math.max(0, code.lastIndexOf("\n")));
@@ -247,7 +220,7 @@ export const CodeBlock = memo(function CodeBlock({
     );
     const timer = setTimeout(() => {
       lastRun.current = performance.now();
-      highlight(target, lang, theme, latest.current).then(
+      highlight(target, lang, theme).then(
         (next) => {
           if (cancelled) return;
           latest.current = next;

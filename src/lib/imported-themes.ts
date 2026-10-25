@@ -1,14 +1,14 @@
 /**
  * VS Code themes installed from Open VSX. Each theme in an extension becomes a
- * Relay theme for its own mode, and its token colours are registered with
- * Shiki so code and diffs use them. They live in local storage because the
+ * Relay theme for its own mode, and its token colours are registered as a
+ * syntax theme so code and diffs use them. They live in local storage because the
  * saved appearance is read synchronously at startup and has to find them.
  */
 import { useSyncExternalStore } from "react";
-import { registerCustomTheme } from "@pierre/diffs";
 import type { ThemeExtension, VsCodeTheme } from "../../shared/open-vsx";
 import { setImportedThemes, type Theme } from "./themes";
 import { kindOf, paletteFromVsCode, swatchesFromVsCode } from "./vscode-theme";
+import { registerSyntaxTheme } from "./zed-theme";
 
 export interface ImportedExtension {
   namespace: string;
@@ -79,7 +79,7 @@ function toTheme(extension: ImportedExtension, theme: VsCodeTheme): Theme {
   const palette = paletteFromVsCode(theme, syntax);
   if (!registered.has(syntax)) {
     registered.add(syntax);
-    registerCustomTheme(syntax, async () => ({
+    registerSyntaxTheme(syntax, async () => ({
       name: syntax,
       type: kindOf(theme),
       colors: {

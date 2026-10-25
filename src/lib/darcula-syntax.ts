@@ -4,7 +4,7 @@
  * call scopes the editor gives function and method calls, which Darcula
  * leaves plain while declarations are yellow.
  */
-import { registerCustomTheme } from "@pierre/diffs";
+import { registerSyntaxTheme } from "./zed-theme";
 
 export const DARCULA_SYNTAX = "relay-darcula";
 
@@ -85,7 +85,7 @@ const tokenColors = [
   { scope: "invalid", settings: { foreground: "#bc3f3c" } },
 ];
 
-registerCustomTheme(DARCULA_SYNTAX, async () => ({
+registerSyntaxTheme(DARCULA_SYNTAX, async () => ({
   name: DARCULA_SYNTAX,
   type: "dark",
   colors: { "editor.background": "#2b2b2b", "editor.foreground": text },

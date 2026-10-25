@@ -11,6 +11,7 @@ import { clickedLine, selectedSpan } from "./diff-selection";
 import { Columns2, FolderOpen, MessageSquare, X } from "lucide-react";
 import type { FilePair, Side } from "../../../shared/types";
 import { DiffCodeView } from "./DiffCodeView";
+import { HIGHLIGHT_MAX_LINES, HIGHLIGHTER } from "./highlighting";
 import { useFileDiff } from "./useFileDiff";
 import { useTheme } from "../../lib/useTheme";
 import { useSyntaxThemes } from "../../lib/appearance";
@@ -209,12 +210,12 @@ export function WorkingDiff({
           }),
           theme: syntaxThemes,
           themeType: theme,
-          preferredHighlighter: "shiki-js",
+          preferredHighlighter: HIGHLIGHTER,
           diffStyle: split && roomForSplit(width) ? "split" : "unified",
           disableFileHeader: true,
           hunkSeparators: "line-info",
           expansionLineCount: 20,
-          tokenizeMaxLength: 5000,
+          tokenizeMaxLength: HIGHLIGHT_MAX_LINES,
           tokenizeMaxLineLength: 1000,
           maxLineDiffLength: 1000,
           overflow: wrap ? "wrap" : "scroll",

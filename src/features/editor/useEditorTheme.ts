@@ -21,12 +21,14 @@ const fallbackColors = {
 function resolve(name: string): Promise<Resolved> {
   let pending = cache.get(name);
   if (!pending) {
-    pending = Promise.resolve(getResolvedOrResolveTheme(name)).then(
-      (theme) => {
-        const colors = (theme.colors ?? {}) as Record<string, string>;
+    // CodeMirror's highlighting is built from TextMate scopes, so the editor
+    // takes that form of the theme whatever the diffs use.
+    pending = Promise.resolve(getResolvedOrResolveTheme(name, "shiki-js")).then(
+      ({ textmate }) => {
+        const colors = (textmate?.colors ?? {}) as Record<string, string>;
         const pick = (keys: string[], fallback: string) =>
           keys.map((k) => colors[k]).find(Boolean) ?? fallback;
-        const rules = (theme.settings ?? theme.tokenColors ?? []) as ThemeRule[];
+        const rules = (textmate?.settings ?? textmate?.tokenColors ?? []) as ThemeRule[];
         return {
           name,
           extension: [
@@ -49,7 +51,7 @@ function resolve(name: string): Promise<Resolved> {
 }
 
 /**
- * The Shiki theme the diffs and chat use, as the editor's highlighting.
+ * The syntax theme the diffs and chat use, as the editor's highlighting.
  * Undefined only while the very first one loads; switching themes keeps the
  * old colours until the new ones are in.
  */

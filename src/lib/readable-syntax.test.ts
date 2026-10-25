@@ -19,16 +19,25 @@ describe.each(light)("%s", (_, palette) => {
 
   it("colours code at AA on its own backgrounds", async () => {
     expect(readableSyntaxBase(palette.syntax)).not.toBeNull();
-    const theme = await resolveTheme(palette.syntax);
-    const colours = (theme.settings ?? [])
-      .map((s) => s.settings?.foreground)
-      .filter((c): c is string => /^#[0-9a-f]{6}$/i.test(c ?? ""));
-    expect(colours.length).toBeGreaterThan(5);
-    for (const bg of [palette.surface, palette.inbox])
-      for (const colour of colours)
-        expect(
-          contrastRatio(colour, bg),
-          `${colour} on ${bg}`,
-        ).toBeGreaterThanOrEqual(4.5);
+    const { textmate } = await resolveTheme(palette.syntax, "shiki-js");
+    const { zed } = await resolveTheme(palette.syntax, "highlights");
+    const zedColours = Object.values(zed?.style.syntax ?? {}).map((style) =>
+      typeof style === "string" ? style : style.color,
+    );
+    for (const colours of [
+      (textmate?.settings ?? []).map((s) => s.settings?.foreground),
+      zedColours,
+    ]) {
+      const solid = colours.filter((c): c is string =>
+        /^#[0-9a-f]{6}$/i.test(c ?? ""),
+      );
+      expect(solid.length).toBeGreaterThan(5);
+      for (const bg of [palette.surface, palette.inbox])
+        for (const colour of solid)
+          expect(
+            contrastRatio(colour, bg),
+            `${colour} on ${bg}`,
+          ).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
