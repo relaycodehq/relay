@@ -230,4 +230,33 @@ export class ThreadCreate {
     await this.core.storage.add(chat);
     return chatSummary(chat);
   }
+
+  /**
+   * A new thread carrying on a conversation someone shared: its messages
+   * marked as copied, and a note the agent reads with its first turn.
+   */
+  async importShared(
+    projectId: string,
+    shared: {
+      id: string;
+      title: string;
+      messages: ProjectChat["messages"];
+      note: string;
+    },
+  ) {
+    this.core.projects.get(projectId);
+    const chat: ProjectChat = {
+      id: shared.id,
+      projectId,
+      scope: { kind: "project" },
+      title: shared.title.slice(0, 120),
+      renamed: true,
+      created: Date.now(),
+      updated: Date.now(),
+      messages: shared.messages,
+      setupNote: shared.note,
+    };
+    await this.core.storage.add(chat);
+    return chatSummary(chat);
+  }
 }

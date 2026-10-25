@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { join } from "node:path";
+import { net } from "electron";
 import { z } from "zod";
 import { sentAgent } from "../../shared/recipient";
 import { idSchema } from "../../shared/validation";
@@ -6,6 +8,7 @@ import { seal, unseal } from "../app/login";
 import type { Store } from "../app/store";
 import { GuestShares } from "../guest-share";
 import { Funnel } from "../guest-share/funnel";
+import { importGuestThread } from "../guest-share/import";
 import { lastSend } from "../started-threads/lead-side";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -71,6 +74,21 @@ export function guestShareHandlers(ctx: ApiContext) {
     resolveGuestSuggestion: takes(
       [idSchema, z.enum(["drafted", "dismissed"])],
       (id, status) => shares.resolve(id, status),
+    ),
+    importGuestThread: takes(
+      [idSchema, z.string().max(4096)],
+      (projectId, link) =>
+        importGuestThread(
+          {
+            fetch: (url, init) => net.fetch(String(url), init),
+            create: (project, shared) =>
+              chats.creating.importShared(project, shared),
+            filesDir: (threadId) =>
+              join(ctx.store.dir, "shared-threads", threadId),
+          },
+          projectId,
+          link,
+        ),
     ),
   } satisfies Handlers;
 }

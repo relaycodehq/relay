@@ -11,7 +11,8 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 
 // Share with guest: the thread's menu makes a link, a guest's suggestions
-// show above the composer to edit or dismiss, and Stop sharing ends the link.
+// show above the composer to edit or dismiss, a guest with Relay can carry the
+// conversation on, and Stop sharing ends the link.
 test("shares a thread with a guest who suggests a message", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-guest-")));
   const repo = join(root, "project"),
@@ -124,6 +125,24 @@ test("shares a thread with a guest who suggests a message", async () => {
     expect(alex.suggestions).toEqual([
       { text: "Say 'Start one from the sidebar'", status: "drafted" },
       { text: "Make it rhyme", status: "dismissed" },
+    ]);
+
+    // A guest with Relay carries the conversation on in a project of theirs.
+    const copied = await page.evaluate(
+      ([project, url]) => window.relay.importGuestThread(project, url),
+      [projectId, link] as const,
+    );
+    const thread = await page.evaluate(
+      (id) => window.relay.projectChat(id),
+      copied.id,
+    );
+    expect(thread.title).toBe("Empty state cleanup");
+    const copiedMessages = thread.messages.filter((m) => typeof m !== "string");
+    expect(
+      copiedMessages.map((m) => [m.author ?? m.role, m.body, m.imported]),
+    ).toEqual([
+      ["Host", "The empty state copy feels off", true],
+      ["assistant", "Updated it to: No threads yet.", true],
     ]);
 
     await page

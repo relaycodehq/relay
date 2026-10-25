@@ -37,6 +37,7 @@ import { useToolPages } from "./useToolPages";
 import type { GitActionsHandle } from "../features/changes/GitActions";
 import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
+import { GuestImport } from "../features/guest-share/GuestImport";
 import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
@@ -448,6 +449,15 @@ export default function ProjectShell() {
           onRecheck={host.recheck}
           onConnectGitea={gitea ? () => void linkProject() : undefined}
           onClose={() => setChoosePR(false)}
+        />
+      )}
+      {links.guestLink && (
+        <GuestImport
+          link={links.guestLink}
+          projects={projects.data}
+          current={project?.id ?? null}
+          onOpen={openChatById}
+          onClose={links.closeGuest}
         />
       )}
       {starts.picking && (

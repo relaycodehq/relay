@@ -11,6 +11,7 @@ import "./projects.css";
  * in the heading for a chat that needs no project.
  */
 export function NewThreadPicker({
+  title = "New thread in…",
   projects,
   current,
   onSelect,
@@ -18,6 +19,7 @@ export function NewThreadPicker({
   onScratch,
   onClose,
 }: {
+  title?: string;
   /** Undefined until the list has loaded. */
   projects: Project[] | undefined;
   current: string | null;
@@ -49,7 +51,7 @@ export function NewThreadPicker({
 
   return (
     <Modal
-      title="New thread in…"
+      title={title}
       className="new-thread-picker"
       onClose={onClose}
       actions={<ScratchpadButton onClick={onScratch} />}

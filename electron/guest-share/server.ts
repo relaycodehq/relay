@@ -27,6 +27,7 @@ import {
   sendFile,
   sendJson,
 } from "./respond";
+import { guestBundle } from "./bundle";
 import { sharedFileText } from "./shared-files";
 import type { GuestSnapshot } from "./snapshot";
 import { guestVideo } from "./video";
@@ -146,6 +147,13 @@ export class GuestServer<L extends ServedLink> {
         return this.media(link, rest[0] ?? "", req, res);
       case "render":
         return this.render(link, rest[0] ?? "", Number(rest[1]), res);
+      case "bundle":
+        return sendBody(
+          req,
+          res,
+          JSON.stringify(await guestBundle(await this.host.snapshot(link))),
+          json,
+        );
       default:
         return notFound(res);
     }

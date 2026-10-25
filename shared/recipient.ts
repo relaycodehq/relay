@@ -3,7 +3,12 @@ import {
   agentMentionPattern,
   type AgentProvider,
 } from "./agents";
-import type { ChatMessage, ChatSummary, ProjectChatSend } from "./projects";
+import {
+  agentAnswered,
+  type ChatMessage,
+  type ChatSummary,
+  type ProjectChatSend,
+} from "./projects";
 
 /** Who a message goes to: an agent, or "message", a note no agent answers. */
 export type Recipient = AgentProvider | "message";
@@ -53,15 +58,7 @@ export const contextAgent = (
 ): AgentProvider | undefined =>
   [...conversation]
     .reverse()
-    .find(
-      (m) =>
-        m.role === "assistant" &&
-        !m.compaction &&
-        !m.handoff &&
-        !m.reload &&
-        !m.worktreeCommand &&
-        m.id !== rootId,
-    )?.provider;
+    .find((m) => agentAnswered(m) && m.id !== rootId)?.provider;
 
 /**
  * Whether sending to `to` makes another agent take over from `holder`, the

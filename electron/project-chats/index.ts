@@ -131,7 +131,7 @@ export class ProjectChats {
   private triaging: ThreadTriage;
   /** What the user keeps at hand in each thread. */
   readonly notes: ThreadNotes;
-  private creating: ThreadCreate;
+  readonly creating: ThreadCreate;
   private terminal: TerminalContinue;
   readonly imports: ProjectImports;
   /** Importing another app's history with an agent. */

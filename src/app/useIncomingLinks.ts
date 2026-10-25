@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { guestImportLink } from "../../shared/guest-share";
 import type { Bootstrap } from "../../shared/types";
 import { isSitePullUrl, parseAzurePullUrl } from "../../shared/validation";
 import { api } from "../lib/api";
@@ -7,9 +8,9 @@ import type { ShellNavigation } from "./useShellNavigation";
 import type { SignInFlow } from "../features/settings/useSignIn";
 
 /**
- * Links Relay is asked to open, at launch or later, which open the Pull
- * requests page. A link that comes while navigation is locked waits until
- * it's released.
+ * Links Relay is asked to open, at launch or later: pull requests open the
+ * Pull requests page, a shared thread asks where to carry it on. A link that
+ * comes while navigation is locked waits until it's released.
  */
 export function useIncomingLinks(
   boot: Bootstrap | undefined,
@@ -19,7 +20,8 @@ export function useIncomingLinks(
   setError: (error: unknown) => void,
 ) {
   const [incoming, setIncoming] = useState<{ url: string }>(),
-    [queuedUrl, setQueuedUrl] = useState<string>();
+    [queuedUrl, setQueuedUrl] = useState<string>(),
+    [guestLink, setGuestLink] = useState<string>();
   useEffect(() => {
     // The page took its link when it opened; coming back mustn't open it again.
     if (!inbox) setIncoming(undefined);
@@ -29,6 +31,9 @@ export function useIncomingLinks(
       setQueuedUrl(url);
       return;
     }
+    // A shared thread to carry on here, from a guest page's button.
+    const guest = guestImportLink(url);
+    if (guest) return setGuestLink(guest);
     setIncoming({ url });
     setInbox(true);
     // GitHub and Azure DevOps links go through their CLI's login; only
@@ -52,6 +57,9 @@ export function useIncomingLinks(
     incoming,
     /** The Azure DevOps organization the link is in, which no project may be. */
     azureServer: incoming && azureServerOf(incoming.url),
+    /** A shared thread's link, asking which project to carry it on in. */
+    guestLink,
+    closeGuest: () => setGuestLink(undefined),
   };
 }
 

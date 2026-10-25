@@ -67,6 +67,7 @@ export function guestPage(data: { view: GuestPageView; known: string }) {
 <body>
 <header class="top"><div class="top-inner">
   <div class="top-title"><h1 id="title"></h1><p>Shared from Relay. Suggest messages; the person who shared it decides what reaches the agent.</p></div>
+  <a id="continue" class="continue" title="Carry this conversation on in a new thread of your own Relay">Continue in Relay</a>
 </div></header>
 <main>
   <ol id="messages" class="messages" aria-live="polite"></ol>

@@ -66,6 +66,11 @@ export interface GuestShareApi {
     id: string,
     status: "drafted" | "dismissed",
   ): Promise<void>;
+  /** Copies a thread someone shared into a new thread of `projectId`; its summary. */
+  importGuestThread(
+    projectId: string,
+    link: string,
+  ): Promise<import("./projects").ChatSummary>;
   onGuestShare(callback: (event: GuestShareEvent) => void): () => void;
 }
 
@@ -150,4 +155,58 @@ export interface GuestDelta {
   messages: GuestMessage[];
   files?: GuestFile[];
   suggestions?: GuestPageView["suggestions"];
+}
+
+/** What a guest's own Relay downloads to carry the conversation on. */
+export const guestBundleSchema = z.object({
+  title: z.string().max(300),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        from: z.string().max(100),
+        body: z.string().max(200_000),
+        created: z.number(),
+      }),
+    )
+    .max(500),
+  files: z
+    .array(z.object({ path: z.string().max(1000), content: z.string() }))
+    .max(20),
+});
+
+export type GuestBundle = z.infer<typeof guestBundleSchema>;
+
+/** The deep link a guest page opens to carry on in the guest's own Relay. */
+export const guestImportUrl = (link: string) =>
+  `relay://guest?link=${encodeURIComponent(link)}`;
+
+/** The share link inside one, if it is one and points at a guest page. */
+export function guestImportLink(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  if (parsed.protocol !== "relay:" || parsed.host !== "guest") return;
+  const link = parsed.searchParams.get("link");
+  return link && guestLinkProblem(link) === undefined ? link : undefined;
+}
+
+/** Why `link` can't be a guest page: https anywhere, or http on this computer. */
+export function guestLinkProblem(link: string): string | undefined {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    return "That isn't a link.";
+  }
+  const local = url.hostname === "127.0.0.1" || url.hostname === "localhost";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && local))
+    return "Guest links are https.";
+  if (url.username || url.password) return "That isn't a guest link.";
+  if (!/\/g\/[A-Za-z0-9_-]{43}\/?$/.test(url.pathname))
+    return "That isn't a guest link.";
+  return undefined;
 }

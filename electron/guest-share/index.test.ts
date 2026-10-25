@@ -286,6 +286,21 @@ describe("GuestShares", () => {
     expect(JSON.stringify(store.shares)).not.toContain(link.split("/g/")[1]);
   });
 
+  it("hands a guest's Relay the conversation and files to carry on", async () => {
+    const { link } = await started();
+    const bundle = await (await fetch(`${link}/bundle`)).json();
+    expect(bundle.messages.map((m: { from: string }) => m.from)).toEqual([
+      "Host",
+      "Claude",
+    ]);
+    expect(bundle.files).toEqual([
+      {
+        path: "empty.tsx",
+        content: "export const Empty = () => <p>No threads yet.</p>;\n",
+      },
+    ]);
+  });
+
   it("ends the link when the thread is archived", async () => {
     const { summary, changed, link, events, store } = await started();
     summary.archivedAt = 2;

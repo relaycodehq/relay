@@ -180,6 +180,8 @@ export interface ChatMessage {
   fromThread?: string;
   /** Local: `fromThread` is one this thread started, and this is what it said; see ChildSays. */
   fromChild?: import("./send").ChildSays;
+  /** Local: copied in from a thread someone shared; no agent here wrote or holds it. */
+  imported?: true;
   /** Local: Relay sent this message for one of the user's schedules. */
   scheduled?: import("../schedules").ScheduleMessage;
   seq?: number;
@@ -253,6 +255,15 @@ export function turnImages(message: ChatMessage): string[] {
     : (message.activity ?? []);
   return [...new Set(calls.flatMap((a) => imageRead(a) ?? []))];
 }
+
+/** An answer an agent gave in this thread: not one of Relay's markers, nor one copied from a shared thread. */
+export const agentAnswered = (m: ChatMessage) =>
+  m.role === "assistant" &&
+  !m.compaction &&
+  !m.handoff &&
+  !m.reload &&
+  !m.worktreeCommand &&
+  !m.imported;
 
 /** Sequenced messages in the thread's order, then ones not yet sequenced by when they were made. */
 export const threadOrder = (a: ChatMessage, b: ChatMessage) =>

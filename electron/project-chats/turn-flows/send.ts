@@ -6,6 +6,7 @@ import type {
   ResumeSettings,
 } from "../../../shared/projects";
 import {
+  agentAnswered,
   onComputerMessage,
   replyRoot,
   sentBy,
@@ -357,15 +358,7 @@ export class TurnSends {
       // first, unless a command leaves no room for the note.
       const outgoing = [...chat.messages]
         .reverse()
-        .find(
-          (m) =>
-            m.role === "assistant" &&
-            !m.compaction &&
-            !m.handoff &&
-            !m.reload &&
-            !m.worktreeCommand &&
-            onBranch(m),
-        );
+        .find((m) => agentAnswered(m) && onBranch(m));
       const switchedFrom =
         !command && outgoing && outgoing.provider !== asked.provider
           ? outgoing.provider

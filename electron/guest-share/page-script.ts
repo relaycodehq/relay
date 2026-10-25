@@ -34,6 +34,7 @@ export const GUEST_SCRIPT = String.raw`(() => {
   let ended = false;
 
   $("name").value = localStorage.getItem("relay-guest-name") || "";
+  $("continue").href = "relay://guest?link=" + encodeURIComponent(location.origin + base);
 
   function hydrate(root) {
     for (const media of root.querySelectorAll("[data-media]")) media.src = base + "/media/" + media.dataset.media;
