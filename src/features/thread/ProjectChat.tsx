@@ -46,7 +46,7 @@ import type { Viewing } from "./useThreadView";
 import { useThreadHandle } from "./useThreadHandle";
 import { useThreadWorktree } from "./useThreadWorktree";
 import { workingTreeKey } from "../../lib/working-tree-key";
-import { AgentRequestCard } from "./AgentRequestCard";
+import { OpenRequestCard } from "./OpenRequestCard";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { DeepReviewSetup } from "../deep-review/DeepReview";
 import type {
@@ -498,29 +498,11 @@ export function ProjectChat({
             e.preventDefault();
         }}
       >
-        {history.data?.requests?.slice(0, 1).map((request) => (
-          <AgentRequestCard
-            key={request.id}
-            request={request}
-            pendingCount={history.data?.requests?.length}
-            onRespond={async (response) => {
-              if (!chat) return;
-              await api.respondProjectChat(chat.id, request.id, response);
-              const { data } = await history.refetch();
-              // The answered card takes the clicked button, and the focus, with it.
-              if (!data?.requests?.length)
-                requestAnimationFrame(() => {
-                  const active = document.activeElement;
-                  if (
-                    !active ||
-                    active === document.body ||
-                    active.closest(".agent-request")
-                  )
-                    composer.current?.focus();
-                });
-            }}
-          />
-        ))}
+        <OpenRequestCard
+          chatId={chat?.id}
+          history={history}
+          focusComposer={() => composer.current?.focus()}
+        />
 
         {isEmpty && (
           <ThreadIntroduction
