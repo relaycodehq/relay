@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Gitea } from "./gitea";
+import { Gitea, giteaMergeMethods } from "./gitea";
 
 const account = {
   id: "https://git.example.com#7",
@@ -123,4 +123,21 @@ it("doesn't renew more than once or retry a write after an ambiguous failure", a
     expect(asked).toBe(failure === 401 ? 1 : 0);
     expect(sent).toBe(failure === 401 ? 2 : 1);
   }
+});
+
+it("offers Gitea's allowed merge methods with the repository's default first", () => {
+  expect(
+    giteaMergeMethods({
+      allow_merge_commits: true,
+      allow_squash_merge: true,
+      allow_rebase: false,
+      default_merge_style: "squash",
+    }),
+  ).toEqual(["squash", "merge"]);
+  // A rebase-merge or fast-forward default isn't one Relay offers; the order stays.
+  expect(giteaMergeMethods({ default_merge_style: "rebase-merge" })).toEqual([
+    "merge",
+    "squash",
+    "rebase",
+  ]);
 });

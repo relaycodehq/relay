@@ -45,6 +45,14 @@ export interface AzPull {
   targetRefName: string;
   lastMergeSourceCommit?: { commitId: string };
   lastMergeTargetCommit?: { commitId: string };
+  /** Azure's trial merge of the PR into its target. */
+  mergeStatus?:
+    | "notSet"
+    | "queued"
+    | "conflicts"
+    | "succeeded"
+    | "rejectedByPolicy"
+    | "failure";
   reviewers?: AzReviewer[];
   labels?: { id: string; name: string; active?: boolean }[];
   repository: AzRepository;

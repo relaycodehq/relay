@@ -4,6 +4,8 @@ import type {
   Discussion,
   FilePair,
   Issue,
+  MergeMethod,
+  MergeReadiness,
   Page,
   Pull,
   PullRef,
@@ -26,6 +28,30 @@ import { mergedPulls } from "./merged";
 import { HostRequests, type RequestOptions } from "./request";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_FILE = 2 * 1024 * 1024;
+
+interface GiteaMergeSettings {
+  allow_merge_commits?: boolean;
+  allow_squash_merge?: boolean;
+  allow_rebase?: boolean;
+  default_merge_style?: string;
+}
+
+/** The repository's allowed merge methods, its default first. */
+export function giteaMergeMethods(r: GiteaMergeSettings): MergeMethod[] {
+  const allowed = (
+    [
+      ["merge", r.allow_merge_commits],
+      ["squash", r.allow_squash_merge],
+      ["rebase", r.allow_rebase],
+    ] as const
+  )
+    .filter(([, on]) => on !== false)
+    .map(([m]) => m as MergeMethod);
+  const preferred = allowed.find((m) => m === r.default_merge_style);
+  return preferred
+    ? [preferred, ...allowed.filter((m) => m !== preferred)]
+    : allowed;
+}
 /** Pull requests on the connected Gitea server, as its account. */
 export class Gitea implements PullHost {
   private requests: HostRequests;
@@ -312,6 +338,49 @@ export class Gitea implements PullHost {
         },
       })
     ).data;
+  }
+  async mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    const [p, repository] = await Promise.all([
+      this.request<Pull & { mergeable: boolean }>(this.pr(r)),
+      this.request<GiteaMergeSettings>(this.repo(r)),
+    ]);
+    return {
+      status: p.data.mergeable ? "clean" : "conflicts",
+      behind: await this.behind(r, p.data).catch(() => null),
+      methods: giteaMergeMethods(repository.data),
+    };
+  }
+  /** Commits on the base branch since the head left it, counted by the list's total. */
+  private async behind(r: Repo, p: Pull) {
+    const query = new URLSearchParams({
+      sha: p.base.ref,
+      not: p.merge_base,
+      stat: "false",
+      verification: "false",
+      files: "false",
+      limit: "1",
+    });
+    const { headers } = await this.request(
+      `${this.repo(r)}/commits?${query}`,
+    );
+    const total = headers.get("x-total-count");
+    return total === null ? null : Number(total);
+  }
+  async merge(r: PullRef, head: string, method: MergeMethod) {
+    try {
+      await this.request(`${this.pr(r)}/merge`, {
+        method: "POST",
+        body: { Do: method, head_commit_id: head },
+      });
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409)
+        throw new Error("A new commit arrived. Refresh before merging.");
+      if (e instanceof ApiError && e.status === 405)
+        throw new Error(
+          "Gitea won't merge this yet: it has conflicts, or the branch's rules want more checks or approvals.",
+        );
+      throw e;
+    }
   }
   /** A page of the repository's pulls, newest first. */
   pulls(

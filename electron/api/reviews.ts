@@ -69,6 +69,15 @@ export function reviewHandlers(ctx: ApiContext) {
         );
       },
     ),
+    pullMergeReadiness: takes([refSchema], async (r) =>
+      (await clientFor(r)).mergeReadiness(r),
+    ),
+    mergePull: takes(
+      [refSchema, shaSchema, z.enum(["merge", "squash", "rebase"])],
+      async (r, head, method) => {
+        await (await clientFor(r)).merge(r, head, method);
+      },
+    ),
     files: takes([refSchema, pageSchema], async (r, page) =>
       (await clientFor(r)).files(r, page),
     ),

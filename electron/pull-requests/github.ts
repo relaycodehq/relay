@@ -4,6 +4,8 @@ import type {
   Discussion,
   Issue,
   Draft,
+  MergeMethod,
+  MergeReadiness,
   FilePair,
   Page,
   Pull,
@@ -135,6 +137,21 @@ const asReview = (r: Review): Review => {
   };
 };
 
+/**
+ * GitHub's `mergeable_state` as Relay reads it. "behind" is a branch rule
+ * wanting the head up to date first; "unstable" only means non-required
+ * checks failed, which doesn't stop a merge.
+ */
+export function githubMergeStatus(
+  mergeable: boolean | null,
+  state: string,
+): MergeReadiness["status"] {
+  if (mergeable === false || state === "dirty") return "conflicts";
+  if (state === "blocked" || state === "behind") return "blocked";
+  if (mergeable === null || state === "unknown") return "unknown";
+  return "clean";
+}
+
 /** `gh` has no GitHub login, as opposed to GitHub not answering. */
 export class GithubSignedOut extends Error {
   constructor() {
@@ -238,7 +255,7 @@ export class GitHub implements PullHost {
                   : `GitHub denied this${message ? `: ${message}` : "."}`
                 : response.status === 404
                   ? "Not found, or your gh login can't see this repository."
-                  : response.status === 422 && message
+                  : [405, 409, 422].includes(response.status) && message
                     ? `GitHub refused this: ${message}`
                     : `GitHub returned HTTP ${response.status}. Please retry.`,
           );
@@ -636,6 +653,36 @@ export class GitHub implements PullHost {
         })
       ).data,
     );
+  }
+  async mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    const p = (
+      await this.request<
+        GithubPull & { mergeable: boolean | null; mergeable_state: string }
+      >(this.pr(r))
+    ).data;
+    const [compared, repository] = await Promise.all([
+      this.request<{ behind_by: number }>(
+        `${this.repo(r)}/compare/${encodeURIComponent(p.base.ref)}...${p.head.sha}?per_page=1`,
+      ).catch(() => null),
+      this.request<Partial<Record<`allow_${string}`, boolean>>>(this.repo(r)),
+    ]);
+    // The allow_ flags only come to those who may change them; missing, all are offered.
+    const allowed = repository.data;
+    return {
+      status: githubMergeStatus(p.mergeable, p.mergeable_state),
+      behind: compared?.data.behind_by ?? null,
+      methods: (["squash", "merge", "rebase"] as const).filter(
+        (m) =>
+          allowed[`allow_${m === "merge" ? "merge_commit" : `${m}_merge`}`] !==
+          false,
+      ),
+    };
+  }
+  async merge(r: PullRef, head: string, method: MergeMethod) {
+    await this.request(`${this.pr(r)}/merge`, {
+      method: "PUT",
+      body: { sha: head, merge_method: method },
+    });
   }
   async repository(r: Repo) {
     return (await this.request<RepositoryInfo>(this.repo(r))).data;

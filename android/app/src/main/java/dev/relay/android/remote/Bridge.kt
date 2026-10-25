@@ -50,7 +50,8 @@ object Bridge {
     val slowPhoneMethods = setOf(
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
-        "regenerateProjectChatTitle", "search", "pullCiStatus", "submitReview", "comment",
+        "regenerateProjectChatTitle", "search", "pullCiStatus", "pullMergeReadiness", "mergePull",
+        "submitReview", "comment",
     )
 
     /** `phoneDesktopMethods`: the desktop's own calls a phone may make through `desktop`. */
@@ -69,7 +70,8 @@ object Bridge {
         "projectMergePlan", "projectMergeBranch", "projectCommitMessage", "projectBranches",
         "projectChangeBranch", "projectHistory", "projectCommit", "projectFiles", "projectFile",
         "projectTasks", "stopProjectTask", "restartProjectTask",
-        "pullServers", "hostAccount", "search", "pull", "pullCiStatus", "files", "reviews", "discussion",
+        "pullServers", "hostAccount", "search", "pull", "pullCiStatus", "pullMergeReadiness", "mergePull",
+        "files", "reviews", "discussion",
         "comment", "submitReview",
     )
 }

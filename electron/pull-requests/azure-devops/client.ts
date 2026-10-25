@@ -4,6 +4,8 @@ import type {
   Draft,
   FilePair,
   Issue,
+  MergeMethod,
+  MergeReadiness,
   Page,
   Pull,
   PullRef,
@@ -48,6 +50,22 @@ import {
 } from "./shapes";
 
 const VERSION = "api-version=7.1";
+const azureMergeStatus: Record<
+  NonNullable<AzPull["mergeStatus"]>,
+  MergeReadiness["status"]
+> = {
+  succeeded: "clean",
+  conflicts: "conflicts",
+  rejectedByPolicy: "blocked",
+  failure: "blocked",
+  queued: "unknown",
+  notSet: "unknown",
+};
+const azureStrategies: Record<MergeMethod, string> = {
+  merge: "noFastForward",
+  squash: "squash",
+  rebase: "rebase",
+};
 /** File diffs are only served as a preview; without the flag Azure refuses them. */
 const FILE_DIFFS_VERSION = "api-version=7.1-preview.1";
 const MAX_FILE = 2 * 1024 * 1024;
@@ -793,6 +811,41 @@ export class AzureDevOps implements PullHost {
       submitted_at: new Date().toISOString(),
       commit_id: head,
     };
+  }
+
+  async mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    const pr = await this.azurePull(r);
+    const head = pr.lastMergeSourceCommit?.commitId;
+    const query = new URLSearchParams({
+      baseVersion: pr.targetRefName.replace(/^refs\/heads\//, ""),
+      baseVersionType: "branch",
+      targetVersion: head ?? "",
+      targetVersionType: "commit",
+      $top: "1",
+    });
+    const compared = head
+      ? await this.request<{ behindCount: number }>(
+          `${this.repoPath(r)}/diffs/commits?${query}&${VERSION}`,
+        ).catch(() => null)
+      : null;
+    return {
+      status: azureMergeStatus[pr.mergeStatus ?? "notSet"],
+      behind: compared?.data.behindCount ?? null,
+      // A branch policy may allow fewer; Azure says so when completing.
+      methods: ["squash", "merge", "rebase"],
+    };
+  }
+  async merge(r: PullRef, head: string, method: MergeMethod) {
+    this.forget(r);
+    await this.request(`${this.prPath(r)}?${VERSION}`, {
+      method: "PATCH",
+      body: {
+        status: "completed",
+        // Azure refuses the completion when the source has moved past this.
+        lastMergeSourceCommit: { commitId: head },
+        completionOptions: { mergeStrategy: azureStrategies[method] },
+      },
+    });
   }
 
   /** Which change each path is in the latest push, which Azure anchors new threads to. */

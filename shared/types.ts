@@ -129,6 +129,19 @@ export interface Pull extends PullRef {
   labels: Issue["labels"];
   comments: number;
 }
+export type MergeMethod = "merge" | "squash" | "rebase";
+/** Whether a pull request can be merged now, and the ways its repository allows. */
+export interface MergeReadiness {
+  /**
+   * "blocked": the host's rules hold it back (required checks or approvals);
+   * "unknown": the host is still working it out.
+   */
+  status: "clean" | "conflicts" | "blocked" | "unknown";
+  /** Commits on the base branch the PR's head doesn't have; null when the host can't say. */
+  behind: number | null;
+  /** The repository's allowed merge methods, its preferred one first. */
+  methods: MergeMethod[];
+}
 type Counts = "additions" | "deletions" | "changed_files";
 /** A PR in a repository's list, which may not say how much it changes. */
 export type PullListing = Omit<Pull, Counts> & Partial<Pick<Pull, Counts>>;
@@ -577,6 +590,9 @@ export interface Api
     ref: PullRef,
     branch: string,
   ): Promise<import("./ci").CiStatus | null>;
+  pullMergeReadiness(ref: PullRef): Promise<MergeReadiness>;
+  /** Merges the PR if its head is still `head`. */
+  mergePull(ref: PullRef, head: string, method: MergeMethod): Promise<void>;
   files(ref: PullRef, page: number): Promise<Page<ChangedFile>>;
   blame(ref: PullRef, query: BlameQuery): Promise<LineBlame>;
   contents(

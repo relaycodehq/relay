@@ -5,6 +5,8 @@ import type {
   Draft,
   FilePair,
   Issue,
+  MergeMethod,
+  MergeReadiness,
   Page,
   Pull,
   PullListing,
@@ -120,6 +122,9 @@ export interface PullHost {
     body: string,
     drafts: Draft[],
   ): Promise<Review>;
+  mergeReadiness(r: PullRef): Promise<MergeReadiness>;
+  /** Merges the PR, refusing once a commit arrived after `head`. */
+  merge(r: PullRef, head: string, method: MergeMethod): Promise<void>;
   repository(r: Repo): Promise<RepositoryInfo>;
   /** Whether this sign-in sees `r` under that name; false for one it can't. */
   hasRepository(r: Repo): Promise<boolean>;
