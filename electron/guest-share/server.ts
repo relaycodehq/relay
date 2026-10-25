@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
   createServer,
   type IncomingMessage,
@@ -12,6 +11,7 @@ import {
 } from "../../shared/guest-share";
 import { injectRenderBootstrap, RENDER_CSP } from "../../shared/html-render";
 import {
+  baselineKey,
   baselineOf,
   emptyBaseline,
   guestDelta,
@@ -132,13 +132,7 @@ export class GuestServer<L extends ServedLink> {
           json,
         );
       case "events":
-        return this.events(
-          link,
-          guestId,
-          url.searchParams.get("known") ?? "",
-          req,
-          res,
-        );
+        return this.events(link, guestId, this.resumedFrom(req, url), res);
       case "file":
         return this.file(link, rest[0] ?? "", res);
       case "detail":
@@ -164,15 +158,9 @@ export class GuestServer<L extends ServedLink> {
     const view = await this.host.page(link, "");
     // Named by its content, so every guest loading the same thread gets the
     // same page and its compressed copy is made once.
-    const known = createHash("sha1")
-      .update(JSON.stringify(view))
-      .digest("base64url")
-      .slice(0, 16);
-    this.baselines.set(known, baselineOf(view));
-    if (this.baselines.size > 200)
-      this.baselines.delete(this.baselines.keys().next().value!);
+    const known = this.remember(baselineOf(view));
     const { html, csp } = guestPage({ view, known });
-    sendBody(req, res, html, {
+    return sendBody(req, res, html, {
       "Cache-Control": "no-store",
       "Content-Type": "text/html; charset=utf-8",
       "Content-Security-Policy": csp,
@@ -180,12 +168,35 @@ export class GuestServer<L extends ServedLink> {
     });
   }
 
+  /** Keeps what a guest's page holds, under a name its live connection can ask for. */
+  private remember(baseline: GuestBaseline) {
+    const key = baselineKey(baseline);
+    this.baselines.delete(key);
+    this.baselines.set(key, baseline);
+    if (this.baselines.size > 200)
+      this.baselines.delete(this.baselines.keys().next().value!);
+    return key;
+  }
+
+  /**
+   * What the page holds as its live connection opens: the last change it got
+   * when it's reconnecting, else what it was served with.
+   */
+  private resumedFrom(req: IncomingMessage, url: URL) {
+    const lastEvent = req.headers["last-event-id"];
+    const key =
+      (typeof lastEvent === "string" && lastEvent) ||
+      url.searchParams.get("known") ||
+      "";
+    // An unknown one starts from nothing, so the page gets everything again.
+    return this.baselines.get(key) ?? emptyBaseline();
+  }
+
   /** Server-sent changes to the guest's page, a message at a time. */
   private events(
     link: L,
     guestId: string,
-    known: string,
-    req: IncomingMessage,
+    from: GuestBaseline,
     res: ServerResponse,
   ) {
     res.writeHead(200, {
@@ -194,7 +205,7 @@ export class GuestServer<L extends ServedLink> {
       "Cache-Control": "no-store, no-transform",
       "X-Accel-Buffering": "no",
     });
-    let baseline = this.baselines.get(known) ?? emptyBaseline();
+    let baseline = from;
     let busy = false;
     const tick = async () => {
       if (busy) return;
@@ -208,7 +219,8 @@ export class GuestServer<L extends ServedLink> {
         );
         if (!change) return;
         baseline = change.after;
-        res.write(`data: ${JSON.stringify(change.delta)}\n\n`);
+        const id = this.remember(baseline);
+        res.write(`id: ${id}\ndata: ${JSON.stringify(change.delta)}\n\n`);
       } catch (e) {
         console.warn("Guest share update failed:", e);
       } finally {
@@ -218,7 +230,7 @@ export class GuestServer<L extends ServedLink> {
     void tick();
     const timer = setInterval(() => void tick(), DELTA_MS);
     const ping = setInterval(() => res.write(": ping\n\n"), PING_MS);
-    req.on("close", () => {
+    res.on("close", () => {
       clearInterval(timer);
       clearInterval(ping);
     });

@@ -158,9 +158,13 @@ const suggest = (link: string, guestId: string, text: string) =>
     body: JSON.stringify({ guestId, name: "Alex", text }),
   });
 
-/** The guest page's live updates, as parsed events, until `enough` says stop. */
-async function deltas(url: string, enough: (events: any[]) => boolean) {
-  const res = await fetch(url);
+/** The guest page's live updates, as parsed events with their ids, until `enough` says stop. */
+async function deltas(
+  url: string,
+  enough: (events: any[]) => boolean,
+  headers: Record<string, string> = {},
+) {
+  const res = await fetch(url, { headers });
   const reader = res.body!.getReader();
   const seen: any[] = [];
   let buffer = "";
@@ -171,8 +175,13 @@ async function deltas(url: string, enough: (events: any[]) => boolean) {
     buffer += new TextDecoder().decode(value);
     const frames = buffer.split("\n\n");
     buffer = frames.pop()!;
-    for (const frame of frames)
-      if (frame.startsWith("data: ")) seen.push(JSON.parse(frame.slice(6)));
+    for (const frame of frames) {
+      const lines = frame.split("\n");
+      const data = lines.find((l) => l.startsWith("data: "));
+      if (!data) continue;
+      const id = lines.find((l) => l.startsWith("id: "))?.slice(4);
+      seen.push({ ...JSON.parse(data.slice(6)), id });
+    }
   }
   await reader.cancel();
   return seen;
@@ -232,6 +241,25 @@ describe("GuestShares", () => {
     );
     expect(delta.messages.map((m: { id: string }) => m.id)).toEqual(["m3"]);
     expect(delta.order).toEqual(["m1", "m2", "m3"]);
+  });
+
+  it("picks a reconnecting page up from the last change it got", async () => {
+    const { link, thread, skip } = await started();
+    const html = await (await fetch(link)).text();
+    const known = /"known":"([^"]+)"/.exec(html)![1];
+    thread.messages.push(message({ id: "m3", seq: 3, body: "Dark mode?" }));
+    const [first] = await deltas(
+      `${link}/events?known=${known}`,
+      (e) => e.length > 0,
+    );
+    thread.messages.pop();
+    skip(2000);
+    const [after] = await deltas(
+      `${link}/events?known=${known}`,
+      (e) => e.length > 0,
+      { "Last-Event-ID": first.id },
+    );
+    expect(after.order).toEqual(["m1", "m2"]);
   });
 
   it("serves the shared file, the picture, the tool output and the page the answer showed", async () => {

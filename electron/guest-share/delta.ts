@@ -25,6 +25,10 @@ export function baselineOf(view: GuestPageView): GuestBaseline {
   };
 }
 
+/** A short name for a baseline, the same for the same page. */
+export const baselineKey = (baseline: GuestBaseline) =>
+  hash({ ...baseline, messages: [...baseline.messages] }).slice(0, 16);
+
 /**
  * What changed on a guest's page since `before`: only the messages that are
  * new or different, so a streaming answer sends its own text and not the
