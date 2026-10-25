@@ -57,7 +57,13 @@ internal fun tabTitleStyle(): TextStyle =
     RelayTheme.type.base.copy(fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.5).sp)
 
 /** What the search in the header looks for, and whether it's open. */
-internal class HomeSearch(val open: Boolean, val query: String, val onOpen: (Boolean) -> Unit, val onQuery: (String) -> Unit)
+internal class HomeSearch(
+    val open: Boolean,
+    val query: String,
+    val onOpen: (Boolean) -> Unit,
+    val onQuery: (String) -> Unit,
+    val placeholder: String = "Search threads and projects",
+)
 
 private const val SEARCH_BOX = "home-search"
 
@@ -129,7 +135,12 @@ private fun TitleRow(
             Text("Settings", Modifier.weight(1f), style = tabTitleStyle(), maxLines = 1)
             return@Row
         }
-        ComputerSwitch(if (tab == HomeTab.Activity) "Threads" else "Projects", remote, seen, Modifier.weight(1f), computerRows)
+        val title = when (tab) {
+            HomeTab.Activity -> "Threads"
+            HomeTab.Pulls -> "Pull requests"
+            else -> "Projects"
+        }
+        ComputerSwitch(title, remote, seen, Modifier.weight(1f), computerRows)
         Row(
             Modifier.padding(top = 2.dp).then(box).height(52.dp).background(c.popover, CircleShape).border(1.dp, c.border, CircleShape)
                 .padding(horizontal = 6.dp),
@@ -155,7 +166,7 @@ private fun SearchBar(search: HomeSearch, box: Modifier) {
     ) {
         IconButton(TablerIcons.Outline.ArrowLeft, "Close search", { search.onOpen(false) }, tint = c.foreground)
         Box(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-            if (search.query.isEmpty()) Text("Search threads and projects", style = text, color = c.faint, maxLines = 1)
+            if (search.query.isEmpty()) Text(search.placeholder, style = text, color = c.faint, maxLines = 1)
             BasicTextField(
                 search.query,
                 search.onQuery,

@@ -42,6 +42,9 @@ sealed interface Route : NavKey {
     @Serializable data class History(val where: String) : Route
     @Serializable data class Tasks(val where: String) : Route
 
+    /** A pull request on its host; `server` null for the Gitea account's, as the desktop takes it. */
+    @Serializable data class Pull(val owner: String, val name: String, val number: Int, val server: String? = null) : Route
+
     /** A browser on the computer's localhost, through the tunnel: `url` an http://localhost link, null for the sites. */
     @Serializable data class Browser(val url: String? = null) : Route
 }

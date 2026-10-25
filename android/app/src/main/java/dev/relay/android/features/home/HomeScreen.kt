@@ -49,7 +49,7 @@ import dev.relay.android.ui.SectionHeader
 import dev.relay.android.ui.listPadding
 import dev.relay.android.ui.ribbon.RibbonRefreshBox
 
-internal enum class HomeTab { Activity, Projects, Settings }
+internal enum class HomeTab { Activity, Projects, Pulls, Settings }
 
 /**
  * Activity and Projects (mobile/src/screens/Browser.tsx + app/index.tsx): the phone's home
@@ -70,6 +70,8 @@ fun HomeScreen(
     computerRows: @Composable (close: () -> Unit) -> Unit = {},
     /** The Settings tab's page, leaving [bottom] free under it; a wide window opens Settings in its pane instead. */
     settings: @Composable (bottom: Dp) -> Unit = {},
+    /** The Pull requests tab's list, narrowed by what search has typed, leaving [bottom] free under it. */
+    pulls: @Composable (query: String, bottom: Dp) -> Unit = { _, _ -> },
 ) {
     val navigator = LocalNavigator.current
     val active by remote.active.collectAsState()
@@ -91,11 +93,17 @@ fun HomeScreen(
                 Column(Modifier.fillMaxSize()) {
                     HomeHeader(
                         shown, remote, computerSeen, overview, filter, home.filter::set,
-                        HomeSearch(searching, query, { searching = it; if (!it) query = "" }, { query = it }),
+                        HomeSearch(
+                            searching, query, { searching = it; if (!it) query = "" }, { query = it },
+                            if (shown == HomeTab.Pulls) "Search pull requests" else "Search threads and projects",
+                        ),
                         computerRows,
                     )
                     if (shown == HomeTab.Settings) settings(DOCK_ROOM)
-                    else {
+                    else if (shown == HomeTab.Pulls) {
+                        if (!searching) ConnectionLine(remote)
+                        Box(Modifier.weight(1f).fillMaxWidth()) { pulls(query, DOCK_ROOM) }
+                    } else {
                         if (!searching) {
                             ConnectionLine(remote)
                             banners()
@@ -236,7 +244,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                             onNewScratch = { open(Route.NewThread(scratch = true)) },
                             bottom = DOCK_ROOM,
                         )
-                        HomeTab.Settings -> {}
+                        HomeTab.Pulls, HomeTab.Settings -> {}
                     }
                 }
             }

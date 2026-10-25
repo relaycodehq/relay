@@ -76,6 +76,8 @@ fun <T> SegmentedTabs(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     fill: Boolean = true,
+    /** The chosen tab wears the computer's Send colour instead of Hexta's faint lift: for a filter that changes the whole list. */
+    primary: Boolean = false,
 ) {
     val c = RelayTheme.colors
     val slots = remember { Slots() }
@@ -94,10 +96,12 @@ fun <T> SegmentedTabs(
     ) {
         Box((if (fill) Modifier.fillMaxWidth() else Modifier.horizontalScroll(rememberScrollState())).fillMaxHeight()) {
         if (w > 0.dp) Box(
-            Modifier.offset(x = x).width(w).fillMaxHeight()
+            Modifier.offset(x = x).width(w).fillMaxHeight().then(
+                if (primary) Modifier.background(c.send, pill)
                 // Tailwind's `bg-input/30` scales the colour's own alpha, it doesn't replace it.
-                .background(if (c.isDark) c.input.copy(alpha = c.input.alpha * 0.3f) else c.background, pill)
-                .ring(if (c.isDark) c.input else c.foreground.copy(alpha = 0.05f), pill),
+                else Modifier.background(if (c.isDark) c.input.copy(alpha = c.input.alpha * 0.3f) else c.background, pill)
+                    .ring(if (c.isDark) c.input else c.foreground.copy(alpha = 0.05f), pill),
+            ),
         )
         Row(
             (if (fill) Modifier.fillMaxWidth() else Modifier).fillMaxHeight(),
@@ -105,7 +109,7 @@ fun <T> SegmentedTabs(
         ) {
             options.forEachIndexed { i, o ->
                 val on = i == index
-                val color by animateColorAsState(if (on) c.foreground else c.mutedForeground, label = "seg-color")
+                val color by animateColorAsState(if (on) (if (primary) c.onSend else c.foreground) else c.mutedForeground, label = "seg-color")
                 Box(
                     Modifier
                         .then(if (fill) Modifier.weight(1f) else Modifier)

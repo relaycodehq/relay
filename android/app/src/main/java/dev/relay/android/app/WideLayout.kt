@@ -22,10 +22,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.home.HomeScreen
+import dev.relay.android.features.pulls.PullsList
+import dev.relay.android.features.pulls.pullSelection
 import dev.relay.android.features.updates.ComputerUpdateRow
 import dev.relay.android.features.updates.UpdateBanners
 import dev.relay.android.lib.navigation.LocalNavigator
@@ -53,6 +56,7 @@ fun HomeSidebar(container: AppContainer) {
     val selected = when (val open = LocalNavigator.current.stack.getOrNull(1)) {
         is Route.Thread -> open.id
         is Route.Project -> open.id
+        is Route.Pull -> pullSelection(open)
         else -> null
     }
     AppHome(container, pane = true, selected = selected)
@@ -61,10 +65,12 @@ fun HomeSidebar(container: AppContainer) {
 /** Home with what other features put on it: the update banners and the computers sheet's update row. */
 @Composable
 fun AppHome(container: AppContainer, pane: Boolean, selected: String?) {
+    val navigator = LocalNavigator.current
     HomeScreen(
         container.remote, container.home, container.computerSeen, pane = pane, selected = selected,
         banners = { UpdateBanners(container.updates, container.remote, Modifier.padding(horizontal = 16.dp)) },
         computerRows = { close -> ComputerUpdateRow(container.updates, container.remote, close) },
+        pulls = { query, bottom -> PullsList(container.remote, query, selected, bottom, if (pane) navigator::openInPane else navigator::push) },
         settings = { bottom ->
             SettingsList(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope, bottom)
         },
@@ -113,7 +119,8 @@ fun WideLayout(
                 )
             }
         }
-        Box(Modifier.weight(1f).fillMaxHeight()) {
+        // Clipped: a screen sliding out to the left would otherwise draw over the sidebar.
+        Box(Modifier.weight(1f).fillMaxHeight().then(if (showSidebar) Modifier.clipToBounds() else Modifier)) {
             val toggle: (@Composable () -> Unit)? = if (!wide) null else {
                 {
                     IconButton(
