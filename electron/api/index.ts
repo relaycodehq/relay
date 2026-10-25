@@ -32,6 +32,7 @@ import { soundHandlers } from "./sounds";
 import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
+import { editorWindowHandlers } from "./editor-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
 import { scheduleHandlers } from "./schedules";
@@ -60,6 +61,7 @@ export function createDispatch(
     chatHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
+    editorWindowHandlers(ctx),
     previewHandlers(ctx),
     deviceHandlers(ctx),
     settingsHandlers(ctx),

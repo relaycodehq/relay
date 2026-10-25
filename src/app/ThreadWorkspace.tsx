@@ -23,6 +23,7 @@ import { FolderGone } from "../features/projects/FolderGone";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { RunningTasks } from "../features/terminal/RunningTasks";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
+import { useEditorWindowShortcut } from "../features/editor-windows/EditorWindowButtons";
 import { Pane } from "../ui/WorkspacePanes";
 import { TerminalToggle, ThreadPaneToggles } from "./ShellTitlebar";
 import { ThreadChanges, ThreadPanel } from "./ThreadPanes";
@@ -196,6 +197,13 @@ export function ThreadWorkspace({
   onLinkProject?: () => void;
 }) {
   const { chat, chats, draftId, panes, pull, navigate } = nav;
+  const editorWindowUsable = !hidden && !folder.gone && !folder.deleted;
+  useEditorWindowShortcut(
+    project.id,
+    folder.where,
+    editorWindowUsable,
+    setError,
+  );
   const review =
     chat?.reviewer &&
     chats.data?.find((c) => c.id === chat.reviewer?.parent);
@@ -330,6 +338,7 @@ export function ThreadWorkspace({
               panel={panel}
               zoomed={panes.layout.zoomed === "panel"}
               onZoom={(on) => panes.zoom(on ? "panel" : undefined)}
+              onError={setError}
               agentRunning={!!chat?.running}
               inWorktree={!!chat?.worktree}
               onOpenThread={openThread}

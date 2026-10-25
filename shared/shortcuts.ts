@@ -272,6 +272,14 @@ const shortcutCommands = {
     keywords: "link",
     defaults: one("mod+KeyK"),
   },
+  "editor-window": {
+    title: "Open the editor in its own window, or put it back",
+    group: "Editor",
+    description:
+      "The editor of the thread in front, with its tabs and unsaved edits. Closing its window puts it back too.",
+    keywords: "pop out window detach monitor files code",
+    defaults: one("mod+alt+KeyE"),
+  },
   "reopen-tab": {
     title: "Reopen the last closed editor tab",
     group: "Editor",

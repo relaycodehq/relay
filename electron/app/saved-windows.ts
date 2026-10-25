@@ -2,6 +2,10 @@ import {
   savedMainWindow,
   savedThreadWindows,
 } from "../../shared/thread-windows";
+import {
+  editorWindowExists,
+  savedEditorWindows,
+} from "../../shared/editor-windows";
 import type { AppWindow } from "./window";
 import type { Store } from "./store";
 
@@ -19,7 +23,7 @@ export function keepMainWindowPlace(window: AppWindow, store: Store) {
   });
 }
 
-/** Opens the thread windows the last run left open. */
+/** Opens the thread and editor windows the last run left open. */
 export function restorePoppedWindows(window: AppWindow, store: Store) {
   window.threads.restore({
     load: () => savedThreadWindows(store.get().threadWindows),
@@ -30,5 +34,20 @@ export function restorePoppedWindows(window: AppWindow, store: Store) {
         })
         .catch((e) => console.warn("Could not save thread windows:", e)),
     exists: ({ chatId }) => !!store.get().chats?.some((c) => c.id === chatId),
+  });
+  window.editors.restore({
+    load: () => savedEditorWindows(store.get().editorWindows),
+    save: (windows) =>
+      void store
+        .update((s) => {
+          s.editorWindows = windows;
+        })
+        .catch((e) => console.warn("Could not save editor windows:", e)),
+    exists: (editor) =>
+      editorWindowExists(
+        editor,
+        store.get().projects ?? [],
+        store.get().chats ?? [],
+      ),
   });
 }

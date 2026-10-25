@@ -38,6 +38,8 @@ interface State {
   sidebarView?: import("../../shared/types").SidebarView;
   /** Threads open in windows of their own, and where; they reopen after a restart. */
   threadWindows?: import("../../shared/thread-windows").SavedThreadWindow[];
+  /** Editors open in windows of their own, and where; they reopen after a restart. */
+  editorWindows?: import("../../shared/editor-windows").SavedEditorWindow[];
   /** The main window's size and state when it last changed. */
   mainWindow?: import("../../shared/thread-windows").SavedMainWindow;
   /** Frosted glass, on unless the page last said off; windows then start clear. */

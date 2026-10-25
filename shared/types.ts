@@ -13,6 +13,7 @@ import type { PreviewApi } from "./preview";
 import type { DevicesApi } from "./devices";
 import type { ProjectSearchApi } from "./project-search";
 import type { ThreadWindowsApi } from "./thread-windows";
+import type { EditorWindowsApi } from "./editor-windows";
 import type { WorkingTreeApi } from "./working-tree";
 import type { LanguageServersApi } from "./language-servers";
 import type { LocalHistoryApi } from "./local-history";
@@ -284,6 +285,7 @@ export interface Api
     WorkingTreeApi,
     LocalHistoryApi,
     ThreadWindowsApi,
+    EditorWindowsApi,
     LanguageServersApi,
     ProjectApi,
     DevOpsApi,

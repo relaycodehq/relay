@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ErrorBoundary } from "./ui/ui";
 import ProjectShell from "./app/ProjectShell";
 import ThreadWindowShell from "./app/ThreadWindowShell";
+import EditorWindowShell from "./app/EditorWindowShell";
 import {
   drawsWindowControls,
   followFullScreen,
@@ -23,7 +24,9 @@ import { followSounds } from "./features/sounds/follow-sounds";
 import { playPushedSounds } from "./features/sounds/pushed-sounds";
 import { startRegistryAgents } from "./features/agents/registry-agents";
 import { followThreadWindows } from "./features/thread-windows/thread-windows";
+import { followEditorWindows } from "./features/editor-windows/editor-windows";
 import { threadWindowOf } from "../shared/thread-windows";
+import { editorWindowOf } from "../shared/editor-windows";
 import { startDraftSync } from "./features/composer/draft-sync";
 import { followHeldSends } from "./features/composer/held-sends";
 import { DragTray } from "./features/bug-report/DragTray";
@@ -51,6 +54,9 @@ function startDragTray() {
 function startApp() {
   // A thread popped out of the main window, in a window of its own.
   const thread = threadWindowOf(location.search);
+  // A workspace's editor popped out likewise.
+  const editor = editorWindowOf(location.search);
+  const inMainWindow = !thread && !editor;
   initAppearance();
   initTypography();
   initChatWidth();
@@ -75,15 +81,22 @@ function startApp() {
     followChatEvents(client);
     followMainSettings(client);
     followThreadWindows();
+    followEditorWindows();
     // The main window plays every thread's sounds, its own windows' too.
-    if (!thread) followSounds(client);
+    if (inMainWindow) followSounds(client);
     // Each window shares what's typed in it; the main one takes what came from elsewhere.
-    startDraftSync({ takes: !thread });
-    if (!thread) followHeldSends();
+    // An editor window has no composer to draft in.
+    if (!editor) startDraftSync({ takes: !thread });
+    if (inMainWindow) followHeldSends();
     // Agents start deep reviews with the setups the sheet keeps.
-    if (!thread) shareReviewSetups();
+    if (inMainWindow) shareReviewSetups();
     // Threads on a registry agent need its name before anything lists them.
     startRegistryAgents();
+  }
+  function windowShell() {
+    if (editor) return <EditorWindowShell editor={editor} />;
+    if (thread) return <ThreadWindowShell thread={thread} />;
+    return <ProjectShell />;
   }
   createRoot(document.getElementById("root")!).render(
     <StrictMode>
@@ -93,11 +106,7 @@ function startApp() {
         <>
           <ErrorBoundary>
             <QueryClientProvider client={client}>
-              {thread ? (
-                <ThreadWindowShell thread={thread} />
-              ) : (
-                <ProjectShell />
-              )}
+              {windowShell()}
             </QueryClientProvider>
           </ErrorBoundary>
           {drawsWindowControls && <WindowControls />}

@@ -42,6 +42,8 @@ type ProjectFilesProps = {
   onOpenThread?: (chatId: string) => void;
   /** The thread works in a worktree Relay made, which the sidebar compares with its source branch. */
   inWorktree?: boolean;
+  /** Offers to open the editor in a window of its own, at the end of the tabs. */
+  onPopOut?: () => void;
 };
 
 /**
@@ -56,6 +58,7 @@ export function ProjectFiles({
   checks,
   onViewing,
   opens,
+  onPopOut,
   ...thread
 }: ProjectFilesProps) {
   // Refreshed by the shell's working-tree poll.
@@ -118,6 +121,7 @@ export function ProjectFiles({
         browsing={browsing}
         search={search}
         onAsk={thread.onAsk}
+        onPopOut={onPopOut}
       />
     </div>
   );

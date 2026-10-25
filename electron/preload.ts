@@ -52,6 +52,8 @@ contextBridge.exposeInMainWorld("relay", {
   onOpenUrl: subscribe<string>("relay:open-url"),
   onOpenProject: subscribe<string>("relay:open-project"),
   onThreadWindows: on("relay:thread-windows"),
+  onEditorWindows: on("relay:editor-windows"),
+  onEditorReturn: on("relay:editor-return"),
   onOpenThread: on("relay:open-thread"),
   onThreadMoved: on("relay:thread-moved"),
   onFlashWindow: on("relay:flash-window"),

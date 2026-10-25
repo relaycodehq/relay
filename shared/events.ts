@@ -2,6 +2,7 @@ import type { DeviceHubState } from "./devices";
 import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
+import type { EditorWindowsState } from "./editor-windows";
 import type { PlaySoundEvent } from "./sounds";
 import type {
   MainWindowCommand,
@@ -36,6 +37,9 @@ export interface RelayEvents {
   "relay:preview-reveal": PreviewReveal;
   "relay:play-sound": PlaySoundEvent;
   "relay:thread-windows": ThreadWindowsState;
+  "relay:editor-windows": EditorWindowsState;
+  /** Put this workspace's editor back: its window hands over its unsaved edits and closes. */
+  "relay:editor-return": string;
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
   /** This thread moved to another project; a window showing it follows. */

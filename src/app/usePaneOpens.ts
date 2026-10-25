@@ -17,6 +17,10 @@ import {
 import { changeOpeners } from "./change-openers";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { requestChannel } from "../lib/request-channel";
+import {
+  isEditorElsewhere,
+  openInEditorWindow,
+} from "../features/editor-windows/editor-windows";
 import type { ShellNavigation } from "./useShellNavigation";
 import type { ThreadFolder } from "./useThreadFolder";
 import {
@@ -95,6 +99,7 @@ export function usePaneOpens(
   /** Files, with the folder's changes in its sidebar for "changes"; a PR thread's changes are its Review. */
   function openCode(next: "changes" | "files") {
     if (next === "changes" && pull) return panes.show("changes");
+    if (editorElsewhere()) return raiseEditor();
     openSurface("files");
     if (next === "changes" && !project?.plain) fileOpens.send({ view: "changes" });
   }
@@ -112,12 +117,26 @@ export function usePaneOpens(
     return () =>
       mounted.current && currentLocation.current === location && request.current === sequence;
   }
+  /** The editor is in a window of its own, which comes forward in place of the Files pane. */
+  const editorElsewhere = () => isEditorElsewhere(folder.where);
+  function raiseEditor() {
+    if (project)
+      void api.openEditorWindow(project.id, folder.where).catch(onError);
+  }
   /**
    * Shows `target` in Files, or in the editor's own window, which takes a
    * version as the file on disk; false when an unsaved edit holds the view.
    */
   function openInEditor(target: FilesRequest) {
     request.current++;
+    if (editorElsewhere()) {
+      if ("view" in target) raiseEditor();
+      else {
+        const file = "snapshot" in target ? { path: target.path, directory: false } : target;
+        void openInEditorWindow(folder.where, file).catch(onError);
+      }
+      return true;
+    }
     if (lock.blocked()) return false;
     fileOpens.send(target);
     openSurface("files");

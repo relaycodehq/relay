@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ChevronsLeftRight,
   ChevronsRightLeft,
@@ -13,6 +13,7 @@ import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
 import type { ThreadFolder } from "./useThreadFolder";
 import {
+  NO_VIEWING,
   type ThreadView,
   type Viewing,
 } from "../features/thread/useThreadView";
@@ -20,6 +21,11 @@ import { PullReviewPane } from "../features/review/PullReviewPane";
 import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectFiles } from "../features/files/ProjectFiles";
+import { EditorElsewhere } from "../features/editor-windows/EditorElsewhere";
+import {
+  popOutEditor,
+  useEditorElsewhere,
+} from "../features/editor-windows/editor-windows";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
 import { WORKTREE_DELETED } from "./thread-folder";
 import { NO_SLOTS, PaneHeader, type PaneSlots } from "../ui/WorkspacePanes";
@@ -140,6 +146,7 @@ export function ThreadPanel({
   panel,
   zoomed,
   onZoom,
+  onError,
   agentRunning,
   inWorktree,
   onOpenThread,
@@ -153,12 +160,14 @@ export function ThreadPanel({
   /** The panel fills the workspace, the other panes and the sidebar stepped aside. */
   zoomed: boolean;
   onZoom: (zoomed: boolean) => void;
+  onError: (error: unknown) => void;
   agentRunning?: boolean;
   /** The thread works in a worktree Relay made, which Files compares with its source branch. */
   inWorktree?: boolean;
   onOpenThread?: (chatId: string) => void;
 }) {
   const { locked } = useNavigationLock();
+  const editorElsewhere = useEditorElsewhere(where);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const historyTitle = useCallback(
       (title: HTMLElement | null) => setHistorySlots((s) => ({ ...s, title })),
@@ -179,6 +188,10 @@ export function ThreadPanel({
     },
     [setViewing],
   );
+  // Its file is open in the other window now, not in this one.
+  useEffect(() => {
+    if (editorElsewhere) filesViewing(NO_VIEWING);
+  }, [editorElsewhere, filesViewing]);
   const front = panel.front;
   const preview = usePreviewState(previewKey(project.id, chatId));
   let terminals = 0;
@@ -228,6 +241,15 @@ export function ThreadPanel({
       return (
         <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
       );
+    if (editorElsewhere)
+      return (
+        <EditorElsewhere
+          project={project}
+          where={where}
+          detail={detail?.text}
+          onError={onError}
+        />
+      );
     return (
       <ProjectFiles
         key={where}
@@ -243,6 +265,7 @@ export function ThreadPanel({
         agentRunning={agentRunning}
         inWorktree={inWorktree}
         onOpenThread={onOpenThread}
+        onPopOut={() => void popOutEditor(project.id, where).catch(onError)}
       />
     );
   }

@@ -6,7 +6,7 @@ import type { OpenTarget } from "../editor/FileEditor";
 import type { FileTarget } from "./file-link-target";
 import { EditorGroups } from "./EditorGroups";
 import { FindDock } from "./EditorSearch";
-import { FileListToggle } from "./EditorTabButtons";
+import { FileListToggle, PopOutButton } from "./EditorTabButtons";
 import { NoFileOpen } from "./NoFileOpen";
 import { editorJump, searchJump } from "./open-targets";
 import type { useDeletedFiles } from "./useDeletedFiles";
@@ -26,6 +26,7 @@ export function EditorPane({
   browsing,
   search,
   onAsk,
+  onPopOut,
 }: {
   workspace: EditorWorkspace;
   where: string;
@@ -38,6 +39,7 @@ export function EditorPane({
   browsing: FileBrowsing;
   search: ReturnType<typeof useEditorSearch>;
   onAsk?: (ref: CodeReference) => void;
+  onPopOut?: () => void;
 }) {
   const { open } = workspace;
   const editorReady = !!tree || source.plain;
@@ -71,6 +73,7 @@ export function EditorPane({
             onToggle={browsing.toggleList}
           />
         }
+        trail={onPopOut && <PopOutButton onClick={onPopOut} />}
         deleted={deleted}
         changeOf={(path) => tree?.changes.find((c) => c.path === path)}
         editor={editor}
