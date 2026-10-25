@@ -559,9 +559,9 @@ internal fun ComposerCore(
                     inputTransformation = { error = null },
                 )
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 // Short of room, the model's label is cut short.
-                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Tool("Attach a photo", onClick = { sheet = Sheet.Attach }) {
                     Icon(TablerIcons.Outline.PhotoPlus, null, size = 17.dp, tint = c.mutedForeground)
                 }
@@ -586,7 +586,7 @@ internal fun ComposerCore(
                     edit("/")
                     runCatching { focus.requestFocus() }
                 }) {
-                    Text("/", Modifier.widthIn(min = 18.dp), style = RelayTheme.type.mono, color = c.mutedForeground)
+                    Text("/", style = RelayTheme.type.mono, color = c.mutedForeground)
                 }
                 // The two sends stay side by side, as on the desktop.
                 if (canDictate(remote)) DictationButton(remote, dictationOwner, target = { input }, enabled = !disabled && !busy)

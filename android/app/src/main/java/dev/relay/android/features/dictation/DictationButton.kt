@@ -125,6 +125,7 @@ fun DictationButton(
             .width(width)
             .height(34.dp)
             .clip(RoundedCornerShape(17.dp))
+            .background(c.tool)
             .alpha(if (!enabled && !mine) 0.4f else 1f)
             .semantics {
                 role = Role.Button

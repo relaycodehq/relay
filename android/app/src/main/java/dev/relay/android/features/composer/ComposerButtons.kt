@@ -36,14 +36,15 @@ import io.github.lyxnx.compose.ui.tablericons.outline.PlaylistAdd
 @Composable
 internal fun Tool(label: String, modifier: Modifier = Modifier, enabled: Boolean = true, onClick: () -> Unit, content: @Composable () -> Unit) {
     Row(
-        modifier.widthIn(max = 140.dp)
+        modifier.widthIn(min = 32.dp, max = 140.dp)
             .heightIn(min = 32.dp)
             .alpha(if (enabled) 1f else 0.4f)
             .pressable(onClick = onClick, enabled = enabled, role = Role.Button)
+            .background(RelayTheme.colors.tool, CircleShape)
             .semantics { contentDescription = label }
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
     ) { content() }
 }
 
@@ -85,13 +86,13 @@ internal fun SendButtons(
                 onLongClick = if (empty) null else onLater,
             )
             .size(SEND_SIZE).alpha(if (enabled) 1f else 0.5f)
-            .background(if (newThread != null) c.primary else if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
+            .background(if (newThread != null) c.send else if (stop) STOP_RED else if (!empty) c.send else c.muted, SEND_SHAPE)
             .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         val tint = if (stop) Color.White else if (!empty) c.onSend else c.faint
         when {
-            newThread != null -> Icon(TablerIcons.Outline.Edit, null, size = 16.dp, tint = c.onPrimary)
+            newThread != null -> Icon(TablerIcons.Outline.Edit, null, size = 16.dp, tint = c.onSend)
             stop -> Icon(TablerIcons.Filled.PlayerStop, null, size = 14.dp, tint = tint)
             running -> Icon(TablerIcons.Outline.PlaylistAdd, null, size = 16.dp, tint = tint)
             else -> Icon(TablerIcons.Outline.ArrowUp, null, size = 18.dp, tint = tint)

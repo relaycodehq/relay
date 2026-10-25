@@ -1,5 +1,6 @@
 package dev.relay.android.features.newthread
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -73,12 +75,13 @@ val LocalProjectBadge = staticCompositionLocalOf<@Composable (RemoteProject, Dp)
 fun WhereLine(project: RemoteProject?, picked: Where?, workspace: String, onOpen: (WhereSheet) -> Unit) {
     val c = RelayTheme.colors
     val name = if (picked == SCRATCH) "Scratchpad" else project?.name ?: "Projects…"
-    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(
             Modifier.weight(1f, fill = false).heightIn(min = 34.dp)
                 .pressable(onClick = { onOpen(WhereSheet.Project) }, role = Role.Button)
+                .background(c.tool, CircleShape)
                 .semantics { contentDescription = "Project: $name" }
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -95,8 +98,9 @@ fun WhereLine(project: RemoteProject?, picked: Where?, workspace: String, onOpen
             Row(
                 Modifier.heightIn(min = 34.dp)
                     .pressable(onClick = { onOpen(WhereSheet.Workspace) }, role = Role.Button)
+                    .background(c.tool, CircleShape)
                     .semantics { contentDescription = "Works in: ${workspaceLabel(workspace)}" }
-                    .padding(horizontal = 8.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {

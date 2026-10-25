@@ -51,6 +51,8 @@ data class RelayColors(
 ) {
     /** Hexta's hover: foreground mixed in at ~5%. */
     val hover: Color get() = foreground.copy(alpha = 0.05f).compositeOver(background)
+    /** Behind a toolbar control: a shade off whatever it sits on, lighter in dark, darker in light. */
+    val tool: Color get() = foreground.copy(alpha = 0.07f)
 }
 
 private val waitingColor = Color(0xFFD99A2B)

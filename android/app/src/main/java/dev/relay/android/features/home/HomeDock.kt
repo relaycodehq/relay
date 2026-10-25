@@ -107,9 +107,9 @@ private fun Dock(tab: HomeTab, labels: Boolean, onTab: (HomeTab) -> Unit, onNew:
         Box(
             Modifier.sharedButton(NEW_THREAD_MORPH)
                 .size(DOCK_HEIGHT).shadow(10.dp, CircleShape).clip(CircleShape)
-                .background(c.primary).pressable(onClick = onNew),
+                .background(c.send).pressable(onClick = onNew),
             contentAlignment = Alignment.Center,
-        ) { Icon(TablerIcons.Outline.Edit, "New thread", tint = c.onPrimary, size = 24.dp) }
+        ) { Icon(TablerIcons.Outline.Edit, "New thread", tint = c.onSend, size = 24.dp) }
     }
 }
 
