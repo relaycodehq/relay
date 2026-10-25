@@ -77,7 +77,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** shared/remote.ts's tailscaleAndroid. */
+/** shared/remote-pairing.ts's tailscaleAndroid. */
 private const val TAILSCALE_PLAY = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"
 private const val NOT_A_CODE = "That isn't a Relay pairing code."
 private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the pairing link instead."

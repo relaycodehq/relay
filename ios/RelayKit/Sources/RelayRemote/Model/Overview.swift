@@ -1,6 +1,6 @@
 import Foundation
 
-// shared/remote.ts's overview and thread list. Enum-like fields stay strings
+// shared/remote-models.ts's overview and thread list. Enum-like fields stay strings
 // so a newer desktop's values still decode.
 
 public struct RemoteOverview: Codable, Sendable, Equatable {

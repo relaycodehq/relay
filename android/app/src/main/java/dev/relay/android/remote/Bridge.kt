@@ -1,6 +1,6 @@
 package dev.relay.android.remote
 
-/** `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes. */
+/** `shared/remote-bridges.ts` bridge versions: what a desktop speaking at least that many takes. */
 object Bridge {
     /** This app's own bridge, sent with `pair`/`auth`. */
     const val VERSION = 33

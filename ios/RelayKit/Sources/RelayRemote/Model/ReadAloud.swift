@@ -1,6 +1,6 @@
 import Foundation
 
-// shared/remote.ts PhoneReadAloud: the desktop makes the audio and keeps it
+// shared/remote-models.ts PhoneReadAloud: the desktop makes the audio and keeps it
 // until the phone pulls it, a few seconds at a time. From `Bridge.readAloud`.
 
 public enum ReadAloudRequest: Sendable, Equatable {

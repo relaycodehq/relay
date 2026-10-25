@@ -1,6 +1,6 @@
 import Foundation
 
-// What a turn changed (shared/remote.ts RemoteDiff), rolling it back or
+// What a turn changed (shared/remote-models.ts RemoteDiff), rolling it back or
 // forward, and forking a thread from an answer.
 
 public struct RemoteDiffLine: Codable, Sendable, Equatable {

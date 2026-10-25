@@ -1,4 +1,4 @@
-/// `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes.
+/// `shared/remote-bridges.ts` bridge versions: what a desktop speaking at least that many takes.
 public enum Bridge {
     /// This app's own bridge, sent with `pair`/`auth`.
     public static let version = 33
