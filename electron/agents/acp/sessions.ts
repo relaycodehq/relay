@@ -168,6 +168,8 @@ async function initialize(agent: AcpAgent) {
       clientCapabilities: {
         fs: { readTextFile: false, writeTextFile: false },
         terminal: false,
+        // Without it OpenCode cancels its question tool before anyone sees it.
+        elicitation: { form: {} },
       },
       // Antigravity 1.4.1 hardcodes third-party model support by client name.
       // Its "zed" identity exposes the account's Claude/GPT models; "relay"

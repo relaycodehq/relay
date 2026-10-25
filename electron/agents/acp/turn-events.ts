@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import type { AskedQuestion } from "../../../shared/asked-questions";
 import type { AgentOptions } from "../types";
 import { answerLimitError, TurnText } from "../turn-kit";
 import { AntigravityBatches, antigravityBatches } from "../antigravity";
@@ -15,6 +17,8 @@ export class AcpTurnEvents {
     Partial<AcpToolCall> & { toolCallId: string }
   >();
   readonly batches: AntigravityBatches | undefined;
+  /** Calls that asked the user through a form, with the answers once they're in. */
+  private asked = new Map<string, AskedQuestion[] | undefined>();
 
   constructor(
     private profile: AcpProfile,
@@ -34,6 +38,49 @@ export class AcpTurnEvents {
       profile.provider === "antigravity" && key
         ? new AntigravityBatches(antigravityBatches.open(key))
         : undefined;
+  }
+
+  /**
+   * Shows the call asking the user as a question, or a row of its own when
+   * the agent named none. The returned function records their answers, or
+   * that they gave none.
+   */
+  asking = (toolCallId?: string) => {
+    const known = toolCallId ? this.calls.get(toolCallId) : undefined;
+    if (!known) {
+      const row = {
+        id: `question:${randomUUID()}`,
+        kind: "tool",
+        label: "request_user_input",
+      } as const;
+      this.options.onActivity?.({ ...row, status: "running" });
+      return (answers?: AskedQuestion[]) =>
+        this.options.onActivity?.({
+          ...row,
+          ...(answers
+            ? { status: "complete", questionAnswers: answers }
+            : { status: "stopped" }),
+        });
+    }
+    const id = known.toolCallId;
+    this.asked.set(id, undefined);
+    this.show(known);
+    return (answers?: AskedQuestion[]) => {
+      this.asked.set(id, answers);
+      this.show(this.calls.get(id) ?? known);
+    };
+  };
+
+  private show(call: Partial<AcpToolCall> & { toolCallId: string }) {
+    const activity = acpActivity(call);
+    if (!this.asked.has(call.toolCallId))
+      return this.options.onActivity?.(activity);
+    const answers = this.asked.get(call.toolCallId);
+    this.options.onActivity?.({
+      ...activity,
+      label: "request_user_input",
+      ...(answers ? { questionAnswers: answers } : {}),
+    });
   }
 
   hear = (raw: unknown) => {
@@ -79,7 +126,7 @@ export class AcpTurnEvents {
         this.calls.set(update.toolCallId, call);
         this.batches?.update(call);
         if (!known) this.turn.toCommentary();
-        this.options.onActivity?.(acpActivity(call));
+        this.show(call);
         const edits = acpEdits(call);
         if (edits.length) this.options.onEdit?.(edits);
         return;

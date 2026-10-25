@@ -280,5 +280,46 @@ export const picked = (optionId: string) => ({
 
 export const cancelledPermission = { outcome: { outcome: "cancelled" } };
 
+const choiceSchema = z
+  .object({ const: z.string(), title: text, description: text })
+  .loose();
+
+/** How a form field lists its choices: titled `oneOf`/`anyOf`, or a bare `enum`. */
+const choicesSchema = {
+  oneOf: lenient(z.array(choiceSchema)),
+  anyOf: lenient(z.array(choiceSchema)),
+  enum: lenient(z.array(z.string())),
+};
+
+const formFieldSchema = z
+  .object({
+    type: text,
+    title: text,
+    description: text,
+    ...choicesSchema,
+    items: lenient(z.object(choicesSchema).loose()),
+  })
+  .loose();
+
+export type AcpFormField = z.infer<typeof formFieldSchema>;
+
+/** `elicitation/create`: the agent asks the user to fill a form (or open a link, which Relay doesn't). */
+export const elicitationRequestSchema = z
+  .object({
+    sessionId: text,
+    mode: z.string(),
+    message: text,
+    toolCallId: text,
+    requestedSchema: lenient(
+      z.object({ properties: z.record(z.string(), formFieldSchema) }).loose(),
+    ),
+  })
+  .loose();
+
+export type AcpElicitation = z.infer<typeof elicitationRequestSchema>;
+
+/** The answer to `elicitation/create` when the user didn't fill the form. */
+export const cancelledElicitation = { action: "cancel" };
+
 /** JSON-RPC's code for a request that needs the user signed in first. */
 export const AUTH_REQUIRED = -32000;

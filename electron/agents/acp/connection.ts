@@ -1,6 +1,7 @@
 import { JsonRpcConnection, type RpcId } from "../json-rpc";
 import { isRecord } from "../../../shared/records";
 import { errorMessage } from "../../../shared/error-message";
+import { cancelledElicitation, cancelledPermission } from "./protocol";
 
 /** A request the agent answered with a JSON-RPC error. */
 export class AcpRequestError extends Error {
@@ -51,12 +52,11 @@ export class AcpConnection extends JsonRpcConnection {
   protected override async answer(id: RpcId, method: string, params: unknown) {
     let reply: object;
     try {
-      // Between turns nobody can answer; a permission asked then is declined.
+      // Between turns nobody can answer; a permission or form asked then is cancelled.
       if (!this.onRequest && method === "session/request_permission")
-        return void this.write({
-          id,
-          result: { outcome: { outcome: "cancelled" } },
-        });
+        return void this.write({ id, result: cancelledPermission });
+      if (!this.onRequest && method === "elicitation/create")
+        return void this.write({ id, result: cancelledElicitation });
       if (!this.onRequest)
         throw new AcpRequestError(
           -32601,

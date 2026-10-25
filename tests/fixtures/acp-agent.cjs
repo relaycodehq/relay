@@ -10,6 +10,7 @@
 //   turn: steps for each session/prompt, in order:
 //     { update }            a session/update
 //     { ask: { toolCall, options } }  a request_permission, waited on
+//     { elicit: { mode, message, toolCallId, requestedSchema } }  an elicitation/create, waited on
 //     { waitCancel: true }  waits for session/cancel and stops as cancelled
 //   stopReason, usage: how session/prompt ends ("end_turn" by default)
 //   spend: dollars each turn adds; the turn ends with one usage_update
@@ -97,6 +98,8 @@ async function prompt(m) {
       });
     if (step.ask)
       await ask("session/request_permission", { sessionId, ...step.ask });
+    if (step.elicit)
+      await ask("elicitation/create", { sessionId, ...step.elicit });
     if (step.waitCancel) {
       await new Promise((resolve) => (cancelled = resolve));
       return send({ id: m.id, result: { stopReason: "cancelled" } });

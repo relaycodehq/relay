@@ -6,6 +6,7 @@ import { CANCEL_GRACE_MS, cancelledByYou, TurnText } from "../turn-kit";
 import type { AgentOptions } from "../types";
 import { editKinds, lookKinds } from "./activity";
 import { AcpRequestError } from "./connection";
+import { answerElicitation } from "./elicitation";
 import type { AcpProfile } from "./profiles";
 import {
   cancelledPermission,
@@ -314,6 +315,14 @@ async function runAcpTurn(
         params,
         turnAbort.signal,
         profile.provider === "antigravity",
+      );
+    if (method === "elicitation/create")
+      return answerElicitation(
+        options,
+        name,
+        params,
+        turnAbort.signal,
+        events.asking,
       );
     throw new AcpRequestError(
       -32601,
