@@ -238,6 +238,8 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
     await expect(
       page.locator(".composer-branch-trigger.workspace-trigger.static"),
     ).toHaveText("newer");
+    // The sidebar went back to the files to open one; Changes shows them again.
+    await page.getByRole("button", { name: /^Changes\b/ }).click();
     await expect(changes).toContainText("newer.txt");
     await expect(page.locator(".project-history")).not.toContainText(
       "Worktree change",

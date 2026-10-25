@@ -45,7 +45,9 @@ import { ErrorToast, ReviewPanes } from "../features/review/ReviewPanes";
 import { PullRequestsPage } from "../features/pulls/PullRequestsPage";
 import { OpenPullUrl } from "../features/pulls/OpenPullUrl";
 
-const LocalFileEditor = lazy(() => import("../features/files/editor/LocalFileEditor"));
+const PullFileEditor = lazy(() =>
+  import("../features/editor/TextFile").then((m) => ({ default: m.PullFileEditor })),
+);
 
 /**
  * The Pull requests page: its board while no PR is open, else the PR's
@@ -232,7 +234,7 @@ export function PullsSurface({
             </Modal>
           }
         >
-          <LocalFileEditor
+          <PullFileEditor
             checks={review.checks}
             {...editing}
             onClose={() => {

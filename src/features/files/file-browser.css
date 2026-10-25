@@ -43,7 +43,9 @@
 .file-tree-row.selected {
   background: var(--selected);
 }
-.file-tree-row button {
+/* The row shows hover and selection; a button painting its own hover would cover half of it. */
+.file-tree-row button,
+.file-tree-row button:hover {
   border: 0;
   background: transparent;
   border-radius: 0;
@@ -188,18 +190,6 @@
   flex: 1;
   min-height: 0;
 }
-.project-inline-editor .local-editor-path {
-  padding: 10px 14px;
-}
-.project-inline-editor .local-editor-footer {
-  padding: 8px;
-}
-.project-inline-editor .editor-shortcuts {
-  display: none;
-}
-.project-inline-editor .local-editor-note {
-  display: none;
-}
 .project-editor-empty {
   flex: 1;
 }
@@ -274,4 +264,189 @@
 .markdown-preview-missing {
   color: var(--muted);
   font-style: italic;
+}
+
+/* Open files across the top of the editor. */
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+  background: var(--toolbar);
+  flex-shrink: 0;
+}
+.editor-tabs > .file-list-toggle {
+  align-self: center;
+  margin: 0 2px 0 4px;
+}
+.editor-tabs > .editor-window-button {
+  align-self: center;
+  margin: 0 4px 0 2px;
+}
+.editor-tabs-strip {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.editor-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 5px 0 12px;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+}
+.editor-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.editor-tab.active {
+  background: var(--code-background);
+  color: var(--text);
+}
+/* The front tab joins the code below it with no border between. */
+.editor-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--code-background);
+}
+.editor-tab.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.editor-tab.dragging {
+  opacity: 0.5;
+}
+.editor-tab-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+.editor-tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  visibility: hidden;
+}
+.editor-tab-close:hover {
+  background: var(--selected);
+  color: var(--text);
+}
+.editor-tab:hover .editor-tab-close,
+.editor-tab.active .editor-tab-close,
+.editor-tab.unsaved .editor-tab-close,
+.editor-tab-close.pinned {
+  visibility: visible;
+}
+/* An unsaved tab shows a dot in place of its × until the pointer is over it. */
+.editor-tab.unsaved:not(:hover) .editor-tab-close svg {
+  display: none;
+}
+.editor-tab.unsaved:not(:hover) .editor-tab-close::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Find in Files, docked under the editor. */
+.files-find {
+  display: flex;
+  flex-direction: column;
+  height: 42%;
+  min-height: 180px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* The editor's splits, side by side or stacked. */
+.editor-groups {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-groups.column {
+  flex-direction: column;
+}
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-groups.row > .editor-group + .editor-group {
+  border-left: 1px solid var(--border);
+}
+.editor-groups.column > .editor-group + .editor-group {
+  border-top: 1px solid var(--border);
+}
+/* Only the focused split draws the accent line on its front tab. */
+.editor-groups:has(> .editor-group.focused) > .editor-group:not(.focused) .editor-tab.active::before {
+  background: var(--border);
+}
+.editor-tabs > .editor-split-button {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 2px;
+}
+
+/* Files or Changes, the sidebar's two views. */
+.sidebar-views {
+  display: flex;
+  gap: 2px;
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-views > button {
+  min-height: 0;
+  margin-bottom: -1px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sidebar-views > button:hover {
+  color: var(--text);
+}
+.sidebar-views > button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.sidebar-views-count {
+  margin-left: 5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.project-file-list > .local-changes {
+  background: transparent;
 }

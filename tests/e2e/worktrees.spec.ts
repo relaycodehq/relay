@@ -136,16 +136,22 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     await screenshot(page, { path: "test-results/worktree-header.png" });
     await panelToggle(page).click();
 
-    // What the branch has that main doesn't opens like a turn's diff.
+    // What the branch has that main doesn't lists beside the editor, and a
+    // file opens with its changes since main.
     const menu = page.getByRole("button", { name: /^Worktree/ });
     await expect(menu.getByLabel("2 files not in main")).toBeVisible();
     await menu.click();
     await screenshot(page, { path: "test-results/worktree-menu.png" });
     await page.getByRole("menuitem", { name: "Changes against main" }).click();
-    const changes = page.getByRole("region", { name: "Turn changes" });
-    await expect(changes).toContainText("Changed in this worktree");
-    await expect(changes).toContainText("Branched from → Worktree");
+    const changes = page.getByRole("region", { name: "Changes against main" });
+    await expect(changes).toContainText("guard.ts");
+    await expect(changes).toContainText("README.md");
     await expect(changes).not.toContainText("notes.txt");
+    const editor = page.locator(".project-inline-editor");
+    await expect(editor.locator(".editor-bar-baseline")).toHaveText("Changes since main");
+    await changes.getByRole("button", { name: /guard\.ts/ }).click();
+    await expect(editor.locator(".editor-bar")).toContainText("guard.ts");
+    await expect(editor.locator(".cm-changedLine")).toContainText("export const guard = true;");
 
     // A process running in the worktree says so in Running.
     // Started from a subshell that exits at once, so it runs on its own like `nohup … &`.

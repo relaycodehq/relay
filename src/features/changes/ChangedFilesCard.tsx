@@ -1,5 +1,5 @@
 // What one agent turn changed, as a folder tree with line counts. Rows open
-// that turn's diff in the Changes pane; hovering one offers to roll it back.
+// the file in the editor with that turn's changes; hovering one offers to roll it back.
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { memo, useMemo, useState, type CSSProperties } from "react";
 import {

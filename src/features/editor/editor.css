@@ -1,0 +1,8 @@
+/* The editor fills what it's given and scrolls inside itself. */
+.code-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}

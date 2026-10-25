@@ -14,7 +14,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("shows what an agent turn changed and opens that turn's diff", async () => {
+test("shows what an agent turn changed and opens its files with the turn's changes", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-turn-changes-")),
   );
@@ -79,17 +79,21 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
     await expect(card.getByRole("button", { name: /guard\.ts/ })).toBeVisible();
     await screenshot(card, { path: "test-results/turn-changes-card.png" });
 
+    // A file opens in the editor, its changes since before the turn in place.
     await card.getByRole("button", { name: /guard\.ts/ }).click();
-    const turn = page.getByRole("region", { name: "Turn changes" });
-    await expect(turn).toContainText("Changed in this turn");
-    await expect(turn).toContainText("Before turn → After turn");
-    await expect(turn.locator(".working-review strong")).toHaveText(
-      "src/guard.ts",
-    );
-    await expect(turn.getByText("export const guard = true;")).toBeVisible();
-    await turn.getByRole("button", { name: /README\.md/ }).click();
-    await expect(turn.getByText("Edited by the agent.")).toBeVisible();
-    await screenshot(page, { path: "test-results/turn-changes-pane.png" });
+    const editor = page.locator(".project-inline-editor");
+    await expect(editor.locator(".editor-bar")).toContainText("guard.ts");
+    await expect(editor.locator(".editor-bar-baseline")).toHaveText("Changes since before turn");
+    await expect(editor).toContainText("export const guard = true;");
+    await expect(editor.locator(".cm-changedLine").first()).toBeVisible();
+    await card.getByRole("button", { name: /README\.md/ }).click();
+    await expect(editor.locator(".editor-bar")).toContainText("README.md");
+    await expect(editor).toContainText("Edited by the agent.");
+    await expect(page.getByRole("region", { name: "Turn changes" })).toHaveCount(0);
+    await screenshot(page, { path: "test-results/turn-changes-editor.png" });
+    // × goes back to the changes since the last commit.
+    await editor.getByRole("button", { name: "Show changes since HEAD instead" }).click();
+    await expect(editor.locator(".editor-bar-baseline")).toHaveCount(0);
 
     // Hovering a file offers to roll back just that file.
     const readme = join(repo, "README.md"),
@@ -140,9 +144,13 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
       .poll(async () => readFile(join(root, "agent.jsonl"), "utf8"))
       .toContain("I rolled back your edits to README.md");
 
-    await page.getByRole("button", { name: "Local changes" }).click();
+    // The title bar's Changes lists the folder's own changes beside the editor.
+    await page
+      .getByRole("group", { name: "Workspace panes" })
+      .getByRole("button", { name: /^Changes\b/ })
+      .click();
     await expect(
-      page.getByRole("region", { name: "Local changes" }),
+      page.locator(".project-file-list").getByRole("region", { name: "Local changes" }),
     ).toBeVisible();
     // The turn's ref and the one rollback left to redo are kept once the
     // unchanged follow-up turn drops its own, and the user's index is untouched.
@@ -158,22 +166,15 @@ test("shows what an agent turn changed and opens that turn's diff", async () => 
       ]);
     expect(git("diff", "--cached", "--name-only")).toBe("");
 
-    // A file clicked in the chat shows its local diff in Changes, even over a
-    // turn's diff.
+    // A file clicked in the chat opens with its changes since the last
+    // commit, even when the turn's are showing.
     await card.getByRole("button", { name: /guard\.ts/ }).click();
-    await expect(
-      page.getByRole("region", { name: "Turn changes" }),
-    ).toBeVisible();
+    await expect(editor.locator(".editor-bar-baseline")).toHaveText("Changes since before turn");
     const answer = page.locator(".project-message.assistant").first();
     await answer.locator('.chat-file-link[title="src/guard.ts"]').click();
-    const local = page.getByRole("region", { name: "Local changes" });
-    await expect(local.locator(".working-file.selected")).toContainText(
-      "guard.ts",
-    );
-    await expect(local.locator(".working-review > header strong")).toHaveText(
-      "src/guard.ts",
-    );
-    await expect(page.locator(".project-file-list")).toHaveCount(0);
+    await expect(editor.locator(".editor-bar")).toContainText("guard.ts");
+    await expect(editor.locator(".editor-bar-baseline")).toHaveCount(0);
+    await expect(editor.locator(".cm-changedLine").first()).toBeVisible();
     // A file without local changes opens straight in the editor.
     await answer.locator('.chat-file-link[title="src/cache.ts:1"]').click();
     await expect(

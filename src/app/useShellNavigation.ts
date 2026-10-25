@@ -84,7 +84,6 @@ export function useShellNavigation(
       projects?.[0]);
   // Which of the project's unsent threads shows while no thread is open.
   const draftId = project ? currentNewThread(project.id) : "";
-  const panes = useWorkspacePanes(chatId ?? draftId);
   const [restoredProject, setRestoredProject] = useState<string>();
   const qc = useQueryClient();
   const chats = useQuery({
@@ -107,6 +106,7 @@ export function useShellNavigation(
   // A PR thread reviews its PR; any other thread shows the working tree.
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
+  const panes = useWorkspacePanes(chatId ?? draftId, !!pull);
   useEffect(() => {
     if (pinned) panes.switchTo(pinned.chatId);
     else if (project) {
@@ -115,7 +115,6 @@ export function useShellNavigation(
       setChatId(saved || null);
       setDraftScope(loadDraftScope(currentNewThread(project.id)));
       panes.switchTo(saved || currentNewThread(project.id));
-      view.closeTurn();
       setRestoredProject(project.id);
     }
   }, [project?.id]);

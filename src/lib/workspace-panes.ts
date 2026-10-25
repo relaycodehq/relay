@@ -226,8 +226,10 @@ export type WorkspacePanes = ReturnType<typeof useWorkspacePanes>;
 /**
  * Chat, changes and the panel are peers: each can be shown, hidden and reordered.
  * Which are open is the thread's own; order and widths are the same everywhere.
+ * Only a thread `reviewing` a PR has the changes pane, its Review; any other
+ * thread's changes are in the editor.
  */
-export function useWorkspacePanes(thread: string) {
+export function useWorkspacePanes(thread: string, reviewing: boolean) {
   const [layout, setLayout] = useState<PaneLayout>(() =>
     restoredLayout(thread),
   );
@@ -319,7 +321,8 @@ export function useWorkspacePanes(thread: string) {
       setLayout((l) => ({ ...l, weights: { ...l.weights, ...weights } })),
     [],
   );
-  const shown = shownPanes(layout);
+  const asked = shownPanes(layout).filter((id) => id !== "changes" || reviewing);
+  const shown: PaneId[] = asked.length ? asked : ["chat"];
   const visible = fitPanes(shown, layout.recent, room);
   return {
     layout,

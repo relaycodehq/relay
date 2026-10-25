@@ -63,6 +63,11 @@ export async function openPull(page: Page, title: RegExp | string) {
 }
 /** Opens a file in the Files pane's tree, unfolding each folder on the way. */
 export async function openInFileTree(page: Page, path: string) {
+  // The sidebar may be showing the changes instead of the files.
+  const filesView = page
+    .getByRole("tablist", { name: "Sidebar" })
+    .getByRole("tab", { name: "Files", exact: true });
+  if (await filesView.isVisible()) await filesView.click();
   const tree = page.locator(".file-tree");
   const names = path.split("/");
   for (const [i, name] of names.entries()) {

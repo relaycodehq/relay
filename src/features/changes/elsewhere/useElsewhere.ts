@@ -24,7 +24,7 @@ export function useElsewhere(chatId: string | undefined) {
 
 /**
  * The same list, read without watching: enough to know whether there is
- * one. The Changes pane's `useElsewhere` keeps it fresh while it shows.
+ * one. The Changes view's `useElsewhere` keeps it fresh while it shows.
  */
 export function useElsewhereListed(chatId: string | undefined) {
   const poll = usePoll();

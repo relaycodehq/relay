@@ -7,7 +7,7 @@ import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { layoutGraph, type GraphRow } from "./commit-graph";
-import { CommitChanges } from "./CommitChanges";
+import { CommitChanges, type CommitVersion } from "./CommitChanges";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { relativeDate } from "../../lib/relative-date";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
@@ -28,7 +28,8 @@ export function ProjectHistory({
 }: {
   projectId: string;
   slots: PaneSlots;
-  onOpenFile: (path: string) => void;
+  /** Opens a file as a commit left it. */
+  onOpenFile: (path: string, commit: CommitVersion) => void;
 }) {
   const [scope, setScope] = useStoredChoice<HistoryScope>(
     SCOPE_KEY,

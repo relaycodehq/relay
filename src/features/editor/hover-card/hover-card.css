@@ -1,0 +1,99 @@
+.hover-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 12px 14px 10px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.hover-card-owner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: var(--code-font-size, 12.5px);
+}
+.hover-card-kind {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+}
+.hover-card-signature {
+  margin: 0;
+  color: var(--code-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--code-font-size, 12.5px);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.hover-card-signature + .hover-card-docs {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.hover-card-docs {
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hover-card-tags {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.hover-card-tags > div {
+  display: contents;
+}
+.hover-card-tags dd {
+  margin: 0;
+  color: var(--text);
+}
+.hover-card-docs pre {
+  margin: 4px 0;
+  font-size: var(--code-font-size, 12px);
+}
+/* A fixed height, and no say in the card's width: filling in can't move the card. */
+.hover-card-footer {
+  display: flex;
+  align-items: center;
+  height: 22px;
+  contain: inline-size;
+}
+.hover-card-place {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: calc(100% + 8px);
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.hover-card-place > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hover-card-place:hover {
+  background: var(--hover);
+  color: var(--text);
+}

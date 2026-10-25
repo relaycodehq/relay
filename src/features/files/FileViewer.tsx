@@ -9,18 +9,14 @@ import { useQuery } from "@tanstack/react-query";
 import { FileCode2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { ErrorBox, Loading } from "../../ui/ui";
-import {
-  FileBar,
-  ImageFile,
-  OtherFile,
-  RevealButtons,
-  VideoFile,
-} from "./FileViews";
+import type { WorkingChange } from "../../../shared/working-tree";
+import { FileBar, OtherFile, RevealButtons } from "./FileViews";
+import { MediaFile } from "./MediaFile";
 import { usePoll } from "../../lib/poll";
-const LocalFileEditor = lazy(() => import("./editor/LocalFileEditor"));
+const TextFile = lazy(() => import("../editor/TextFile"));
 
 type EditorProps = Omit<
-  ComponentProps<typeof LocalFileEditor>,
+  ComponentProps<typeof TextFile>,
   "path" | "shownPath" | "lead" | "inline" | "actions"
 >;
 
@@ -32,7 +28,7 @@ export function FileViewer({
   shownPath,
   lead,
   editor,
-  editorKey,
+  change,
 }: {
   active: boolean;
   where: string;
@@ -41,7 +37,8 @@ export function FileViewer({
   lead?: ReactNode;
   /** Undefined until the workspace's editor revision is available. */
   editor?: EditorProps;
-  editorKey: string;
+  /** The file's uncommitted change, which a picture or video can show. */
+  change?: WorkingChange;
 }) {
   const poll = usePoll();
   const info = useQuery({
@@ -66,16 +63,15 @@ export function FileViewer({
     );
   if (!info.data) return <Loading text="Opening…" />;
   const media = { active, where, info: info.data, lead, shownPath };
-  if (info.data.kind === "image") return <ImageFile {...media} />;
-  if (info.data.kind === "video") return <VideoFile {...media} />;
+  if (info.data.kind === "image" || info.data.kind === "video")
+    return <MediaFile {...media} change={change} opened={editor?.reveal} />;
   if (info.data.kind === "other") return <OtherFile {...media} />;
   if (!editor) return <Loading text="Opening editor…" />;
   return (
     <div className="files-main">
       {!!actionError && <ErrorBox error={actionError} />}
       <Suspense fallback={<Loading text="Opening editor…" />}>
-        <LocalFileEditor
-          key={editorKey}
+        <TextFile
           {...editor}
           path={path}
           shownPath={shownPath}

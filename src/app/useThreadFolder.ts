@@ -124,7 +124,7 @@ export function useThreadFolder({
  * watches the one place each window last asked for. A hidden window refreshes
  * once it shows again, as the poll it replaces waited.
  */
-function useTreeWatch(where: string | null) {
+export function useTreeWatch(where: string | null) {
   const qc = useQueryClient();
   const [watched, setWatched] = useState<string | null>(null);
   useEffect(() => {

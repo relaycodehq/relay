@@ -6,6 +6,8 @@ import { mount } from "../../tests/unit/hook-harness";
 import { usePaneOpens } from "./usePaneOpens";
 import { api } from "../lib/api";
 import type { FileTarget } from "../features/files/file-link-target";
+import { snapshotOf } from "../features/files/snapshots";
+import type { FilePair } from "../../shared/types";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -14,6 +16,9 @@ vi.mock("../lib/api", () => ({
     projectFileInfo: vi.fn(),
     projectDirectory: vi.fn(),
     revealProjectPath: vi.fn(),
+    projectTurnDiff: vi.fn(),
+    projectWorktreeDiff: vi.fn(),
+    projectCommitDiff: vi.fn(),
   },
 }));
 afterEach(() => vi.clearAllMocks());
@@ -33,7 +38,6 @@ const tree = (paths: string[]) =>
 function setup() {
   const showPane = vi.fn(),
     showSurface = vi.fn(),
-    closeTurn = vi.fn(),
     onError = vi.fn();
   const blocked = vi.fn(() => false);
   const params = {
@@ -55,7 +59,7 @@ function setup() {
       usePaneOpens(
         params,
         { show: showSurface } as unknown as Parameters<typeof usePaneOpens>[1],
-        { closeTurn } as unknown as Parameters<typeof usePaneOpens>[2],
+        {} as unknown as Parameters<typeof usePaneOpens>[2],
         folder,
         { blocked } as unknown as Parameters<typeof usePaneOpens>[4],
         onError,
@@ -74,7 +78,6 @@ function setup() {
     revealed,
     showPane,
     showSurface,
-    closeTurn,
     blocked,
     onError,
   };
@@ -159,15 +162,17 @@ it("lets a direct editor open supersede an earlier lookup", async () => {
   expect(s.revealed).not.toHaveBeenCalled();
 });
 
-it("keeps changed-file routing and checks the current unsaved edit lock", async () => {
+it("opens a changed file with its changes and checks the current unsaved edit lock", async () => {
   const pending = deferred<string[]>();
   vi.mocked(api.projectFiles).mockReturnValue(pending.promise);
   const s = setup();
   s.folder.tree = tree(["src/a.ts"]);
   s.result.rerender();
   await s.result().openChatFile(file("a.ts"));
-  expect(s.revealed).toHaveBeenCalledExactlyOnceWith(file("src/a.ts"));
-  expect(s.closeTurn).toHaveBeenCalledTimes(1);
+  expect(s.opened).toHaveBeenCalledExactlyOnceWith({ ...file("src/a.ts"), changes: true });
+  expect(s.revealed).not.toHaveBeenCalled();
+  s.opened.mockClear();
+  s.showSurface.mockClear();
   const opening = s.result().openChatFile(file("b.ts"));
   s.blocked.mockReturnValue(true);
   pending.resolve(["b.ts"]);
@@ -244,4 +249,74 @@ it("says so when a linked folder isn't in the project", async () => {
   await s.result().openChatFile({ path: "pending", directory: true });
   expect(s.opened).not.toHaveBeenCalled();
   expect(s.onError).toHaveBeenCalledOnce();
+});
+
+const pair = (old: string | null, next: string | null): FilePair => ({
+  old: old === null ? null : { name: "a", contents: old, cacheKey: "o" },
+  next: next === null ? null : { name: "a", contents: next, cacheKey: "n" },
+  binary: false,
+});
+const turn = { chatId: "t1", messageId: "m1", files: [], label: "Claude" };
+
+it("opens a turn's file in the editor against how it was before the turn", async () => {
+  vi.mocked(api.projectTurnDiff).mockResolvedValue(pair("old text", "new text"));
+  const s = setup();
+  await s.result().openTurnDiff({ ...turn, path: "src/a.ts" });
+  expect(api.projectTurnDiff).toHaveBeenCalledWith("t1", "m1", "src/a.ts");
+  expect(s.opened).toHaveBeenCalledExactlyOnceWith({
+    path: "src/a.ts",
+    directory: false,
+    changes: true,
+    baseline: { label: "before turn", text: "old text" },
+  });
+  expect(s.showPane).not.toHaveBeenCalledWith("changes");
+});
+
+it("lists the worktree's files beside the editor and opens one against its branch", async () => {
+  vi.mocked(api.projectWorktreeDiff).mockResolvedValue(pair("main text", "branch text"));
+  const s = setup();
+  await s.result().openTurnDiff({ ...turn, messageId: "worktree", worktree: true, from: "main", path: "a.ts" });
+  expect(s.opened).toHaveBeenNthCalledWith(1, { view: "branch" });
+  expect(s.opened).toHaveBeenNthCalledWith(2, expect.objectContaining({ baseline: { label: "main", text: "main text" } }));
+});
+
+it("shows a file the turn deleted as it was", async () => {
+  vi.mocked(api.projectTurnDiff).mockResolvedValue(pair("gone text", null));
+  const s = setup();
+  await s.result().openTurnDiff({ ...turn, path: "gone.ts" });
+  const request = s.opened.mock.calls[0][0] as { snapshot: string; path: string };
+  expect(request.path).toBe("gone.ts");
+  expect(snapshotOf(request.snapshot)).toMatchObject({ text: "gone text", label: "before turn, deleted since" });
+});
+
+it("shows a picture the turn changed before and after", async () => {
+  vi.mocked(api.projectTurnDiff).mockResolvedValue({
+    old: null,
+    next: null,
+    binary: true,
+    images: { old: "data:old", next: "data:new" },
+  });
+  const s = setup();
+  await s.result().openTurnDiff({ ...turn, path: "logo.png" });
+  const request = s.opened.mock.calls[0][0] as { snapshot: string; path: string };
+  expect(snapshotOf(request.snapshot)).toEqual({
+    path: "logo.png",
+    label: "before turn → now",
+    media: { sources: { old: "data:old", next: "data:new" }, video: false },
+    sides: { deletions: "before turn", additions: "Now" },
+  });
+});
+
+it("opens a commit's file read-only, with what the commit changed", async () => {
+  vi.mocked(api.projectCommitDiff).mockResolvedValue(pair("parent text", "commit text"));
+  const s = setup();
+  await s.result().openCommitFile({ sha: "abcdef123", short: "abcdef1", parent: "1234567" }, "src/a.ts");
+  expect(api.projectCommitDiff).toHaveBeenCalledWith("p1", "abcdef123", "src/a.ts");
+  const request = s.opened.mock.calls[0][0] as { snapshot: string; path: string };
+  expect(snapshotOf(request.snapshot)).toEqual({
+    path: "src/a.ts",
+    label: "abcdef1",
+    text: "commit text",
+    baseline: { label: "1234567", text: "parent text" },
+  });
 });

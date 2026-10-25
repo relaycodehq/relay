@@ -63,11 +63,11 @@ test("new threads start on the repository, and not behind an open dialog", async
     await expect(context("Deep review")).not.toHaveClass(/selected/);
 
     // The new-thread shortcut leaves the workspace alone behind a dialog.
-    const changes = page
+    const panel = page
       .getByRole("group", { name: "Workspace panes" })
-      .getByRole("button", { name: "Changes", exact: true });
-    await changes.click();
-    await expect(changes).toHaveAttribute("aria-pressed", "true");
+      .getByRole("button", { name: "Panel", exact: true });
+    await panel.click();
+    await expect(panel).toHaveAttribute("aria-pressed", "true");
     await page.getByLabel("Message project").fill("Later");
     await page.getByRole("button", { name: "Send message" }).click({
       button: "right",
@@ -83,7 +83,7 @@ test("new threads start on the repository, and not behind an open dialog", async
     );
     await page.keyboard.press("Escape");
     await expect(picker).toHaveCount(0);
-    await expect(changes).toHaveAttribute("aria-pressed", "true");
+    await expect(panel).toHaveAttribute("aria-pressed", "true");
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

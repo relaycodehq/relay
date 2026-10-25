@@ -66,7 +66,7 @@ test("digits typed in the Files editor stay in the editor while the agent asks a
       '.project-inline-editor [contenteditable="true"]',
     );
     await expect(editor).toBeFocused();
-    await editor.click();
+    await editor.locator(".cm-line", { hasText: "Notes" }).click();
     await page.keyboard.press("End");
     await page.keyboard.type("a");
     await expect(editor).toContainText("Notesa");

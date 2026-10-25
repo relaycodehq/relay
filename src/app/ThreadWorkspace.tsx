@@ -142,6 +142,7 @@ export function ThreadHeaderActions({
           filesOpen={panel.has("files")}
           unseen={!panes.layout.open.panel && !!panel.unseen}
           onToggle={opens.togglePane}
+          onChanges={() => opens.openCode("changes")}
         />
         <span className="header-strip-sep" aria-hidden="true" />
         <TerminalToggle terminal={terminal} />
@@ -202,6 +203,11 @@ export function ThreadWorkspace({
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
   const row = usePaneRow(panes.measure);
+  const openThread = (id: string) => {
+    const c = everyThread.find((t) => t.id === id);
+    if (c)
+      navigate(allProjects.find((p) => p.id === c.projectId) ?? project, c);
+  };
   const previewPanel = useThreadPreviewPanel(
     project.id,
     panel,
@@ -290,23 +296,12 @@ export function ThreadWorkspace({
           />
         </Pane>
         <Pane id="changes" label="Changes" {...frame("changes")}>
-          {panes.layout.open.changes && (
+          {panes.layout.open.changes && pull && (
             <ThreadChanges
               project={project}
               pull={pull}
               folder={folder}
               view={view}
-              chatId={chat?.id}
-              inWorktree={!!chat?.worktree}
-              agentRunning={!!chat?.running}
-              onOpenThread={(id) => {
-                const c = everyThread.find((t) => t.id === id);
-                if (c)
-                  navigate(
-                    allProjects.find((p) => p.id === c.projectId) ?? project,
-                    c,
-                  );
-              }}
               opens={opens}
               review={{
                 account: host.account,
@@ -335,6 +330,9 @@ export function ThreadWorkspace({
               panel={panel}
               zoomed={panes.layout.zoomed === "panel"}
               onZoom={(on) => panes.zoom(on ? "panel" : undefined)}
+              agentRunning={!!chat?.running}
+              inWorktree={!!chat?.worktree}
+              onOpenThread={openThread}
             />
           )}
         </Pane>

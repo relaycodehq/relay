@@ -1,0 +1,57 @@
+import { lspServerFor } from "../../../shared/language-servers";
+import { lsp } from "../language-servers/client";
+import type { FileDocument } from "./documents";
+
+/** A document a language server can hear about: in a project's folder, of a language one covers. */
+export const servedBy = (doc: FileDocument) =>
+  doc.source.kind === "project" && !!lspServerFor(doc.path);
+
+/** Sends the server the text it should answer from. A failure only means it answers from older text. */
+export const tellServerText = (where: string, path: string, text: string) =>
+  lsp.change(where, path, text).catch(() => {});
+
+/** The main process debounces too; this keeps big files off the bridge on every keystroke. */
+const CHANGE_DELAY = 120;
+
+const synced = new WeakSet<FileDocument>();
+
+/**
+ * Keeps the language server's copy of `doc` current: opened once it's read,
+ * the text again a moment after each edit, told of saves, closed with the
+ * document. Calling it again for the same document does nothing.
+ */
+export function syncWithServer(doc: FileDocument) {
+  if (doc.source.kind !== "project" || synced.has(doc) || !servedBy(doc)) return;
+  synced.add(doc);
+  const { where } = doc.source;
+  let openedPath: string | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const open = () => {
+    if (openedPath || !doc.state) return;
+    openedPath = doc.path;
+    void lsp.open(where, openedPath, doc.text()).catch(() => {});
+  };
+  open();
+  const offStatus = doc.subscribe(open);
+  let heardText = doc.state?.doc;
+  const offState = doc.onState((state) => {
+    if (!openedPath) return open();
+    // Carets, folds and completions update the state too; only new text is worth sending.
+    const textChanged = state.doc !== heardText;
+    if (!textChanged) return;
+    heardText = state.doc;
+    const path = openedPath;
+    clearTimeout(timer);
+    timer = setTimeout(() => void tellServerText(where, path, doc.text()), CHANGE_DELAY);
+  });
+  const offSave = doc.onSave(() => {
+    if (openedPath) void lsp.save(where, openedPath).catch(() => {});
+  });
+  doc.onDispose(() => {
+    clearTimeout(timer);
+    offStatus();
+    offState();
+    offSave();
+    if (openedPath) void lsp.close(where, openedPath).catch(() => {});
+  });
+}

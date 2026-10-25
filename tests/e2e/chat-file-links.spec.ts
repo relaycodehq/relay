@@ -32,7 +32,7 @@ async function launch(root: string, extra: Record<string, string> = {}) {
   });
 }
 
-test("a chat file link with a line opens its local diff at that line", async () => {
+test("a chat file link with a line opens the changed file at that line, its changes in place", async () => {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "relay-chat-line-")),
   );
@@ -69,12 +69,13 @@ test("a chat file link with a line opens its local diff at that line", async () 
       .getByRole("button", { name: "Send message", exact: true })
       .click();
     await page.locator('.chat-file-link[title="src/long.ts:250"]').click();
-    const local = page.getByRole("region", { name: "Local changes" });
-    await expect(local.locator(".working-file.selected")).toContainText(
-      "long.ts",
-    );
-    await expect(local.locator('[data-line="250"]').first()).toBeInViewport();
-    await expect(page.locator(".project-file-list")).toHaveCount(0);
+    const editor = page.locator(".project-inline-editor");
+    await expect(editor.locator(".editor-bar")).toContainText("long.ts");
+    const caretLine = editor.locator(".cm-activeLine");
+    await expect(caretLine).toHaveText("export const n250 = 0;");
+    await expect(caretLine).toBeInViewport();
+    // A new file is all changes since the last commit.
+    await expect(editor.locator(".cm-changedLine").first()).toBeVisible();
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

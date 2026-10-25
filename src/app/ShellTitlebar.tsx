@@ -246,7 +246,10 @@ function ThreadTitle({
   );
 }
 
-/** Shows, hides and reorders the thread's panes; a PR thread's Changes is its Review. */
+/**
+ * Shows, hides and reorders the thread's panes. A PR thread's Changes is
+ * its Review; any other thread's opens the editor on the folder's changes.
+ */
 export function ThreadPaneToggles({
   panes: { layout, visible, move },
   plain,
@@ -255,6 +258,7 @@ export function ThreadPaneToggles({
   filesOpen,
   unseen,
   onToggle,
+  onChanges,
 }: {
   panes: WorkspacePanes;
   /** The panel has Files open, which may hold an unsaved edit. */
@@ -266,15 +270,18 @@ export function ThreadPaneToggles({
   /** Lines the working tree changed, beside Changes. */
   lines?: { additions: number; deletions: number };
   onToggle: (id: PaneId) => void;
+  /** Shows the folder's changes beside the editor. */
+  onChanges: () => void;
 }) {
   const { locked } = useNavigationLock();
+  const opensEditor = (id: PaneId) => id === "changes" && !pull;
   return (
     <PaneToggles
-      onToggle={onToggle}
+      onToggle={(id) => (opensEditor(id) ? onChanges() : onToggle(id))}
       onMove={move}
       panes={panesOf(layout.order, plain).map((id) => ({
         id,
-        open: visible.includes(id),
+        open: !opensEditor(id) && visible.includes(id),
         // The panel stays open over an unsaved edit in Files, and so does
         // the last open pane. One off screen for lack of room still comes back.
         disabled:

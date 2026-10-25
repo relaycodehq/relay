@@ -5,7 +5,7 @@ import { type FileInfo } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import { formatSize } from "../../lib/file-tree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { EditorPath } from "./EditorPath";
+import { EditorPath } from "../../ui/EditorPath";
 import { revealLabel } from "../../lib/mod-key";
 import "./file-browser.css";
 
@@ -72,6 +72,7 @@ export function ImageFile({
   info,
   lead,
   shownPath = info.path,
+  actions,
 }: {
   active: boolean;
   where: string;
@@ -79,6 +80,8 @@ export function ImageFile({
   lead?: ReactNode;
   /** What the bar shows instead of the path, like a file's full path outside the project. */
   shownPath?: string;
+  /** First in the bar, before its own buttons. */
+  actions?: ReactNode;
 }) {
   const [error, setError] = useState<unknown>();
   const [actual, setActual] = useState(false);
@@ -102,6 +105,7 @@ export function ImageFile({
           .filter(Boolean)
           .join(" · ")}
       >
+        {actions}
         <IconButton
           label="Copy image"
           disabled={!image.data}
@@ -149,6 +153,7 @@ export function VideoFile({
   info,
   lead,
   shownPath = info.path,
+  actions,
 }: {
   active: boolean;
   where: string;
@@ -156,6 +161,8 @@ export function VideoFile({
   lead?: ReactNode;
   /** What the bar shows instead of the path, like a file's full path outside the project. */
   shownPath?: string;
+  /** First in the bar, before its own buttons. */
+  actions?: ReactNode;
 }) {
   const [error, setError] = useState<unknown>();
   const [size, setSize] = useState<{ width: number; height: number }>();
@@ -178,6 +185,7 @@ export function VideoFile({
           .filter(Boolean)
           .join(" · ")}
       >
+        {actions}
         <RevealButtons
           where={where}
           path={info.path}

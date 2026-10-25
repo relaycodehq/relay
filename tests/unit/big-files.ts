@@ -34,7 +34,7 @@ export const bigFiles: Record<string, number> = {
   "shared/projects/api.ts": 607,
   "shared/remote-client.ts": 747,
   "shared/remote.ts": 1128,
-  "shared/shortcuts.ts": 578,
+  "shared/shortcuts.ts": 513,
   "shared/types.ts": 865,
   "src/features/add-project/AddProjectPalette.tsx": 579,
   "src/features/agent-turn/AgentTurn.tsx": 645,
