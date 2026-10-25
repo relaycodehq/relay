@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld("relay", {
   onMainWindowCommand: on("relay:main-command"),
   onSharedDraft: on("relay:shared-draft"),
   onDraftSend: on("relay:draft-send"),
+  onGuestShare: on("relay:guest-share"),
   onBugReport: on("relay:bug-report"),
   onWorkingTree: on("relay:working-tree"),
   onElsewhere: on("relay:elsewhere"),

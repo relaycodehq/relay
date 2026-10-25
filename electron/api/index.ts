@@ -16,6 +16,7 @@ import { desktopHandlers } from "./desktop";
 import { draftHandlers } from "./drafts";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
+import { guestShareHandlers } from "./guest-share";
 import { elsewhereHandlers } from "./elsewhere";
 import { projectHandlers } from "./projects";
 import { readAloudHandlers } from "./read-aloud";
@@ -52,6 +53,7 @@ export function createDispatch(
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
+    guestShareHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
     previewHandlers(ctx),

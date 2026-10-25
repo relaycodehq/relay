@@ -1,0 +1,127 @@
+/* Share with guest: the dialog making the link, and what guests suggested. */
+.guest-share-dialog > p,
+.guest-share-offline p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+.guest-share-starting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+.guest-share-link {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.guest-share-link input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--toolbar);
+  color: var(--text);
+  font: 12px var(--font-mono);
+}
+.guest-share-link button {
+  font-size: 12px;
+}
+.guest-share-offline {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--toolbar);
+}
+.guest-share-offline p {
+  margin: 0;
+}
+.guest-share-offline-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guest-share-offline-actions button {
+  font-size: 12px;
+}
+.guest-share-dialog > .guest-share-ends {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
+}
+
+.guest-suggestions {
+  width: min(100%, var(--thread-width));
+  align-self: center;
+  margin: 0 auto 10px;
+  display: grid;
+  gap: 8px;
+}
+.guest-suggestion {
+  padding: 12px 14px 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 1px 2px #0000000a;
+  font-size: 13px;
+}
+.guest-suggestion header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.guest-suggestion header svg {
+  color: var(--accent);
+}
+.guest-suggestion-text {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 140px;
+  overflow: auto;
+}
+.guest-suggestion footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+.guest-suggestion footer button {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+.guest-suggestions-more,
+.guest-share-live {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.guest-share-live button {
+  border: 0;
+  background: none;
+  padding: 0 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.guest-share-live button:hover {
+  background: none;
+  color: var(--text);
+}
+.guest-share-dialog > .guest-share-contents {
+  color: var(--muted);
+  font-size: 12px;
+}
+.guest-suggestion-error {
+  margin: 6px 0 0;
+  color: var(--danger, #e46b73);
+  font-size: 12px;
+}

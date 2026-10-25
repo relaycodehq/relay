@@ -45,3 +45,14 @@ export interface SavedComputer {
   /** Handoffs taken back without it whose notice didn't reach it yet; said again when it's online. */
   abandoned?: string[];
 }
+
+/** A thread shared with guests; its link's token is derived from `id`, never saved. */
+export interface SavedGuestShare {
+  id: string;
+  threadId: string;
+  startedAt: number;
+  endsAt: number;
+  suggestions: (import("../../shared/guest-share").GuestSuggestion & {
+    guestId: string;
+  })[];
+}

@@ -28,6 +28,7 @@ export type ThreadMenuAction =
   | { kind: "stop-driving" }
   | { kind: "move-worktree" }
   | { kind: "snooze-pick" }
+  | { kind: "share-guest" }
   | { kind: "project-settings" }
   | { kind: "own-window"; open: boolean }
   | { kind: "triage"; triage: ChatTriage };
@@ -74,6 +75,8 @@ export function useThreadActions({
   const [renaming, setRenaming] = useState<string>();
   /** The thread the Move into its own worktree dialog is for. */
   const [moving, setMoving] = useState<string>();
+  /** The thread the Share with guest dialog is for. */
+  const [sharing, setSharing] = useState<string>();
   /** The thread whose archive asks about its worktree, with the files only it has. */
   const [archiving, setArchiving] = useState<{
     chat: ChatSummary;
@@ -297,6 +300,8 @@ export function useThreadActions({
     rename,
     moving,
     setMoving,
+    sharing,
+    setSharing,
     pickingSnooze,
     setPickingSnooze,
     archiving,
@@ -337,6 +342,8 @@ export function useThreadActions({
           return setMoving(c.id);
         case "snooze-pick":
           return setPickingSnooze(c);
+        case "share-guest":
+          return setSharing(c.id);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "own-window":

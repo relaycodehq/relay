@@ -47,6 +47,7 @@ import type {
 import type { TriageState } from "./triage";
 import type { PhoneRemoteApi } from "./remote";
 import type { ComputersApi } from "./handoff";
+import type { GuestShareApi } from "./guest-share";
 
 interface User {
   id: number;
@@ -97,12 +98,7 @@ export interface Issue {
   updated_at: string;
   user: User;
   /** `server` is set where it isn't the Gitea account's, i.e. GitHub. */
-  repository: {
-    name: string;
-    owner: string;
-    full_name: string;
-    server?: string;
-  };
+  repository: Repo & { full_name: string };
   labels: { id: number; name: string; color: string }[];
   comments: number;
   pull_request?: { merged: boolean };
@@ -318,7 +314,8 @@ export interface Api
     PreviewApi,
     DevicesApi,
     PhoneRemoteApi,
-    ComputersApi {
+    ComputersApi,
+    GuestShareApi {
   inspectSymbol(
     ref: PullRef,
     head: string,
@@ -906,7 +903,6 @@ export interface Api
   savePaste(text: string, n: number): Promise<string>;
 }
 
-/** Request/response methods; the `on…` members subscribe to main-process events. */
 /** What the page asks the main process for; the rest the preload answers itself. */
 export type ApiMethod = Exclude<
   keyof Api,

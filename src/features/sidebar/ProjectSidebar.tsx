@@ -42,6 +42,7 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
+import { ShareGuestDialog } from "../guest-share/ShareGuestDialog";
 import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
@@ -392,6 +393,12 @@ export function ProjectSidebar({
           files={actions.archiving.files}
           onArchive={actions.archive}
           onCancel={actions.cancelArchive}
+        />
+      )}
+      {actions.sharing && (
+        <ShareGuestDialog
+          threadId={actions.sharing}
+          onClose={() => actions.setSharing(undefined)}
         />
       )}
       {actions.moving && (

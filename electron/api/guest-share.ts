@@ -1,0 +1,80 @@
+import { randomBytes } from "node:crypto";
+import { z } from "zod";
+import { idSchema } from "../../shared/validation";
+import { seal, unseal } from "../app/login";
+import type { Store } from "../app/store";
+import { GuestShares } from "../guest-share";
+import { Funnel } from "../guest-share/funnel";
+import { takes, type ApiContext, type Handlers } from "./context";
+
+/** Where the guest server listens first; a worktree's Relay moves it with its other ports. */
+const GUEST_PORT = 47410 + (Number(process.env.RELAY_PORT_OFFSET) || 0);
+
+/** Test runs keep their links on this computer: a real Tailscale would publish them. */
+const testFunnel = () =>
+  new Funnel(
+    Object.assign(async () => ({ ok: false, output: "" }), { sync: () => {} }),
+  );
+
+/** Share with guest: a thread a browser outside Relay can follow and suggest messages to. */
+export function guestShareHandlers(ctx: ApiContext) {
+  const chats = ctx.projectChats;
+  const shares = new GuestShares({
+    thread: (id) => chats.get(id),
+    summary: (id) => ctx.store.get().chats?.find((c) => c.id === id),
+    root: (thread) =>
+      chats.worktrees
+        .terminalFolder(thread.projectId, thread.id)
+        .catch(() => null),
+    media: chats.files,
+    renderPage: (threadId, renderId, page) =>
+      chats.renderPage(threadId, renderId, page),
+    onSummaries: (listener) => chats.onSummaries(listener),
+    send: (event) => ctx.window.send("relay:guest-share", event),
+    saved: {
+      load: () => ctx.store.get().guestShares ?? [],
+      save: (shares) =>
+        ctx.store.update((s) => {
+          s.guestShares = shares;
+        }),
+    },
+    key: signingKey(ctx.store),
+    port: GUEST_PORT,
+    ...(process.env.RELAY_TEST_DATA ? { funnel: testFunnel() } : {}),
+  });
+  return {
+    guestShare: takes([idSchema], (id) => shares.share(id)),
+    startGuestShare: takes([idSchema], (id) => shares.start(id)),
+    stopGuestShare: takes([idSchema], (id) => shares.stop(id)),
+    guestSuggestions: takes([idSchema], async (id) => shares.waiting(id)),
+    resolveGuestSuggestion: takes(
+      [idSchema, z.enum(["drafted", "dismissed"])],
+      (id, status) => shares.resolve(id, status),
+    ),
+  } satisfies Handlers;
+}
+
+/**
+ * The key guest links are signed with: made once, sealed by the OS
+ * credential store, or kept `plain:` where there is none, as the phone
+ * bridge's key is.
+ */
+function signingKey(store: Store) {
+  let key: Promise<Buffer> | undefined;
+  const load = async () => {
+    const saved = store.get().guestShareKey;
+    if (saved) {
+      const value = saved.startsWith("plain:")
+        ? saved.slice(6)
+        : await unseal(saved);
+      return Buffer.from(value, "base64");
+    }
+    const made = randomBytes(32).toString("base64");
+    const sealed = (await seal(made)) ?? `plain:${made}`;
+    await store.update((s) => {
+      s.guestShareKey = sealed;
+    });
+    return Buffer.from(made, "base64");
+  };
+  return () => (key ??= load());
+}

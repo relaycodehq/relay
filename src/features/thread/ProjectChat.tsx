@@ -47,6 +47,7 @@ import { useThreadHandle } from "./useThreadHandle";
 import { useThreadWorktree } from "./useThreadWorktree";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { OpenRequestCard } from "./OpenRequestCard";
+import { GuestSuggestions } from "../guest-share/GuestSuggestions";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { DeepReviewSetup } from "../deep-review/DeepReview";
 import type {
@@ -498,6 +499,15 @@ export function ProjectChat({
             e.preventDefault();
         }}
       >
+        {chat && (
+          <GuestSuggestions
+            threadId={chat.id}
+            onAdd={(text) => {
+              composeFromPage(text);
+              requestAnimationFrame(() => composer.current?.focusEnd());
+            }}
+          />
+        )}
         <OpenRequestCard
           chatId={chat?.id}
           history={history}

@@ -45,6 +45,10 @@ interface State {
   chats?: import("../../shared/projects").ChatSummary[];
   /** Prompts Relay sends on its own; see shared/schedules. */
   schedules?: import("../../shared/schedules").Schedule[];
+  /** Threads shared with guests; see electron/guest-share. */
+  guestShares?: import("./store-types").SavedGuestShare[];
+  /** Guest links' signing key: sealed by the OS credential store, or `plain:` where there is none. */
+  guestShareKey?: string;
   /** The deep review sheet's setups, newest first, for the deep_review tool. */
   reviewSetups?: import("../../shared/deep-review").SavedReviewSetup[];
   /** This computer's last page and known server command for each thread. */

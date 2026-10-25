@@ -47,6 +47,7 @@ export interface RelayEvents {
   "relay:device-hub": DeviceHubState;
   "relay:shared-draft": import("./drafts").DraftChange;
   "relay:draft-send": import("./drafts").HeldSend;
+  "relay:guest-share": import("./guest-share").GuestShareEvent;
   /** A menu or crash prompt wants the report page; `takeBugReportWanted` says if it still does. */
   "relay:bug-report": null;
   /** Something changed in this place's folder that its working tree may show. */

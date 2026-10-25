@@ -23,6 +23,7 @@ import {
   SquarePen,
   Sunrise,
   Unlink,
+  UserPlus,
 } from "lucide-react";
 import { liveAway } from "../../../shared/handoff";
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
@@ -306,6 +307,14 @@ function ThreadMenuItems({
         </MenuAction>
       )}
       <Menu.Separator className="sb-menu-separator" />
+      <MenuAction
+        icon={<UserPlus size={13} />}
+        // Its messages live on the computer it was handed to.
+        disabled={!!chat.sentTo}
+        onClick={() => onAction({ kind: "share-guest" })}
+      >
+        Share with guest…
+      </MenuAction>
       <Menu.SubmenuRoot>
         <Menu.SubmenuTrigger className="sb-menu-item">
           <span className="sb-menu-label">

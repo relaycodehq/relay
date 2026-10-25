@@ -102,13 +102,13 @@ function cliStatus(cli: string) {
 }
 
 /** The `tailscale` the user's shell runs first, else where its installers put it. */
-const findCli = () =>
+export const findTailscaleCli = () =>
   findExecutable("tailscale").catch(() =>
     (cliPaths[process.platform] ?? []).find((p) => existsSync(p)),
   );
 
 async function probe(): Promise<PhoneTailnet> {
-  const cli = await findCli();
+  const cli = await findTailscaleCli();
   if (cli)
     try {
       const status = readTailscaleStatus(await cliStatus(cli));
