@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -28,8 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog as WindowDialog
 import androidx.compose.ui.window.DialogProperties
@@ -86,14 +91,30 @@ fun Sheet(
         },
     ) {
         // Held short of the top: a sheet whose content reached it bounced about a dozen times a second
-        // there (the notes sheet with a long table), while one that stops short sat still.
-        val window = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.height.toDp() }
-        Column(Modifier.heightIn(max = window * SHEET_MAX).navigationBarsPadding()) { SheetBody(title, description, content) }
+        // there (the notes sheet with a long table), while one that stops short sat still. Measured
+        // against the room between the bars, which the sheet adds outside this cap: 88% of the whole
+        // window plus a 3-button nav bar still reached the top, and the bouncing sheet took drags from the list.
+        val windowHeight = LocalWindowInfo.current.containerSize.height
+        val bars = WindowInsets.safeDrawing
+        val room = with(LocalDensity.current) { (windowHeight - bars.getTop(this) - bars.getBottom(this)).toDp() }
+        Column(Modifier.heightIn(max = room * SHEET_MAX).navigationBarsPadding().nestedScroll(KeepUpFlingsOffSheet)) {
+            SheetBody(title, description, content)
+        }
     }
 }
 
-/** How much of the window a bottom sheet may take. */
+/** How much of the room between the system bars a bottom sheet's content may take. */
 private const val SHEET_MAX = 0.88f
+
+/**
+ * Overscrolling the end of a sheet's list handed the leftover upward fling to the sheet, which settled
+ * with it and sprang past its top for a frame. The sheet only rises on a drag, before the list scrolls,
+ * so it never needs these.
+ */
+private val KeepUpFlingsOffSheet = object : NestedScrollConnection {
+    override suspend fun onPostFling(consumed: Velocity, available: Velocity) =
+        if (available.y < 0f) available else Velocity.Zero
+}
 
 @Composable
 private fun SheetBody(title: String?, description: String?, content: @Composable ColumnScope.() -> Unit) {
