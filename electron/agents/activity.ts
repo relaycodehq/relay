@@ -1,8 +1,13 @@
 import type { AgentActivity } from "../../shared/projects";
 import { isImagePath } from "../../shared/answer-images";
 import { relayToolLabel } from "../relay-mcp";
+import { writtenByCommand } from "../../shared/call-actions";
+import { claudeWritten, codexWritten } from "./written-code";
 
-/** Keep a small, local-only activity trace. Never retain raw tool arguments or patches. */
+/**
+ * Keep a small, local-only activity trace: no raw tool arguments, but what a
+ * call wrote, capped, for its row to show (electron/agents/written-code).
+ */
 export function codexActivity(
   method: string,
   value: unknown,
@@ -22,7 +27,8 @@ export function codexActivity(
         ? "running"
         : "complete";
   const base = { id: item.id.slice(0, 180), status } as const;
-  if (item.type === "commandExecution" && typeof item.command === "string")
+  if (item.type === "commandExecution" && typeof item.command === "string") {
+    const written = writtenByCommand(item.command);
     return {
       ...base,
       kind: "command",
@@ -30,23 +36,11 @@ export function codexActivity(
       ...(typeof item.aggregatedOutput === "string"
         ? { detail: item.aggregatedOutput.slice(-8000) }
         : {}),
-    };
-  if (item.type === "fileChange" && Array.isArray(item.changes)) {
-    const paths = item.changes
-      .flatMap((v) =>
-        v && typeof v.path === "string" ? [v.path.slice(0, 500)] : [],
-      )
-      .slice(0, 30);
-    return {
-      ...base,
-      kind: "file",
-      label:
-        paths.length > 1
-          ? `${paths[0]} +${paths.length - 1} more`
-          : (paths[0] ?? "Changed files"),
-      detail: paths.join("\n"),
+      ...(written.length ? { written } : {}),
     };
   }
+  if (item.type === "fileChange" && Array.isArray(item.changes))
+    return codexFileChange(base, item.changes);
   if (item.type === "imageView" && typeof item.path === "string")
     return { ...base, kind: "read", label: item.path.slice(0, 500) };
   // The picture comes as base64 too; only the copy Codex saved is kept.
@@ -114,6 +108,30 @@ export function codexActivity(
 }
 
 /** What an MCP or dynamic tool call answered, its text only, or why it failed. */
+/** A Codex patch: named by its first path, every path in `detail`, the diffs kept to show. */
+function codexFileChange(
+  base: Pick<AgentActivity, "id" | "status">,
+  changes: unknown[],
+): AgentActivity {
+  const paths = changes
+    .flatMap((v) => {
+      const path = (v as { path?: unknown } | null)?.path;
+      return typeof path === "string" ? [path.slice(0, 500)] : [];
+    })
+    .slice(0, 30);
+  const written = codexWritten(changes);
+  return {
+    ...base,
+    kind: "file",
+    label:
+      paths.length > 1
+        ? `${paths[0]} +${paths.length - 1} more`
+        : (paths[0] ?? "Changed files"),
+    detail: paths.join("\n"),
+    ...(written.length ? { written } : {}),
+  };
+}
+
 function toolOutput(item: Record<string, unknown>) {
   const error = item.error as { message?: unknown } | null | undefined;
   if (typeof error?.message === "string" && error.message) return error.message;
@@ -211,11 +229,13 @@ export function claudeActivity(
       : {};
   const text = (key: string) =>
     typeof input[key] === "string" ? (input[key] as string).trim() : "";
+  const written = claudeWritten(name, input);
   const call = (kind: AgentActivity["kind"], label: string) => ({
     id: id.slice(0, 180),
     status: "running" as const,
     kind,
     label: (label || name).slice(0, 500),
+    ...(written.length ? { written } : {}),
   });
   if (Object.hasOwn(claudeFileTools, name))
     return call("file", text(claudeFileTools[name]));

@@ -237,7 +237,27 @@ export interface AgentActivity {
   mcp?: { server: string; tool: string };
   /** The picture the call made, by absolute path; the turn shows it as an image it read. */
   image?: string;
+  /** The code a call wrote, per file, for its row to show opened (shared/call-actions). */
+  written?: WrittenCode[];
+  /** Phones only: the call wrote code, left out here; `activityWritten` has it. */
+  wroteCode?: true;
+  /** Phones only: what the call did, read by the desktop from its command or tool. */
+  actions?: import("../call-actions").CallAction[];
 }
+
+/**
+ * What a call wrote into one file: all of it, the passages it swapped, or a
+ * patch. `cut` when it ran past `writtenLimit` and lost its end.
+ */
+export type WrittenCode =
+  | { kind: "whole"; path: string; content: string; cut?: true }
+  | {
+      kind: "swap";
+      path: string;
+      edits: { old: string; new: string }[];
+      cut?: true;
+    }
+  | { kind: "patch"; path: string; diff: string; cut?: true };
 
 export type TraceDropped = Partial<
   Record<AgentActivity["kind"] | "failed", number>

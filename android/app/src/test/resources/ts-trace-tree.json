@@ -1,0 +1,1199 @@
+{
+ "cases": [
+  {
+   "name": "searches interleaved with a read",
+   "calls": [
+    {
+     "id": "call-1",
+     "kind": "command",
+     "label": "grep -n \"rg\\b\\|rgFlags\" electron/agent-host/read-only-bash.ts | head -20; wc -l electron/agent-host/read-only-bash.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "rg\\b\\|rgFlags",
+       "where": "electron/agent-host/read-only-bash.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-2",
+     "kind": "command",
+     "label": "grep -rl \"Activity\" /tmp/audit/scripts/B /tmp/audit/scripts/B/cmd 2>/dev/null | head -3; grep -rh \"Activity\" /tmp/audit/scripts/B/cmd/*.mjs | head",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "Activity",
+       "where": "/tmp/audit/scripts/B /tmp/audit/scripts/B/cmd"
+      },
+      {
+       "kind": "search",
+       "pattern": "Activity",
+       "where": "/tmp/audit/scripts/B/cmd/*.mjs"
+      }
+     ]
+    },
+    {
+     "id": "call-3",
+     "kind": "read",
+     "label": "electron/agent-host/read-only-bash.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "electron/agent-host/read-only-bash.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-4",
+     "kind": "command",
+     "label": "grep -n \"Activity\" -B2 -A6 /tmp/audit/scripts/B/cmd/run15.mjs | head -30",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "Activity",
+       "where": "/tmp/audit/scripts/B/cmd/run15.mjs"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "branch",
+     "branch": "search",
+     "heading": "Searched 4 times",
+     "rows": [
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "rg\\b\\|rgFlags",
+        "where": "electron/agent-host/read-only-bash.ts"
+       },
+       "calls": [
+        "call-1"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "Activity",
+        "where": "/tmp/audit/scripts/B /tmp/audit/scripts/B/cmd"
+       },
+       "calls": [
+        "call-2"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "Activity",
+        "where": "/tmp/audit/scripts/B/cmd/*.mjs"
+       },
+       "calls": [
+        "call-2"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "Activity",
+        "where": "/tmp/audit/scripts/B/cmd/run15.mjs"
+       },
+       "calls": [
+        "call-4"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "read",
+       "file": "electron/agent-host/read-only-bash.ts"
+      },
+      "calls": [
+       "call-3"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    }
+   ]
+  },
+  {
+   "name": "scripts written to /tmp split the commands",
+   "calls": [
+    {
+     "id": "call-5",
+     "kind": "file",
+     "label": "/tmp/f9/c8-views.mjs",
+     "status": "complete",
+     "detail": "File created successfully at: /tmp/f9/c8-views.mjs",
+     "actions": [
+      {
+       "kind": "create",
+       "file": "/tmp/f9/c8-views.mjs"
+      }
+     ]
+    },
+    {
+     "id": "call-6",
+     "kind": "command",
+     "label": "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "run",
+       "what": "c8-views.mjs"
+      }
+     ]
+    },
+    {
+     "id": "call-7",
+     "kind": "command",
+     "label": "rg --version | head -1; rg --help | grep -oE 'x' > /tmp/rgflags.txt; cat > /tmp/rgcheck.mts <<'EOF'\nimport { readFileSync } from \"node:fs\";\nEOF",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "run",
+       "what": "rg --version"
+      },
+      {
+       "kind": "run",
+       "what": "rg --help"
+      },
+      {
+       "kind": "create",
+       "file": "/tmp/rgcheck.mts"
+      }
+     ]
+    },
+    {
+     "id": "call-8",
+     "kind": "command",
+     "label": "cd /tmp && mkdir -p rgneg && echo hi > rgneg/a.txt; for f in hidden follow; do rg --no-$f x rgneg; done",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "x",
+       "where": "rgneg"
+      }
+     ]
+    },
+    {
+     "id": "call-9",
+     "kind": "command",
+     "label": "grep -rn \"activity\" src/features/sidebar/*.tsx | head",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "activity",
+       "where": "src/features/sidebar/*.tsx"
+      }
+     ]
+    },
+    {
+     "id": "call-10",
+     "kind": "file",
+     "label": "electron/agent-host/read-only-bash.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "edit",
+       "file": "electron/agent-host/read-only-bash.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-11",
+     "kind": "command",
+     "label": "sed -n 160,180p src/features/sidebar/ProjectSidebar.tsx",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/features/sidebar/ProjectSidebar.tsx",
+       "lines": "160–180"
+      }
+     ]
+    },
+    {
+     "id": "call-12",
+     "kind": "command",
+     "label": "sed -n 107,110p electron/agent-host/read-only-bash.ts; npx tsx /tmp/rgcheck.mts 2>&1 | grep -v \"npm notice\"; npx tsx /tmp/rgneg.mts | head -2",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "electron/agent-host/read-only-bash.ts",
+       "lines": "107–110"
+      },
+      {
+       "kind": "run",
+       "what": "rgcheck.mts"
+      },
+      {
+       "kind": "run",
+       "what": "rgneg.mts"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "create",
+       "file": "/tmp/f9/c8-views.mjs"
+      },
+      "calls": [
+       "call-5",
+       "call-6"
+      ],
+      "ranToo": true,
+      "failed": false,
+      "running": false,
+      "verb": "Wrote",
+      "liveVerb": "Writing"
+     }
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "run",
+        "what": "rg --version"
+       },
+       "calls": [
+        "call-7"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      },
+      {
+       "action": {
+        "kind": "run",
+        "what": "rg --help"
+       },
+       "calls": [
+        "call-7"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "create",
+       "file": "/tmp/rgcheck.mts"
+      },
+      "calls": [
+       "call-7"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Wrote",
+      "liveVerb": "Writing"
+     }
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "run",
+        "what": "rgcheck.mts"
+       },
+       "calls": [
+        "call-12"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      },
+      {
+       "action": {
+        "kind": "run",
+        "what": "rgneg.mts"
+       },
+       "calls": [
+        "call-12"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      }
+     ]
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "x",
+        "where": "rgneg"
+       },
+       "calls": [
+        "call-8"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "activity",
+        "where": "src/features/sidebar/*.tsx"
+       },
+       "calls": [
+        "call-9"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "edit",
+       "file": "electron/agent-host/read-only-bash.ts"
+      },
+      "calls": [
+       "call-10"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Edited",
+      "liveVerb": "Editing"
+     }
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "read",
+        "file": "src/features/sidebar/ProjectSidebar.tsx",
+        "lines": "160–180"
+       },
+       "calls": [
+        "call-11"
+       ],
+       "lines": [
+        "160–180"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      },
+      {
+       "action": {
+        "kind": "read",
+        "file": "electron/agent-host/read-only-bash.ts",
+        "lines": "107–110"
+       },
+       "calls": [
+        "call-12"
+       ],
+       "lines": [
+        "107–110"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "edits, a failing then passing test, git checks",
+   "calls": [
+    {
+     "id": "call-13",
+     "kind": "file",
+     "label": "/tmp/f9/c8-views.mjs",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "edit",
+       "file": "/tmp/f9/c8-views.mjs"
+      }
+     ]
+    },
+    {
+     "id": "call-14",
+     "kind": "command",
+     "label": "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "run",
+       "what": "c8-views.mjs"
+      }
+     ]
+    },
+    {
+     "id": "call-15",
+     "kind": "command",
+     "label": "python3 - <<'EOF'\np=\"electron/agent-host/read-only-bash.ts\"\ns=open(p).read()\ns=s.replace(\"a\",\"b\")\nopen(p,\"w\").write(s)\nEOF\ngrep -n \"hostname-bin\" electron/agent-host/read-only-bash.test.ts | head -30",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "edit",
+       "file": "electron/agent-host/read-only-bash.ts"
+      },
+      {
+       "kind": "search",
+       "pattern": "hostname-bin",
+       "where": "electron/agent-host/read-only-bash.test.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-16",
+     "kind": "read",
+     "label": "electron/agent-host/read-only-bash.test.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "electron/agent-host/read-only-bash.test.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-17",
+     "kind": "command",
+     "label": "python3 - <<'EOF'\np=\"electron/agent-host/read-only-bash.test.ts\"\ns=open(p).read()\ns=s.replace(\"x\",\"y\",1)\nEOF",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "edit",
+       "file": "electron/agent-host/read-only-bash.test.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-18",
+     "kind": "command",
+     "label": "npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -20",
+     "status": "complete",
+     "detail": " FAIL  electron/agent-host/read-only-bash.test.ts > lets reads through\n Test Files  1 failed (1)",
+     "actions": [
+      {
+       "kind": "test",
+       "target": "electron/agent-host/read-only-bash.test.ts",
+       "failed": true
+      }
+     ]
+    },
+    {
+     "id": "call-19",
+     "kind": "command",
+     "label": "grep -n \"const disguised\" -A4 electron/agent-host/read-only-bash.ts; sed -i '' \"s/a/b/\" electron/agent-host/read-only-bash.test.ts && npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -3",
+     "status": "complete",
+     "detail": " Test Files  1 passed (1)\n      Tests  12 passed (12)",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "const disguised",
+       "where": "electron/agent-host/read-only-bash.ts"
+      },
+      {
+       "kind": "edit",
+       "file": "electron/agent-host/read-only-bash.test.ts"
+      },
+      {
+       "kind": "test",
+       "target": "electron/agent-host/read-only-bash.test.ts",
+       "failed": false
+      }
+     ]
+    },
+    {
+     "id": "call-20",
+     "kind": "command",
+     "label": "git log --format='%h %s' -- electron/agent-host/read-only-bash.ts | tail -3; git show 02111667:electron/agent-host/read-only-bash.ts | grep -n disg",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "git",
+       "what": "git log"
+      },
+      {
+       "kind": "git",
+       "what": "git show"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "edit",
+       "file": "/tmp/f9/c8-views.mjs"
+      },
+      "calls": [
+       "call-13",
+       "call-14"
+      ],
+      "ranToo": true,
+      "failed": false,
+      "running": false,
+      "verb": "Edited",
+      "liveVerb": "Editing"
+     }
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "git",
+        "what": "git log"
+       },
+       "calls": [
+        "call-20"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      },
+      {
+       "action": {
+        "kind": "git",
+        "what": "git show"
+       },
+       "calls": [
+        "call-20"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      }
+     ]
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "edit",
+        "file": "electron/agent-host/read-only-bash.ts"
+       },
+       "calls": [
+        "call-15"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Edited",
+       "liveVerb": "Editing"
+      },
+      {
+       "action": {
+        "kind": "edit",
+        "file": "electron/agent-host/read-only-bash.test.ts"
+       },
+       "calls": [
+        "call-17",
+        "call-19"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Edited",
+       "liveVerb": "Editing"
+      }
+     ]
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "hostname-bin",
+        "where": "electron/agent-host/read-only-bash.test.ts"
+       },
+       "calls": [
+        "call-15"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "const disguised",
+        "where": "electron/agent-host/read-only-bash.ts"
+       },
+       "calls": [
+        "call-19"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "read",
+       "file": "electron/agent-host/read-only-bash.test.ts"
+      },
+      "calls": [
+       "call-16"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "test",
+       "target": "electron/agent-host/read-only-bash.test.ts",
+       "failed": true
+      },
+      "calls": [
+       "call-18"
+      ],
+      "failed": true,
+      "running": false,
+      "verb": "Tests failed",
+      "liveVerb": "Running tests"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "test",
+       "target": "electron/agent-host/read-only-bash.test.ts",
+       "failed": false
+      },
+      "calls": [
+       "call-19"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Tests passed",
+      "liveVerb": "Running tests"
+     }
+    }
+   ]
+  },
+  {
+   "name": "a file read twice, a commit, and a picture",
+   "calls": [
+    {
+     "id": "call-21",
+     "kind": "command",
+     "label": "sed -n 890,900p src/features/sidebar/sidebar.css && sed -i '' '898s/.*/  color: var(--muted);/' src/features/sidebar/sidebar.css && sed -n 892,900p src/features/sidebar/sidebar.css",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/features/sidebar/sidebar.css",
+       "lines": "890–900"
+      },
+      {
+       "kind": "edit",
+       "file": "src/features/sidebar/sidebar.css"
+      },
+      {
+       "kind": "read",
+       "file": "src/features/sidebar/sidebar.css",
+       "lines": "892–900"
+      }
+     ]
+    },
+    {
+     "id": "call-22",
+     "kind": "command",
+     "label": "git add src/features/sidebar/sidebar.css && git commit -q -m \"Show the branch line in muted grey\" && git log --oneline -1",
+     "status": "complete",
+     "detail": "4484e535 Show the branch line in muted grey",
+     "actions": [
+      {
+       "kind": "commit",
+       "subject": "Show the branch line in muted grey",
+       "hash": "4484e535"
+      },
+      {
+       "kind": "git",
+       "what": "git log"
+      }
+     ]
+    },
+    {
+     "id": "call-23",
+     "kind": "read",
+     "label": "/tmp/shots/dim-light.png",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "image",
+       "file": "/tmp/shots/dim-light.png"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "read",
+       "file": "src/features/sidebar/sidebar.css",
+       "lines": "890–900"
+      },
+      "calls": [
+       "call-21"
+      ],
+      "lines": [
+       "890–900",
+       "892–900"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "image",
+       "file": "/tmp/shots/dim-light.png"
+      },
+      "calls": [
+       "call-23"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Looked at",
+      "liveVerb": "Looking at"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "edit",
+       "file": "src/features/sidebar/sidebar.css"
+      },
+      "calls": [
+       "call-21"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Edited",
+      "liveVerb": "Editing"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "commit",
+       "subject": "Show the branch line in muted grey",
+       "hash": "4484e535"
+      },
+      "calls": [
+       "call-22"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Committed",
+      "liveVerb": "Committing"
+     }
+    }
+   ]
+  },
+  {
+   "name": "a run still going",
+   "calls": [
+    {
+     "id": "call-24",
+     "kind": "command",
+     "label": "bash -c \"printf '[%s] ' rg x\"",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "run",
+       "what": "shell snippet"
+      }
+     ]
+    },
+    {
+     "id": "call-25",
+     "kind": "command",
+     "label": "npm run typecheck >/tmp/tc.txt 2>&1; echo \"tc $?\"; git add a.ts && git commit -qm \"Let rg take its flags\"",
+     "status": "running",
+     "actions": [
+      {
+       "kind": "check",
+       "name": "typecheck",
+       "failed": false
+      },
+      {
+       "kind": "commit",
+       "subject": "Let rg take its flags"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "run",
+       "what": "shell snippet"
+      },
+      "calls": [
+       "call-24"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Ran",
+      "liveVerb": "Running"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "check",
+       "name": "typecheck",
+       "failed": false
+      },
+      "calls": [
+       "call-25"
+      ],
+      "failed": false,
+      "running": true,
+      "verb": "Typecheck passed",
+      "liveVerb": "Running typecheck"
+     }
+    }
+   ]
+  },
+  {
+   "name": "tools, agents, the web and a failed read",
+   "calls": [
+    {
+     "id": "call-26",
+     "kind": "search",
+     "label": "useThreadScroll in src",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "useThreadScroll",
+       "where": "src"
+      }
+     ]
+    },
+    {
+     "id": "call-27",
+     "kind": "search",
+     "label": "thread-scroll in tests",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "thread-scroll",
+       "where": "tests"
+      }
+     ]
+    },
+    {
+     "id": "call-28",
+     "kind": "web",
+     "label": "shiki line diff",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "web",
+       "query": "shiki line diff"
+      }
+     ]
+    },
+    {
+     "id": "call-29",
+     "kind": "agent",
+     "label": "Find the scroll code",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "tool"
+      }
+     ]
+    },
+    {
+     "id": "call-30",
+     "kind": "agent",
+     "label": "Check the phone apps",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "tool"
+      }
+     ]
+    },
+    {
+     "id": "call-31",
+     "kind": "tool",
+     "label": "relay: screenshot",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "tool"
+      }
+     ]
+    },
+    {
+     "id": "call-32",
+     "kind": "read",
+     "label": "src/missing.ts",
+     "status": "failed",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/missing.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-33",
+     "kind": "read",
+     "label": "src/app/shell.css",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/app/shell.css"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "useThreadScroll",
+        "where": "src"
+       },
+       "calls": [
+        "call-26"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      },
+      {
+       "action": {
+        "kind": "search",
+        "pattern": "thread-scroll",
+        "where": "tests"
+       },
+       "calls": [
+        "call-27"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Searched",
+       "liveVerb": "Searching"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "web",
+       "query": "shiki line diff"
+      },
+      "calls": [
+       "call-28"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Searched the web for",
+      "liveVerb": "Searching the web for"
+     }
+    },
+    {
+     "kind": "branch",
+     "branch": "tool",
+     "heading": "Used 3 tools",
+     "rows": [
+      {
+       "action": {
+        "kind": "tool"
+       },
+       "calls": [
+        "call-29"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "",
+       "liveVerb": ""
+      },
+      {
+       "action": {
+        "kind": "tool"
+       },
+       "calls": [
+        "call-30"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "",
+       "liveVerb": ""
+      },
+      {
+       "action": {
+        "kind": "tool"
+       },
+       "calls": [
+        "call-31"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "",
+       "liveVerb": ""
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "read",
+       "file": "src/missing.ts"
+      },
+      "calls": [
+       "call-32"
+      ],
+      "failed": true,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "action": {
+       "kind": "read",
+       "file": "src/app/shell.css"
+      },
+      "calls": [
+       "call-33"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    }
+   ]
+  }
+ ],
+ "shortPatterns": [
+  [
+   "^\\.sb-age\\b\\|^\\.sb-age {",
+   ".sb-age"
+  ],
+  [
+   "rg\\b\\|rgFlags",
+   "rg"
+  ],
+  [
+   "color: color-mix(in srgb, var(--muted) 70%, transparent);",
+   "color: color-mix(in srgb, var(--…"
+  ],
+  [
+   "plain",
+   "plain"
+  ]
+ ],
+ "shortWheres": [
+  [
+   "src",
+   "src"
+  ],
+  [
+   "/private/tmp/relay-audit/scripts/B /tmp/x",
+   "…/scripts/B"
+  ],
+  [
+   "src/features/sidebar/*.tsx",
+   "…/sidebar/*.tsx"
+  ]
+ ]
+}

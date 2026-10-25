@@ -5,7 +5,7 @@
 export const bigFunctions: Record<string, number> = {
   "electron/agent-host/host.ts › receive": 95,
   "electron/agents/acp/run.ts › runAcpTurn": 221,
-  "electron/agents/activity.ts › codexActivity": 109,
+  "electron/agents/activity.ts › codexActivity": 98,
   "electron/agents/agent-updates.ts › runUpdate": 122,
   "electron/agents/antigravity/helper.ts › antigravityHelper": 84,
   "electron/agents/antigravity/usage.ts › createAntigravityUsageReader": 133,
@@ -98,7 +98,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/pull-requests/pull-request-create.ts › create": 103,
   "electron/read-aloud/engines/pocket/model.ts › loadPocket": 210,
   "electron/read-aloud/engines/supertonic.ts › loadSupertonic": 159,
-  "electron/remote/bridge.ts › handle": 95,
+  "electron/remote/bridge.ts › handle": 92,
   "electron/remote/phone-remote.ts › constructor": 86,
   "electron/remote/server.ts › receive": 117,
   "electron/started-threads/index.ts › answer": 125,

@@ -1,5 +1,6 @@
 import type { AgentActivity } from "../../../shared/projects";
 import { patchPaths } from "../activity";
+import { acpWritten } from "../written-code";
 import type { AcpToolCall } from "./protocol";
 
 /** Tool kinds that change files. */
@@ -95,12 +96,14 @@ export function acpActivity(call: Partial<AcpToolCall> & { toolCallId: string })
   const printed = output(call);
   const detail = kind === "read" ? "" : printed.text;
   const status = statuses[call.status ?? ""] ?? "running";
+  const written = acpWritten(call.content ?? []);
   return {
     id: call.toolCallId.slice(0, 180),
     kind,
     status: status === "complete" && printed.exitCode ? "failed" : status,
     label: label.slice(0, 500),
     ...(detail ? { detail: detail.slice(-8000) } : {}),
+    ...(written.length ? { written } : {}),
   };
 }
 

@@ -16,7 +16,12 @@ import type {
   RemoteProjectMethod,
 } from "./handoff";
 import type { PhoneAppReport } from "./phone-app";
-import type { ChatMessage, KnownMessages, ProjectChatSend } from "./projects";
+import type {
+  ChatMessage,
+  KnownMessages,
+  ProjectChatSend,
+  WrittenCode,
+} from "./projects";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type {
   ComputerCallMethod,
@@ -94,6 +99,12 @@ export interface RemoteApi {
     messageId: string,
     activityId: string,
   ): Promise<string | null>;
+  /** The code a call wrote, which the thread left out; missing before `traceTreeBridge`. */
+  activityWritten(
+    chatId: string,
+    messageId: string,
+    activityId: string,
+  ): Promise<WrittenCode[] | null>;
   /** The image as a data URL at most `max` pixels on its longer side; missing before `imageBridge`. */
   image(source: RemoteImageSource, max: number): Promise<string>;
   /** The news after `cursor`, or where it is now without one; missing before `newsBridge`. */

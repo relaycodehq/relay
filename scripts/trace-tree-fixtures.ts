@@ -1,0 +1,140 @@
+// What shared/trace-tree.ts makes of sample runs, for the phone apps' tests to
+// hold their ports to. The calls carry `actions` as a phone gets them.
+//
+//   node_modules/.bin/jiti scripts/trace-tree-fixtures.ts
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import type { AgentActivity } from "../shared/projects";
+import { callActions } from "../shared/call-actions";
+import {
+  actionVerb,
+  rowFailed,
+  rowRunning,
+  shortPattern,
+  shortWhere,
+  traceTree,
+  type TracePiece,
+  type TraceRow,
+} from "../shared/trace-tree";
+
+const root = resolve(import.meta.dirname, "..");
+
+let n = 0;
+const call = (
+  kind: AgentActivity["kind"],
+  label: string,
+  extra: Partial<AgentActivity> = {},
+): AgentActivity => {
+  const activity: AgentActivity = { id: `call-${++n}`, kind, label, status: "complete", ...extra };
+  return { ...activity, actions: callActions(activity) };
+};
+
+const cases: { name: string; calls: AgentActivity[] }[] = [
+  {
+    name: "searches interleaved with a read",
+    calls: [
+      call("command", `grep -n "rg\\b\\|rgFlags" electron/agent-host/read-only-bash.ts | head -20; wc -l electron/agent-host/read-only-bash.ts`),
+      call("command", `grep -rl "Activity" /tmp/audit/scripts/B /tmp/audit/scripts/B/cmd 2>/dev/null | head -3; grep -rh "Activity" /tmp/audit/scripts/B/cmd/*.mjs | head`),
+      call("read", "electron/agent-host/read-only-bash.ts"),
+      call("command", `grep -n "Activity" -B2 -A6 /tmp/audit/scripts/B/cmd/run15.mjs | head -30`),
+    ],
+  },
+  {
+    name: "scripts written to /tmp split the commands",
+    calls: [
+      call("file", "/tmp/f9/c8-views.mjs", { detail: "File created successfully at: /tmp/f9/c8-views.mjs" }),
+      call("command", "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs"),
+      call("command", "rg --version | head -1; rg --help | grep -oE 'x' > /tmp/rgflags.txt; cat > /tmp/rgcheck.mts <<'EOF'\nimport { readFileSync } from \"node:fs\";\nEOF"),
+      call("command", "cd /tmp && mkdir -p rgneg && echo hi > rgneg/a.txt; for f in hidden follow; do rg --no-$f x rgneg; done"),
+      call("command", `grep -rn "activity" src/features/sidebar/*.tsx | head`),
+      call("file", "electron/agent-host/read-only-bash.ts"),
+      call("command", "sed -n 160,180p src/features/sidebar/ProjectSidebar.tsx"),
+      call("command", `sed -n 107,110p electron/agent-host/read-only-bash.ts; npx tsx /tmp/rgcheck.mts 2>&1 | grep -v "npm notice"; npx tsx /tmp/rgneg.mts | head -2`),
+    ],
+  },
+  {
+    name: "edits, a failing then passing test, git checks",
+    calls: [
+      call("file", "/tmp/f9/c8-views.mjs"),
+      call("command", "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs"),
+      call("command", `python3 - <<'EOF'\np="electron/agent-host/read-only-bash.ts"\ns=open(p).read()\ns=s.replace("a","b")\nopen(p,"w").write(s)\nEOF\ngrep -n "hostname-bin" electron/agent-host/read-only-bash.test.ts | head -30`),
+      call("read", "electron/agent-host/read-only-bash.test.ts"),
+      call("command", `python3 - <<'EOF'\np="electron/agent-host/read-only-bash.test.ts"\ns=open(p).read()\ns=s.replace("x","y",1)\nEOF`),
+      call("command", "npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -20", {
+        detail: " FAIL  electron/agent-host/read-only-bash.test.ts > lets reads through\n Test Files  1 failed (1)",
+      }),
+      call("command", `grep -n "const disguised" -A4 electron/agent-host/read-only-bash.ts; sed -i '' "s/a/b/" electron/agent-host/read-only-bash.test.ts && npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -3`, {
+        detail: " Test Files  1 passed (1)\n      Tests  12 passed (12)",
+      }),
+      call("command", "git log --format='%h %s' -- electron/agent-host/read-only-bash.ts | tail -3; git show 02111667:electron/agent-host/read-only-bash.ts | grep -n disg"),
+    ],
+  },
+  {
+    name: "a file read twice, a commit, and a picture",
+    calls: [
+      call("command", "sed -n 890,900p src/features/sidebar/sidebar.css && sed -i '' '898s/.*/  color: var(--muted);/' src/features/sidebar/sidebar.css && sed -n 892,900p src/features/sidebar/sidebar.css"),
+      call("command", `git add src/features/sidebar/sidebar.css && git commit -q -m "Show the branch line in muted grey" && git log --oneline -1`, {
+        detail: "4484e535 Show the branch line in muted grey",
+      }),
+      call("read", "/tmp/shots/dim-light.png"),
+    ],
+  },
+  {
+    name: "a run still going",
+    calls: [
+      call("command", `bash -c "printf '[%s] ' rg x"`),
+      call("command", `npm run typecheck >/tmp/tc.txt 2>&1; echo "tc $?"; git add a.ts && git commit -qm "Let rg take its flags"`, { status: "running" }),
+    ],
+  },
+  {
+    name: "tools, agents, the web and a failed read",
+    calls: [
+      call("search", "useThreadScroll in src"),
+      call("search", "thread-scroll in tests"),
+      call("web", "shiki line diff"),
+      call("agent", "Find the scroll code"),
+      call("agent", "Check the phone apps"),
+      call("tool", "relay: screenshot"),
+      call("read", "src/missing.ts", { status: "failed" }),
+      call("read", "src/app/shell.css"),
+    ],
+  },
+];
+
+const row = (r: TraceRow) => ({
+  action: r.action,
+  calls: r.calls.map((c) => c.id),
+  ...(r.lines ? { lines: r.lines } : {}),
+  ...(r.ranToo ? { ranToo: true } : {}),
+  failed: rowFailed(r),
+  running: rowRunning(r),
+  verb: actionVerb(r),
+  liveVerb: actionVerb(r, true),
+});
+
+const piece = (p: TracePiece) => {
+  switch (p.kind) {
+    case "row":
+      return { kind: "row", row: row(p.row) };
+    case "pair":
+      return { kind: "pair", rows: p.rows.map(row) };
+    case "branch":
+      return { kind: "branch", branch: p.branch, heading: p.heading, rows: p.rows.map(row) };
+  }
+};
+
+const fixture = {
+  cases: cases.map((c) => ({ name: c.name, calls: c.calls, pieces: traceTree(c.calls).map(piece) })),
+  shortPatterns: ["^\\.sb-age\\b\\|^\\.sb-age {", "rg\\b\\|rgFlags", "color: color-mix(in srgb, var(--muted) 70%, transparent);", "plain"].map(
+    (p) => [p, shortPattern(p)],
+  ),
+  shortWheres: ["src", "/private/tmp/relay-audit/scripts/B /tmp/x", "src/features/sidebar/*.tsx"].map((w) => [w, shortWhere(w)]),
+};
+
+for (const path of [
+  "ios/RelayKit/Tests/RelayRemoteTests/Fixtures/ts-trace-tree.json",
+  "android/app/src/test/resources/ts-trace-tree.json",
+]) {
+  mkdirSync(dirname(join(root, path)), { recursive: true });
+  writeFileSync(join(root, path), JSON.stringify(fixture, null, 1) + "\n");
+}

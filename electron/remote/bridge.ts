@@ -50,7 +50,7 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import { phoneIcon } from "./svg-icon";
-import { forPhone, forPhoneRun, messageActivity } from "./for-phone";
+import { callIn, forPhone, forPhoneRun } from "./for-phone";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
 import type {
@@ -200,6 +200,10 @@ const streamMs = 150;
 const sendKey = (chatId: string, id: string) => JSON.stringify([chatId, id]);
 
 /** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
+/** The thread, message and call a phone opens a row of. */
+const callIds = (args: unknown[]) =>
+  [idSchema.parse(args[0]), idSchema.parse(args[1]), activityIdSchema.parse(args[2])] as const;
+
 export class RemoteBridge {
   private streams = new Map<
     string,
@@ -326,15 +330,10 @@ export class RemoteBridge {
           : {}),
       };
     },
-    activityDetail: async (chatId, messageId, activityId) => {
-      const message = (await this.host.chat(chatId)).messages.find(
-        (m): m is ChatMessage => typeof m !== "string" && m.id === messageId,
-      );
-      return (
-        messageActivity(message).find((a) => a.id === activityId)?.detail ??
-        null
-      );
-    },
+    activityDetail: async (chatId, messageId, id) =>
+      callIn(await this.host.chat(chatId), messageId, id)?.detail ?? null,
+    activityWritten: async (chatId, messageId, id) =>
+      callIn(await this.host.chat(chatId), messageId, id)?.written ?? null,
     image: async (source, max) => {
       const dataUrl = (await this.host.dispatch(
         ...((source.kind === "attached"
@@ -531,11 +530,8 @@ export class RemoteBridge {
           args[3] == null ? undefined : idSchema.parse(args[3]),
         );
       case "activityDetail":
-        return a.activityDetail(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          activityIdSchema.parse(args[2]),
-        );
+      case "activityWritten":
+        return a[method](...callIds(args));
       case "diff":
         return a.diff(diffSourceSchema.parse(args[0]));
       case "image":

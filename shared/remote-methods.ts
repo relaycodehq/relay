@@ -171,6 +171,7 @@ export const remoteMethods = [
   "dictate",
   "readAloud",
   "activityDetail",
+  "activityWritten",
   "image",
   "renderPage",
   "news",

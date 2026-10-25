@@ -1,14 +1,28 @@
-// A thread as a phone gets it: tool output cut to its start and end, the rest
-// fetched when a fold opens.
+// A thread as a phone gets it: tool output cut to its start and end, written
+// code left out, both fetched when a row opens, and what each call did read
+// here so phones never parse a command.
 import type { AgentActivity, ChatMessage } from "../../shared/projects";
 import { phoneDetailPreview } from "../../shared/remote";
 import { isStartThreads } from "../../shared/started-threads";
+import { callActions } from "../../shared/call-actions";
 import type { SubagentDetail } from "../../shared/subagents";
 
-export const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
+const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
   m?.trace
     ? m.trace.flatMap((e) => (e.kind === "activity" ? [e.activity] : []))
     : (m?.activity ?? []);
+
+/** A tool call in a thread's message, which phones fetch the cut parts of. */
+export function callIn(
+  chat: { messages: (ChatMessage | string)[] },
+  messageId: string,
+  activityId: string,
+) {
+  const message = chat.messages.find(
+    (m): m is ChatMessage => typeof m !== "string" && m.id === messageId,
+  );
+  return messageActivity(message).find((a) => a.id === activityId);
+}
 
 /**
  * Tool output is most of a thread's weight (8.5 of 11.9 MB over 40 real
@@ -28,15 +42,25 @@ function cutDetail(a: AgentActivity): AgentActivity {
   };
 }
 
+/** A call with what it did spelled out, and its written code swapped for a mark. */
+function forPhoneCall(a: AgentActivity): AgentActivity {
+  const { written, ...call } = cutDetail(a);
+  return {
+    ...call,
+    actions: callActions(a),
+    ...(written?.length ? { wroteCode: true as const } : {}),
+  };
+}
+
 export function forPhone(m: ChatMessage): ChatMessage {
   if (m.trace)
     return {
       ...m,
       trace: m.trace.map((e) =>
-        e.kind === "activity" ? { ...e, activity: cutDetail(e.activity) } : e,
+        e.kind === "activity" ? { ...e, activity: forPhoneCall(e.activity) } : e,
       ),
     };
-  if (m.activity) return { ...m, activity: m.activity.map(cutDetail) };
+  if (m.activity) return { ...m, activity: m.activity.map(forPhoneCall) };
   return m;
 }
 
@@ -46,7 +70,8 @@ export function forPhoneRun(run: SubagentDetail): SubagentDetail {
     ...run,
     trace: run.trace.map((e) => {
       if (e.kind !== "activity") return e;
-      const { detailCut: _, ...activity } = cutDetail(e.activity);
+      // No `activityDetail` or `activityWritten` reaches a subagent's calls.
+      const { detailCut: _, wroteCode: __, ...activity } = forPhoneCall(e.activity);
       return { ...e, activity };
     }),
   };
