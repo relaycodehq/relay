@@ -44,8 +44,63 @@
   the preload script and the tests are separate projects, so `src/` can't
   reach for Node and `electron/` can't reach for the DOM. A bare
   `tsc --noEmit` checks nothing and passes.
-- `tests/unit/layout.test.ts` fails when one of these rules is broken, or when
-  features, or the folders of `electron/`, import each other in a circle.
+- **One job per file, class and function.** A file past ~500 lines, or a
+  function past ~80, does several things: split it by what each part does
+  (`lead-messages.ts` came out of `started-threads/index.ts` that way), not
+  into arbitrary halves. Files already over 500 are listed with a ceiling in
+  `tests/unit/big-files.ts`; they may shrink, never grow. Lower the ceiling
+  when you shrink one, and never raise it to fit a change.
+- `tests/unit/layout.test.ts` fails when one of these rules is broken, when a
+  file grows past its line limit, or when features, or the folders of
+  `electron/`, import each other in a circle.
+
+## Readable code
+
+Code should read like you'd explain it out loud: one fact per line, in the
+order things happen. A few more words are fine when each one helps; this is
+not a call for interfaces and factories.
+
+- **A name says only what the code has checked.** What `chats.get(id)`
+  returns is a `thread`; it becomes a parent's child only once you've found
+  its `startedBy`.
+- **Name the decision.** A run of conditions becomes a predicate with one
+  named boolean per rule, and the caller reads as steps:
+  ```ts
+  // Not this:
+  if (!chat?.startedBy || chat.reviewer) return;
+  if (!answeredLead(chat, chat.startedBy.chatId)) return;
+  if (this.reads.waitsFor(chat.startedBy.chatId, chat.id)) return;
+  // This:
+  const thread = await this.chats.get(turn.threadId).catch(() => undefined);
+  const parentId = thread?.startedBy?.chatId;
+  if (!thread || !parentId) return; // no thread to report to
+  if (!this.parentShouldHear(thread, parentId, turn)) return;
+  ```
+- **A name says what the value is, not the question that made it.** `cold`
+  sounds like a yes or no, so a `{ provider, tokens }` behind it surprises;
+  `compactOffer` doesn't.
+- **A function's name answers what you'd ask where it's called.**
+  `worthCompactingCold(usage)`, `refusalFor(request)`, `nextMoveIsSet(answer)`;
+  not `compactsCold`, `checkStart` or `allows`.
+- **`undefined` doesn't mean anything but "not there".** If "no other
+  project" means "the lead's own", say so with a type:
+  `{ own: true } | { own: false; project }`, then `if (destination.own)`.
+- **No double negations.** `!(!chat.queuePaused && …)` becomes a named
+  `queuedMessageNext`.
+- **A ternary picks between two values; nothing more.** Fine for a string, a
+  prop or an argument: `spec.readOnly ? "read-only" : last.runtimeMode`. Three
+  or more outcomes become a small function with early returns, or a lookup;
+  never a nested ternary. Don't use one in place of `&&`
+  (`root?.side ? false : running` is `!root?.side && running`). In JSX, a
+  two-way ternary is fine; a chain over which screen is open becomes one value
+  and a `switch` or a component per screen.
+- **Comments say why, plainly.** "No thread to report to", not "A stop is
+  whoever stopped it's to tell". Many older comments are compressed like that;
+  don't copy their voice into new code.
+- **One word per idea.** Not `lead`, `caller` and `from` for the same thread,
+  nor `branch` for a reply thread in an app about Git branches (`replyTo`).
+- **Tidy what you touch.** When you change a function, leave it reading like
+  this; don't sweep files you aren't working in.
 
 ## Deprecated APIs
 
