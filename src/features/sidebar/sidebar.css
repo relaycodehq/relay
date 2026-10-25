@@ -549,6 +549,10 @@
 .sb-compact-title-input {
   padding: 0;
 }
+/* A cut-off title fades out instead of ending in "…" (useTitleFade). */
+:is(.sb-thread-title, .sb-card-title, .sb-compact-title)[data-cut] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
 .sb-title-regenerating {
   opacity: 0.55;
   transition: opacity 0.2s;
@@ -610,7 +614,6 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
 }
@@ -1067,7 +1070,6 @@
   line-height: 1.35;
   color: var(--text);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   transition: color 0.12s;
 }
@@ -1479,7 +1481,6 @@
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 .sb-compact small {
