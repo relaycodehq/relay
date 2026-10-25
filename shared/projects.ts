@@ -10,4 +10,5 @@ export * from "./projects/chat";
 export * from "./projects/composer";
 export * from "./projects/sync";
 export * from "./projects/api";
+export * from "./projects/council-api";
 export type { AgentProvider } from "./agents";

@@ -1,5 +1,4 @@
 import type { RunImportOffer } from "../import-offer";
-import type { PredictionSummary } from "../prediction";
 import type { AgentResponse } from "../agent-modes";
 import type { AgentProvider } from "../agents";
 import type { MergeBranch, MergePlan, MergeResult } from "../branch-merge";
@@ -18,17 +17,9 @@ import type {
 import type { CiStatus } from "../ci";
 import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
-import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
 import type { HelperPick } from "../settings";
 import type { ElsewhereChanges } from "../elsewhere";
-import type {
-  DeepReviewStart,
-  ResumeReview,
-  ReviewSetup,
-  SavedReviewSetup,
-} from "../deep-review";
-import type { FindingStatus } from "../findings";
 import type { ThreadNote } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { NewsItem } from "../thread-news";
@@ -60,6 +51,7 @@ import type {
   WorkingTree,
 } from "../working-tree";
 import type { AddingJob, AddingStart, GithubRepos, NewProject } from "./adding";
+import type { ProjectCouncilApi } from "./council-api";
 import type {
   ImportApp,
   ImportProject,
@@ -362,52 +354,6 @@ export interface ProjectChatApi {
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
   /** What a thread is news of: an answer that finished or failed, a thread that needs you. */
   onThreadNews(callback: (item: NewsItem) => void): () => void;
-}
-
-/** Deep reviews, run inside a thread. */
-export interface ProjectCouncilApi {
-  startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
-  /** A short name for a deep review setup, written by a helper agent; null when none could. */
-  nameReviewSetup(setup: ReviewSetup): Promise<string | null>;
-  /** The setups the deep review sheet lists, for the deep_review tool to pick from. */
-  saveReviewSetups(setups: SavedReviewSetup[]): Promise<void>;
-  /**
-   * Runs the reviewers that didn't finish, then the lead. `slot` runs that
-   * reviewer's task again before the lead starts; `lead` hands a stopped
-   * review to the lead with the reports that are in.
-   */
-  resumeDeepReview(id: string, only?: ResumeReview): Promise<void>;
-  /** Opens or dismisses a finding an answer in the thread published. */
-  setFinding(
-    id: string,
-    findingId: string,
-    status: Extract<FindingStatus, "open" | "dismissed">,
-  ): Promise<void>;
-  /**
-   * Takes a watch note out of its turn; "known" also keeps its topic from
-   * coming up again. `read` says its details were open.
-   */
-  closeWatchNote(
-    id: string,
-    messageId: string,
-    noteId: string,
-    how: WatchClose,
-    read: boolean,
-  ): Promise<void>;
-  /** What "Flag what I'd miss" spent this past week, by thread. */
-  watchSpend(): Promise<WatchSpendSummary | undefined>;
-  /** What the composer's next-message guesses cost this past week, and how often they were sent. */
-  predictionSpend(): Promise<PredictionSummary | undefined>;
-  /** The composer showed an answer's guess at the next message, or Escape put it away. */
-  seePrediction(
-    id: string,
-    messageId: string,
-    how: "shown" | "dismissed",
-  ): Promise<void>;
-  /** This past week's notes with what was done with each; development builds. */
-  watchReview(): Promise<WatchReview>;
-  /** Has a helper model grade the notes not graded yet; spends on the helper's account. */
-  judgeWatchNotes(): Promise<WatchReview>;
 }
 
 /** A thread's own worktree, and the ones its agent made. */

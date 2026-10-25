@@ -32,7 +32,7 @@ export const bigFiles: Record<string, number> = {
   "electron/triage/service.ts": 561,
   "shared/handoff.ts": 671,
   "shared/open-vsx.ts": 536,
-  "shared/projects/api.ts": 607,
+  "shared/projects/api.ts": 553,
   "shared/remote-client.ts": 776,
   "shared/shortcuts.ts": 580,
   "shared/types.ts": 920,
