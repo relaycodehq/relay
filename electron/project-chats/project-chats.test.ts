@@ -177,13 +177,14 @@ it("keeps unanswered async questions across a restart and answers them as a foll
   expect(calls.some((call) => call.interrupt || call.steer)).toBe(false);
 });
 
-it("resumes after a question reply without carrying its hidden-response markers into the resume", async () => {
+it("resumes after a question reply without carrying its hidden-response markers or guest into the resume", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {
     ...input("@codex wait for cancellation"),
     asyncQuestionAnswer: true,
     questionMessageId: "original-question",
     pageAnswer: { title: "Pick a sound" },
+    guest: { name: "Alex" },
   });
   await vi.waitFor(async () =>
     expect((await chats.get(chat.id)).messages.at(-1)?.body).toContain(
@@ -201,6 +202,7 @@ it("resumes after a question reply without carrying its hidden-response markers 
   expect(resumed.asyncQuestionAnswer).toBeUndefined();
   expect(resumed.questionMessageId).toBeUndefined();
   expect(resumed.pageAnswer).toBeUndefined();
+  expect(resumed.author).toBeUndefined();
 });
 
 it("sends only messages the renderer doesn't hold at their current version", async () => {

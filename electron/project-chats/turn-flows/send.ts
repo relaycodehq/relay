@@ -145,12 +145,11 @@ export class TurnSends {
         ...settings,
         id: randomUUID(),
         to: provider,
-        body: missed
-          ? `@${provider} Your previous response ended before you read what I wrote above. Check what has already been done before repeating any actions.`
-          : `@${provider} Continue from where the previous response was stopped. Check what has already been done before repeating any actions.`,
+        body: `@${provider} ${missed ? "Your previous response ended before you read what I wrote above." : "Continue from where the previous response was stopped."} Check what has already been done before repeating any actions.`,
         asyncQuestionAnswer: undefined,
         questionMessageId: undefined,
         pageAnswer: undefined,
+        guest: undefined,
         images: undefined,
         selection: undefined,
         delivery: undefined,
