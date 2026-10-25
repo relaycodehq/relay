@@ -256,6 +256,10 @@ export function turnImages(message: ChatMessage): string[] {
   return [...new Set(calls.flatMap((a) => imageRead(a) ?? []))];
 }
 
+/** An answer given in this thread, Relay's markers included; not one copied from a shared thread. */
+export const answeredHere = (m: ChatMessage) =>
+  m.role === "assistant" && !m.imported;
+
 /** An answer an agent gave in this thread: not one of Relay's markers, nor one copied from a shared thread. */
 export const agentAnswered = (m: ChatMessage) =>
   m.role === "assistant" &&

@@ -17,7 +17,7 @@ import type {
   ProjectChatSend,
   ScheduledChatMessage,
 } from "../../shared/projects";
-import { reviewFolder } from "../../shared/projects";
+import { answeredHere, reviewFolder } from "../../shared/projects";
 import { reviewerTitle } from "../../shared/deep-review";
 import { contextAgent } from "../../shared/recipient";
 import { notesMark } from "../../shared/thread-notes";
@@ -96,7 +96,7 @@ export function chatSummary({
   asking,
   ...summary
 }: ProjectChat): ChatSummary {
-  const answers = [...messages].reverse().filter((m) => m.role === "assistant");
+  const answers = [...messages].reverse().filter(answeredHere);
   const latest = answers[0];
   const provider = latest?.provider;
   const model = latest?.model?.name;

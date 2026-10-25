@@ -74,6 +74,10 @@ it("lists each answering agent once, most recently used first, including side co
   ]);
   chat.messages = [];
   expect(chatSummary(chat).providers).toEqual([]);
+  // Answers copied from a shared thread hold no session here.
+  chat.messages = [{ ...answer("Copied"), imported: true }];
+  expect(chatSummary(chat)).toMatchObject({ providers: [] });
+  expect(chatSummary(chat).provider).toBeUndefined();
 });
 
 it("backfills agent history for older summaries even when the thread file is old", async () => {
