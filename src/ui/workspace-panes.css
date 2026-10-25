@@ -16,6 +16,12 @@
   background: var(--surface);
   overflow: hidden;
   container-type: inline-size;
+  /* Its own compositor layer. Painted into the window's, every step of a
+     resize moved and redrew the whole window, which a 6K screen can't keep
+     up with at 60fps: Skia Graphite showed frames before they were drawn,
+     as black holes. Opacity, unlike transform, keeps fixed descendants
+     placed against the window. */
+  will-change: opacity;
 }
 .pane-splitter + .workspace-pane {
   border-left: 1px solid var(--border);

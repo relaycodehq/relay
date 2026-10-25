@@ -198,24 +198,12 @@ function PaneSplitter({
   right: { id: PaneId; weight: number };
   onResize: (weights: Partial<Record<PaneId, number>>) => void;
 }) {
-  const resizeBy = (leftWidth: number, total: number) => {
+  const resizeTo = (leftWidth: number, total: number) => {
     const share = left.weight + right.weight;
-    const next = Math.max(
-      PANE_MIN[left.id],
-      Math.min(total - PANE_MIN[right.id], leftWidth),
-    );
     onResize({
-      [left.id]: (next / total) * share,
-      [right.id]: ((total - next) / total) * share,
+      [left.id]: (leftWidth / total) * share,
+      [right.id]: ((total - leftWidth) / total) * share,
     });
-  };
-  const widths = (element: HTMLElement) => {
-    const pane = element.nextElementSibling!;
-    const before = element.parentElement!.querySelector<HTMLElement>(
-      `[data-pane="${left.id}"]`,
-    )!;
-    const l = before.getBoundingClientRect().width;
-    return { l, total: l + pane.getBoundingClientRect().width };
   };
   return (
     <Splitter
@@ -224,8 +212,32 @@ function PaneSplitter({
       step={20}
       style={{ order }}
       begin={(handle) => {
-        const { l, total } = widths(handle);
-        return (delta) => resizeBy(l + delta, total);
+        const after = handle.nextElementSibling as HTMLElement;
+        const before = handle.parentElement!.querySelector<HTMLElement>(
+          `[data-pane="${left.id}"]`,
+        )!;
+        const l = before.getBoundingClientRect().width,
+          total = l + after.getBoundingClientRect().width;
+        // The two panes' share of the row, which the drag splits between them.
+        const grow =
+          Number(before.style.flexGrow) + Number(after.style.flexGrow);
+        let next = l;
+        return {
+          // Straight onto the two panes while it moves, kept in the layout at
+          // the end: through its state, every step re-rendered the workspace,
+          // the thread and an open editor included.
+          move: (delta) => {
+            next = Math.max(
+              PANE_MIN[left.id],
+              Math.min(total - PANE_MIN[right.id], l + delta),
+            );
+            before.style.flexGrow = String((grow * next) / total);
+            after.style.flexGrow = String((grow * (total - next)) / total);
+          },
+          end: () => {
+            if (next !== l) resizeTo(next, total);
+          },
+        };
       }}
       onReset={() => onResize({ [left.id]: 1, [right.id]: 1 })}
     />
