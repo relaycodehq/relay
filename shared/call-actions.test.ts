@@ -37,8 +37,9 @@ describe("commandActions", () => {
     ]);
   });
 
-  it("names a loop it can't see into", () => {
+  it("names a loop it can't see into, and a command that only set up", () => {
     expect(commandActions("cd /tmp && mkdir -p x; for f in a b")).toEqual([{ kind: "run", what: "shell loop" }]);
+    expect(commandActions("echo three")).toEqual([{ kind: "run", what: "echo" }]);
   });
 });
 

@@ -1,0 +1,180 @@
+/* A run of tool calls told by what they did: a muted verb, then the file or
+   pattern as a chip. Branches fold open into a tree with elbow lines. */
+.trace-label {
+  color: var(--muted);
+}
+.trace-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: middle;
+}
+.trace-chip-dim,
+.trace-where,
+.trace-then,
+.trace-subject {
+  color: var(--muted);
+}
+.trace-where {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.trace-then {
+  margin-left: 6px;
+}
+.trace-code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.trace-good,
+.trace-bad {
+  margin-left: 5px;
+  vertical-align: -2px;
+}
+/* The changes card's green for additions. */
+.trace-good {
+  color: #538665;
+}
+.trace-bad,
+.agent-step.failed .trace-verb {
+  color: var(--danger);
+}
+
+/* The tree: a line down from the branch's icon, an elbow into each row. */
+.trace-tree {
+  margin: 0 0 4px 6px;
+}
+.trace-tree-row {
+  position: relative;
+  padding-left: 16px;
+}
+.trace-tree-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--border);
+}
+.trace-tree-row:last-child::before {
+  bottom: auto;
+  height: 7px;
+}
+.trace-tree-row::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 9px;
+  height: 7px;
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: 6px;
+}
+
+/* What a row opens to. */
+.trace-opened {
+  margin: 2px 0 8px 21px;
+}
+.trace-tree-row .trace-opened {
+  margin-left: 21px;
+}
+.trace-output {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  max-height: 220px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  background: var(--toolbar);
+  border-radius: 5px;
+}
+.trace-output-command {
+  color: var(--text);
+}
+.agent-step .trace-opened .trace-output {
+  margin-left: 0;
+}
+.trace-changes {
+  margin: 0 0 8px;
+  font-size: 10px;
+}
+.written-code {
+  margin: 0 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.written-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.agent-step .written-body {
+  margin: 0;
+  padding: 6px 0;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre;
+  overflow-wrap: normal;
+  background: var(--code-background, var(--toolbar));
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.written-line {
+  display: flex;
+  min-width: fit-content;
+}
+.written-gutter {
+  flex: none;
+  width: 34px;
+  padding-right: 10px;
+  text-align: right;
+  color: var(--muted);
+  opacity: 0.55;
+  user-select: none;
+}
+.written-line.added {
+  background: var(--diff-addition);
+}
+.written-line.removed {
+  background: var(--diff-deletion);
+}
+.written-line.added .written-gutter,
+.written-line.removed .written-gutter {
+  opacity: 0.9;
+}
+.written-line.hunk-head {
+  padding-left: 44px;
+  color: var(--muted);
+}
+.written-hunk + .written-hunk {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.written-cut {
+  padding: 4px 10px 0 44px;
+  color: var(--muted);
+  font-style: italic;
+}

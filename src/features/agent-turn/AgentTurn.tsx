@@ -1,13 +1,12 @@
 import { useNow } from "../../lib/useNow";
-// One summary line per turn, and a flat list of tool rows named by what they
-// touched.
-import { Fragment, useContext, useRef, useState, type ReactNode } from "react";
+// One summary line per turn; under it the commentary, and between lines of it
+// the tool calls grouped by what they did (TraceRun).
+import { useContext, useRef, useState, type ReactNode } from "react";
 import {
   Brain,
   ChevronRight,
   Clock3,
   MessageCircleQuestion,
-  Wrench,
 } from "lucide-react";
 import type { AgentActivity, ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
@@ -15,7 +14,6 @@ import {
   doneLabel,
   duration,
   liveLabel,
-  summarizeActivity,
 } from "../../../shared/activity-labels";
 import {
   batchHead,
@@ -30,23 +28,23 @@ import { isQuestionCall } from "../../../shared/asked-questions";
 import { StartedHeading, StartedThreadMarks } from "./StartedThreads";
 import { WorkingAgentsHeading } from "./TurnAgents";
 import {
-  Fold,
-  icons,
   iconOf,
   ImageReadPeek,
   Progress,
   ReadIcon,
   SubagentRows,
   Subagents,
-  ToolRow,
   TurnImages,
   useImageRead,
   type ReadImages,
 } from "./ToolRow";
-
-export type { ReadImages } from "./ToolRow";
+import { TraceRun } from "./TraceRun";
+import { ActionLabel, actionText } from "./ActionRow";
+import { rowsOf } from "../../../shared/trace-tree";
 import "./agent-trace.css";
 import "./agent-turn.css";
+
+export type { ReadImages } from "./ToolRow";
 
 function WorkingTimer({
   started,
@@ -67,42 +65,6 @@ export interface TurnPresentation {
   waiting: boolean;
   expanded: boolean;
   onToggle: (expanded: boolean) => void;
-}
-
-/** A run of tool calls between two commentary lines, folded into "Ran 6 commands". */
-function ActivityGroup({
-  activity,
-  display,
-  onChanges,
-}: {
-  activity: AgentActivity[];
-  display: (text: string) => string;
-  onChanges: () => void;
-}) {
-  const kinds = new Set(activity.map((a) => a.kind));
-  const Icon = kinds.size === 1 ? icons[activity[0]!.kind] : Wrench;
-  return (
-    <Fold
-      className="agent-step agent-group"
-      summary={
-        <summary className="agent-step-heading">
-          <Icon size={14} />
-          <span>{summarizeActivity(activity)}</span>
-        </summary>
-      }
-    >
-      <div className="agent-group-rows">
-        {activity.map((a) => (
-          <ToolRow
-            key={a.id}
-            activity={a}
-            label={display(a.label)}
-            onChanges={onChanges}
-          />
-        ))}
-      </div>
-    </Fold>
-  );
 }
 
 export function AgentTurn({
@@ -282,24 +244,10 @@ export function AgentTurn({
                     display={display}
                     onChanges={onChanges}
                   />
-                ) : part.activity.length === 1 ||
-                  parts.every((p) => p === part || p.kind === "commentary") ? (
-                  // The only run's summary is already the turn's heading.
-                  <Fragment key={part.id}>
-                    {part.activity.map((a) => (
-                      <ToolRow
-                        key={a.id}
-                        activity={a}
-                        label={display(a.label)}
-                        onChanges={onChanges}
-                      />
-                    ))}
-                  </Fragment>
                 ) : (
-                  <ActivityGroup
+                  <TraceRun
                     key={part.id}
-                    activity={part.activity}
-                    display={display}
+                    calls={part.activity}
                     onChanges={onChanges}
                   />
                 ),
@@ -369,6 +317,8 @@ function OpenBatch({
   const [open, setOpen] = useState(false);
   const { head, earlier } = batchHead(activity);
   const running = head.status === "running";
+  const headRow = rowsOf([head])[0];
+  const toldByAction = headRow && headRow.action.kind !== "tool" && headRow.action.kind !== "image";
   const Icon = iconOf(head);
   const calls = useContext(Subagents).calls.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
@@ -391,9 +341,15 @@ function OpenBatch({
       >
         <span className="agent-batch-row" title={display(head.label)}>
           {read ? <ReadIcon image={read.image} /> : <Icon size={14} />}
-          <span className={running ? "live-shine" : undefined}>
-            {display(running ? liveLabel(head) : doneLabel(head))}
-          </span>
+          {toldByAction && !running ? (
+            <ActionLabel row={headRow} />
+          ) : (
+            <span className={running ? "live-shine" : undefined}>
+              {toldByAction
+                ? actionText(headRow, display)
+                : display(running ? liveLabel(head) : doneLabel(head))}
+            </span>
+          )}
           <Progress activity={head} />
         </span>
         {folded && <ChevronRight size={13} className="agent-batch-chevron" />}
@@ -404,14 +360,7 @@ function OpenBatch({
       )}
       {open && earlier.length > 0 && (
         <div className="agent-group-rows">
-          {earlier.map((a) => (
-            <ToolRow
-              key={a.id}
-              activity={a}
-              label={display(a.label)}
-              onChanges={onChanges}
-            />
-          ))}
+          <TraceRun calls={earlier} onChanges={onChanges} />
         </div>
       )}
     </div>

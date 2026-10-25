@@ -80,9 +80,14 @@ export function commandActions(command: string, output = ""): CallAction[] {
     const action = segmentAction(segment, body);
     if (action) actions.push(withOutcome(action, output));
   }
-  // A loop, or a label cut off mid-word, can leave nothing recognisable.
-  if (!actions.length) actions.push({ kind: "run", what: /\bfor\b/.test(head) ? "shell loop" : "command" });
+  if (!actions.length) actions.push({ kind: "run", what: onlySetup(head) });
   return actions;
+}
+
+/** A command that only set up, like `echo hi`, or a loop that ran nothing it could name. */
+function onlySetup(head: string) {
+  if (/^\s*(?:cd [^;&]+(?:&&|;)\s*)*.*\bfor\b/.test(head)) return "shell loop";
+  return wordsOf(segments(head)[0] ?? "")[0] ?? "command";
 }
 
 /** The command as you'd retype it: no `cd`, no `| head`, no heredoc body. */

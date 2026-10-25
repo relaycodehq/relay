@@ -1,0 +1,138 @@
+// What a call wrote, opened under its row: a new file whole, an edit as the
+// lines it changed, highlighted in the file's own language.
+import { useEffect, useState } from "react";
+import type { ThemedToken } from "@pierre/diffs";
+import { diffArrays } from "diff";
+import type { WrittenCode as Written } from "../../../shared/projects";
+import { syntaxTheme, tokenize, tokenStyle } from "../../ui/CodeBlock";
+
+type Mark = "removed" | "added" | "same";
+
+const plain = (code: string): ThemedToken[][] =>
+  code.split("\n").map((content) => [{ content, offset: 0 } as ThemedToken]);
+
+/** The code's lines tokenized for `path`; plain until the highlighter has them. */
+function useLines(path: string, code: string) {
+  const [lines, setLines] = useState<{ code: string; lines: ThemedToken[][] }>();
+  useEffect(() => {
+    let current = true;
+    void (async () => {
+      const { getFiletypeFromFileName } = await import("@pierre/diffs");
+      const lang = getFiletypeFromFileName(path);
+      const tokens = await tokenize(code, lang, syntaxTheme()).catch(() => null);
+      if (current && tokens) setLines({ code, lines: tokens });
+    })();
+    return () => {
+      current = false;
+    };
+  }, [path, code]);
+  return lines?.code === code ? lines.lines : plain(code);
+}
+
+function Line({ tokens, gutter, mark }: { tokens: ThemedToken[]; gutter: string | number; mark?: Mark }) {
+  return (
+    <div className={mark ? `written-line ${mark}` : "written-line"}>
+      <span className="written-gutter">{gutter}</span>
+      <span>
+        {tokens.map((token, index) => (
+          <span key={index} style={tokenStyle(token)}>
+            {token.content}
+          </span>
+        ))}
+        {"\n"}
+      </span>
+    </div>
+  );
+}
+
+function Whole({ path, content }: { path: string; content: string }) {
+  const lines = useLines(path, content);
+  return (
+    <>
+      {lines.map((tokens, index) => (
+        <Line key={index} tokens={tokens} gutter={index + 1} />
+      ))}
+    </>
+  );
+}
+
+const gutters: Record<Mark, string> = { removed: "−", added: "+", same: "" };
+
+/** One swapped passage, line by line: only what changed is tinted, the rest is context. */
+function Swap({ path, edit }: { path: string; edit: { old: string; new: string } }) {
+  const before = useLines(path, edit.old);
+  const after = useLines(path, edit.new);
+  const rows: { tokens: ThemedToken[]; mark: Mark }[] = [];
+  let old = 0;
+  let next = 0;
+  for (const part of diffArrays(edit.old.split("\n"), edit.new.split("\n")))
+    for (let i = 0; i < part.value.length; i++) {
+      if (part.removed) rows.push({ tokens: before[old++] ?? [], mark: "removed" });
+      else if (part.added) rows.push({ tokens: after[next++] ?? [], mark: "added" });
+      else {
+        rows.push({ tokens: after[next++] ?? [], mark: "same" });
+        old++;
+      }
+    }
+  return (
+    <div className="written-hunk">
+      {rows.map((row, index) => (
+        <Line key={index} tokens={row.tokens} gutter={gutters[row.mark]} mark={row.mark} />
+      ))}
+    </div>
+  );
+}
+
+function markOf(line: string): Mark {
+  if (line.startsWith("+")) return "added";
+  if (line.startsWith("-")) return "removed";
+  return "same";
+}
+
+/** A unified diff's lines, tinted by their sign and highlighted as one file. */
+function Patch({ path, diff }: { path: string; diff: string }) {
+  const lines = diff.split("\n").filter((line) => !/^(?:---|\+\+\+|diff |index )/.test(line));
+  const tokens = useLines(path, lines.map((line) => line.slice(1)).join("\n"));
+  return (
+    <div className="written-hunk">
+      {lines.map((line, index) => {
+        if (line.startsWith("@@")) return <div key={index} className="written-line hunk-head">{line}</div>;
+        const mark = markOf(line);
+        return <Line key={index} tokens={tokens[index] ?? []} gutter={gutters[mark]} mark={mark} />;
+      })}
+    </div>
+  );
+}
+
+/** "+17 −2" for an edit, "24 lines" for a file written whole. */
+function size(file: Written) {
+  if (file.kind === "whole") return `${file.content.split("\n").length} lines`;
+  const changed =
+    file.kind === "swap"
+      ? file.edits.flatMap((e) => diffArrays(e.old.split("\n"), e.new.split("\n")))
+      : file.diff.split("\n").map((line) => ({
+          added: line.startsWith("+") && !line.startsWith("+++"),
+          removed: line.startsWith("-") && !line.startsWith("---"),
+          value: [line],
+        }));
+  const count = (side: "added" | "removed") =>
+    changed.reduce((sum, part) => sum + (part[side] ? part.value.length : 0), 0);
+  return `+${count("added")} −${count("removed")}`;
+}
+
+export function WrittenCode({ file, shownPath }: { file: Written; shownPath: string }) {
+  return (
+    <div className="written-code">
+      <div className="written-head">
+        <span>{shownPath}</span>
+        <span>{size(file)}</span>
+      </div>
+      <pre className="written-body">
+        {file.kind === "whole" && <Whole path={file.path} content={file.content} />}
+        {file.kind === "swap" && file.edits.map((edit, index) => <Swap key={index} path={file.path} edit={edit} />)}
+        {file.kind === "patch" && <Patch path={file.path} diff={file.diff} />}
+        {file.cut && <div className="written-cut">Cut here: the rest was too long to keep</div>}
+      </pre>
+    </div>
+  );
+}
