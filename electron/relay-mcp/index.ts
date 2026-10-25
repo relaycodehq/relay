@@ -12,6 +12,7 @@ import { DEV_PARAM, IMPORT_PARAM, PAGES_PARAM, STARTED_PATH } from "./tools";
 
 export { serveRelayTools, type McpHandlers } from "./server";
 export { relayToolLabel, relayToolsWhere } from "./tool-meta";
+export { startedNote } from "./started-note";
 export {
   relayToolSchemas,
   relayToolList,

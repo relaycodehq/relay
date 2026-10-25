@@ -8,6 +8,7 @@ import { sliceWhole } from "../../shared/truncate";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { ThreadReads } from "./thread-reads";
+import { LeadMessages, type Delivered, type Sender } from "./lead-messages";
 import { ProjectAccess, type AgentProjects } from "./project-access";
 import { ThreadPages } from "./thread-pages";
 import { json, localTime } from "./tool-output";
@@ -99,6 +100,7 @@ type Chats = Pick<
   liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
   importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
   projectMoves?: Pick<ProjectChats["projectMoves"], "blocked" | "move">;
+  onAnswersEnd?: ProjectChats["onAnswersEnd"];
 };
 
 /** Moving threads to the user's other computers, as the thread header does. */
@@ -155,6 +157,7 @@ export class StartedThreads {
   private readUsage: ReadUsage;
   private projects: ProjectAccess;
   private reads: ThreadReads;
+  private leads: LeadMessages;
   private pages: ThreadPages;
   private handoffs: ThreadHandoffs | undefined;
   private restart: (() => void) | undefined;
@@ -189,6 +192,19 @@ export class StartedThreads {
     this.readUsage = options.readUsage ?? readProviderUsage;
     this.projects = new ProjectAccess(options.projects);
     this.reads = new ThreadReads(chats, this.projects);
+    this.leads = new LeadMessages(
+      chats,
+      this.reads,
+      (lead, body, from) => this.sendToLead(lead, body, from),
+      (chat) => this.leadSide(chat).from,
+    );
+    chats.onAnswersEnd?.((turn) => {
+      this.leads
+        .ended(turn)
+        .catch((e) =>
+          console.warn("Could not tell the lead how its thread ended:", e),
+        );
+    });
     this.pages = new ThreadPages(chats, options);
     this.handoffs = options.handoffs;
     this.restart = options.restart;
@@ -248,6 +264,8 @@ export class StartedThreads {
         return this.reads.wait(lead, input, signal);
       case "stop_thread":
         return this.stop(lead, input.id, signal);
+      case "message_lead":
+        return this.leads.message(lead, input.message);
       case "hand_off_thread":
         return this.handOff(lead, input, signal);
       case "settle_thread":
@@ -1084,18 +1102,65 @@ export class StartedThreads {
     signal: AbortSignal,
   ) {
     const { chat, sends, where } = await this.target(lead, id);
-    const previous = chat.lastInput;
-    if (!previous) return toolText("That thread hasn't started yet.", true);
+    if (!chat.lastInput) return toolText("That thread hasn't started yet.", true);
     const title = `${steer ? "Steer" : "Send to"} “${chat.title}”${where}?`;
     const approved = sends
       ? await this.approve(lead, title, head(message), signal)
       : await this.drive(lead, title, head(message), signal);
     if (!approved) return this.refused("send this");
-    const { from } = this.leadSide(lead);
+    const sent = await this.deliver(
+      chat,
+      this.messageTo(chat, message, this.leadSide(lead).from, !!steer),
+    );
+    if (sent.away)
+      return toolText(
+        sent.held
+          ? `${sent.away} is offline; it goes out once it's back.`
+          : `Sent; it runs on ${sent.away}.`,
+      );
+    if (!sent.working) return toolText("Sent.");
+    return toolText(
+      steer
+        ? "Steered; it reads it mid-answer."
+        : "Queued; it goes out when its current answer ends. To reach it mid-answer, send with steer.",
+    );
+  }
+
+  /** A started thread's message to its lead: a steer while it works, so it hears now. */
+  private async sendToLead(
+    lead: ProjectChat,
+    body: string,
+    from: Sender,
+  ): Promise<Delivered> {
+    const { summary, chat } = await this.reads.thread(lead.id);
+    const { status } = chatStatus(summary, chat);
+    const sent = await this.deliver(
+      chat,
+      this.messageTo(chat, body, from, status === "working"),
+    );
+    return {
+      steered: status === "working",
+      queued: status === "needs-input",
+      ...(sent.away ? { away: sent.away } : {}),
+    };
+  }
+
+  /** A message to `chat` from another thread's agent, on what `chat` last ran. */
+  private messageTo(
+    chat: ProjectChat,
+    body: string,
+    from: Sender,
+    steer: boolean,
+  ): ProjectChatSend {
+    const previous = chat.lastInput ?? {
+      ...fallbackInput,
+      body: "",
+      id: chat.id,
+    };
     const agent = sentAgent(previous);
-    const send: ProjectChatSend = {
+    return {
       id: randomUUID(),
-      body: message,
+      body,
       choice: previous.choice,
       ...(previous.contextWindow
         ? { contextWindow: previous.contextWindow }
@@ -1107,33 +1172,26 @@ export class StartedThreads {
       ...(steer ? { delivery: "steer" as const } : {}),
       fromThread: from,
     };
+  }
+
+  /** Sends to a thread here, or on the computer it was handed off to. */
+  private async deliver(chat: ProjectChat, send: ProjectChatSend) {
     // A send to one waiting on a setup would reach the setup's agent instead.
     if (inSetup(chat))
-      return toolText(
+      throw new Error(
         `“${chat.title}” is on its way to ${chat.sentTo!.computer}, which is still being set up for it. Try again once it's there.`,
-        true,
       );
-    if (this.handoffs?.forwards("sendProjectChat", [id, send])) {
-      const computer = chat.sentTo!.computer;
-      await this.handoffs.forward("sendProjectChat", [id, send]);
-      const held = (await this.chats.liveHandoff.outbox(id)).some(
+    if (this.handoffs?.forwards("sendProjectChat", [chat.id, send])) {
+      await this.handoffs.forward("sendProjectChat", [chat.id, send]);
+      const held = (await this.chats.liveHandoff.outbox(chat.id)).some(
         (h) => h.input.id === send.id,
       );
-      return toolText(
-        held
-          ? `${computer} is offline; it goes out once it's back.`
-          : `Sent; it runs on ${computer}.`,
-      );
+      return { away: chat.sentTo!.computer, held, working: false };
     }
     // Read now: approving may have taken long enough for the answer to end.
-    const now = await this.reads.thread(id);
+    const now = await this.reads.thread(chat.id);
     const working = chatStatus(now.summary, now.chat).status === "working";
-    await this.chats.send(id, send);
-    if (!working) return toolText("Sent.");
-    return toolText(
-      steer
-        ? "Steered; it reads it mid-answer."
-        : "Queued; it goes out when its current answer ends. To reach it mid-answer, send with steer.",
-    );
+    await this.chats.send(chat.id, send);
+    return { working };
   }
 }

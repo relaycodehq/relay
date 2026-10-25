@@ -49,8 +49,18 @@ function bodyFrom(body: string, offset = 0) {
   return end < body.length ? { body: part, nextOffset: end } : { body: part };
 }
 
+/** A wait_for_threads running now: which threads it covers, every one the lead started without `ids`. */
+interface Wait {
+  ids?: string[];
+  /** Threads the lead started that messaged it meanwhile. */
+  messaged: string[];
+  woken: AbortController;
+}
+
 /** Read-only thread discovery, transcript pagination and status polling. */
 export class ThreadReads {
+  private waits = new Map<string, Set<Wait>>();
+
   constructor(
     private chats: Pick<
       ProjectChats,
@@ -215,28 +225,61 @@ export class ThreadReads {
     });
   }
 
+  /** Whether the lead is in a wait_for_threads that covers `id`, a thread it started. */
+  waitsFor(lead: string, id: string) {
+    return [...(this.waits.get(lead) ?? [])].some(
+      (w) => !w.ids || w.ids.includes(id),
+    );
+  }
+
+  /** A thread the lead started messaged it: its waits end, so it reads the message. */
+  messaged(lead: string, from: string) {
+    for (const wait of this.waits.get(lead) ?? []) {
+      if (!wait.messaged.includes(from)) wait.messaged.push(from);
+      wait.woken.abort();
+    }
+  }
+
   async wait(
     lead: ProjectChat,
     { ids, timeoutSeconds = 300 }: RelayToolArgs<"wait_for_threads">,
     signal: AbortSignal,
   ) {
     const until = Date.now() + timeoutSeconds * 1000;
-    for (;;) {
-      const threads = await this.list(lead, ids);
-      const done = threads.every((t) => settled.has(t.status));
-      if (done || signal.aborted || Date.now() >= until)
-        return json({
-          ...(done
-            ? {}
-            : {
-                timedOut: !signal.aborted,
-                note: "Still working; wait again or read them.",
-              }),
-          threads,
-        });
-      await delay(Math.min(POLL_MS, until - Date.now()), undefined, {
-        signal,
-      }).catch(() => {});
+    const wait: Wait = {
+      ...(ids ? { ids } : {}),
+      messaged: [],
+      woken: new AbortController(),
+    };
+    const waits = this.waits.get(lead.id) ?? new Set();
+    this.waits.set(lead.id, waits.add(wait));
+    try {
+      for (;;) {
+        const threads = await this.list(lead, ids);
+        const done = threads.every((t) => settled.has(t.status));
+        const { messaged } = wait;
+        if (done || messaged.length || signal.aborted || Date.now() >= until)
+          return json({
+            ...(messaged.length
+              ? {
+                  messaged,
+                  note: "They messaged you; it comes in this thread next. Answer with send_to_thread, then wait again if you need to.",
+                }
+              : done
+                ? {}
+                : {
+                    timedOut: !signal.aborted,
+                    note: "Still working; wait again or read them.",
+                  }),
+            threads,
+          });
+        await delay(Math.min(POLL_MS, until - Date.now()), undefined, {
+          signal: AbortSignal.any([signal, wait.woken.signal]),
+        }).catch(() => {});
+      }
+    } finally {
+      waits.delete(wait);
+      if (!waits.size) this.waits.delete(lead.id);
     }
   }
 }

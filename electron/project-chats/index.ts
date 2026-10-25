@@ -46,7 +46,7 @@ import type {
   NewsItem,
   ThreadNews,
 } from "../../shared/thread-news";
-import { working } from "../../shared/turns";
+import { working, type Turn } from "../../shared/turns";
 import { ActiveTurns } from "./active";
 import { SideQuestions } from "./asides";
 import { threadControl } from "./control";
@@ -377,6 +377,10 @@ export class ProjectChats {
   /** What threads are news of, decided once for every window, menubar and phone. */
   onNews(listener: (item: NewsItem) => void) {
     return this.news.onNews(listener);
+  }
+  /** A thread's answers are over, nothing queued after the last; see TurnNews.onEnd. */
+  onAnswersEnd(listener: (turn: Turn) => void) {
+    return this.news.onEnd(listener);
   }
   /** The news after `cursor`, for a client that was away. */
   newsSince(cursor?: NewsCursor) {

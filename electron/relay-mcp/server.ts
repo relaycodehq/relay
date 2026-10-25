@@ -8,6 +8,7 @@ import {
   DEV_PARAM,
   IMPORT_PARAM,
   PAGES_PARAM,
+  leadToolList,
   relayToolList,
   startedToolList,
   STARTED_PATH,
@@ -22,7 +23,7 @@ import { errorMessage } from "../../shared/error-message";
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 type ToolList = typeof relayToolList;
 const toolsAt: Record<string, ToolList> = {
-  "/mcp": relayToolList,
+  "/mcp": leadToolList,
   [STARTED_PATH]: startedToolList,
 };
 const toolsFor = (url: URL) => {

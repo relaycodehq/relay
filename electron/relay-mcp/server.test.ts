@@ -194,6 +194,7 @@ test("a started thread's path lists and answers only the tools that drive no oth
   expect(list.result.tools.map((t: { name: string }) => t.name)).toEqual([
     "find_threads",
     "read_thread",
+    "message_lead",
     "settle_this_thread",
     "wake_this_thread",
     "usage_limits",
@@ -216,6 +217,30 @@ test("a started thread's path lists and answers only the tools that drive no oth
       id: 2,
       method: "tools/call",
       params: { name: "start_threads", arguments: {} },
+    })
+  ).json();
+  expect(refused.error.code).toBe(-32602);
+  expect(calls).toEqual([]);
+});
+
+test("a thread nothing started isn't offered message_lead, nor can call it", async () => {
+  const calls: string[] = [];
+  const url = await serve(async (_chat, name) => {
+    calls.push(name);
+    return toolText("ok");
+  });
+  const list = await (
+    await post(url, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+  ).json();
+  const names = list.result.tools.map((t: { name: string }) => t.name);
+  expect(names).toContain("start_threads");
+  expect(names).not.toContain("message_lead");
+  const refused = await (
+    await post(url, {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name: "message_lead", arguments: { message: "hi" } },
     })
   ).json();
   expect(refused.error.code).toBe(-32602);

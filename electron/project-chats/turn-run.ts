@@ -24,7 +24,7 @@ import { isAgentError, type AgentError } from "../agents/errors";
 import type { AgentPredict, AgentWatch, UsageReport } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import { publishFindings, settleFixes } from "../findings";
-import { relayToolsFor } from "../relay-mcp";
+import { relayToolsFor, startedNote } from "../relay-mcp";
 import type { AgentControl } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
@@ -357,8 +357,13 @@ export class TurnRunner {
             : undefined,
         );
         return (
-          [note, linksInstructions(links)].filter(Boolean).join("\n\n") ||
-          undefined
+          [
+            note,
+            linksInstructions(links),
+            this.startedNote(chat, input, !!relayTools && !readOnly),
+          ]
+            .filter(Boolean)
+            .join("\n\n") || undefined
         );
       },
       choice: input.choice,
@@ -467,6 +472,25 @@ export class TurnRunner {
         before.prediction,
         chat.messages[at]!.body,
       );
+  }
+
+  /** Who started the thread, for a started thread's agent; a reviewer reports to its council instead. */
+  private startedNote(
+    chat: ProjectChat,
+    input: ProjectChatSend,
+    canMessage: boolean,
+  ) {
+    const by = chat.startedBy;
+    if (!by || chat.reviewer) return undefined;
+    const lead = (this.core.store.get().chats ?? []).find(
+      (c) => c.id === by.chatId,
+    );
+    if (!lead) return undefined;
+    return startedNote({
+      lead: { id: lead.id, title: lead.title, agent: by.agent },
+      fromLead: input.fromThread?.id === lead.id,
+      canMessage,
+    });
   }
 
   /** A guess at the next message, asked on the same session as the check. */

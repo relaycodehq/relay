@@ -21,6 +21,14 @@ const pastedImageSchema = z
       .regex(/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/),
   })
   .strict();
+/**
+ * What a thread said to the thread that started it: a message it sent with
+ * message_lead, or how the task it was given ended. The body opens with a
+ * line for the agent saying so, which the thread shows as a frame instead.
+ */
+export const childSaysSchema = z.enum(["message", "finished", "failed"]);
+export type ChildSays = z.infer<typeof childSaysSchema>;
+
 export const projectChatSendSchema = z
   .object({
     delivery: z.enum(["queue", "steer"]).optional(),
@@ -59,7 +67,12 @@ export const projectChatSendSchema = z
     images: z.array(pastedImageSchema).optional(),
     /** Sent by the agent in another thread, through Relay's tools; see electron/started-threads. */
     fromThread: z
-      .object({ id: idSchema, name: z.string().trim().min(1).max(300) })
+      .object({
+        id: idSchema,
+        name: z.string().trim().min(1).max(300),
+        /** A thread this one started wrote it; see ChildSays. */
+        child: childSaysSchema.optional(),
+      })
       .strict()
       .optional(),
     /** Sent by Relay for one of the user's schedules; see shared/schedules. */
@@ -141,6 +154,7 @@ export const sentBy = (
   ...(input.fromThread
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),
+  ...(input.fromThread?.child ? { fromChild: input.fromThread.child } : {}),
   ...(input.scheduled ? { scheduled: input.scheduled } : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),
   ...(input.asyncQuestionAnswer ? { asyncQuestionAnswer: true } : {}),

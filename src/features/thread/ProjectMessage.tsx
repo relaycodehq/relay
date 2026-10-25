@@ -6,6 +6,7 @@ import type { ChatMessage } from "../../../shared/projects";
 import { CompactionRow } from "./CompactionRow";
 import { SessionReloadRow } from "./SessionReloadRow";
 import { WorktreeCommandRow } from "./WorktreeCommandRow";
+import { ChildThreadMessage } from "./ChildThreadMessage";
 import {
   AssistantMessage,
   type AssistantMessageProps,
@@ -108,6 +109,14 @@ export const Message = memo(function Message({
       </LineDivider>
     );
   if (m.role === "user" && (m.asyncQuestionAnswer || m.pageAnswer)) return null;
+  if (m.role === "user" && m.fromChild)
+    return (
+      <ChildThreadMessage
+        message={m}
+        projectRoot={projectRoot}
+        onOpenFile={onOpenFile}
+      />
+    );
   if (m.handoff)
     return (
       <HandoffRow

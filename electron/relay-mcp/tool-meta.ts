@@ -4,8 +4,8 @@ import type { RelayToolName } from "./tools";
 interface ToolMeta {
   /** What a call reads as in a turn. */
   label: string;
-  /** Also served at STARTED_PATH, to threads another thread started. */
-  started?: true;
+  /** Also served at STARTED_PATH, to threads another thread started; "only": just there. */
+  started?: true | "only";
   /** Left out unless the URL's query turns its group on, or `pages` off. */
   group?: "pages" | "dev" | "import";
   /** Only reads or waits, so a call a restart cut off can run again. */
@@ -25,6 +25,7 @@ export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
   send_to_thread: { label: "Messaged a started thread" },
   wait_for_threads: { label: "Waited for started threads", replayable: true },
   stop_thread: { label: "Stopped a started thread" },
+  message_lead: { label: "Messaged its lead", started: "only" },
   hand_off_thread: { label: "Moved a thread to another computer" },
   settle_thread: { label: "Settled a started thread" },
   settle_this_thread: { label: "Settles this thread when done", started: true },

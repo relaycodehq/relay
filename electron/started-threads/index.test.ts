@@ -21,6 +21,8 @@ import { localTime, StartedThreads, type AgentProjects } from ".";
 import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
 import { chatStatus } from "../project-chats";
 import { chatSummary } from "../project-chats/storage";
+import { sentBy } from "../../shared/projects/send";
+import type { Turn } from "../../shared/turns";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -31,6 +33,7 @@ function fakeChats() {
   const sent: { id: string; input: ProjectChatSend }[] = [];
   const asked: { id: string; request: unknown }[] = [];
   const copies: { id: string; from: string }[] = [];
+  const ends: ((turn: Turn) => void)[] = [];
   /** What the user picks on the approval card. */
   const answer = { decision: "accept" };
   let next = 100;
@@ -132,7 +135,12 @@ function fakeChats() {
           created: 3,
           provider: input.provider,
           version: 1,
+          ...sentBy(input),
         });
+      },
+      onAnswersEnd: (listener: (turn: Turn) => void) => {
+        ends.push(listener);
+        return () => {};
       },
       cancel: async () => undefined,
       triage: async (id: string, triage: { kind: string }) => {
@@ -167,6 +175,19 @@ function fakeChats() {
     asked,
     answer,
     copies,
+    /** Tells StartedThreads a thread's answers are over. */
+    end: (threadId: string, endedAs: Turn["endedAs"] = "completed") =>
+      ends.forEach((listener) =>
+        listener({
+          id: "turn",
+          threadId,
+          kind: "answer",
+          provider: "claude",
+          phase: "ended",
+          startedAt: 1,
+          endedAs,
+        } as Turn),
+      ),
   };
 }
 
@@ -1835,4 +1856,149 @@ test("asks before a deep review, led by the agent the message went to, with setu
   await call(threads, lead.id, "deep_review", {});
   expect(asked).toHaveLength(before);
   expect(start).toHaveBeenCalledTimes(2);
+});
+
+const answerOf = (
+  body: string,
+  extra: Partial<ProjectChat["messages"][number]> = {},
+) => ({
+  id: `answer-${body.length}`,
+  role: "assistant" as const,
+  body,
+  status: "complete" as const,
+  created: 4,
+  provider: "claude" as const,
+  version: 1,
+  ...extra,
+});
+const tick = () => new Promise((r) => setTimeout(r, 50));
+
+/** A thread the lead started, which answered the task the lead gave it. */
+async function startedChild(answer = "Saved in artwork/.") {
+  const fake = fakeChats();
+  const threads = new StartedThreads(fake.api);
+  const [started] = parse(
+    await call(threads, fake.lead.id, "start_threads", {
+      threads: [{ prompt: "Draw the Hangar icon" }],
+    }),
+  );
+  const child = fake.chats.get(started.id)!;
+  child.title = "Hangar icon";
+  child.messages.push(answerOf(answer));
+  fake.sent.length = 0;
+  return { ...fake, threads, child };
+}
+
+test("a finished task goes back to an idle lead as a turn of its own", async () => {
+  const { lead, child, sent, end } = await startedChild();
+  end(child.id);
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]!.id).toBe(lead.id);
+  expect(sent[0]!.input.delivery).toBeUndefined();
+  expect(sent[0]!.input.fromThread).toEqual({
+    id: child.id,
+    name: "Claude in Hangar icon",
+    child: "finished",
+  });
+  expect(sent[0]!.input.body).toContain(`“Hangar icon” (thread ${child.id})`);
+  expect(sent[0]!.input.body).toContain("Saved in artwork/.");
+});
+
+test("a finished task steers a lead that's working, and a long answer is cut", async () => {
+  const { lead, chats, child, sent, end } = await startedChild(
+    "x".repeat(5000),
+  );
+  chats.get(lead.id)!.running = true;
+  end(child.id);
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]!.input.delivery).toBe("steer");
+  expect(sent[0]!.input.body.length).toBeLessThan(4300);
+  expect(sent[0]!.input.body).toContain("read_thread has the rest");
+});
+
+test("a failed task tells the lead why", async () => {
+  const { child, sent, end } = await startedChild();
+  child.messages[child.messages.length - 1] = answerOf("", {
+    status: "failed",
+    error: "Model not found",
+  });
+  end(child.id, "failed");
+  await vi.waitFor(() => expect(sent).toHaveLength(1));
+  expect(sent[0]!.input.fromThread?.child).toBe("failed");
+  expect(sent[0]!.input.body).toMatch(/failed:\n\nModel not found$/);
+});
+
+test("no report of a stop, nor of a turn the user started in the thread", async () => {
+  const { child, sent, end } = await startedChild();
+  end(child.id, "cancelled");
+  child.messages.push(
+    { ...answerOf("user"), id: "u2", role: "user", body: "also teal?" },
+    answerOf("Teal it is."),
+  );
+  end(child.id);
+  await tick();
+  expect(sent).toEqual([]);
+});
+
+test("a lead waiting on the thread hears of its end from the wait, not twice", async () => {
+  const { lead, chats, child, sent, end, threads } = await startedChild();
+  child.running = true;
+  chats.get(lead.id)!.running = true;
+  const waiting = call(threads, lead.id, "wait_for_threads", {
+    timeoutSeconds: 5,
+  });
+  await tick();
+  child.running = false;
+  end(child.id);
+  const result = parse(await waiting);
+  await tick();
+  expect(result.threads[0]).toMatchObject({ id: child.id, status: "done" });
+  expect(sent).toEqual([]);
+});
+
+test("message_lead reaches a working lead mid-answer and ends its wait", async () => {
+  const { lead, chats, child, sent, threads } = await startedChild();
+  child.running = true;
+  chats.get(lead.id)!.running = true;
+  const waiting = call(threads, lead.id, "wait_for_threads", {
+    timeoutSeconds: 5,
+  });
+  await tick();
+  const result = await call(threads, child.id, "message_lead", {
+    message: "Purple or teal?",
+  });
+  expect(resultText(result)).toBe("Sent; your lead reads it mid-answer.");
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.id).toBe(lead.id);
+  expect(sent[0]!.input).toMatchObject({
+    delivery: "steer",
+    fromThread: { id: child.id, child: "message" },
+  });
+  // The agent's line first, which the thread shows as a frame instead.
+  expect(sent[0]!.input.body).toBe(
+    `From “Hangar icon” (thread ${child.id}), a thread you started:\n\nPurple or teal?`,
+  );
+  const waited = parse(await waiting);
+  expect(waited.messaged).toEqual([child.id]);
+  expect(waited.threads[0].status).toBe("working");
+});
+
+test("message_lead wakes an idle lead with a turn", async () => {
+  const { lead, child, sent, threads } = await startedChild();
+  const result = await call(threads, child.id, "message_lead", {
+    message: "Blocked: no write access to assets/",
+  });
+  expect(resultText(result)).toBe("Sent; your lead reads it in a new turn.");
+  expect(sent[0]!.id).toBe(lead.id);
+  expect(sent[0]!.input.delivery).toBeUndefined();
+});
+
+test("message_lead is refused in a thread nothing started", async () => {
+  const { lead, api, sent } = fakeChats();
+  const result = await call(new StartedThreads(api), lead.id, "message_lead", {
+    message: "hi",
+  });
+  expect(result).toMatchObject({ isError: true });
+  expect(resultText(result)).toMatch(/No thread started this one/);
+  expect(sent).toEqual([]);
 });

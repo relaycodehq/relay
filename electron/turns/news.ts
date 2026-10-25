@@ -45,6 +45,7 @@ export class TurnNews {
   private seq = 0;
   private items: NewsItem[] = [];
   private listeners = new Set<(item: NewsItem) => void>();
+  private ends = new Set<(turn: Turn) => void>();
   /** Whether each thread waited when news last looked; one it hasn't seen yet isn't news. */
   private waited = new Map<string, boolean>();
   /** A finished answer whose news waits for the thread's next end, by thread. */
@@ -73,6 +74,16 @@ export class TurnNews {
     return () => void this.listeners.delete(listener);
   }
 
+  /**
+   * A thread's answers are over: its last one ended with nothing queued after
+   * it, `turn` being that one. Unlike news it also hears of a stop, and of a
+   * thread settled or snoozed while it ran.
+   */
+  onEnd(listener: (turn: Turn) => void) {
+    this.ends.add(listener);
+    return () => void this.ends.delete(listener);
+  }
+
   /** What came after `cursor`; without one, or too far behind, only where the news is now. */
   since(cursor?: NewsCursor): NewsCatchUp {
     const now = { epoch: this.epoch, seq: this.seq };
@@ -95,6 +106,7 @@ export class TurnNews {
       if (held && !this.busy(chat.id)) {
         this.held.delete(chat.id);
         this.tellEnd(held);
+        this.over(held);
       }
     } catch (e) {
       console.warn("Could not tell of the thread:", e);
@@ -113,6 +125,7 @@ export class TurnNews {
     this.disposed = true;
     this.unsubscribe();
     this.listeners.clear();
+    this.ends.clear();
     this.held.clear();
   }
 
@@ -144,6 +157,11 @@ export class TurnNews {
     // finished one before it is the news.
     if (!this.tellEnd(turn) && held && turn.endedAs !== "cancelled")
       this.tellEnd(held);
+    this.over(turn);
+  }
+
+  private over(turn: Turn) {
+    for (const listener of this.ends) listener(turn);
   }
 
   private busy(threadId: string) {
