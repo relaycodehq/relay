@@ -42,4 +42,10 @@ describe("guest names", () => {
     expect(guestNameSchema.safeParse("Alex\nHost").success).toBe(false);
     expect(guestNameSchema.safeParse("\u202Etsoh").success).toBe(false);
   });
+
+  it("aren't the host's or an agent's", () => {
+    expect(guestNameSchema.safeParse("host").success).toBe(false);
+    expect(guestNameSchema.safeParse(" Claude ").success).toBe(false);
+    expect(guestNameSchema.safeParse("Claudette").success).toBe(true);
+  });
 });

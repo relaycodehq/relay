@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentName, agentProviders } from "./agents";
 import type { AgentActivity } from "./projects/messages";
 
 /**
@@ -80,12 +81,19 @@ export const MAX_GUEST_NAME_CHARS = 40;
 // One plain line, so a name can't break the message header or pass for another.
 const NAME_BREAKING = /[\p{Cc}\p{Zl}\p{Zp}؜‎‏‪-‮⁦-⁩]/u;
 
+/** Whether a guest's message would read as the host's or an agent's under this name. */
+const someoneElsesName = (name: string) =>
+  ["Host", ...agentProviders.map(agentName)].some(
+    (taken) => taken.toLowerCase() === name.toLowerCase(),
+  );
+
 export const guestNameSchema = z
   .string()
   .trim()
   .min(1)
   .max(MAX_GUEST_NAME_CHARS)
-  .refine((name) => !NAME_BREAKING.test(name), "Use one plain line.");
+  .refine((name) => !NAME_BREAKING.test(name), "Use one plain line.")
+  .refine((name) => !someoneElsesName(name), "Pick a name of your own.");
 
 export const guestSuggestionInput = z
   .object({

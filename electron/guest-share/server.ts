@@ -246,8 +246,13 @@ export class GuestServer<L extends ServedLink> {
     if (raw === undefined)
       return sendJson(res, 413, { error: "That's too long." });
     const input = guestSuggestionInput.safeParse(parseJson(raw));
-    if (!input.success)
-      return sendJson(res, 400, { error: "Write a name and a message." });
+    if (!input.success) {
+      // A rule of ours says what's wrong in words; zod's own don't.
+      const ours = input.error.issues.find((issue) => issue.code === "custom");
+      return sendJson(res, 400, {
+        error: ours?.message ?? "Write a name and a message.",
+      });
+    }
     const refused = this.host.suggest(link, input.data);
     if (refused) return sendJson(res, 429, { error: refused });
     sendJson(res, 200, { ok: true });
