@@ -162,8 +162,16 @@
 }
 .turn-file-row .diff-stat {
   flex: none;
-  padding-right: 8px;
+  margin-left: auto;
   font-size: 10px;
+}
+/* The stat sits inside the button, so the name shrinks to keep it in view; the folder still gives way first. */
+.turn-file-row .change-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.turn-file-row .change-dir {
+  flex: 0 100 auto;
 }
 /* A row and its rollback button, shown on hover. */
 .changed-files-item {

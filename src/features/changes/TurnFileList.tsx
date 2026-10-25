@@ -111,8 +111,8 @@ function FileRow({
           {!nested && slash > 0 && (
             <span className="change-dir">{f.path.slice(0, slash)}</span>
           )}
+          {!f.binary && <DiffStatLabel stat={f} />}
         </button>
-        {!f.binary && <DiffStatLabel stat={f} />}
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
         <ContextMenu.Positioner className="sb-menu-positioner">
