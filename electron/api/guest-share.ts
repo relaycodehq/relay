@@ -71,7 +71,7 @@ export function guestShareHandlers(ctx: ApiContext) {
     guestShare: takes([idSchema], (id) => shares.share(id)),
     startGuestShare: takes([idSchema], (id) => shares.start(id)),
     stopGuestShare: takes([idSchema], (id) => shares.stop(id)),
-    guestSuggestions: takes([idSchema], async (id) => shares.waiting(id)),
+    guestSuggestions: takes([idSchema], (id) => shares.waiting(id)),
     sendGuestSuggestion: takes([idSchema], (id) => shares.send(id)),
     resolveGuestSuggestion: takes(
       [idSchema, z.enum(["drafted", "dismissed"])],

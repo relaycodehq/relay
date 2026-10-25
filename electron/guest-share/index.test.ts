@@ -261,7 +261,7 @@ describe("GuestShares", () => {
       (await suggest(link, "guest-alex-1", "Say 'Start one from the sidebar'"))
         .status,
     ).toBe(200);
-    const [waiting] = shares.waiting(threadId);
+    const [waiting] = await shares.waiting(threadId);
     expect(waiting).not.toHaveProperty("guestId");
     await shares.send(waiting!.id);
     expect(sent).toEqual([
@@ -284,9 +284,53 @@ describe("GuestShares", () => {
     open.push(again);
     const share = await again.share(threadId);
     expect(share!.localUrl.replace(/:\d+/, "")).toBe(link.replace(/:\d+/, ""));
-    expect(again.waiting(threadId).map((s) => s.text)).toEqual(["still here?"]);
+    expect((await again.waiting(threadId)).map((s) => s.text)).toEqual([
+      "still here?",
+    ]);
     expect(store.shares).toHaveLength(1);
     expect(JSON.stringify(store.shares)).not.toContain(link.split("/g/")[1]);
+  });
+
+  it("makes one link however many starts ask at once, so Stop ends it", async () => {
+    const w = await world();
+    const shares = w.make();
+    open.push(shares);
+    const [a, b] = await Promise.all([
+      shares.start(threadId),
+      shares.start(threadId),
+    ]);
+    expect(a.localUrl).toBe(b.localUrl);
+    await shares.stop(threadId);
+    await expect(fetch(a.localUrl)).rejects.toThrow();
+  });
+
+  it("sends a suggestion once, and nothing else answers it meanwhile", async () => {
+    const { shares, sent, link } = await started();
+    await suggest(link, "guest-alex-1", "Ship it");
+    const [waiting] = await shares.waiting(threadId);
+    const sends = Promise.allSettled([
+      shares.send(waiting!.id),
+      shares.send(waiting!.id),
+      shares.resolve(waiting!.id, "dismissed"),
+    ]);
+    expect((await sends).map((r) => r.status)).toEqual([
+      "fulfilled",
+      "rejected",
+      "fulfilled",
+    ]);
+    expect(sent).toHaveLength(1);
+    const alex = await (await fetch(`${link}/view?guest=guest-alex-1`)).json();
+    expect(alex.suggestions).toEqual([{ text: "Ship it", status: "sent" }]);
+  });
+
+  it("doesn't bring back the link of a thread archived while Relay was closed", async () => {
+    const { shares, store, make, summary } = await started();
+    await shares.close();
+    summary.archivedAt = 2;
+    const again = make();
+    open.push(again);
+    expect(await again.share(threadId)).toBeNull();
+    expect(store.shares).toEqual([]);
   });
 
   it("hands a guest's Relay the conversation and files to carry on", async () => {

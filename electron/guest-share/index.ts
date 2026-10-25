@@ -65,6 +65,10 @@ const SNAPSHOT_MS = 1000;
 export class GuestShares {
   private links = new Map<string, Link>();
   private threadLinks = new Map<string, Link>();
+  /** Links being made, so a second start for the thread waits for the first's. */
+  private making = new Map<string, Promise<Link>>();
+  /** Suggestions on their way to the agent, which nothing else may answer meanwhile. */
+  private sending = new Set<string>();
   private snapshots = new Map<
     string,
     { at: number; snapshot: Promise<GuestSnapshot> }
@@ -105,21 +109,36 @@ export class GuestShares {
     await this.restored;
     if (!this.host.summary(threadId)) throw new Error("That thread is gone.");
     await this.listen();
-    let link = this.threadLinks.get(threadId);
-    if (!link) {
-      const startedAt = this.now();
-      link = await this.add({
-        id: randomUUID(),
-        threadId,
-        startedAt,
-        endsAt: startedAt + GUEST_SHARE_HOURS * 3600_000,
-        suggestions: [],
-      });
-      await this.persist();
-    }
+    const link = await this.linkOf(threadId);
     const share = await this.describe(link);
     this.host.send({ kind: "share", threadId, share });
     return share;
+  }
+
+  /** The thread's link, made once however many starts ask for it at the same time. */
+  private async linkOf(threadId: string) {
+    const link = this.threadLinks.get(threadId);
+    if (link) return link;
+    const making = this.making.get(threadId) ?? this.newLink(threadId);
+    this.making.set(threadId, making);
+    try {
+      return await making;
+    } finally {
+      this.making.delete(threadId);
+    }
+  }
+
+  private async newLink(threadId: string) {
+    const startedAt = this.now();
+    const link = await this.add({
+      id: randomUUID(),
+      threadId,
+      startedAt,
+      endsAt: startedAt + GUEST_SHARE_HOURS * 3600_000,
+      suggestions: [],
+    });
+    await this.persist();
+    return link;
   }
 
   async stop(threadId: string) {
@@ -145,32 +164,41 @@ export class GuestShares {
     await Promise.all([this.funnel.close(), this.server.close()]);
   }
 
-  waiting(threadId: string) {
+  async waiting(threadId: string) {
+    await this.restored;
     return waitingOf(this.threadLinks.get(threadId)?.suggestions ?? []);
   }
 
   /** Runs the suggestion as a turn in its guest's name. */
   async send(id: string) {
-    const found = this.findSuggestion(id);
-    if (!found || found.suggestion.status !== "waiting")
-      throw new Error("That suggestion was already answered.");
-    await this.host.sendAsGuest(
-      found.link.threadId,
-      found.suggestion.name,
-      found.suggestion.text,
-    );
+    await this.restored;
+    const found = this.waitingSuggestion(id);
+    if (!found) throw new Error("That suggestion was already answered.");
+    this.sending.add(id);
+    try {
+      await this.host.sendAsGuest(
+        found.link.threadId,
+        found.suggestion.name,
+        found.suggestion.text,
+      );
+    } finally {
+      this.sending.delete(id);
+    }
     await this.answer(found, "sent");
   }
 
   async resolve(id: string, status: "drafted" | "dismissed") {
-    const found = this.findSuggestion(id);
+    await this.restored;
+    const found = this.waitingSuggestion(id);
     if (found) await this.answer(found, status);
   }
 
-  private findSuggestion(id: string) {
+  /** A suggestion nobody has answered or started sending yet. */
+  private waitingSuggestion(id: string) {
+    if (this.sending.has(id)) return undefined;
     for (const link of this.threadLinks.values()) {
       const suggestion = link.suggestions.find((s) => s.id === id);
-      if (suggestion) return { link, suggestion };
+      if (suggestion?.status === "waiting") return { link, suggestion };
     }
     return undefined;
   }
@@ -179,7 +207,7 @@ export class GuestShares {
     {
       link,
       suggestion,
-    }: NonNullable<ReturnType<GuestShares["findSuggestion"]>>,
+    }: NonNullable<ReturnType<GuestShares["waitingSuggestion"]>>,
     status: "sent" | "drafted" | "dismissed",
   ) {
     suggestion.status = status;
@@ -188,9 +216,17 @@ export class GuestShares {
   }
 
   private async restore() {
-    const live = this.host.saved.load().filter((s) => s.endsAt > this.now());
-    for (const saved of live) await this.add(saved);
-    if (live.length) await this.listen();
+    const saved = this.host.saved.load();
+    // Threads may have been archived, settled or deleted while Relay was closed.
+    const live = saved.filter(
+      (s) => s.endsAt > this.now() && !this.linkShouldEnd(s),
+    );
+    for (const share of live) await this.add(share);
+    if (live.length < saved.length) await this.persist();
+    if (!live.length) return;
+    await this.listen();
+    for (const link of this.threadLinks.values())
+      if (waitingOf(link.suggestions).length) this.suggestionsChanged(link);
   }
 
   private async add(saved: SavedGuestShare) {
@@ -324,7 +360,7 @@ export class GuestShares {
     });
   }
 
-  private linkShouldEnd(link: Link) {
+  private linkShouldEnd(link: SavedGuestShare) {
     const thread = this.host.summary(link.threadId);
     if (!thread || thread.archivedAt) return true;
     const settledByHand = !thread.settleWhenDone && chatSettled(thread);
