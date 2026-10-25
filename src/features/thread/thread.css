@@ -150,6 +150,8 @@
      instead of adding a band of empty space before the next message. */
   margin-top: 2px;
   margin-bottom: -27px;
+  /* Its speed and time aren't part of the answer to select and quote. */
+  user-select: none;
 }
 /* Hidden child by child, so a pinned answer's pin can stay in sight. */
 .message-actions > * {
