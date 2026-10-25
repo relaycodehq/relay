@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { open, readFile, realpath, stat } from "node:fs/promises";
+import { open, realpath, stat } from "node:fs/promises";
 import {
   basename,
   isAbsolute,
@@ -85,8 +85,16 @@ export async function sharedFileText(file: SharedFile) {
   // The checked file, unless a link has been put in its way since.
   if ((await realpath(file.absolute)) !== file.real)
     throw new Error("The shared file moved.");
-  const text = await readFile(file.real, "utf8");
-  return redacted(text.slice(0, MAX_SHARED_BYTES));
+  // Read only as far as the limit: the file may have grown since it was picked.
+  const handle = await open(file.real, "r");
+  try {
+    const { size } = await handle.stat();
+    const head = Buffer.alloc(Math.min(size, MAX_SHARED_BYTES));
+    const { bytesRead } = await handle.read(head, 0, head.length, 0);
+    return redacted(head.subarray(0, bytesRead).toString("utf8"));
+  } finally {
+    await handle.close();
+  }
 }
 
 function* candidates(messages: ChatMessage[], root: string | null) {
@@ -125,7 +133,8 @@ function workPlaces(messages: ChatMessage[], root: string | null): Place[] {
 
 const inside = (root: string, path: string) => {
   const rel = relative(root, path);
-  return !!rel && !rel.startsWith("..") && !isAbsolute(rel);
+  const above = rel === ".." || rel.startsWith(`..${sep}`);
+  return !!rel && !above && !isAbsolute(rel);
 };
 
 const SECRET_FOLDERS = new Set([

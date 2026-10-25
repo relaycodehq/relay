@@ -130,6 +130,16 @@ describe("sharedFiles", () => {
     ]);
   });
 
+  it("shares a file whose name starts with two dots, which is still inside", async () => {
+    const root = await folder({ "..notes.md": "n" });
+    const messages = [
+      answer({ changes: [{ path: "..notes.md", additions: 1, deletions: 0 }] }),
+    ];
+    expect((await sharedFiles(messages, root)).map((f) => f.path)).toEqual([
+      "..notes.md",
+    ]);
+  });
+
   it("stops at 20 files", async () => {
     const names = Array.from({ length: 25 }, (_, i) => `f${i}.ts`);
     const root = await folder(Object.fromEntries(names.map((n) => [n, n])));
