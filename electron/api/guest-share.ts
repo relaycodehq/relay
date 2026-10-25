@@ -117,5 +117,10 @@ function signingKey(store: Store) {
     });
     return Buffer.from(made, "base64");
   };
-  return () => (key ??= load());
+  // A refused Keychain prompt isn't kept: the next share asks again.
+  return () =>
+    (key ??= load().catch((e) => {
+      key = undefined;
+      throw e;
+    }));
 }
