@@ -5,6 +5,7 @@ import { ArrowLeft, Plus } from "lucide-react";
 import type { Project } from "../../../shared/projects";
 import {
   SCRATCHPAD_SCHEDULE,
+  type Schedule,
   type ScheduleInput,
 } from "../../../shared/schedules";
 import { api } from "../../lib/api";
@@ -82,35 +83,9 @@ export function SchedulesPage({
     }
   }
 
-  const on = list.filter((s) => s.enabled);
-  const soonest = on.length
-    ? on.reduce((a, b) => (nextAt(a) <= nextAt(b) ? a : b))
-    : undefined;
-
   return (
     <div className="pulls-page schedules-page">
-      <header className="pulls-head">
-        <div className="pulls-head-text">
-          <div className="pulls-heading">
-            <h1>Schedules</h1>
-          </div>
-          <p>
-            {soonest ? (
-              <>
-                {on.length} running on their own · next up <strong>{soonest.name}</strong>,{" "}
-                {runTime(nextAt(soonest))}
-              </>
-            ) : (
-              "Prompts Relay sends on its own. Their runs show up as normal threads."
-            )}
-          </p>
-        </div>
-        <div className="pulls-tools">
-          <button className="pulls-quiet-button" onClick={() => void add()}>
-            <Plus size={14} /> New schedule
-          </button>
-        </div>
-      </header>
+      <SchedulesHead schedules={list} onNew={() => void add()} />
       {!!(error || schedules.error) && <ErrorBox error={error ?? schedules.error} />}
       {schedules.isPending ? (
         <Loading />
@@ -146,5 +121,43 @@ export function SchedulesPage({
         </div>
       )}
     </div>
+  );
+}
+
+/** The title, what runs next, and New schedule. */
+function SchedulesHead({
+  schedules,
+  onNew,
+}: {
+  schedules: Schedule[];
+  onNew: () => void;
+}) {
+  const on = schedules.filter((s) => s.enabled);
+  const soonest = on.length
+    ? on.reduce((a, b) => (nextAt(a) <= nextAt(b) ? a : b))
+    : undefined;
+  return (
+    <header className="pulls-head">
+      <div className="pulls-head-text">
+        <div className="pulls-heading">
+          <h1>Schedules</h1>
+        </div>
+        <p>
+          {soonest ? (
+            <>
+              {on.length} running on their own · next up <strong>{soonest.name}</strong>,{" "}
+              {runTime(nextAt(soonest))}
+            </>
+          ) : (
+            "Prompts Relay sends on its own. Their runs show up as normal threads."
+          )}
+        </p>
+      </div>
+      <div className="pulls-tools">
+        <button className="pulls-quiet-button" onClick={onNew}>
+          <Plus size={14} /> New schedule
+        </button>
+      </div>
+    </header>
   );
 }

@@ -300,7 +300,6 @@ export const bigFunctions: Record<string, number> = {
   "src/features/review/useReviewTriage.ts › useReviewTriage": 88,
   "src/features/schedules/RepeatPicker.tsx › RepeatPanel": 126,
   "src/features/schedules/ScheduleEditor.tsx › ScheduleEditor": 234,
-  "src/features/schedules/SchedulesPage.tsx › SchedulesPage": 100,
   "src/features/settings/FontPicker.tsx › FontPicker": 146,
   "src/features/settings/Settings.tsx › Settings": 215,
   "src/features/settings/ShortcutSettings.tsx › ShortcutKeys": 233,
