@@ -78,6 +78,7 @@ class RemoteClient(
     private var watchdog: Job? = null
     private var heard = 0L
     private var background = false
+    private var networkUp = true
     /** When the app last came back from the background. */
     private var backAt = 0L
     private var attempt = 0
@@ -132,7 +133,7 @@ class RemoteClient(
     fun start() = post {
         if (!closed) return@post
         closed = false
-        connect()
+        if (networkUp) connect() else setStatus(LinkState.Offline, NO_NETWORK, phoneOffline = true)
     }
 
     fun close() = post {
@@ -159,7 +160,7 @@ class RemoteClient(
      */
     fun wake() = post {
         val state = _status.value.state
-        if (closed || state == LinkState.Denied) return@post
+        if (closed || state == LinkState.Denied || !networkUp) return@post
         // Back from the background, a desktop that ticked once a minute is asked for a tick instead.
         val probing = supports(Bridge.BACKGROUND) && heard < backAt
         val quiet = state == LinkState.Online && !probing && now() - heard > options.staleMs / 2
@@ -171,6 +172,30 @@ class RemoteClient(
         } else if (state == LinkState.Online) {
             worse.clear()
             tryBetter()
+        }
+    }
+
+    /**
+     * Whether the phone has a network at all. Without one the backoff stops,
+     * so a phone in flight mode isn't dialling every minute; when one comes
+     * back it tries at once.
+     */
+    fun setNetwork(up: Boolean) = post {
+        if (networkUp == up) return@post
+        networkUp = up
+        if (closed || _status.value.state == LinkState.Denied) return@post
+        when {
+            up -> if (_status.value.state == LinkState.Offline) {
+                retry = 0
+                connect()
+            }
+            // A live link stays until it fails: a switch from Wi-Fi to cellular passes through no network.
+            _status.value.state != LinkState.Online -> {
+                retryTimer?.cancel()
+                attempt++
+                racer.cancelAll()
+                setStatus(LinkState.Offline, NO_NETWORK, phoneOffline = true)
+            }
         }
     }
 
@@ -279,8 +304,8 @@ class RemoteClient(
         scope.launch { block() }
     }
 
-    private fun setStatus(state: LinkState, detail: String? = null) {
-        val status = RemoteStatus(state, detail)
+    private fun setStatus(state: LinkState, detail: String? = null, phoneOffline: Boolean = false) {
+        val status = RemoteStatus(state, detail, phoneOffline)
         _status.value = status
         listener.onStatus(status)
     }
@@ -312,7 +337,8 @@ class RemoteClient(
                 reason = error.message?.ifEmpty { null } ?: reason
             }
             override fun done() {
-                setStatus(LinkState.Offline, reason)
+                if (networkUp) setStatus(LinkState.Offline, reason)
+                else setStatus(LinkState.Offline, NO_NETWORK, phoneOffline = true)
                 scheduleRetry()
             }
         })
@@ -320,6 +346,8 @@ class RemoteClient(
 
     private fun scheduleRetry() {
         retryTimer?.cancel()
+        // setNetwork tries again when a network comes.
+        if (!networkUp) return
         val wait = minOf(if (background) options.backgroundRetryMs else 15_000L, 1000L shl minOf(retry++, 14))
         retryTimer = scope.launch {
             delay(wait)
@@ -457,7 +485,8 @@ class RemoteClient(
     private fun lost() {
         drop("Connection lost.")
         if (closed || _status.value.state == LinkState.Denied) return
-        setStatus(LinkState.Offline, "Connection lost.")
+        if (networkUp) setStatus(LinkState.Offline, "Connection lost.")
+        else setStatus(LinkState.Offline, NO_NETWORK, phoneOffline = true)
         scheduleRetry()
     }
 
@@ -517,3 +546,5 @@ class RemoteClient(
         calls.failAll(reason)
     }
 }
+
+private const val NO_NETWORK = "This phone has no network."

@@ -145,7 +145,8 @@ class Remote(
     private var live: RemoteClient? = null
     /** Starts true: the app may be opened by a notification's worker with nothing on screen. */
     private var background = true
-    /** Held around [background] and the client it goes to, which change on different threads. */
+    private var networkUp = true
+    /** Held around [background], [networkUp] and the client they go to, which change on different threads. */
     private val backgroundLock = Any()
     /** Where the latest switch goes, set before its offline copy is read; [_active] moves after. */
     private var wanted: String? = null
@@ -242,6 +243,12 @@ class Remote(
     fun setBackground(on: Boolean) = synchronized(backgroundLock) {
         background = on
         live?.setBackground(on)
+    }
+
+    /** Whether the phone has a network, for the link to the active computer and the next. */
+    fun setNetwork(up: Boolean) = synchronized(backgroundLock) {
+        networkUp = up
+        live?.setNetwork(up)
     }
 
     /** A fresh overview, when online. */
@@ -425,6 +432,7 @@ class Remote(
         synchronized(backgroundLock) {
             live = next
             next.setBackground(background)
+            next.setNetwork(networkUp)
         }
         livePresent = null
         previous?.close()
