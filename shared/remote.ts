@@ -456,7 +456,8 @@ export type RemoteDiffSource =
 /**
  * Desktop calls a paired phone makes as they are, validated by the desktop's
  * own dispatch: threads and their notes, models, Git (stage, commit, push, pull, fetch,
- * branches), read-only files, history, background tasks and subagents; only what the
+ * branches), read-only files, history, background tasks, subagents and pull requests
+ * (reading them, commenting and reviewing); only what the
  * phone app uses. Terminals, file saves, settings (bar the agent new threads
  * start on), sharing and anything that opens a desktop dialog are not on the
  * list and stay out of reach.
@@ -522,6 +523,16 @@ export const phoneDesktopMethods = [
   "projectTasks",
   "stopProjectTask",
   "restartProjectTask",
+  "pullServers",
+  "hostAccount",
+  "search",
+  "pull",
+  "pullCiStatus",
+  "files",
+  "reviews",
+  "discussion",
+  "comment",
+  "submitReview",
 ] as const satisfies readonly ApiMethod[];
 export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
 
@@ -966,6 +977,10 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "projectCiStatus",
   "providerUsage",
   "regenerateProjectChatTitle",
+  "search",
+  "pullCiStatus",
+  "submitReview",
+  "comment",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */

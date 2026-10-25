@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { helperOffMessage, helperOn } from "../../shared/settings";
+import { isAzureServer, isSourceControlOn } from "../../shared/source-control";
 import { emptyProgress } from "../../shared/types";
 import {
   bodySchema,
@@ -21,6 +22,8 @@ export function reviewHandlers(ctx: ApiContext) {
     clientFor,
     prKey,
     projectChats,
+    ci,
+    login,
   } = ctx;
 
   const triageArgs = [refSchema, shaSchema, shaSchema] as const;
@@ -44,6 +47,28 @@ export function reviewHandlers(ctx: ApiContext) {
     ),
     parseUrl: takes([z.string().max(4096)], (url) => hosts.parseUrl(url)),
     pull: takes([refSchema], async (r) => (await clientFor(r)).pull(r)),
+    pullCiStatus: takes(
+      [refSchema, z.string().min(1).max(255)],
+      (r, branch) => {
+        const server =
+          r.server ?? login.client?.account.server ?? "https://github.com";
+        const host = isAzureServer(server)
+          ? "dev.azure.com"
+          : new URL(server).hostname.toLowerCase();
+        const settings = store.get().sourceControl;
+        return ci.branchStatus(
+          {
+            host,
+            owner: r.owner,
+            name: r.name,
+            ...(isAzureServer(server) ? { server } : {}),
+          },
+          branch,
+          { gitea: login.client, azure: (s) => hosts.azureClient(s) },
+          (kind) => isSourceControlOn(settings, kind),
+        );
+      },
+    ),
     files: takes([refSchema, pageSchema], async (r, page) =>
       (await clientFor(r)).files(r, page),
     ),

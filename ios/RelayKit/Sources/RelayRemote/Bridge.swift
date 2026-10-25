@@ -47,6 +47,6 @@ public enum Bridge {
     public static let slowPhoneMethods: Set<String> = [
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
-        "regenerateProjectChatTitle",
+        "regenerateProjectChatTitle", "search", "pullCiStatus", "submitReview", "comment",
     ]
 }

@@ -572,6 +572,11 @@ export interface Api
     server?: string,
   ): Promise<Page<Issue>>;
   pull(ref: PullRef): Promise<Pull>;
+  /** CI on the pull request's head branch; null when its host reports none. */
+  pullCiStatus(
+    ref: PullRef,
+    branch: string,
+  ): Promise<import("./ci").CiStatus | null>;
   files(ref: PullRef, page: number): Promise<Page<ChangedFile>>;
   blame(ref: PullRef, query: BlameQuery): Promise<LineBlame>;
   contents(

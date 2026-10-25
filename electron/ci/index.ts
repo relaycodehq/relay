@@ -119,6 +119,22 @@ export class Ci {
     ];
   }
 
+  /** CI on a branch of a repository on its host, with no checkout: a pull request's head. */
+  async branchStatus(
+    remote: CiRepo & { host: string },
+    branch: string,
+    hosts: CiHosts,
+    isOn: (kind: SourceControlKind) => boolean = () => true,
+  ): Promise<CiStatus | null> {
+    const source = this.sources(hosts).find(
+      (s) => s.host === remote.host && isOn(s.kind),
+    );
+    const reading = source && (await source.read(remote, branch));
+    return reading
+      ? { source: source.name, branch, ...reading, ahead: 0 }
+      : null;
+  }
+
   /** `isOn` says which hosts the user left turned on in Settings. */
   async status(
     root: string,
