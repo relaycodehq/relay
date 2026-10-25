@@ -430,6 +430,13 @@
 .project-message.user {
   contain-intrinsic-block-size: auto 120px;
 }
+/* An answer that ends in text ends in its last line's leading and descent,
+   which the eye counts as gap: what follows starts that much sooner, so the
+   gap reads 44px from the baseline like the rest. */
+.project-message.assistant:has(> .markdown + .message-actions)
+  + .project-message:not(.assistant) {
+  padding-top: 16px;
+}
 .project-message .markdown {
   font-size: 14px;
   line-height: 1.75;
