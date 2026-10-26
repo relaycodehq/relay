@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode, Ref, RefObject } from "react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { threadWorktree } from "../../shared/projects";
-import type { Account } from "../../shared/types";
+import type { Account, PullRef } from "../../shared/types";
 import type { SettingsCategory } from "../lib/settings-page";
 import { LOCKED_MESSAGE, type NavigationLock } from "../lib/navigation-lock";
 import { paneFrame, usePaneRow, type PaneId } from "../lib/workspace-panes";
@@ -153,13 +153,49 @@ export function ThreadHeaderActions({
   );
 }
 
+/** A PR thread's Review, wired to the repository host and the thread's PR. */
+function PullReview({
+  tools: { folder, view, opens, prs, host, setError },
+  project,
+  pull,
+  onConnect,
+}: {
+  tools: ThreadTools;
+  project: Project;
+  pull: PullRef;
+  onConnect?: () => void;
+}) {
+  return (
+    <ThreadChanges
+      project={project}
+      pull={pull}
+      folder={folder}
+      view={view}
+      opens={opens}
+      review={{
+        account: host.account,
+        kind: host.kind,
+        error: host.error,
+        checking: host.checking,
+        onRecheck: host.recheck,
+        onDiscuss: (target, pr) =>
+          void prs
+            .open(pr)
+            .then(() => opens.askAbout(target, pr))
+            .catch(setError),
+        onConnect,
+      }}
+    />
+  );
+}
+
 /**
  * The thread's panes, chat, Changes and the panel, over its terminal. What
  * would leave the thread goes through `nav`, which a thread's own window
  * hands to the main one.
  */
 export function ThreadWorkspace({
-  tools: { nav, view, folder, panel, opens, prs, host, terminal, setError },
+  tools,
   project,
   projects,
   allProjects,
@@ -197,6 +233,7 @@ export function ThreadWorkspace({
   onSettings: (at: SettingsCategory, projectId?: string) => void;
   onLinkProject?: () => void;
 }) {
+  const { nav, view, folder, panel, opens, host, terminal, setError } = tools;
   const { chat, chats, draftId, panes, pull, navigate } = nav;
   const editorWindowUsable = !hidden && !folder.gone && !folder.deleted;
   useEditorWindowShortcut(
@@ -206,8 +243,7 @@ export function ThreadWorkspace({
     setError,
   );
   const review =
-    chat?.reviewer &&
-    chats.data?.find((c) => c.id === chat.reviewer?.parent);
+    chat?.reviewer && chats.data?.find((c) => c.id === chat.reviewer?.parent);
   const codeOpen =
     panes.layout.open.changes ||
     (panes.layout.open.panel && panel.has("files"));
@@ -306,25 +342,11 @@ export function ThreadWorkspace({
         </Pane>
         <Pane id="changes" label="Changes" {...frame("changes")}>
           {panes.layout.open.changes && pull && (
-            <ThreadChanges
+            <PullReview
+              tools={tools}
               project={project}
               pull={pull}
-              folder={folder}
-              view={view}
-              opens={opens}
-              review={{
-                account: host.account,
-                kind: host.kind,
-                error: host.error,
-                checking: host.checking,
-                onRecheck: host.recheck,
-                onDiscuss: (target, pr) =>
-                  void prs
-                    .open(pr)
-                    .then(() => opens.askAbout(target, pr))
-                    .catch(setError),
-                onConnect: onLinkProject,
-              }}
+              onConnect={onLinkProject}
             />
           )}
         </Pane>
