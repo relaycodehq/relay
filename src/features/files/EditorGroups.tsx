@@ -187,6 +187,7 @@ function SplitBody({
           active={active}
           path={view.tab.path}
           reveal={forTab(ws.reveal, group, tabId(view.tab))}
+          closeRequest={forTab(ws.closing, group, tabId(view.tab))?.nonce}
           checks={checks}
           onOpen={(path) => ws.open({ path, outside: true })}
           onClose={() => ws.closed(group, tabId(view.tab))}

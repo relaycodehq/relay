@@ -24,6 +24,7 @@ export function OutsideFile({
   active,
   path,
   reveal,
+  closeRequest,
   checks,
   lead,
   onOpen,
@@ -33,6 +34,8 @@ export function OutsideFile({
   /** Absolute, or from `~`. */
   path: string;
   reveal?: Reveal;
+  /** A new value asks to close, as the tab's × does. */
+  closeRequest?: number;
   checks: ChecksController;
   lead?: ReactNode;
   /** Opens another file outside the project, by its absolute path. */
@@ -57,6 +60,7 @@ export function OutsideFile({
         target: { projectId: source.where, head: { sha: "" } },
         checks: noChecks,
         reveal,
+        closeRequest,
         onOpenLink: (target) => {
           if (!target.directory)
             onOpen(`${source.where.replace(/[/\\]$/, "")}/${target.path}`);
