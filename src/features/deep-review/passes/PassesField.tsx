@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { MAX_REVIEWERS, passCount } from "../../../shared/deep-review";
-import { formatLines, leftOut, readLines } from "../../../shared/review-passes";
-import { PASS_LINES, passPerFolder } from "../../../shared/suggest-passes";
+import { MAX_REVIEWERS, passCount } from "../../../../shared/deep-review";
+import { formatLines, leftOut, readLines } from "../../../../shared/review-passes";
+import { PASS_LINES, passPerFolder } from "../../../../shared/suggest-passes";
 import type { ReviewPasses } from "./useReviewPasses";
 
 /**

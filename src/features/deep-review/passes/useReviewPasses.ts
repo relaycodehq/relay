@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReviewTarget } from "../../../shared/deep-review";
+import type { ReviewTarget } from "../../../../shared/deep-review";
 import {
   parsePasses,
   passCoverage,
   passesText,
   type ReviewPass,
-} from "../../../shared/review-passes";
-import { suggestPasses } from "../../../shared/suggest-passes";
-import { api } from "../../lib/api";
-import { readJson, writeJson } from "../../lib/persisted-store";
+} from "../../../../shared/review-passes";
+import { suggestPasses } from "../../../../shared/suggest-passes";
+import { api } from "../../../lib/api";
+import { readJson, writeJson } from "../../../lib/persisted-store";
 
 const seamsKey = "deep-review-seams";
 

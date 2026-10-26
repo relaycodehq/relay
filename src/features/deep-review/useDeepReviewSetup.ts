@@ -35,7 +35,7 @@ import {
 import { useClaudeModels } from "../agents/useClaudeModels";
 import { usePoll } from "../../lib/poll";
 import { readText, writeJson, writeText } from "../../lib/persisted-store";
-import { useReviewPasses } from "./useReviewPasses";
+import { useReviewPasses } from "./passes/useReviewPasses";
 
 /**
  * Keeps `change` with the unsent review, and the setup it was made with the

@@ -11,8 +11,8 @@ import { useDeepReviewSetup } from "./useDeepReviewSetup";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
 import { LeadField } from "./LeadField";
-import { PassesField } from "./PassesField";
-import type { ReviewPasses } from "./useReviewPasses";
+import { PassesField } from "./passes/PassesField";
+import type { ReviewPasses } from "./passes/useReviewPasses";
 import { ReviewersField } from "./ReviewersField";
 import { TargetField } from "./TargetField";
 
