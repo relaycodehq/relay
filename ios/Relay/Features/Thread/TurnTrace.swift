@@ -109,7 +109,7 @@ struct TurnTrace: View {
                 Text("Working")
             case .call(let a):
                 Spinner(size: 13)
-                Text(liveLabel(a)).lineLimit(1)
+                Text(liveLabel(a)).lineLimit(1).layoutPriority(-1)
             case .writing:
                 Image(systemName: "text.cursor")
                 Text("Writing")
@@ -120,12 +120,14 @@ struct TurnTrace: View {
                 }
             case .done(let text):
                 Image(systemName: Turn(message).activity.isEmpty ? "brain" : "wrench.and.screwdriver")
-                Text(text).lineLimit(open ? nil : 1)
+                // One line, cut short: the time and chevron after it always show whole.
+                Text(text).lineLimit(1).truncationMode(.tail).layoutPriority(-1)
             }
-            took
+            took.fixedSize()
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
                 .rotationEffect(.degrees(open ? 90 : 0))
+                .fixedSize()
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
