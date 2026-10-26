@@ -117,42 +117,26 @@ export function ActionObject({ row, withWhere = true }: { row: TraceRow; withWhe
   }
 }
 
-/** What an action was about, as plain text. */
-function objectText(a: CallAction, display: (text: string) => string) {
-  switch (a.kind) {
-    case "read":
-    case "image":
-    case "edit":
-    case "create":
-      return baseName(display(a.file));
-    case "search":
-      return shortPattern(a.pattern);
-    case "web":
-      return a.query;
-    case "test":
-      return a.target ? baseName(a.target) : "";
-    case "run":
-    case "git":
-      return a.what;
-    default:
-      return "";
-  }
-}
-
-/** The live row's words as plain text, for the shine to cross: "Reading read-only-bash.ts". */
-export const actionText = (row: TraceRow, display: (text: string) => string) =>
-  `${actionVerb(row, true)} ${objectText(row.action, display)}`.trim();
-
 /** A finished test or check says how it went beside its verb. */
 function Outcome({ action }: { action: CallAction }) {
   if (action.kind !== "test" && action.kind !== "check") return null;
   return action.failed ? <X size={12} className="trace-bad" /> : <Check size={12} className="trace-good" />;
 }
 
-export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boolean }) {
+export function ActionLabel({
+  row,
+  live = false,
+  shine = false,
+}: {
+  row: TraceRow;
+  live?: boolean;
+  /** The verb shimmers: the turn's one live row. */
+  shine?: boolean;
+}) {
   return (
     <span className="trace-label">
-      <span className="trace-verb">{actionVerb(row, live)}</span> <ActionObject row={row} />
+      <span className={shine ? "trace-verb live-shine" : "trace-verb"}>{actionVerb(row, live)}</span>{" "}
+      <ActionObject row={row} />
       {row.ranToo && <span className="trace-then">and ran it</span>}
       {!live && <Outcome action={row.action} />}
     </span>

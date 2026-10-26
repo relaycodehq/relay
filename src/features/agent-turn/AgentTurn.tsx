@@ -1,7 +1,14 @@
 import { useNow } from "../../lib/useNow";
 // One summary line per turn; under it the commentary, and between lines of it
 // the tool calls grouped by what they did (TraceRun).
-import { useContext, useRef, useState, type ReactNode } from "react";
+import {
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Brain,
   ChevronRight,
@@ -41,7 +48,8 @@ import {
 } from "./ToolRow";
 import { TraceRun } from "./TraceRun";
 import { useFoldAway } from "./useFoldAway";
-import { ActionLabel, actionText } from "./ActionRow";
+import { ActionLabel, actionIcons } from "./ActionRow";
+import { growIn } from "../../lib/fold-motion";
 import { rowsOf } from "../../../shared/trace-tree";
 import "./agent-trace.css";
 import "./agent-turn.css";
@@ -259,6 +267,11 @@ function TraceParts({
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
 }) {
+  // Batches that come in after the trace first drew grow in.
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    if (live) setDrawn(true);
+  }, [live]);
   return groupTrace(shown).map((part, index, parts) =>
     part.kind === "commentary" ? (
       <div className="agent-commentary" key={part.id}>
@@ -274,6 +287,7 @@ function TraceParts({
       <OpenBatch
         key={part.id}
         activity={part.activity}
+        arrived={drawn}
         display={display}
         onChanges={onChanges}
       />
@@ -352,10 +366,13 @@ function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
  */
 function OpenBatch({
   activity,
+  arrived,
   display,
   onChanges,
 }: {
   activity: AgentActivity[];
+  /** It came in while the turn was on screen, not with the thread. */
+  arrived: boolean;
   display: (text: string) => string;
   onChanges: () => void;
 }) {
@@ -364,13 +381,21 @@ function OpenBatch({
   const running = head.status === "running";
   const headRow = rowsOf([head])[0];
   const toldByAction = headRow && headRow.action.kind !== "tool" && headRow.action.kind !== "image";
-  const Icon = iconOf(head);
+  // The tree's icon for what the call did, so a read looks the same however it was done.
+  const Icon = toldByAction ? actionIcons[headRow.action.kind] : iconOf(head);
   const calls = useContext(Subagents).calls.get(head.id) ?? [];
   const folded = earlier.length > 0 || calls.length > 0;
   // With nothing folded behind it, an image's row opens the image instead.
   const read = useImageRead(head);
+  const batch = useRef<HTMLDivElement>(null);
+  // A batch that arrives while the reader watches grows in, rather than
+  // pushing the pinned thread up in one frame; later heads swap in place.
+  useLayoutEffect(() => {
+    const growing = arrived && batch.current ? growIn(batch.current) : undefined;
+    return () => growing?.cancel();
+  }, []);
   return (
-    <div className={`agent-batch ${head.status}`}>
+    <div className={`agent-batch ${head.status}`} ref={batch}>
       <ImageReadPeek
         image={read?.image}
         onOpen={read?.open}
@@ -386,13 +411,12 @@ function OpenBatch({
       >
         <span className="agent-batch-row" title={display(head.label)}>
           {read ? <ReadIcon image={read.image} /> : <Icon size={14} />}
-          {toldByAction && !running ? (
-            <ActionLabel row={headRow} />
+          {toldByAction ? (
+            // Running or done, the same words: only the verb changes, and shines while it runs.
+            <ActionLabel row={headRow} live={running} shine={running} />
           ) : (
             <span className={running ? "live-shine" : undefined}>
-              {toldByAction
-                ? actionText(headRow, display)
-                : display(running ? liveLabel(head) : doneLabel(head))}
+              {display(running ? liveLabel(head) : doneLabel(head))}
             </span>
           )}
           <Progress activity={head} />
