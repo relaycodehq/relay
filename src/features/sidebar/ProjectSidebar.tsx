@@ -41,12 +41,9 @@ import { useDraftRaise } from "./useDraftRaise";
 import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
-import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
-import { ShareGuestDialog } from "../guest-share/ShareGuestDialog";
-import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { SidebarFooter } from "./SidebarFooter";
-import { SnoozePickDialog } from "./SnoozeMenu";
+import { ThreadActionDialogs } from "./ThreadActionDialogs";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchPalette } from "./SearchPalette";
 import { FilterMenu } from "./FilterMenu";
@@ -373,37 +370,7 @@ export function ProjectSidebar({
           onClose={() => setSearching(false)}
         />
       )}
-      {actions.pickingSnooze && (
-        <SnoozePickDialog
-          onSnooze={(until) =>
-            void actions.triage(actions.pickingSnooze!, {
-              kind: "snooze",
-              until,
-            })
-          }
-          onClose={() => actions.setPickingSnooze(undefined)}
-        />
-      )}
-      {actions.archiving && (
-        <ArchiveWorktreeDialog
-          chat={actions.archiving.chat}
-          files={actions.archiving.files}
-          onArchive={actions.archive}
-          onCancel={actions.cancelArchive}
-        />
-      )}
-      {actions.sharing && (
-        <ShareGuestDialog
-          threadId={actions.sharing}
-          onClose={() => actions.setSharing(undefined)}
-        />
-      )}
-      {actions.moving && (
-        <MoveToWorktreeDialog
-          chatId={actions.moving}
-          onClose={() => actions.setMoving(undefined)}
-        />
-      )}
+      <ThreadActionDialogs actions={actions} />
       <SidebarFooter
         projectId={projectId}
         projectName={projects.find((p) => p.id === projectId)?.name}

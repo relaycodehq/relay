@@ -73,17 +73,12 @@ export function useThreadActions({
 }) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState<string>();
-  /** The thread the Move into its own worktree dialog is for. */
-  const [moving, setMoving] = useState<string>();
-  /** The thread the Share with guest dialog is for. */
-  const [sharing, setSharing] = useState<string>();
+  const dialogs = useThreadDialogs();
   /** The thread whose archive asks about its worktree, with the files only it has. */
   const [archiving, setArchiving] = useState<{
     chat: ChatSummary;
     files: number;
   }>();
-  /** The thread whose snooze time is being picked. */
-  const [pickingSnooze, setPickingSnooze] = useState<ChatSummary>();
   /** Threads whose title is being generated again. */
   const [regenerating, setRegenerating] = useState<ReadonlySet<string>>(
     new Set(),
@@ -298,12 +293,7 @@ export function useThreadActions({
     renaming,
     setRenaming,
     rename,
-    moving,
-    setMoving,
-    sharing,
-    setSharing,
-    pickingSnooze,
-    setPickingSnooze,
+    ...dialogs,
     archiving,
     /** Archives the thread the question was for, its worktree's folder going too or not. */
     archive(dropWorktree: boolean) {
@@ -339,11 +329,11 @@ export function useThreadActions({
         case "stop-driving":
           return void stopDriving(c);
         case "move-worktree":
-          return setMoving(c.id);
+          return dialogs.setMoving(c.id);
         case "snooze-pick":
-          return setPickingSnooze(c);
+          return dialogs.setPickingSnooze(c);
         case "share-guest":
-          return setSharing(c.id);
+          return dialogs.setSharing(c.id);
         case "project-settings":
           return onProjectSettings(c.projectId);
         case "own-window":
@@ -356,5 +346,23 @@ export function useThreadActions({
           return void triage(c, action.triage);
       }
     },
+  };
+}
+
+/** Which thread each dialog a menu action opens is for. */
+function useThreadDialogs() {
+  /** The thread the Move into its own worktree dialog is for. */
+  const [moving, setMoving] = useState<string>();
+  /** The thread the Share with guest dialog is for. */
+  const [sharing, setSharing] = useState<string>();
+  /** The thread whose snooze time is being picked. */
+  const [pickingSnooze, setPickingSnooze] = useState<ChatSummary>();
+  return {
+    moving,
+    setMoving,
+    sharing,
+    setSharing,
+    pickingSnooze,
+    setPickingSnooze,
   };
 }

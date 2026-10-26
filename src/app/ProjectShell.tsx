@@ -35,9 +35,7 @@ import { useShellCommands } from "./useShellCommands";
 import { useThreadOpening } from "./useThreadOpening";
 import { useToolPages } from "./useToolPages";
 import type { GitActionsHandle } from "../features/changes/GitActions";
-import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
-import { NewThreadPicker } from "../features/projects/NewThreadPicker";
-import { GuestImport } from "../features/guest-share/GuestImport";
+import { StartDialogs } from "./StartDialogs";
 import { NoProject } from "../features/projects/NoProject";
 import { PaneResizer } from "../ui/PaneResizer";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
@@ -439,42 +437,15 @@ export default function ProjectShell() {
           onClose={() => setChoosePR(false)}
         />
       )}
-      {links.guestLink && !starts.adding && (
-        <GuestImport
-          link={links.guestLink}
-          projects={projects.data}
-          current={project?.id ?? null}
-          onOpen={openChatById}
-          onAddProject={() => starts.addProject()}
-          onClose={links.closeGuest}
-        />
-      )}
-      {starts.picking && (
-        <NewThreadPicker
-          projects={projects.data && realProjects}
-          current={project?.id ?? null}
-          onSelect={(p) => {
-            starts.setPicking(false);
-            starts.open(p);
-          }}
-          onAdd={() => starts.addProject()}
-          onScratch={() => {
-            starts.setPicking(false);
-            void starts.scratch();
-          }}
-          onClose={() => starts.setPicking(false)}
-        />
-      )}
-      {starts.adding && (
-        <AddProjectPalette
-          projects={realProjects}
-          computerId={starts.addingOn}
-          initialPage={starts.adding}
-          onClose={() => starts.setAdding(false)}
-          onDone={(p) => void starts.added(p)}
-          onImportWithAgent={(app) => void starts.importThread(app)}
-        />
-      )}
+      <StartDialogs
+        starts={starts}
+        projects={projects.data}
+        realProjects={realProjects}
+        current={project?.id ?? null}
+        guestLink={links.guestLink}
+        onCloseGuest={links.closeGuest}
+        onOpenChat={openChatById}
+      />
       {signIn.open && (
         <SignInDialog
           boot={boot.data}

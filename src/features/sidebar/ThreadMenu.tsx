@@ -105,8 +105,6 @@ function ThreadMenuItems({
   const section = chatActivitySection(chat, now);
   const busy = chat.running || chat.waiting;
   const review = chat.scope.kind === "review";
-  const path = chat.worktree?.path ?? projectPath;
-  const branch = chat.worktree?.branch ?? chat.branch;
   const triage = (triage: ChatTriage) => onAction({ kind: "triage", triage });
   const holder = threadContextAgent(chat);
   const ownWindow = useHasOwnWindow(chat.id);
@@ -315,45 +313,12 @@ function ThreadMenuItems({
       >
         Share with guest…
       </MenuAction>
-      <Menu.SubmenuRoot>
-        <Menu.SubmenuTrigger className="sb-menu-item">
-          <span className="sb-menu-label">
-            <Copy size={13} />
-            Copy
-          </span>
-          <ChevronRight size={12} />
-        </Menu.SubmenuTrigger>
-        <MenuPopup side="right" align="start">
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => void api.writeClipboard(chat.title)}
-          >
-            Title
-          </Menu.Item>
-          {path && (
-            <Menu.Item
-              className="sb-menu-item"
-              onClick={() => void api.writeClipboard(path)}
-            >
-              Path
-            </Menu.Item>
-          )}
-          {branch && (
-            <Menu.Item
-              className="sb-menu-item"
-              onClick={() => void api.writeClipboard(branch)}
-            >
-              Branch
-            </Menu.Item>
-          )}
-          <Menu.Item
-            className="sb-menu-item"
-            onClick={() => void api.writeClipboard(chat.id)}
-          >
-            Thread ID
-          </Menu.Item>
-        </MenuPopup>
-      </Menu.SubmenuRoot>
+      <CopyMenu
+        title={chat.title}
+        path={chat.worktree?.path ?? projectPath}
+        branch={chat.worktree?.branch ?? chat.branch}
+        threadId={chat.id}
+      />
       <Menu.Separator className="sb-menu-separator" />
       <MenuAction
         icon={<Archive size={13} />}
@@ -363,5 +328,60 @@ function ThreadMenuItems({
         Archive thread
       </MenuAction>
     </>
+  );
+}
+
+/** Copies what a thread is known by: its title, folder, branch and id. */
+function CopyMenu({
+  title,
+  path,
+  branch,
+  threadId,
+}: {
+  title: string;
+  path: string | undefined;
+  branch: string | undefined;
+  threadId: string;
+}) {
+  return (
+    <Menu.SubmenuRoot>
+      <Menu.SubmenuTrigger className="sb-menu-item">
+        <span className="sb-menu-label">
+          <Copy size={13} />
+          Copy
+        </span>
+        <ChevronRight size={12} />
+      </Menu.SubmenuTrigger>
+      <MenuPopup side="right" align="start">
+        <Menu.Item
+          className="sb-menu-item"
+          onClick={() => void api.writeClipboard(title)}
+        >
+          Title
+        </Menu.Item>
+        {path && (
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => void api.writeClipboard(path)}
+          >
+            Path
+          </Menu.Item>
+        )}
+        {branch && (
+          <Menu.Item
+            className="sb-menu-item"
+            onClick={() => void api.writeClipboard(branch)}
+          >
+            Branch
+          </Menu.Item>
+        )}
+        <Menu.Item
+          className="sb-menu-item"
+          onClick={() => void api.writeClipboard(threadId)}
+        >
+          Thread ID
+        </Menu.Item>
+      </MenuPopup>
+    </Menu.SubmenuRoot>
   );
 }
