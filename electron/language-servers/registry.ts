@@ -29,6 +29,8 @@ export interface ServerSpec {
   npm?: { package: string; bin: string };
   /** What to tell the user when Relay can't get it. */
   hint: string;
+  /** Where it keeps its own files in the project, as a gitignore pattern kept out of Git's changes. */
+  cache?: string;
   initializationOptions?: unknown;
   /** What it gets when it asks for its settings, by section; any other section is its default. */
   settings?: Record<string, unknown>;
@@ -97,6 +99,8 @@ export const servers: Record<LspServerId, ServerSpec> = {
     commands: ["clangd"],
     args: ["--background-index"],
     probe: ["--version"],
+    // Its index of the whole project, next to compile_commands.json wherever that is.
+    cache: "**/.cache/clangd/",
     github: {
       repo: "clangd/clangd",
       asset(platform, arch) {

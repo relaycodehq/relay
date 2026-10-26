@@ -48,6 +48,8 @@ export interface LanguageServersDeps {
   inactiveLines?(event: LspInactiveLinesEvent): void;
   version: string;
   log?(line: string): void;
+  /** Keeps a pattern out of the Git changes of the repository at `root`. */
+  excludeLocally?(root: string, pattern: string): Promise<void>;
   platform?: NodeJS.Platform;
   /** How long a server runs after the last file of its folder closes. */
   idleMs?: number;
@@ -369,6 +371,14 @@ export class LanguageServers implements Omit<
       notices: new FileNotices(server, this.paths, this.deps),
     };
     this.entries.set(id, entry);
+    if (spec.cache)
+      void this.deps
+        .excludeLocally?.(root, spec.cache)
+        .catch((e) =>
+          this.deps.log?.(
+            `${spec.id}: couldn't keep ${spec.cache} out of Git: ${errorMessage(e)}`,
+          ),
+        );
     return entry;
   }
 

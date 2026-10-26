@@ -1,3 +1,4 @@
+import { excludeLocally } from "../git/local-exclude";
 import { ServerInstaller } from "./install";
 import {
   findNpm,
@@ -50,6 +51,7 @@ export function createLanguageServers(options: LanguageServersOptions) {
     inactiveLines: (event) => options.send("relay:lsp-inactive-lines", event),
     version: options.version,
     log: options.log,
+    excludeLocally,
     resolve: (spec, hooks) =>
       resolveServer(spec, { ...resolvePlatform, installer }, hooks),
     spawn: (launch, cwd) =>
