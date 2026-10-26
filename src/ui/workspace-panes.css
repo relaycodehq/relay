@@ -476,9 +476,6 @@
 .editor-bar .symbol-actions button:disabled {
   opacity: 0.45;
 }
-.project-inline-editor .editor-versions {
-  font-size: 10px;
-}
 
 /* Changes pane */
 .workspace-pane .local-changes {
