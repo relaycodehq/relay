@@ -245,10 +245,7 @@ describe("commands that look like something else", () => {
   });
 
   it("doesn't take a here-string or a shift for a heredoc", () => {
-    expect(commandActions("read x <<< word\nnpm test")).toEqual([
-      { kind: "run", what: "read" },
-      { kind: "test", failed: false },
-    ]);
+    expect(commandActions("read x <<< word\nnpm test")).toEqual([{ kind: "test", failed: false }]);
     expect(commandActions("echo $((1<<3))\nnpm test")).toEqual([{ kind: "test", failed: false }]);
   });
 
@@ -321,5 +318,12 @@ describe("words before the program", () => {
       { kind: "test", target: "a.test.ts", failed: false },
     ]);
   });
-});
 
+  it("reads past the shell's own setup and wrappers", () => {
+    expect(commandActions("set -euo pipefail\nnpm test")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("source .venv/bin/activate && pytest")).toEqual([{ kind: "run", what: "pytest" }]);
+    expect(commandActions("nohup node server.js")).toEqual([{ kind: "run", what: "server.js" }]);
+    expect(commandActions("[ -f a.ts ] && cat a.ts")).toEqual([{ kind: "read", file: "a.ts" }]);
+    expect(commandActions("while read f; do echo $f; done < list")).toEqual([{ kind: "run", what: "shell loop" }]);
+  });
+});

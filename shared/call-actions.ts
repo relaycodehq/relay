@@ -8,12 +8,16 @@ import { actionsThatRan, failedByItsCall, outcomes, type Step } from "./call-ver
 import {
   baseName,
   chain,
+  commandSetup,
+  commandWrappers,
   firstStage,
   heredocOpened,
   heredocs,
   pipedInto,
   positional,
   segments,
+  shellHeaders,
+  shellLeads,
   unwrapShell,
   wordsOf,
   writesTo,
@@ -93,10 +97,10 @@ function searchAction(label: string): CallAction {
     : { kind: "search", pattern: label };
 }
 
-/** Setup around the work: moving about, echoing separators, making folders. */
-const setup = new Set(["cd", "echo", "mkdir", "true", "export", "wc", "pushd", "popd", "for", "done", "fi"]);
+/** The shell's own setup, and what an agent runs around the work: separators echoed, folders made, lines counted, a loop's `read`. */
+const setup = new Set([...commandSetup, ...shellHeaders, "echo", "mkdir", "wc", "read"]);
 /** Words that lead into the command after them. */
-const leads = new Set(["npx", "sudo", "do", "then", "else", "if", "!", "time", "env"]);
+const leads = new Set([...commandWrappers, ...shellLeads]);
 /** `2>&1`, `>/dev/null`, `> /tmp/out.txt`; not a `>` inside a quoted message. */
 const redirect = /\s\d?>\s*(?:&\d|\/\S*)/g;
 
@@ -115,10 +119,12 @@ export function commandActions(command: string, output = ""): CallAction[] {
   return actionsThatRan(steps.map((step) => ({ ...step, actions: step.actions.map(judge) })));
 }
 
+const loops = new Set(["for", "while", "until"]);
+
 /** A command that only set up, like `echo hi`, or a loop that ran nothing it could name. */
 function onlySetup(head: string) {
   const commands = segments(head);
-  if (commands.some((segment) => wordsOf(segment)[0] === "for")) return "shell loop";
+  if (commands.some((segment) => loops.has(wordsOf(segment)[0] ?? ""))) return "shell loop";
   return wordsOf(commands[0] ?? "")[0] ?? "command";
 }
 

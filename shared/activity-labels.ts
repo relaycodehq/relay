@@ -2,6 +2,7 @@
 import type { AgentActivity, TraceDropped } from "./projects";
 import { askedQuestions, isQuestionCall } from "./asked-questions";
 import { isStartThreads, startedIds } from "./started-threads";
+import { baseName, commandSetup, commandWrappers, shellHeaders, shellLeads } from "./shell-words";
 
 export function duration(ms: number) {
   const seconds = Math.max(0, Math.floor(ms / 1000));
@@ -96,57 +97,6 @@ export function summarizeActivity(
   if (parts.length < 3) return parts.join(" and ");
   return `${parts.slice(0, -1).join(", ")}, and ${parts.at(-1)}`;
 }
-
-const baseName = (path: string) =>
-  path.split("/").filter(Boolean).at(-1) ?? path;
-
-const commandWrappers = new Set([
-  "sudo",
-  "env",
-  "time",
-  "nice",
-  "nohup",
-  "exec",
-  "command",
-  "npx",
-  "pnpx",
-  "bunx",
-]);
-
-const commandSetup = new Set([
-  "cd",
-  "pushd",
-  "popd",
-  "export",
-  "unset",
-  "set",
-  "source",
-  ".",
-  "true",
-  "[",
-  "[[",
-  "test",
-  "done",
-  "fi",
-  "esac",
-  "}",
-]);
-
-// Shell grammar around the commands: `if` and `do` lead into one, while the
-// headers of `for f in …` or `case $x in` run nothing themselves.
-const shellLeads = new Set([
-  "if",
-  "elif",
-  "while",
-  "until",
-  "then",
-  "do",
-  "else",
-  "!",
-  "{",
-]);
-
-const shellHeaders = new Set(["for", "case", "select", "function"]);
 
 /** The program a command line is about: "cd app && npx vitest run" is
  *  vitest, and Codex's "/bin/zsh -lc 'rg foo'" is rg. */

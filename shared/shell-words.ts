@@ -170,3 +170,17 @@ export function writesTo(segment: string) {
 
 /** The last part of a path: a program's name, a file's. */
 export const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
+
+/** Words that run the command after them: `sudo`, `npx`, `nohup`. */
+export const commandWrappers = new Set(["sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx"]);
+
+/** Commands that only set the shell up for the ones after them. */
+export const commandSetup = new Set([
+  "cd", "pushd", "popd", "export", "unset", "set", "source", ".", "true", "[", "[[", "test", "done", "fi", "esac", "}",
+]);
+
+// Shell grammar around the commands: `if` and `do` lead into one, while the
+// headers of `for f in …` or `case $x in` run nothing themselves.
+export const shellLeads = new Set(["if", "elif", "while", "until", "then", "do", "else", "!", "{"]);
+
+export const shellHeaders = new Set(["for", "case", "select", "function"]);
