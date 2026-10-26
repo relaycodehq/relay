@@ -51,7 +51,8 @@ export function detectIndent(text: string) {
   const sample = text.length > 200_000 ? text.slice(0, 200_000) : text;
   for (const line of sample.split("\n")) {
     if (line.startsWith("\t")) return "\t";
-    const spaces = /^( +)\S/.exec(line)?.[1].length;
+    // A block comment's " * " lines are aligned to its opening, not indented.
+    const spaces = /^( +)(?!\*)\S/.exec(line)?.[1].length;
     if (spaces && spaces < width) width = spaces;
     if (spaces) seen = true;
   }
