@@ -35,11 +35,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.thread.logic.BranchKind
-import dev.relay.android.features.thread.logic.ReadCode
 import dev.relay.android.features.thread.logic.TracePiece
 import dev.relay.android.features.thread.logic.TraceRow
 import dev.relay.android.features.thread.logic.actionVerb
 import dev.relay.android.features.thread.logic.readCode
+import dev.relay.android.features.thread.logic.readCodeWhenWhole
 import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.rowRunning
 import dev.relay.android.features.thread.logic.traceTree
@@ -145,8 +145,7 @@ private fun opensTo(a: AgentActivity) = a.wroteCode == true || a.detail != null 
  */
 @Composable
 private fun CallInside(a: AgentActivity) {
-    val read = readOf(a)
-    if (read != null) return ReadFile(read)
+    if (readCode(a) != null) return ReadInside(a)
     val wroteCode = a.wroteCode == true
     val showsOutput = a.detail != null && (!wroteCode || a.status == "failed")
     if (wroteCode) WrittenCodeOf(a, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
@@ -154,12 +153,14 @@ private fun CallInside(a: AgentActivity) {
     if (showsOutput) Detail(a)
 }
 
-/** The file a call read, from the whole of its output once the desktop has sent it. */
+/** A read of one file: its lines once the whole output is here, and plain as before until then. */
 @Composable
-private fun readOf(a: AgentActivity): ReadCode? {
-    if (readCode(a) == null) return null
-    val detail = wholeDetail(a)
-    return remember(a, detail) { readCode(a.copy(detail = detail)) }
+private fun ReadInside(a: AgentActivity) {
+    val fetched = fetchedDetail(a)
+    val read = remember(a, fetched) { readCodeWhenWhole(a, fetched) }
+    if (read != null) return ReadFile(read)
+    if (a.kind == "command") CommandLine(a.label)
+    Detail(a, fetched ?: a.detail.orEmpty())
 }
 
 /** What ran, as typed: the row says what it did, this says how. */

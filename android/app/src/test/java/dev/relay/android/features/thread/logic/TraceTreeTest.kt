@@ -12,6 +12,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,6 +68,22 @@ class TraceTreeTest {
             }
             assertEquals(call.label, want, readCode(call))
         }
+    }
+
+    @Test
+    fun keepsACutReadPlainUntilItIsWhole() {
+        val whole = "10\tconst a = 1;\n11\tconst b = 2;\n12\tconst c = 3;"
+        val preview = "10\tconst a = 1;\n…\n12\tconst c = 3;"
+        val read = AgentActivity(
+            id = "r", kind = "read", label = "src/a.ts", status = "complete", detail = preview, detailCut = 40,
+            actions = listOf(CallAction("read", file = "src/a.ts")),
+        )
+        assertNull(readCodeWhenWhole(read, fetched = null))
+        // A subagent's call arrives cut with no detailCut to say so.
+        assertNull(readCodeWhenWhole(read.copy(detailCut = null), fetched = null))
+        val fetched = readCodeWhenWhole(read, fetched = whole)
+        assertEquals(ReadCode("src/a.ts", "const a = 1;\nconst b = 2;\nconst c = 3;", 10), fetched)
+        assertEquals(ReadCode("src/a.ts", "const a = 1;", 10), readCodeWhenWhole(read.copy(detail = "10\tconst a = 1;", detailCut = null), null))
     }
 
     private fun assertPiece(at: String, want: JsonObject, got: TracePiece) {

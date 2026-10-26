@@ -324,8 +324,7 @@ private fun AnsweredQuestions(questions: List<AskedQuestion>) {
 
 /** A call's output; the desktop sends a long one cut, and the whole of it once the fold opens. */
 @Composable
-internal fun Detail(a: AgentActivity) {
-    val detail = wholeDetail(a)
+internal fun Detail(a: AgentActivity, detail: String = fetchedDetail(a) ?: a.detail.orEmpty()) {
     SelectionContainer(
         Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp).fillMaxWidth().heightIn(max = 220.dp)
             .background(RelayTheme.colors.muted, Radii.smShape).verticalScroll(rememberScrollState()).padding(9.dp),
@@ -334,9 +333,9 @@ internal fun Detail(a: AgentActivity) {
     }
 }
 
-/** [a]'s output as sent, until the desktop has given the whole of a cut one. */
+/** The whole of [a]'s cut output, once the desktop has given it; none while it hasn't, or wasn't cut. */
 @Composable
-internal fun wholeDetail(a: AgentActivity): String {
+internal fun fetchedDetail(a: AgentActivity): String? {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current
     var whole by remember(a.id) { mutableStateOf<String?>(null) }
@@ -350,7 +349,7 @@ internal fun wholeDetail(a: AgentActivity): String {
         } catch (_: Exception) {
         }
     }
-    return whole ?: a.detail.orEmpty()
+    return whole
 }
 
 @Composable

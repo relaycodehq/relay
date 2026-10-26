@@ -30,6 +30,21 @@ fun readCode(call: AgentActivity): ReadCode? {
     return ReadCode(file, lines.joinToString("\n"), rangeStart(lines, read.lines))
 }
 
+/** Where the desktop joined the start and the end of an output it cut for the phone. */
+private const val CUT_MARK = "\n…\n"
+
+/**
+ * What a read printed, once its output is whole: the desktop's [fetched] copy
+ * of a cut one, or the detail as sent when nothing was cut. A subagent's call
+ * loses its `detailCut` on the way and can't be fetched, so the cut mark is
+ * what tells. Read from a cut output, the mark would show as a line of code.
+ */
+fun readCodeWhenWhole(call: AgentActivity, fetched: String?): ReadCode? {
+    if (fetched != null) return readCode(call.copy(detail = fetched, detailCut = null))
+    val cut = (call.detailCut ?: 0) > 0 || CUT_MARK in call.detail.orEmpty()
+    return if (cut) null else readCode(call)
+}
+
 /**
  * The longest run of numbered lines counting up from the top. Output kept from
  * its end may start mid-line, so the run can start on the second line; it
