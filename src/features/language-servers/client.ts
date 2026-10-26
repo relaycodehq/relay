@@ -34,12 +34,35 @@ export const lsp = {
   status: call("lspStatus"),
 };
 
+/**
+ * The last diagnostics each file was sent, by folder and path. The main
+ * process sends them once, so an editor mounted again after a tab switch
+ * reads them here instead of waiting for a change.
+ */
+const lastDiagnostics = new Map<string, LspDiagnostic[]>();
+let keepingDiagnostics = false;
+
+const fileKey = (where: string, path: string) => `${where}\0${path}`;
+
+function keepDiagnostics() {
+  if (keepingDiagnostics) return;
+  keepingDiagnostics = true;
+  api.onLspDiagnostics((event) => {
+    const key = fileKey(event.where, event.path);
+    if (event.diagnostics.length) lastDiagnostics.set(key, event.diagnostics);
+    else lastDiagnostics.delete(key);
+  });
+}
+
 /** Hears what the servers report for one file, now and whenever it changes. */
 export function onLspDiagnostics(
   where: string,
   path: string,
   callback: (diagnostics: LspDiagnostic[]) => void,
 ) {
+  keepDiagnostics();
+  const known = lastDiagnostics.get(fileKey(where, path));
+  if (known) callback(known);
   return api.onLspDiagnostics((event) => {
     if (event.where === where && event.path === path)
       callback(event.diagnostics);
