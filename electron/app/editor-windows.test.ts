@@ -127,6 +127,17 @@ describe("EditorWindows", () => {
     expect(made[0].destroy).not.toHaveBeenCalled();
   });
 
+  it("takes buffers only from the editor window, so another window's can't close it over its edits", () => {
+    editors.popOut(editor, main as never);
+    editors.giveBack("p", thread as never, [buffer("stale")]);
+    expect(made[0].destroy).not.toHaveBeenCalled();
+    expect(made[0].webContents.send).toHaveBeenCalledWith(
+      "relay:editor-return",
+      "p",
+    );
+    expect(editors.take("p", main as never).buffers).toEqual([]);
+  });
+
   it("gives files asked for to the editor window only, and none if it has no window", () => {
     expect(editors.openFile("p", { path: "a.ts", directory: false })).toBe(
       false,

@@ -154,8 +154,8 @@ export interface EditorWindowsApi {
   onEditorReturn(callback: (where: string) => void): () => void;
   /**
    * Puts a workspace's editor back in the window it came from. The editor
-   * window calls it with its unsaved text; from any other window, with none
-   * given, it asks the editor window to.
+   * window calls it with its unsaved text; from any other window it asks the
+   * editor window to, and ignores the buffers sent.
    */
   returnEditorWindow(where: string, buffers?: UnsavedBuffer[]): Promise<void>;
   /** Shows a file in the workspace's editor window; false when it has none. */

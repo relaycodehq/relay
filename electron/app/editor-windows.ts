@@ -90,10 +90,10 @@ export class EditorWindows extends PoppedWindows<EditorWindow> {
 
   /**
    * Puts the workspace's editor back where it came from, `buffers` with it,
-   * and closes its window. Asked by another window, with no `buffers` given,
-   * the editor window is asked to do it: only it has its unsaved text. A
-   * window handing over buffers closes without asking, since its page keeps
-   * nothing but what is handed over.
+   * and closes its window. Asked by another window, the editor window is
+   * asked to do it, and what the caller sent is left alone: only the editor
+   * window has its unsaved text. Handing over buffers, it closes without
+   * asking, since its page keeps nothing but what is handed over.
    */
   giveBack(
     where: string,
@@ -102,7 +102,7 @@ export class EditorWindows extends PoppedWindows<EditorWindow> {
   ) {
     const win = this.window(where);
     if (!win) return;
-    if (!buffers && caller !== win) {
+    if (caller !== win) {
       win.webContents.send("relay:editor-return", where);
       return;
     }
