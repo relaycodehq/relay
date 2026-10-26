@@ -46,6 +46,12 @@ describe("applyLspEdits", () => {
     ).toBe("ABx");
   });
 
+  it("inserts before a replace that starts at the same spot", () => {
+    expect(
+      applyLspEdits("abcd", [edit(0, 0, 0, 0, "I"), edit(0, 0, 0, 1, "R")]),
+    ).toBe("IRbcd");
+  });
+
   it("counts characters as UTF-16, so a surrogate pair is two", () => {
     expect(applyLspEdits("😀x", [edit(0, 2, 0, 3, "y")])).toBe("😀y");
   });

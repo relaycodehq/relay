@@ -362,9 +362,14 @@ export function applyLspEdits(text: string, edits: readonly LspEdit[]) {
       to: offsetAt(text, edit.endLine, edit.endCharacter),
       newText: edit.newText,
     }))
-    .sort((a, b) => b.from - a.from || b.order - a.order);
-  let out = text;
-  for (const edit of resolved)
-    out = out.slice(0, edit.from) + edit.newText + out.slice(edit.to);
-  return out;
+    .sort((a, b) => a.from - b.from || a.order - b.order);
+  // Built front to back from the original text, so edits at one offset
+  // (an insert, then a replace) land in the order the server gave them.
+  let out = "";
+  let at = 0;
+  for (const edit of resolved) {
+    out += text.slice(at, edit.from) + edit.newText;
+    at = Math.max(at, edit.to);
+  }
+  return out + text.slice(at);
 }
