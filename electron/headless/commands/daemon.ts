@@ -34,7 +34,7 @@ export async function run(home: string, flags: Flags) {
     );
   await remember(home, flags);
   const config = await readConfig(home);
-  const port = await networkPort(config);
+  const port = networkPort(config);
   // Its own bundle, so the commands that only ask it something start quickly.
   const daemon = require(
     join(__dirname, "relay-daemon.cjs"),

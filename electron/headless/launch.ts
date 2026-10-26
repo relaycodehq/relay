@@ -7,7 +7,6 @@ import { defaultRemotePort } from "../../shared/remote-pairing";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
 import { headlessPaths, privateDirectory } from "./paths";
 import { lockPath } from "./lock";
-import { mirroredWslPort, sharesWindowsNetwork } from "./wsl";
 import { recordedAlive, recordProcess } from "./process-identity";
 import { inSshSession, startOutsideSession } from "./outside-session";
 import { installedService, serviceHome, startService } from "./service";
@@ -34,17 +33,9 @@ const configSchema = z
 /** What `relay` was told once and keeps: `headless.json` in the home folder. */
 export type HeadlessConfig = z.infer<typeof configSchema>;
 
-/**
- * The port phones and computers connect to: the saved one, else the
- * environment's, else Relay's own, or in mirrored WSL the one beside it, as
- * the desktop Relay on Windows has Relay's own there.
- */
-export async function networkPort(config: HeadlessConfig) {
-  const chosen =
-    config.port ?? (Number(process.env.RELAY_REMOTE_PORT) || undefined);
-  if (chosen) return chosen;
-  return (await sharesWindowsNetwork()) ? mirroredWslPort : defaultRemotePort;
-}
+/** The port phones and computers connect to: the saved one, else the environment's, else Relay's own. */
+export const networkPort = (config: HeadlessConfig) =>
+  config.port ?? (Number(process.env.RELAY_REMOTE_PORT) || defaultRemotePort);
 
 export async function readConfig(home: string): Promise<HeadlessConfig> {
   const text = await readFile(headlessPaths(home).config, "utf8").catch(

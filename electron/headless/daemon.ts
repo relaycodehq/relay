@@ -64,6 +64,7 @@ import {
   threadServices,
 } from "../startup";
 import { controlApi } from "./control-api";
+import { inWsl } from "../platform/wsl";
 
 export { logTo } from "./log";
 
@@ -307,9 +308,9 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   const { receiver, phoneRemote: remote } = remoteSide;
   const { computers } = handoffs;
   phoneRemote = remote;
-  // Default phone access on once, even if Tailscale isn't available yet.
-  // start() watches for it; an explicitly saved false remains false.
-  await remote.start(true);
+  // Phone access on once by default, a saved choice kept; not in WSL, where
+  // Windows' Relay reaches it through wsl.exe and would lose its port to it.
+  await remote.start(!inWsl());
   void computers.start();
   await resumeThreads({
     dir: home,

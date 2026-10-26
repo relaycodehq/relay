@@ -26,6 +26,7 @@ import {
   type RemoteMethod,
   type ServerFrame,
 } from "../../shared/remote";
+import { inWsl } from "../platform/wsl";
 import { SignInUnavailable, type RemoteDevices } from "./devices";
 import { LinkSender } from "./link-sender";
 import { MessageBatches } from "./message-batches";
@@ -124,11 +125,15 @@ export const nodeCodec: Codec = {
   deflateUpTo: Infinity,
 };
 
-/** WSL's mirrored networking shares Windows' ports, and a Relay in there may hold this one. */
+/** WSL's mirrored networking shares Windows' ports, so the other Relay may hold this one. */
 function portTaken(port: number) {
   const taken = `Port ${port} is taken by another app.`;
-  if (process.platform !== "win32") return taken;
-  return `${taken} If it's Relay in WSL, relay restart --port ${port + 1} there moves it.`;
+  const moves = `relay restart --port ${port + 1}`;
+  if (process.platform === "win32")
+    return `${taken} If it's Relay in WSL, ${moves} there moves it.`;
+  if (inWsl())
+    return `${taken} If it's Relay on Windows, ${moves} moves this one.`;
+  return taken;
 }
 
 /** The desktop end of the phone remote; see shared/remote-crypto for the channel. */

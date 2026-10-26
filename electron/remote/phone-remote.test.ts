@@ -452,6 +452,39 @@ it("reached only through `relay pipe`, takes any free port and leaves its own to
   expect(await remote.state()).toMatchObject({ listening: true, port: own });
 });
 
+it("lets a computer paired through a pipe in on its loopback alone, phone access on or off", async () => {
+  const tailnet = {
+    current: { status: "missing", addresses: [] } as PhoneTailnet,
+  };
+  const { remote } = await desktop(undefined, tailnet, {}, () => ["127.0.0.1"], {
+    pipes: true,
+  });
+  const own = (await remote.state()).port;
+  await remote.start();
+  expect(await remote.state()).toMatchObject({
+    enabled: false,
+    listening: false,
+    bound: "127.0.0.1",
+    hosts: [],
+  });
+  const link = parsePairingUrl((await remote.pairing({ pipe: true })).url)!;
+  await phone({ link, device: "Windows" }).until("online");
+
+  // Phone access takes the network on Relay's own port; off, the loopback stays.
+  await remote.setEnabled(true);
+  expect(await remote.state()).toMatchObject({
+    listening: true,
+    bound: "0.0.0.0",
+    port: own,
+  });
+  await remote.setEnabled(false);
+  expect(await remote.state()).toMatchObject({
+    listening: false,
+    bound: "127.0.0.1",
+    hosts: [],
+  });
+});
+
 it("resumes previously enabled access with no saved LAN choice and no Tailscale", async () => {
   const { remote } = await desktop(
     undefined,

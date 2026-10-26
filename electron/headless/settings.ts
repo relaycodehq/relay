@@ -94,7 +94,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
   return {
     // What's saved, which a restart puts to use.
     name: config.name ?? status.name,
-    port: await networkPort(config),
+    port: networkPort(config),
     autoUpdate: config.autoUpdate ?? true,
     update: status.update,
     keepAwake,

@@ -1,6 +1,7 @@
 import { networkInterfaces } from "node:os";
 import { z } from "zod";
 import type { Store } from "../app/store";
+import type { RemoteSettings } from "../app/store-types";
 import type { ProjectChatsEvent } from "../../shared/events";
 import { toBase64Url } from "../../shared/remote-crypto";
 import type { DraftChange } from "../../shared/drafts";
@@ -120,6 +121,7 @@ export const phoneAppearanceSchema = z
 const portSchema = z.number().int().min(1).max(65535);
 
 const loopback = "127.0.0.1";
+const everyAddress = "0.0.0.0";
 
 export class PhoneRemote {
   readonly devices: RemoteDevices;
@@ -229,11 +231,12 @@ export class PhoneRemote {
     );
   }
 
-  /** Resumes listening if phone access was on when Relay last quit. */
+  /** Resumes listening if phone access was on when Relay last quit, or pipes were. */
   async start(defaultEnabled = false) {
     if (defaultEnabled && this.devices.settings.enabled === undefined)
       await this.devices.setEnabled(true);
     if (this.devices.settings.enabled) await this.follow();
+    else await this.sync();
   }
 
   /** Keeps the window's theme for phones, and hands a change to those online. */
@@ -333,6 +336,13 @@ export class PhoneRemote {
     return this.state();
   }
 
+  /** Lets computers paired through `relay pipe` in, whether phone access is on or off. */
+  async setPipes(pipes: boolean) {
+    await this.devices.setPipes(pipes);
+    await this.sync();
+    return this.state();
+  }
+
   /** A paired phone or computer may call in, so this one shouldn't sleep on its own. */
   expectsCalls() {
     return this.server.listening && this.devices.list().length > 0;
@@ -340,7 +350,9 @@ export class PhoneRemote {
 
   /** `pipe`: for a computer that reaches this one over SSH or wsl.exe, which needs no network. */
   async pairing({ pipe = false } = {}): Promise<PhonePairing> {
-    if (!this.server.listening) throw new Error("Turn on phone access first.");
+    // Listening failed, a taken port say, or nothing turned it on.
+    if (!this.server.listening)
+      throw new Error(this.error ?? "Turn on phone access first.");
     if (!this.hosts.length && !pipe)
       throw new Error("This computer isn't on a network a phone can reach.");
     // Listening on its loopback alone, it pairs over the pipe.
@@ -389,43 +401,62 @@ export class PhoneRemote {
     await this.sync();
   }
 
-  /**
-   * Listens while phone access is on: on this computer's Tailscale address,
-   * or on every address when the local network is allowed too.
-   */
+  /** Listens where `listenerFor` says, moving when that changes. */
   private sync() {
     this.syncing = this.syncing.then(async () => {
-      const { enabled, lan } = this.devices.settings;
-      const tailnet = enabled ? await this.tailnet() : undefined;
+      const settings = this.devices.settings;
+      const tailnet = settings.enabled ? await this.tailnet() : undefined;
       const tail = tailnet?.status === "connected" ? tailnet.addresses : [];
-      // Without Tailscale, only a pipe (`relay pipe`, over SSH or wsl.exe)
-      // reaches it, through its loopback; no device can by an address.
-      const pipesOnly = !!enabled && !lan && !tail.length;
-      const host = !enabled
-        ? undefined
-        : lan
-          ? "0.0.0.0"
-          : (tail[0] ?? loopback);
-      this.hosts =
-        !host || pipesOnly
-          ? []
-          : lan
-            ? [...this.lan(), ...tail].slice(0, maxHosts)
-            : [host];
+      const listener = listenerFor(settings, tail);
+      this.hosts = this.reachableHosts(listener, tail);
+      const pipesOnly = !!listener?.pipesOnly;
       const sameListener =
-        host === this.server.host && pipesOnly === this.pipesOnly;
+        listener?.host === this.server.host && pipesOnly === this.pipesOnly;
       if (sameListener) return;
       await this.server.close();
       this.error = undefined;
       this.pipesOnly = pipesOnly;
-      if (!host) return;
+      if (!listener) return;
       try {
-        // `relay pipe` asks for the port, so it needn't be the usual one.
-        await this.server.listen(host, { lan: !!lan, anyPort: pipesOnly });
+        await this.server.listen(listener.host, {
+          lan: listener.host === everyAddress,
+          // `relay pipe` asks for the port, so it needn't be the usual one.
+          anyPort: pipesOnly,
+        });
       } catch (e) {
         this.error = errorMessage(e);
       }
     });
     return this.syncing;
   }
+
+  /** Where devices reach it by an address: none when only pipes do. */
+  private reachableHosts(listener: Listener | undefined, tail: string[]) {
+    if (!listener || listener.pipesOnly) return [];
+    if (listener.host === everyAddress)
+      return [...this.lan(), ...tail].slice(0, maxHosts);
+    return [listener.host];
+  }
+}
+
+interface Listener {
+  host: string;
+  /** Only `relay pipe`, over SSH or wsl.exe, reaches it, on its loopback. */
+  pipesOnly: boolean;
+}
+
+/**
+ * Where it listens: with phone access on, on every address when the local
+ * network is allowed, else on Tailscale's; on its loopback alone when no
+ * device can reach it by an address, or when only computers paired through
+ * `relay pipe` need it.
+ */
+function listenerFor(
+  { enabled, lan, pipes }: RemoteSettings,
+  tail: string[],
+): Listener | undefined {
+  if (enabled && lan) return { host: everyAddress, pipesOnly: false };
+  if (enabled && tail[0]) return { host: tail[0], pipesOnly: false };
+  if (enabled || pipes) return { host: loopback, pipesOnly: true };
+  return undefined;
 }

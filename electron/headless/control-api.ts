@@ -83,8 +83,8 @@ export function controlApi({
       };
     },
     async pair(pipe = false) {
-      if (!remote.devices.settings.enabled || !(await remote.state()).listening)
-        await remote.setEnabled(true);
+      if (pipe) await remote.setPipes(true);
+      else if (!(await remote.state()).listening) await remote.setEnabled(true);
       const pairing = await remote.pairing({ pipe });
       return { ...pairing, remote: await remote.state() };
     },
