@@ -107,7 +107,6 @@ export function codexActivity(
     };
 }
 
-/** What an MCP or dynamic tool call answered, its text only, or why it failed. */
 /** A Codex patch: named by its first path, every path in `detail`, the diffs kept to show. */
 function codexFileChange(
   base: Pick<AgentActivity, "id" | "status">,
@@ -132,6 +131,7 @@ function codexFileChange(
   };
 }
 
+/** What an MCP or dynamic tool call answered, its text only, or why it failed. */
 function toolOutput(item: Record<string, unknown>) {
   const error = item.error as { message?: unknown } | null | undefined;
   if (typeof error?.message === "string" && error.message) return error.message;

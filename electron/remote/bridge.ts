@@ -199,11 +199,11 @@ const maxDiffLines = 3000;
 const streamMs = 150;
 const sendKey = (chatId: string, id: string) => JSON.stringify([chatId, id]);
 
-/** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 /** The thread, message and call a phone opens a row of. */
 const callIds = (args: unknown[]) =>
   [idSchema.parse(args[0]), idSchema.parse(args[1]), activityIdSchema.parse(args[2])] as const;
 
+/** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 export class RemoteBridge {
   private streams = new Map<
     string,
