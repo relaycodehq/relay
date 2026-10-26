@@ -30,7 +30,21 @@ export interface ServerSpec {
   /** What to tell the user when Relay can't get it. */
   hint: string;
   initializationOptions?: unknown;
+  /** What it gets when it asks for its settings, by section; any other section is its default. */
+  settings?: Record<string, unknown>;
 }
+
+/** TypeScript's inline hints as PhpStorm shows them: types it worked out, and names of literal arguments. */
+const typescriptHints = {
+  inlayHints: {
+    parameterNames: { enabled: "literals", suppressWhenArgumentMatchesName: true },
+    parameterTypes: { enabled: true },
+    variableTypes: { enabled: true, suppressWhenTypeMatchesName: true },
+    propertyDeclarationTypes: { enabled: true },
+    functionLikeReturnTypes: { enabled: true },
+    enumMemberValues: { enabled: true },
+  },
+};
 
 const windows = (platform: NodeJS.Platform) => platform === "win32";
 
@@ -106,6 +120,7 @@ export const servers: Record<LspServerId, ServerSpec> = {
     args: ["--stdio"],
     npm: { package: "@vtsls/language-server", bin: "vtsls" },
     hint: "Install Node.js, or `npm install -g @vtsls/language-server`.",
+    settings: { typescript: typescriptHints, javascript: typescriptHints },
   },
   intelephense: {
     id: "intelephense",

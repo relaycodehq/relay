@@ -474,8 +474,7 @@ app
       fetch: (url, init) =>
         net.fetch(url instanceof Request ? url.url : url.toString(), init),
       version: app.getVersion(),
-      status: (event) => window.send("relay:lsp-status", event),
-      diagnostics: (event) => window.send("relay:lsp-diagnostics", event),
+      send: (channel, event) => window.send(channel, event),
       log: (line) => console.warn(line),
     });
     const projectAdding = new ProjectAdding({

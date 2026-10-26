@@ -50,6 +50,8 @@ export interface SessionDeps {
   status(status: LspServerStatus): void;
   /** The diagnostics a server published for a file, by its URI. */
   diagnostics(uri: string, diagnostics: unknown): void;
+  /** The code clangd says the preprocessor leaves out of a file, by its URI. */
+  inactiveRegions?(uri: string, regions: unknown): void;
   log?(line: string): void;
   folderUri: string;
   version: string;
@@ -83,6 +85,8 @@ export class ServerSession {
   private gaveUpAt = 0;
   private restartTimer: NodeJS.Timeout | undefined;
   private settleTimer: NodeJS.Timeout | undefined;
+  /** What the running server said it does; unset until it has answered `initialize`. */
+  private offered: Record<string, unknown> | undefined;
   /** Requests waiting for the server to come up; each is told the connection, or none. */
   private waitingForConnection: Array<
     (conn: RpcConnection | undefined) => void
@@ -110,6 +114,11 @@ export class ServerSession {
 
   hasDocument(uri: string) {
     return this.docs.has(uri);
+  }
+
+  /** Whether the server offers a capability such as `inlayHintProvider`; yes until it has said. */
+  offers(capability: string) {
+    return !this.offered || !!this.offered[capability];
   }
 
   /** The server isn't there and won't be until it is asked for again. */
@@ -216,11 +225,12 @@ export class ServerSession {
       broken: (error) => this.pipeBroke(child, error),
     });
     try {
-      await conn.request(
+      const answer = await conn.request(
         "initialize",
         this.initializeParams(),
         this.timing.initializeMs,
       );
+      this.offered = (answer as { capabilities?: Record<string, unknown> } | null)?.capabilities;
     } catch (e) {
       // A process that died has been handled; this is one that answered badly or not at all.
       this.exited(child, `${this.spec.id} didn't start: ${errorMessage(e)}`);
@@ -343,6 +353,9 @@ export class ServerSession {
     if (method === "textDocument/publishDiagnostics") {
       if (typeof p.uri === "string")
         this.deps.diagnostics(p.uri, p.diagnostics);
+    } else if (method === "textDocument/inactiveRegions") {
+      const uri = (p.textDocument as { uri?: unknown } | undefined)?.uri;
+      if (typeof uri === "string") this.deps.inactiveRegions?.(uri, p.regions);
     } else if (method === "$/progress") {
       const value = p.value as Record<string, unknown> | undefined;
       if (!value) return;
@@ -358,7 +371,7 @@ export class ServerSession {
   }
 
   private answerServer(method: string, params: unknown) {
-    return answerServerRequest(method, params, this.folder());
+    return answerServerRequest(method, params, this.folder(), this.spec.settings);
   }
 
   // Documents

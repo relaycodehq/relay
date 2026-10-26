@@ -65,6 +65,8 @@ export interface RelayEvents {
   "relay:settings-file": import("./settings-file").SettingsFileState;
   /** What a language server reports for a file now; the editor shows these as markers. */
   "relay:lsp-diagnostics": import("./language-servers").LspDiagnosticsEvent;
+  /** The code the compiler leaves out of a file; the editor greys it. */
+  "relay:lsp-inactive-lines": import("./language-servers").LspInactiveLinesEvent;
   /** A language server starts, loads, downloads, stops or fails. */
   "relay:lsp-status": import("./language-servers").LspStatusEvent;
 }

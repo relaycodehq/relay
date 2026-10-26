@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("relay", {
   onAutoCompact: on("relay:auto-compact"),
   onSettingsFile: on("relay:settings-file"),
   onLspDiagnostics: on("relay:lsp-diagnostics"),
+  onLspInactiveLines: on("relay:lsp-inactive-lines"),
   onLspStatus: on("relay:lsp-status"),
   // Synchronous, once as the page starts: its first frame already uses the
   // file's fonts and theme instead of switching to them a moment later.

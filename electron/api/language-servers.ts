@@ -44,6 +44,10 @@ export function languageServerHandlers(ctx: ApiContext) {
     lspDocumentSymbols: takes([workspaceIdSchema, lspPathSchema], (...a) =>
       lsp.lspDocumentSymbols(...a),
     ),
+    lspInlayHints: takes(
+      [workspaceIdSchema, lspPathSchema, lspLineSchema, lspLineSchema],
+      (...a) => lsp.lspInlayHints(...a),
+    ),
     lspWorkspaceSymbols: takes([workspaceIdSchema, lspQuerySchema], (...a) =>
       lsp.lspWorkspaceSymbols(...a),
     ),

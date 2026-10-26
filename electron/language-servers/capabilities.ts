@@ -40,10 +40,13 @@ export const clientCapabilities = {
     references: {},
     rename: { prepareSupport: false },
     formatting: {},
+    inlayHint: { dynamicRegistration: false },
     documentSymbol: {
       hierarchicalDocumentSymbolSupport: true,
       symbolKind: { valueSet: range(26) },
     },
+    // clangd's lines the preprocessor leaves out, such as another platform's #ifdef.
+    inactiveRegionsCapabilities: { inactiveRegions: true },
     publishDiagnostics: {
       relatedInformation: false,
       versionSupport: false,

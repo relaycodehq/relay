@@ -5,6 +5,8 @@ import type {
   LspEdit,
   LspFileEdits,
   LspHover,
+  LspInlayHint,
+  LspLineSpan,
   LspLocation,
   LspRange,
   LspSeverity,
@@ -396,4 +398,33 @@ export function plainSnippet(snippet: string) {
     (_, escaped?: string, placeholder?: string, choice?: string) =>
       escaped ?? placeholder ?? choice ?? "",
   );
+}
+
+const HINT_KINDS: Record<number, LspInlayHint["kind"]> = { 1: "type", 2: "parameter" };
+
+/** InlayHint[]: a label (a string or parts) at a position, with LSP's kinds 1 for types and 2 for parameters. */
+export function inlayHintsOf(result: unknown): LspInlayHint[] {
+  if (!Array.isArray(result)) return [];
+  return result.flatMap((item): LspInlayHint[] => {
+    if (!isObject(item) || !isObject(item.position)) return [];
+    const [line, character] = [num(item.position.line), num(item.position.character)];
+    const label = Array.isArray(item.label)
+      ? item.label.map((part) => (isObject(part) ? (str(part.value) ?? "") : "")).join("")
+      : str(item.label);
+    if (line === undefined || character === undefined || !label) return [];
+    const kind = HINT_KINDS[num(item.kind) ?? 0] ?? "other";
+    return [{ line, character, label, kind, paddingLeft: item.paddingLeft === true, paddingRight: item.paddingRight === true }];
+  });
+}
+
+/** Range[] of clangd's `textDocument/inactiveRegions`, as the whole lines they cover. */
+export function inactiveLinesOf(regions: unknown): LspLineSpan[] {
+  if (!Array.isArray(regions)) return [];
+  return regions.flatMap((region): LspLineSpan[] => {
+    const range = rangeOf(region);
+    if (!range) return [];
+    // A range that ends at the start of a line leaves that line out.
+    const to = range.endCharacter === 0 && range.endLine > range.line ? range.endLine - 1 : range.endLine;
+    return [{ from: range.line, to }];
+  });
 }

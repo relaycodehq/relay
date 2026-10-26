@@ -1,5 +1,6 @@
 import type {
   LspDiagnostic,
+  LspLineSpan,
   LspStatusEvent,
 } from "../../../shared/language-servers";
 import type { Api } from "../../../shared/types";
@@ -27,6 +28,7 @@ export const lsp = {
   rename: call("lspRename"),
   format: call("lspFormat"),
   documentSymbols: call("lspDocumentSymbols"),
+  inlayHints: call("lspInlayHints"),
   workspaceSymbols: call("lspWorkspaceSymbols"),
   readFile: call("lspReadFile"),
   status: call("lspStatus"),
@@ -41,6 +43,17 @@ export function onLspDiagnostics(
   return api.onLspDiagnostics((event) => {
     if (event.where === where && event.path === path)
       callback(event.diagnostics);
+  });
+}
+
+/** Hears which lines of one file the compiler leaves out, now and whenever that changes. */
+export function onLspInactiveLines(
+  where: string,
+  path: string,
+  callback: (lines: LspLineSpan[]) => void,
+) {
+  return api.onLspInactiveLines((event) => {
+    if (event.where === where && event.path === path) callback(event.lines);
   });
 }
 

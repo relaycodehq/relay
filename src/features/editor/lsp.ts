@@ -15,6 +15,8 @@ import type {
 import { lsp } from "../language-servers/client";
 import type { OpenTarget } from "./editor-types";
 import { mountHoverCard } from "./hover-card/HoverCard";
+import { inactiveCode } from "./inactive-code";
+import { inlayHints } from "./inlay-hints";
 import { tellServerText } from "./lsp-sync";
 import { offsetAt, positionAt } from "./positions";
 
@@ -166,5 +168,10 @@ export function lspFeatures(where: string, path: string, onOpen: (target: OpenTa
   // One source for the file's life: autocompletion takes a new one for a new
   // kind of completion and starts its query again, which never settles.
   const source = completions(where, path);
-  return [hoverDocs(where, path, onOpen), EditorState.languageData.of(() => [{ autocomplete: source }])];
+  return [
+    hoverDocs(where, path, onOpen),
+    EditorState.languageData.of(() => [{ autocomplete: source }]),
+    inlayHints(where, path),
+    inactiveCode(where, path),
+  ];
 }

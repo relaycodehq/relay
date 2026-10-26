@@ -62,6 +62,20 @@ export interface LspDiagnosticsEvent {
   diagnostics: LspDiagnostic[];
 }
 
+/** Lines from `from` to `to`, 0-based, both included. */
+export interface LspLineSpan {
+  from: number;
+  to: number;
+}
+
+/** The code the compiler leaves out of a file, such as another platform's `#ifdef`; clangd reports it. */
+export interface LspInactiveLinesEvent {
+  where: string;
+  path: string;
+  /** Everything left out now; empty clears it. */
+  lines: LspLineSpan[];
+}
+
 export interface LspLocation extends LspRange {
   path: string;
   /** The file is outside the workspace folder; `path` is absolute. */
@@ -155,6 +169,16 @@ export interface LspSymbol {
   detail?: string;
 }
 
+/** What the server shows inside the code: a type after a name, or a parameter's name before an argument. */
+export interface LspInlayHint {
+  line: number;
+  character: number;
+  label: string;
+  kind: "type" | "parameter" | "other";
+  paddingLeft: boolean;
+  paddingRight: boolean;
+}
+
 export interface LspOpened {
   /** The server's name; null when no language server covers this file. */
   server: string | null;
@@ -218,12 +242,15 @@ export interface LanguageServersApi {
     options?: LspFormatOptions,
   ): Promise<LspEdit[]>;
   lspDocumentSymbols(where: string, path: string): Promise<LspSymbol[]>;
+  /** The hints in lines `fromLine` up to `toLine`, 0-based. */
+  lspInlayHints(where: string, path: string, fromLine: number, toLine: number): Promise<LspInlayHint[]>;
   lspWorkspaceSymbols(where: string, query: string): Promise<LspSymbol[]>;
   /** The file's text, for an outside path a location pointed at. Refuses any other. */
   lspReadFile(where: string, path: string): Promise<string>;
   /** Servers this workspace has used, running or not. */
   lspStatus(where: string): Promise<LspServerStatus[]>;
   onLspDiagnostics(callback: (event: LspDiagnosticsEvent) => void): () => void;
+  onLspInactiveLines(callback: (event: LspInactiveLinesEvent) => void): () => void;
   onLspStatus(callback: (event: LspStatusEvent) => void): () => void;
 }
 

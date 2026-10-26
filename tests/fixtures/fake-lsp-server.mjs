@@ -10,6 +10,7 @@
 //   FAKE_LSP_HOVER        answer every hover with this Markdown
 //   FAKE_LSP_HOVER_FILE   once this file exists, answer hovers with its Markdown instead
 //   FAKE_LSP_SLOW_DEFINITION  answer definitions this many ms late
+//   FAKE_LSP_INLAY        answer inlay hint requests with this JSON list
 import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -113,6 +114,7 @@ const handlers = {
       { label: "alpha", kind: 6, sortText: "a", documentation: { kind: "markdown", value: "**a**" } },
     ],
   }),
+  "textDocument/inlayHint": () => JSON.parse(process.env.FAKE_LSP_INLAY ?? "[]"),
   "textDocument/documentSymbol": () => [
     {
       name: "Outer",

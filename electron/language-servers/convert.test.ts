@@ -4,6 +4,8 @@ import {
   MAX_COMPLETIONS,
   plainSnippet,
   UnsupportedEdit,
+  inactiveLinesOf,
+  inlayHintsOf,
 } from "./convert";
 import { pathsFor } from "./uri";
 
@@ -312,5 +314,34 @@ describe("symbols", () => {
     ).toEqual([
       { name: "T", kind: "struct", path: "a.rs", line: 0, character: 0 },
     ]);
+  });
+});
+
+describe("inlayHintsOf", () => {
+  it("joins label parts and names the kinds", () => {
+    expect(
+      inlayHintsOf([
+        { position: { line: 3, character: 9 }, label: ": KnownMessages", kind: 1, paddingLeft: true },
+        { position: { line: 4, character: 2 }, label: [{ value: "failure" }, { value: ":" }], kind: 2, paddingRight: true },
+        { position: { line: 5 }, label: "broken" },
+      ]),
+    ).toEqual([
+      { line: 3, character: 9, label: ": KnownMessages", kind: "type", paddingLeft: true, paddingRight: false },
+      { line: 4, character: 2, label: "failure:", kind: "parameter", paddingLeft: false, paddingRight: true },
+    ]);
+  });
+});
+
+describe("inactiveLinesOf", () => {
+  const range = (line: number, character: number, endLine: number, endCharacter: number) => ({
+    start: { line, character },
+    end: { line: endLine, character: endCharacter },
+  });
+  it("covers whole lines, leaving out a line the range only reaches the start of", () => {
+    expect(inactiveLinesOf([range(7, 0, 10, 1), range(12, 0, 14, 0), "junk"])).toEqual([
+      { from: 7, to: 10 },
+      { from: 12, to: 13 },
+    ]);
+    expect(inactiveLinesOf(undefined)).toEqual([]);
   });
 });

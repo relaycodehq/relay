@@ -5,8 +5,8 @@ import {
   lspServerFor,
   type LanguageServersApi,
   type LspCompletions,
-  type LspDiagnostic,
   type LspDiagnosticsEvent,
+  type LspInactiveLinesEvent,
   type LspEdit,
   type LspFileEdits,
   type LspFormatOptions,
@@ -16,10 +16,12 @@ import {
   type LspServerId,
   type LspServerStatus,
   type LspStatusEvent,
+  type LspInlayHint,
   type LspSymbol,
 } from "../../shared/language-servers";
 import { keyedQueue } from "../util/keyed-queue";
-import { Converter } from "./convert";
+import { Converter, inlayHintsOf } from "./convert";
+import { FileNotices, type OpenDoc } from "./file-notices";
 import { servers, type ServerSpec } from "./registry";
 import type { Launch, Resolution } from "./resolve";
 import { isCancelled, RpcError } from "./rpc";
@@ -43,6 +45,7 @@ export interface LanguageServersDeps {
   spawn(launch: Launch, cwd: string): ChildProcess;
   status(event: LspStatusEvent): void;
   diagnostics(event: LspDiagnosticsEvent): void;
+  inactiveLines?(event: LspInactiveLinesEvent): void;
   version: string;
   log?(line: string): void;
   platform?: NodeJS.Platform;
@@ -55,15 +58,6 @@ export const IDLE_MS = 5 * 60_000;
 const MAX_READ_BYTES = 5 * 1024 * 1024;
 const MAX_WORKSPACE_SYMBOLS = 200;
 
-interface OpenDoc {
-  /** As the editor named it; events use it back. */
-  path: string;
-  file: string;
-  uri: string;
-  languageId: string;
-  wheres: Set<string>;
-}
-
 /** The server for one (folder, language) and the files open in it. */
 interface Entry {
   root: string;
@@ -74,9 +68,7 @@ interface Entry {
   converter: Converter;
   wheres: Set<string>;
   docs: Map<string, OpenDoc>;
-  /** What was last sent for a file, to leave out a repeat. */
-  sent: Map<string, string>;
-  published: Map<string, LspDiagnostic[]>;
+  notices: FileNotices;
   /** Files outside the folder that a result pointed at; the only ones `readFile` opens. */
   outside: Set<string>;
   idle?: NodeJS.Timeout;
@@ -89,7 +81,7 @@ interface Entry {
  */
 export class LanguageServers implements Omit<
   LanguageServersApi,
-  "onLspDiagnostics" | "onLspStatus"
+  "onLspDiagnostics" | "onLspInactiveLines" | "onLspStatus"
 > {
   private entries = new Map<string, Entry>();
   private roots = new Map<string, string>();
@@ -147,9 +139,7 @@ export class LanguageServers implements Omit<
     }
     doc.wheres.add(where);
     entry.session.open(doc.uri, doc.languageId, text);
-    const cached = entry.published.get(key);
-    if (cached?.length)
-      this.deps.diagnostics({ where, path, diagnostics: cached });
+    entry.notices.replay(key, where, path);
     return entry;
   }
 
@@ -176,8 +166,7 @@ export class LanguageServers implements Omit<
       if (doc.wheres.size) return;
       entry.session.close(doc.uri);
       entry.docs.delete(key);
-      entry.published.delete(key);
-      entry.sent.delete(key);
+      entry.notices.forget(key);
       if (!entry.docs.size) this.armIdle(entry);
     });
   }
@@ -284,6 +273,13 @@ export class LanguageServers implements Omit<
     );
   }
 
+  lspInlayHints(where: string, path: string, fromLine: number, toLine: number) {
+    const range = { start: { line: fromLine, character: 0 }, end: { line: toLine, character: 0 } };
+    // Asking a server without them only fails, and the editor asks again on every change.
+    if (this.find(where, path)?.entry.session.offers("inlayHintProvider") === false) return Promise.resolve([]);
+    return this.ask<LspInlayHint[]>(where, path, "textDocument/inlayHint", { range }, [], 8_000, inlayHintsOf);
+  }
+
   async lspWorkspaceSymbols(where: string, query: string) {
     const root = this.roots.get(where);
     if (!root) return [];
@@ -345,13 +341,14 @@ export class LanguageServers implements Omit<
       status: (status) => {
         for (const where of entry.wheres) this.report(where, status);
       },
-      diagnostics: (uri, raw) => this.publish(entry, uri, raw),
+      diagnostics: (uri, raw) => entry.notices.diagnostics(uri, raw),
+      inactiveRegions: (uri, raw) => entry.notices.inactiveRegions(uri, raw),
       log: this.deps.log,
       folderUri: this.paths.toUri(root, root),
       version: this.deps.version,
       timing: this.deps.timing,
     });
-    entry = {
+    const server = {
       root,
       spec,
       session,
@@ -362,11 +359,14 @@ export class LanguageServers implements Omit<
         (file) => entry.outside.add(this.paths.key(file)),
         aliases,
       ),
-      wheres: new Set(),
-      docs: new Map(),
-      sent: new Map(),
-      published: new Map(),
-      outside: new Set(),
+      wheres: new Set<string>(),
+      docs: new Map<string, OpenDoc>(),
+      outside: new Set<string>(),
+    };
+    // The notices share the server's docs and workspaces, not copies.
+    entry = {
+      ...server,
+      notices: new FileNotices(server, this.paths, this.deps),
     };
     this.entries.set(id, entry);
     return entry;
@@ -385,29 +385,6 @@ export class LanguageServers implements Omit<
     if (!byServer) this.statuses.set(where, (byServer = new Map()));
     byServer.set(status.server, status);
     this.deps.status({ where, ...status });
-  }
-
-  private publish(entry: Entry, uri: string, raw: unknown) {
-    const file = this.paths.fromUri(uri);
-    if (file === undefined) return;
-    const located = this.paths.toWorkspacePath(entry.root, file, entry.aliases);
-    const key = this.paths.key(
-      located.outside ? file : this.paths.absolute(entry.root, located.path),
-    );
-    const doc = entry.docs.get(key);
-    // Nobody looks at diagnostics for a file outside the folder that isn't open.
-    if (!doc && located.outside) return;
-    const diagnostics = entry.converter.diagnostics(raw);
-    const fingerprint = JSON.stringify(diagnostics);
-    if (entry.sent.get(key) === fingerprint) return;
-    entry.sent.set(key, fingerprint);
-    entry.published.set(key, diagnostics);
-    for (const where of doc ? doc.wheres : entry.wheres)
-      this.deps.diagnostics({
-        where,
-        path: doc?.path ?? located.path,
-        diagnostics,
-      });
   }
 
   private find(where: string, path: string) {

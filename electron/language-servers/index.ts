@@ -6,15 +6,27 @@ import {
   runProgram,
   spawnServer,
 } from "./platform";
+import type { RelayEvents } from "../../shared/events";
 import { resolveServer } from "./resolve";
 import { LanguageServers, type LanguageServersDeps } from "./service";
 
 export { LanguageServers } from "./service";
 
+type LspEvents = Pick<
+  RelayEvents,
+  "relay:lsp-status" | "relay:lsp-diagnostics" | "relay:lsp-inactive-lines"
+>;
+/** A channel and what it carries. */
+type LspEvent = {
+  [C in keyof LspEvents]: [channel: C, event: LspEvents[C]];
+}[keyof LspEvents];
+
 export interface LanguageServersOptions extends Pick<
   LanguageServersDeps,
-  "root" | "status" | "diagnostics" | "version" | "log"
+  "root" | "version" | "log"
 > {
+  /** Pushes what the servers report to the windows. */
+  send(...event: LspEvent): void;
   /** `<userData>/language-servers`: where downloaded servers live. */
   dir: string;
   fetch: typeof fetch;
@@ -33,8 +45,9 @@ export function createLanguageServers(options: LanguageServersOptions) {
   });
   return new LanguageServers({
     root: options.root,
-    status: options.status,
-    diagnostics: options.diagnostics,
+    status: (event) => options.send("relay:lsp-status", event),
+    diagnostics: (event) => options.send("relay:lsp-diagnostics", event),
+    inactiveLines: (event) => options.send("relay:lsp-inactive-lines", event),
     version: options.version,
     log: options.log,
     resolve: (spec, hooks) =>

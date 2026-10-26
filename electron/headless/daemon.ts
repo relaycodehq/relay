@@ -216,8 +216,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     root: (where) => api.placeRoot(where),
     fetch: fetcher,
     version: headlessVersion,
-    status: (event) => window.send("relay:lsp-status", event),
-    diagnostics: (event) => window.send("relay:lsp-diagnostics", event),
+    send: (channel, event) => window.send(channel, event),
     log: (line) => console.warn(line),
   });
   const api = apiContext({
