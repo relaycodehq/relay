@@ -1,4 +1,4 @@
-import type { Project } from "../../shared/projects";
+import type { ChatSummary, Project } from "../../shared/projects";
 import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { GuestImport } from "../features/guest-share/GuestImport";
@@ -21,7 +21,7 @@ export function StartDialogs({
   current: string | null;
   guestLink: string | undefined;
   onCloseGuest: () => void;
-  onOpenChat: (projectId: string, chatId: string) => void;
+  onOpenChat: (project: Project, thread: ChatSummary) => void;
 }) {
   return (
     <>

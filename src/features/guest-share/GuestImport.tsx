@@ -1,7 +1,8 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { Project } from "../../../shared/projects";
+import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
+import { projectChatsQuery } from "../../lib/workspace-queries";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
 import { NewThreadPicker } from "../projects/NewThreadPicker";
 import "./guest-share.css";
@@ -22,26 +23,15 @@ export function GuestImport({
   /** Scratchpad included; undefined until the list has loaded. */
   projects: Project[] | undefined;
   current: string | null;
-  onOpen: (projectId: string, chatId: string) => void;
+  onOpen: (project: Project, thread: ChatSummary) => void;
   /** Hides the picker while adding; it comes back with the new project listed. */
   onAddProject: () => void;
   onClose: () => void;
 }) {
-  const [copying, setCopying] = useState(false);
-  const [error, setError] = useState<unknown>();
-  const qc = useQueryClient();
-  const copyInto = async (destination: () => Promise<Project>) => {
-    setCopying(true);
-    try {
-      const project = await destination();
-      const thread = await api.importGuestThread(project.id, link);
-      onClose();
-      onOpen(project.id, thread.id);
-    } catch (e) {
-      setError(e);
-      setCopying(false);
-    }
-  };
+  const { copying, error, copyInto } = useGuestCopy(link, (project, thread) => {
+    onClose();
+    onOpen(project, thread);
+  });
   if (copying || error)
     return (
       <Modal title="Continue shared thread" onClose={onClose}>
@@ -54,22 +44,47 @@ export function GuestImport({
         )}
       </Modal>
     );
-  // A Scratchpad folder of its own, as a new Scratchpad thread gets.
-  const newScratch = async () => {
-    const project = await api.createScratch();
-    await qc.invalidateQueries({ queryKey: ["projects"] });
-    return project;
-  };
+  const own = projects?.filter((p) => !p.scratch && !p.computer);
   return (
     <NewThreadPicker
       title="Continue shared thread in…"
       // A project on another computer would need the thread started there.
-      projects={projects?.filter((p) => !p.scratch && !p.computer)}
+      projects={own}
       current={current}
       onSelect={(p) => void copyInto(async () => p)}
       onAdd={onAddProject}
-      onScratch={() => void copyInto(newScratch)}
+      onScratch={() => void copyInto(() => api.createScratch())}
       onClose={onClose}
     />
   );
+}
+
+/** Copies the shared thread into a project, then hands back the project and the new thread. */
+function useGuestCopy(
+  link: string,
+  onCopied: (project: Project, thread: ChatSummary) => void,
+) {
+  const [copying, setCopying] = useState(false);
+  const [error, setError] = useState<unknown>();
+  const qc = useQueryClient();
+  const copyInto = async (destination: () => Promise<Project>) => {
+    if (copying) return;
+    setCopying(true);
+    try {
+      const project = await destination();
+      const thread = await api.importGuestThread(project.id, link);
+      // Opened by what came back: the lists in view may not have the new project or thread yet.
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["projects"] }),
+        qc.invalidateQueries({
+          queryKey: projectChatsQuery(project.id).queryKey,
+        }),
+      ]);
+      onCopied(project, thread);
+    } catch (e) {
+      setError(e);
+      setCopying(false);
+    }
+  };
+  return { copying, error, copyInto };
 }

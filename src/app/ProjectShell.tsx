@@ -444,7 +444,7 @@ export default function ProjectShell() {
         current={project?.id ?? null}
         guestLink={links.guestLink}
         onCloseGuest={links.closeGuest}
-        onOpenChat={openChatById}
+        onOpenChat={open}
       />
       {signIn.open && (
         <SignInDialog
