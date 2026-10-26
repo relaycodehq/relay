@@ -206,32 +206,14 @@ export function AgentTurn({
         <Subagents.Provider value={{ calls, display }}>
           <TurnImages.Provider value={images}>
             <div className="agent-trace" aria-label="Local agent activity">
-              {groupTrace(shown).map((part, index, parts) =>
-                part.kind === "commentary" ? (
-                  <div className="agent-commentary" key={part.id}>
-                    <RichText
-                      text={part.text}
-                      projectRoot={projectRoot}
-                      onOpenFile={onOpenFile}
-                    />
-                  </div>
-                ) : live &&
-                  index === parts.length - 1 &&
-                  !isQuestionCall(part.activity[0]!) ? (
-                  <OpenBatch
-                    key={part.id}
-                    activity={part.activity}
-                    display={display}
-                    onChanges={onChanges}
-                  />
-                ) : (
-                  <TraceRun
-                    key={part.id}
-                    calls={part.activity}
-                    onChanges={onChanges}
-                  />
-                ),
-              )}
+              <TraceParts
+                shown={shown}
+                live={live}
+                display={display}
+                projectRoot={projectRoot}
+                onOpenFile={onOpenFile}
+                onChanges={onChanges}
+              />
               {/* The line keeps its height while a call runs, so each call
                 doesn't shrink the trace and jolt the thread pinned below. */}
               {live && !message.body && (
@@ -252,6 +234,46 @@ export function AgentTurn({
         </Subagents.Provider>
       )}
     </Container>
+  );
+}
+
+/** The trace between lines of commentary; while the turn runs, its last batch is open. */
+function TraceParts({
+  shown,
+  live,
+  display,
+  projectRoot,
+  onOpenFile,
+  onChanges,
+}: {
+  shown: ReturnType<typeof readTurn>["shown"];
+  live: boolean;
+  display: (text: string) => string;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
+  onChanges: () => void;
+}) {
+  return groupTrace(shown).map((part, index, parts) =>
+    part.kind === "commentary" ? (
+      <div className="agent-commentary" key={part.id}>
+        <RichText
+          text={part.text}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+        />
+      </div>
+    ) : live &&
+      index === parts.length - 1 &&
+      !isQuestionCall(part.activity[0]!) ? (
+      <OpenBatch
+        key={part.id}
+        activity={part.activity}
+        display={display}
+        onChanges={onChanges}
+      />
+    ) : (
+      <TraceRun key={part.id} calls={part.activity} onChanges={onChanges} />
+    ),
   );
 }
 
