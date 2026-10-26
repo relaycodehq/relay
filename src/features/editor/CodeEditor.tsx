@@ -24,10 +24,6 @@ function reconfigure(view: EditorView, values: SlotValues) {
  * back where it was scrolled to when it was last shown.
  */
 function restorePlace(view: EditorView, doc: FileDocument) {
-  doc.revealInView = (line, column) => {
-    moveCaretTo(view, line, column);
-    view.focus();
-  };
   const pending = doc.pendingReveal;
   doc.pendingReveal = undefined;
   if (pending) return moveCaretTo(view, pending.line, pending.column);
@@ -101,6 +97,11 @@ export function CodeEditor({
     doc.attach(view);
     shown.current = doc;
     reconfigure(view, latest.current);
+    const reveal = (line: number, column?: number) => {
+      moveCaretTo(view, line, column);
+      view.focus();
+    };
+    doc.revealers.push(reveal);
     restorePlace(view, doc);
     if (autoFocus) view.focus();
     onView?.(view);
@@ -114,7 +115,7 @@ export function CodeEditor({
       attached = false;
       if (view.dom.isConnected) keepScroll(view, doc);
       doc.detach(view);
-      doc.revealInView = undefined;
+      doc.revealers = doc.revealers.filter((r) => r !== reveal);
       shown.current = undefined;
       onView?.(undefined);
     };

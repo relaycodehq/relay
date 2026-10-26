@@ -71,8 +71,8 @@ export class FileDocument {
   scroll: { top: number; left: number } | undefined;
   /** Where to put the caret (1-based) once a view shows the document. */
   pendingReveal: { line: number; column?: number } | undefined;
-  /** Moves the caret in the view that shows the document. Set while a view shows it. */
-  revealInView: ((line: number, column?: number) => void) | undefined;
+  /** How each view showing it moves its caret there; the one shown last reveals. */
+  revealers: ((line: number, column?: number) => void)[] = [];
   /**
    * True or false to show the changes inline (or not) whatever the editor-wide
    * setting says, as a file opened from the changes list does. Undefined to
@@ -401,7 +401,8 @@ export class FileDocument {
 
   /** Moves the caret to a 1-based line and column, now or once a view shows the document. */
   reveal(line: number, column?: number) {
-    if (this.revealInView) this.revealInView(line, column);
+    const inView = this.revealers.at(-1);
+    if (inView) inView(line, column);
     else this.pendingReveal = { line, column };
   }
 
