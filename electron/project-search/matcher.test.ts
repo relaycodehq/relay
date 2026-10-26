@@ -41,6 +41,11 @@ describe("searchRegExp", () => {
     expect(hitsIn(accent, "é eé")).toHaveLength(1);
   });
 
+  it("keeps a plain query with a dash in Unicode mode", () => {
+    const re = searchRegExp(query("a-b", { wholeWord: true }));
+    expect(hitsIn(re, "a-bé a-b")).toEqual([{ index: 5, length: 3 }]);
+  });
+
   it("runs a regex, and ignores empty matches", () => {
     const re = searchRegExp(query("a*", { regex: true }));
     expect(hitsIn(re, "baab")).toEqual([{ index: 1, length: 2 }]);

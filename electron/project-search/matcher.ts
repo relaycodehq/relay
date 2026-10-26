@@ -5,8 +5,9 @@ type Pattern = Pick<
   "pattern" | "regex" | "caseSensitive" | "wholeWord"
 >;
 
+// No `-`: it means nothing outside a class, and Unicode mode refuses `\-`.
 const escapeForRegExp = (text: string) =>
-  text.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
+  text.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 
 /** V8's "Invalid regular expression: /(/: Unterminated group" without the pattern in the middle. */
 function patternProblem(error: unknown) {
