@@ -70,8 +70,17 @@
 .hover-card-footer {
   display: flex;
   align-items: center;
+  box-sizing: content-box;
   height: 22px;
   contain: inline-size;
+}
+.hover-card-footer:not(:first-child) {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+/* Room for the declaring file's path, which can't widen the card once it arrives. */
+.hover-card:has(> .hover-card-footer) {
+  min-width: 320px;
 }
 .hover-card-place {
   display: flex;

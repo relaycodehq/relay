@@ -1,8 +1,7 @@
 /**
  * JetBrains' Darcula colour scheme as a Shiki theme, for code, diffs and the
- * editor. The colours are the IDE's own; the scopes are TextMate's, plus the
- * call scopes the editor gives function and method calls, which Darcula
- * leaves plain while declarations are yellow.
+ * editor. The colours are the IDE's own; the scopes are TextMate's. Calls are
+ * yellow like declarations, as PhpStorm and WebStorm colour them.
  */
 import { registerSyntaxTheme } from "./zed-theme";
 
@@ -42,14 +41,6 @@ const tokenColors = [
   { scope: "string", settings: { foreground: "#6a8759" } },
   { scope: "constant.numeric", settings: { foreground: "#6897bb" } },
   { scope: "entity.name.function", settings: { foreground: "#ffc66d" } },
-  {
-    scope: [
-      "meta.function-call entity.name.function",
-      "entity.name.function.call",
-      "entity.name.function.member.call",
-    ],
-    settings: { foreground: text },
-  },
   {
     scope: [
       "variable.other.property",

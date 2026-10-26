@@ -8,7 +8,7 @@ export type CodeRun = { text: string; className?: string };
 
 const SCRIPTS = ["javascript", "typescript", "jsx", "tsx"];
 /** Types TypeScript's parser names like any other, which JetBrains colours as keywords. */
-const PRIMITIVES = new Set([
+export const PRIMITIVES: ReadonlySet<string> = new Set([
   "string",
   "number",
   "boolean",
@@ -65,6 +65,16 @@ export function highlightRuns(state: EditorState, code: string, member: boolean)
     const source = before + read;
     for (const [from, to] of primitiveTypes(tree, source, start, end)) paint(from, to, keyword);
   }
+  return runsOf(code, classes);
+}
+
+/** `code` read on its own and coloured as the editor colours its own text. */
+export function codeRuns(state: EditorState, code: string): CodeRun[] {
+  const parser = state.facet(language);
+  if (!parser) return [{ text: code }];
+  const classes: (string | undefined)[] = new Array(code.length);
+  const paint = (from: number, to: number, className: string) => classes.fill(className, from, to);
+  highlightTree(parser.parser.parse(code), { style: (found) => highlightingFor(state, found) }, paint);
   return runsOf(code, classes);
 }
 

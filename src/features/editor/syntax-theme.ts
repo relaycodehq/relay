@@ -1,9 +1,12 @@
 import { HighlightStyle } from "@codemirror/language";
-import { tags as t, type Tag } from "@lezer/highlight";
+import { Tag, tags as t } from "@lezer/highlight";
 import { phpVariable } from "../../lib/code-languages";
 import { firstStyle, type ThemeRule } from "../../lib/textmate-scopes";
 
 export type { ThemeRule };
+
+/** A doc comment's `@param` and the like, which no parser tags on its own. */
+export const docTag = Tag.define();
 
 /**
  * Each group of highlight tags with the TextMate scopes to take its style
@@ -11,7 +14,9 @@ export type { ThemeRule };
  * same Shiki theme as the diffs and the chat.
  */
 const SCOPES: [Tag[], string[]][] = [
-  [[t.comment, t.lineComment, t.blockComment, t.docComment], ["comment"]],
+  [[t.comment, t.lineComment, t.blockComment], ["comment"]],
+  [[t.docComment], ["comment.block.documentation", "comment"]],
+  [[docTag], ["storage.type.class.jsdoc", "keyword.other.phpdoc", "comment.block.documentation"]],
   [[t.keyword], ["keyword"]],
   [[t.controlKeyword], ["keyword.control", "keyword"]],
   [[t.operatorKeyword], ["keyword.operator.expression", "keyword.operator"]],

@@ -3,13 +3,13 @@ import { resolveTheme } from "@pierre/diffs";
 import { DARCULA_SYNTAX } from "./darcula-syntax";
 import { zedThemeFrom } from "./zed-theme";
 
-it("gives the Highlights lexers Darcula's own split of calls and declarations", async () => {
+it("gives the Highlights lexers Darcula's colours, calls as yellow as declarations", async () => {
   const { zed } = await resolveTheme(DARCULA_SYNTAX, "highlights");
   const syntax = zed!.style.syntax!;
   expect(zed!.appearance).toBe("dark");
   expect(zed!.style["editor.background"]).toBe("#2b2b2b");
   expect(syntax["function.definition"]).toEqual({ color: "#ffc66d" });
-  expect(syntax.function).toEqual({ color: "#a9b7c6" });
+  expect(syntax.function).toEqual({ color: "#ffc66d" });
   expect(syntax["comment.doc"]).toEqual({
     color: "#629755",
     font_style: "italic",
