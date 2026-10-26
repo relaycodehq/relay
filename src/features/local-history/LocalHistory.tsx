@@ -29,11 +29,8 @@ export function LocalHistory({
   onRevert(contents: string): void;
   onClose(): void;
 }) {
-  const { entries, error, selected, selectedText, select } = useHistoryVersions(
-    where,
-    path,
-    current,
-  );
+  const { entries, error, selected, selectedText, selectedError, select } =
+    useHistoryVersions(where, path, current);
 
   async function revert() {
     if (selectedText === undefined) return;
@@ -64,14 +61,18 @@ export function LocalHistory({
           selectedId={selected?.id}
           onSelect={select}
         />
-        <HistoryCompare
-          path={path}
-          entry={selected}
-          versionText={selectedText}
-          current={current}
-          extensions={extensions}
-          onRevert={() => void revert()}
-        />
+        {selectedError ? (
+          <ErrorBox error={selectedError} />
+        ) : (
+          <HistoryCompare
+            path={path}
+            entry={selected}
+            versionText={selectedText}
+            current={current}
+            extensions={extensions}
+            onRevert={() => void revert()}
+          />
+        )}
       </div>
     );
   }

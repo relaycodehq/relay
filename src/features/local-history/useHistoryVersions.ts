@@ -20,6 +20,8 @@ export function useHistoryVersions(
   const [selectedId, setSelectedId] = useState<string>();
   /** Texts read so far, by entry id. */
   const [texts, setTexts] = useState<Record<string, string>>({});
+  /** Versions that couldn't be read, by entry id; the others still can. */
+  const [unreadable, setUnreadable] = useState<Record<string, unknown>>({});
   const currentText = useRef(current);
   currentText.current = current;
 
@@ -30,17 +32,25 @@ export function useHistoryVersions(
       if (!live) return;
       setEntries(list);
       const read: Record<string, string> = {};
+      const failed: Record<string, unknown> = {};
       let opened = list[0];
       for (const entry of list.slice(0, LOOK_BACK)) {
         if (entry.skipped) continue;
-        read[entry.id] = await api.localHistoryRead(where, path, entry.id);
+        try {
+          read[entry.id] = await api.localHistoryRead(where, path, entry.id);
+        } catch (e) {
+          failed[entry.id] = e;
+          continue;
+        }
         if (!live) return;
         if (read[entry.id] !== currentText.current) {
           opened = entry;
           break;
         }
       }
+      if (!live) return;
       setTexts((all) => ({ ...all, ...read }));
+      setUnreadable((all) => ({ ...all, ...failed }));
       setSelectedId(opened?.id);
     })().catch((e) => live && setError(e));
     return () => {
@@ -50,23 +60,25 @@ export function useHistoryVersions(
 
   const selected = entries?.find((e) => e.id === selectedId);
   useEffect(() => {
-    if (!selected || selected.skipped || texts[selected.id] !== undefined)
-      return;
+    if (!selected || selected.skipped) return;
+    if (texts[selected.id] !== undefined || selected.id in unreadable) return;
     let live = true;
     api.localHistoryRead(where, path, selected.id).then(
       (value) => live && setTexts((all) => ({ ...all, [selected.id]: value })),
-      (e) => live && setError(e),
+      (e) => live && setUnreadable((all) => ({ ...all, [selected.id]: e })),
     );
     return () => {
       live = false;
     };
-  }, [where, path, selected, texts]);
+  }, [where, path, selected, texts, unreadable]);
 
   return {
     entries,
     error,
     selected,
     selectedText: selected ? texts[selected.id] : undefined,
+    /** Why the version picked can't be shown, when it can't. */
+    selectedError: selected ? unreadable[selected.id] : undefined,
     select: setSelectedId,
   };
 }
