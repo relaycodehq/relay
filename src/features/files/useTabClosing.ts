@@ -1,5 +1,4 @@
 import { useState, type RefObject } from "react";
-import { documents } from "../editor/documents";
 import {
   allTabs,
   closeIn,
@@ -10,7 +9,7 @@ import {
 import { bulkClose, type CloseScope } from "./tab-bulk-close";
 import { tabId, tabIsWithin, type EditorTab } from "./editor-tabs";
 import { forget, type History } from "./navigation-history";
-import { hasUnsavedEdits, tabDocument, type TabHome } from "./tab-documents";
+import { closeTabDocument, hasUnsavedEdits, type TabHome } from "./tab-documents";
 import type { ClosedTabs } from "./useClosedTabs";
 
 /** The tab being closed that holds unsaved edits; its editor asks what to do. */
@@ -37,12 +36,7 @@ export function useTabClosing({
 }) {
   const [closing, setClosing] = useState<ClosingTab>();
 
-  const closeDocument = (tab: EditorTab) => {
-    // A snapshot's file may be open in another tab; its document isn't this tab's.
-    if (tab.snapshot) return;
-    const { source, path } = tabDocument(tab, home);
-    documents.close(source, path, true);
-  };
+  const closeDocument = (tab: EditorTab) => closeTabDocument(tab, home, true);
 
   /** The tab's edits are saved or let go: it closes, and its document once no split shows it. */
   const closed = (group: string, id: string) => {
@@ -91,11 +85,11 @@ export function useTabClosing({
     for (const tab of closing) closed(group, tabId(tab));
   };
 
-  /** A file or folder went to the Trash: its tabs close, edits and all. */
-  const trashed = (path: string) => {
+  /** A file or folder went to the Trash, in the project or with `outside` outside it: its tabs close, edits and all. */
+  const trashed = (path: string, outside = false) => {
     for (const tab of allTabs(layout))
-      if (tabIsWithin(tab, path)) closeDocument(tab);
-    setLayout((l) => dropInGroups(l, path));
+      if (tabIsWithin(tab, path, outside)) closeDocument(tab);
+    setLayout((l) => dropInGroups(l, path, outside));
   };
 
   return { closing, closed, requestClose, closeMany, trashed };

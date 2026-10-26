@@ -3,6 +3,7 @@ import {
   closeTab,
   dropTabs,
   emptyTabs,
+  keepTab,
   MAX_TABS,
   moveTab,
   openTab,
@@ -10,6 +11,7 @@ import {
   renameTabs,
   setPinned,
   tabId,
+  type EditorTab,
 } from "./editor-tabs";
 
 const open = (...paths: string[]) =>
@@ -24,6 +26,25 @@ describe("editor tabs", () => {
     state = openTab(state, { path: "d" });
     expect(names(state)).toEqual(["a", "d", "b", "c"]);
     expect(state.active).toBe("d");
+  });
+
+  it("lets the next file looked at take a preview's place, until it's kept", () => {
+    const look = (state: ReturnType<typeof open>, path: string) =>
+      openTab(state, { path, preview: true });
+    let state = look(look(open("a"), "b"), "c");
+    expect(names(state)).toEqual(["a", "c"]);
+    expect(state.recent).toEqual(["c", "a"]);
+    // Opened for keeps, or kept from its tab, a preview stays.
+    state = look(openTab(state, { path: "c" }), "d");
+    expect(names(state)).toEqual(["a", "c", "d"]);
+    state = look(keepTab(state, "d"), "e");
+    expect(names(state)).toEqual(["a", "c", "d", "e"]);
+    // An unsaved preview isn't replaced either.
+    const unsaved = (tab: EditorTab) => tab.path === "e";
+    state = openTab(state, { path: "f", preview: true }, unsaved);
+    expect(names(state)).toEqual(["a", "c", "d", "e", "f"]);
+    // Looking at a file already kept open doesn't make it a preview.
+    expect(look(state, "a").tabs[0].preview).toBeUndefined();
   });
 
   it("closing the tab in front goes back to the one before it", () => {
@@ -49,6 +70,18 @@ describe("editor tabs", () => {
     expect(names(state)).toEqual(["lib/a.ts", "lib/b.ts", "readme.md"]);
     expect(state.recent[0]).toBe("readme.md");
     expect(names(dropTabs(state, "lib"))).toEqual(["readme.md"]);
+  });
+
+  it("moves a linked folder's tabs apart from the project's", () => {
+    const linked = { path: "/work/api/a.ts", outside: true };
+    let state = openTab(open("api/a.ts"), linked);
+    state = renameTabs(state, "/work/api", "/work/server", true);
+    expect(names(state)).toEqual(["api/a.ts", "outside:/work/server/a.ts"]);
+    expect(state.active).toBe("outside:/work/server/a.ts");
+    expect(names(dropTabs(state, "/work/server", true))).toEqual(["api/a.ts"]);
+    expect(names(dropTabs(state, "api"))).toEqual([
+      "outside:/work/server/a.ts",
+    ]);
   });
 
   it("reorders and survives a bad save", () => {

@@ -1,10 +1,12 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import type { Project } from "../../../shared/projects";
 import { documents } from "../editor/documents";
 import {
   allTabs,
   focusedGroup,
   focusGroup,
+  keepEdited,
+  keepIn,
   moveToGroup,
   pinIn,
   renameInGroups,
@@ -13,7 +15,12 @@ import {
 } from "./editor-groups";
 import { tabId, tabIsWithin, type EditorTab } from "./editor-tabs";
 import { emptyHistory, type History } from "./navigation-history";
-import { hasUnsavedEdits, tabDocument } from "./tab-documents";
+import {
+  closeTabDocument,
+  hasUnsavedEdits,
+  tabDocument,
+} from "./tab-documents";
+import { outsideSource } from "./OutsideFile";
 import { useClosedTabs } from "./useClosedTabs";
 import { useEditorLayout } from "./useEditorLayout";
 import { useTabClosing } from "./useTabClosing";
@@ -41,10 +48,16 @@ export function useEditorWorkspace({
   const closedTabs = useClosedTabs(where);
   const home = { where, plain: project.plain };
   // Tabs show which files hold unsaved edits.
-  useSyncExternalStore(
+  const edits = useSyncExternalStore(
     (listener) => documents.subscribe(listener),
     () => documents.version,
   );
+  const editedPreview = (tab: EditorTab) =>
+    !!tab.preview && hasUnsavedEdits(tab, home);
+  useEffect(() => {
+    if (allTabs(layout).some(editedPreview))
+      setLayout((l) => keepEdited(l, (tab) => hasUnsavedEdits(tab, home)));
+  }, [edits, layout]);
   const focused = focusedGroup(layout);
   const frontTab =
     focused.tabs.find((t) => tabId(t) === focused.active) ?? null;
@@ -60,16 +73,29 @@ export function useEditorWorkspace({
   const { closing, closed, requestClose, closeMany, trashed } = useTabClosing(
     { layout, setLayout, home, history, closedTabs },
   );
-  /** A file or folder moved: tabs and documents on it or under it follow. */
-  const renamed = (from: string, to: string) => {
-    for (const tab of allTabs(layout))
-      if (tabIsWithin(tab, from))
+  /**
+   * A file or folder moved, in the project or with `outside` outside it:
+   * tabs and documents on it or under it follow. A file outside keeps its
+   * document only when it stays in its folder, which the document is kept by.
+   */
+  const renamed = (from: string, to: string, outside = false) => {
+    for (const tab of allTabs(layout)) {
+      if (!tabIsWithin(tab, from, outside)) continue;
+      const moved = { ...tab, path: to + tab.path.slice(from.length) };
+      const sameFolder =
+        !outside ||
+        outsideSource(tab.path).source.where ===
+          outsideSource(moved.path).source.where;
+      const before = tabDocument(tab, home);
+      if (sameFolder)
         documents.rename(
-          tabDocument(tab, home).source,
-          tab.path,
-          to + tab.path.slice(from.length),
+          before.source,
+          before.path,
+          tabDocument(moved, home).path,
         );
-    setLayout((l) => renameInGroups(l, from, to));
+      else closeTabDocument(tab, home);
+    }
+    setLayout((l) => renameInGroups(l, from, to, outside));
   };
 
   return {
@@ -79,6 +105,9 @@ export function useEditorWorkspace({
     unsaved: (tab: EditorTab) => hasUnsavedEdits(tab, home),
     ...opening,
     focus: (group: string) => setLayout((l) => focusGroup(l, group)),
+    /** A previewed tab stays open when another file is looked at. */
+    keep: (group: string, id: string) =>
+      setLayout((l) => keepIn(l, group, id)),
     /** Splits `group`, showing its front tab or the tab `shown`. */
     split: (
       group: string,

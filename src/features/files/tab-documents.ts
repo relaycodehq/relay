@@ -20,6 +20,14 @@ export function tabDocument(
   return { source, path: name };
 }
 
+/** Lets a tab's document go; `discard` lets unsaved edits go too. */
+export function closeTabDocument(tab: EditorTab, home: TabHome, discard = false) {
+  // A snapshot's file may be open in another tab; its document isn't this tab's.
+  if (tab.snapshot) return;
+  const { source, path } = tabDocument(tab, home);
+  documents.close(source, path, discard);
+}
+
 export function hasUnsavedEdits(tab: EditorTab, home: TabHome) {
   if (tab.snapshot) return false; // read-only
   const { source, path } = tabDocument(tab, home);

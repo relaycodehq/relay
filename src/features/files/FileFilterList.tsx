@@ -23,7 +23,8 @@ export function FileFilterList({
   /** The file in front, marked in the list. */
   shownPath: string | null;
   checks: ChecksController;
-  onOpen: (path: string) => void;
+  /** `clicks` is 1 for a single click, 2 for a double one. */
+  onOpen: (path: string, clicks: number) => void;
 }) {
   const poll = usePoll();
   const files = useQuery({
@@ -64,7 +65,7 @@ export function FileFilterList({
                 transform: `translateY(${row.start}px)`,
               }}
               title={path}
-              onClick={() => onOpen(path)}
+              onClick={(e) => onOpen(path, e.detail)}
             >
               <FileCode2 size={14} />
               <span>

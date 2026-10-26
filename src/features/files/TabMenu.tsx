@@ -18,6 +18,8 @@ export type TabMenuActions = {
   onClose: (id: string) => void;
   onCloseMany: (scope: CloseScope, from: string) => void;
   onPin: (id: string, pinned: boolean) => void;
+  /** A previewed tab stays open when another file is looked at. */
+  onKeep: (id: string) => void;
   onCopyPath: (tab: EditorTab) => void;
   onCopyRelativePath: (tab: EditorTab) => void;
   onRevealInList: (tab: EditorTab) => void;
@@ -65,6 +67,11 @@ export function TabMenu({
             onCloseMany={actions.onCloseMany}
           />
           <ContextMenu.Separator className="sb-menu-separator" />
+          {tab.preview && (
+            <ContextMenuItem onClick={() => actions.onKeep(id)}>
+              Keep Open
+            </ContextMenuItem>
+          )}
           <ContextMenuItem
             icon={tab.pinned ? <PinOff size={13} /> : <Pin size={13} />}
             onClick={() => actions.onPin(id, !tab.pinned)}

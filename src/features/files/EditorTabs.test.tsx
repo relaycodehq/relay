@@ -19,6 +19,7 @@ function actions(): TabMenuActions {
     onClose: vi.fn(),
     onCloseMany: vi.fn(),
     onPin: vi.fn(),
+    onKeep: vi.fn(),
     onCopyPath: vi.fn(),
     onCopyRelativePath: vi.fn(),
     onRevealInList: vi.fn(),

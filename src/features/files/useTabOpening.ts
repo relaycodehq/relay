@@ -2,7 +2,7 @@ import { useState, type RefObject } from "react";
 import { ancestors } from "../../lib/file-tree";
 import type { Reveal } from "../editor/TextFile";
 import { tabsGone } from "./closed-tabs";
-import { openIn, type EditorLayout } from "./editor-groups";
+import { allTabs, openIn, type EditorLayout } from "./editor-groups";
 import { tabId, type EditorTab } from "./editor-tabs";
 import {
   leave,
@@ -10,7 +10,7 @@ import {
   stepForward,
   type History,
 } from "./navigation-history";
-import { caretPlace, hasUnsavedEdits, type TabHome } from "./tab-documents";
+import { caretPlace, closeTabDocument, hasUnsavedEdits, type TabHome } from "./tab-documents";
 import type { ClosedTabs } from "./useClosedTabs";
 
 /** Where to put the caret in a file being opened, and whether to show its changes inline, against what. */
@@ -50,11 +50,14 @@ export function useTabOpening({
     const keep = (t: EditorTab) => hasUnsavedEdits(t, home);
     const splitTabs = (l: EditorLayout) =>
       l.groups.find((g) => g.id === group)?.tabs ?? [];
-    const madeRoom = tabsGone(
-      splitTabs(layout),
-      splitTabs(openIn(layout, tab, keep, group)),
-    );
-    closedTabs.remember(madeRoom.map((gone) => ({ tab: gone, group })));
+    const after = openIn(layout, tab, keep, group);
+    const madeRoom = tabsGone(splitTabs(layout), splitTabs(after));
+    // A preview replaced by the next file looked at wasn't really closed.
+    const closed = madeRoom.filter((gone) => !gone.preview);
+    closedTabs.remember(closed.map((gone) => ({ tab: gone, group })));
+    // Their documents go too, unless another split still shows them.
+    for (const gone of madeRoom)
+      if (!allTabs(after).some((t) => tabId(t) === tabId(gone))) closeTabDocument(gone, home);
     setLayout((l) => openIn(l, tab, keep, group));
     const wantsReveal = !!(at?.line || at?.changes || at?.baseline);
     if (wantsReveal)

@@ -3,8 +3,16 @@
  * A pinned tab stays at the start of its split and isn't closed to make room.
  * A `snapshot` tab shows a version of the file that isn't on disk, kept in
  * snapshots.ts under that id; it lasts only as long as the window.
+ * A `preview` tab is a file only looked at, as VS Code's are: the next file
+ * looked at takes its place, until it's edited or kept.
  */
-export type EditorTab = { path: string; outside?: boolean; pinned?: true; snapshot?: string };
+export type EditorTab = {
+  path: string;
+  outside?: boolean;
+  pinned?: true;
+  snapshot?: string;
+  preview?: true;
+};
 
 export type TabState = {
   tabs: EditorTab[];
@@ -28,9 +36,12 @@ export const emptyTabs: TabState = { tabs: [], active: null, recent: [] };
 export const isWithin = (path: string, folder: string) =>
   path === folder || path.startsWith(folder + "/");
 
-/** A project file at or under `path`; files outside the project are never in it. */
-export const tabIsWithin = (tab: EditorTab, path: string) =>
-  !tab.outside && !tab.snapshot && isWithin(tab.path, path);
+/**
+ * A file at or under `path`: a project file, or with `outside` one outside
+ * the project by its absolute path. A snapshot is never on disk.
+ */
+export const tabIsWithin = (tab: EditorTab, path: string, outside = false) =>
+  !!tab.outside === outside && !tab.snapshot && isWithin(tab.path, path);
 
 /** Pinned tabs first; each side keeps its order. */
 export const pinnedFirst = (tabs: EditorTab[]) => [
@@ -43,10 +54,20 @@ const withFront = (recent: string[], id: string) => [
   ...recent.filter((r) => r !== id),
 ];
 
+const kept = ({ preview: _, ...tab }: EditorTab): EditorTab => tab;
+
+/** The tab `id` stays open when another file is looked at. */
+export function keepTab(state: TabState, id: string): TabState {
+  const tab = state.tabs.find((t) => tabId(t) === id);
+  if (!tab?.preview) return state;
+  return { ...state, tabs: state.tabs.map((t) => (t === tab ? kept(t) : t)) };
+}
+
 /**
  * Opens `tab` beside the one in front and brings it forward, or just brings
- * it forward when it's open. `keep` says which tabs besides the pinned ones
- * mustn't close to make room (unsaved ones).
+ * it forward when it's open. A preview takes the place of the split's last
+ * one. `keep` says which tabs besides the pinned ones mustn't close to make
+ * room or be replaced (unsaved ones).
  */
 export function openTab(
   state: TabState,
@@ -54,8 +75,16 @@ export function openTab(
   keep: (tab: EditorTab) => boolean = () => false,
 ): TabState {
   const id = tabId(tab);
-  if (state.tabs.some((t) => tabId(t) === id))
-    return { ...state, active: id, recent: withFront(state.recent, id) };
+  const open = state.tabs.find((t) => tabId(t) === id);
+  if (open) {
+    // Opened for keeps, a file only looked at so far stays.
+    const shown = tab.preview ? state : keepTab(state, id);
+    return { ...shown, active: id, recent: withFront(state.recent, id) };
+  }
+  const replaced = tab.preview
+    ? state.tabs.find((t) => t.preview && !keep(t))
+    : undefined;
+  if (replaced) return replaceTab(state, replaced, tab);
   const frontAt = state.tabs.findIndex((t) => tabId(t) === state.active);
   let tabs = [...state.tabs];
   tabs.splice(frontAt < 0 ? tabs.length : frontAt + 1, 0, tab);
@@ -73,6 +102,16 @@ export function openTab(
   return { tabs, active: id, recent };
 }
 
+function replaceTab(state: TabState, old: EditorTab, tab: EditorTab): TabState {
+  const id = tabId(tab);
+  const recent = state.recent.filter((r) => r !== tabId(old));
+  return {
+    tabs: state.tabs.map((t) => (t === old ? tab : t)),
+    active: id,
+    recent: withFront(recent, id),
+  };
+}
+
 /** Closes a tab; the one in front before it comes back, as in an IDE. */
 export function closeTab(state: TabState, id: string): TabState {
   const tabs = state.tabs.filter((t) => tabId(t) !== id);
@@ -84,30 +123,35 @@ export function closeTab(state: TabState, id: string): TabState {
   return { tabs, active: fallback, recent };
 }
 
-/** A file or folder moved: tabs on it or under it follow. */
+/** A file or folder moved, in the project or with `outside` outside it: tabs on it or under it follow. */
 export function renameTabs(
   state: TabState,
   from: string,
   to: string,
+  outside = false,
 ): TabState {
-  const movedPath = (path: string) =>
-    isWithin(path, from) ? to + path.slice(from.length) : path;
-  const movedId = (id: string) =>
-    id.startsWith("outside:") || id.startsWith("snapshot:") ? id : movedPath(id);
+  const moved = (tab: EditorTab) =>
+    tabIsWithin(tab, from, outside)
+      ? { ...tab, path: to + tab.path.slice(from.length) }
+      : tab;
+  const movedIds = new Map(state.tabs.map((t) => [tabId(t), tabId(moved(t))]));
+  const movedId = (id: string) => movedIds.get(id) ?? id;
   return {
-    tabs: state.tabs.map((t) =>
-      t.outside || t.snapshot ? t : { ...t, path: movedPath(t.path) },
-    ),
+    tabs: state.tabs.map(moved),
     active: state.active && movedId(state.active),
     recent: state.recent.map(movedId),
   };
 }
 
-/** A file or folder went to the Trash: its tabs close. */
-export function dropTabs(state: TabState, path: string): TabState {
+/** A file or folder went to the Trash, in the project or with `outside` outside it: its tabs close. */
+export function dropTabs(
+  state: TabState,
+  path: string,
+  outside = false,
+): TabState {
   let next = state;
   for (const tab of state.tabs)
-    if (tabIsWithin(tab, path)) next = closeTab(next, tabId(tab));
+    if (tabIsWithin(tab, path, outside)) next = closeTab(next, tabId(tab));
   return next;
 }
 
@@ -135,7 +179,7 @@ export function setPinned(
   if (!tab || !!tab.pinned === pinned) return state;
   const others = state.tabs.filter((t) => t !== tab);
   const pinnedBefore = others.filter((t) => t.pinned).length;
-  others.splice(pinnedBefore, 0, { ...tab, pinned: pinned || undefined });
+  others.splice(pinnedBefore, 0, { ...kept(tab), pinned: pinned || undefined });
   return { ...state, tabs: others };
 }
 
@@ -156,6 +200,7 @@ export function parseTabs(saved: string | null): TabState | undefined {
           path: t.path,
           ...(t.outside && { outside: true }),
           ...(t.pinned === true && { pinned: true }),
+          ...(t.preview === true && { preview: true }),
         }),
       );
     // Pinned tabs all come back, whatever the limit; it only trims the rest.

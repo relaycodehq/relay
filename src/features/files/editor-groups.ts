@@ -2,6 +2,7 @@ import {
   closeTab,
   dropTabs,
   emptyTabs,
+  keepTab,
   moveTab,
   openTab,
   parseTabs,
@@ -90,6 +91,29 @@ export const pinIn = (
   pinned: boolean,
 ) => withGroup(layout, group, (g) => setPinned(g, id, pinned));
 
+/** A previewed tab in a split stays open when another file is looked at. */
+export const keepIn = (layout: EditorLayout, group: string, id: string) =>
+  withGroup(layout, group, (g) => keepTab(g, id));
+
+/** Previewed tabs that were edited stay, as VS Code's do. */
+export function keepEdited(
+  layout: EditorLayout,
+  edited: (tab: EditorTab) => boolean,
+): EditorLayout {
+  const editedPreview = (t: EditorTab) => !!t.preview && edited(t);
+  // Every split's own copy: allTabs keeps one per file, which may not be the preview.
+  if (!layout.groups.some((g) => g.tabs.some(editedPreview))) return layout;
+  return {
+    ...layout,
+    groups: layout.groups.map((g) => ({
+      ...g,
+      tabs: g.tabs.map((t) =>
+        editedPreview(t) ? { ...t, preview: undefined } : t,
+      ),
+    })),
+  };
+}
+
 /**
  * A new split beside `group` showing its tab in front (or the tab `id`), as
  * an IDE's Split Right does; the file stays where it was too, both showing
@@ -107,7 +131,9 @@ export function split(
   const id = newId();
   const fresh: EditorGroup = {
     id,
-    ...(tab ? openTab(emptyTabs, { ...tab, pinned: undefined }) : emptyTabs),
+    ...(tab
+      ? openTab(emptyTabs, { ...tab, pinned: undefined, preview: undefined })
+      : emptyTabs),
   };
   const groups = [...layout.groups];
   groups.splice(groups.indexOf(from) + 1, 0, fresh);
@@ -132,7 +158,9 @@ export function moveToGroup(
     .find((g) => g.id === from)
     ?.tabs.find((t) => tabId(t) === id);
   if (!tab) return layout;
-  let next = withGroup(layout, to, (g) => moveTab(openTab(g, tab), id, before));
+  // Dragged somewhere on purpose, a previewed tab stays.
+  const moved = { ...tab, preview: undefined };
+  let next = withGroup(layout, to, (g) => moveTab(openTab(g, moved), id, before));
   next = closeIn(next, from, id);
   return { ...next, focused: to };
 }
@@ -148,16 +176,27 @@ export const renameInGroups = (
   layout: EditorLayout,
   from: string,
   to: string,
+  outside = false,
 ) => ({
   ...layout,
-  groups: layout.groups.map((g) => ({ ...renameTabs(g, from, to), id: g.id })),
+  groups: layout.groups.map((g) => ({
+    ...renameTabs(g, from, to, outside),
+    id: g.id,
+  })),
 });
 
 /** A file or folder went to the Trash: its tabs close everywhere, and splits left empty go. */
-export function dropInGroups(layout: EditorLayout, path: string): EditorLayout {
+export function dropInGroups(
+  layout: EditorLayout,
+  path: string,
+  outside = false,
+): EditorLayout {
   let next: EditorLayout = {
     ...layout,
-    groups: layout.groups.map((g) => ({ ...dropTabs(g, path), id: g.id })),
+    groups: layout.groups.map((g) => ({
+      ...dropTabs(g, path, outside),
+      id: g.id,
+    })),
   };
   for (const group of next.groups)
     if (!group.tabs.length && next.groups.length > 1)

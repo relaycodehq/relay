@@ -27,7 +27,8 @@ type TabItemProps = {
 /**
  * One tab: the file's name, a folder hint when another tab has the same name,
  * and × (a pin for a pinned tab, which a middle-click leaves open). Right-click
- * for its menu.
+ * for its menu. A previewed file's name is in italics until a double click
+ * keeps it.
  */
 export function TabItem({
   tab,
@@ -51,6 +52,7 @@ export function TabItem({
     "editor-tab",
     selected && "active",
     dirty(tab) && "unsaved",
+    tab.preview && "preview",
     dragging && "dragging",
   ];
   return (
@@ -88,6 +90,7 @@ export function TabItem({
               if (e.button === 1 && !tab.pinned) menu.onClose(id);
             }}
             onClick={() => onActivate(id)}
+            onDoubleClick={() => menu.onKeep(id)}
           />
         }
       >

@@ -17,6 +17,7 @@ export function tabMenuActions(
     onClose: (id) => ws.requestClose(group, id),
     onCloseMany: (scope, from) => ws.closeMany(group, scope, from),
     onPin: (id, pinned) => ws.pin(group, id, pinned),
+    onKeep: (id) => ws.keep(group, id),
     onCopyPath: (tab) =>
       void copyFullPath(tab, where).catch(report("copy the path")),
     onCopyRelativePath: (tab) =>
