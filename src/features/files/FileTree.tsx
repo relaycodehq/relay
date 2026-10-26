@@ -1,12 +1,5 @@
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  ChevronRight,
-  ChevronsDownUp,
-  FilePlus,
-  FolderOpen,
-  FolderPlus,
-} from "lucide-react";
 import { api } from "../../lib/api";
 import {
   joinPath,
@@ -16,12 +9,12 @@ import {
 } from "../../lib/file-tree";
 import { directoryKey, useDirectories, type useExpanded } from "./useFileTree";
 import { workingTreeKey } from "../../lib/working-tree-key";
-import { ErrorBox, IconButton, Modal } from "../../ui/ui";
+import { ErrorBox, Modal } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { FileTreeHead, type TreeFold } from "./FileTreeHead";
 import { FileTreeRow, NameInput } from "./FileTreeRow";
 import "../../ui/tree.css";
 import "./file-browser.css";
-import { revealLabel } from "../../lib/mod-key";
 
 type Editing =
   | { mode: "rename"; path: string }
@@ -44,8 +37,7 @@ export function FileTree({
   active: boolean;
   where: string;
   title: string;
-  /** With other folders' trees beside it, it folds away under its title; `path` says where it is. */
-  fold?: { open: boolean; path?: string; onToggle: () => void };
+  fold?: TreeFold;
   selected: string | null;
   /** The file with unsaved edits: it and the folders around it stay as they are. */
   lockedPath: string | null;
@@ -187,53 +179,16 @@ export function FileTree({
 
   return (
     <div className={`file-tree ${shown ? "" : "folded"}`}>
-      <div className="file-tree-head">
-        {fold ? (
-          <button
-            type="button"
-            className="file-tree-fold"
-            aria-expanded={fold.open}
-            title={fold.path ?? title}
-            onClick={fold.onToggle}
-          >
-            <ChevronRight size={12} className={fold.open ? "open" : ""} />
-            <strong>{title}</strong>
-          </button>
-        ) : (
-          <strong title={title}>{title}</strong>
-        )}
-        {shown && (
-          <>
-            <IconButton
-              label="New file"
-              onClick={() => startCreate(selectedDir(selected, rows), "file")}
-            >
-              <FilePlus size={14} />
-            </IconButton>
-            <IconButton
-              label="New folder"
-              onClick={() => startCreate(selectedDir(selected, rows), "dir")}
-            >
-              <FolderPlus size={14} />
-            </IconButton>
-            <IconButton
-              label="Collapse folders"
-              disabled={!expansion.expanded.size || !!lockedPath}
-              onClick={() =>
-                [...expansion.expanded].forEach(expansion.collapse)
-              }
-            >
-              <ChevronsDownUp size={14} />
-            </IconButton>
-            <IconButton
-              label={revealLabel}
-              onClick={() => void run(() => api.revealProjectPath(where, ""))}
-            >
-              <FolderOpen size={14} />
-            </IconButton>
-          </>
-        )}
-      </div>
+      <FileTreeHead
+        title={title}
+        fold={fold}
+        canCollapse={!!expansion.expanded.size && !lockedPath}
+        onNew={(kind) => startCreate(selectedDir(selected, rows), kind)}
+        onCollapseAll={() =>
+          [...expansion.expanded].forEach(expansion.collapse)
+        }
+        onReveal={() => void run(() => api.revealProjectPath(where, ""))}
+      />
       {shown && (
         <div
           className="file-tree-body"

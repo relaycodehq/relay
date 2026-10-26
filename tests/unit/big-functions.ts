@@ -222,7 +222,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/diff/find/useDiffFind.tsx › useDiffFind": 138,
   "src/features/diff/viewer/SelectionToolbar.tsx › SelectionToolbar": 101,
   "src/features/file-mentions/useFileMentions.ts › useFileMentions": 128,
-  "src/features/files/FileTree.tsx › FileTree": 288,
+  "src/features/files/FileTree.tsx › FileTree": 282,
   "src/features/files/FileTreeRow.tsx › FileTreeRow": 129,
   "src/features/files/ProjectFiles.tsx › ProjectFiles": 86,
   "src/features/editor/EditorBar.tsx › EditorBar": 83,
