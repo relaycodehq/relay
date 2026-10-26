@@ -38,7 +38,8 @@ export function useUnsavedPrompt({
   };
   const saveAndClose = async () => {
     const saved = await doc.save();
-    if (!saved) return;
+    // Edits typed while it saved aren't on disk, and closing now would drop them.
+    if (!saved || doc.status.dirty) return;
     setAsking(null);
     onClose();
   };
