@@ -32,6 +32,8 @@ describe("bandAround", () => {
   it("paints a page either side, within the file", () => {
     expect(bandAround(500, 726, 5000)).toEqual({ first: 273, last: 953 });
     expect(bandAround(1, 227, 300)).toEqual({ first: 1, last: 300 });
+    // Too short to show a line, the editor still has its first to paint.
+    expect(bandAround(1, 0, 300)).toEqual({ first: 1, last: 2 });
   });
 
   it("is repainted only once the page reaches past it", () => {

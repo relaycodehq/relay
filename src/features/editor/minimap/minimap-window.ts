@@ -53,8 +53,10 @@ export type Band = { first: number; last: number };
 
 /** The band to paint around the lines the page shows now. */
 export function bandAround(firstLine: number, lastLine: number, lines: number): Band {
-  const page = lastLine - firstLine + 1;
-  return { first: Math.max(1, firstLine - page), last: Math.min(lines, lastLine + page) };
+  // An editor too short to show a line still paints the first.
+  const shownLast = Math.max(firstLine, lastLine);
+  const page = shownLast - firstLine + 1;
+  return { first: Math.max(1, firstLine - page), last: Math.min(lines, shownLast + page) };
 }
 
 /** Whether a painted band still holds every line the page shows. */
