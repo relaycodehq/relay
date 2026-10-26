@@ -489,6 +489,58 @@ describe("queries", () => {
   });
 });
 
+describe("usages in a folder of several TypeScript projects", () => {
+  async function solution() {
+    const files = {
+      "tsconfig.json": { files: [], references: [{ path: "./web.json" }, { path: "./node.json" }] },
+      "web.json": { include: ["src", "shared"] },
+      "node.json": { include: ["electron", "shared"] },
+    };
+    await Promise.all(["src", "shared", "electron"].map((d) => mkdir(join(root, d))));
+    await Promise.all([
+      ...Object.entries(files).map(([name, config]) => writeFile(join(root, name), JSON.stringify(config))),
+      writeFile(join(root, "src/app.ts"), "app"),
+      writeFile(join(root, "shared/a.ts"), "a"),
+      writeFile(join(root, "electron/main.ts"), "main"),
+    ]);
+  }
+
+  const uris = async (t: ReturnType<typeof setup>, method: string) =>
+    (await t.received()).filter((m) => m.method === method).map((m) => m.params.textDocument.uri);
+
+  it("opens a file of each project once before looking, and closes them with the last open file", async () => {
+    await solution();
+    const t = setup({ idleMs: 60 });
+    await t.service.lspOpen(WHERE, "shared/a.ts", "a");
+    await t.ready();
+    await t.service.lspReferences(WHERE, "shared/a.ts", 0, 0);
+    await t.service.lspReferences(WHERE, "shared/a.ts", 0, 0);
+    const files = ["shared/a.ts", "src/app.ts", "electron/main.ts"].map((f) => pathsFor().toUri(root, f));
+    expect(await uris(t, "textDocument/didOpen")).toEqual(files);
+    const loads = t.statuses.filter((s) => s.message?.startsWith("Loading projects"));
+    expect(loads.map((s) => [s.state, s.message, s.progress])).toEqual([
+      ["indexing", "Loading projects 1 of 2", 0],
+      ["indexing", "Loading projects 2 of 2", 50],
+    ]);
+    expect(t.statuses.at(-1)?.state).toBe("ready");
+
+    await t.service.lspClose(WHERE, "shared/a.ts");
+    await vi.waitFor(() => expect(t.states()).toContain("stopped"));
+    expect((await uris(t, "textDocument/didClose")).sort()).toEqual([...files].sort());
+  });
+
+  it("keeps a held file open when the editor closes it while another file is open", async () => {
+    await solution();
+    const t = setup();
+    await t.service.lspOpen(WHERE, "shared/a.ts", "a");
+    await t.service.lspOpen(WHERE, "src/app.ts", "app");
+    await t.ready();
+    await t.service.lspReferences(WHERE, "shared/a.ts", 0, 0);
+    await t.service.lspClose(WHERE, "src/app.ts");
+    expect(await uris(t, "textDocument/didClose")).toEqual([]);
+  });
+});
+
 describe("progress", () => {
   it("reads indexing from the server's progress, with its percentage", async () => {
     const t = setup({

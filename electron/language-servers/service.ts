@@ -22,6 +22,7 @@ import {
 import { keyedQueue } from "../util/keyed-queue";
 import { Converter, inlayHintsOf } from "./convert";
 import { FileNotices, type OpenDoc } from "./file-notices";
+import { holdEveryProject, letGo, onlyHeldOpen, searchHold } from "./project-holds";
 import { servers, type ServerSpec } from "./registry";
 import type { Launch, Resolution } from "./resolve";
 import { isCancelled, RpcError } from "./rpc";
@@ -76,6 +77,7 @@ interface Entry {
   /** Files outside the folder that a result pointed at; the only ones `readFile` opens. */
   outside: Set<string>;
   idle?: NodeJS.Timeout;
+  holding?: Promise<void>;
 }
 
 /**
@@ -134,7 +136,7 @@ export class LanguageServers implements Omit<
     const real = await realpath(root).catch(() => root);
     const entry = this.entry(root, real, servers[lang.server]);
     this.attach(entry, where);
-    clearTimeout(entry.idle);
+    if (owner !== searchHold) clearTimeout(entry.idle);
     const file = this.paths.absolute(root, path);
     const key = this.paths.key(file);
     let doc = entry.docs.get(key);
@@ -182,7 +184,9 @@ export class LanguageServers implements Omit<
       entry.session.close(doc.uri);
       entry.docs.delete(key);
       entry.notices.forget(key);
-      if (!entry.docs.size) this.armIdle(entry);
+      if (!onlyHeldOpen(entry)) return;
+      letGo(entry);
+      this.armIdle(entry);
     });
   }
 
@@ -224,7 +228,11 @@ export class LanguageServers implements Omit<
     );
   }
 
-  lspReferences(where: string, path: string, line: number, character: number) {
+  async lspReferences(where: string, path: string, line: number, character: number) {
+    const entry = this.find(where, path)?.entry;
+    const open = (file: string, text: string) => this.lspOpen(where, file, text, searchHold);
+    const report = (status: LspServerStatus) => entry?.wheres.forEach((w) => this.report(w, status));
+    if (entry) await holdEveryProject(entry, { open, report, log: this.deps.log });
     return this.ask<LspLocation[]>(
       where,
       path,
@@ -438,7 +446,7 @@ export class LanguageServers implements Omit<
   private armIdle(entry: Entry) {
     clearTimeout(entry.idle);
     entry.idle = setTimeout(() => {
-      if (entry.docs.size) return;
+      if (!onlyHeldOpen(entry)) return;
       this.entries.delete(`${this.paths.key(entry.root)}\0${entry.spec.id}`);
       void entry.session.stop();
     }, this.idleMs);

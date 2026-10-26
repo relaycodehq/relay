@@ -1,4 +1,5 @@
 import type { LspServerId } from "../../shared/language-servers";
+import { oneFilePerProject } from "./typescript-projects";
 
 /** The release asset to download for this computer, and what is in it. */
 export interface AssetPlan {
@@ -34,6 +35,13 @@ export interface ServerSpec {
   initializationOptions?: unknown;
   /** What it gets when it asks for its settings, by section; any other section is its default. */
   settings?: Record<string, unknown>;
+  /**
+   * A file of each project in the folder, for a server that searches only
+   * the projects of files it has open. Usages are looked up with these open.
+   */
+  oneFilePerProject?(root: string): Promise<string[]>;
+  /** A request it answers once the project of `file`, a full path, has loaded. */
+  projectLoaded?(file: string): { method: string; params: object };
 }
 
 /** TypeScript's inline hints as PhpStorm shows them: types it worked out, and names of literal arguments. */
@@ -125,6 +133,15 @@ export const servers: Record<LspServerId, ServerSpec> = {
     npm: { package: "@vtsls/language-server", bin: "vtsls" },
     hint: "Install Node.js, or `npm install -g @vtsls/language-server`.",
     settings: { typescript: typescriptHints, javascript: typescriptHints },
+    oneFilePerProject,
+    // tsserver loads a project in the background; asking about it waits for that.
+    projectLoaded: (file) => ({
+      method: "workspace/executeCommand",
+      params: {
+        command: "typescript.tsserverRequest",
+        arguments: ["projectInfo", { file, needFileNameList: false }],
+      },
+    }),
   },
   intelephense: {
     id: "intelephense",
