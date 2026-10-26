@@ -259,7 +259,7 @@ it("only offers recovery for the latest stopped answer with input in this conver
   );
 });
 
-it("keeps one header, timer and fold through a saved question and its follow-up", () => {
+it("keeps one header, timer and fold through a saved question and its follow-up", async () => {
   vi.spyOn(Date, "now").mockReturnValue(106000);
   const asking = message("asking", "assistant", "", {
     created: 1000,
@@ -337,7 +337,10 @@ it("keeps one header, timer and fold through a saved question and its follow-up"
   );
   expect(host.querySelectorAll(".agent-run-heading")).toHaveLength(1);
   expect(host.querySelector(".agent-run-time")?.textContent).toBe("1m 7s");
-  expect(host.querySelectorAll(".agent-trace")).toHaveLength(0);
+  // The trace folds away rather than vanishing in the frame the turn ends.
+  await vi.waitFor(() =>
+    expect(host.querySelectorAll(".agent-trace")).toHaveLength(0),
+  );
   expect(host.textContent).toContain("Done");
   expect(host.textContent).toContain("Private");
   const fold = host.querySelector<HTMLDetailsElement>(

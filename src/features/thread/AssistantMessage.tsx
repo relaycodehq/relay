@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, type ReactNode } from "react";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import {
   answerImagePaths,
@@ -15,6 +15,7 @@ import { RichText } from "../../ui/RichText";
 import { useAgentSignIn, type SignInPlace } from "../sign-in/useAgentSignIn";
 import { WatchNotes } from "../watch/WatchNotes";
 import { AgentTurn, type TurnPresentation } from "../agent-turn/AgentTurn";
+import { useEndGrowsIn } from "../agent-turn/useEndGrowsIn";
 import { AsyncQuestionCards } from "./AsyncQuestionCards";
 import { ImportOfferCard } from "../import-offer/ImportOfferCard";
 import { HtmlRenders, type RenderCompose } from "../html-render/HtmlRenders";
@@ -147,6 +148,8 @@ export function AssistantMessage({
   responseExpanded,
   onToggleResponse,
 }: AssistantMessageProps) {
+  const article = useRef<HTMLElement>(null);
+  useEndGrowsIn(article, m.status === "streaming");
   const activity = useResponsePresentation({
     response,
     continuation,
@@ -221,6 +224,7 @@ export function AssistantMessage({
   ) : null;
   return (
     <article
+      ref={article}
       className="project-message assistant"
       data-message-id={m.id}
       data-response-continuation={continuation || undefined}

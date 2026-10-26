@@ -40,6 +40,7 @@ import {
   type ReadImages,
 } from "./ToolRow";
 import { TraceRun } from "./TraceRun";
+import { useFoldAway } from "./useFoldAway";
 import { ActionLabel, actionText } from "./ActionRow";
 import { rowsOf } from "../../../shared/trace-tree";
 import "./agent-trace.css";
@@ -97,6 +98,7 @@ export function AgentTurn({
     open || undefined,
   );
   const expanded = presentation?.expanded ?? toggled ?? live;
+  const fold = useFoldAway(expanded);
   const headingMessage = presentation?.summary ?? message;
   const headingTurn = presentation?.summary ? readTurn(headingMessage) : turn;
   if (!live && !entries.length && !presentation?.summary) return null;
@@ -157,7 +159,7 @@ export function AgentTurn({
   return (
     <Container
       className={`agent-activity${live ? " live" : ""}${continuation ? " continuation" : ""}`}
-      open={continuation ? undefined : expanded}
+      open={continuation ? undefined : expanded || fold.folding}
       onToggle={
         continuation
           ? undefined
@@ -202,10 +204,14 @@ export function AgentTurn({
           <ChevronRight size={13} className="agent-run-chevron" />
         </summary>
       )}
-      {expanded && (entries.length > 0 || thinking) && (
+      {(expanded || fold.folding) && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
           <TurnImages.Provider value={images}>
-            <div className="agent-trace" aria-label="Local agent activity">
+            <div
+              className="agent-trace"
+              aria-label="Local agent activity"
+              ref={fold.ref}
+            >
               <TraceParts
                 shown={shown}
                 live={live}
