@@ -52,18 +52,27 @@ fun readCodeWhenWhole(call: AgentActivity, fetched: String?): ReadCode? {
 /**
  * The longest run of numbered lines counting up from the top. Output kept from
  * its end may start mid-line, so the run can start on the second line; it
- * stops where something was appended after the file, like a reminder.
+ * stops where something was appended after the file, like a reminder. Plain
+ * `nl` leaves a blank line unnumbered and doesn't count it.
  */
 private fun numberedRun(lines: List<String>): List<NumberedLine> {
     fun runFrom(start: Int): List<NumberedLine> {
         val run = mutableListOf<NumberedLine>()
+        var numbered = 0
         for (line in lines.drop(start)) {
-            val found = numberedLine.matchEntire(line) ?: break
+            val found = numberedLine.matchEntire(line)
+            if (found == null && run.isNotEmpty() && line.isBlank()) {
+                run += NumberedLine(run.last().n, "")
+                continue
+            }
+            if (found == null) break
             val n = found.groupValues[1].toLongOrNull() ?: break
             if (run.isNotEmpty() && n != run.last().n + 1) break
             run += NumberedLine(n, found.groupValues[2])
+            numbered = run.size
         }
-        return run
+        // Blank lines after the last numbered one came after the file.
+        return run.take(numbered)
     }
     val fromTop = runFrom(0)
     val fromSecond = runFrom(1)

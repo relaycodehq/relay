@@ -31,17 +31,25 @@ export function readCode(call: AgentActivity): ReadCode | undefined {
 /**
  * The longest run of numbered lines counting up from the top. Output kept from
  * its end may start mid-line, so the run can start on the second line; it
- * stops where something was appended after the file, like a reminder.
+ * stops where something was appended after the file, like a reminder. Plain
+ * `nl` leaves a blank line unnumbered and doesn't count it.
  */
 function numberedRun(lines: string[]) {
   const runFrom = (start: number) => {
     const run: { n: number; text: string }[] = [];
+    let numbered = 0;
     for (const line of lines.slice(start)) {
       const found = numberedLine.exec(line);
+      if (!found && run.length && !line.trim()) {
+        run.push({ n: run.at(-1)!.n, text: "" });
+        continue;
+      }
       if (!found || (run.length && Number(found[1]) !== run.at(-1)!.n + 1)) break;
       run.push({ n: Number(found[1]), text: found[2]! });
+      numbered = run.length;
     }
-    return run;
+    // Blank lines after the last numbered one came after the file.
+    return run.slice(0, numbered);
   };
   const fromTop = runFrom(0);
   const fromSecond = runFrom(1);

@@ -47,16 +47,23 @@ nonisolated(unsafe) private let numbersItsLines = #/(?:^|[\s;&|('"])(?:nl\s|cat\
 
 /// The longest run of numbered lines counting up from the top. Output kept from its end may start
 /// mid-line, so the run can start on the second line; it stops where something was appended after
-/// the file, like a reminder.
+/// the file, like a reminder. Plain `nl` leaves a blank line unnumbered and doesn't count it.
 private func numberedRun(_ lines: [String]) -> [(n: Int, text: String)] {
     func runFrom(_ start: Int) -> [(n: Int, text: String)] {
         var run: [(n: Int, text: String)] = []
+        var numbered = 0
         for line in lines.dropFirst(start) {
+            if let last = run.last, line.allSatisfy(\.isWhitespace) {
+                run.append((last.n, ""))
+                continue
+            }
             guard let found = line.wholeMatch(of: numberedLine), let n = Int(found.1) else { break }
             if let last = run.last, n != last.n + 1 { break }
             run.append((n, String(found.2)))
+            numbered = run.count
         }
-        return run
+        // Blank lines after the last numbered one came after the file.
+        return Array(run.prefix(numbered))
     }
     let fromTop = runFrom(0)
     let fromSecond = runFrom(1)

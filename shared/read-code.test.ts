@@ -40,6 +40,15 @@ describe("readCode", () => {
     });
   });
 
+  it("reads plain nl past the blank lines it leaves unnumbered", () => {
+    const detail = "     1\tone\n     2\ttwo\n       \n     3\tthree\n     4\tfour\n";
+    expect(readCode(call("command", "nl src/c.ts", detail))).toEqual({
+      file: "src/c.ts",
+      code: "one\ntwo\n\nthree\nfour",
+      first: 1,
+    });
+  });
+
   it("doesn't take a command's tab-separated output for line numbers", () => {
     const data = "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw";
     expect(readCode(call("command", "cat data.tsv", data))).toEqual({ file: "data.tsv", code: data });

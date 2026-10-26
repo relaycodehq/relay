@@ -175,6 +175,7 @@ const reads = [
   call("command", "cat data.tsv", { detail: "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw" }),
   call("command", "cat ids.tsv", { detail: "001\tann\n002\tbob\n003\tcam" }),
   call("command", "cat -n src/b.ts", { detail: "     1\tx\n     2\ty" }),
+  call("command", "nl src/c.ts", { detail: "     1\tone\n     2\ttwo\n       \n     3\tthree\n     4\tfour\n" }),
   call("command", "sed -n 1,2p a.ts; sed -n 1,2p b.ts", { detail: "x\ny\nz\nw" }),
   call("command", "cat missing.ts", { detail: "No such file", status: "failed" }),
 ];

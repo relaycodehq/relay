@@ -1996,6 +1996,26 @@
    "call": {
     "id": "call-55",
     "kind": "command",
+    "label": "nl src/c.ts",
+    "status": "complete",
+    "detail": "     1\tone\n     2\ttwo\n       \n     3\tthree\n     4\tfour\n",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "src/c.ts"
+     }
+    ]
+   },
+   "read": {
+    "file": "src/c.ts",
+    "code": "one\ntwo\n\nthree\nfour",
+    "first": 1
+   }
+  },
+  {
+   "call": {
+    "id": "call-56",
+    "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
     "detail": "x\ny\nz\nw",
@@ -2016,7 +2036,7 @@
   },
   {
    "call": {
-    "id": "call-56",
+    "id": "call-57",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",
