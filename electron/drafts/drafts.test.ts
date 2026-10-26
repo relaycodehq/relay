@@ -5,7 +5,8 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import type { DraftChange, HeldSend } from "../../shared/drafts";
 import type { ProjectChatSend } from "../../shared/projects";
-import { RemoteBridge, type RemoteHost } from "../remote/bridge";
+import { RemoteBridge } from "../remote/bridge";
+import type { RemoteHost } from "../remote/remote-host";
 import { DraftStore, Drafts } from ".";
 
 let dir: string;

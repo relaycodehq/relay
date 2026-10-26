@@ -20,7 +20,8 @@ import {
   updateMethods,
 } from "../../shared/remote";
 import { maxHosts } from "../../shared/remote-routes";
-import { RemoteBridge, type RemoteHost } from "./bridge";
+import { RemoteBridge } from "./bridge";
+import type { RemoteHost } from "./remote-host";
 import { RemoteDevices } from "./devices";
 import { PhoneDictations } from "./phone-dictation";
 import { PhoneReadings } from "./phone-read-aloud";
