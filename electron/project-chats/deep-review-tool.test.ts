@@ -136,7 +136,9 @@ it("reviews where the thread works, and hands the reports to its agent once its 
     .filter(Boolean)
     .map((line) => JSON.parse(line));
   const review = calls.find((c) => c.review);
-  expect(review.review.target).toEqual({ type: "uncommittedChanges" });
+  // A focus turns Codex's built-in review into its custom one, which carries it.
+  expect(review.review.target).toMatchObject({ type: "custom" });
+  expect(review.review.target.instructions).toContain('"the queue"');
   const reviewerThread = calls.find(
     (c) =>
       c.thread &&
