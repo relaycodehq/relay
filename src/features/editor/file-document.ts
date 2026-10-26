@@ -297,6 +297,8 @@ export class FileDocument {
     if (!this.file || !this.state || this.status.saving || this.status.loading) return false;
     if (!this.status.dirty) return true;
     this.set({ saving: true, error: undefined });
+    // A read still on its way is of the file before this save.
+    this.generation++;
     const doc = this.state.doc;
     const contents = this.state.sliceDoc();
     const { source, path } = this;

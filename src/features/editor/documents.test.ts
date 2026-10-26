@@ -13,10 +13,12 @@ vi.mock("../../lib/api", () => ({
       contents: "one\ntwo\n",
       original: "one\ntwo\n",
     })),
+    saveProjectFile: vi.fn(async () => ({ version: "v2" })),
     localHistoryRecord: vi.fn(async () => null),
   },
 }));
 
+const { api } = await import("../../lib/api");
 const { documents } = await import("./documents");
 
 const views: EditorView[] = [];
@@ -61,4 +63,31 @@ it("keeps two views of one file in step, and the file's state with the first", a
   expect(doc.text()).toBe("xone\ntwo\nthree\n");
   doc.detach(right);
   documents.close(source, "a.txt", true);
+});
+
+it("drops a disk check that read the file before a save", async () => {
+  const source = { kind: "project" as const, where: "w" };
+  const doc = documents.get(source, "b.txt", () => history());
+  await vi.waitFor(() => expect(doc.state).toBeDefined());
+  const view = viewOf(doc);
+  view.dispatch({ changes: { from: 0, insert: "zero\n" }, userEvent: "input" });
+  let readDone!: () => void;
+  vi.mocked(api.projectFile).mockImplementationOnce(async (_where, path) => {
+    await new Promise<void>((resolve) => (readDone = resolve));
+    return {
+      path,
+      branch: "main",
+      head: "abc",
+      version: "v1",
+      contents: "one\ntwo\n",
+      original: "one\ntwo\n",
+    };
+  });
+  const checked = doc.check();
+  expect(await doc.save()).toBe(true);
+  readDone();
+  await checked;
+  expect(doc.text()).toBe("zero\none\ntwo\n");
+  doc.detach(view);
+  documents.close(source, "b.txt", true);
 });
