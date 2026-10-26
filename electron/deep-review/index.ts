@@ -15,7 +15,6 @@ import {
   reviewerRound,
   reviewerTitle,
   roundOf,
-  workingReview,
   reviewRunning,
   reviewThreadTitle,
   type DeepReviewStart,
@@ -35,14 +34,8 @@ import {
 import { leadPrompt, requestText, reviewerTask } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
-import {
-  discardReviewCheckout,
-  followReviewedBranch,
-  needsCheckout,
-  openReviewCheckout,
-} from "./checkout";
-import { noteWorkspaceMove } from "../../shared/workspace-moves";
-import { fixesFit, roundsOfFindings } from "./rounds";
+import { discardReviewCheckout, openReviewCheckout } from "./checkout";
+import { followFixes } from "./fixes";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
@@ -195,30 +188,12 @@ export class DeepReviews {
       status: "reviewing",
     };
     // Reviewers first: the thread only holds the review once all of them exist.
-    const created: ProjectChat[] = [];
-    try {
-      for (const [slot, reviewer] of config.reviewers.entries()) {
-        const { codex } = reviewerTask(reviewer, scope, state.focus);
-        const child = await this.host.createReviewer(chat, {
-          task: {
-            parent: chat.id,
-            round: request.id,
-            slot,
-            ...(codex ? { codex } : {}),
-          },
-          title: reviewerTitle(slot, reviewer),
-          by: config.lead.provider,
-        });
-        created.push(child);
-        state.reviewers.push({ ...reviewer, chatId: child.id });
-      }
-    } catch (error) {
-      await Promise.allSettled([
-        ...created.map((c) => this.host.discard(c)),
-        discardCheckout(),
-      ]);
-      throw error;
-    }
+    const created = await this.createReviewers(chat, state, config).catch(
+      async (error: unknown) => {
+        await Promise.allSettled([discardCheckout()]);
+        throw error;
+      },
+    );
     const before = {
       title: chat.title,
       updated: chat.updated,
@@ -245,6 +220,36 @@ export class DeepReviews {
       throw error;
     }
     await this.sendReviewers(chat, state, [...state.reviewers.keys()]);
+  }
+
+  /** A thread for each reviewer; those made before one failed are deleted again. */
+  private async createReviewers(
+    chat: ProjectChat,
+    state: DeepReviewState,
+    config: DeepReviewStart,
+  ) {
+    const created: ProjectChat[] = [];
+    try {
+      for (const [slot, reviewer] of config.reviewers.entries()) {
+        const { codex } = reviewerTask(reviewer, state.scope, state.focus);
+        const child = await this.host.createReviewer(chat, {
+          task: {
+            parent: chat.id,
+            round: state.request,
+            slot,
+            ...(codex ? { codex } : {}),
+          },
+          title: reviewerTitle(slot, reviewer),
+          by: config.lead.provider,
+        });
+        created.push(child);
+        state.reviewers.push({ ...reviewer, chatId: child.id });
+      }
+    } catch (error) {
+      await Promise.allSettled(created.map((c) => this.host.discard(c)));
+      throw error;
+    }
+    return created;
   }
 
   /**
@@ -421,83 +426,7 @@ export class DeepReviews {
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
     if (this.reviewing(chat)) return;
-    const state = workingReview(chat);
-    const fixing = !!input.fixes?.length;
-    if (fixing) this.fixesHere(chat, input.fixes!, state);
-    const checkout = state?.scope.checkout;
-    if (!state?.scope.head || !checkout) return;
-    const next = await followReviewedBranch(
-      await this.host.root(chat.projectId),
-      checkout,
-      {
-        head: state.scope.head,
-        dir: this.host.worktrees,
-        chatId: chat.id,
-        fixing,
-      },
-    ).catch((e: unknown) => {
-      console.warn("Could not follow the reviewed branch:", e);
-      if (!fixing) return checkout;
-      const branch = checkout.branch ?? checkout.pr?.head;
-      throw new Error(
-        `Relay couldn't check out ${branch ?? "the reviewed branch"} for the fix. Check it out in a folder of your own and ask again; the review follows it there.`,
-      );
-    });
-    if (next === checkout) return;
-    state.scope.checkout = next;
-    if (next.path !== checkout.path) {
-      noteWorkspaceMove(chat, {
-        how: "switched",
-        to: next.path,
-        ...(next.branch ? { branch: next.branch } : {}),
-      });
-      // The lead's session hears it too: its first turn wasn't one that
-      // notes what it heard. A session not told of an earlier move yet
-      // still works where that one started.
-      const pending = chat.movedIn;
-      chat.movedIn = {
-        from: pending?.from ?? checkout.path,
-        to: next.path,
-        owed: [
-          ...new Set([
-            ...(pending?.owed ?? []),
-            ...Object.keys(chat.scopeHeard ?? {}),
-            `${state.lead.provider}:main`,
-            ...(input.provider ? [`${input.provider}:main`] : []),
-          ]),
-        ],
-        selected: true,
-      };
-      // Its session started in the old folder.
-      this.host.close(chat.id);
-    }
-    await this.host.touch(chat, state.request);
-  }
-
-  /**
-   * Refuses fixes that would land on other code than the findings are
-   * about: the round's reviewers read it from Git, as it wasn't checked out
-   * where the thread works, or a later round moved the thread on to other
-   * code, or the thread itself moved to another branch.
-   */
-  private fixesHere(
-    chat: ProjectChat,
-    ids: string[],
-    working: DeepReviewState | undefined,
-  ) {
-    const rounds = roundsOfFindings(chat, ids);
-    const away = rounds.find(
-      (r) => !r.scope.checkout && needsCheckout(r.scope),
-    );
-    if (away)
-      throw new Error(
-        `Those findings are from the review of ${away.scope.label}, which isn't checked out where this thread works. Review it from a deep review thread to fix them there.`,
-      );
-    const elsewhere = rounds.find((r) => !fixesFit(chat, r, working));
-    if (elsewhere)
-      throw new Error(
-        `Those findings are from the review of ${elsewhere.scope.label}, and this thread works on ${working?.scope.label ?? chat.branch ?? "other code"} now. Review ${elsewhere.scope.label} again to fix them there.`,
-      );
+    await followFixes(this.host, chat, input);
   }
 
   /**

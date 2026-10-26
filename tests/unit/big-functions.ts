@@ -46,7 +46,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/bug-report/service.ts › post": 101,
   "electron/checks/detect.ts › detectProject": 98,
   "electron/checks/service.ts › launch": 210,
-  "electron/deep-review/index.ts › start": 138,
+  "electron/deep-review/index.ts › start": 120,
   "electron/deep-review/scope.ts › resolveScope": 128,
   "electron/dictation/apple.ts › serveAppleSpeech": 83,
   "electron/dictation/parakeet.ts › loadParakeet": 150,
