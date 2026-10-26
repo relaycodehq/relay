@@ -58,6 +58,12 @@ export function GuestImport({
   return (
     <NewThreadPicker
       title="Continue shared thread in…"
+      note={
+        <>
+          Shared from <strong>{new URL(link).host}</strong>. Its messages come
+          from someone else&apos;s computer.
+        </>
+      }
       // A project on another computer would need the thread started there.
       projects={own}
       current={current}

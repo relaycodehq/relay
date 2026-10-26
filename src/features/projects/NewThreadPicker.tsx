@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Modal } from "../../ui/ui";
 import { matches } from "../../lib/shortcuts";
 import { ProjectPicker, ScratchpadButton } from "./ProjectPicker";
@@ -12,6 +12,7 @@ import "./projects.css";
  */
 export function NewThreadPicker({
   title = "New thread in…",
+  note,
   projects,
   current,
   onSelect,
@@ -20,6 +21,8 @@ export function NewThreadPicker({
   onClose,
 }: {
   title?: string;
+  /** A line under the heading, saying what the pick is for. */
+  note?: ReactNode;
   /** Undefined until the list has loaded. */
   projects: Project[] | undefined;
   current: string | null;
@@ -56,6 +59,7 @@ export function NewThreadPicker({
       onClose={onClose}
       actions={<ScratchpadButton onClick={onScratch} />}
     >
+      {note && <p className="new-thread-note">{note}</p>}
       {projects && (
         <ProjectPicker
           projects={projects}

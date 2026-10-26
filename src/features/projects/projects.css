@@ -326,6 +326,13 @@
   font-size: 11.5px;
   line-height: 1.6;
 }
+.new-thread-note {
+  margin: 0 0 6px;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
 .headline-project-name {
   display: block;
   overflow: hidden;
