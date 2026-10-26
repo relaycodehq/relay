@@ -1,20 +1,13 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  matchLink,
-  splitOutsidePath,
-  type ProjectFileLink,
-} from "../../shared/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import type { QuestionTarget } from "../../shared/questions";
 import type { Pull } from "../../shared/types";
 import { api } from "../lib/api";
 import { threadDraftKey } from "../lib/thread-storage";
-import {
-  changedTarget,
-  fileTarget,
-  type FilesRequest,
-} from "../features/files/file-link-target";
+import type { FilesRequest } from "../features/files/file-link-target";
 import { changeOpeners } from "./change-openers";
+import { chatFileOpener } from "./chat-file-opener";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { requestChannel } from "../lib/request-channel";
 import {
@@ -101,7 +94,8 @@ export function usePaneOpens(
     if (next === "changes" && pull) return panes.show("changes");
     if (editorElsewhere()) return raiseEditor();
     openSurface("files");
-    if (next === "changes" && !project?.plain) fileOpens.send({ view: "changes" });
+    if (next === "changes" && !project?.plain)
+      fileOpens.send({ view: "changes" });
   }
   function togglePane(id: PaneId) {
     // A pane hidden behind a zoom reads as closed, so a click brings it back.
@@ -115,7 +109,9 @@ export function usePaneOpens(
   function startRequest() {
     const sequence = ++request.current;
     return () =>
-      mounted.current && currentLocation.current === location && request.current === sequence;
+      mounted.current &&
+      currentLocation.current === location &&
+      request.current === sequence;
   }
   /** The editor is in a window of its own, which comes forward in place of the Files pane. */
   const editorElsewhere = () => isEditorElsewhere(folder.where);
@@ -132,7 +128,10 @@ export function usePaneOpens(
     if (editorElsewhere()) {
       if ("view" in target) raiseEditor();
       else {
-        const file = "snapshot" in target ? { path: target.path, directory: false } : target;
+        const file =
+          "snapshot" in target
+            ? { path: target.path, directory: false }
+            : target;
         void openInEditorWindow(folder.where, file).catch(onError);
       }
       return true;
@@ -148,63 +147,23 @@ export function usePaneOpens(
     changeReveals.send(target);
     panes.show("changes");
   }
-  const changes = changeOpeners({ where: folder.where, openInEditor, startRequest, onError });
-  // A file clicked in the chat opens in Files, with its changes in place
-  // when it has some (in its Review in a PR thread). A name that fits several
-  // files lists them in Files. A file outside the project opens in Files too,
-  // a folder outside it in the system's file manager.
-  async function openChatFile(target: ProjectFileLink) {
-    const isCurrent = startRequest();
-    if (target.outside && target.directory) {
-      const { folder, name } = splitOutsidePath(target.path);
-      return void api.revealProjectPath(folder, name).catch(onError);
-    }
-    if (target.outside) return void openInEditor(target);
-    if (pull) return revealInReview(target);
-    const id = folder.where;
-    try {
-      const changes = project!.plain
-        ? []
-        : (folder.tree ?? (await api.projectWorkingTree(id))).changes.map(
-            (c) => c.path,
-          );
-      if (!isCurrent()) return;
-      const changed = changedTarget(target, changes);
-      if (changed) return void openInEditor({ ...changed, changes: !changed.directory });
-      if (target.directory) {
-        // An agent naming a folder elsewhere by its bare name gets a link here.
-        const exists = await api.projectDirectory(id, target.path).then(
-          () => true,
-          () => false,
-        );
-        if (!isCurrent()) return;
-        if (!exists)
-          return onError(
-            new Error(`There's no ${target.path}/ in this project.`),
-          );
-        return void openInEditor(target);
-      }
-      const found = matchLink(
-        target,
-        await qc.query({
-          queryKey: ["project-files", id],
-          queryFn: () => api.projectFiles(id),
-          staleTime: 5000,
-        }),
-      );
-      if (!isCurrent()) return;
-      // Ignored files (an agent's output folder) aren't in Git's list but are on disk.
-      const onDisk =
-        !found.length &&
-        (await api.projectFileInfo(id, target.path).then(
-          () => true,
-          () => false,
-        ));
-      if (isCurrent()) openInEditor(fileTarget(target, found, onDisk));
-    } catch (e) {
-      if (isCurrent()) onError(e);
-    }
-  }
+  const changes = changeOpeners({
+    where: folder.where,
+    openInEditor,
+    startRequest,
+    onError,
+  });
+  const openChatFile = chatFileOpener({
+    project,
+    where: folder.where,
+    tree: folder.tree,
+    inReview: !!pull,
+    qc,
+    openInEditor,
+    revealInReview,
+    startRequest,
+    onError,
+  });
   /** Hands `context` to the chat's composer, showing the chat. */
   function ask(context: Omit<ChatContext, "id">) {
     view.setContext({ id: crypto.randomUUID(), ...context });

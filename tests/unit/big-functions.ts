@@ -118,7 +118,7 @@ export const bigFunctions: Record<string, number> = {
   "src/app/ThreadWindowShell.tsx › ThreadWindowShell": 105,
   "src/app/ThreadWorkspace.tsx › ThreadWorkspace": 187,
   "src/app/useNewThreads.ts › useNewThreads": 167,
-  "src/app/usePaneOpens.ts › usePaneOpens": 178,
+  "src/app/usePaneOpens.ts › usePaneOpens": 162,
   "src/app/usePullThreads.ts › usePullThreads": 107,
   "src/app/useShellNavigation.ts › useShellNavigation": 176,
   "src/app/useSidebarVisibility.ts › useSidebarVisibility": 136,
