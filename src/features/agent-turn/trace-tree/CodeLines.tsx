@@ -2,7 +2,7 @@
 // what a call wrote and what a read printed open this way.
 import { useEffect, useState } from "react";
 import type { ThemedToken } from "@pierre/diffs";
-import { syntaxTheme, tokenize, tokenStyle } from "../../ui/CodeBlock";
+import { syntaxTheme, tokenize, tokenStyle } from "../../../ui/CodeBlock";
 
 /** How a line of an edit changed; a read's lines have none. */
 export type Mark = "removed" | "added" | "same";

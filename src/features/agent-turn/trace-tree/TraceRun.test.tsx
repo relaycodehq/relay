@@ -2,10 +2,10 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import type { AgentActivity } from "../../../shared/projects";
+import type { AgentActivity } from "../../../../shared/projects";
 import { ClosedRun, TraceRun } from "./TraceRun";
 
-vi.mock("../../lib/api", () => ({ api: {} }));
+vi.mock("../../../lib/api", () => ({ api: {} }));
 
 // Highlighting loads a grammar off the main thread; the rows only need the lines there.
 vi.mock("./CodeLines", () => ({

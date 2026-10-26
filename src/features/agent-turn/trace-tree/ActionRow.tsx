@@ -18,10 +18,10 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import type { AgentActivity } from "../../../shared/projects";
-import { readCode } from "../../../shared/read-code";
-import { callActions, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
-import { baseName } from "../../../shared/shell-words";
+import type { AgentActivity } from "../../../../shared/projects";
+import { readCode } from "../../../../shared/read-code";
+import { callActions, isScratch, shownCommand, type CallAction } from "../../../../shared/call-actions";
+import { baseName } from "../../../../shared/shell-words";
 import {
   actionVerb,
   rowFailed,
@@ -31,8 +31,8 @@ import {
   showsOutput,
   verdictStopped,
   type TraceRow,
-} from "../../../shared/trace-tree";
-import { Fold, Subagents } from "./ToolRow";
+} from "../../../../shared/trace-tree";
+import { Fold, Subagents } from "../ToolRow";
 import { ReadCode } from "./ReadCode";
 import { WrittenCode } from "./WrittenCode";
 

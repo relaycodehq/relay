@@ -2,7 +2,7 @@
 // lines it changed, highlighted in the file's own language.
 import type { ThemedToken } from "@pierre/diffs";
 import { diffArrays } from "diff";
-import type { WrittenCode as Written } from "../../../shared/projects";
+import type { WrittenCode as Written } from "../../../../shared/projects";
 import { Line, useLines, type Mark } from "./CodeLines";
 
 /** A text without the newline that ends its last line, which starts no line of its own. */

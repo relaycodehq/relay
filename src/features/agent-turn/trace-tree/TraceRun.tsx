@@ -2,8 +2,8 @@
 // (shared/trace-tree): single rows, pairs said as one sentence, and branches
 // that fold open into a tree.
 import { useContext, useRef } from "react";
-import type { AgentActivity } from "../../../shared/projects";
-import { baseName } from "../../../shared/shell-words";
+import type { AgentActivity } from "../../../../shared/projects";
+import { baseName } from "../../../../shared/shell-words";
 import {
   actionVerb,
   branchOf,
@@ -12,9 +12,9 @@ import {
   type BranchKind,
   type TracePiece,
   type TraceRow,
-} from "../../../shared/trace-tree";
+} from "../../../../shared/trace-tree";
 import { ActionRow, actionIcons, PairRow } from "./ActionRow";
-import { Fold, Subagents, ToolRow } from "./ToolRow";
+import { Fold, Subagents, ToolRow } from "../ToolRow";
 import "./trace-tree.css";
 
 /** Tools, agents, questions and pictures keep the row that knows them; the rest say what they did. */

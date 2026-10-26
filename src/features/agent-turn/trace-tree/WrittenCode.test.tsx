@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import type { WrittenCode as Written } from "../../../shared/projects";
+import type { WrittenCode as Written } from "../../../../shared/projects";
 import { WrittenCode } from "./WrittenCode";
 
 const highlighted: string[] = [];

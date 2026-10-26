@@ -2,7 +2,7 @@
 // own lines, highlighted, beside their line numbers when the output says them.
 // No heading: the row above already names the file and the lines.
 import type { CSSProperties } from "react";
-import type { ReadCode as Read } from "../../../shared/read-code";
+import type { ReadCode as Read } from "../../../../shared/read-code";
 import { Line, useLines } from "./CodeLines";
 
 export function ReadCode({ read }: { read: Read }) {

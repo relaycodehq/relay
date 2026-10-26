@@ -25,7 +25,7 @@ import { isQuestionCall } from "../../../shared/asked-questions";
 import { StartedHeading, StartedThreadMarks } from "./StartedThreads";
 import { WorkingAgentsHeading } from "./TurnAgents";
 import { iconOf, Subagents, TurnImages, type ReadImages } from "./ToolRow";
-import { Run } from "./Run";
+import { Run } from "./trace-tree/Run";
 import { useFoldAway } from "./useFoldAway";
 import "./agent-trace.css";
 import "./agent-turn.css";

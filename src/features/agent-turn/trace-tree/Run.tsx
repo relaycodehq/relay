@@ -8,9 +8,9 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { AgentActivity } from "../../../shared/projects";
-import { rowsOf } from "../../../shared/trace-tree";
-import { foldAway, foldMs, growIn, moves } from "../../lib/fold-motion";
+import type { AgentActivity } from "../../../../shared/projects";
+import { rowsOf } from "../../../../shared/trace-tree";
+import { foldAway, foldMs, growIn, moves } from "../../../lib/fold-motion";
 import { ClosedRun, Row } from "./TraceRun";
 
 /** Opens in from nothing as it mounts, when `grow`, rather than pushing the pinned thread up. */
