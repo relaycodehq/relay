@@ -29,7 +29,7 @@ import {
   sendJson,
 } from "./respond";
 import { guestBundle } from "./bundle";
-import { sharedFileText } from "./shared-files";
+import { sharedFileText, type SharedFile } from "./shared-files";
 import type { GuestSnapshot } from "./snapshot";
 import { guestVideo } from "./video";
 
@@ -78,6 +78,12 @@ export class GuestServer<L extends ServedLink> {
   private streams = new Set<ServerResponse>();
   /** What each page was served with, so its live connection sends only what changed. */
   private baselines = new Map<string, GuestBaseline>();
+  /**
+   * Files and bundles read and redacted once per snapshot, however often a
+   * link's holder asks: that work runs on the main process.
+   */
+  private texts = new WeakMap<SharedFile, Promise<string | undefined>>();
+  private bundles = new WeakMap<GuestSnapshot, Promise<string>>();
 
   constructor(private host: GuestServerHost<L>) {}
 
@@ -171,7 +177,7 @@ export class GuestServer<L extends ServedLink> {
         return sendBody(
           req,
           res,
-          JSON.stringify(await guestBundle(await this.host.snapshot(link))),
+          await this.bundle(await this.host.snapshot(link)),
           json,
         );
       default:
@@ -285,10 +291,30 @@ export class GuestServer<L extends ServedLink> {
   private async file(link: L, id: string, res: ServerResponse) {
     const file = (await this.host.snapshot(link)).files.get(id);
     if (!file) return notFound(res);
-    const text = await sharedFileText(file).catch(() => undefined);
+    const text = await this.fileText(file);
     if (text === undefined) return notFound(res);
     res.writeHead(200, { ...SECURITY_HEADERS, ...plain });
     res.end(text);
+  }
+
+  private fileText(file: SharedFile) {
+    let text = this.texts.get(file);
+    if (!text) {
+      text = sharedFileText(file).catch(() => undefined);
+      this.texts.set(file, text);
+    }
+    return text;
+  }
+
+  private bundle(snapshot: GuestSnapshot) {
+    let bundle = this.bundles.get(snapshot);
+    if (!bundle) {
+      bundle = guestBundle(snapshot).then((b) => JSON.stringify(b));
+      this.bundles.set(snapshot, bundle);
+      // A failed read is tried again by the next request.
+      bundle.catch(() => this.bundles.delete(snapshot));
+    }
+    return bundle;
   }
 
   private async detail(
