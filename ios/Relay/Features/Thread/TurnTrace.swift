@@ -30,7 +30,7 @@ struct TurnTrace: View {
             .buttonStyle(.plain)
             if open {
                 let parts = groupTrace(turn.shown)
-                let alone = parts.count(where: { if case .run = $0 { true } else { false } }) == 1
+                let oneRun = parts.count(where: { if case .run = $0 { true } else { false } }) == 1
                 // A running turn shows its newest steps and folds the rest. One row thousands of points
                 // tall makes the lazy stack guess every unmeasured row that tall, and the end it scrolls
                 // to drifts past the thread when the turn folds or a steer ends it.
@@ -41,10 +41,10 @@ struct TurnTrace: View {
                             if case .run(_, let a) = part { a } else { [] }
                         })
                         Fold(label: earlier.isEmpty ? "Earlier" : earlier) {
-                            ForEach(parts[..<cut]) { self.part($0, last: parts.last?.id, alone: alone, turn: turn) }
+                            ForEach(parts[..<cut]) { self.part($0, last: parts.last?.id, only: oneRun, turn: turn) }
                         }
                     }
-                    ForEach(parts[cut...]) { self.part($0, last: parts.last?.id, alone: alone, turn: turn) }
+                    ForEach(parts[cut...]) { self.part($0, last: parts.last?.id, only: oneRun, turn: turn) }
                     if turn.thinking { ThinkingLine(seed: message.id) }
                 }
                 .padding(.leading, 4)
@@ -54,36 +54,21 @@ struct TurnTrace: View {
         .onChange(of: open, initial: true) { onOpen(open) }
     }
 
-    @ViewBuilder private func part(_ part: TracePart, last: String?, alone: Bool, turn: Turn) -> some View {
+    @ViewBuilder private func part(_ part: TracePart, last: String?, only: Bool, turn: Turn) -> some View {
         switch part {
         case .commentary(_, let text):
             MarkdownView(text, small: true)
         case .run(let id, let activity):
-            run(activity, batch: turn.live && id == last && !isQuestionCall(activity[0]), alone: alone, turn: turn)
+            run(activity, live: turn.live && id == last && !isQuestionCall(activity[0]), only: only, turn: turn)
         }
     }
 
-    @ViewBuilder private func run(_ activity: [AgentActivity], batch: Bool, alone: Bool, turn: Turn) -> some View {
-        if batch {
-            let (head, earlier) = batchHead(activity)
-            if !earlier.isEmpty {
-                Fold(label: summarizeActivity(earlier)) {
-                    if saysWhatItDid(earlier) {
-                        CallPieces(calls: earlier, context: context(turn))
-                    } else {
-                        ForEach(earlier) { row($0, turn) }
-                    }
-                }
-            }
-            if saysWhatItDid([head]) {
-                // The call working now, in its own words: "Searching `x` in src".
-                ForEach(rowsOf([head])) { ActionRow(rows: [$0], context: context(turn)) }
-            } else {
-                row(head, turn)
-            }
-        } else if saysWhatItDid(activity) {
-            CallPieces(calls: activity, context: context(turn))
-        } else if activity.count == 1 || (alone && !turn.live) {
+    /// The run the agent works on shows its calls one by one; the rest are grouped by what they did.
+    @ViewBuilder private func run(_ activity: [AgentActivity], live: Bool, only: Bool, turn: Turn) -> some View {
+        if saysWhatItDid(activity) {
+            CallRun(calls: activity, live: live, only: only, context: context(turn))
+        } else if live || activity.count == 1 || only {
+            // An older desktop doesn't say what its calls did: they keep a row each.
             ForEach(activity) { row($0, turn) }
         } else {
             Fold(label: summarizeActivity(activity)) {

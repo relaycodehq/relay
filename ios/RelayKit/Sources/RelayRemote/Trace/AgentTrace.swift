@@ -89,12 +89,6 @@ public func turnHeading(_ message: ChatMessage, expanded: Bool, turn: Turn? = ni
     return message.body.isEmpty ? .thinking : .writing
 }
 
-/// The batch still being worked on shows one row: its running call, else its latest.
-public func batchHead(_ activity: [AgentActivity]) -> (head: AgentActivity, earlier: [AgentActivity]) {
-    let head = activity.last { $0.status == "running" } ?? activity[activity.count - 1]
-    return (head, activity.filter { $0.id != head.id })
-}
-
 /// The line under a stopped turn, which claims output was kept only when there is some.
 public func stoppedNote(_ message: ChatMessage) -> String {
     !message.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !traceOf(message).isEmpty
