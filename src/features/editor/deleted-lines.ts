@@ -94,9 +94,10 @@ function lineSpans(text: string): Span[] {
 
 /** The editor's highlight class of every character of `text`, read in the editor's language. */
 function syntaxClasses(state: EditorState, text: string) {
-  const classes: string[] = [];
   const parser = state.facet(language);
-  if (!parser || text.length > MAX_HIGHLIGHTED) return classes;
+  if (!parser || text.length > MAX_HIGHLIGHTED) return [];
+  // Sized up front: fill never grows an array.
+  const classes = new Array<string>(text.length).fill("");
   highlightTree(
     parser.parser.parse(text),
     { style: (tags) => highlightingFor(state, tags) },
