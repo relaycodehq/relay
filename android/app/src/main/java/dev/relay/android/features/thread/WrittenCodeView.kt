@@ -2,7 +2,7 @@ package dev.relay.android.features.thread
 
 // The code a call wrote, as its row shows it opened: a new file numbered, an
 // edit as the lines it changed tinted among the ones it kept, a patch by its
-// marks. Highlighted like an answer's code blocks.
+// marks. Highlighted like an answer's code blocks, and so is what a read printed.
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +36,7 @@ import dev.relay.android.features.markdown.highlight
 import dev.relay.android.features.markdown.languageFor
 import dev.relay.android.features.markdown.styledLine
 import dev.relay.android.features.thread.logic.LineMark
+import dev.relay.android.features.thread.logic.ReadCode
 import dev.relay.android.features.thread.logic.WrittenLine
 import dev.relay.android.features.thread.logic.WrittenView
 import dev.relay.android.features.thread.logic.keptNothing
@@ -107,9 +108,38 @@ internal fun WrittenFile(code: WrittenCode, named: Boolean = false) {
                 val gutter = if (view.diff) 18.dp else (view.lines.size.toString().length * 8 + 12).dp
                 for (line in view.lines) {
                     val source = if (line.before) before else after
-                    CodeLine(line, source.getOrNull(line.index), gutter, view.diff)
+                    CodeLine(line, source.getOrNull(line.index), gutter, gutterText(line, view.diff))
                 }
                 if (code.cut) Text("…cut", Modifier.padding(start = gutter, top = 4.dp), style = RelayTheme.type.xs, color = c.faint)
+            }
+        }
+    }
+}
+
+/**
+ * What a read printed, boxed like a written file but with no header: the row
+ * above already names the file and the lines. Numbered from [ReadCode.first]
+ * when the output says where it started; otherwise the gutter stays empty.
+ */
+@Composable
+internal fun ReadFile(read: ReadCode) {
+    val c = RelayTheme.colors
+    val language = remember(read.file) { languageFor(read.file) }
+    val code = remember(read, c.isDark) { highlighted(read.code, language, c) }
+    val lines = remember(read) { read.code.split("\n").mapIndexed { i, text -> WrittenLine(LineMark.Same, text, i) } }
+    // Room for the widest number, so lines past 999 don't push their code over.
+    val last = (read.first ?: 0L) + lines.size
+    val gutter = (last.toString().length * 8 + 12).dp
+    Column(
+        Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp).fillMaxWidth()
+            .clip(Radii.smShape).background(c.code).ring(c.border, Radii.smShape),
+    ) {
+        SelectionContainer(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.padding(vertical = 6.dp)) {
+                for (line in lines) {
+                    val number = read.first?.let { "${it + line.index}" }.orEmpty()
+                    CodeLine(line, code.getOrNull(line.index), gutter, number)
+                }
             }
         }
     }
@@ -134,9 +164,9 @@ private fun WrittenHeader(code: WrittenCode, view: WrittenView, named: Boolean, 
     }
 }
 
-/** One line: its number, or its +/− mark, then the code, tinted when it changed. */
+/** One line: [number] (or its +/− mark) in the gutter, then the code, tinted when it changed. */
 @Composable
-private fun CodeLine(line: WrittenLine, code: AnnotatedString?, gutter: Dp, diff: Boolean) {
+private fun CodeLine(line: WrittenLine, code: AnnotatedString?, gutter: Dp, number: String) {
     val c = RelayTheme.colors
     val tint = when (line.mark) {
         LineMark.Added -> c.diffAddition
@@ -151,7 +181,7 @@ private fun CodeLine(line: WrittenLine, code: AnnotatedString?, gutter: Dp, diff
     Row(Modifier.fillMaxWidth().background(tint)) {
         DisableSelection {
             Text(
-                gutterText(line, diff),
+                number,
                 Modifier.width(gutter).padding(end = 6.dp),
                 style = mono,
                 color = gutterColor(line.mark, c),

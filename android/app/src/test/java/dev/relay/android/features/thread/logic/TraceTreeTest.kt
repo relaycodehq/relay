@@ -3,12 +3,14 @@ package dev.relay.android.features.thread.logic
 import dev.relay.android.remote.model.AgentActivity
 import dev.relay.android.remote.model.CallAction
 import dev.relay.android.remote.model.RemoteJson
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -52,6 +54,19 @@ class TraceTreeTest {
     fun shortensPatternsAndPlaces() {
         for ((pattern, short) in pairs("shortPatterns")) assertEquals(pattern, short, shortPattern(pattern))
         for ((where, short) in pairs("shortWheres")) assertEquals(where, short, shortWhere(where))
+    }
+
+    @Test
+    fun takesReadsBackToTheFilesLinesAsTheDesktopDoes() {
+        val reads = fixture.getValue("readCodes").jsonArray.map { it.jsonObject }
+        check(reads.isNotEmpty())
+        for (entry in reads) {
+            val call = RemoteJson.decodeFromJsonElement<AgentActivity>(entry.getValue("call"))
+            val want = entry["read"]?.takeUnless { it is JsonNull }?.jsonObject?.let {
+                ReadCode(it.string("file"), it.string("code"), it["first"]?.jsonPrimitive?.long)
+            }
+            assertEquals(call.label, want, readCode(call))
+        }
     }
 
     private fun assertPiece(at: String, want: JsonObject, got: TracePiece) {

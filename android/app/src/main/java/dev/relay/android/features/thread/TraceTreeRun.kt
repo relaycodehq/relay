@@ -3,7 +3,7 @@ package dev.relay.android.features.thread
 // A finished run of tool calls grouped by what they did (logic/TraceTree.kt):
 // rows and pairs always show, three or more of a kind fold behind a branch
 // header into a tree hooked to it by elbow lines. A row opens to the code its
-// calls wrote, or else to what they ran and printed.
+// calls wrote or read, or else to what they ran and printed.
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -35,9 +35,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.thread.logic.BranchKind
+import dev.relay.android.features.thread.logic.ReadCode
 import dev.relay.android.features.thread.logic.TracePiece
 import dev.relay.android.features.thread.logic.TraceRow
 import dev.relay.android.features.thread.logic.actionVerb
+import dev.relay.android.features.thread.logic.readCode
 import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.rowRunning
 import dev.relay.android.features.thread.logic.traceTree
@@ -139,14 +141,25 @@ private fun opensTo(a: AgentActivity) = a.wroteCode == true || a.detail != null 
 /**
  * The code a call wrote, the command it ran, and what it printed: not when
  * that only confirms the code shown, but always when the call failed, to say why.
+ * A read of one file opens as that file's lines instead.
  */
 @Composable
 private fun CallInside(a: AgentActivity) {
+    val read = readOf(a)
+    if (read != null) return ReadFile(read)
     val wroteCode = a.wroteCode == true
     val showsOutput = a.detail != null && (!wroteCode || a.status == "failed")
     if (wroteCode) WrittenCodeOf(a, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
     if (a.kind == "command") CommandLine(a.label)
     if (showsOutput) Detail(a)
+}
+
+/** The file a call read, from the whole of its output once the desktop has sent it. */
+@Composable
+private fun readOf(a: AgentActivity): ReadCode? {
+    if (readCode(a) == null) return null
+    val detail = wholeDetail(a)
+    return remember(a, detail) { readCode(a.copy(detail = detail)) }
 }
 
 /** What ran, as typed: the row says what it did, this says how. */
