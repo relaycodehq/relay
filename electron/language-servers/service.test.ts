@@ -516,7 +516,8 @@ describe("usages in a folder of several TypeScript projects", () => {
     await t.service.lspReferences(WHERE, "shared/a.ts", 0, 0);
     await t.service.lspReferences(WHERE, "shared/a.ts", 0, 0);
     const files = ["shared/a.ts", "src/app.ts", "electron/main.ts"].map((f) => pathsFor().toUri(root, f));
-    expect(await uris(t, "textDocument/didOpen")).toEqual(files);
+    // The projects' files open side by side, in whichever order they're read.
+    expect((await uris(t, "textDocument/didOpen")).sort()).toEqual([...files].sort());
     const loads = t.statuses.filter((s) => s.message?.startsWith("Loading projects"));
     expect(loads.map((s) => [s.state, s.message, s.progress])).toEqual([
       ["indexing", "Loading projects 1 of 2", 0],
