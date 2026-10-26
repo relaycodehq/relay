@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.relay.android.lib.navigation.NEW_THREAD_MORPH
 import dev.relay.android.ui.Icon
+import dev.relay.android.ui.KeepToastsAbove
 import dev.relay.android.ui.sharedButton
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
@@ -81,6 +82,7 @@ private val grow = spring<IntSize>(dampingRatio = 0.72f, stiffness = Spring.Stif
  */
 @Composable
 internal fun HomeDock(tab: HomeTab, onTab: (HomeTab) -> Unit, onNew: () -> Unit, modifier: Modifier = Modifier) {
+    KeepToastsAbove(DOCK_HEIGHT + DOCK_GAP)
     val measurer = rememberTextMeasurer()
     val style = labelStyle()
     val density = LocalDensity.current
