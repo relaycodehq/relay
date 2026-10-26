@@ -18,6 +18,7 @@ import { startCompletion } from "@codemirror/autocomplete";
 import { nextDiagnostic, previousDiagnostic } from "@codemirror/lint";
 import { EditorSelection, Facet, Prec } from "@codemirror/state";
 import { EditorView, keymap, type Command, type KeyBinding } from "@codemirror/view";
+import { matches } from "../../lib/shortcuts";
 import { stepChange } from "./change-gutter";
 import { openFind, openReplace } from "./find-bar/find-bar";
 import {
@@ -114,9 +115,6 @@ const phpstormKeys: KeyBinding[] = [
   { key: "Mod-Shift--", run: foldAll },
   { key: "Ctrl-Space", run: startCompletion },
   { key: "Mod-b", run: atCaret("definition") },
-  { key: "F12", run: atCaret("definition") },
-  { key: "Alt-F7", run: atCaret("references") },
-  { key: "Shift-F12", run: atCaret("references") },
   { key: "Shift-F6", run: atCaret("rename") },
   { key: "Ctrl-Alt-Shift-ArrowDown", run: stepThrough(true) },
   { key: "Ctrl-Alt-Shift-ArrowUp", run: stepThrough(false) },
@@ -134,7 +132,19 @@ const phpstormKeys: KeyBinding[] = [
   { key: "Mod-Alt-ArrowRight", run: atCaret("forward") },
 ];
 
-export const phpstormKeymap = Prec.high(keymap.of(phpstormKeys));
+/** Go to Definition and Find Usages on the keys set in Settings → Shortcuts. */
+const settingsKeys = EditorView.domEventHandlers({
+  keydown(event, view) {
+    const kind = (["definition", "references"] as const).find((id) =>
+      matches(id, event),
+    );
+    if (!kind || !atCaret(kind)(view)) return false;
+    event.preventDefault();
+    return true;
+  },
+});
+
+export const phpstormKeymap = [Prec.high(keymap.of(phpstormKeys)), settingsKeys];
 
 /** ⌘-click goes to the definition; ⌥⇧-click adds a caret, as in PhpStorm. */
 export const phpstormMouse = [
