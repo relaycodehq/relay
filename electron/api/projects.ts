@@ -4,8 +4,7 @@ import {
   importSelectionSchema,
 } from "../../shared/project-import";
 import { runImportOfferSchema } from "../../shared/import-offer";
-import { app, dialog, nativeImage, shell } from "electron";
-import { lstat, realpath } from "node:fs/promises";
+import { app, dialog, nativeImage } from "electron";
 import { join } from "node:path";
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
@@ -20,7 +19,6 @@ import {
 } from "../../shared/projects";
 import {
   checkNewLinks,
-  expandHome,
   folderPreview,
   inspectFolder,
   linkSuggestions,
@@ -30,29 +28,10 @@ import { folderInputSchema, newProjectSchema } from "../../shared/projects";
 import { githubRepos } from "../project-add";
 import { createPullRequestSchema } from "../../shared/pull-request-create";
 import { isSourceControlOn } from "../../shared/source-control";
-import {
-  digestSchema,
-  idSchema,
-  shaSchema,
-  textSchema,
-} from "../../shared/validation";
-import { workingPathSchema } from "../../shared/working-tree";
+import { idSchema } from "../../shared/validation";
 import { workspaceIdSchema } from "../../shared/workspaces";
-import { videoMime } from "../../shared/project-files";
-import { mediaUrl } from "../media";
-import { saveKept } from "../local-history";
 import { agentRuntime } from "../agents";
-import {
-  createEntry,
-  entryPath,
-  fileInfo,
-  listDirectory,
-  readImage,
-  renameEntry,
-} from "../projects/project-files";
 import { projectIcon } from "../projects/project-icon";
-import { openWith, openWithApps } from "../open-with";
-import { openWithAppIdSchema } from "../../shared/open-with";
 import { branchPulls } from "../pull-requests/pull-request-create";
 import {
   computerIdSchema,
@@ -63,11 +42,7 @@ import {
   type Handlers,
 } from "./context";
 
-/** The project list and its folders, files, agents, and pull requests. */
-const folderPathSchema = workingPathSchema.or(z.literal(""));
-/** Where a file call works: a workspace, or the folder of a file outside every project. */
-const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
-
+/** The project list and its folders, agents, and pull requests. */
 export function projectHandlers(ctx: ApiContext) {
   const {
     projects,
@@ -87,12 +62,6 @@ export function projectHandlers(ctx: ApiContext) {
       );
     const client = await clientFor(known);
     return { client, repo: await projects.linked(projectId, client) };
-  }
-  /** A file outside the project, one an answer names or in a linked folder, opens from its folder, like a plain one. */
-  async function fileRoot(where: string) {
-    return workspaceIdSchema.safeParse(where).success
-      ? place(where)
-      : { root: await realpath(expandHome(where)), plain: true };
   }
   async function pullRequestPlace(where: string) {
     // A worktree thread's PR opens from its own branch.
@@ -331,97 +300,6 @@ export function projectHandlers(ctx: ApiContext) {
       [idSchema, agentProviderSchema],
       async (id, provider) =>
         agentRuntime(provider).defaults(await projects.root(id)),
-    ),
-    projectFiles: takes([workspaceIdSchema], async (where) =>
-      projects.files(await place(where)),
-    ),
-    projectDirectory: takes(
-      [fileRootSchema, folderPathSchema],
-      async (where, dir) => {
-        const { root, plain } = await fileRoot(where);
-        return listDirectory(root, dir, plain);
-      },
-    ),
-    projectFileInfo: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) => fileInfo((await fileRoot(where)).root, path),
-    ),
-    projectImage: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) => readImage((await fileRoot(where)).root, path),
-    ),
-    projectVideo: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) => {
-        const { root } = await fileRoot(where);
-        const full = await entryPath(root, path);
-        if (!videoMime(full)) throw new Error("That is not a video.");
-        return mediaUrl(full, root);
-      },
-    ),
-    revealProjectPath: takes(
-      [fileRootSchema, folderPathSchema],
-      async (where, path) => {
-        const full = await entryPath((await fileRoot(where)).root, path);
-        // A folder opens in Finder to show what's inside; a file is selected in its folder.
-        if (await lstat(full).then((s) => s.isDirectory())) {
-          await openPath(full);
-        } else shell.showItemInFolder(full);
-      },
-    ),
-    projectAbsolutePath: takes(
-      [workspaceIdSchema, workingPathSchema],
-      async (where, path) => join((await place(where)).root, path),
-    ),
-    openProjectPath: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) =>
-        openPath(entryPath((await fileRoot(where)).root, path)),
-    ),
-    openWithApps: () => openWithApps(),
-    openProjectPathWith: takes(
-      [fileRootSchema, workingPathSchema, openWithAppIdSchema],
-      async (where, path, appId) =>
-        openWith(appId, await entryPath((await fileRoot(where)).root, path)),
-    ),
-    createProjectEntry: takes(
-      [fileRootSchema, workingPathSchema, z.enum(["file", "dir"])],
-      async (where, path, kind) =>
-        createEntry((await fileRoot(where)).root, path, kind),
-    ),
-    renameProjectEntry: takes(
-      [fileRootSchema, workingPathSchema, workingPathSchema],
-      async (where, from, to) =>
-        renameEntry((await fileRoot(where)).root, from, to),
-    ),
-    trashProjectEntry: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) =>
-        shell.trashItem(await entryPath((await fileRoot(where)).root, path)),
-    ),
-    projectFile: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) => projects.file(await fileRoot(where), path),
-    ),
-    projectFilePreview: takes(
-      [fileRootSchema, workingPathSchema],
-      async (where, path) => projects.filePreview(await fileRoot(where), path),
-    ),
-    saveProjectFile: takes(
-      [
-        fileRootSchema,
-        workingPathSchema,
-        // A plain folder has no HEAD.
-        shaSchema.or(z.literal("")),
-        digestSchema,
-        textSchema,
-      ],
-      async (where, path, head, version, contents) => {
-        const place = await fileRoot(where);
-        return saveKept(place.root, path, contents, () =>
-          projects.save(place, path, head, version, contents),
-        );
-      },
     ),
     projectCiStatus: takes(
       [idSchema, idSchema.nullish()],

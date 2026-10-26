@@ -22,6 +22,8 @@ import { elsewhereHandlers } from "./elsewhere";
 import { languageServerHandlers } from "./language-servers";
 import { lineHistoryHandlers } from "./line-history";
 import { localHistoryHandlers } from "./local-history";
+import { projectEntryHandlers } from "./project-entries";
+import { projectFileHandlers } from "./project-files";
 import { projectHandlers } from "./projects";
 import { projectSearchHandlers } from "./project-search";
 import { readAloudHandlers } from "./read-aloud";
@@ -58,6 +60,8 @@ export function createDispatch(
     checkHandlers(ctx),
     lineHistoryHandlers(ctx),
     projectHandlers(ctx),
+    projectFileHandlers(ctx),
+    projectEntryHandlers(ctx),
     languageServerHandlers(ctx),
     localHistoryHandlers(ctx),
     projectSearchHandlers(ctx),
