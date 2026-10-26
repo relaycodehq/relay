@@ -24,6 +24,16 @@ describe("guestHtml", () => {
     expect(html).not.toContain("javascript:");
   });
 
+  it("follows reference-style links to their definitions", () => {
+    const html = guestHtml(
+      "Get the [report][r] or ![chart][c].\n\n[r]: https://example.com/r\n[c]: https://example.com/c.png",
+      none,
+    );
+    expect(html).toContain('<a href="https://example.com/r"');
+    expect(html).toContain('<a href="https://example.com/c.png"');
+    expect(html).toContain(">chart</a>");
+  });
+
   it("doesn't load remote pictures, so opening the page calls no other server", () => {
     const html = guestHtml("![tracker](https://evil.example/pixel.png)", none);
     expect(html).not.toContain("<img");

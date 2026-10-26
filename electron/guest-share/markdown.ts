@@ -23,14 +23,27 @@ export function guestHtml(markdown: string, links: GuestLinks) {
     extensions: [gfm()],
     mdastExtensions: [gfmFromMarkdown()],
   });
-  return children(tree, links);
+  return children(tree, { ...links, urls: definitions(tree) });
 }
 
-function children(node: Parents, links: GuestLinks): string {
+/** What the guest page reads markdown with: the links, and where `[text][ref]` points. */
+interface Context extends GuestLinks {
+  urls: Map<string, string>;
+}
+
+/** The URLs `[ref]: https://…` lines define, by the name references use. */
+function definitions(node: Nodes, urls = new Map<string, string>()) {
+  if (node.type === "definition") urls.set(node.identifier, node.url);
+  if ("children" in node)
+    for (const child of node.children) definitions(child, urls);
+  return urls;
+}
+
+function children(node: Parents, links: Context): string {
   return node.children.map((child) => html(child, links)).join("");
 }
 
-function html(node: Nodes, links: GuestLinks): string {
+function html(node: Nodes, links: Context): string {
   switch (node.type) {
     case "root":
       return children(node, links);
@@ -75,6 +88,17 @@ function html(node: Nodes, links: GuestLinks): string {
       return link(node.url, children(node, links), links);
     case "image":
       return image(node.url, node.alt ?? "", links);
+    case "linkReference": {
+      const url = links.urls.get(node.identifier);
+      const label = children(node, links);
+      return url ? link(url, label, links) : label;
+    }
+    case "imageReference": {
+      const url = links.urls.get(node.identifier);
+      return url ? image(url, node.alt ?? "", links) : escape(node.alt ?? "");
+    }
+    case "definition":
+      return "";
     case "table":
       return `<div class="table"><table>${node.children
         .map((row, i) => tableRow(row, i === 0 ? "th" : "td", links))
@@ -90,13 +114,13 @@ function html(node: Nodes, links: GuestLinks): string {
 }
 
 /** A node this page has no tag for: its text, or its children's. */
-function anything(node: Nodes, links: GuestLinks) {
+function anything(node: Nodes, links: Context) {
   if ("children" in node) return children(node, links);
   if ("value" in node) return escape(String(node.value));
   return "";
 }
 
-function tableRow(row: TableRow, cell: "th" | "td", links: GuestLinks) {
+function tableRow(row: TableRow, cell: "th" | "td", links: Context) {
   return `<tr>${row.children
     .map((c) => `<${cell}>${children(c, links)}</${cell}>`)
     .join("")}</tr>`;
