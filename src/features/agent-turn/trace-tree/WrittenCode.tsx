@@ -111,11 +111,16 @@ function keptNothing(file: Written) {
   }
 }
 
+const lineCount = (text: string) => {
+  const count = linesOf(text).length;
+  return `${count} ${count === 1 ? "line" : "lines"}`;
+};
+
 /** "+17 −2" for an edit, "24 lines" for a file written whole. */
 function size(file: Written) {
   if (keptNothing(file)) return file.secret ? "not kept, may hold secrets" : "too long to keep";
-  if (file.kind === "whole") return `${linesOf(file.content).length} lines`;
-  if (file.kind === "patch" && !hunkLines(file.diff)) return `${linesOf(file.diff).length} lines`;
+  if (file.kind === "whole") return lineCount(file.content);
+  if (file.kind === "patch" && !hunkLines(file.diff)) return lineCount(file.diff);
   const changed =
     file.kind === "swap"
       ? file.edits.flatMap((e) => diffArrays(linesOf(e.old), linesOf(e.new)))

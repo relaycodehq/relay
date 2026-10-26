@@ -29,6 +29,7 @@ function render(file: Written) {
 
 it("doesn't count or draw the newline that ends a file as a line", () => {
   expect(render({ kind: "whole", path: "a.ts", content: "a\nb\n" })).toMatchObject({ size: "2 lines", lines: 2 });
+  expect(render({ kind: "whole", path: "a.ts", content: "a\n" })).toMatchObject({ size: "1 line", lines: 1 });
   expect(render({ kind: "patch", path: "a.ts", diff: "@@ -1 +1 @@\n-a\n+b\n" })).toMatchObject({ size: "+1 −1", lines: 2 });
   expect(render({ kind: "swap", path: "a.ts", edits: [{ old: "a\n", new: "b\n" }] })).toMatchObject({ size: "+1 −1", lines: 2 });
 });
