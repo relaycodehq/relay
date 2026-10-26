@@ -69,8 +69,10 @@ async function withVersions(root: string, found: FoundFile[]) {
   return out.filter((f): f is ProjectSearchFile => !!f);
 }
 
-const byPath = (a: { path: string }, b: { path: string }) =>
-  a.path < b.path ? -1 : a.path > b.path ? 1 : 0;
+function byPath(a: { path: string }, b: { path: string }) {
+  if (a.path === b.path) return 0;
+  return a.path < b.path ? -1 : 1;
+}
 
 /** Searches with ripgrep, or returns undefined when it can't: Rust's regex has no lookaround (JavaScript's does), or the install is gone. */
 async function ripgrepResult(run: {
