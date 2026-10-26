@@ -3,6 +3,11 @@ import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { popupOpen, useShortcut } from "../lib/shortcuts";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
 import { readText, writeText } from "../lib/persisted-store";
+import {
+  chosenHidden,
+  sidebarChoiceAfter,
+  type SidebarChoice,
+} from "./sidebar-choice";
 
 /** How close to the window's left edge the pointer peeks a hidden sidebar. */
 const EDGE_PEEK_WIDTH = 12;
@@ -11,11 +16,11 @@ const BESIDE_PANE_KEY = "relay-projects-hidden-beside-pane";
 export type SidebarVisibility = ReturnType<typeof useSidebarVisibility>;
 
 /**
- * Whether the projects sidebar shows, and its peek while hidden. It
- * remembers two states: beside the chat alone, and beside a side pane (a
- * PR's Review, say). Until toggled there, the latter follows the "make room"
- * setting. While a pane is zoomed it is hidden whatever was chosen, and
- * toggling it ends the zoom instead of changing the choice.
+ * Whether the projects sidebar shows, and its peek while hidden. The user's
+ * hide or show holds everywhere (see sidebarChoiceAfter); beside a side pane
+ * the "make room" setting decides until it's chosen there. While a pane is
+ * zoomed it is hidden whatever was chosen, and toggling it ends the zoom
+ * instead of changing the choice.
  *
  * `need` is the room the panes beside it need. It narrows to fit them, and
  * when even its narrowest won't fit it steps aside until the window grows
@@ -46,22 +51,20 @@ export function useSidebarVisibility(
       style.setProperty("--sidebar-room", `${room - need}px`);
     else style.removeProperty("--sidebar-room");
   }, [room, need, crowded]);
-  const [hiddenAlone, setHiddenAlone] = useState(
-    () => readText("relay-projects-hidden") === "true",
-  );
-  const [hiddenBesidePane, setHiddenBesidePane] = useState(() => {
-    const saved = readText(BESIDE_PANE_KEY);
-    return saved ? saved === "true" : null;
+  const [choice, setChoice] = useState<SidebarChoice>(() => {
+    const besidePane = readText(BESIDE_PANE_KEY);
+    return {
+      alone: readText("relay-projects-hidden") === "true",
+      besidePane: besidePane ? besidePane === "true" : null,
+    };
   });
   // Asked back while crowded: it stays, and a pane yields instead.
   const [kept, setKept] = useState(false);
   useEffect(() => {
     if (!crowded) setKept(false);
   }, [crowded]);
-  const chosenHidden = besidePane
-    ? (hiddenBesidePane ?? (autoHide || hiddenAlone))
-    : hiddenAlone;
-  const hidden = zoom.on || (crowded && !kept) || chosenHidden;
+  const hidden =
+    zoom.on || (crowded && !kept) || chosenHidden(choice, besidePane, autoHide);
   // While the sidebar is hidden, hovering its toggle peeks it as an overlay.
   const [peek, setPeek] = useState(false);
   const peekTimer = useRef<number | undefined>(undefined);
@@ -80,27 +83,26 @@ export function useSidebarVisibility(
     window.clearTimeout(peekTimer.current);
     setPeek(false);
     if (zoom.on) return zoom.exit();
-    const choose = besidePane ? setHiddenBesidePane : setHiddenAlone;
+    const choose = (hide: boolean) =>
+      setChoice(sidebarChoiceAfter(hide, besidePane));
     if (!crowded) return choose(!hidden);
     setKept(hidden);
     if (hidden) choose(false);
   };
   useShortcut("sidebar", true, toggle);
   useEffect(() => {
-    writeText("relay-projects-hidden", String(hiddenAlone));
-  }, [hiddenAlone]);
-  useEffect(() => {
+    writeText("relay-projects-hidden", String(choice.alone));
     writeText(
       BESIDE_PANE_KEY,
-      hiddenBesidePane === null ? null : String(hiddenBesidePane),
+      choice.besidePane === null ? null : String(choice.besidePane),
     );
-  }, [hiddenBesidePane]);
+  }, [choice]);
   // Flipping the setting is a fresh answer for side panes.
   const autoHideWas = useRef(autoHide);
   useEffect(() => {
     if (autoHideWas.current === autoHide) return;
     autoHideWas.current = autoHide;
-    setHiddenBesidePane(null);
+    setChoice((choice) => ({ ...choice, besidePane: null }));
   }, [autoHide]);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
   // Resting the pointer along the window's left edge peeks it too. It's
