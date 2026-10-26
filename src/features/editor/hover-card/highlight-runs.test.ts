@@ -10,6 +10,7 @@ const style = HighlightStyle.define([
   { tag: t.function(t.definition(t.variableName)), class: "declaration" },
   { tag: t.function(t.definition(t.propertyName)), class: "declaration" },
 ]);
+
 // Relay's TypeScript, which tags a class method's name as a declaration.
 const typescript = (await loadLanguage("x.ts"))!;
 const state = EditorState.create({ extensions: [typescript, syntaxHighlighting(style)] });

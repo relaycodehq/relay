@@ -57,6 +57,7 @@ export class FileDocument {
   state: EditorState | undefined;
   /** The file as last read: the committed text, HEAD and branch with it. */
   file: LocalFile | undefined;
+
   status: DocumentStatus = {
     loading: true,
     needsFolder: false,
@@ -65,6 +66,7 @@ export class FileDocument {
     saved: false,
     changedOnDisk: false,
   };
+
   /** Where the view that last showed it was scrolled to. */
   scroll: { top: number; left: number } | undefined;
   /** Where to put the caret (1-based) once a view shows the document. */

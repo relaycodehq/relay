@@ -5,14 +5,17 @@ const mocks = vi.hoisted(() => ({
   collect: vi.fn(() => [{ path: "a.ts", text: "edited\n" }]),
   discard: vi.fn(),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: { openEditorWindow: mocks.open },
 }));
+
 vi.mock("./unsaved-buffers", () => ({
   adoptBuffers: vi.fn(),
   collectUnsaved: mocks.collect,
   discardWorkspace: mocks.discard,
 }));
+
 import { isEditorElsewhere, popOutEditor } from "./editor-windows";
 
 const where = "w";

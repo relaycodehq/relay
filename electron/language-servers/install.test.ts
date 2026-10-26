@@ -21,9 +21,11 @@ import {
 import { servers } from "./registry";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-lsp-install-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 const sha = (data: Uint8Array) =>

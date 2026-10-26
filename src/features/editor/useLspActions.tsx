@@ -11,6 +11,7 @@ import { useLspRename } from "./useLspRename";
 
 const DEFINITIONS = { title: "Definitions", empty: "No definition found." };
 const USAGES = { title: "Usages", empty: "No usages found." };
+
 const STRUCTURE = {
   title: "File structure",
   empty: "The server lists no symbols here.",

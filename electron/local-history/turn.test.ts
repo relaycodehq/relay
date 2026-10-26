@@ -11,6 +11,7 @@ import { recordTurnHistory } from "./turn";
 let root: string;
 let dir: string;
 let store: LocalHistoryStore;
+
 beforeEach(async () => {
   root = await tempRepo("relay-history-turn-");
   dir = await mkdtemp(join(tmpdir(), "relay-history-store-"));
@@ -20,6 +21,7 @@ beforeEach(async () => {
   gitIn(root, "add", ".");
   gitIn(root, "commit", "-qm", "Initial");
 });
+
 afterEach(async () => {
   store.close();
   await rm(root, { recursive: true, force: true });

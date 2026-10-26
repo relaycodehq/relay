@@ -14,6 +14,7 @@ const paths = pathsFor("linux");
 const outside: string[] = [];
 const c = new Converter(root, paths, (f) => outside.push(f));
 const uri = (p: string) => paths.toUri(root, p);
+
 const r = (
   line: number,
   character: number,
@@ -337,6 +338,7 @@ describe("inactiveLinesOf", () => {
     start: { line, character },
     end: { line: endLine, character: endCharacter },
   });
+
   it("covers whole lines, leaving out a line the range only reaches the start of", () => {
     expect(inactiveLinesOf([range(7, 0, 10, 1), range(12, 0, 14, 0), "junk"])).toEqual([
       { from: 7, to: 10 },

@@ -14,6 +14,7 @@ const edited = original
   .join("\n");
 
 let view: EditorView | undefined;
+
 afterEach(() => view?.destroy());
 
 const open = () =>

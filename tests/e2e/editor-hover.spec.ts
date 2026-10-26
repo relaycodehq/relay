@@ -17,6 +17,7 @@ const docs = [
   "",
   ...Array.from({ length: 6 }, (_, i) => `- \`option${i}\`: what it changes, at some length.`),
 ].join("\n");
+
 const padding = Array.from({ length: 30 }, (_, i) => `// line ${i + 1}`).join("\n");
 
 test("a hover card opens clear of the word and stays while the pointer rests on it", async () => {

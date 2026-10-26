@@ -46,6 +46,7 @@ export function ripgrepArgs(
 }
 
 const textField = z.object({ text: z.string() });
+
 const matchEvent = z.object({
   type: z.literal("match"),
   data: z.object({

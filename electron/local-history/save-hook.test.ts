@@ -7,16 +7,19 @@ import { LocalHistoryStore } from "./store";
 
 let dir: string;
 let store: LocalHistoryStore;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-history-hook-"));
   store = new LocalHistoryStore(join(dir, "history"), { sweepDelayMs: null });
   vi.spyOn(console, "warn").mockImplementation(() => {});
 });
+
 afterEach(async () => {
   store.close();
   vi.restoreAllMocks();
   await rm(dir, { recursive: true, force: true });
 });
+
 const file = "/p/a.ts";
 /** Waits for the writes the hook leaves running behind the save. */
 const settled = () => store.list(file);

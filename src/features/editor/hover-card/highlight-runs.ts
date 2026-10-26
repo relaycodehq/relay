@@ -7,6 +7,7 @@ import type { Tree } from "@lezer/common";
 export type CodeRun = { text: string; className?: string };
 
 const SCRIPTS = ["javascript", "typescript", "jsx", "tsx"];
+
 /** Types TypeScript's parser names like any other, which JetBrains colours as keywords. */
 export const PRIMITIVES: ReadonlySet<string> = new Set([
   "string",

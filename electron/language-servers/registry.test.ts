@@ -14,6 +14,7 @@ const rustAssets = [
   "rust-analyzer-x86_64-unknown-linux-gnu.gz",
   "rust-analyzer-x86_64-unknown-linux-musl.gz",
 ];
+
 const clangdAssets = [
   "clangd-debug-symbols-windows-23.1.0.7z",
   "clangd-linux-23.1.0.zip",

@@ -13,6 +13,7 @@ export function combo(mac: boolean, spec: string): KeyCombo {
     shift: has("shift"),
   };
 }
+
 export const one =
   (spec: string) =>
   (mac: boolean): KeyCombo[] => [combo(mac, spec)];

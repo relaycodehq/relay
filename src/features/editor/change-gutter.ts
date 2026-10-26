@@ -25,6 +25,7 @@ class ChangeMark extends GutterMarker {
   constructor(readonly elementClass: string) {
     super();
   }
+
   eq(other: GutterMarker) {
     return other instanceof ChangeMark && other.elementClass === this.elementClass;
   }

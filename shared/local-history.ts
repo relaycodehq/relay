@@ -8,6 +8,7 @@ export const localHistoryReasons = [
   "before-revert",
   "label",
 ] as const;
+
 export type LocalHistoryReason = (typeof localHistoryReasons)[number];
 export const localHistoryReasonSchema = z.enum(localHistoryReasons);
 export const localHistoryLabelSchema = z.string().trim().min(1).max(200);

@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   })),
   save: vi.fn(async () => ({ version: "v2" })),
 }));
+
 vi.mock("../../lib/api", () => ({
   api: {
     projectFile: mocks.read,
@@ -20,6 +21,7 @@ vi.mock("../../lib/api", () => ({
     localHistoryRecord: vi.fn(async () => {}),
   },
 }));
+
 vi.mock("../files/OutsideFile", () => ({
   outsideSource: (path: string) => {
     const at = path.lastIndexOf("/");
@@ -29,6 +31,7 @@ vi.mock("../files/OutsideFile", () => ({
     };
   },
 }));
+
 import {
   adoptBuffers,
   collectUnsaved,
@@ -52,6 +55,7 @@ beforeEach(() => {
     }),
   );
 });
+
 afterEach(() => {
   for (const doc of documents.unsaved())
     documents.close(doc.source, doc.path, true);

@@ -31,6 +31,7 @@ class DeletedLines extends WidgetType {
   ) {
     super();
   }
+
   eq(other: DeletedLines) {
     return (
       other.text === this.text &&
@@ -38,6 +39,7 @@ class DeletedLines extends WidgetType {
       other.changed.every(([from, to], i) => from === this.changed[i][0] && to === this.changed[i][1])
     );
   }
+
   toDOM(view: EditorView) {
     return deletedLinesDOM(view.state, this.text, this.changed);
   }

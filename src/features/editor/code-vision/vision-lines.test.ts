@@ -25,6 +25,7 @@ describe("visionDeclarations", () => {
     ]);
     expect(shown.map((d) => d.name)).toEqual(["View", "Store", "constructor", "read"]);
   });
+
   it("tells a container from another symbol of its name", () => {
     const shown = visionDeclarations([
       symbol("Panel", "class", 1),
@@ -37,10 +38,12 @@ describe("visionDeclarations", () => {
 
 describe("codeAuthor", () => {
   const authors = { authors: ["ada", "bo", "cy"], lines: [0, 0, 1, 0, 2] };
+
   it("names who wrote most of the lines and counts the others", () => {
     expect(codeAuthor(authors, [1, 2, 3, 4, 5])).toBe("ada +2");
     expect(codeAuthor(authors, [3])).toBe("bo");
   });
+
   it("marks code with edits not committed yet, as PhpStorm does", () => {
     expect(codeAuthor(authors, [undefined, 3, undefined])).toBe("bo *");
     expect(codeAuthor(authors, [undefined, undefined])).toBe("new *");

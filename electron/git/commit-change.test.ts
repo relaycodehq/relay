@@ -22,6 +22,7 @@ beforeEach(async () => {
   git("commit", "-qm", "Initial");
   await writeFile(join(root, "file.txt"), text(withBoth));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const commitA = () =>

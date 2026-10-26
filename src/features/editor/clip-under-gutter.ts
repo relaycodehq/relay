@@ -7,6 +7,7 @@ const far = "-100000px";
 
 /** How far the code is clipped from its left edge: how far it's scrolled sideways under the line numbers. */
 const setClip = StateEffect.define<number>();
+
 const clipLeft = StateField.define<number>({
   create: () => 0,
   update: (left, tr) => tr.effects.reduce((at, effect) => (effect.is(setClip) ? effect.value : at), left),

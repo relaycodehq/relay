@@ -5,9 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findLinuxApps, findMacApps, findWindowsApps } from "./find-apps";
 
 let root: string;
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "relay-open-with-"));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 async function touch(...paths: string[]) {

@@ -18,6 +18,7 @@ const opens = [
   '    expect(state.active).toBe("d");',
   "  });",
 ];
+
 const preview = [
   "  it(\"lets the next file looked at take a preview's place, until it's kept\", () => {",
   "    const look = (state: ReturnType<typeof open>, path: string) =>",
@@ -38,10 +39,12 @@ const preview = [
   '    expect(look(state, "a").tabs[0].preview).toBeUndefined();',
   "  });",
 ];
+
 const closing = [
   '  it("closing the tab in front goes back to the one before it", () => {',
   '    let state = open("a", "b", "c");',
 ];
+
 // An edit above, as in the file this came from, keeps the start from being set aside.
 const before = ["import { open } from \"./tabs\";", "", ...opens, "", ...closing].join("\n");
 const after = ["import { keep, open } from \"./tabs\";", "", ...opens, "", ...preview, "", ...closing].join("\n");

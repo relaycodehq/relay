@@ -12,6 +12,7 @@ const git = (...args: string[]) =>
 beforeEach(async () => {
   root = await tempRepo("relay-exclude-");
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 it("keeps a folder out of the changes at any depth", async () => {

@@ -29,6 +29,7 @@ export const handoffChatMethods = [
   "closeWatchNote",
   "seePrediction",
 ] as const satisfies readonly ApiMethod[];
+
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];
 
 /**
@@ -79,6 +80,7 @@ export const handoffFolderMethods = [
   "localFileAuthors",
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
+
 /**
  * Calls about a project that lives on another computer (`Project.computer`),
  * its id first, that run on that computer (`projectCall`): its checkout's
@@ -97,7 +99,9 @@ export const remoteProjectMethods = [
   "stopProjectTask",
   "restartProjectTask",
 ] as const satisfies readonly ApiMethod[];
+
 export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];
+
 /**
  * Calls on a live handoff's worktree, the thread's id first, that run there
  * from `folderHandoffBridge` too; so do the files its agents changed in
@@ -110,6 +114,7 @@ export const handoffWorktreeMethods = [
   "threadElsewhereDiff",
   "threadElsewhereCommit",
 ] as const satisfies readonly ApiMethod[];
+
 /**
  * Calls that open or point at a thread's files on this computer's disk. For a
  * live handoff's thread they'd open the copy it left behind, so they're
@@ -122,6 +127,7 @@ export const handoffHereOnlyMethods = [
   "openProjectPathWith",
   "revealProjectWorktree",
 ] as const satisfies readonly ApiMethod[];
+
 export type HandoffHereOnlyMethod = (typeof handoffHereOnlyMethods)[number];
 export type HandoffMethod =
   | HandoffChatMethod

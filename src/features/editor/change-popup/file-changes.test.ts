@@ -49,6 +49,7 @@ describe("rollbackEdit", () => {
     ["a\nb\nc\n", "a\n"],
     ["", "new\n"],
   ];
+
   it.each(cases)("puts %j back from %j", (compared, buffer) => {
     let state = EditorState.create({ doc: buffer });
     // Last to first, so each edit's lines are still where they were found.

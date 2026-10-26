@@ -16,10 +16,12 @@ import { searchProjectText, type SearchTarget } from "./search";
 import { SearchSlots } from "./slots";
 
 let root: string;
+
 const put = async (path: string, contents: string | Buffer) => {
   await mkdir(join(root, path, ".."), { recursive: true });
   await writeFile(join(root, path), contents);
 };
+
 const find = (pattern: string, over: Partial<ProjectSearchQuery> = {}) => ({
   pattern,
   regex: false,
@@ -27,6 +29,7 @@ const find = (pattern: string, over: Partial<ProjectSearchQuery> = {}) => ({
   wholeWord: false,
   ...over,
 });
+
 const gitFiles = (): string[] =>
   execFileSync(
     "git",
@@ -49,6 +52,7 @@ const target = (): SearchTarget => ({
   plain: false,
   files: async () => gitFiles(),
 });
+
 const rgPath = (() => {
   try {
     return execFileSync("which", ["rg"], { encoding: "utf8" }).trim() || null;
@@ -56,6 +60,7 @@ const rgPath = (() => {
     return null;
   }
 })();
+
 const live = new AbortController().signal;
 
 beforeEach(async () => {
@@ -85,6 +90,7 @@ beforeEach(async () => {
   await put("regex.txt", "foo123bar\nfoo bar\nfoobar\n");
   execFileSync("git", ["-C", root, "add", "src", ".gitignore", "regex.txt"]);
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 const run = (

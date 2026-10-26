@@ -15,12 +15,15 @@ import { digest } from "../util/hash";
 import { replaceProjectText } from "./replace";
 
 let root: string;
+
 const put = async (path: string, contents: string | Buffer) => {
   await mkdir(join(root, path, ".."), { recursive: true });
   await writeFile(join(root, path), contents);
   return digest(contents);
 };
+
 const read = (path: string) => readFile(join(root, path), "utf8");
+
 const find = (pattern: string, over: Partial<ProjectSearchQuery> = {}) => ({
   pattern,
   regex: false,
@@ -32,6 +35,7 @@ const find = (pattern: string, over: Partial<ProjectSearchQuery> = {}) => ({
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-replace-")));
 });
+
 afterEach(() => rm(root, { recursive: true, force: true }));
 
 describe("replaceProjectText", () => {

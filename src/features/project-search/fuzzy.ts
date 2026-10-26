@@ -229,6 +229,7 @@ function scorePath(
 /** The paths with their lower-case copies, made once for a list and searched many times. */
 export class PathIndex {
   private lower: string[];
+
   constructor(readonly paths: readonly string[]) {
     this.lower = paths.map((p) => p.toLowerCase());
   }

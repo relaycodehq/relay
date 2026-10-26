@@ -17,6 +17,7 @@ const m = (
   previewStart: 0,
   ...over,
 });
+
 const file = (
   path: string,
   matches: ProjectSearchMatch[],
@@ -25,6 +26,7 @@ const file = (
   version: "v",
   matches,
 });
+
 const files = [
   file("a.ts", [m(1, 0), m(1, 4), m(3, 0)]),
   file("b.ts", [m(9, 0)]),

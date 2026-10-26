@@ -9,6 +9,7 @@ const tabs: EditorTab[] = [
   { path: "d" },
   { path: "e", pinned: true },
 ];
+
 const unsavedC = (tab: EditorTab) => tab.path === "c";
 const paths = (list: EditorTab[]) => list.map((t) => t.path);
 

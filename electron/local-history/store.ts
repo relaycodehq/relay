@@ -53,6 +53,7 @@ const entrySchema = z.object({
   hash: z.string().regex(/^[a-f0-9]{64}$/),
   skipped: z.boolean().optional(),
 });
+
 const indexSchema = z.object({
   version: z.literal(1),
   /** The file's real path, so a folder can be told from what it was made for. */
@@ -60,6 +61,7 @@ const indexSchema = z.object({
   /** Oldest first. */
   entries: z.array(entrySchema),
 });
+
 type Index = z.infer<typeof indexSchema>;
 
 /** A temporary file this old belongs to a write that died. */
@@ -106,9 +108,11 @@ export class LocalHistoryStore {
   private folder(file: string) {
     return join(this.dir, "files", digest(file).slice(0, 32));
   }
+
   private blob(hash: string) {
     return join(this.dir, "blobs", hash.slice(0, 2), `${hash}.gz`);
   }
+
   /** Jobs run one at a time, so a sweep never deletes the text a write is about to point at. */
   private serial<T>(job: () => Promise<T>) {
     return this.queue("store", job);
@@ -130,6 +134,7 @@ export class LocalHistoryStore {
       return empty;
     }
   }
+
   private save(index: Index) {
     return writeFileAtomic(
       join(this.folder(index.path), "index.json"),

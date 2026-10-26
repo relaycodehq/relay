@@ -17,6 +17,7 @@ type LspEvents = Pick<
   RelayEvents,
   "relay:lsp-status" | "relay:lsp-diagnostics" | "relay:lsp-inactive-lines"
 >;
+
 /** A channel and what it carries. */
 type LspEvent = {
   [C in keyof LspEvents]: [channel: C, event: LspEvents[C]];

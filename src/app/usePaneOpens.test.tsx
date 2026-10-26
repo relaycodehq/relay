@@ -259,6 +259,7 @@ const pair = (old: string | null, next: string | null): FilePair => ({
   next: next === null ? null : { name: "a", contents: next, cacheKey: "n" },
   binary: false,
 });
+
 const turn = { chatId: "t1", messageId: "m1", files: [], label: "Claude" };
 
 it("opens a turn's file in the editor against how it was before the turn", async () => {

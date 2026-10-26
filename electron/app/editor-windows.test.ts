@@ -12,6 +12,7 @@ vi.mock("electron", () => ({
     }),
   },
 }));
+
 vi.mock("./page", () => ({ loadPage: vi.fn(async () => {}) }));
 import { EditorWindows } from "./editor-windows";
 
@@ -26,6 +27,7 @@ class FakeWindow extends EventEmitter {
   showInactive = vi.fn();
   close = vi.fn(() => this.end());
   destroy = vi.fn(() => this.end());
+
   private end() {
     this.destroyed = true;
     this.emit("closed");
@@ -37,10 +39,12 @@ const buffer = (text: string) => ({ path: "a.ts", text });
 
 let main: FakeWindow;
 let thread: FakeWindow;
+
 let hooks: {
   changed: Mock<(state: unknown) => void>;
   returned: Mock<(win: unknown) => void>;
 };
+
 let editors: EditorWindows;
 let made: FakeWindow[];
 

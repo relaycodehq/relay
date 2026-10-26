@@ -19,6 +19,7 @@ import { frames } from "../fixtures/renderer-measure";
 // runs. Opt in with RELAY_PERF=1; RELAY_PERF_OUT picks the folder for the JSON,
 // RELAY_PERF_LOOK the appearance (dark, light or darcula; dark by default).
 test.skip(process.env.RELAY_PERF !== "1", "benchmark; set RELAY_PERF=1");
+
 test.setTimeout(300_000);
 
 const out = process.env.RELAY_PERF_OUT ?? join(tmpdir(), "relay-diff-perf");
@@ -28,6 +29,7 @@ const looks: Record<string, object> = {
   light: { mode: "light" },
   darcula: { mode: "dark", dark: { theme: "darcula" } },
 };
+
 const look = looks[process.env.RELAY_PERF_LOOK ?? "dark"];
 
 /** A TypeScript file of about `lines` lines, varied enough to highlight like real code. */

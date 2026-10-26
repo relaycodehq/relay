@@ -13,9 +13,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { unzipTo, zipEntryPath } from "./archive";
 
 let dir: string;
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-lsp-archive-"));
 });
+
 afterEach(() => rm(dir, { recursive: true, force: true }));
 
 describe("unzipTo", () => {

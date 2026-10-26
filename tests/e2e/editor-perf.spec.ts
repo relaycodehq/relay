@@ -43,6 +43,7 @@ import {
 // language server. Opt in with RELAY_PERF=1; RELAY_PERF_OUT picks the folder
 // for the JSON (phases with in-page numbers) and the OS samples (macOS only).
 test.skip(process.env.RELAY_PERF !== "1", "benchmark; set RELAY_PERF=1");
+
 test.setTimeout(600_000);
 
 const out = process.env.RELAY_PERF_OUT ?? join(tmpdir(), "relay-editor-perf");
@@ -50,6 +51,7 @@ const PHASE_MS = 10_000;
 const TYPED = "const total = items.reduce((sum, item) => sum + item.price, 0);";
 
 const run = promisify(execFile);
+
 /** The whole machine's GPU busy share, as macOS reports it; other apps count too. */
 async function gpuPercent() {
   const { stdout } = await run("ioreg", [

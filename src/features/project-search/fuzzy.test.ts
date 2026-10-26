@@ -18,6 +18,7 @@ const paths = [
   "package.json",
   "docs/editor-notes.md",
 ];
+
 const index = new PathIndex(paths);
 const top = (q: string, n = 3) => index.rank(q, n).map((m) => m.path);
 

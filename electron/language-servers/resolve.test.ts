@@ -8,6 +8,7 @@ const installedJs: Installed = {
   exe: "/data/pyright/1.2.3/node_modules/pyright/langserver.index.js",
   node: true,
 };
+
 const installedBin: Installed = {
   version: "2026-10-19",
   exe: "/data/rust-analyzer/2026-10-19/rust-analyzer",

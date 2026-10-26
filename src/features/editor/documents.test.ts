@@ -20,6 +20,7 @@ vi.mock("../../lib/api", () => ({
 const { documents } = await import("./documents");
 
 const views: EditorView[] = [];
+
 const viewOf = (doc: ReturnType<typeof documents.get>) => {
   const view = new EditorView({
     parent: document.body,
@@ -32,6 +33,7 @@ const viewOf = (doc: ReturnType<typeof documents.get>) => {
   doc.attach(view);
   return view;
 };
+
 afterEach(() => views.splice(0).forEach((v) => v.destroy()));
 
 it("keeps two views of one file in step, and the file's state with the first", async () => {

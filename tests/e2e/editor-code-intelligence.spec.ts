@@ -25,6 +25,7 @@ const files = {
 
 test("the editor goes to definitions, shows usages, renames and searches like an IDE", async () => {
   test.skip(!clangd, "needs clangd on PATH");
+
   test.setTimeout(120_000);
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-lsp-"))),
     repo = join(root, "app"),

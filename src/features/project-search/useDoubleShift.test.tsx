@@ -5,10 +5,12 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { doubleShiftDetector, useDoubleShift } from "./useDoubleShift";
 
 let clock = 0;
+
 const key = (
   type: "keydown" | "keyup",
   init: KeyboardEventInit & { key: string },
 ) => new KeyboardEvent(type, init);
+
 const tap = (
   d: ReturnType<typeof doubleShiftDetector>,
   gap: number,
@@ -18,6 +20,7 @@ const tap = (
   d.keydown(key("keydown", { key: "Shift", shiftKey: true, ...init }));
   d.keyup(key("keyup", { key: "Shift", shiftKey: false }));
 };
+
 const detect = () => {
   clock = 1000;
   const fire = vi.fn();
@@ -88,12 +91,15 @@ it("forgets the first tap after a click", () => {
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
+
 const host = document.createElement("div");
 let root: ReturnType<typeof createRoot>;
+
 beforeEach(() => {
   document.body.append(host);
   root = createRoot(host);
 });
+
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();

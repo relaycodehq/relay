@@ -13,6 +13,7 @@ import { LocalHistoryStore, type HistoryLimits } from "./store";
 import { writeFileAtomic as realWrite } from "../util/atomic-write";
 
 const failing = vi.hoisted(() => ({ on: false }));
+
 vi.mock("../util/atomic-write", async (original) => {
   const mod = await original<typeof import("../util/atomic-write")>();
   return {
@@ -30,16 +31,19 @@ vi.mock("../util/atomic-write", async (original) => {
 
 let dir: string;
 const stores: LocalHistoryStore[] = [];
+
 /** A store that prunes only when a test says so. */
 function open(limits: Partial<HistoryLimits> = {}) {
   const store = new LocalHistoryStore(dir, { sweepDelayMs: null, ...limits });
   stores.push(store);
   return store;
 }
+
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "relay-local-history-"));
   failing.on = false;
 });
+
 afterEach(async () => {
   vi.useRealTimers();
   for (const s of stores.splice(0)) s.close();
@@ -57,6 +61,7 @@ async function tree(sub = ""): Promise<string[]> {
     else out.push(join(sub, e.name));
   return out;
 }
+
 const blobs = async () =>
   (await tree("blobs")).filter((f) => f.endsWith(".gz"));
 

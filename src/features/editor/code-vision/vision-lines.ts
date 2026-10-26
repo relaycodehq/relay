@@ -10,6 +10,7 @@ const SHOWN: ReadonlySet<LspSymbolKind> = new Set([
   "method",
   "constructor",
 ]);
+
 /** Kinds whose insides are a body of code, where a helper isn't worth a line of its own. */
 const BODIES: ReadonlySet<LspSymbolKind> = new Set(["function", "method", "constructor"]);
 

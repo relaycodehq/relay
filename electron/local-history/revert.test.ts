@@ -9,11 +9,13 @@ import { LocalHistoryStore } from "./store";
 let root: string;
 let store: LocalHistoryStore;
 let file: string;
+
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "relay-history-revert-")));
   store = new LocalHistoryStore(join(root, ".history"), { sweepDelayMs: null });
   file = join(root, "a.ts");
 });
+
 afterEach(async () => {
   store.close();
   await rm(root, { recursive: true, force: true });

@@ -26,6 +26,7 @@ const CLANGD_HEADING = /^#{1,6}\s+([\w ]+?)\s+`[^`]+`[ \t]*(?:\n|$)/;
 const BOLD_NAME = /^(?:__|\*\*)([^_*\n]+)(?:__|\*\*)[ \t]*(?:\n|$)/;
 const MODULE_PATH = /^[\w]+(?:::[\w]+)*$/;
 const TAG_LINE = /^[*_]@(\w+)[*_](?:\s+(?:—\s*)?|$)(.*)$/;
+
 const TAG_LABELS: Record<string, string> = {
   param: "Params",
   returns: "Returns",
@@ -40,6 +41,7 @@ const TAG_LABELS: Record<string, string> = {
   typeParam: "Type params",
   since: "Since",
 };
+
 const KIND_IN_BRACKETS = /^\(([\w ]+)\)\s+/;
 const MEMBER_KINDS = new Set(["method", "property", "getter", "setter", "enum member"]);
 const DECLARATION_WORDS =

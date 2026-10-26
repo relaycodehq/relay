@@ -22,6 +22,7 @@ const SLOT = "palette";
 /** Text goes to ripgrep once there is enough of it to mean something. */
 const TEXT_MIN_CHARS = 2;
 const TEXT_DELAY_MS = 180;
+
 const flagsOff: SearchFlags = {
   regex: false,
   caseSensitive: false,
