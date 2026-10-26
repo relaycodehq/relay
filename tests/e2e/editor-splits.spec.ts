@@ -1,6 +1,6 @@
 import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
@@ -97,5 +97,6 @@ test("the editor splits right, keeps one file in step across splits, and moves t
       })
       .catch(() => {});
     await app.close().catch(() => {});
+    await rm(root, { recursive: true, force: true });
   }
 });
