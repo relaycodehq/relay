@@ -68,6 +68,7 @@ export function FindInFiles({
           asking: flow.asking,
           running: flow.running,
           matchCount: scope.matches,
+          moreMatches: !!result?.truncated,
           filesCount: scope.files.length,
           canAsk: !!scope.matches && !loading && !!query,
           onAsk: flow.ask,

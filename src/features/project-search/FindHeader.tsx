@@ -9,6 +9,8 @@ interface ReplaceActionsProps {
   asking: boolean;
   running: boolean;
   matchCount: number;
+  /** The search stopped at its cap, so a file listed may hold more matches than shown. */
+  moreMatches: boolean;
   filesCount: number;
   canAsk: boolean;
   onAsk: () => void;
@@ -18,7 +20,7 @@ interface ReplaceActionsProps {
 
 /** The replace-all button, which turns into "Replace N matches in M files?" with Replace and Cancel. */
 function ReplaceActions(props: ReplaceActionsProps) {
-  const { asking, running, matchCount, filesCount } = props;
+  const { asking, running, matchCount, moreMatches, filesCount } = props;
   if (!asking)
     return (
       <div className="ps-replace-actions">
@@ -30,7 +32,9 @@ function ReplaceActions(props: ReplaceActionsProps) {
   return (
     <div className="ps-replace-actions">
       <span className="ps-confirm">
-        Replace {matchCount} {matchCount === 1 ? "match" : "matches"} in{" "}
+        Replace {matchCount}
+        {moreMatches ? "+" : ""}{" "}
+        {matchCount === 1 && !moreMatches ? "match" : "matches"} in{" "}
         {fileCount(filesCount)}?
       </span>
       <button type="button" disabled={running} onClick={props.onReplace}>
