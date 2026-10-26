@@ -18,7 +18,8 @@ export function useDeletedFiles(
 ) {
   const qc = useQueryClient();
   const [restoring, setRestoring] = useState<string>();
-  const [error, setError] = useState<unknown>();
+  /** The last restore that failed, and why. */
+  const [failed, setFailed] = useState<{ path: string; error: unknown }>();
   /** Deleted in the index too reads the version from HEAD; only on disk, from the index. */
   const deletionArea = (path: string): ChangeArea | undefined => {
     const changes = tree?.changes.filter((c) => c.path === path) ?? [];
@@ -37,7 +38,7 @@ export function useDeletedFiles(
     const area = deletionArea(path);
     if (!tree || !area) return;
     setRestoring(path);
-    setError(undefined);
+    setFailed(undefined);
     try {
       const next = await api.projectGitAction(where, {
         kind: "discard",
@@ -50,11 +51,13 @@ export function useDeletedFiles(
         queryKey: ["project-file-info", where, path],
       });
       void documents.find(source, path)?.load();
-    } catch (e) {
-      setError(e);
+    } catch (error) {
+      setFailed({ path, error });
     } finally {
       setRestoring(undefined);
     }
   };
-  return { areaOf, restore, restoring, error };
+  const errorFor = (path: string) =>
+    failed?.path === path ? failed.error : undefined;
+  return { areaOf, restore, restoring, errorFor };
 }

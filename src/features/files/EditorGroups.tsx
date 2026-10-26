@@ -203,7 +203,7 @@ function SplitBody({
           path={view.tab.path}
           area={view.area}
           restoring={deleted.restoring === view.tab.path}
-          error={deleted.error}
+          error={deleted.errorFor(view.tab.path)}
           onRestore={() => void deleted.restore(view.tab.path)}
           onAsk={editor?.onAsk}
         />
