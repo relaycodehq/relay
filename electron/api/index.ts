@@ -19,6 +19,7 @@ import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { elsewhereHandlers } from "./elsewhere";
 import { languageServerHandlers } from "./language-servers";
+import { lineHistoryHandlers } from "./line-history";
 import { localHistoryHandlers } from "./local-history";
 import { projectHandlers } from "./projects";
 import { projectSearchHandlers } from "./project-search";
@@ -54,6 +55,7 @@ export function createDispatch(
     reviewHandlers(ctx),
     reviewCheckoutHandlers(ctx),
     checkHandlers(ctx),
+    lineHistoryHandlers(ctx),
     projectHandlers(ctx),
     languageServerHandlers(ctx),
     localHistoryHandlers(ctx),

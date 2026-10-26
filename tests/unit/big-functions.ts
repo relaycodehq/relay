@@ -30,7 +30,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/agents/tools/index.ts › inspectAgentTools": 108,
   "electron/api/account.ts › accountHandlers": 96,
   "electron/api/chats.ts › chatHandlers": 316,
-  "electron/api/checks.ts › checkHandlers": 122,
+  "electron/api/checks.ts › checkHandlers": 109,
   "electron/api/computers.ts › computerHandlers": 114,
   "electron/api/context.ts › apiContext": 106,
   "electron/api/desktop.ts › desktopHandlers": 151,

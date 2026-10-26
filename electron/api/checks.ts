@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { CHECKS_MEMORY_MB, symbolQuerySchema } from "../../shared/checks";
 import {
-  blameQuerySchema,
   filePathSchema,
   refSchema,
   shaSchema,
@@ -9,9 +8,7 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
-import { fileAuthorsQuerySchema } from "../../shared/file-authors";
 import { detectProject } from "../checks/detect";
-import { fileAuthors } from "../git/file-authors";
 import type { CheckLimits } from "../checks/service";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -19,11 +16,10 @@ const targetSchema = z.string().max(4096);
 /** A window's hold on a checker it shares with other windows. */
 const holderSchema = z.string().max(64);
 
-/** Diagnostics, symbols and line history, in a project's folders and in linked pull requests. */
+/** Diagnostics and symbols, in a project's folders and in linked pull requests. */
 export function checkHandlers(ctx: ApiContext) {
   const {
     projectChecks,
-    blame,
     placeRoot,
     prKey,
     linkedFolder,
@@ -88,15 +84,6 @@ export function checkHandlers(ctx: ApiContext) {
       [workspaceIdSchema, shaSchema, symbolQuerySchema],
       (where, head, query) => projectChecks.symbol(local(where), head, query),
     ),
-    localBlame: takes(
-      [workspaceIdSchema, blameQuerySchema],
-      async (where, query) =>
-        blame.read(await placeRoot(where), null, null, query),
-    ),
-    localFileAuthors: takes(
-      [workspaceIdSchema, fileAuthorsQuerySchema],
-      async (where, query) => fileAuthors(await placeRoot(where), query),
-    ),
     inspectSymbol: takes(
       [refSchema, shaSchema, symbolQuerySchema],
       (r, head, query) => projectChecks.symbol(prKey(r), head, query),
@@ -137,12 +124,5 @@ export function checkHandlers(ctx: ApiContext) {
       [refSchema, shaSchema, filePathSchema, textSchema.nullable()],
       (r, head, path, text) => projectChecks.update(prKey(r), head, path, text),
     ),
-    blame: takes([refSchema, blameQuerySchema], (r, query) => {
-      const dir = requireFolder(
-        r,
-        "Link this repository to a local folder to see line history.",
-      );
-      return blame.read(dir, requireServer(r), r, query);
-    }),
   } satisfies Handlers;
 }
