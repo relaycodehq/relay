@@ -13,7 +13,8 @@ export interface OpenDoc {
   file: string;
   uri: string;
   languageId: string;
-  wheres: Set<string>;
+  /** The windows' pages that have the file open, by the workspace each opened it in. */
+  openIn: Map<string, Set<object>>;
 }
 
 /** What of a server's folder its notices are read against. */
@@ -60,7 +61,7 @@ export class FileNotices {
     if (this.sent.get(key) === fingerprint) return;
     this.sent.set(key, fingerprint);
     this.published.set(key, diagnostics);
-    for (const where of doc ? doc.wheres : this.server.wheres)
+    for (const where of doc ? doc.openIn.keys() : this.server.wheres)
       this.listeners.diagnostics({
         where,
         path: doc?.path ?? located.path,
@@ -75,7 +76,7 @@ export class FileNotices {
     const { key, doc } = found;
     const lines = inactiveLinesOf(raw);
     this.inactive.set(key, lines);
-    for (const where of doc.wheres)
+    for (const where of doc.openIn.keys())
       this.listeners.inactiveLines?.({ where, path: doc.path, lines });
   }
 

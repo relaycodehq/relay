@@ -57,6 +57,8 @@ export interface LanguageServersDeps {
 }
 
 export const IDLE_MS = 5 * 60_000;
+/** Who opens a file when no window's page asked, as on a headless Relay. */
+const noOwner = {};
 const MAX_READ_BYTES = 5 * 1024 * 1024;
 const MAX_WORKSPACE_SYMBOLS = 200;
 
@@ -97,11 +99,17 @@ export class LanguageServers implements Omit<
     this.idleMs = deps.idleMs ?? IDLE_MS;
   }
 
-  async lspOpen(where: string, path: string, text: string): Promise<LspOpened> {
+  /** `owner` is the window whose page opens the file; it stays open until every owner closes it. */
+  async lspOpen(
+    where: string,
+    path: string,
+    text: string,
+    owner: object = noOwner,
+  ): Promise<LspOpened> {
     const lang = lspServerFor(path);
     if (!lang) return { server: null, status: null };
     const opened = await this.queue(`${where}\0${path}`, () =>
-      this.addDocument(where, path, text, lang),
+      this.addDocument(where, path, text, lang, owner),
     );
     if (!opened) return { server: null, status: null };
     await opened.session.start();
@@ -114,6 +122,7 @@ export class LanguageServers implements Omit<
     path: string,
     text: string,
     lang: { server: LspServerId; languageId: string },
+    owner: object,
   ) {
     const root = await this.deps.root(where);
     const rootIsFolder = await stat(root).then(
@@ -135,11 +144,12 @@ export class LanguageServers implements Omit<
         file,
         uri: this.paths.toUri(root, path),
         languageId: lang.languageId,
-        wheres: new Set(),
+        openIn: new Map(),
       };
       entry.docs.set(key, doc);
     }
-    doc.wheres.add(where);
+    const owners = doc.openIn.get(where) ?? new Set();
+    doc.openIn.set(where, owners.add(owner));
     entry.session.open(doc.uri, doc.languageId, text);
     entry.notices.replay(key, where, path);
     return entry;
@@ -159,18 +169,35 @@ export class LanguageServers implements Omit<
     });
   }
 
-  async lspClose(where: string, path: string) {
+  async lspClose(where: string, path: string, owner: object = noOwner) {
     await this.queue(`${where}\0${path}`, async () => {
       const found = this.find(where, path);
       if (!found) return;
       const { entry, doc, key } = found;
-      doc.wheres.delete(where);
-      if (doc.wheres.size) return;
+      const owners = doc.openIn.get(where);
+      owners?.delete(owner);
+      if (owners?.size) return;
+      doc.openIn.delete(where);
+      if (doc.openIn.size) return;
       entry.session.close(doc.uri);
       entry.docs.delete(key);
       entry.notices.forget(key);
       if (!entry.docs.size) this.armIdle(entry);
     });
+  }
+
+  /** `owner`'s page went, closed or reloaded, without closing its files: they close for it. */
+  async release(owner: object) {
+    const held = [...this.entries.values()].flatMap((entry) =>
+      [...entry.docs.values()].flatMap((doc) =>
+        [...doc.openIn]
+          .filter(([, owners]) => owners.has(owner))
+          .map(([where]) => ({ where, path: doc.path })),
+      ),
+    );
+    await Promise.all(
+      held.map(({ where, path }) => this.lspClose(where, path, owner)),
+    );
   }
 
   lspHover(where: string, path: string, line: number, character: number) {

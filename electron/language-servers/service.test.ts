@@ -233,6 +233,28 @@ describe("documents", () => {
     });
   });
 
+  it("keeps a file open while another window has it, and closes a gone window's files", async () => {
+    const t = setup();
+    const main = {};
+    const popped = {};
+    const sent = async (method: string) =>
+      (await t.received()).filter((m) => m.method === method);
+    await t.service.lspOpen(WHERE, "a.rs", "x", main);
+    await t.service.lspOpen(WHERE, "a.rs", "x", popped);
+    await t.ready();
+    await t.service.lspClose(WHERE, "a.rs", main);
+    // Only an open file is saved, and the server hears in order: a close would come first.
+    await t.service.lspSave(WHERE, "a.rs");
+    await vi.waitFor(async () =>
+      expect(await sent("textDocument/didSave")).toHaveLength(1),
+    );
+    expect(await sent("textDocument/didClose")).toHaveLength(0);
+    await t.service.release(popped);
+    await vi.waitFor(async () =>
+      expect(await sent("textDocument/didClose")).toHaveLength(1),
+    );
+  });
+
   it("pushes diagnostics as the server reports them, by the path the editor used", async () => {
     const t = setup();
     await t.service.lspOpen(WHERE, "src/a.rs", "ok\nlet x = ERROR;\n");

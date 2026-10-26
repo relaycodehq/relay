@@ -161,6 +161,7 @@ const window = new AppWindow({
     devices?.hideAll(win);
     treeWatch?.release(win);
     elsewhereWatch?.release(win);
+    void languageServers?.release(win);
     // A phone's send it was finishing goes to the page that comes next.
     if (win === window.win) drafts?.service.redeliver();
   },

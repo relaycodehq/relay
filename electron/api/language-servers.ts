@@ -13,6 +13,8 @@ import { takes, type ApiContext, type Handlers } from "./context";
 /** Hover, go to definition, completion and the rest, from the language servers Relay runs per folder. */
 export function languageServerHandlers(ctx: ApiContext) {
   const lsp = ctx.languageServers;
+  // Files are open per window, so one window closing a file leaves it open for another.
+  const owner = () => ctx.window.caller() ?? undefined;
   const at = [
     workspaceIdSchema,
     lspPathSchema,
@@ -20,8 +22,9 @@ export function languageServerHandlers(ctx: ApiContext) {
     lspCharacterSchema,
   ] as const;
   return {
-    lspOpen: takes([workspaceIdSchema, lspPathSchema, textSchema], (...a) =>
-      lsp.lspOpen(...a),
+    lspOpen: takes(
+      [workspaceIdSchema, lspPathSchema, textSchema],
+      (where, path, text) => lsp.lspOpen(where, path, text, owner()),
     ),
     lspChange: takes([workspaceIdSchema, lspPathSchema, textSchema], (...a) =>
       lsp.lspChange(...a),
@@ -29,8 +32,8 @@ export function languageServerHandlers(ctx: ApiContext) {
     lspSave: takes([workspaceIdSchema, lspPathSchema], (...a) =>
       lsp.lspSave(...a),
     ),
-    lspClose: takes([workspaceIdSchema, lspPathSchema], (...a) =>
-      lsp.lspClose(...a),
+    lspClose: takes([workspaceIdSchema, lspPathSchema], (where, path) =>
+      lsp.lspClose(where, path, owner()),
     ),
     lspHover: takes(at, (...a) => lsp.lspHover(...a)),
     lspDefinition: takes(at, (...a) => lsp.lspDefinition(...a)),
