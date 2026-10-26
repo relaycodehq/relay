@@ -134,12 +134,16 @@ function collectMatches(
     if (!found) return;
     if (keep && !keep(found.path)) return;
     const list = files.get(found.path) ?? [];
-    files.set(found.path, list);
+    let full = false;
     for (const match of found.matches) {
-      if (count >= limit) return onFull();
+      full = count >= limit;
+      if (full) break;
       list.push(match);
       count++;
     }
+    // A file goes in only with a match, so the cap never leaves one empty.
+    if (list.length) files.set(found.path, list);
+    if (full) onFull();
   };
   return {
     get count() {

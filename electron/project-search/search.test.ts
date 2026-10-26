@@ -240,6 +240,8 @@ describe.each(engines)("searching with %s", (engine) => {
     const total = r.files.reduce((n, f) => n + f.matches.length, 0);
     expect(total).toBe(3);
     expect(r.truncated).toBe(true);
+    // A file reached once the limit is full doesn't come back empty.
+    expect(r.files.every((f) => f.matches.length > 0)).toBe(true);
     const all = await run(find("needle", { limit: 100 }), engine);
     expect(all.truncated).toBe(false);
   });
