@@ -320,10 +320,13 @@ So every exponent is $\le 0$ and the biggest term is exactly $1$. A ragged one s
     message("user", "Explain CRDTs like I'm five.", 601),
     message("assistant", "Two kids draw on copies of one picture, and whatever each adds can be put together the same way every time.", 600),
   ], { settledAt: now - 590 * min });
-  thread(scratchB, "Czech word for spinner", 15, [
+  const spinnerWord = thread(scratchB, "Czech word for spinner", 15, [
     message("user", "What's the Czech word for a loading spinner?", 16),
     message("assistant", "Usually just *načítání* (loading), or *kolečko* for the little wheel.", 15),
   ]);
+  // A finished second opinion on its answer, not sent back yet.
+  secondOpinion(spinnerWord, threads.get(spinnerWord)!.messages[1].id, "codex", "GPT-5.5",
+    "Mostly right. *Načítání* is the word UIs use; *kolečko* is what people say out loud. I'd add *točítko*, the playful one you hear for a spinner that never stops.");
   thread(site, "Tidy the footer links", 50, [message("assistant", "Done: the footer links all point at the new pages.", 50)], { markedUnread: true, branch: "site/footer" });
   const lead = thread(relay, "Split the settings page", 12, [message("assistant", "Started two threads: one per half of the page.", 12)]);
   thread(relay, "Settings: account half", 6, [message("assistant", "", 6, { status: "streaming" })], { startedBy: { chatId: lead, agent: "claude" }, running: true, runningSince: now - 6 * min, created: 2 });
@@ -717,6 +720,8 @@ const host = {
     if (method === "saveNewThreadModel") newThreadModels[args[0]] = args[1];
     if (method === "createProjectChat") return created(args[0], args[2]);
     if (method === "forkProjectChat") return forked(args[0], args[1]);
+    if (method === "askSecondOpinion") return void secondOpinion(args[0], args[1], args[2].provider, args[2].model || "its default model");
+    if (method === "sendSecondOpinion") return sentBack(args[0]);
     if (method === "rewindProjectTurn") return rewound(args[0], args[1], args[2], args[3]);
     if (method === "projectTurnDiff") return turnDiff(args[2]);
     if (method === "projectIcon") return args[0] === relay ? relayIcon : null;
@@ -814,6 +819,36 @@ function forked(chatId: string, messageId: string) {
   const made = thread(t.summary.projectId, `${t.summary.title} (fork)`, 0, copy, { provider: t.summary.provider });
   changed(t.summary.projectId);
   return threads.get(made)!.summary;
+}
+
+/** A second opinion on answer `answerId` of `leadId`, as electron/started-threads/second-opinions makes one; it answers on its own without `opinion`. */
+function secondOpinion(leadId: string, answerId: string, provider: string, model: string, opinion?: string) {
+  const lead = threads.get(leadId)!;
+  const at = lead.messages.findIndex((m) => m.id === answerId);
+  const before = lead.messages[at - 1];
+  const asked = { question: before?.role === "user" ? before.body : "", answer: lead.messages[at].body };
+  const ask = { ...message("user", "My colleague answered this question, and I'd like a second opinion.", 0), created: Date.now(), provider, secondOpinion: asked };
+  const said = opinion ? [{ ...message("assistant", opinion, 0), created: Date.now() + 1, provider, model: { name: model } }] : [];
+  const made = thread(lead.summary.projectId, `Second opinion: ${lead.summary.title}`, 0, [ask, ...said], {
+    provider, created: Date.now(), startedBy: { chatId: leadId, agent: lead.summary.provider ?? "claude", secondOpinionOn: answerId },
+  });
+  // Seeded ones are in before the bridge is up; one asked later answers as an agent would.
+  if (opinion) return made;
+  changed(lead.summary.projectId);
+  answer(made, { id: ask.id, body: ask.body, to: provider, choice: { model, fast: false, reasoningEffort: "" } }, true);
+  return made;
+}
+
+/** Sends a finished opinion to the lead, as a turn of its own. */
+function sentBack(opinionId: string) {
+  const opinion = threads.get(opinionId)!;
+  const leadId = opinion.summary.startedBy.chatId;
+  const lead = threads.get(leadId)!;
+  const body = `Here's a second opinion on your answer.\n\n${opinion.messages.at(-1).body}`;
+  const asked = { ...message("user", body, 0), created: Date.now(), fromThread: opinionId, author: opinion.summary.title };
+  lead.messages.push(asked);
+  remote.chatEvent({ chatId: leadId, message: asked });
+  answer(leadId, { id: asked.id, body, to: lead.summary.provider ?? "claude" }, true);
 }
 
 /** Marks the turn's files rolled back, or clears the mark; nothing overlaps here. */
