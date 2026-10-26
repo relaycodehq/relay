@@ -1,23 +1,9 @@
 import type { Ref } from "react";
 import { Search } from "lucide-react";
-import type { LinkedFolder } from "../../../shared/projects";
 import type { ChecksController } from "../checks/useProjectChecks";
-import { isWithin } from "./editor-tabs";
 import { FileFilterList } from "./FileFilterList";
-import { FileTree } from "./FileTree";
-import { LinkedFolderTree } from "./LinkedFolderTree";
-import { PROJECT_ROOT, useOpenRoots, type useExpanded } from "./useFileTree";
-
-/** Files in the thread's linked folders, which open by their absolute paths. */
-export type LinkedFiles = {
-  /** The folders linked to the thread with `/add-dir`. */
-  links: readonly LinkedFolder[];
-  /** The file outside the project in front, by its absolute path. */
-  shownPath: string | null;
-  onOpenFile: (path: string, preview: boolean) => void;
-  onRenamed: (from: string, to: string) => void;
-  onTrashed: (path: string) => void;
-};
+import { FileTrees, type LinkedFiles } from "./FileTrees";
+import type { useExpanded } from "./useFileTree";
 
 type FileSideProps = {
   /** The sidebar is showing and the Files tab is in front. */
@@ -65,65 +51,8 @@ export function FileSide({
   onTrashed,
   linked,
 }: FileSideProps) {
-  const roots = useOpenRoots(where);
-  const hasLinks = linked.links.length > 0;
   const openFile = (path: string, clicks?: number) =>
     onOpenFile(path, clicks === 1);
-  const pick = (path: string, kind: "file" | "dir", clicks?: number) =>
-    kind === "file" ? openFile(path, clicks) : onPickFolder(path);
-  const projectTree = (
-    <FileTree
-      active={active}
-      where={where}
-      watched={watched}
-      title={title}
-      fold={
-        hasLinks
-          ? {
-              open: roots.isOpen(PROJECT_ROOT),
-              onToggle: () => roots.toggle(PROJECT_ROOT),
-            }
-          : undefined
-      }
-      selected={shownPath ?? folder}
-      lockedPath={null}
-      expansion={expansion}
-      onSelect={pick}
-      onCreated={pick}
-      onMoved={(from, to) => {
-        expansion.remap(from, to);
-        onRenamed(from, to);
-        if (folder && isWithin(folder, from))
-          onPickFolder(to + folder.slice(from.length));
-      }}
-      onTrashed={(path) => {
-        expansion.remap(path, null);
-        onTrashed(path);
-        if (folder && isWithin(folder, path)) onPickFolder(null);
-      }}
-    />
-  );
-  // One scroll for all the trees, each folding under its name.
-  const trees = hasLinks ? (
-    <div className="file-roots">
-      {projectTree}
-      {linked.links.map((link) => (
-        <LinkedFolderTree
-          key={link.path}
-          link={link}
-          active={active}
-          open={roots.isOpen(link.path)}
-          onToggle={() => roots.toggle(link.path)}
-          shownPath={linked.shownPath}
-          onOpenFile={linked.onOpenFile}
-          onRenamed={linked.onRenamed}
-          onTrashed={linked.onTrashed}
-        />
-      ))}
-    </div>
-  ) : (
-    projectTree
-  );
   return (
     <>
       <div className="search-field">
@@ -146,7 +75,20 @@ export function FileSide({
           onOpen={openFile}
         />
       ) : (
-        trees
+        <FileTrees
+          active={active}
+          where={where}
+          watched={watched}
+          title={title}
+          shownPath={shownPath}
+          folder={folder}
+          expansion={expansion}
+          onOpenFile={onOpenFile}
+          onPickFolder={onPickFolder}
+          onRenamed={onRenamed}
+          onTrashed={onTrashed}
+          linked={linked}
+        />
       )}
     </>
   );

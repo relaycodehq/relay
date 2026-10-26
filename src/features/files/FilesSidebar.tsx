@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ErrorBox } from "../../ui/ui";
 import { PaneResizer } from "../../ui/PaneResizer";
 import type { ChecksController } from "../checks/useProjectChecks";
-import { FileSide, type LinkedFiles } from "./FileSide";
+import { FileSide } from "./FileSide";
+import type { LinkedFiles } from "./FileTrees";
 import { SidebarViews } from "./SidebarViews";
 import { useChangeViews, type ThreadChangesProps } from "./useChangeViews";
 import type { EditorWorkspace } from "./useEditorWorkspace";
@@ -104,7 +105,10 @@ export function FilesSidebar({
         max={MAX_WIDTH}
       />
       <SidebarViews
-        views={[{ id: "files", label: "Files", content: files }, ...changes.views]}
+        views={[
+          { id: "files", label: "Files", content: files },
+          ...changes.views,
+        ]}
         shown={browsing.sideView}
         onShow={browsing.showSideView}
         onNamesWidth={setNamesWidth}
