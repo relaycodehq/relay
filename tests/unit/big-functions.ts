@@ -212,7 +212,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/dictation/DictationButton.tsx › ModelPrompt": 81,
   "src/features/dictation/DictationWave.tsx › DictationWave": 159,
   "src/features/dictation/DictationWave.tsx › draw": 94,
-  "src/features/diff/DiffViewer.tsx › DiffViewer": 258,
+  "src/features/diff/DiffViewer.tsx › DiffViewer": 248,
   "src/features/diff/LineBlame.tsx › move": 103,
   "src/features/diff/LineBlame.tsx › useLineBlame": 266,
   "src/features/diff/SymbolNavigation.tsx › SymbolPreview": 125,
