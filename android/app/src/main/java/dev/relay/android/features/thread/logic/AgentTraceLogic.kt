@@ -51,24 +51,14 @@ fun groupTrace(entries: List<AgentTrace>): List<TracePart> {
     return parts
 }
 
-/** How a run of calls shows in an open trace. */
-enum class RunShape { Live, Rows, Group }
-
-/**
- * The batch still being worked on is one live row, and a single call is its own row. A finished
- * turn's only run lists every call, its summary being the heading already; not while the turn
- * runs or is held open for a reader, or the run would unfold the moment the agent writes after
- * it and fold again at its next call, moving everything under it.
- */
-fun runShape(parts: List<TracePart>, index: Int, live: Boolean, settled: Boolean): RunShape {
+/** The agent is still on this run: the turn runs and it's the last thing in it, and not a question waiting on the reader. */
+fun runIsLive(parts: List<TracePart>, index: Int, live: Boolean): Boolean {
     val run = parts[index] as TracePart.Run
-    return when {
-        live && index == parts.lastIndex && !isQuestionCall(run.activity.first()) -> RunShape.Live
-        run.activity.size == 1 -> RunShape.Rows
-        settled && parts.all { it === run || it is TracePart.Commentary } -> RunShape.Rows
-        else -> RunShape.Group
-    }
+    return live && index == parts.lastIndex && !isQuestionCall(run.activity.first())
 }
+
+/** The turn's only run, which the turn's heading already sums up. */
+fun onlyRun(parts: List<TracePart>, run: TracePart.Run) = parts.all { it === run || it is TracePart.Commentary }
 
 /** Everything a turn's heading and trace are drawn from. */
 data class TurnRead(
@@ -129,8 +119,7 @@ fun turnHeading(message: ChatMessage, expanded: Boolean, turn: TurnRead = readTu
 class TraceFold {
     private var wasRunning: Boolean? = null
     /** Ended while read back. */
-    var held = false
-        private set
+    private var held = false
 
     fun open(live: Boolean, savedCopy: Boolean, readingBack: Boolean): Boolean {
         val running = live && !savedCopy
@@ -138,12 +127,6 @@ class TraceFold {
         wasRunning = running
         return running || held
     }
-}
-
-/** The batch still being worked on shows one row: its running call, else its latest; the rest fold behind it. */
-fun batchHead(activity: List<AgentActivity>): Pair<AgentActivity, List<AgentActivity>> {
-    val head = activity.lastOrNull { it.status == "running" } ?: activity.last()
-    return head to activity.filter { it !== head }
 }
 
 private val thinkingWords = listOf(

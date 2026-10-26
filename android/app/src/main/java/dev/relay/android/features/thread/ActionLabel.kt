@@ -12,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -80,12 +79,12 @@ private fun parentName(path: String): String {
 
 private val looksLikeFile = Regex("\\.\\w+$")
 
-/** One row's words: "Read `a.ts` L10–20", "Wrote `x.mjs` and ran it", "Tests failed ✕". */
+/** One row's words: "Read `a.ts` L10–20", "Wrote `x.mjs` and ran it", "Tests failed ✕". `live` while its call runs: the verb says so and shines. */
 @Composable
-internal fun ActionLabel(row: TraceRow, live: Boolean, modifier: Modifier = Modifier, oneLine: Boolean = false) {
+internal fun ActionLabel(row: TraceRow, live: Boolean) {
     val failed = !live && rowFailed(row)
-    LabelLine(oneLine, modifier) {
-        Verb(actionVerb(row, live), failed)
+    LabelLine {
+        Verb(actionVerb(row, live), failed, if (live) Modifier.shine() else Modifier)
         ActionObject(row, withWhere = true)
         if (row.ranToo) Muted("and ran it")
         if (!live) Outcome(row)
@@ -97,7 +96,7 @@ internal fun ActionLabel(row: TraceRow, live: Boolean, modifier: Modifier = Modi
 internal fun PairLabel(first: TraceRow, second: TraceRow) {
     val where = first.action.where.takeIf { first.action.kind == "search" }
     val sharedWhere = where?.takeIf { it == second.action.where }
-    LabelLine(oneLine = false) {
+    LabelLine {
         Verb(actionVerb(first), failed = false)
         ActionObject(first, withWhere = sharedWhere == null)
         Muted("and")
@@ -107,14 +106,10 @@ internal fun PairLabel(first: TraceRow, second: TraceRow) {
     }
 }
 
-/** Wraps onto more lines once settled; the live row stays one line so it never changes height. */
 @Composable
-private fun LabelLine(oneLine: Boolean, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val gap = Arrangement.spacedBy(5.dp)
-    if (oneLine) Row(modifier.clipToBounds(), horizontalArrangement = gap, verticalAlignment = Alignment.CenterVertically) { content() }
-    else FlowRow(
-        modifier,
-        horizontalArrangement = gap,
+private fun LabelLine(content: @Composable () -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),
         itemVerticalAlignment = Alignment.CenterVertically,
     ) { content() }
@@ -152,9 +147,9 @@ private fun Outcome(row: TraceRow) {
 }
 
 @Composable
-private fun Verb(text: String, failed: Boolean) {
+private fun Verb(text: String, failed: Boolean, modifier: Modifier = Modifier) {
     val c = RelayTheme.colors
-    Text(text, color = if (failed) c.destructive else c.mutedForeground, maxLines = 1)
+    Text(text, modifier, color = if (failed) c.destructive else c.mutedForeground, maxLines = 1)
 }
 
 @Composable

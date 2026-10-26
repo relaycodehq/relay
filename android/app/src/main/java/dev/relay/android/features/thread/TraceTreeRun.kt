@@ -2,8 +2,9 @@ package dev.relay.android.features.thread
 
 // A finished run of tool calls grouped by what they did (logic/TraceTree.kt):
 // rows and pairs always show, three or more of a kind fold behind a branch
-// header into a tree hooked to it by elbow lines. A row opens to the code its
-// calls wrote or read, or else to what they ran and printed.
+// header into a tree hooked to it by elbow lines, and a long run folds into
+// one line the same way. A row opens to the code its calls wrote or read, or
+// else to what they ran and printed.
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -38,15 +39,15 @@ import dev.relay.android.features.thread.logic.BranchKind
 import dev.relay.android.features.thread.logic.TracePiece
 import dev.relay.android.features.thread.logic.TraceRow
 import dev.relay.android.features.thread.logic.actionVerb
+import dev.relay.android.features.thread.logic.branchOf
 import dev.relay.android.features.thread.logic.readCode
 import dev.relay.android.features.thread.logic.readCodeWhenWhole
 import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.rowRunning
-import dev.relay.android.features.thread.logic.traceTree
+import dev.relay.android.features.thread.logic.traceRun
 import dev.relay.android.remote.model.AgentActivity
 import dev.relay.android.remote.model.CallAction
 import dev.relay.android.ui.Icon
-import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.Radii
@@ -64,36 +65,63 @@ private val INDENT = 21.dp
 /** Tools, and kinds of action this app doesn't know yet, keep their call's own row. */
 internal fun drawsOwnRow(row: TraceRow) = actionVerb(row).isEmpty()
 
-/** A run whose calls say what they did, told by what they did. */
+/**
+ * A run the agent has moved on from, told by what its calls did: one line
+ * when its tree is long, opening to that tree. The turn's only run shows its
+ * tree as it is, since the turn's heading already says what it did.
+ */
 @Composable
-internal fun TraceTreeRun(calls: List<AgentActivity>) {
-    val pieces = remember(calls) { traceTree(calls) }
+internal fun ClosedRun(calls: List<AgentActivity>, only: Boolean) {
+    val run = remember(calls) { traceRun(calls) }
+    val summary = run.summary
+    if (summary == null || only) return Column { for (piece in run.pieces) key(piece.id) { Piece(piece) } }
+    var open by rememberSaveable { mutableStateOf(false) }
+    val first = run.pieces.first()
+    val failed = run.pieces.any { piece -> rowsIn(piece).any(::rowFailed) }
     Column {
-        for (piece in pieces) key(piece.id) {
-            when (piece) {
-                is TracePiece.Row -> ActionRow(piece.row)
-                is TracePiece.Pair -> PairRow(piece.first, piece.second)
-                is TracePiece.Branch -> Branch(piece)
-            }
+        FoldHeading(branchIcon(firstKind(first), rowsIn(first)), summary, failed, open, onToggle = { open = !open })
+        if (open) run.pieces.forEachIndexed { index, piece ->
+            val elbow = Modifier.treeElbow(last = index == run.pieces.lastIndex, color = treeLine())
+            key(piece.id) { Piece(piece, elbow.padding(start = INDENT)) }
         }
     }
 }
 
 @Composable
-private fun ActionRow(row: TraceRow, modifier: Modifier = Modifier) {
+private fun Piece(piece: TracePiece, modifier: Modifier = Modifier) = when (piece) {
+    is TracePiece.Row -> ActionRow(piece.row, modifier)
+    is TracePiece.Pair -> PairRow(piece.first, piece.second, modifier)
+    is TracePiece.Branch -> Branch(piece, modifier)
+}
+
+private fun rowsIn(piece: TracePiece): List<TraceRow> = when (piece) {
+    is TracePiece.Row -> listOf(piece.row)
+    is TracePiece.Pair -> listOf(piece.first, piece.second)
+    is TracePiece.Branch -> piece.rows
+}
+
+/** What kind the run started with, for its folded line's icon. */
+private fun firstKind(piece: TracePiece): BranchKind = when (piece) {
+    is TracePiece.Branch -> piece.kind
+    is TracePiece.Row -> branchOf(piece.row.action)
+    is TracePiece.Pair -> branchOf(piece.first.action)
+}
+
+/** One thing done; while its call runs it keeps its icon and its verb shines. */
+@Composable
+internal fun ActionRow(row: TraceRow, modifier: Modifier = Modifier) {
     if (drawsOwnRow(row)) {
         Column(modifier) { row.calls.forEach { ToolRow(it) } }
         return
     }
-    val running = rowRunning(row)
-    OpenableRow(listOf(row), modifier, icon = { RowIcon(actionIcon(row.action.kind), running, rowFailed(row)) }, under = { LookedAt(row) }) {
-        ActionLabel(row, live = running)
+    OpenableRow(listOf(row), modifier, icon = { RowIcon(actionIcon(row.action.kind), rowFailed(row)) }, under = { LookedAt(row) }) {
+        ActionLabel(row, live = rowRunning(row))
     }
 }
 
 @Composable
-private fun PairRow(first: TraceRow, second: TraceRow) {
-    OpenableRow(listOf(first, second), icon = { RowIcon(actionIcon(first.action.kind), running = false, failed = false) }) {
+private fun PairRow(first: TraceRow, second: TraceRow, modifier: Modifier = Modifier) {
+    OpenableRow(listOf(first, second), modifier, icon = { RowIcon(actionIcon(first.action.kind), failed = false) }) {
         PairLabel(first, second)
     }
 }
@@ -107,10 +135,9 @@ private fun LookedAt(row: TraceRow) {
 }
 
 @Composable
-private fun RowIcon(icon: ImageVector, running: Boolean, failed: Boolean) {
+private fun RowIcon(icon: ImageVector, failed: Boolean) {
     val c = RelayTheme.colors
-    if (running) Spinner(size = 14.dp, color = c.mutedForeground)
-    else Icon(icon, null, Modifier.alpha(0.75f), size = 14.dp, tint = if (failed) c.destructive else c.mutedForeground)
+    Icon(icon, null, Modifier.alpha(0.75f), size = 14.dp, tint = if (failed) c.destructive else c.mutedForeground)
 }
 
 /** A row that opens to its calls when there's something inside them to show. */
@@ -192,28 +219,33 @@ private fun CommandLine(command: String) {
 
 /** Three or more of a kind: a header that folds open into a tree of their rows. */
 @Composable
-private fun Branch(branch: TracePiece.Branch) {
-    val c = RelayTheme.colors
+private fun Branch(branch: TracePiece.Branch, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val running = branch.rows.any(::rowRunning)
     val failed = branch.rows.any(::rowFailed)
-    Column {
-        Step(Modifier.pressable(onClick = { open = !open }, scale = false)) {
-            RowIcon(branchIcon(branch), running, failed = false)
-            Text(branch.heading, Modifier.weight(1f, fill = false), maxLines = 1, color = if (failed) c.destructive else c.mutedForeground)
-            Icon(
-                TablerIcons.Outline.ChevronRight, null, size = 13.dp, tint = c.faint,
-                modifier = if (open) Modifier.rotate(90f) else Modifier,
-            )
-        }
+    Column(modifier) {
+        FoldHeading(branchIcon(branch.kind, branch.rows), branch.heading, failed, open, onToggle = { open = !open })
         if (open) branch.rows.forEachIndexed { index, row ->
-            val elbow = Modifier.treeElbow(last = index == branch.rows.lastIndex, color = c.faint.copy(alpha = 0.5f))
+            val elbow = Modifier.treeElbow(last = index == branch.rows.lastIndex, color = treeLine())
             key(row.id) { ActionRow(row, elbow.padding(start = INDENT)) }
         }
     }
 }
 
-private fun branchIcon(branch: TracePiece.Branch): ImageVector = when (branch.kind) {
+/** A branch's or a folded run's line; any failed row under it turns its words red. */
+@Composable
+private fun FoldHeading(icon: ImageVector, text: String, failed: Boolean, open: Boolean, onToggle: () -> Unit) {
+    val c = RelayTheme.colors
+    Step(Modifier.pressable(onClick = onToggle, scale = false)) {
+        RowIcon(icon, failed = false)
+        Text(text, Modifier.weight(1f, fill = false), maxLines = 1, color = if (failed) c.destructive else c.mutedForeground)
+        Icon(
+            TablerIcons.Outline.ChevronRight, null, size = 13.dp, tint = c.faint,
+            modifier = if (open) Modifier.rotate(90f) else Modifier,
+        )
+    }
+}
+
+private fun branchIcon(kind: BranchKind, rows: List<TraceRow>): ImageVector = when (kind) {
     BranchKind.Read -> actionIcon("read")
     BranchKind.Search -> actionIcon("search")
     BranchKind.Web -> actionIcon("web")
@@ -222,10 +254,13 @@ private fun branchIcon(branch: TracePiece.Branch): ImageVector = when (branch.ki
     BranchKind.Git -> actionIcon("git")
     BranchKind.Check -> actionIcon("test")
     BranchKind.Commit -> actionIcon("commit")
-    BranchKind.Tool -> if (allAgents(branch.rows)) TablerIcons.Outline.Robot else actionIcon("tool")
+    BranchKind.Tool -> if (allAgents(rows)) TablerIcons.Outline.Robot else actionIcon("tool")
 }
 
 private fun allAgents(rows: List<TraceRow>) = rows.all { row -> row.calls.all { it.kind == "agent" } }
+
+@Composable
+private fun treeLine() = RelayTheme.colors.faint.copy(alpha = 0.5f)
 
 /**
  * The tree's line, drawn beside a row: down from the branch header's icon, and

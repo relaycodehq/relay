@@ -73,9 +73,6 @@ fun traceRun(calls: List<AgentActivity>): TraceRun {
 /** A row per thing done, in the order the calls came: how a run shows while the agent is still on it. */
 fun rowsOf(calls: List<AgentActivity>): List<TraceRow> = rowDrafts(calls).map(RowDraft::row)
 
-/** The row a single call leads with: what the live batch's head names. */
-fun leadRow(call: AgentActivity): TraceRow? = rowsOf(listOf(call)).firstOrNull()
-
 private fun actionsOf(call: AgentActivity) = call.actions ?: listOf(CallAction("tool"))
 
 /**
@@ -185,7 +182,7 @@ private fun commandRuns(rows: List<TraceRow>): List<List<TraceRow>> {
     for (row in rows) {
         val last = runs.lastOrNull()
         val joinsLast = last != null && !isWrite(row.action) && !isWrite(last.first().action)
-        if (joinsLast) last!! += row else runs += mutableListOf(row)
+        if (joinsLast) last += row else runs += mutableListOf(row)
     }
     return runs
 }

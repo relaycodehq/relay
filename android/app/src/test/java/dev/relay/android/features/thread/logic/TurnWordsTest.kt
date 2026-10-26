@@ -113,21 +113,25 @@ class TurnWordsTest {
         assertEquals(2, (parts[0] as TracePart.Run).activity.size)
     }
 
-    @Test fun aRunningTurnsOnlyRunStaysOneRowAsTheAgentWritesAndCallsAgain() {
+    @Test fun onlyTheLastRunOfARunningTurnIsLive() {
         val run = (1..10).map { act(call("r$it", "command", "complete")) }
-        fun shapes(trace: List<AgentTrace>, live: Boolean, settled: Boolean): List<RunShape> {
-            val parts = groupTrace(trace)
-            return parts.indices.filter { parts[it] is TracePart.Run }.map { runShape(parts, it, live, settled) }
-        }
         val wrote = run + AgentTrace("commentary", "c1", text = "Found it")
         val calledAgain = wrote + act(call("n", "command", "running"))
-        // Rows here would unfold ten lines under the reader, then fold them again a call later.
-        assertEquals(listOf(RunShape.Live), shapes(run, live = true, settled = false))
-        assertEquals(listOf(RunShape.Group), shapes(wrote, live = true, settled = false))
-        assertEquals(listOf(RunShape.Group, RunShape.Live), shapes(calledAgain, live = true, settled = false))
-        // Held open for a reader once it ended, it still doesn't unfold.
-        assertEquals(listOf(RunShape.Group), shapes(wrote, live = false, settled = false))
-        assertEquals(listOf(RunShape.Rows), shapes(wrote, live = false, settled = true))
+        val asked = calledAgain + act(call("q", "tool", "running", "AskUserQuestion"))
+        fun runs(trace: List<AgentTrace>, live: Boolean): List<String> {
+            val parts = groupTrace(trace)
+            return parts.indices.filter { parts[it] is TracePart.Run }.map { index ->
+                val run = parts[index] as TracePart.Run
+                listOfNotNull("live".takeIf { runIsLive(parts, index, live) }, "only".takeIf { onlyRun(parts, run) }).joinToString(" ")
+            }
+        }
+        assertEquals(listOf("live only"), runs(run, live = true))
+        // Commentary closes the run; it stays the turn's only one until the agent calls again.
+        assertEquals(listOf("only"), runs(wrote, live = true))
+        assertEquals(listOf("", "live"), runs(calledAgain, live = true))
+        assertEquals(listOf("only"), runs(run, live = false))
+        // A question waiting on the reader is its own run, never a live one.
+        assertEquals(listOf("", "", ""), runs(asked, live = true))
     }
 
     @Test fun nestsSubagentCallsUnderTheirAgentRow() {
