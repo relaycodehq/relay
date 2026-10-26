@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { AgentActivity } from "../../../shared/projects";
 import { rowsOf } from "../../../shared/trace-tree";
-import { foldAway, foldMs, growIn } from "../../lib/fold-motion";
+import { foldAway, foldMs, growIn, moves } from "../../lib/fold-motion";
 import { ClosedRun, Row } from "./TraceRun";
 
 /** Opens in from nothing as it mounts, when `grow`, rather than pushing the pinned thread up. */
@@ -23,13 +23,13 @@ function GrowIn({ grow, children }: { grow: boolean; children: ReactNode }) {
   return <div ref={box}>{children}</div>;
 }
 
-/** True for as long as the fold takes, once `live` turns false while the reader watches. */
+/** True for as long as the fold takes, once `live` turns false while the reader watches and things move. */
 function useClosing(live: boolean, watching: boolean) {
   const [wasLive, setWasLive] = useState(live);
   const [closing, setClosing] = useState(false);
   if (wasLive !== live) {
     setWasLive(live);
-    setClosing(!live && watching);
+    setClosing(!live && watching && moves());
   }
   useEffect(() => {
     if (!closing) return;

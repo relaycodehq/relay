@@ -31,9 +31,15 @@ const noRoom: Keyframe = {
   opacity: 0,
 };
 
-/** Plays `frames` clipped to the box; none under reduced motion. */
+/**
+ * Whether to move at all. A window behind another still draws every frame of
+ * an animation nobody sees: a turn's rows growing in doubled Relay's CPU while
+ * unfocused. Asked before measuring, which costs a layout of its own.
+ */
+export const moves = () => !reducedMotion() && document.hasFocus();
+
+/** Plays `frames` clipped to the box. */
 function play(el: HTMLElement, frames: Keyframe[], fill: FillMode) {
-  if (reducedMotion()) return undefined;
   const { overflow, boxSizing } = el.style;
   el.style.overflow = "hidden";
   el.style.boxSizing = "border-box";
@@ -51,8 +57,8 @@ function play(el: HTMLElement, frames: Keyframe[], fill: FillMode) {
 
 /** Folds `el` away to nothing, where it stays until its owner removes it. */
 export const foldAway = (el: HTMLElement) =>
-  play(el, [roomOf(el), noRoom], "forwards");
+  moves() ? play(el, [roomOf(el), noRoom], "forwards") : undefined;
 
 /** Opens `el` from nothing to the room it takes. */
 export const growIn = (el: HTMLElement) =>
-  play(el, [noRoom, roomOf(el)], "none");
+  moves() ? play(el, [noRoom, roomOf(el)], "none") : undefined;
