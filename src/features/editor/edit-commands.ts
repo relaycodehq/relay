@@ -5,6 +5,7 @@ import type { Command } from "@codemirror/view";
 /** ⌘D: the line again below it, or the selection again after itself. */
 export const duplicate: Command = (view) => {
   const { state } = view;
+  if (state.readOnly) return false;
   if (state.selection.ranges.every((r) => r.empty)) return copyLineDown(view);
   view.dispatch(
     state.changeByRange((range) =>
@@ -37,6 +38,7 @@ export const unselectOccurrence: StateCommand = ({ state, dispatch }) => {
 
 /** ⌘⌥⏎: a new line above the caret's, indented like it. */
 export const newLineAbove: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false;
   dispatch(
     state.update(
       state.changeByRange((range) => {
@@ -55,6 +57,7 @@ export const newLineAbove: StateCommand = ({ state, dispatch }) => {
 
 /** ⌃⇧J: the next line pulled up onto this one, one space between. */
 export const joinLines: StateCommand = ({ state, dispatch }) => {
+  if (state.readOnly) return false;
   const changes = state.changeByRange((range) => {
     const first = state.doc.lineAt(range.from);
     const last = state.doc.lineAt(range.to);
@@ -84,7 +87,8 @@ export const joinLines: StateCommand = ({ state, dispatch }) => {
 
 /** ⌘⇧U: upper case, or lower when it already is. */
 export const toggleCase: StateCommand = ({ state, dispatch }) => {
-  if (state.selection.ranges.every((r) => r.empty)) return false;
+  if (state.readOnly || state.selection.ranges.every((r) => r.empty))
+    return false;
   dispatch(
     state.update(
       state.changeByRange((range) => {
