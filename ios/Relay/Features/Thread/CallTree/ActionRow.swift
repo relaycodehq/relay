@@ -56,7 +56,7 @@ struct ActionRow: View {
                 }
             }
             if open {
-                RowOpened(calls: calls, context: context).padding(.leading, 24)
+                RowOpened(rows: rows, calls: calls, context: context).padding(.leading, 24)
             }
         }
     }

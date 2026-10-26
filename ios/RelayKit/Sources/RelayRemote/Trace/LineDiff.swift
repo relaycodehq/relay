@@ -23,8 +23,8 @@ public let maxDiffCells = 2_000_000
 /// `old` turned into `new` through their longest common run of lines; within a change the
 /// removed lines come before the added ones.
 public func lineDiff(_ old: String, _ new: String) -> [DiffLine] {
-    let before = old.components(separatedBy: "\n")
-    let after = new.components(separatedBy: "\n")
+    let before = linesOf(old)
+    let after = linesOf(new)
     // The lines both start and end with need no table.
     var head = 0
     while head < before.count, head < after.count, before[head] == after[head] { head += 1 }
@@ -86,4 +86,9 @@ public func patchLines(_ diff: String) -> [DiffLine]? {
 /// "+17 −2": how many lines a diff added and removed.
 public func changeCounts(_ lines: [DiffLine]) -> (added: Int, removed: Int) {
     (lines.count { $0.mark == .added }, lines.count { $0.mark == .removed })
+}
+
+/// A passage's lines; an empty one, like what a deletion leaves, has none.
+private func linesOf(_ text: String) -> [String] {
+    text.isEmpty ? [] : text.components(separatedBy: "\n")
 }

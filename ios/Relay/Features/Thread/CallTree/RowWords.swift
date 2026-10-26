@@ -101,9 +101,9 @@ extension RowWords {
                 say(" ")
                 file(target)
             }
-            outcome(live: live, failed: failed)
+            outcome(row, live: live)
         case .check:
-            outcome(live: live, failed: failed)
+            outcome(row, live: live)
         case .commit(let hash, let subject):
             if let hash {
                 say(" ")
@@ -149,10 +149,11 @@ extension RowWords {
         if searchedOneFile(place) { file(place) } else { self.place(shortWhere(place)) }
     }
 
-    private mutating func outcome(live: Bool, failed: Bool) {
-        if failed {
+    /// A finished test or check says how it went beside its verb; one stopped first says nothing more.
+    private mutating func outcome(_ row: TraceRow, live: Bool) {
+        if rowFailed(row) {
             mark("xmark", colors.destructive)
-        } else if !live {
+        } else if !live, !verdictStopped(row) {
             mark("checkmark", colors.additionText)
         }
     }
@@ -188,7 +189,7 @@ func branchSymbol(_ kind: BranchKind) -> String {
     case .edit: "pencil"
     case .run: "terminal"
     case .check: "flask"
-    case .commit: "circle.and.line.horizontal"
+    case .commit, .git: "circle.and.line.horizontal"
     case .tool: "wrench"
     }
 }

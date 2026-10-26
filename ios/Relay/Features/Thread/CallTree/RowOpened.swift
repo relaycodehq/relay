@@ -15,8 +15,9 @@ struct CallContext {
     var canFetch: Bool { !chatId.isEmpty }
 }
 
-/// What a row opens to, call by call: the code it wrote, else what it ran and what came back.
+/// What a row opens to, call by call: the code it wrote, then what it ran and what came back.
 struct RowOpened: View {
+    let rows: [TraceRow]
     let calls: [AgentActivity]
     let context: CallContext
     @Environment(Connection.self) private var connection
@@ -25,7 +26,7 @@ struct RowOpened: View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(calls) { call in
                 if showsWritten(call) {
-                    WrittenLoader(call: call, context: context)
+                    WrittenLoader(call: call, rows: rows, context: context)
                 }
                 if showsOutput(call) {
                     CallOutput(call: call, context: context)
@@ -38,10 +39,24 @@ struct RowOpened: View {
         call.wroteCode == true && context.canFetch && connection.canOpenWritten
     }
 
-    /// What a call printed, unless it only confirms the code shown above it; a failure always says why.
+    /// What a call printed, unless it only confirms the code shown above it; a failure always says
+    /// why, and a command that wrote a script shows what running it printed.
     private func showsOutput(_ call: AgentActivity) -> Bool {
-        !showsWritten(call) || call.status == "failed"
+        !showsWritten(call) || call.kind == "command" || call.status == "failed"
     }
+}
+
+/// Whether a file a call wrote belongs under these rows: a call that wrote three files has a row
+/// for each. A file none of the call's actions names, its opener cut off the label, goes with
+/// whichever row opens.
+private func writtenFor(_ rows: [TraceRow], _ call: AgentActivity, path: String) -> Bool {
+    let about = Set(rows.compactMap { writtenFile($0.action) })
+    let named = Set((call.actions ?? []).compactMap(writtenFile))
+    return about.contains(path) || !named.contains(path)
+}
+
+private func writtenFile(_ action: CallAction) -> String? {
+    action.kind == "edit" || action.kind == "create" ? action.file : nil
 }
 
 /// Whether a row has anything to open to.
@@ -103,6 +118,8 @@ struct CallOutput: View {
 /// Fetches what a call wrote on open; without it, the call's output as before.
 private struct WrittenLoader: View {
     let call: AgentActivity
+    /// The rows it opens under, which say which of the call's files to show.
+    let rows: [TraceRow]
     let context: CallContext
     @Environment(Connection.self) private var connection
     @State private var written: [WrittenCode]?
@@ -117,8 +134,8 @@ private struct WrittenLoader: View {
                     }
                 }
             } else if missing {
-                // A failed call's output already shows beside this.
-                if call.status != "failed" { CallOutput(call: call, context: context) }
+                // A command's or a failed call's output already shows beside this.
+                if call.status != "failed", call.kind != "command" { CallOutput(call: call, context: context) }
             } else {
                 Spinner(size: 13).padding(.vertical, 4)
             }
@@ -129,6 +146,6 @@ private struct WrittenLoader: View {
     private func fetch() async {
         guard written == nil, !missing else { return }
         let files = try? await connection.activityWritten(context.chatId, message: context.messageId, activity: call.id)
-        if let files, !files.isEmpty { written = files } else { missing = true }
+        if let files, !files.isEmpty { written = files.filter { writtenFor(rows, call, path: $0.path) } } else { missing = true }
     }
 }

@@ -8,14 +8,14 @@ public struct TraceRow: Sendable, Equatable, Identifiable {
     public var id: String
     public var action: CallAction
     public var calls: [AgentActivity]
-    /// A file read more than once: each read's lines.
+    /// The lines each read of the file printed; none when a read took it whole.
     public var lines: [String]?
     /// A script written, then run straight after.
     public var ranToo = false
 }
 
 public enum BranchKind: String, Sendable {
-    case read, search, web, edit, run, check, commit, tool
+    case read, search, web, edit, run, git, check, commit, tool
 }
 
 public enum TracePiece: Sendable, Equatable, Identifiable {
@@ -44,6 +44,14 @@ public func rowRunning(_ row: TraceRow) -> Bool {
     row.calls.contains { $0.status == "running" }
 }
 
+/// A test or check stopped before it said how it went.
+public func verdictStopped(_ row: TraceRow) -> Bool {
+    switch row.action {
+    case .test(_, let failed), .check(_, let failed): !failed && row.calls.contains { $0.status == "stopped" }
+    default: false
+    }
+}
+
 /// A test or check fails by its result; anything else only when its call failed.
 public func rowFailed(_ row: TraceRow) -> Bool {
     switch row.action {
@@ -59,23 +67,24 @@ public func traceTree(_ calls: [AgentActivity]) -> [TracePiece] {
     }
 }
 
-/// What a call did worth a row: a commit's own `git log` says nothing new, and a running call has
-/// only started its first part.
-func shownActions(_ call: AgentActivity) -> [CallAction] {
-    let actions = call.actions ?? [.tool]
+/// What a call did worth a row, each with where it stands among the call's actions: a commit's own
+/// `git log` says nothing new, and a running call has only started its first part.
+func shownActions(_ call: AgentActivity) -> [(action: CallAction, index: Int)] {
+    let actions = (call.actions ?? [.tool]).enumerated().map { (action: $0.element, index: $0.offset) }
     if call.status == "running" { return Array(actions.prefix(1)) }
-    let commits = actions.contains { $0.kind == "commit" }
-    return commits ? actions.filter { $0.kind != "git" } : actions
+    let commits = actions.contains { $0.action.kind == "commit" }
+    return commits ? actions.filter { $0.action.kind != "git" } : actions
 }
 
-/// A row per thing done; a file read twice running, or a script written then run, share one.
+/// A row per thing done; a file read twice running, or a script written then run, share one. A row
+/// is named by its call and action, so it keeps its id when a call before it finishes and grows rows.
 public func rowsOf(_ calls: [AgentActivity]) -> [TraceRow] {
     var rows: [TraceRow] = []
     for call in calls {
-        for action in shownActions(call) {
+        for (action, index) in shownActions(call) {
             if let last = rows.indices.last, sameRead(rows[last].action, action) {
                 if !rows[last].calls.contains(where: { $0.id == call.id }) { rows[last].calls.append(call) }
-                if case .read(_, let lines?) = action { rows[last].lines = (rows[last].lines ?? []) + [lines] }
+                rows[last].lines = linesOfBoth(rows[last].lines, readLines(action))
                 continue
             }
             if let last = rows.indices.last, ranWhatItWrote(rows[last].action, action) {
@@ -84,12 +93,21 @@ public func rowsOf(_ calls: [AgentActivity]) -> [TraceRow] {
                 rows[last].ranToo = true
                 continue
             }
-            var row = TraceRow(id: "\(call.id):\(rows.count)", action: action, calls: [call])
-            if case .read(_, let lines?) = action { row.lines = [lines] }
-            rows.append(row)
+            rows.append(TraceRow(id: "\(call.id):\(index)", action: action, calls: [call], lines: readLines(action)))
         }
     }
     return rows
+}
+
+private func readLines(_ action: CallAction) -> [String]? {
+    guard case .read(_, let lines?) = action else { return nil }
+    return [lines]
+}
+
+/// Two reads of a file together: each one's lines, or none once either took the whole file.
+private func linesOfBoth(_ earlier: [String]?, _ later: [String]?) -> [String]? {
+    guard let earlier, let later else { return nil }
+    return earlier + later
 }
 
 private func sameRead(_ a: CallAction, _ b: CallAction) -> Bool {
@@ -115,8 +133,9 @@ public func branchOf(_ action: CallAction) -> BranchKind {
     case .edit(let file), .create(let file): isScratch(file) ? .run : .edit
     case .test, .check: .check
     case .commit: .commit
+    case .git: .git
     case .tool: .tool
-    case .git, .run: .run
+    case .run: .run
     }
 }
 
@@ -130,7 +149,7 @@ private func branches(_ rows: [TraceRow]) -> [(BranchKind, [TraceRow])] {
         if let at = branch.firstIndex(where: { sameFile($0, row) }) {
             let earlier = branch[at].calls
             branch[at].calls += row.calls.filter { call in !earlier.contains { $0.id == call.id } }
-            if let lines = row.lines { branch[at].lines = (branch[at].lines ?? []) + lines }
+            branch[at].lines = linesOfBoth(branch[at].lines, row.lines)
         } else {
             if branch.isEmpty { order.append(kind) }
             branch.append(row)
@@ -188,30 +207,38 @@ private func distinctFiles(_ rows: [TraceRow]) -> Int {
 public func branchHeading(_ kind: BranchKind, _ rows: [TraceRow]) -> String {
     switch kind {
     case .read: return "Read \(plural(distinctFiles(rows), "file"))"
-    case .search: return "Searched \(plural(rows.count, "time"))"
-    case .web: return "Searched the web \(plural(rows.count, "time"))"
+    case .search: return "Searched \(times(rows.count))"
+    case .web: return "Searched the web \(times(rows.count))"
     case .edit: return "Edited \(plural(distinctFiles(rows), "file"))"
     case .run: return runHeading(rows)
+    case .git: return "Checked git \(times(rows.count))"
     case .check:
         let failed = rows.filter(rowFailed).count
         return "Ran \(plural(rows.count, "check"))" + (failed > 0 ? " · \(failed) failed" : "")
-    case .commit: return "Committed \(plural(rows.count, "time"))"
+    case .commit: return "Committed \(times(rows.count))"
     case .tool:
         let agents = rows.allSatisfy { $0.calls.allSatisfy { $0.kind == "agent" } }
         return agents ? "Ran \(plural(rows.count, "agent"))" : "Used \(plural(rows.count, "tool"))"
     }
 }
 
-/// Commands all of one program say which: "Ran rg 3 times". Others count the commands themselves:
-/// `a; b; c` is one.
+/// "once", "twice", "3 times".
+private func times(_ count: Int) -> String {
+    switch count {
+    case 1: "once"
+    case 2: "twice"
+    default: "\(count) times"
+    }
+}
+
+/// Commands all of one program say which: "Ran rg 3 times". Counted as the rows under it.
 private func runHeading(_ rows: [TraceRow]) -> String {
     let programs = Set(rows.map { row in
         guard case .run(let what) = row.action else { return row.id }
         return String(what.split(separator: " ", omittingEmptySubsequences: false)[0])
     })
-    if programs.count == 1, let program = programs.first { return "Ran \(program) \(rows.count) times" }
-    let commands = Set(rows.flatMap { row in row.calls.map(\.id) }).count
-    return "Ran \(plural(commands, "command"))"
+    guard programs.count == 1, let program = programs.first else { return "Ran \(plural(rows.count, "command"))" }
+    return rows.count == 1 ? "Ran \(program)" : "Ran \(program) \(rows.count) times"
 }
 
 /// The verb a row leads with, past or, while it runs, present. Tools draw their own row.
@@ -223,13 +250,18 @@ public func actionVerb(_ row: TraceRow, live: Bool = false) -> String {
     case .web: live ? "Searching the web for" : "Searched the web for"
     case .edit: live ? "Editing" : "Edited"
     case .create: live ? "Writing" : "Wrote"
-    case .test(_, let failed): live ? "Running tests" : failed ? "Tests failed" : "Tests passed"
-    case .check(let name, let failed): live ? "Running \(name)" : "\(capitalized(name)) \(failed ? "failed" : "passed")"
+    case .test: live ? "Running tests" : "Tests \(verdictWord(row))"
+    case .check(let name, _): live ? "Running \(name)" : "\(capitalized(name)) \(verdictWord(row))"
     case .commit: live ? "Committing" : "Committed"
     case .git: live ? "Checking" : "Checked"
     case .run: live ? "Running" : "Ran"
     case .tool: ""
     }
+}
+
+private func verdictWord(_ row: TraceRow) -> String {
+    if rowFailed(row) { return "failed" }
+    return verdictStopped(row) ? "stopped" : "passed"
 }
 
 private func capitalized(_ text: String) -> String {

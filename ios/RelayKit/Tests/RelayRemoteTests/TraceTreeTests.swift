@@ -8,6 +8,7 @@ struct TraceTreeTests {
 
     private func row(_ r: TraceRow) throws -> JSON {
         var fields: [String: JSON] = [
+            "id": .string(r.id),
             "action": try JSON(encoding: r.action),
             "calls": .array(r.calls.map { .string($0.id) }),
             "failed": .bool(rowFailed(r)),
@@ -133,7 +134,8 @@ struct LineDiffTests {
     }
 
     @Test func emptySidesAreAllAddedOrAllRemoved() {
-        #expect(lineDiff("", "a\nb").filter { $0.mark != .same }.map(\.text) == ["", "a", "b"])
+        #expect(lineDiff("", "a\nb") == [DiffLine(.added, "a"), DiffLine(.added, "b")])
+        #expect(lineDiff("a\nb", "") == [DiffLine(.removed, "a"), DiffLine(.removed, "b")])
         #expect(lineDiff("a", "a") == [DiffLine(.same, "a")])
     }
 

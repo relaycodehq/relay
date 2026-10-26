@@ -23,8 +23,9 @@ public func readCode(_ call: AgentActivity) -> ReadCode? {
     guard let actions = call.actions, actions.count == 1, case .read(let file, let range) = actions[0] else { return nil }
     let lines = withoutLastNewline(detail).components(separatedBy: "\n")
     let numbered = numberedRun(lines)
-    // Claude's Read always numbers its lines; a command's output only counts as numbered when most of it is.
-    let isNumbered = !numbered.isEmpty && (call.kind == "read" || numbered.count * 2 >= lines.count)
+    // Claude's Read always numbers its lines; a command's output only when the command numbers them and most of it is.
+    let numberedByCommand = call.label.firstMatch(of: numbersItsLines) != nil && numbered.count * 2 >= lines.count
+    let isNumbered = !numbered.isEmpty && (call.kind == "read" || numberedByCommand)
     if isNumbered {
         return ReadCode(file: file, code: numbered.map(\.text).joined(separator: "\n"), first: numbered[0].n)
     }
@@ -40,6 +41,9 @@ private func withoutLastNewline(_ text: String) -> String {
 
 /// A line `cat -n` style: its number, a tab (an arrow in older Claude Code), then the line.
 nonisolated(unsafe) private let numberedLine = #/^\s*(\d+)(?:\t|→)(.*)$/#.asciiOnlyDigits()
+
+/// Commands that number what they print: `nl`, `cat -n`. Any other output's leading numbers are the file's own.
+nonisolated(unsafe) private let numbersItsLines = #/(?:^|[\s;&|('"])(?:nl\s|cat\s+-[A-Za-z]*n)/#
 
 /// The longest run of numbered lines counting up from the top. Output kept from its end may start
 /// mid-line, so the run can start on the second line; it stops where something was appended after
