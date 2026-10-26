@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { X } from "lucide-react";
+import type { CommitFileChange } from "../../../shared/history";
 import { api } from "../../lib/api";
 import { DiffStatLabel } from "./DiffStatLabel";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
@@ -14,14 +15,11 @@ export type CommitVersion = { sha: string; short: string; parent: string };
 export function CommitChanges({
   projectId,
   sha,
-  shownPath,
   onClose,
   onOpenFile,
 }: {
   projectId: string;
   sha: string;
-  /** The file in front of the editor, marked in the list. */
-  shownPath?: string | null;
   onClose: () => void;
   onOpenFile: (path: string, commit: CommitVersion) => void;
 }) {
@@ -55,34 +53,53 @@ export function CommitChanges({
           <X size={15} />
         </IconButton>
       </header>
-      {detail.error ? (
-        <ErrorBox error={detail.error} />
-      ) : !commit ? (
-        <Loading text="Reading commit…" />
-      ) : (
-        <div className="working-file-list">
-          <section aria-label="Changed files">
-            <header>
-              <strong>
-                Changed files <span>{commit.files.length}</span>
-              </strong>
-            </header>
-            {commit.files.map((f) => (
-              <div className={`working-file ${f.path === shownPath ? "selected" : ""}`} key={f.path}>
-                <button
-                  className="working-select turn-file"
-                  title={f.previousPath ? `${f.previousPath} → ${f.path}` : f.path}
-                  onClick={() => onOpenFile(f.path, version)}
-                >
-                  <FileEntryIcon path={f.path} directory={false} />
-                  <MiddleTruncate text={f.path} kind="path" title={null} />
-                  {!f.binary && <DiffStatLabel stat={f} />}
-                </button>
-              </div>
-            ))}
-          </section>
-        </div>
+      {detail.error && <ErrorBox error={detail.error} />}
+      {!detail.error && !commit && <Loading text="Reading commit…" />}
+      {commit && (
+        <CommitFiles
+          files={commit.files}
+          version={version}
+          onOpenFile={onOpenFile}
+        />
       )}
     </section>
+  );
+}
+
+/** The files a commit changed; one picked opens as the commit left it. */
+function CommitFiles({
+  files,
+  version,
+  onOpenFile,
+}: {
+  files: CommitFileChange[];
+  version: CommitVersion;
+  onOpenFile: (path: string, commit: CommitVersion) => void;
+}) {
+  if (!files.length)
+    return <p className="empty">This commit changes no files.</p>;
+  return (
+    <div className="working-file-list">
+      <section aria-label="Changed files">
+        <header>
+          <strong>
+            Changed files <span>{files.length}</span>
+          </strong>
+        </header>
+        {files.map((f) => (
+          <div className="working-file" key={f.path}>
+            <button
+              className="working-select turn-file"
+              title={f.previousPath ? `${f.previousPath} → ${f.path}` : f.path}
+              onClick={() => onOpenFile(f.path, version)}
+            >
+              <FileEntryIcon path={f.path} directory={false} />
+              <MiddleTruncate text={f.path} kind="path" title={null} />
+              {!f.binary && <DiffStatLabel stat={f} />}
+            </button>
+          </div>
+        ))}
+      </section>
+    </div>
   );
 }
