@@ -64,14 +64,7 @@ export function EditorBar({
       {servers}
       {checks}
       <span className="editor-bar-gap" />
-      {baseline && (
-        <span className="editor-bar-baseline">
-          Changes since {baseline.label}
-          <IconButton label={`Show changes since ${base} instead`} onClick={baseline.onDrop}>
-            <X size={12} />
-          </IconButton>
-        </span>
-      )}
+      {baseline && <BaselineNote baseline={baseline} base={base} />}
       {modes}
       {onCompare && (
         <IconButton
@@ -83,16 +76,48 @@ export function EditorBar({
         </IconButton>
       )}
       <span className="editor-bar-actions">{actions}</span>
-      <button
-        type="button"
-        className="editor-save"
-        aria-label="Save locally"
-        title={`Save to the local folder${saveKeys && ` (${saveKeys})`}`}
-        disabled={!status.dirty || status.saving || status.loading}
-        onClick={onSave}
-      >
-        Save
-      </button>
+      <SaveButton status={status} keys={saveKeys} onSave={onSave} />
     </div>
+  );
+}
+
+/** Says the changes show against a baseline, and drops it. */
+function BaselineNote({
+  baseline,
+  base,
+}: {
+  baseline: { label: string; onDrop: () => void };
+  base: string;
+}) {
+  return (
+    <span className="editor-bar-baseline">
+      Changes since {baseline.label}
+      <IconButton label={`Show changes since ${base} instead`} onClick={baseline.onDrop}>
+        <X size={12} />
+      </IconButton>
+    </span>
+  );
+}
+
+function SaveButton({
+  status,
+  keys,
+  onSave,
+}: {
+  status: DocumentStatus;
+  keys: string;
+  onSave: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="editor-save"
+      aria-label="Save locally"
+      title={`Save to the local folder${keys && ` (${keys})`}`}
+      disabled={!status.dirty || status.saving || status.loading}
+      onClick={onSave}
+    >
+      Save
+    </button>
   );
 }

@@ -225,7 +225,6 @@ export const bigFunctions: Record<string, number> = {
   "src/features/files/FileTree.tsx › FileTree": 282,
   "src/features/files/FileTreeRow.tsx › FileTreeRow": 129,
   "src/features/files/ProjectFiles.tsx › ProjectFiles": 86,
-  "src/features/editor/EditorBar.tsx › EditorBar": 83,
   "src/features/handoff/AddComputer.tsx › AddComputer": 224,
   "src/features/handoff/CheckupLines.tsx › CheckupLines": 156,
   "src/features/handoff/ComputerCard.tsx › ComputerCard": 170,
