@@ -34,6 +34,9 @@ export function useIncomingLinks(
     // A shared thread to carry on here, from a guest page's button.
     const guest = guestImportLink(url);
     if (guest) return setGuestLink(guest);
+    // One that isn't a guest page's link is no pull request either.
+    if (/^relay:\/\/guest\b/i.test(url))
+      return setError(new Error("That shared thread link can't be opened."));
     setIncoming({ url });
     setInbox(true);
     // GitHub and Azure DevOps links go through their CLI's login; only
