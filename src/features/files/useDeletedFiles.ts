@@ -21,7 +21,10 @@ export function useDeletedFiles(
   const [error, setError] = useState<unknown>();
   /** Deleted in the index too reads the version from HEAD; only on disk, from the index. */
   const deletionArea = (path: string): ChangeArea | undefined => {
-    const change = tree?.changes.find((c) => c.path === path);
+    const changes = tree?.changes.filter((c) => c.path === path) ?? [];
+    // Taken out of Git alone (git rm --cached), it's still on disk, untracked.
+    if (changes.some((c) => c.index === "?")) return undefined;
+    const change = changes[0];
     if (change?.index === "D") return "staged";
     if (change?.worktree === "D") return "unstaged";
   };
