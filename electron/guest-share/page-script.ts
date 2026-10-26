@@ -15,9 +15,22 @@ export const GUEST_SCRIPT = String.raw`(() => {
     if (text !== undefined) node.textContent = text;
     return node;
   };
-  const guestId = localStorage.getItem("relay-guest-id") || (() => {
+  // A browser blocking storage throws on reading it; the page then just doesn't remember.
+  const stored = (key) => {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const store = (key, value) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  };
+  const guestId = stored("relay-guest-id") || (() => {
     const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
-    localStorage.setItem("relay-guest-id", id);
+    store("relay-guest-id", id);
     return id;
   })();
   const dark = matchMedia("(prefers-color-scheme: dark)").matches;
@@ -35,7 +48,7 @@ export const GUEST_SCRIPT = String.raw`(() => {
   const nodes = new Map();
   let ended = false;
 
-  $("name").value = localStorage.getItem("relay-guest-name") || "";
+  $("name").value = stored("relay-guest-name") || "";
   $("continue").href = "relay://guest?link=" + encodeURIComponent(location.origin + base);
 
   function hydrate(root) {
@@ -245,7 +258,7 @@ export const GUEST_SCRIPT = String.raw`(() => {
     const name = $("name").value.trim();
     const text = $("text").value.trim();
     if (!name || !text) return;
-    localStorage.setItem("relay-guest-name", name);
+    store("relay-guest-name", name);
     const button = $("send");
     button.disabled = true;
     $("status").textContent = "Sending…";
