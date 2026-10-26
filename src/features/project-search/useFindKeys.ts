@@ -31,16 +31,19 @@ export function useFindKeys(panel: {
         tree.selectedIndex + (e.key === "ArrowDown" ? 1 : -1),
       );
     }
-    const inField = e.target instanceof HTMLInputElement;
+    // A field or button keeps its own keys: Enter on Replace All replaces, not opens.
+    const inControl =
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLButtonElement;
     const fromFindField = e.target === findInput.current;
-    if (e.key === "Enter" && (fromFindField || !inField)) {
+    if (e.key === "Enter" && (fromFindField || !inControl)) {
       e.preventDefault();
       const target = tree.openTargetAt(tree.selectedIndex);
       if (target) onOpen(target);
       return;
     }
     const row = tree.selectedRow;
-    if (inField || !row) return;
+    if (inControl || !row) return;
     if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       tree.toggleLeftOut(row.file.path);
