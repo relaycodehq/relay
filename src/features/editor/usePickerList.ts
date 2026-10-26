@@ -44,6 +44,8 @@ export function usePickerList(
   }, [selected]);
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // These keys finish a word being composed in an input method first.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();
