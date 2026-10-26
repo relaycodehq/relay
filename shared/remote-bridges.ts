@@ -2,7 +2,9 @@
 // version may use it. Bump `remoteBridgeVersion` when the bridge gains calls.
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 35;
+export const remoteBridgeVersion = 36;
+/** Phones may ask another agent for a second opinion on an answer and send it back (`askSecondOpinion`, `sendSecondOpinion`). */
+export const secondOpinionBridge = 36;
 /**
  * A thread's calls carry what they did (`actions`), and a call that wrote
  * code says so (`wroteCode`); `activityWritten` returns the code.

@@ -8,8 +8,8 @@ import { slowForwardedMethods } from "./handoff-methods";
 /**
  * Desktop calls a paired phone makes as they are, validated by the desktop's
  * own dispatch: threads and their notes, models, Git (stage, commit, push, pull, fetch,
- * branches), read-only files, history, background tasks, subagents and pull requests
- * (reading them, commenting and reviewing); only what the
+ * branches), read-only files, history, background tasks, subagents, second
+ * opinions and pull requests (reading them, commenting and reviewing); only what the
  * phone app uses. Terminals, file saves, settings (bar the agent new threads
  * start on), sharing and anything that opens a desktop dialog are not on the
  * list and stay out of reach.
@@ -87,6 +87,8 @@ export const phoneDesktopMethods = [
   "discussion",
   "comment",
   "submitReview",
+  "askSecondOpinion",
+  "sendSecondOpinion",
 ] as const satisfies readonly ApiMethod[];
 
 export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
@@ -239,6 +241,8 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "mergePull",
   "submitReview",
   "comment",
+  // Makes a thread, maybe a worktree, and carries the question's screenshots.
+  "askSecondOpinion",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */
