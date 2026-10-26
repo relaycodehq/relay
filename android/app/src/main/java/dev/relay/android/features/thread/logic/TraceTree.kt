@@ -92,7 +92,7 @@ private fun rowsOf(calls: List<AgentActivity>): List<RowDraft> {
             continue
         }
         if (last != null && ranWhatItWrote(last.action, action)) {
-            last.calls += call
+            last.addOnce(call)
             last.ranToo = true
             continue
         }
@@ -165,7 +165,8 @@ private fun pieces(kind: BranchKind, rows: List<TraceRow>): List<TracePiece> = w
     else -> listOf(TracePiece.Branch(kind, branchHeading(kind, rows), rows))
 }
 
-private val pairVerbs = setOf("read", "image", "search", "web", "edit", "create", "run", "git")
+/** Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail. */
+private val pairVerbs = setOf("read", "search", "web", "edit", "create", "run", "git")
 
 /** Two rows one verb can carry: same action, both settled and fine, said the same way. */
 private fun pairable(a: TraceRow, b: TraceRow): Boolean {

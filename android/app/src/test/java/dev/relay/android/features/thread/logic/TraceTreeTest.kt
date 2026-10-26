@@ -10,6 +10,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -34,6 +35,17 @@ class TraceTreeTest {
             assertEquals("$name: pieces", expected.map { it.string("kind") }, actual.map(::kindOf))
             expected.zip(actual).forEachIndexed { index, (want, got) -> assertPiece("$name #$index", want, got) }
         }
+    }
+
+    @Test
+    fun aScriptWrittenAndRunInOneCallIsOneCallsRow() {
+        val both = AgentActivity(
+            id = "both", kind = "command", label = "cat > /tmp/check.py <<'EOF' … python3 /tmp/check.py", status = "complete",
+            actions = listOf(CallAction("create", file = "/tmp/check.py"), CallAction("run", what = "check.py")),
+        )
+        val row = (traceTree(listOf(both)).single() as TracePiece.Row).row
+        assertTrue(row.ranToo)
+        assertEquals(listOf("both"), row.calls.map { it.id })
     }
 
     @Test
