@@ -44,8 +44,21 @@ export function forgetRipgrep() {
   ripgrep = undefined;
 }
 
-/** The digest of each found file's bytes; one that cannot be read any more is dropped. */
-async function withVersions(root: string, found: FoundFile[]) {
+/**
+ * Whether a file's mtime says it was written after `since`, when ripgrep
+ * started, so the bytes there now may not be the ones it matched. Both are
+ * cut to whole milliseconds, as Date.now() is; a time still to come is a
+ * skewed clock (a network drive), not a write.
+ */
+const writtenSince = (mtimeMs: number, since: number) =>
+  Math.trunc(mtimeMs) > since && mtimeMs <= Date.now();
+
+/**
+ * The digest of each found file's bytes. A file that cannot be read any
+ * more, or was written since the search began, is dropped: its digest would
+ * not be of the text ripgrep matched, and replace trusts it.
+ */
+async function withVersions(root: string, found: FoundFile[], since: number) {
   const out: (ProjectSearchFile | null)[] = new Array(found.length).fill(null);
   let next = 0;
   async function worker() {
@@ -56,10 +69,12 @@ async function withVersions(root: string, found: FoundFile[]) {
       );
       if (!handle) continue;
       try {
-        const stat = await handle.stat();
         // rg searched it, so it fit its limit then; a file that grew is not worth hashing for.
-        if (stat.size > maxFileBytes * 2) continue;
-        out[i] = { ...found[i], version: digest(await handle.readFile()) };
+        if ((await handle.stat()).size > maxFileBytes * 2) continue;
+        const bytes = await handle.readFile();
+        // Asked after the read, so a write during it counts too.
+        if (writtenSince((await handle.stat()).mtimeMs, since)) continue;
+        out[i] = { ...found[i], version: digest(bytes) };
       } finally {
         await handle.close();
       }
@@ -86,6 +101,7 @@ async function ripgrepResult(run: {
 }) {
   const { rg, target, query, globs, limit, timeoutMs, signal } = run;
   try {
+    const since = Date.now();
     const { files, truncated } = await ripgrepSearch({
       rg,
       root: target.root,
@@ -96,7 +112,7 @@ async function ripgrepResult(run: {
     });
     const versioned = signal.aborted
       ? []
-      : await withVersions(target.root, files);
+      : await withVersions(target.root, files, since);
     return { files: versioned, truncated };
   } catch (e) {
     const uninstalled = (e as NodeJS.ErrnoException).code === "ENOENT";

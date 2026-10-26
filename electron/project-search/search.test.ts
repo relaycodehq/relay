@@ -322,6 +322,24 @@ describe.skipIf(!rgPath)("ripgrep", () => {
     );
   });
 
+  it.skipIf(process.platform === "win32")(
+    "drops a file written after ripgrep read it, so replace can't trust a new digest",
+    async () => {
+      const lateRg = join(root, "late-rg.sh");
+      await writeFile(
+        lateRg,
+        `#!/bin/sh\n"${rgPath}" "$@"\ncode=$?\necho needle >> src/app.ts\nexit $code\n`,
+        { mode: 0o755 },
+      );
+      const r = await searchProjectText(target(), find("needle"), live, {
+        rg: lateRg,
+      });
+      expect(r.engine).toBe("ripgrep");
+      expect(r.files.map((f) => f.path)).not.toContain("src/app.ts");
+      expect(r.files.map((f) => f.path)).toContain("untracked.md");
+    },
+  );
+
   it("searches a plain folder without node_modules", async () => {
     const plainRoot = await realpath(
       await mkdtemp(join(tmpdir(), "relay-plain-")),
