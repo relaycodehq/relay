@@ -136,9 +136,11 @@ export const handoffMethods = [
 
 /**
  * Calls a computer forwards (`projectCall`, `handoffCall`, `computerCall`)
- * that wait on the network, git, a model or an install. Given up on early,
- * they'd still finish there, and trying again would push or open a pull
- * request twice; `slowRemoteCall` gives them the slow timeout.
+ * that wait on the network, git, a model, an install or a walk through the
+ * whole folder. Given up on early, they'd still finish there, and trying
+ * again would push, open a pull request or replace text twice;
+ * `slowRemoteCall` gives them the slow timeout. A search alone may run there
+ * as long as the default wait (`searchTimeoutMs`).
  */
 export const slowForwardedMethods = new Set<string>([
   "addingStart",
@@ -159,6 +161,8 @@ export const slowForwardedMethods = new Set<string>([
   "projectPreparePull",
   "projectCreatePull",
   "projectChangeBranch",
+  "searchProjectText",
+  "replaceProjectText",
   "sendProjectChat",
   "compactProjectChat",
   "rerunWorktreeSetup",
