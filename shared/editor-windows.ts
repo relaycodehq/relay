@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { boundsSchema } from "./thread-windows";
+import { digestSchema } from "./validation";
 import { parseWorkspaceId } from "./workspaces";
 
 /**
@@ -36,6 +37,8 @@ export interface UnsavedBuffer {
   /** Its folder has no Git, as the document was opened. */
   plain?: true;
   text: string;
+  /** The file's version on disk the text was edited over; a save over any other is refused. */
+  version?: string;
 }
 
 /** What a file's changes are shown against instead of its last commit, like the file before an agent's turn. */
@@ -72,6 +75,7 @@ export const unsavedBuffersSchema = z
       outside: z.literal(true).optional(),
       plain: z.literal(true).optional(),
       text: z.string().max(64_000_000),
+      version: digestSchema.optional(),
     }),
   )
   .max(500);

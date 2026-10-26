@@ -219,15 +219,25 @@ export class FileDocument {
     }
   }
 
+  /** The version on disk the edits are made over, as read or last saved; a save over any other is refused. */
+  get diskVersion() {
+    return this.version;
+  }
+
   /**
    * Takes unsaved text carried over from another window as an edit, so the
    * document is dirty and the step can be undone. The file must be read first.
+   * `editedOver` is the version on disk the text was edited over there: if the
+   * file has changed since, saving is refused here as it would have been there.
    */
-  adopt(text: string) {
+  adopt(text: string, editedOver?: string) {
     if (!this.state || this.state.sliceDoc() === text) return;
     const changes = minimalChange(this.state, text);
     if (this.dispatchToView) this.dispatchToView({ changes, userEvent: "input.adopt" });
     else this.update(this.state.update({ changes, userEvent: "input.adopt" }));
+    if (editedOver === undefined || editedOver === this.version) return;
+    this.version = editedOver;
+    this.set({ changedOnDisk: true });
   }
 
   /** Looks at the disk. A change is taken without asking when there are no edits to lose. */

@@ -52,6 +52,7 @@ export function collectUnsaved(where: string): UnsavedBuffer[] {
         ? { plain: true as const }
         : {}),
       text: doc.text(),
+      version: doc.diskVersion,
     }));
 }
 
@@ -95,7 +96,8 @@ export async function adoptBuffers(where: string, buffers: UnsavedBuffer[]) {
       );
       const doc = documents.get(source, path, baseExtensions);
       // Typing already in it is newer than what was handed over.
-      if ((await whenRead(doc)) && !doc.status.dirty) doc.adopt(buffer.text);
+      if ((await whenRead(doc)) && !doc.status.dirty)
+        doc.adopt(buffer.text, buffer.version);
     }),
   );
 }

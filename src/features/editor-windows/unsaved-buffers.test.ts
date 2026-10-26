@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({
     original: `disk ${path}\n`,
     version: "v1",
   })),
+  save: vi.fn(async () => ({ version: "v2" })),
 }));
 vi.mock("../../lib/api", () => ({
   api: {
     projectFile: mocks.read,
+    saveProjectFile: mocks.save,
     localHistoryRecord: vi.fn(async () => {}),
   },
 }));
@@ -69,9 +71,30 @@ it("carries the unsaved text of the workspace's tabs, and only theirs, into a ne
   // Untouched tabs aren't opened by it.
   expect(documents.find(source, "b.ts")).toBeUndefined();
   expect(collectUnsaved(where)).toEqual([
-    { path: "a.ts", text: "edited a\n" },
-    { path: "/tmp/n.txt", outside: true, text: "edited note\n" },
+    { path: "a.ts", text: "edited a\n", version: "v1" },
+    {
+      path: "/tmp/n.txt",
+      outside: true,
+      text: "edited note\n",
+      version: "v1",
+    },
   ]);
+});
+
+it("saves over the version the text was edited over, so a file changed meanwhile isn't overwritten", async () => {
+  await adoptBuffers(where, [
+    { path: "a.ts", text: "edited\n", version: "v0" },
+  ]);
+  const a = documents.find(source, "a.ts")!;
+  expect(a.status.changedOnDisk).toBe(true);
+  await a.save();
+  expect(mocks.save).toHaveBeenCalledWith(
+    where,
+    "a.ts",
+    "abc",
+    "v0",
+    "edited\n",
+  );
 });
 
 it("leaves typing that began before the handoff arrived alone", async () => {
