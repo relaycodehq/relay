@@ -10,6 +10,28 @@ export interface TrayStatus {
   waiting: number;
 }
 
+function trayIcon() {
+  // Beside the bundle, in dist-electron's parent: the app's own folder or its asar.
+  const assets = join(__dirname, "..", "assets");
+  switch (process.platform) {
+    case "darwin": {
+      // macOS tints a template image for light and dark menubars.
+      const icon = nativeImage.createFromPath(join(assets, "trayTemplate.png"));
+      icon.setTemplateImage(true);
+      return icon;
+    }
+
+    case "win32":
+      // The .ico carries a size for each scaling, and Windows picks one.
+      return nativeImage.createFromPath(join(assets, "icon.ico"));
+    default:
+      // Elsewhere the app icon reads on any panel.
+      return nativeImage
+        .createFromPath(join(assets, "icon.png"))
+        .resize({ width: 22, height: 22 });
+  }
+}
+
 export class RelayTray {
   private tray?: Tray;
   private status: TrayStatus = { working: 0, waiting: 0 };
@@ -18,14 +40,7 @@ export class RelayTray {
 
   start() {
     if (this.tray) return;
-    const mac = process.platform === "darwin";
-    // macOS tints a template image for light and dark menubars; elsewhere the app icon reads on any panel.
-    // Beside the bundle, in dist-electron's parent: the app's own folder or its asar.
-    const icon = nativeImage.createFromPath(
-      join(__dirname, "..", "assets", mac ? "trayTemplate.png" : "icon.png"),
-    );
-    if (mac) icon.setTemplateImage(true);
-    this.tray = new Tray(mac ? icon : icon.resize({ width: 22, height: 22 }));
+    this.tray = new Tray(trayIcon());
     // Linux panels often send no clicks, only open the menu; there the menu leads with Open.
     if (process.platform === "linux") this.tray.setContextMenu(this.menu());
     else {

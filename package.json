@@ -123,6 +123,7 @@
       "LICENSE",
       "!node_modules/**/*",
       "assets/icon.png",
+      "assets/icon.ico",
       "assets/trayTemplate.png",
       "assets/trayTemplate@2x.png"
     ],
@@ -217,7 +218,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": true,
