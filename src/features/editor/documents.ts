@@ -41,12 +41,12 @@ class DocumentStore {
     this.changed();
   }
 
-  /** A document whose file moved keeps its edits under the new path. */
-  rename(source: DocumentSource, from: string, to: string) {
+  /** A document whose file moved, into the folder `toSource` if it's another, keeps its edits there. */
+  rename(source: DocumentSource, from: string, to: string, toSource = source) {
     const doc = this.docs.get(keyOf(source, from));
-    if (!doc || this.docs.has(keyOf(source, to))) return;
+    if (!doc || this.docs.has(keyOf(toSource, to))) return;
     this.docs.delete(keyOf(source, from));
-    doc.moveTo(to);
+    doc.moveTo(to, toSource);
     this.docs.set(doc.key, doc);
     this.changed();
   }

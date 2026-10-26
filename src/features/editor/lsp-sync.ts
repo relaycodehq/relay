@@ -47,42 +47,44 @@ const synced = new WeakSet<FileDocument>();
 export function syncWithServer(doc: FileDocument) {
   if (doc.source.kind !== "project" || synced.has(doc) || !servedBy(doc)) return;
   synced.add(doc);
-  const { where } = doc.source;
-  let openedPath: string | undefined;
+  // The folder and path the server has the file open at.
+  let opened: { where: string; path: string } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const open = () => {
-    if (openedPath || !doc.state || !servedBy(doc)) return;
-    openedPath = doc.path;
-    heard.set(fileKey(where, openedPath), doc.state.doc);
-    void lsp.open(where, openedPath, doc.text()).catch(() => {});
+    if (opened || !doc.state || doc.source.kind !== "project" || !servedBy(doc)) return;
+    opened = { where: doc.source.where, path: doc.path };
+    heard.set(fileKey(opened.where, opened.path), doc.state.doc);
+    void lsp.open(opened.where, opened.path, doc.text()).catch(() => {});
   };
   const close = () => {
     clearTimeout(timer);
-    if (!openedPath) return;
-    heard.delete(fileKey(where, openedPath));
-    void lsp.close(where, openedPath).catch(() => {});
-    openedPath = undefined;
+    if (!opened) return;
+    heard.delete(fileKey(opened.where, opened.path));
+    void lsp.close(opened.where, opened.path).catch(() => {});
+    opened = undefined;
   };
-  // A renamed file is a different document to the server: close the old path, open the new.
+  // A renamed or moved file is a different document to the server: close the old one, open the new.
   const followRename = () => {
-    if (openedPath && openedPath !== doc.path) close();
+    const where = doc.source.kind === "project" ? doc.source.where : undefined;
+    const moved = opened && (opened.path !== doc.path || opened.where !== where);
+    if (moved) close();
     open();
   };
   open();
   const offStatus = doc.subscribe(followRename);
   let heardText = doc.state?.doc;
   const offState = doc.onState((state) => {
-    if (!openedPath) return open();
+    if (!opened) return open();
     // Carets, folds and completions update the state too; only new text is worth sending.
     const textChanged = state.doc !== heardText;
     if (!textChanged) return;
     heardText = state.doc;
-    const path = openedPath;
+    const { where, path } = opened;
     clearTimeout(timer);
     timer = setTimeout(() => void tellServerText(where, path, state.doc), CHANGE_DELAY);
   });
   const offSave = doc.onSave(() => {
-    if (openedPath) void lsp.save(where, openedPath).catch(() => {});
+    if (opened) void lsp.save(opened.where, opened.path).catch(() => {});
   });
   doc.onDispose(() => {
     offStatus();

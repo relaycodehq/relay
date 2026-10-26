@@ -99,7 +99,7 @@ export class FileDocument {
     | undefined;
 
   constructor(
-    readonly source: DocumentSource,
+    public source: DocumentSource,
     public path: string,
     /** Builds a fresh state's extensions for this file's text. */
     private extensions: (text: string) => Extension,
@@ -388,10 +388,14 @@ export class FileDocument {
     this.update(tr);
   }
 
-  /** The file was renamed or moved: from now on it is read and saved at the new path. */
-  moveTo(path: string) {
+  /**
+   * The file was renamed or moved, into another folder with `source`: from
+   * now on it is read and saved there.
+   */
+  moveTo(path: string, source = this.source) {
+    this.source = source;
     this.path = path;
-    this.key = keyOf(this.source, path);
+    this.key = keyOf(source, path);
     this.notify();
   }
 

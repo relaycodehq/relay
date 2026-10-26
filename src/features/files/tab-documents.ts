@@ -33,9 +33,9 @@ export function closeTabDocument(
 }
 
 /**
- * Tabs on a moved file or folder, or under it, keep their documents at the
- * new path. A file outside the project keeps its document only when it stays
- * in its folder, which the document is kept by.
+ * Tabs on a moved file or folder, or under it, keep their documents, with
+ * their unsaved edits, at the new path; a file outside the project whose
+ * folder moved goes with it to the new folder.
  */
 export function moveTabDocuments(
   tabs: EditorTab[],
@@ -47,18 +47,9 @@ export function moveTabDocuments(
   for (const tab of tabs) {
     if (!tabIsWithin(tab, from, outside)) continue;
     const moved = { ...tab, path: to + tab.path.slice(from.length) };
-    const sameFolder =
-      !outside ||
-      outsideSource(tab.path).source.where ===
-        outsideSource(moved.path).source.where;
     const before = tabDocument(tab, home);
-    if (sameFolder)
-      documents.rename(
-        before.source,
-        before.path,
-        tabDocument(moved, home).path,
-      );
-    else closeTabDocument(tab, home);
+    const after = tabDocument(moved, home);
+    documents.rename(before.source, before.path, after.path, after.source);
   }
 }
 

@@ -91,3 +91,17 @@ it("drops a disk check that read the file before a save", async () => {
   doc.detach(view);
   documents.close(source, "b.txt", true);
 });
+
+it("keeps unsaved edits when the file moves to another folder", async () => {
+  const from = { kind: "project" as const, where: "/old", plain: true };
+  const to = { kind: "project" as const, where: "/new", plain: true };
+  const doc = documents.get(from, "c.txt", () => history());
+  await vi.waitFor(() => expect(doc.state).toBeDefined());
+  const view = viewOf(doc);
+  view.dispatch({ changes: { from: 0, insert: "zero\n" }, userEvent: "input" });
+  documents.rename(from, "c.txt", "c.txt", to);
+  expect(documents.find(from, "c.txt")).toBeUndefined();
+  expect(documents.find(to, "c.txt")?.text()).toBe("zero\none\ntwo\n");
+  doc.detach(view);
+  documents.close(to, "c.txt", true);
+});
