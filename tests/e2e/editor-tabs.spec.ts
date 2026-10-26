@@ -38,7 +38,8 @@ test("editor tabs pin, close in bulk, reopen and copy their path from their menu
     await page.getByLabel("Message project").fill("hello");
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await openSurface(page, "Files");
-    for (const name of ["a", "b", "c"]) await openInFileTree(page, `src/${name}.ts`);
+    for (const name of ["a", "b", "c"])
+      await openInFileTree(page, `src/${name}.ts`, { keep: true });
     const tabs = page.locator(".editor-tabs [role=tab]");
     await expect(tabs).toHaveText([/^a\.ts/, /^b\.ts/, /^c\.ts/]);
     const menu = page.getByRole("menu", { name: "Tab actions" });
