@@ -134,6 +134,33 @@ export function shownCommand(command: string) {
   return (first ? firstStage(first).replace(redirect, "") : head.split("\n")[0]!).trim();
 }
 
+/** `timeout`'s flags that take a value, so the value isn't read as the duration. */
+const timeoutValued = new Set(["-s", "-k", "--signal", "--kill-after"]);
+
+/** `(cd app && npm test)` splits into `(cd app` and `npm test)`: the brackets stick to the words beside them. */
+function subshellOff(segment: string, words: string[]) {
+  const opened = segment.split("(").length - 1;
+  const closed = segment.split(")").length - 1;
+  const last = words.length - 1;
+  if (opened > closed && words[0]?.startsWith("(")) words[0] = words[0].slice(1);
+  if (closed > opened && words[last]?.endsWith(")")) words[last] = words[last]!.slice(0, -1);
+  return words;
+}
+
+/** The words from the program on: past env settings, leads like `sudo`, and `timeout 60`. */
+function pastLeads(words: string[]) {
+  for (;;) {
+    const word = words[0];
+    if (word === undefined) return words;
+    if (word === "" || /^\w+=/.test(word) || leads.has(word)) words.shift();
+    else if (word === "timeout") {
+      words.shift();
+      while (words[0]?.startsWith("-")) if (timeoutValued.has(words.shift()!)) words.shift();
+      words.shift();
+    } else return words;
+  }
+}
+
 function segmentAction(segment: string, body: string | undefined): CallAction | undefined {
   // `b=$(git merge-base HEAD main)` only works out a value for what comes next.
   const assigned = /^\s*\w+=\$\((?:[^()]|\([^()]*\))*\)\s*/.exec(segment);
@@ -141,9 +168,7 @@ function segmentAction(segment: string, body: string | undefined): CallAction | 
     const rest = segment.slice(assigned[0].length);
     return rest ? segmentAction(rest, body) : undefined;
   }
-  const words = wordsOf(firstStage(segment).replace(redirect, ""));
-  while (words[0] && (/^\w+=/.test(words[0]) || leads.has(words[0]))) words.shift();
-  const [program, ...args] = words;
+  const [program, ...args] = pastLeads(subshellOff(segment, wordsOf(firstStage(segment).replace(redirect, ""))));
   if (!program || setup.has(program)) return undefined;
   switch (program) {
     case "sed":

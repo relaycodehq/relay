@@ -185,3 +185,12 @@ describe("git and shell words around a search", () => {
   });
 });
 
+describe("words before the program", () => {
+  it("reads past a subshell's ( and timeout's duration", () => {
+    expect(commandActions("(cd app && npm test)")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("timeout -s KILL 60 npx vitest run a.test.ts")).toEqual([
+      { kind: "test", target: "a.test.ts", failed: false },
+    ]);
+  });
+});
+

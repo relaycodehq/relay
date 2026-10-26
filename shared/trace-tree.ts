@@ -17,7 +17,7 @@ export interface TraceRow {
   ranToo?: boolean;
 }
 
-export type BranchKind = "read" | "search" | "web" | "edit" | "run" | "check" | "commit" | "tool";
+export type BranchKind = "read" | "search" | "web" | "edit" | "run" | "git" | "check" | "commit" | "tool";
 
 export type TracePiece =
   | { kind: "row"; row: TraceRow }
@@ -94,6 +94,8 @@ export function branchOf(action: CallAction): BranchKind {
       return "check";
     case "commit":
       return "commit";
+    case "git":
+      return "git";
     case "tool":
       return "tool";
     default:
@@ -182,6 +184,8 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
       return `Edited ${plural(distinctFiles(rows), "file")}`;
     case "run":
       return runHeading(rows);
+    case "git":
+      return `Checked git ${times(rows.length)}`;
     case "check": {
       const failed = rows.filter(rowFailed).length;
       return `Ran ${plural(rows.length, "check")}${failed ? ` · ${failed} failed` : ""}`;
@@ -195,16 +199,12 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
   }
 }
 
-/**
- * Commands all of one program say which: "Ran rg 3 times". Others count the
- * commands themselves, like the turn's heading: `a; b; c` is one command.
- */
+/** Commands all of one program say which: "Ran rg 3 times". Counted as the rows under it. */
 function runHeading(rows: TraceRow[]) {
   const programs = new Set(rows.map((r) => (r.action.kind === "run" ? r.action.what.split(" ")[0] : r.id)));
   const [program] = programs;
-  if (programs.size === 1) return rows.length === 1 ? `Ran ${program}` : `Ran ${program} ${rows.length} times`;
-  const commands = new Set(rows.flatMap((r) => r.calls.map((c) => c.id))).size;
-  return `Ran ${plural(commands, "command")}`;
+  if (programs.size !== 1) return `Ran ${plural(rows.length, "command")}`;
+  return rows.length === 1 ? `Ran ${program}` : `Ran ${program} ${rows.length} times`;
 }
 
 /** How many kinds a folded run's line names before "and N more". */

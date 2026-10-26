@@ -41,6 +41,7 @@ const branchIcons: Record<BranchKind, keyof typeof actionIcons> = {
   web: "web",
   edit: "edit",
   run: "run",
+  git: "git",
   check: "test",
   commit: "commit",
   tool: "tool",

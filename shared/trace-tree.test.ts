@@ -76,11 +76,11 @@ it("takes a script written and run in one command for one call", () => {
   expect(piece?.kind === "row" && piece.row).toMatchObject({ ranToo: true, calls: [both] });
 });
 
-it("counts commands as the calls that ran them, not the parts of one line", () => {
+it("counts a branch's commands as the rows under it, and git checks apart", () => {
   const oneLine = traceTree([call("command", "node a.js; python3 b.py; make build")]);
-  expect(outline(oneLine)).toEqual(["Ran 1 command: run, run, run"]);
-  const three = traceTree([call("command", "node a.js"), call("command", "python3 b.py"), call("command", "make")]);
-  expect(outline(three)).toEqual(["Ran 3 commands: run, run, run"]);
+  expect(outline(oneLine)).toEqual(["Ran 3 commands: run, run, run"]);
+  const looks = traceTree([call("command", "git status; git diff; ls; git log; git show HEAD")]);
+  expect(outline(looks)).toEqual(["Checked git 4 times: git, git, git, git", "run"]);
 });
 
 it("folds a run of three lines or more into one, and leaves shorter ones be", () => {
@@ -89,7 +89,7 @@ it("folds a run of three lines or more into one, and leaves shorter ones be", ()
   const long = [
     call("command", "grep -n a src/a.ts"),
     call("read", "src/a.ts"),
-    call("command", "git diff"),
+    call("command", "ls"),
     call("command", "grep -n b src/b.ts"),
     call("read", "src/b.ts"),
     call("command", "date"),
