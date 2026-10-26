@@ -60,6 +60,8 @@ import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.remote.PairingLink
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.parsePairingUrl
+import dev.relay.android.features.updates.AppUpdateButton
+import dev.relay.android.features.updates.Updates
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.ButtonVariant
@@ -89,7 +91,7 @@ private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's
  * pairing going through. A relay-remote:// link (`link`) asks before pairing.
  */
 @Composable
-fun PairScreen(remote: Remote, link: String?, stopRelay: () -> Unit) {
+fun PairScreen(remote: Remote, updates: Updates, link: String?, stopRelay: () -> Unit) {
     val nav = LocalNavigator.current
     val context = LocalContext.current
     val uri = LocalUriHandler.current
@@ -186,6 +188,11 @@ fun PairScreen(remote: Remote, link: String?, stopRelay: () -> Unit) {
                 Modifier.padding(start = 16.dp, top = 8.dp),
                 variant = ButtonVariant.Secondary,
                 tint = if (covers) Color.White else null,
+            )
+            // Paired, updates are in Settings; with nothing paired this is the only way to them.
+            if (face == PairingScan.Face.Idle && computers.isEmpty()) AppUpdateButton(
+                updates,
+                Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 8.dp),
             )
 
             Column(

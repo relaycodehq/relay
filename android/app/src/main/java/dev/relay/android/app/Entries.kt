@@ -52,7 +52,7 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     // Relay's own colours, dark on black whatever the theme: pairing another computer shouldn't
     // wear the one already paired's, and the field glows best on black.
     entry<Route.Pair> {
-        RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, it.link, container.relayStop::stop) }
+        RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, container.updates, it.link, container.relayStop::stop) }
     }
     // Home's New thread button flies into the screen as its Send; one opened from a draft or a project slides in.
     entry<Route.NewThread>(metadata = { if (it == Route.NewThread()) mapOf(MORPHS_IN to true) else emptyMap() }) { route ->
