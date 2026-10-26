@@ -66,7 +66,7 @@ export async function answerAntigravityQuestion(
     )
     .catch(() => undefined);
   const answers =
-    response?.kind === "question" ? response.answers[question.id] : undefined;
+    response?.kind === "question" ? response.answers?.[question.id] : undefined;
   const value = answers?.length === 1 ? answers[0] : undefined;
   const exact = request.options.find((o) => o.optionId === value);
   const labels = question.options!.filter((o) => o.label === value);

@@ -72,5 +72,7 @@
             android:foregroundServiceType="remoteMessaging|mediaPlayback" />
         <!-- Not exported: only the system, through Relay's own PendingIntent, reports an install. -->
         <receiver android:name=".features.updates.InstallReceiver" android:exported="false" />
+        <!-- The ongoing notification's Stop button. -->
+        <receiver android:name=".features.notifications.StopReceiver" android:exported="false" />
     </application>
 </manifest>

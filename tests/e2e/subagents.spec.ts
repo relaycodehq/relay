@@ -89,7 +89,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     // The card previews the agent pointed at: its brief and its latest calls.
     await chip.hover();
     const card = page.getByRole("dialog", { name: "Subagents" });
-    await expect(card).toContainText("1 of 3 done");
+    await expect(card).toContainText("1 of 3 back");
     await card
       .getByRole("button", { name: /Check the phone's turn view/ })
       .hover();
@@ -105,7 +105,7 @@ test("shows Claude's subagents by the composer and opens each one's run", async 
     await expect(card.getByRole("button", { name: "Stop agent" })).toHaveCount(
       0,
     );
-    await expect(card).toContainText("2 of 3 done");
+    await expect(card).toContainText("2 of 3 back");
 
     // Its run covers the conversation, read-only.
     await card.getByRole("button", { name: "Open its run" }).click();

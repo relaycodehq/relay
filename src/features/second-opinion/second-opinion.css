@@ -1,0 +1,92 @@
+/* Under the answer: clear of its actions row, which hangs into the space below. */
+.second-opinions {
+  display: grid;
+  gap: 10px;
+  margin-top: 36px;
+}
+/* The picker's button stays in sight while its popup is open. */
+.message-actions > [data-popup-open] {
+  opacity: 1;
+}
+
+/* Long text folded to a few lines, fading out. */
+.second-opinion-fold {
+  overflow: hidden;
+}
+.second-opinion-fold[data-folded] {
+  mask-image: linear-gradient(to bottom, #000 60%, transparent);
+}
+.second-opinion-unfold {
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.second-opinion-unfold:hover {
+  background: none;
+  color: var(--text);
+}
+.second-opinion-waiting {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.second-opinion-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+.second-opinion-send {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+}
+.second-opinion-send button {
+  margin-left: auto;
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+/* Atop the second opinion's own thread. */
+.second-opinion-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.second-opinion-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.second-opinion-back:hover {
+  background: none;
+  color: var(--text);
+}
+.second-opinion-asked h3 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.second-opinion-asked .markdown + h3 {
+  margin-top: 12px;
+}
+.second-opinion-asked .markdown > :first-child {
+  margin-top: 0;
+}
+.second-opinion-asked .markdown > :last-child {
+  margin-bottom: 0;
+}

@@ -46,6 +46,8 @@ export function useStarted(ids: string[] | undefined, live = false) {
         c.startedBy?.chatId === lead &&
         // A deep review's reviewers show in its council instead.
         !c.reviewer &&
+        // A second opinion shows under the answer it checks.
+        !c.startedBy?.secondOpinionOn &&
         (!ids || ids.includes(c.id)) &&
         !chatSettled(c),
     )

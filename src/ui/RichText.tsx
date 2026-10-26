@@ -230,13 +230,19 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
   );
 }
 
-// The default drops data: and file: URLs; an image may use either, a link may not.
-const urlTransform: UrlTransform = (url, key, node) =>
-  key === "src" &&
-  node.tagName === "img" &&
-  /^(?:data:image\/|file:)/i.test(url)
-    ? url
-    : defaultUrlTransform(url);
+// The default drops data: and file: URLs, and reads a Windows drive as a
+// protocol. An image may use data: or file:. A link keeps a file: URL or a drive
+// path for `a` to show as a file chip; only http(s) and mailto become a real href.
+// Markdown hands over a drive path's backslashes as %5C.
+const urlTransform: UrlTransform = (url, key, node) => {
+  if (key === "src" && node.tagName === "img")
+    return /^(?:data:image\/|file:)/i.test(url)
+      ? url
+      : defaultUrlTransform(url);
+  if (key === "href" && /^(?:file:|[A-Za-z]:(?:\/|%5C))/i.test(url)) return url;
+  return defaultUrlTransform(url);
+};
+
 // GitHub's allowlist, so a README's HTML can't restyle or script the app.
 const htmlPlugins = [rehypeRaw, rehypeSanitize];
 

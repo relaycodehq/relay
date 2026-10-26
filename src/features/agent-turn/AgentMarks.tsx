@@ -2,7 +2,12 @@
 // overlapping, a badge on each saying where it is, and a card on hover that
 // lists them. The card mounts only while open, so its clock and anything it
 // loads cost nothing while the marks just sit there.
-import { useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useState,
+  type ComponentProps,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Check } from "lucide-react";
 import type { AgentProvider } from "../../../shared/agents";
@@ -104,23 +109,23 @@ export function AgentMarksRow({
   name,
   meta,
   aside,
-  onClick,
+  ...button
 }: {
   provider: AgentProvider;
   state?: MarkState;
   name: string;
   meta: ReactNode;
-  aside: ReactNode;
-  onClick: () => void;
-}) {
+  /** Left out where the row is too narrow for it. */
+  aside?: ReactNode;
+} & Omit<ComponentProps<"button">, "type" | "className" | "name">) {
   return (
-    <button type="button" className="agent-marks-item" onClick={onClick}>
+    <button type="button" className="agent-marks-item" {...button}>
       <AgentMark provider={provider} state={state} />
       <span className="agent-marks-text">
         <span className="agent-marks-name">{name}</span>
         <span className="agent-marks-meta">{meta}</span>
       </span>
-      <span className="agent-marks-time">{aside}</span>
+      {aside !== undefined && <span className="agent-marks-time">{aside}</span>}
     </button>
   );
 }

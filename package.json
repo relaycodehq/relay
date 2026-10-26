@@ -1,7 +1,7 @@
 {
   "name": "relay",
   "productName": "Relay",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "A project workspace for agent chats, code changes and pull request reviews",
   "author": "Relay contributors",
   "homepage": "https://relaycode.io",
@@ -123,6 +123,7 @@
       "LICENSE",
       "!node_modules/**/*",
       "assets/icon.png",
+      "assets/icon.ico",
       "assets/trayTemplate.png",
       "assets/trayTemplate@2x.png"
     ],
@@ -217,7 +218,7 @@
           ]
         }
       ],
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": true,

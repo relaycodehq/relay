@@ -38,14 +38,19 @@ export interface MainWindowStore {
 export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
   callers.run(win, call);
 
-/** Windows has no badge count; a dot on the taskbar button stands in. */
+/**
+ * Windows has no badge count; a dot on the taskbar button stands in. The
+ * overlay is always a 16px square on the icon's corner, so a dot filling it
+ * reads as big as the icon; Windows' own unread dots are about half that.
+ */
 function badgeDot() {
   const size = 16,
+    radius = 4.5,
     pixels = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2),
-        alpha = Math.max(0, Math.min(1, size / 2 - d)),
+        alpha = Math.max(0, Math.min(1, radius + 0.5 - d)),
         i = (y * size + x) * 4;
       // BGRA, premultiplied: #e5484d with an antialiased edge.
       pixels[i] = Math.round(0x4d * alpha);

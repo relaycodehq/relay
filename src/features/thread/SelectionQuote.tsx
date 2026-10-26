@@ -25,6 +25,19 @@ interface Offer {
 /** Room the buttons need so they stay inside the window. */
 const WIDTH = 240;
 
+/**
+ * Whether a selection takes no text from beyond its message. A triple-click
+ * ends at the start of the next selectable block, and past an answer's
+ * unselectable actions row that is the next message.
+ */
+export function takesTextOnlyFrom(message: Element, range: Range) {
+  if (message.contains(range.endContainer)) return true;
+  const beyond = document.createRange();
+  beyond.setStartAfter(message);
+  beyond.setEnd(range.endContainer, range.endOffset);
+  return !beyond.toString().trim();
+}
+
 export function SelectionQuote({
   container,
   onQuote,
@@ -53,7 +66,7 @@ export function SelectionQuote({
         return clear();
       const range = selection.getRangeAt(0);
       const from = message(range.startContainer);
-      if (!from || from !== message(range.endContainer) || !root.contains(from))
+      if (!from || !root.contains(from) || !takesTextOnlyFrom(from, range))
         return clear();
       const text = selectionQuote(selection.toString());
       if (!text) return clear();

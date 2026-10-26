@@ -72,7 +72,7 @@ fun AppHome(container: AppContainer, pane: Boolean, selected: String?) {
         computerRows = { close -> ComputerUpdateRow(container.updates, container.remote, close) },
         pulls = { query, bottom -> PullsList(container.remote, query, selected, bottom, if (pane) navigator::openInPane else navigator::push) },
         settings = { bottom ->
-            SettingsList(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope, bottom)
+            SettingsList(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope, container.relayStop::stop, bottom)
         },
     )
 }

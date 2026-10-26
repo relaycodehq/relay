@@ -20,6 +20,28 @@ describe("RichText file citations", () => {
     expect(out).not.toContain("codex-file-citation");
   });
 
+  it.each([
+    "C:\\Users\\jan\\Desktop\\sklad.png",
+    "C:/Users/jan/Desktop/sklad.png",
+    "file:///C:/Users/jan/Desktop/sklad.png",
+  ])("links a Windows file outside the project: %s", (href) => {
+    const out = renderToStaticMarkup(
+      <RichText
+        text={`[Stáhnout fotku](${href})`}
+        projectRoot="C:\\Projects\\shop"
+        onOpenFile={() => {}}
+      />,
+    );
+    expect(out).toContain('class="chat-file-link"');
+    expect(out).toContain("sklad.png</span>");
+  });
+
+  it("keeps a file link without an opener as text, not an href", () => {
+    expect(render("[photo](file:///C:/Users/jan/sklad.png)")).toBe(
+      '<div class="markdown"><p><span>photo</span></p></div>',
+    );
+  });
+
   it("shows a project folder's full path on hover", () => {
     const out = renderToStaticMarkup(
       <RichText

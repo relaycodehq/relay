@@ -29,6 +29,8 @@ import { AgentImageStrip } from "../images/AgentImageStrip";
 import { useImageViewer } from "../images/ImageViewer";
 import { MessageActions, RepliesLink } from "./MessageActions";
 import { MessageAgentName } from "./MessageAgentName";
+import { SecondOpinionCards } from "../second-opinion/SecondOpinionCards";
+import { secondOpinionTarget } from "../second-opinion/second-opinion-ask";
 import { TipPeek } from "../tips/TipPeek";
 import type { QuestionResponse } from "./question-responses";
 
@@ -336,12 +338,71 @@ export function AssistantMessage({
           {stoppedNote(m)}
         </p>
       )}
+      <AnswerFailure
+        message={m}
+        text={text}
+        failure={failure}
+        signInAt={signInAt}
+        projectRoot={projectRoot}
+        onResume={onResume}
+        resumeDisabled={resumeDisabled}
+      />
+      {!continues && (
+        <MessageActions
+          id={m.id}
+          text={text}
+          readingKey={m.id}
+          sent={m.created}
+          stats={m}
+          cost={m.cost}
+          pending={m.status === "streaming"}
+          onReply={() => onReply(m)}
+          onFork={onFork && (() => onFork(m))}
+          secondOpinion={secondOpinionTarget(chatId, m)}
+        />
+      )}
+      {!continues && (
+        <SecondOpinionCards
+          chatId={chatId}
+          answer={m}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+        />
+      )}
+    </article>
+  );
+}
+
+/** Why the answer failed, with a retry, and a sign-in when its agent's login is the cause. */
+function AnswerFailure({
+  message: m,
+  text,
+  failure,
+  signInAt,
+  projectRoot,
+  onResume,
+  resumeDisabled,
+}: {
+  message: ChatMessage;
+  /** What the answer shows of its body. */
+  text: string;
+  failure: ReturnType<typeof agentError> | undefined;
+  signInAt?: SignInPlace;
+  projectRoot: string;
+  onResume?: () => void;
+  resumeDisabled?: boolean;
+}) {
+  const loginFailed =
+    !!m.signIn ||
+    (m.provider === "opencode" && !!failure?.authenticationRequired);
+  return (
+    <>
       {m.error && m.status !== "cancelled" && (
         <AgentError
           error={m.error}
           interrupted={
             !!(
-              text?.trim() ||
+              text.trim() ||
               m.activity?.length ||
               m.trace?.length ||
               m.changes?.length
@@ -351,28 +412,13 @@ export function AssistantMessage({
           retryDisabled={resumeDisabled}
         />
       )}
-      {signInAt &&
-        (m.signIn ||
-          (m.provider === "opencode" && failure?.authenticationRequired)) && (
-          <SignIn
-            provider={m.signIn ?? m.provider}
-            place={{ ...signInAt, directory: projectRoot }}
-          />
-        )}
-      {!continues && (
-        <MessageActions
-          id={m.id}
-          text={text}
-          readingKey={m.id}
-          sent={m.created}
-          streamed={m.streamed}
-          cost={m.cost}
-          pending={m.status === "streaming"}
-          onReply={() => onReply(m)}
-          onFork={onFork && (() => onFork(m))}
+      {signInAt && loginFailed && (
+        <SignIn
+          provider={m.signIn ?? m.provider}
+          place={{ ...signInAt, directory: projectRoot }}
         />
       )}
-    </article>
+    </>
   );
 }
 

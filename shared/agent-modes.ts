@@ -99,10 +99,10 @@ export const agentResponseSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("question"),
-      answers: z.record(
-        z.string().max(200),
-        z.array(z.string().max(16000)).max(30),
-      ),
+      /** Answers by question id; null when the user skipped the questions. */
+      answers: z
+        .record(z.string().max(200), z.array(z.string().max(16000)).max(30))
+        .nullable(),
     })
     .strict(),
   z
@@ -115,6 +115,10 @@ export const agentResponseSchema = z.discriminatedUnion("kind", [
 ]);
 
 export type AgentResponse = z.infer<typeof agentResponseSchema>;
+
+/** What an agent hears when the user skips its questions. */
+export const SKIPPED_QUESTIONS =
+  "The user skipped your questions. Decide on your own, and say what you picked.";
 
 export interface AgentQuestion {
   id: string;

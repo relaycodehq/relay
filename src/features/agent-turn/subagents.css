@@ -67,7 +67,7 @@
 }
 .subagents-peek {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 230px minmax(0, 1fr);
   height: 292px;
 }
 .subagents-list {
@@ -87,6 +87,14 @@
   padding: 5px 8px 6px;
   color: var(--muted);
   font-size: 11px;
+}
+.subagents-card .subagents-list:has(> .agent-marks-item) {
+  gap: 0;
+  padding: 6px;
+}
+.subagents-list > .subagents-card-head:has(~ .agent-marks-item) {
+  padding: 3px 7px 6px;
+  font-size: 12px;
 }
 .subagents-card-head > span {
   margin-left: auto;
@@ -117,8 +125,24 @@
 .subagents-item:hover {
   background: var(--hover);
 }
-.subagents-item[aria-current="true"] {
+.subagents-item[aria-current="true"],
+.subagents-list .agent-marks-item[aria-current="true"] {
   background: var(--selected);
+}
+.subagents-list .agent-marks-item {
+  flex: none;
+  font-size: 12.5px;
+}
+/* Rows drawn like the thread's agents card, but still while they work. */
+.subagents-list .agent-mark-badge.working .spinner {
+  display: none;
+}
+.subagents-list .agent-mark-badge.working::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 .subagents-earlier {
   display: flex;

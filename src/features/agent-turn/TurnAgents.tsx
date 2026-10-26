@@ -77,14 +77,15 @@ function workingAgentsLabel(rest: string, runs: SubagentRun[]) {
   );
 }
 
-const markState = (run: SubagentRun): MarkState | undefined =>
+export const markState = (run: SubagentRun): MarkState | undefined =>
   run.status === "running"
     ? "working"
     : run.status === "completed"
       ? "done"
       : undefined;
 
-function standing(run: SubagentRun, now: number): ReactNode {
+/** "working 3m", "back after 5m": where an agent is and how long it took. */
+export function standing(run: SubagentRun, now: number): ReactNode {
   const time = took((run.ended ?? now) - run.started);
   switch (run.status) {
     case "running":

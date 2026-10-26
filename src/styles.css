@@ -91,6 +91,8 @@ button {
   white-space: nowrap;
   line-height: 1.25;
   transition: background-color 0.1s;
+  /* A label isn't content: a double-click mustn't select it and offer to quote it. */
+  user-select: none;
 }
 button:hover {
   background: var(--hover);

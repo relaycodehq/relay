@@ -58,7 +58,7 @@ export function answerOf(
       response.kind === "page"
         ? response.answer
         : response.kind === "question"
-          ? (response.answers[PAGE_QUESTION_ID]?.join("\n").trim() ?? null)
+          ? (response.answers?.[PAGE_QUESTION_ID]?.join("\n").trim() ?? null)
           : undefined;
     if (text === undefined) throw new Error("Invalid response type.");
     const title = group.page.title;
@@ -75,23 +75,26 @@ export function answerOf(
         };
   }
   if (response.kind !== "question") throw new Error("Invalid response type.");
+  // These questions don't hold the agent up; Dismiss hides them instead.
+  const answers = response.answers;
+  if (!answers) throw new Error("Answer each question before sending.");
   if (
-    Object.keys(response.answers).some(
+    Object.keys(answers).some(
       (key) => !group.questions.some((q) => q.id === key),
     )
   )
     throw new Error("Unknown question.");
   if (
-    group.questions.some((q) => !response.answers[q.id]?.some((a) => a.trim()))
+    group.questions.some((q) => !answers[q.id]?.some((a) => a.trim()))
   )
     throw new Error("Answer each question before sending.");
   return {
     body:
       "Answer to your questions:\n" +
       group.questions
-        .map((q) => `${q.question}\n${response.answers[q.id].join("\n")}`)
+        .map((q) => `${q.question}\n${answers[q.id].join("\n")}`)
         .join("\n\n"),
-    answers: response.answers,
+    answers,
   };
 }
 

@@ -50,6 +50,7 @@ fun connectionText(status: RemoteStatus, name: String, always: Boolean = false, 
         LinkState.Online -> if (always) "$name · connected" else null
         LinkState.Connecting -> "Connecting to $name…"
         LinkState.Denied -> status.detail ?: "$name turned this phone away."
+        LinkState.Offline if status.phoneOffline -> "This phone has no network. Reconnects to $name once it's back."
         LinkState.Offline -> {
             val why = status.detail ?: "Can't reach $name."
             when (unreached) {
@@ -93,6 +94,8 @@ fun ConnectionLine(remote: Remote, modifier: Modifier = Modifier, always: Boolea
     var asked by remember { mutableStateOf(false) }
     val action: Pair<String, () -> Unit>? = when {
         status.state != LinkState.Offline -> null
+        // Nothing to try until the phone has a network; the link tries by itself then.
+        status.phoneOffline -> null
         unreached == Unreached.TailscaleOff -> "Turn on" to {
             asked = true
             Tailscale.connect(context)

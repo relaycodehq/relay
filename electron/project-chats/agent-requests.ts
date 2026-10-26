@@ -75,15 +75,16 @@ export class AgentRequests {
       !entry.request.decisions?.includes(response.decision)
     )
       throw new Error("This decision is not offered by the provider.");
-    if (response.kind === "question") {
+    const answers = response.kind === "question" ? response.answers : null;
+    if (answers) {
       const questions = entry.request.questions ?? [];
       if (
-        Object.keys(response.answers).some(
+        Object.keys(answers).some(
           (id) => !questions.some((q) => q.id === id),
         )
       )
         throw new Error("Unknown question.");
-      if (questions.some((q) => !response.answers[q.id]?.some((a) => a.trim())))
+      if (questions.some((q) => !answers[q.id]?.some((a) => a.trim())))
         throw new Error("Answer each question before continuing.");
     }
     entry.resolve(response);

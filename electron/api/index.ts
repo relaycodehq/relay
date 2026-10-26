@@ -32,6 +32,7 @@ import { threadWindowHandlers } from "./thread-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
 import { scheduleHandlers } from "./schedules";
+import { secondOpinionHandlers } from "./second-opinions";
 import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
@@ -52,6 +53,7 @@ export function createDispatch(
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
+    secondOpinionHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
     previewHandlers(ctx),

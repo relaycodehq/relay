@@ -11,6 +11,7 @@ import dev.relay.android.features.home.StoreDrafts
 import dev.relay.android.features.images.PendingImages
 import dev.relay.android.features.dictation.Dictation
 import dev.relay.android.features.notifications.ThreadNotifications
+import dev.relay.android.features.notifications.phoneNetwork
 import dev.relay.android.features.readaloud.ReadAloud
 import dev.relay.android.features.updates.Updates
 import dev.relay.android.remote.OfflineCache
@@ -24,6 +25,8 @@ import dev.relay.android.remote.tunnel.TunnelPorts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 import dev.relay.android.features.thread.ReadAhead
@@ -74,6 +77,11 @@ class AppContainer(context: Context) {
         dictation.beforeStart = { r.stop() }
     }
 
+    val relayStop = RelayStop(app, remote) {
+        readAloud.stop()
+        dictation.stop()
+    }
+
     val lock = AppLock(File(app.filesDir, "app-lock.bin"))
 
     val threadSeen = ThreadSeen(File(app.filesDir, "thread-seen.json"))
@@ -88,6 +96,8 @@ class AppContainer(context: Context) {
     init {
         // Once per process, not per activity: a rotation or fold mustn't reconnect.
         scope.launch { remote.load() }
+        // With no network at all, the link waits for one instead of retrying into nothing.
+        scope.launch { phoneNetwork(app).map { it != null }.distinctUntilChanged().collect(remote::setNetwork) }
         scope.launch { ReadAhead.of(remote, ThreadCache.of(app)).run() }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {

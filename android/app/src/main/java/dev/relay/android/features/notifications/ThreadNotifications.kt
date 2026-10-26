@@ -17,6 +17,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
+import dev.relay.android.remote.client.RemoteStatus
 import dev.relay.android.remote.model.RemoteEvent
 import dev.relay.android.remote.model.RemoteChatSummary
 import kotlinx.coroutines.CoroutineScope
@@ -143,23 +144,22 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
         })
 
         scope.launch {
-            combine(remote.client, _on) { client, on -> client != null && on }.collect { enabled.value = it }
+            combine(remote.client, _on, remote.stopped) { client, on, stopped -> client != null && on && !stopped }
+                .collect { enabled.value = it }
         }
         scope.launch { enabled.collect { if (it) askOnce() } }
 
         // Starts once connected with the app on screen; kept through reconnects
-        // so a dropped link can come back in the background.
+        // so a dropped link can come back in the background. Every try passes
+        // through Connecting, so the notice says the same through both, or it
+        // would be posted again on each try.
         scope.launch {
             combine(enabled, remote.status, remote.computers, remote.active, remote.overview) { on, status, computers, active, overview ->
-                Triple(on, status.state, computers.find { it.id == active }?.name ?: overview?.name ?: "your computer")
-            }.distinctUntilChanged().collect { (on, state, name) ->
-                if (!on) return@collect release(Reason.Watch)
-                val text = when (state) {
-                    LinkState.Online -> "Tells you when a thread finishes or needs you."
-                    LinkState.Offline -> "Reconnecting…"
-                    else -> ""
-                }
-                if (state == LinkState.Online || running) hold(Reason.Watch, "Connected to $name", text)
+                val name = computers.find { it.id == active }?.name ?: overview?.name ?: "your computer"
+                if (on) (status.state == LinkState.Online) to watchNotice(status, name) else null
+            }.distinctUntilChanged().collect { watch ->
+                val (online, notice) = watch ?: return@collect release(Reason.Watch)
+                if (online || running) hold(Reason.Watch, notice.title, notice.text)
             }
         }
 
@@ -221,6 +221,13 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
                 if (enabled.value && !foreground) due.forEach(::post)
             }
         }
+    }
+
+    private fun watchNotice(status: RemoteStatus, name: String) = when {
+        status.state == LinkState.Online -> Notice("Connected to $name", "Tells you when a thread finishes or needs you.")
+        status.state == LinkState.Denied -> Notice("Not connected to $name", status.detail ?: "")
+        status.phoneOffline -> Notice("Waiting for a network", "Reconnects to $name once this phone is back online.")
+        else -> Notice("Reconnecting to $name", "")
     }
 
     private fun post(news: ThreadNews) =

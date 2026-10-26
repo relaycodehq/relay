@@ -14,7 +14,7 @@ const question = {
   options: [{ label: "Scores" }, { label: "Agent" }],
 };
 
-function mount() {
+function mount({ deferred = true } = {}) {
   const onRespond = vi.fn(async () => {});
   const host = document.createElement("div");
   document.body.append(host);
@@ -24,7 +24,7 @@ function mount() {
         questions={[question]}
         busy={false}
         onRespond={onRespond}
-        deferred
+        deferred={deferred}
       />,
     ),
   );
@@ -43,7 +43,9 @@ function mount() {
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
   const send = () => act(() => host.querySelector("form")!.requestSubmit());
-  return { option, input, type, send, onRespond };
+  const skip = () =>
+    [...host.querySelectorAll("button")].find((b) => b.textContent === "Skip");
+  return { option, input, type, send, skip, onRespond };
 }
 
 it("clicking a picked option again unpicks it", () => {
@@ -64,6 +66,17 @@ it("writing your own answer replaces the picked option", () => {
     kind: "question",
     answers: { q: ["Both, honestly"] },
   });
+});
+
+it("skips a waiting question without answers, but not one the agent isn't waiting on", () => {
+  const waiting = mount({ deferred: false });
+  act(() => waiting.option("Scores").click());
+  act(() => waiting.skip()!.click());
+  expect(waiting.onRespond).toHaveBeenCalledWith({
+    kind: "question",
+    answers: null,
+  });
+  expect(mount({ deferred: true }).skip()).toBeUndefined();
 });
 
 it("shows only offered native choices and submits their stable ids, even when labels repeat", () => {

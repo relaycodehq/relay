@@ -7,7 +7,12 @@ import dev.relay.android.remote.model.RemoteEvent
 
 enum class LinkState { Connecting, Online, Offline, Denied }
 
-data class RemoteStatus(val state: LinkState, val detail: String? = null)
+data class RemoteStatus(
+    val state: LinkState,
+    val detail: String? = null,
+    /** Offline because the phone has no network at all; it tries again once one comes. */
+    val phoneOffline: Boolean = false,
+)
 
 /** How a client starts: trading a pairing code, or signing in with saved credentials. */
 sealed interface RemoteStart {

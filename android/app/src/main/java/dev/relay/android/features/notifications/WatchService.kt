@@ -101,12 +101,16 @@ class WatchService : Service() {
             val tap = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
                 PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
             }
+            val stop = PendingIntent.getBroadcast(
+                context, 0, Intent(context, StopReceiver::class.java), PendingIntent.FLAG_IMMUTABLE,
+            )
             return Notification.Builder(context, CONNECTION_CHANNEL)
                 .setSmallIcon(R.drawable.relay_notification)
                 .setColor(ACCENT)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(tap)
+                .addAction(Notification.Action.Builder(null, "Stop Relay", stop).build())
                 .setOngoing(true)
                 // Its own group, or Android bundles it with the threads' news and it shows as loudly.
                 .setGroup(CONNECTION_CHANNEL)

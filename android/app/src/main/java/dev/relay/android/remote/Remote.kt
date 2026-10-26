@@ -55,8 +55,12 @@ data class PairedComputer(
 
 class PairingFailed(message: String) : Exception(message)
 
-/** An overview just fetched from [computer] through [client], not a saved copy. */
-data class FreshOverview(val computer: String, val client: RemoteClient, val overview: RemoteOverview)
+/**
+ * An overview just fetched from [computer] through [client], not a saved copy.
+ * [askedAt] is [System.nanoTime] when it was asked for: what the phone heard
+ * since may be newer than what it lists.
+ */
+data class FreshOverview(val computer: String, val client: RemoteClient, val overview: RemoteOverview, val askedAt: Long)
 
 /**
  * The phone's one live connection and what it knows of each paired computer
@@ -142,10 +146,15 @@ class Remote(
 
     val paired: Boolean get() = _client.value != null
 
+    private val _stopped = MutableStateFlow(false)
+    /** Stopped by hand: the link is closed and stays closed until [resume]. */
+    val stopped: StateFlow<Boolean> = _stopped.asStateFlow()
+
     private var live: RemoteClient? = null
     /** Starts true: the app may be opened by a notification's worker with nothing on screen. */
     private var background = true
-    /** Held around [background] and the client it goes to, which change on different threads. */
+    private var networkUp = true
+    /** Held around [background], [networkUp] and the client they go to, which change on different threads. */
     private val backgroundLock = Any()
     /** Where the latest switch goes, set before its offline copy is read; [_active] moves after. */
     private var wanted: String? = null
@@ -244,15 +253,33 @@ class Remote(
         live?.setBackground(on)
     }
 
+    /** Whether the phone has a network, for the link to the active computer and the next. */
+    fun setNetwork(up: Boolean) = synchronized(backgroundLock) {
+        networkUp = up
+        live?.setNetwork(up)
+    }
+
+    /** Closes the link, pairings kept, and starts no other until [resume]. */
+    fun stop() {
+        _stopped.value = true
+        scope.launch { live?.close() }
+    }
+
+    fun resume() {
+        if (!_stopped.compareAndSet(true, false)) return
+        scope.launch { live?.start() }
+    }
+
     /** A fresh overview, when online. */
     suspend fun refresh(): RemoteOverview? {
         val client = _client.value ?: return null
         if (client.status.value.state != LinkState.Online) return null
         val heard = withContext(dispatcher) { presenceHeard }
+        val asked = System.nanoTime()
         val fresh = client.overview()
         return withContext(dispatcher) {
             if (live !== client) return@withContext null
-            setFresh(client, fresh, heard)
+            setFresh(client, fresh, heard, asked)
             fresh
         }
     }
@@ -328,10 +355,10 @@ class Remote(
      * event since is newer than the overview (it comes after the reply on the
      * wire), and the desktop tells it again if not.
      */
-    private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int) {
+    private fun setFresh(client: RemoteClient, overview: RemoteOverview, heard: Int, askedAt: Long) {
         val kept = if (heard == presenceHeard) overview else overview.copy(present = livePresent)
         setOverview(kept)
-        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept)) }
+        _active.value?.let { _fresh.tryEmit(FreshOverview(it, client, kept, askedAt)) }
     }
 
     /** Talks to this computer from now on, showing its last seen lists while it connects. */
@@ -380,8 +407,9 @@ class Remote(
                         val heard = presenceHeard
                         scope.launch {
                             try {
+                                val asked = System.nanoTime()
                                 val fresh = next.overview()
-                                if (live === next) setFresh(next, fresh, heard)
+                                if (live === next) setFresh(next, fresh, heard, asked)
                             } catch (_: Exception) {
                             }
                         }
@@ -425,13 +453,14 @@ class Remote(
         synchronized(backgroundLock) {
             live = next
             next.setBackground(background)
+            next.setNetwork(networkUp)
         }
         livePresent = null
         previous?.close()
         _client.value = next
         _status.value = next.status.value
         if (start is RemoteStart.Pair) pairing?.client = next
-        next.start()
+        if (!_stopped.value) next.start()
         return next
     }
 }
