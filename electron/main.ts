@@ -23,7 +23,11 @@ import { Quit } from "./app/quit";
 import { AppWindow } from "./app/window";
 import { TreeWatch } from "./git/tree-watch";
 import { ElsewhereWatch } from "./git/elsewhere-watch";
-import { savedMainWindow, savedThreadWindows } from "../shared/thread-windows";
+import {
+  createLanguageServers,
+  type LanguageServers,
+} from "./language-servers";
+import { keepMainWindowPlace, restorePoppedWindows } from "./app/saved-windows";
 import {
   askAboutCrashLoop,
   offerCrashReport,
@@ -141,6 +145,8 @@ let agentHosts: AgentHosts | undefined;
 let treeWatch: TreeWatch | undefined;
 /** Which other repositories the windows' threads changed files in; unset until Relay has started. */
 let elsewhereWatch: ElsewhereWatch | undefined;
+/** The language servers behind the editor; unset until Relay has started. */
+let languageServers: LanguageServers | undefined;
 const login = new GiteaLogin(teaTokenFor);
 
 configureOpenCodeFetch((url, options) =>
@@ -161,6 +167,7 @@ const window = new AppWindow({
     devices?.hideAll(win);
     treeWatch?.release(win);
     elsewhereWatch?.release(win);
+    void languageServers?.release(win);
     // A phone's send it was finishing goes to the page that comes next.
     if (win === window.win) drafts?.service.redeliver();
   },
@@ -227,6 +234,7 @@ const quit = new Quit({
     previews?.dispose({ detach: quit.detaching });
     treeWatch?.dispose();
     elsewhereWatch?.dispose();
+    languageServers?.dispose();
     // Quitting before Relay finished starting skips shutDown.
     void devices?.dispose();
     blame.dispose();
@@ -483,6 +491,15 @@ app
     elsewhereWatch = new ElsewhereWatch({
       changed: (chatId) => window.send("relay:elsewhere", chatId),
     });
+    languageServers = createLanguageServers({
+      dir: join(app.getPath("userData"), "language-servers"),
+      root: (where) => api.placeRoot(where),
+      fetch: (url, init) =>
+        net.fetch(url instanceof Request ? url.url : url.toString(), init),
+      version: app.getVersion(),
+      send: (channel, event) => window.send(channel, event),
+      log: (line) => console.warn(line),
+    });
     const projectAdding = new ProjectAdding({
       store: loaded,
       projects,
@@ -523,6 +540,7 @@ app
       dragTray: dragTray(),
       treeWatch,
       elsewhereWatch,
+      languageServers,
       settingsFile: file,
     });
     const dispatch = createDispatch(api);
@@ -637,33 +655,11 @@ app
     // Test runs stay off the user's menubar, as their windows stay off the desktop.
     if (!process.env.RELAY_TEST_DATA || process.env.RELAY_TEST_HEADED === "1")
       menubar.start();
-    // Test runs park their windows off-screen and size them as each test needs.
-    if (!process.env.RELAY_TEST_DATA)
-      window.keepPlace({
-        load: () => savedMainWindow(loaded.get().mainWindow),
-        save: (place) =>
-          void loaded
-            .update((s) => {
-              s.mainWindow = place;
-            })
-            .catch((e) =>
-              console.warn("Could not save the window's place:", e),
-            ),
-      });
+    keepMainWindowPlace(window, loaded);
     window.clear = loaded.get().glass !== false;
     window.create();
     window.win?.webContents.once("did-finish-load", windowLoaded);
-    window.threads.restore({
-      load: () => savedThreadWindows(loaded.get().threadWindows),
-      save: (windows) =>
-        void loaded
-          .update((s) => {
-            s.threadWindows = windows;
-          })
-          .catch((e) => console.warn("Could not save thread windows:", e)),
-      exists: ({ chatId }) =>
-        !!loaded.get().chats?.some((c) => c.id === chatId),
-    });
+    restorePoppedWindows(window, loaded);
     void login.restoreSaved(loaded);
     app.on("activate", () => {
       if (!window.win) window.create();

@@ -18,7 +18,10 @@ import { draftHandlers } from "./drafts";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { elsewhereHandlers } from "./elsewhere";
+import { languageServerHandlers } from "./language-servers";
+import { localHistoryHandlers } from "./local-history";
 import { projectHandlers } from "./projects";
+import { projectSearchHandlers } from "./project-search";
 import { readAloudHandlers } from "./read-aloud";
 import { renderHandlers } from "./renders";
 import { reviewCheckoutHandlers } from "./review-checkout";
@@ -30,6 +33,7 @@ import { soundHandlers } from "./sounds";
 import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
+import { editorWindowHandlers } from "./editor-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
 import { scheduleHandlers } from "./schedules";
@@ -51,6 +55,9 @@ export function createDispatch(
     reviewCheckoutHandlers(ctx),
     checkHandlers(ctx),
     projectHandlers(ctx),
+    languageServerHandlers(ctx),
+    localHistoryHandlers(ctx),
+    projectSearchHandlers(ctx),
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
@@ -58,6 +65,7 @@ export function createDispatch(
     secondOpinionHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
+    editorWindowHandlers(ctx),
     previewHandlers(ctx),
     deviceHandlers(ctx),
     settingsHandlers(ctx),

@@ -55,6 +55,8 @@ contextBridge.exposeInMainWorld("relay", {
   onOpenUrl: subscribe<string>("relay:open-url"),
   onOpenProject: subscribe<string>("relay:open-project"),
   onThreadWindows: on("relay:thread-windows"),
+  onEditorWindows: on("relay:editor-windows"),
+  onEditorReturn: on("relay:editor-return"),
   onOpenThread: on("relay:open-thread"),
   onThreadMoved: on("relay:thread-moved"),
   onFlashWindow: on("relay:flash-window"),
@@ -66,6 +68,9 @@ contextBridge.exposeInMainWorld("relay", {
   onElsewhere: on("relay:elsewhere"),
   onAutoCompact: on("relay:auto-compact"),
   onSettingsFile: on("relay:settings-file"),
+  onLspDiagnostics: on("relay:lsp-diagnostics"),
+  onLspInactiveLines: on("relay:lsp-inactive-lines"),
+  onLspStatus: on("relay:lsp-status"),
   // Synchronous, once as the page starts: its first frame already uses the
   // file's fonts and theme instead of switching to them a moment later.
   settingsFileAtStart: () => ipcRenderer.sendSync("relay:settings-file-now"),

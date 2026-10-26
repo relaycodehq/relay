@@ -111,6 +111,9 @@ class HeadlessApp extends EventEmitter {
   setAsDefaultProtocolClient() {
     return false;
   }
+  async getFileIcon(): Promise<HeadlessImage> {
+    throw unavailable("App icons");
+  }
 }
 
 export const app = new HeadlessApp();

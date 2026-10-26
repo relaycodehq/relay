@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { digestSchema } from "./validation";
+import { digestSchema, textSchema } from "./validation";
+import { workingPathSchema, type WorkingTree } from "./working-tree";
 
 /** One piece a split can place: a whole file, or one hunk of a changed file. */
 export interface SplitChange {
@@ -48,3 +49,42 @@ export const applyCommitSplitSchema = z
   })
   .strict();
 export type ApplyCommitSplit = z.infer<typeof applyCommitSplitSchema>;
+
+/** One change of one file, as the editor's change bar shows it. */
+export const fileChangeSchema = z
+  .object({
+    path: workingPathSchema,
+    /** What the editor compared with: HEAD's text for the file, "" when HEAD hasn't got it. */
+    committed: textSchema,
+    /** The whole file to commit: HEAD's text with just this change applied. */
+    content: textSchema,
+  })
+  .strict();
+export type FileChange = z.infer<typeof fileChangeSchema>;
+export const commitFileChangeSchema = fileChangeSchema
+  .extend({ message: z.string().max(16000) })
+  .strict();
+export type CommitFileChange = z.infer<typeof commitFileChangeSchema>;
+
+/** Commits of part of the uncommitted changes: a planned split, or one change from the editor. */
+export interface PartialCommitApi {
+  /** A model's split of every uncommitted change into commits, not yet made. */
+  projectPlanCommitSplit(
+    where: string,
+    note?: string,
+  ): Promise<CommitSplitPlan>;
+  projectApplyCommitSplit(
+    where: string,
+    split: ApplyCommitSplit,
+  ): Promise<WorkingTree>;
+  /** Commits just this change; the file's other edits stay uncommitted, and what was staged stays staged. */
+  projectCommitFileChange(
+    where: string,
+    change: CommitFileChange,
+  ): Promise<WorkingTree>;
+  /** A generated message for committing just this change. */
+  projectChangeCommitMessage(
+    where: string,
+    change: FileChange,
+  ): Promise<string>;
+}

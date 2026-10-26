@@ -1,6 +1,7 @@
 import type { QuestionTarget } from "../../../shared/questions";
 import { useSymbolNavigation } from "./SymbolNavigation";
 import { useLineBlame } from "./LineBlame";
+import { HIGHLIGHT_MAX_LINES, HIGHLIGHTER } from "./highlighting";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { clickedLine } from "./diff-selection";
 import type { ProjectCheckState } from "../../../shared/checks";
@@ -144,7 +145,8 @@ export function DiffViewer({
   const [highlightLarge, setHighlightLarge] = useState(false);
   const isLarge =
     !!diff &&
-    Math.max(diff.additionLines.length, diff.deletionLines.length) > 5000;
+    Math.max(diff.additionLines.length, diff.deletionLines.length) >
+      HIGHLIGHT_MAX_LINES;
   const annotations = useMemo(
     () =>
       lineAnnotations({
@@ -271,9 +273,9 @@ export function DiffViewer({
           },
           theme: syntaxThemes,
           themeType: theme,
-          tokenizeMaxLength: highlightLarge ? 100000 : 5000,
+          tokenizeMaxLength: highlightLarge ? 100000 : HIGHLIGHT_MAX_LINES,
           useTokenTransformer: true,
-          preferredHighlighter: "shiki-js",
+          preferredHighlighter: HIGHLIGHTER,
           diffStyle: layout,
           expandUnchanged: fullContext || problemLine !== undefined,
           diffIndicators: "bars",
@@ -291,9 +293,9 @@ export function DiffViewer({
             if (phase !== "unmount") labelDiffGapControls(node);
           },
         }}
-        renderAnnotation={(a) => (
+        renderAnnotation={(...[annotation]) => (
           <LineAnnotations
-            notes={a.metadata}
+            notes={annotation.metadata}
             path={file.filename}
             composer={composer}
             actions={noteActions}

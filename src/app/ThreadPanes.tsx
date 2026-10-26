@@ -1,26 +1,32 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ChevronsLeftRight,
   ChevronsRightLeft,
-  GitCompareArrows,
   GitPullRequest,
   X,
 } from "lucide-react";
-import type { Project } from "../../shared/projects";
+import type { LinkedFolder, Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
 import type { SourceControlKind } from "../../shared/source-control";
 import type { Account, Pull, PullRef } from "../../shared/types";
 import { useNavigationLock } from "../lib/navigation-lock";
 import type { PaneOpens } from "./usePaneOpens";
 import type { ThreadFolder } from "./useThreadFolder";
-import type { ThreadView, Viewing } from "../features/thread/useThreadView";
+import {
+  NO_VIEWING,
+  type ThreadView,
+  type Viewing,
+} from "../features/thread/useThreadView";
 import { PullReviewPane } from "../features/review/PullReviewPane";
 import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
-import { ProjectChanges } from "./ProjectViews";
 import { ProjectFiles } from "../features/files/ProjectFiles";
+import { EditorElsewhere } from "../features/editor-windows/EditorElsewhere";
+import {
+  popOutEditor,
+  useEditorElsewhere,
+} from "../features/editor-windows/editor-windows";
 import { FolderGoneEmpty } from "../features/projects/FolderGone";
-import { ElsewhereOnly } from "../features/changes/elsewhere/ElsewhereOnly";
 import { WORKTREE_DELETED } from "./thread-folder";
 import { NO_SLOTS, PaneHeader, type PaneSlots } from "../ui/WorkspacePanes";
 import { PaneTabs } from "../ui/PaneTabs";
@@ -50,24 +56,17 @@ import {
 } from "../features/browser/previews";
 import { readText, writeText } from "../lib/persisted-store";
 
-/**
- * The working tree's changes, or in a PR thread the PR's Review, which
- * needs the Git host connected.
- */
+/** A PR thread's Review, which needs the Git host connected. */
 export function ThreadChanges({
   project,
   pull,
-  folder: { where, detail, gone, deleted },
+  folder: { where },
   view,
   opens,
   review,
-  chatId,
-  inWorktree,
-  onOpenThread,
-  agentRunning,
 }: {
   project: Project;
-  pull: PullRef | null;
+  pull: PullRef;
   folder: ThreadFolder;
   view: ThreadView;
   opens: PaneOpens;
@@ -83,98 +82,51 @@ export function ThreadChanges({
     /** Absent while Gitea is off in Settings → Integrations. */
     onConnect?: () => void;
   };
-  chatId?: string;
-  /** The thread works in a worktree Relay made for it. */
-  inWorktree?: boolean;
-  /** Opens a thread this one started, from a file it changed. */
-  onOpenThread?: (chatId: string) => void;
-  /** The thread's agent is at work in its folder. */
-  agentRunning?: boolean;
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
-  // Editing takes over from the diff, so Changes steps aside for Files.
+  // Editing takes over from the diff, so Review steps aside for Files.
   const editFile = (path: string, line?: number) => {
     if (opens.openInEditor({ path, line, directory: false }))
       opens.togglePane("changes");
   };
-  const reviewFile = pull
-    ? `relay-project-review-file:${project.id}:${pull.number}`
-    : "";
+  const reviewFile = `relay-project-review-file:${project.id}:${pull.number}`;
   return (
     <>
       <PaneHeader
-        icon={
-          pull ? <GitPullRequest size={14} /> : <GitCompareArrows size={14} />
-        }
-        title={pull ? "Review" : "Changes"}
-        detail={pull ? undefined : detail}
+        icon={<GitPullRequest size={14} />}
+        title="Review"
         onSlots={setSlots}
         onClose={() => opens.togglePane("changes")}
       />
-      {pull ? (
-        review.account && project.repository ? (
-          <div className="project-review">
-            <PullReviewPane
-              key={`${project.id}:${pull.number}`}
-              pull={pull}
-              workspace={where}
-              account={review.account}
-              initialFile={readText(reviewFile)}
-              slots={slots}
-              onEditFile={editFile}
-              reveals={opens.changeReveals}
-              onPresence={(next) => {
-                view.setViewing(next);
-                if (next.path) writeText(reviewFile, next.path);
-              }}
-              onDiscuss={review.onDiscuss}
-            />
-          </div>
-        ) : (
-          <div className="empty pane-empty">
-            <GitPullRequest size={28} />
-            <HostPrompt
-              kind={review.kind}
-              error={review.error}
-              checking={review.checking}
-              onRecheck={review.onRecheck}
-              onConnectGitea={review.onConnect}
-            />
-          </div>
-        )
-      ) : project.plain ? (
-        // No Git here: only what its agents changed in other repositories.
-        chatId && (
-          <ElsewhereOnly
-            chatId={chatId}
-            onOpenThread={onOpenThread}
-            onOpenOutside={(path) =>
-              opens.openInEditor({ path, outside: true, directory: false })
-            }
+      {review.account && project.repository ? (
+        <div className="project-review">
+          <PullReviewPane
+            key={`${project.id}:${pull.number}`}
+            pull={pull}
+            workspace={where}
+            account={review.account}
+            initialFile={readText(reviewFile)}
+            slots={slots}
+            onEditFile={editFile}
+            reveals={opens.changeReveals}
+            onPresence={(next) => {
+              view.setViewing(next);
+              if (next.path) writeText(reviewFile, next.path);
+            }}
+            onDiscuss={review.onDiscuss}
           />
-        )
-      ) : gone || deleted ? (
-        <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
+        </div>
       ) : (
-        <ProjectChanges
-          key={where}
-          where={where}
-          slots={slots}
-          onViewing={view.setViewing}
-          onOpenFile={editFile}
-          turn={view.turnDiff}
-          onShowTurn={view.showTurn}
-          onCloseTurn={() => view.closeTurn()}
-          reveals={opens.changeReveals}
-          onAsk={(code) => opens.ask({ text: "", code })}
-          chatId={chatId}
-          inWorktree={inWorktree}
-          onOpenThread={onOpenThread}
-          agentRunning={agentRunning}
-          onOpenOutside={(path) =>
-            opens.openInEditor({ path, outside: true, directory: false })
-          }
-        />
+        <div className="empty pane-empty">
+          <GitPullRequest size={28} />
+          <HostPrompt
+            kind={review.kind}
+            error={review.error}
+            checking={review.checking}
+            onRecheck={review.onRecheck}
+            onConnectGitea={review.onConnect}
+          />
+        </div>
       )}
     </>
   );
@@ -194,6 +146,11 @@ export function ThreadPanel({
   panel,
   zoomed,
   onZoom,
+  onError,
+  agentRunning,
+  inWorktree,
+  onOpenThread,
+  links,
 }: {
   project: Project;
   chatId: string | null;
@@ -204,8 +161,16 @@ export function ThreadPanel({
   /** The panel fills the workspace, the other panes and the sidebar stepped aside. */
   zoomed: boolean;
   onZoom: (zoomed: boolean) => void;
+  onError: (error: unknown) => void;
+  agentRunning?: boolean;
+  /** The thread works in a worktree Relay made, which Files compares with its source branch. */
+  inWorktree?: boolean;
+  onOpenThread?: (chatId: string) => void;
+  /** The folders linked to the thread with `/add-dir`, which Files shows beside the project's. */
+  links?: readonly LinkedFolder[];
 }) {
   const { locked } = useNavigationLock();
+  const editorElsewhere = useEditorElsewhere(where);
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const historyTitle = useCallback(
       (title: HTMLElement | null) => setHistorySlots((s) => ({ ...s, title })),
@@ -226,6 +191,10 @@ export function ThreadPanel({
     },
     [setViewing],
   );
+  // Its file is open in the other window now, not in this one.
+  useEffect(() => {
+    if (editorElsewhere) filesViewing(NO_VIEWING);
+  }, [editorElsewhere, filesViewing]);
   const front = panel.front;
   const preview = usePreviewState(previewKey(project.id, chatId));
   let terminals = 0;
@@ -269,6 +238,41 @@ export function ThreadPanel({
   };
   const folderShown =
     front?.surface === "files" || front?.surface === "history";
+  function filesPane() {
+    // An unsaved edit stays on screen, to copy out before it goes.
+    if ((gone || deleted) && !locked)
+      return (
+        <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
+      );
+    if (editorElsewhere)
+      return (
+        <EditorElsewhere
+          project={project}
+          where={where}
+          detail={detail?.text}
+          onError={onError}
+        />
+      );
+    return (
+      <ProjectFiles
+        key={where}
+        active={front?.surface === "files"}
+        project={project}
+        where={where}
+        watched={watched}
+        checks={checks}
+        onViewing={filesViewing}
+        opens={opens.fileOpens}
+        onAsk={(code) => opens.ask({ text: "", code })}
+        chatId={chatId ?? undefined}
+        agentRunning={agentRunning}
+        inWorktree={inWorktree}
+        onOpenThread={onOpenThread}
+        onPopOut={() => void popOutEditor(project.id, where).catch(onError)}
+        links={links}
+      />
+    );
+  }
   return (
     <>
       <header className="pane-header panel-header">
@@ -330,21 +334,7 @@ export function ThreadPanel({
       )}
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
-          {/* An unsaved edit stays on screen, to copy out before it goes. */}
-          {(gone || deleted) && !locked ? (
-            <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
-          ) : (
-            <ProjectFiles
-              key={where}
-              active={front?.surface === "files"}
-              project={project}
-              where={where}
-              watched={watched}
-              checks={checks}
-              onViewing={filesViewing}
-              opens={opens.fileOpens}
-            />
-          )}
+          {filesPane()}
         </div>
       )}
       {panel.has("history") && !project.plain && (
@@ -356,9 +346,7 @@ export function ThreadPanel({
               key={where}
               projectId={where}
               slots={historySlots}
-              onOpenFile={(path) =>
-                opens.openInEditor({ path, directory: false })
-              }
+              onOpenFile={(path, commit) => void opens.openCommitFile(commit, path)}
             />
           )}
         </div>

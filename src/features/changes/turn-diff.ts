@@ -12,6 +12,8 @@ export type TurnDiffTarget = {
   label: string;
   /** Everything the thread's worktree has that the branch it came from doesn't yet. */
   worktree?: boolean;
+  /** The branch the worktree came from. */
+  from?: string;
 };
 
 /** Everything the worktree has that the branch it came from doesn't, opened at `path`. */
@@ -27,6 +29,7 @@ export function worktreeDiff(
     path,
     label: status.branch ?? "Worktree",
     worktree: true,
+    from: status.from,
   };
 }
 

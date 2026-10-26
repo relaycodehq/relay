@@ -52,6 +52,36 @@
   flex-direction: column;
   border-right: 1px solid var(--border);
 }
+/* Beside the editor the sidebar is only the list of changes, so it fills the width it has. */
+.local-changes.list-only .working-sidebar {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  border-right: 0;
+}
+.local-changes.list-only .working-toolbar {
+  gap: 6px;
+  padding: 6px 6px 6px 12px;
+}
+.local-changes.list-only .working-toolbar > :is(strong, .muted) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.local-changes.list-only .working-toolbar > strong {
+  flex: 0 0 auto;
+  max-width: 60%;
+}
+/* The branch name keeps its room; the sync status beside it shrinks first. */
+.local-changes.list-only .working-toolbar > .muted {
+  flex: 0 1 auto;
+}
+.local-changes.list-only .working-toolbar > .spacer {
+  flex: 1 0 0;
+  margin-left: -6px;
+}
 .working-sidebar > .pane-resizer {
   top: 0;
 }
@@ -131,6 +161,10 @@
 .local-changes .working-file-list section > header strong {
   color: var(--text);
   font-weight: 600;
+}
+/* No chevron or checkbox before this title, so it lines up with the views above it. */
+.local-changes .working-file-list section > header.branch-changes-head {
+  padding-left: 12px;
 }
 .change-section-count {
   flex: none;
@@ -316,52 +350,6 @@
   color: var(--muted);
   border-bottom: 1px solid var(--border);
 }
-.image-diff {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  align-content: start;
-  gap: 12px;
-  padding: 12px;
-  overflow: auto;
-}
-.image-diff.split {
-  grid-template-columns: 1fr 1fr;
-}
-.image-diff-side {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  min-height: 0;
-}
-.image-diff-side figcaption {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-}
-.image-diff-canvas {
-  min-height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 12px;
-  /* A checkerboard so transparent pixels read as transparent. */
-  background: repeating-conic-gradient(
-      color-mix(in srgb, var(--muted) 12%, transparent) 0 25%,
-      transparent 0 50%
-    )
-    0 0 / 16px 16px;
-}
-.image-diff-canvas img,
-.image-diff-canvas video {
-  max-width: 100%;
-}
 .working-folder {
   display: flex;
   align-items: center;
@@ -390,4 +378,10 @@
 }
 .local-changes .working-file.nested {
   padding-left: 42px;
+}
+.working-empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--muted);
+  font-size: 12px;
 }

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { git } from "./git";
 import { digest } from "../util/hash";
 import { readWorkingFile } from "./working-files";
-import { serializeRepo, workingTree } from "./working-tree";
+import { assertCommittable, serializeRepo, workingTree } from "./working-tree";
 import { agentRuntime } from "../agents";
 import { emptyCwd, unfence } from "../agents/helper-output";
 import { runHelperJob } from "../agents/helper-fallback";
@@ -110,15 +110,6 @@ async function inBatches<T, R>(
   for (const part of chunks(items, size))
     out.push(...(await Promise.all(part.map(run))));
   return out;
-}
-
-function assertCommittable(state: WorkingTree) {
-  if (!state.branch || state.operation)
-    throw new Error(
-      "Finish the current Git operation on a branch before committing here.",
-    );
-  if (state.changes.some((c) => c.conflict))
-    throw new Error("Resolve and stage all merge conflicts first.");
 }
 
 /**

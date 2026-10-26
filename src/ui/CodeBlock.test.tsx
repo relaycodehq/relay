@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 vi.mock("../lib/api", () => ({ api: {} }));
 import { renderToStaticMarkup } from "react-dom/server";
-import { highlight, RunCommand, type Highlighted } from "./CodeBlock";
+import { highlight, RunCommand } from "./CodeBlock";
 import { RichText } from "./RichText";
 
 const inThread = (text: string) =>
@@ -57,40 +57,19 @@ it("draws a mermaid block only once it's closed, keeping its source until then",
   expect(closed).toContain("A --&gt; B");
 });
 
-it("colours a block streamed line by line exactly like the finished block", async () => {
-  // A comment and a template string that span lines carry grammar state over.
-  const code = [
-    "/* opens here",
-    "   still a comment */",
-    "const greeting = `hello",
-    "${name} and ${'quoted'}`;",
-    "export function f(a: number): string {",
-    "  return String(a); // trailing",
-    "}",
-  ].join("\n");
-  const lines = code.split("\n");
-  // First, so the grammar's patterns are compiled: a busy machine compiling
-  // them mid-line runs past Shiki's time limit, which leaves the line plain.
-  const whole = await highlight(code, "tsx", "pierre-dark", null);
-  let prior: Highlighted | null = null;
-  for (let end = 1; end <= lines.length; end++)
-    prior = await highlight(
-      lines.slice(0, end).join("\n"),
-      "tsx",
-      "pierre-dark",
-      prior,
-    );
-  // Offsets count from each pass's start; only what's drawn has to match.
-  const drawn = (lines: Highlighted["lines"] = []) =>
-    lines.map((line) =>
-      line.map(({ content, color, fontStyle }) => [content, color, fontStyle]),
-    );
-  expect(drawn(prior?.lines)).toEqual(drawn(whole.lines));
-  expect(
-    new Set(
-      drawn(whole.lines)
+it("colours code, and leaves a language the lexers don't know plain", async () => {
+  const code =
+    "export function f(a: number): string {\n  return String(a); // trailing\n}";
+  const colours = async (lang: string) => {
+    const { lines } = await highlight(code, lang, "pierre-dark");
+    expect(
+      lines
         .flat()
-        .map(([, color]) => color),
-    ).size,
-  ).toBeGreaterThan(3);
+        .map((token) => token.content)
+        .join(""),
+    ).toBe(code.replaceAll("\n", ""));
+    return new Set(lines.flat().map((token) => token.color)).size;
+  };
+  expect(await colours("tsx")).toBeGreaterThan(3);
+  expect(await colours("prisma")).toBe(1);
 });

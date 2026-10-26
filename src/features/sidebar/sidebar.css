@@ -1610,6 +1610,9 @@
 .sb-menu-label > svg {
   color: var(--muted);
 }
+.sb-menu-icon-gap {
+  flex: 0 0 13px;
+}
 .sb-menu-group {
   display: flex;
   min-width: 0;

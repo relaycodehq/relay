@@ -8,7 +8,8 @@ export function ContextMenuItem({
   disabled,
   onClick,
 }: {
-  icon: ReactNode;
+  /** Left out where it would only repeat a neighbour's; the label keeps its place. */
+  icon?: ReactNode;
   children: ReactNode;
   hint?: string;
   disabled?: boolean;
@@ -21,7 +22,7 @@ export function ContextMenuItem({
       onClick={onClick}
     >
       <span className="sb-menu-label">
-        {icon}
+        {icon ?? <span className="sb-menu-icon-gap" aria-hidden />}
         {children}
       </span>
       {hint && <small>{hint}</small>}

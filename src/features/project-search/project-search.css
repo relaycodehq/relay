@@ -1,0 +1,400 @@
+/* Search Everywhere (a palette on the shared .modal.palette shell) and the
+   Find in Files panel. Matches are marked with the accent, never a badge. */
+
+.ps-name mark,
+.ps-code mark,
+.ps-dir mark {
+  background: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+.ps-code mark,
+.ps-line-code mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* Palette */
+.modal.palette.ps-palette {
+  width: 700px;
+}
+.ps-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 10px 0;
+}
+.ps-tab {
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 3px 9px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ps-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.ps-tab[aria-selected="true"] {
+  background: none;
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  border-radius: 0;
+}
+.ps-tabs-hint {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ps-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+}
+.ps-input input,
+.ps-input input:focus-visible {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  padding: 3px 0;
+  outline: none;
+  background: transparent;
+  font-size: 14px;
+}
+.ps-flags {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex: none;
+}
+.ps-toggle {
+  width: 24px;
+  height: 22px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.ps-toggle.active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent);
+}
+.ps-section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 9px 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+.ps-section-label small {
+  margin-left: auto;
+  font-weight: 400;
+}
+.ps-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0 9px;
+  text-align: left;
+  font-size: 13px;
+  overflow: hidden;
+}
+.ps-row[data-active],
+.ps-row:hover {
+  background: var(--hover);
+}
+.ps-row[data-active] {
+  background: var(--selected);
+}
+.ps-row .file-entry-icon {
+  width: 15px;
+  height: 15px;
+}
+.ps-name {
+  flex: none;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.ps-dir {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  /* A long folder path loses its start, which is the least telling part. */
+  direction: rtl;
+  text-align: left;
+  unicode-bidi: plaintext;
+}
+.ps-trail {
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ps-code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font: var(--code-font-size, 12px) / 1.4 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: pre;
+}
+.ps-where {
+  flex: none;
+  max-width: 42%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.ps-kind {
+  flex: none;
+  min-width: 52px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.ps-more {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 4px 9px 6px 32px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+}
+.ps-more:hover {
+  background: transparent;
+  color: var(--accent);
+}
+.ps-empty {
+  padding: 22px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.ps-problem {
+  padding: 4px 9px;
+  color: var(--danger);
+  font-size: 11px;
+}
+.ps-foot-note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ps-foot-note[data-problem] {
+  color: var(--danger);
+}
+
+/* Find in Files */
+.ps-find {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+}
+.ps-find-head {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: none;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.ps-find-line {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.ps-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding-right: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.ps-field:focus-within {
+  border-color: var(--accent);
+}
+.ps-field[data-problem] {
+  border-color: var(--danger);
+}
+.ps-field input,
+.ps-field input:focus-visible {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 8px;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+}
+.ps-field input.mono {
+  font-family: var(--font-mono);
+}
+.ps-find-line > .icon-button {
+  width: 24px;
+  height: 24px;
+}
+.ps-find-line .ps-gutter {
+  display: inline-flex;
+  flex: none;
+  width: 24px;
+  justify-content: center;
+  color: var(--muted);
+}
+.ps-find-status {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 4px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-find-status[data-problem] {
+  color: var(--danger);
+}
+.ps-find-masks {
+  display: flex;
+  gap: 4px;
+  padding-left: 28px;
+}
+.ps-replace-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  white-space: nowrap;
+}
+.ps-replace-actions button {
+  padding: 3px 9px;
+  font-size: 12px;
+}
+.ps-replace-actions .ps-confirm {
+  color: var(--muted);
+}
+.ps-find-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  outline: none;
+}
+.ps-find-results:focus-visible {
+  outline: none;
+}
+.ps-result {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  overflow: hidden;
+  cursor: default;
+  white-space: nowrap;
+}
+.ps-result:hover {
+  background: var(--hover);
+}
+.ps-result[data-active] {
+  background: var(--selected);
+}
+.ps-result[data-excluded] {
+  opacity: 0.45;
+}
+.ps-result[data-kind="file"] {
+  font-weight: 500;
+}
+.ps-result[data-kind="file"] .ps-name {
+  max-width: 50%;
+}
+.ps-result .file-entry-icon {
+  width: 14px;
+  height: 14px;
+}
+.ps-result .ps-chevron {
+  flex: none;
+  color: var(--muted);
+}
+.ps-result .ps-count {
+  margin-left: auto;
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+.ps-result .ps-exclude {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+}
+.ps-result:hover .ps-exclude,
+.ps-result[data-active] .ps-exclude {
+  opacity: 1;
+}
+.ps-result .ps-line-no {
+  flex: none;
+  width: 38px;
+  padding-left: 14px;
+  box-sizing: content-box;
+  color: var(--muted);
+  font: var(--code-font-size, 12px) / 1 var(--font-mono);
+  text-align: right;
+}
+.ps-line-code {
+  min-width: 0;
+  overflow: hidden;
+  font: var(--code-font-size, 12px) / 1.4 var(--font-mono);
+  text-overflow: ellipsis;
+}
+.ps-find-empty {
+  padding: 18px 14px;
+  color: var(--muted);
+  text-align: center;
+}
+.ps-report {
+  flex: none;
+  max-height: 96px;
+  overflow: auto;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+}
+.ps-report div + div {
+  margin-top: 2px;
+}
+.ps-report code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}

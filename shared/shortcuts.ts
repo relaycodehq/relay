@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { isFunctionKey } from "./shortcut-accelerator";
+import { combo, one } from "./shortcut-combo";
+
+export { accelerator } from "./shortcut-accelerator";
 
 /**
  * A key combination, matched by physical key (`KeyboardEvent.code`) so it
@@ -60,24 +64,6 @@ export interface ShortcutCommand {
   doubleEscape?: boolean;
   defaults: (mac: boolean) => KeyCombo[];
 }
-
-/** `mod` is ⌘ on macOS and Ctrl elsewhere; the key is the last part. */
-function combo(mac: boolean, spec: string): KeyCombo {
-  const parts = spec.split("+");
-  const code = parts.pop()!;
-  const has = (name: string) => parts.includes(name);
-  return {
-    code,
-    alt: has("alt"),
-    ctrl: has("ctrl") || (!mac && has("mod")),
-    meta: has("meta") || (mac && has("mod")),
-    shift: has("shift"),
-  };
-}
-
-const one =
-  (spec: string) =>
-  (mac: boolean): KeyCombo[] => [combo(mac, spec)];
 
 export const doubleEscapeCombo: KeyCombo = {
   code: "Escape",
@@ -286,6 +272,22 @@ const shortcutCommands = {
     keywords: "link",
     defaults: one("mod+KeyK"),
   },
+  "editor-window": {
+    title: "Open the editor in its own window, or put it back",
+    group: "Editor",
+    description:
+      "The editor of the thread in front, with its tabs and unsaved edits. Closing its window puts it back too.",
+    keywords: "pop out window detach monitor files code",
+    defaults: one("mod+alt+KeyE"),
+  },
+  "reopen-tab": {
+    title: "Reopen the last closed editor tab",
+    group: "Editor",
+    description:
+      "Brings back tabs closed in this workspace, newest first, including ones closed to make room.",
+    keywords: "undo close restore bring back files",
+    defaults: one("mod+shift+KeyT"),
+  },
   save: {
     title: "Save the open file",
     group: "Editor",
@@ -443,7 +445,6 @@ export function overlaps(
 
 export const modifierCode =
   /^(Alt|Control|Meta|Shift|OS|CapsLock|Fn)(Left|Right)?$/;
-const fKey = /^F([1-9]|1[0-9]|2[0-4])$/;
 /** Keys that type something, so they can't be a shortcut alone in a field. */
 const printable =
   /^(Key[A-Z]|Digit\d|Minus|Equal|BracketLeft|BracketRight|Backslash|Semicolon|Quote|Comma|Period|Slash|Backquote|IntlBackslash)$/;
@@ -497,7 +498,7 @@ export function recordCombo(
       };
     return { kind: "combo", combo: { ...next, code: "Digit1" } };
   }
-  if (!held && !fKey.test(next.code)) {
+  if (!held && !isFunctionKey(next.code)) {
     if (!cmd.bare)
       return {
         kind: "invalid",
@@ -510,71 +511,4 @@ export function recordCombo(
       };
   }
   return { kind: "combo", combo: next };
-}
-
-const acceleratorKeys: Record<string, string> = {
-  Minus: "-",
-  Equal: "=",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Backslash: "\\",
-  Semicolon: ";",
-  Quote: "'",
-  Comma: ",",
-  Period: ".",
-  Slash: "/",
-  Backquote: "`",
-  ArrowLeft: "Left",
-  ArrowRight: "Right",
-  ArrowUp: "Up",
-  ArrowDown: "Down",
-  Space: "Space",
-  Backspace: "Backspace",
-  Delete: "Delete",
-  Insert: "Insert",
-  Home: "Home",
-  End: "End",
-  PageUp: "PageUp",
-  PageDown: "PageDown",
-  NumpadAdd: "numadd",
-  NumpadSubtract: "numsub",
-  NumpadMultiply: "nummult",
-  NumpadDivide: "numdiv",
-  NumpadDecimal: "numdec",
-};
-
-/**
- * Electron's accelerator for a combo, or undefined for a key it can't name.
- * Menus match the character a key types, so `typed` names it on the
- * keyboard's own layout when it knows.
- */
-export function accelerator(
-  c: KeyCombo,
-  mac: boolean,
-  typed?: (code: string) => string | undefined,
-) {
-  let key: string | undefined;
-  let shift = c.shift;
-  const own = typed?.(c.code);
-  if (c.code === "Equal" && shift && (!own || own === "=")) {
-    // Electron's own zoom-in: "Plus" is ⇧= on most layouts.
-    key = "Plus";
-    shift = false;
-  } else if (own && /^[a-z0-9\-=[\];',./`\\]$/i.test(own))
-    key = own.toUpperCase();
-  else if (/^Key[A-Z]$/.test(c.code)) key = c.code.slice(3);
-  else if (/^Digit\d$/.test(c.code)) key = c.code.slice(5);
-  else if (/^Numpad\d$/.test(c.code)) key = "num" + c.code.slice(6);
-  else if (fKey.test(c.code)) key = c.code;
-  else key = acceleratorKeys[c.code];
-  if (!key || c.twice) return undefined;
-  return [
-    c.ctrl && (mac ? "Control" : "Ctrl"),
-    c.alt && "Alt",
-    shift && "Shift",
-    c.meta && (mac ? "Command" : "Super"),
-    key,
-  ]
-    .filter(Boolean)
-    .join("+");
 }

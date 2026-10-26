@@ -3,11 +3,13 @@ import type {
   AgentProvider,
   ChatMessage,
   ProjectChat,
+  TurnFileChange,
 } from "../../shared/projects";
 import { checkedOutOr } from "../git/git";
 import { finishTurn, resumeTurn, startTurn } from "../git/turn-changes";
 import { keepIgnored, recordIgnored } from "../git/ignored-touches";
 import { outsideEdits } from "../git/elsewhere";
+import { localHistory, recordTurnHistory } from "../local-history";
 import { commitWatch } from "./turn-commit";
 
 /**
@@ -84,6 +86,23 @@ export class TurnSnapshot {
     for (const path of paths) this.edited.add(path);
   }
 
+  /** Reads the turn's Git snapshots in the background, so the answer doesn't wait for it. */
+  private keepInLocalHistory(
+    messageId: string,
+    files: TurnFileChange[],
+    title: string,
+  ) {
+    const history = localHistory();
+    if (!history) return;
+    void recordTurnHistory(
+      history,
+      this.counted,
+      messageId,
+      files,
+      title,
+    ).catch((e) => console.warn("Local History could not keep a turn:", e));
+  }
+
   /**
    * Puts what the turn changed on the message it ended in, and what the
    * checkout is on now on the thread. Before the status changes: a finished
@@ -103,7 +122,10 @@ export class TurnSnapshot {
         message.id,
         { edited, commands: [...this.commands.values()] },
       );
-      if (files.length) message.changes = files;
+      if (files.length) {
+        message.changes = files;
+        this.keepInLocalHistory(message.id, files, chat.title);
+      }
       await recordIgnored(
         this.counted,
         this.ignoredStart,

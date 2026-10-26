@@ -41,6 +41,7 @@ import type { TreeWatch } from "../git/tree-watch";
 import type { ElsewhereWatch } from "../git/elsewhere-watch";
 import type { SettingsFile } from "../settings";
 import type { Schedules } from "../schedules";
+import type { LanguageServers } from "../language-servers";
 
 export interface Services {
   store: Store;
@@ -90,6 +91,8 @@ export interface Services {
   elsewhereWatch?: ElsewhereWatch;
   /** settings.json, which windows follow and the main process reads. */
   settingsFile: SettingsFile;
+  /** Hover, definitions and completion from language servers, one per folder. */
+  languageServers: LanguageServers;
 }
 
 /** What a method's promise resolves to in the page. */

@@ -9,7 +9,9 @@ import {
 } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
+import { fileAuthorsQuerySchema } from "../../shared/file-authors";
 import { detectProject } from "../checks/detect";
+import { fileAuthors } from "../git/file-authors";
 import type { CheckLimits } from "../checks/service";
 import { takes, type ApiContext, type Handlers } from "./context";
 
@@ -90,6 +92,10 @@ export function checkHandlers(ctx: ApiContext) {
       [workspaceIdSchema, blameQuerySchema],
       async (where, query) =>
         blame.read(await placeRoot(where), null, null, query),
+    ),
+    localFileAuthors: takes(
+      [workspaceIdSchema, fileAuthorsQuerySchema],
+      async (where, query) => fileAuthors(await placeRoot(where), query),
     ),
     inspectSymbol: takes(
       [refSchema, shaSchema, symbolQuerySchema],

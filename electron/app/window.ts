@@ -2,7 +2,6 @@ import {
   app,
   BrowserWindow,
   dialog,
-  nativeImage,
   nativeTheme,
   screen,
   type IpcMainInvokeEvent,
@@ -19,8 +18,11 @@ import {
   type SavedMainWindow,
   type ThreadWindow,
 } from "../../shared/thread-windows";
+import { badgeDot } from "./badge-dot";
 import { isRelayPage, loadPage } from "./page";
 import { ThreadWindows } from "./thread-windows";
+import { EditorWindows } from "./editor-windows";
+import { show as showWindow } from "./popped-windows";
 
 /** The window whose page made the API call running now. */
 const callers = new AsyncLocalStorage<BrowserWindow | null>();
@@ -39,30 +41,8 @@ export const callFrom = <T>(win: BrowserWindow | null, call: () => T) =>
   callers.run(win, call);
 
 /**
- * Windows has no badge count; a dot on the taskbar button stands in. The
- * overlay is always a 16px square on the icon's corner, so a dot filling it
- * reads as big as the icon; Windows' own unread dots are about half that.
- */
-function badgeDot() {
-  const size = 16,
-    radius = 4.5,
-    pixels = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const d = Math.hypot(x + 0.5 - size / 2, y + 0.5 - size / 2),
-        alpha = Math.max(0, Math.min(1, radius + 0.5 - d)),
-        i = (y * size + x) * 4;
-      // BGRA, premultiplied: #e5484d with an antialiased edge.
-      pixels[i] = Math.round(0x4d * alpha);
-      pixels[i + 1] = Math.round(0x48 * alpha);
-      pixels[i + 2] = Math.round(0xe5 * alpha);
-      pixels[i + 3] = Math.round(0xff * alpha);
-    }
-  return nativeImage.createFromBitmap(pixels, { width: size, height: size });
-}
-
-/**
- * Relay's main window, and the threads popped out of it into their own.
+ * Relay's main window, and the threads and editors popped out of it into
+ * their own.
  * Closed, the main one comes back from the menubar, the dock or a link.
  */
 export class AppWindow {
@@ -72,6 +52,7 @@ export class AppWindow {
   /** The typography setting's share of the window zoom; ⌘+ and ⌘− add to it. */
   interfaceScale = 1;
   readonly threads: ThreadWindows;
+  readonly editors: EditorWindows;
   private closingToQuit = false;
   /** A thread to open once the main window's page asks, as it loads. */
   private pendingThread?: ThreadWindow;
@@ -99,20 +80,33 @@ export class AppWindow {
     },
   ) {
     this.threads = new ThreadWindows({
-      make: (bounds, unloadKept) =>
-        this.build(
-          {
-            ...(bounds ?? { width: 1100, height: 900 }),
-            minWidth: MAIN_MIN_WIDTH.alone,
-            minHeight: 500,
-          },
-          unloadKept,
-        ),
+      make: this.popOutMaker({ width: 1100, height: 900 }),
       changed: (state) => this.send("relay:thread-windows", state),
       pageGone: (win) => hooks.pageGone(win),
       quitCancelled: () => hooks.quitCancelled(),
       returned: (thread) => this.openThread(thread),
     });
+    this.editors = new EditorWindows({
+      make: this.popOutMaker({ width: 1200, height: 900 }),
+      changed: (state) => this.send("relay:editor-windows", state),
+      pageGone: (win) => hooks.pageGone(win),
+      quitCancelled: () => hooks.quitCancelled(),
+      main: () => this.win,
+      returned: (win) => (win ? showWindow(win) : this.open()),
+    });
+  }
+
+  /** Builds a popped-out window where it was saved, else at `size`. */
+  private popOutMaker(size: { width: number; height: number }) {
+    return (bounds: Rectangle | undefined, unloadKept: () => void) =>
+      this.build(
+        {
+          ...(bounds ?? size),
+          minWidth: MAIN_MIN_WIDTH.alone,
+          minHeight: 500,
+        },
+        unloadKept,
+      );
   }
 
   /** Pushes to every Relay window; channels in `RelayEvents` must carry their payload. */
@@ -124,9 +118,13 @@ export class AppWindow {
       if (!win.isDestroyed()) win.webContents.send(channel, payload);
   }
 
-  /** The main window and every thread's own. */
+  /** The main window, every thread's own and every editor's. */
   all(): BrowserWindow[] {
-    return [...(this.win ? [this.win] : []), ...this.threads.windows()];
+    return [
+      ...(this.win ? [this.win] : []),
+      ...this.threads.windows(),
+      ...this.editors.windows(),
+    ];
   }
 
   /** The window whose page made the API call running now, else the main one. */
@@ -235,10 +233,12 @@ export class AppWindow {
   }
 
   /**
-   * Closes the windows on the way to quitting, threads' first; each one's
-   * unsaved-edits prompt can still cancel. False when none is left to close.
+   * Closes the windows on the way to quitting, editors' and threads' first;
+   * each one's unsaved-edits prompt can still cancel. False when none is left
+   * to close.
    */
   closeToQuit() {
+    if (this.editors.closeToQuit()) return true;
     if (this.threads.closeToQuit()) return true;
     if (!this.win) return false;
     this.closingToQuit = true;

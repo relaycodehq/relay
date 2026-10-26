@@ -27,6 +27,7 @@ import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
 import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
+import { createLanguageServers } from "../language-servers";
 import { flushWorkingFiles } from "../git/working-files";
 import { flushGitOperations } from "../git/working-tree";
 import { setComputerName } from "../platform/computer-name";
@@ -210,6 +211,14 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     client: () => login.client,
     send: () => {},
   });
+  const languageServers = createLanguageServers({
+    dir: join(home, "language-servers"),
+    root: (where) => api.placeRoot(where),
+    fetch: fetcher,
+    version: headlessVersion,
+    send: (channel, event) => window.send(channel, event),
+    log: (line) => console.warn(line),
+  });
   const api = apiContext({
     store,
     projects,
@@ -245,6 +254,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
     agentAccounts,
     projectAdding,
     drafts,
+    languageServers,
     settingsFile,
   });
   const dispatch: Dispatch = createDispatch(api);
@@ -358,6 +368,7 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
         console.error("Stopping didn't finish cleanly:", e);
       }
       keepAwake.dispose();
+      languageServers.dispose();
       dictation.stopWorker();
       readAloud.stopWorker();
       if (process.platform !== "win32")

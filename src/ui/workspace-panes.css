@@ -271,6 +271,8 @@
   position: relative;
   width: var(--files-width, 210px);
   max-width: 60%;
+  /* One chrome around the code: the list, the tabs and the status line. */
+  background: var(--sidebar);
 }
 .files-workspace .project-file-list > .pane-resizer {
   top: 0;
@@ -304,25 +306,31 @@
   margin: 8px;
 }
 
-/* Inline editor: a single toolbar row, then code. */
+/* Under the code, a quiet status line: the file and what reads it on the
+   left, what its changes show against and Save on the right. */
 .editor-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  min-height: 36px;
+  gap: 10px;
+  height: 28px;
+  flex-shrink: 0;
   padding: 0 6px 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--toolbar);
-  font-size: 12px;
+  border-top: 1px solid var(--border);
+  background: var(--sidebar);
+  color: var(--muted);
+  font-size: 11px;
 }
 .editor-bar-path {
   display: flex;
   align-items: baseline;
   gap: 2px;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
   white-space: nowrap;
+}
+.editor-bar-gap {
+  flex: 1;
 }
 .editor-bar-path > .editor-bar-dir {
   color: var(--muted);
@@ -333,7 +341,8 @@
   text-align: left;
 }
 .editor-bar-path > strong {
-  font-weight: 500;
+  font-weight: 400;
+  color: var(--text);
   flex-shrink: 0;
 }
 .editor-bar-state {
@@ -353,13 +362,6 @@
   padding: 0;
   font-size: inherit;
 }
-.editor-bar-state.dirty::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-}
 .editor-bar .divider {
   width: 1px;
   height: 16px;
@@ -367,8 +369,87 @@
   margin: 0 4px;
 }
 .editor-bar .icon-button {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.editor-bar-actions {
+  display: contents;
+}
+.editor-bar .lsp-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  font-size: 11px;
+}
+/* The checks' word on the file shares the line; their problems open above it. */
+.editor-bar .editor-checks {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.editor-bar .editor-checks > span {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-bar .editor-checks details {
+  position: relative;
+  flex-shrink: 0;
+}
+.editor-bar .editor-checks details > div {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 9px);
+  z-index: 40;
+  width: min(440px, 70cqi);
+  max-height: 240px;
+  padding: 2px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  color: var(--text);
+}
+/* Save is a word at the end of the line, in the accent once there is something to save. */
+.editor-save {
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+}
+.editor-save:disabled {
+  color: var(--muted);
+  font-weight: 400;
+  opacity: 0.6;
+}
+/* What the changes show against, when not the last commit; muted, beside the path. */
+.editor-bar-baseline {
+  display: flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 2px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.editor-bar-baseline .icon-button {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
 }
 .editor-bar .symbol-actions {
   display: flex;
@@ -395,11 +476,6 @@
 .editor-bar .symbol-actions button:disabled {
   opacity: 0.45;
 }
-.editor-bar > .primary {
-  font-size: 11px;
-  padding: 4px 10px;
-  min-height: 26px;
-}
 .project-inline-editor .editor-versions {
   font-size: 10px;
 }
@@ -420,7 +496,6 @@
     gap: 0;
     padding: 6px;
   }
-  .editor-bar .editor-history,
   .editor-bar .divider {
     display: none;
   }
@@ -461,16 +536,13 @@
     margin-left: 6px;
   }
 }
-/* Too narrow for the path beside the controls: the path gets its own row. */
+/* A narrow split keeps one row: the file's name, its changes and Save. */
 @container (max-width: 360px) {
-  .editor-bar {
-    flex-wrap: wrap;
-    padding-block: 4px;
-  }
-  .editor-bar-path {
-    flex-basis: calc(100% - 40px);
-    min-height: 28px;
-    align-items: center;
+  .editor-bar .lsp-status,
+  .editor-bar .editor-checks,
+  .editor-bar-actions,
+  .editor-bar-path > .editor-bar-dir {
+    display: none;
   }
 }
 

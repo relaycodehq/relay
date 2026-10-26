@@ -1,10 +1,12 @@
-import { git } from "./git";
+import { createPatch } from "diff";
+import { currentBranch, git } from "./git";
 import { readWorkingFile } from "./working-files";
 import { workingTree } from "./working-tree";
 import { agentRuntime } from "../agents";
 import { emptyCwd, unfence } from "../agents/helper-output";
 import { runHelperJob } from "../agents/helper-fallback";
 import { agentName } from "../../shared/agents";
+import type { FileChange } from "../../shared/commit-split";
 import type { AISettings } from "../../shared/settings";
 
 const SUMMARY_LIMIT = 6_000;
@@ -17,8 +19,20 @@ const limitSection = (value: string, max: number) =>
 /** Attribution lines agents add out of habit; the commit is the user's. */
 const ATTRIBUTION = /^\s*(co-authored-by:|(🤖\s*)?generated with\b)/i;
 
+/** What a commit changes, as the model sees it. */
+interface CommitContext {
+  /** Empty when HEAD is detached. */
+  branch: string;
+  /** One line a file: its status letter and path. */
+  summary: string;
+  patch: string;
+}
+
 /** What the chosen files change, as the model sees it: a summary and a capped patch. */
-async function commitContext(root: string, paths: string[]) {
+async function commitContext(
+  root: string,
+  paths: string[],
+): Promise<CommitContext> {
   const state = await workingTree(root);
   const changes = paths.map((path) => {
     const c = state.changes.find((c) => c.path === path);
@@ -87,6 +101,32 @@ export async function generateCommitMessage(
   signal: AbortSignal,
 ): Promise<string> {
   const context = await commitContext(root, paths);
+  return writeCommitMessage(root, context, settings, signal);
+}
+
+/** A message for committing just this change of one file, written from its own patch. */
+export async function generateChangeCommitMessage(
+  root: string,
+  change: FileChange,
+  settings: AISettings,
+  signal: AbortSignal,
+): Promise<string> {
+  // An empty committed text is a file new to Git, or near enough.
+  const status = change.committed ? "M" : "A";
+  const context = {
+    branch: await currentBranch(root).catch(() => ""),
+    summary: `${status} ${change.path}`,
+    patch: createPatch(change.path, change.committed, change.content),
+  };
+  return writeCommitMessage(root, context, settings, signal);
+}
+
+async function writeCommitMessage(
+  root: string,
+  context: CommitContext,
+  settings: AISettings,
+  signal: AbortSignal,
+): Promise<string> {
   const recent = await git(root, ["log", "-8", "--format=%s"]).catch(() => "");
   // The helper instructions below keep the answer to JSON and the patch untrusted.
   const prompt = [

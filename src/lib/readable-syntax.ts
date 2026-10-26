@@ -1,16 +1,22 @@
 /**
- * Registers the readable Shiki themes the built-in light palettes name: the
+ * Registers the readable syntax themes the built-in light palettes name: the
  * stock theme with every token colour pushed to AA against the darker of the
  * palette's code backgrounds (chat code sits on --inbox, diffs on --surface).
+ * Both forms are made, the TextMate one for Shiki and the editor, the Zed one
+ * for the Highlights lexers.
  */
 import {
   registerCustomTheme,
   resolveTheme,
-  type ThemeRegistrationResolved,
+  type DiffsTheme,
 } from "@pierre/diffs";
+import type {
+  Theme as ZedTheme,
+  ThemeSyntaxSettings,
+} from "@pierre/highlights";
+import { readableSyntaxBase } from "./builtin-themes";
 import {
   luminance,
-  readableSyntaxBase,
   themesFor,
   withContrast,
   type Palette,
@@ -33,13 +39,14 @@ export function readableToken(color: string, background: string): string {
   );
 }
 
+type TextmateTheme = NonNullable<DiffsTheme["textmate"]>;
 type Setting = { settings?: { foreground?: string } };
 
 export function readableTheme(
-  base: ThemeRegistrationResolved,
+  base: TextmateTheme,
   name: string,
   background: string,
-): ThemeRegistrationResolved {
+): TextmateTheme {
   const fix = (list: Setting[] | undefined) =>
     list?.map((entry) =>
       entry.settings?.foreground
@@ -66,12 +73,53 @@ export function readableTheme(
   };
 }
 
+function readableSyntaxStyle(
+  style: string | ThemeSyntaxSettings,
+  background: string,
+): string | ThemeSyntaxSettings {
+  if (typeof style === "string") return readableToken(style, background);
+  if (!style.color) return style;
+  return { ...style, color: readableToken(style.color, background) };
+}
+
+function readableZedTheme(
+  base: ZedTheme,
+  name: string,
+  background: string,
+): ZedTheme {
+  const syntax = Object.fromEntries(
+    Object.entries(base.style.syntax ?? {}).map(([token, style]) => [
+      token,
+      readableSyntaxStyle(style, background),
+    ]),
+  );
+  return { ...base, name, style: { ...base.style, syntax } };
+}
+
+/** Built-in themes come in both forms; a missing one is a bundling mistake. */
+function present<T>(form: T | undefined, what: string): T {
+  if (!form) throw new Error(`No ${what}`);
+  return form;
+}
+
 for (const theme of themesFor("light")) {
   const palette = theme.light!;
   const base = readableSyntaxBase(palette.syntax);
   if (!base) continue;
   const name = palette.syntax;
-  registerCustomTheme(name, async () =>
-    readableTheme(await resolveTheme(base), name, codeBackground(palette)),
+  const background = codeBackground(palette);
+  registerCustomTheme(name, async () => {
+    const stock = await resolveTheme(base, "shiki-js");
+    const textmate = present(stock.textmate, `TextMate ${base}`);
+    return readableTheme(textmate, name, background);
+  });
+  registerCustomTheme(
+    name,
+    async () => {
+      const stock = await resolveTheme(base, "highlights");
+      const zed = present(stock.zed, `Zed ${base}`);
+      return readableZedTheme(zed, name, background);
+    },
+    "zed",
   );
 }
