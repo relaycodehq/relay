@@ -87,6 +87,14 @@ describe("locations", () => {
 });
 
 describe("completions", () => {
+  it("orders by sortText as plain strings, as servers write it", () => {
+    const { items } = c.completions([
+      { label: "lower", sortText: "a" },
+      { label: "upper", sortText: "B" },
+    ]);
+    expect(items.map((i) => i.label)).toEqual(["upper", "lower"]);
+  });
+
   it("uses the edit's text and range over the label", () => {
     const { items } = c.completions([
       {

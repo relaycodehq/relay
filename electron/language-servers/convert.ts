@@ -175,11 +175,7 @@ export class Converter {
   completions(result: unknown): LspCompletions {
     const items = completionItemsOf(result)
       .filter(isObject)
-      .sort((a, b) =>
-        (str(a.sortText) ?? str(a.label) ?? "").localeCompare(
-          str(b.sortText) ?? str(b.label) ?? "",
-        ),
-      );
+      .sort((a, b) => byCodeUnits(sortKey(a), sortKey(b)));
     const incomplete =
       items.length > MAX_COMPLETIONS ||
       (isObject(result) && result.isIncomplete === true);
@@ -427,4 +423,14 @@ export function inactiveLinesOf(regions: unknown): LspLineSpan[] {
     const to = range.endCharacter === 0 && range.endLine > range.line ? range.endLine - 1 : range.endLine;
     return [{ from: range.line, to }];
   });
+}
+
+/** What LSP sorts a completion by: its sortText, else its label. */
+const sortKey = (item: Record<string, unknown>) =>
+  str(item.sortText) ?? str(item.label) ?? "";
+
+/** Servers write sortText for a plain string comparison, not a locale's. */
+function byCodeUnits(a: string, b: string) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
 }

@@ -149,12 +149,14 @@ function completions(where: string, path: string) {
       .completion(where, path, line, character)
       .catch(() => ({ items: [], incomplete: false }));
     if (context.aborted || !found.items.length) return null;
+    // A list cut here, or by the server, has to be asked for again as the word grows.
+    const whole = !found.incomplete && found.items.length <= MAX_SUGGESTIONS;
     return {
       from: word?.from ?? context.pos,
       options: found.items
         .slice(0, MAX_SUGGESTIONS)
         .map((item, index) => completionOption(item, index, context.state)),
-      ...(found.incomplete ? {} : { validFor: /^[\w$]*$/ }),
+      ...(whole ? { validFor: /^[\w$]*$/ } : {}),
     };
   };
 }
