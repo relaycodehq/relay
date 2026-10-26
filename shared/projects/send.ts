@@ -9,6 +9,7 @@ import { recipient } from "../recipient";
 import { browserAnnotationSchema } from "../browser-annotations";
 import { scheduleMessageSchema } from "../schedules";
 import { secondOpinionAskedSchema } from "../second-opinion";
+import { guestNameSchema } from "../guest-share";
 
 const imageMimeSchema = z.enum(["image/png", "image/jpeg", "image/webp"]);
 const pastedImageSchema = z
@@ -77,10 +78,7 @@ export const projectChatSendSchema = z
       .strict()
       .optional(),
     /** Written by a guest the thread is shared with, sent by the user; see shared/guest-share. */
-    guest: z
-      .object({ name: z.string().trim().min(1).max(40) })
-      .strict()
-      .optional(),
+    guest: z.object({ name: guestNameSchema }).strict().optional(),
     /** Sent by Relay for one of the user's schedules; see shared/schedules. */
     scheduled: scheduleMessageSchema.optional(),
     /** Asks for a second opinion on this; see shared/second-opinion. */

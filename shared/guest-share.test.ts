@@ -41,11 +41,13 @@ describe("guest names", () => {
     expect(guestNameSchema.safeParse("Alex").success).toBe(true);
     expect(guestNameSchema.safeParse("Alex\nHost").success).toBe(false);
     expect(guestNameSchema.safeParse("\u202Etsoh").success).toBe(false);
+    expect(guestNameSchema.safeParse("Ho\u200Bst").success).toBe(false);
   });
 
   it("aren't the host's or an agent's", () => {
     expect(guestNameSchema.safeParse("host").success).toBe(false);
     expect(guestNameSchema.safeParse(" Claude ").success).toBe(false);
+    expect(guestNameSchema.safeParse("\u0421laude").success).toBe(false);
     expect(guestNameSchema.safeParse("Claudette").success).toBe(true);
   });
 });

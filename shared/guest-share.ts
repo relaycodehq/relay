@@ -78,13 +78,45 @@ export interface GuestShareApi {
 export const MAX_SUGGESTION_CHARS = 4000;
 export const MAX_GUEST_NAME_CHARS = 40;
 
-// One plain line, so a name can't break the message header or pass for another.
-const NAME_BREAKING = /[\p{Cc}\p{Zl}\p{Zp}؜‎‏‪-‮⁦-⁩]/u;
+// One plain line, so a name can't break the message header or pass for
+// another: no control, format (zero-width, bidi) or separator characters.
+const NAME_BREAKING = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
+
+/** Cyrillic and Greek letters drawn like Latin ones, so "\u0421laude" can't pass for "Claude". */
+const LOOK_ALIKES: Record<string, string> = {
+  "\u0430": "a",
+  "\u0441": "c",
+  "\u0435": "e",
+  "\u04bb": "h",
+  "\u0456": "i",
+  "\u0458": "j",
+  "\u04cf": "l",
+  "\u043e": "o",
+  "\u0440": "p",
+  "\u0455": "s",
+  "\u0445": "x",
+  "\u0443": "y",
+  "\u03b1": "a",
+  "\u03b5": "e",
+  "\u03b9": "i",
+  "\u03ba": "k",
+  "\u03bd": "v",
+  "\u03bf": "o",
+  "\u03c1": "p",
+  "\u03c4": "t",
+  "\u03c5": "u",
+};
+
+/** A name as it reads: compatibility forms folded, case and look-alike letters ignored. */
+const asRead = (name: string) =>
+  [...name.normalize("NFKC").toLowerCase()]
+    .map((c) => LOOK_ALIKES[c] ?? c)
+    .join("");
 
 /** Whether a guest's message would read as the host's or an agent's under this name. */
 const someoneElsesName = (name: string) =>
   ["Host", ...agentProviders.map(agentName)].some(
-    (taken) => taken.toLowerCase() === name.toLowerCase(),
+    (taken) => asRead(taken) === asRead(name),
   );
 
 export const guestNameSchema = z
