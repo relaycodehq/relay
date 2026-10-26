@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
 import type { EditorView } from "@codemirror/view";
-import type { LspLocation } from "../../../shared/language-servers";
 import type { OpenTarget } from "./editor-types";
 import type { FileDocument } from "./documents";
 import { formatWithServer } from "./lsp-format";
 import { pickItemAt, withPreviews } from "./lsp-picks";
-import { placesAt, structureOf } from "./lsp-requests";
-import { offsetAt } from "./positions";
+import { isUnderCaret, placesAt, structureOf } from "./lsp-requests";
 import { useLspDiagnostics } from "./useLspDiagnostics";
 import { useLspPicker } from "./useLspPicker";
 import { useLspRename } from "./useLspRename";
@@ -19,15 +17,6 @@ const STRUCTURE = {
 };
 
 export type LspActions = ReturnType<typeof useLspActions>;
-
-/** `place` is the symbol at `pos` in the file at `path`, as when the caret sits on a declaration. */
-function isUnderCaret(place: LspLocation, path: string, view: EditorView, pos: number) {
-  if (place.outside || place.path !== path) return false;
-  const text = view.state.doc;
-  const from = offsetAt(text, place.line, place.character);
-  const to = offsetAt(text, place.endLine, place.endCharacter);
-  return from <= pos && pos <= to;
-}
 
 type LspActionsInput = {
   doc: FileDocument;

@@ -3,6 +3,7 @@ import type { EditorView } from "@codemirror/view";
 import { useShortcutLabel } from "../../lib/shortcuts";
 import { useContentHash } from "../checks/diagnostics";
 import type { FileEditorProps } from "./editor-types";
+import { useCodeVision } from "./code-vision/useCodeVision";
 import { useCodeIntelligence } from "./useCodeIntelligence";
 import { useDiskCheck } from "./useDiskCheck";
 import { useDocument, useSettledText } from "./useDocument";
@@ -37,6 +38,15 @@ export function useFileEditor(props: FileEditorProps) {
     setView(next);
   };
   const intelligence = useCodeIntelligence({ doc, target, checks, text, hash, view, hostProps: props });
+  useCodeVision({
+    doc,
+    view,
+    served: intelligence.served,
+    text,
+    head: plain ? undefined : file?.head,
+    committed,
+    barsAreHead: !baseline,
+  });
 
   const headLabel = source.kind === "project" ? "HEAD" : "PR head";
   const blame = useEditorBlame({

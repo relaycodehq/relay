@@ -5,8 +5,10 @@ import { problemMarkers } from "../checks/editor-checks";
 import { useBufferChecks } from "../checks/useBufferChecks";
 import type { ChecksController } from "../checks/useProjectChecks";
 import { useSymbolNavigation } from "../diff/SymbolNavigation";
+import { codeVision } from "./code-vision/code-vision";
 import type { FileDocument } from "./documents";
 import type { EditorTarget, FileEditorProps, OpenTarget } from "./editor-types";
+import { usageCount } from "./lsp-requests";
 import { servedBy, syncWithServer } from "./lsp-sync";
 import { useEditorDiagnostics } from "./useEditorDiagnostics";
 import { useHostExtensions } from "./useHostExtensions";
@@ -78,12 +80,23 @@ export function useCodeIntelligence({
     onOpen: openFile,
     onAsk: hostProps.onAsk,
   });
+  const showUsages = useStableCallback(
+    (on: EditorView, pos: number) => void lspActions.references(on, pos),
+  );
+  const vision = useMemo(
+    () =>
+      served && where !== undefined
+        ? codeVision({ countUsages: (on, pos) => usageCount(where, path, on, pos), showUsages })
+        : [],
+    [served, where, path, showUsages],
+  );
+  const host = useMemo(() => [hostExtensions, vision], [hostExtensions, vision]);
   return {
     symbols,
     problems,
     lspActions,
     served,
     error,
-    slots: { actions, host: hostExtensions },
+    slots: { actions, host },
   };
 }
