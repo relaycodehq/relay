@@ -42,7 +42,8 @@ export function guestShareHandlers(ctx: ApiContext) {
       // On what the thread last ran, as a message from another thread would.
       const previous = lastSend(await chats.get(threadId));
       const agent = sentAgent(previous);
-      await chats.send(threadId, {
+      // The host sends it, so it unsettles a thread set to settle as one of theirs would.
+      await chats.sendYours(threadId, {
         id: randomUUID(),
         body: text,
         choice: previous.choice,
