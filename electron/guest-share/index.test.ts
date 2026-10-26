@@ -404,6 +404,26 @@ describe("GuestShares", () => {
     expect(store.shares).toEqual([]);
   });
 
+  it("keeps saved links a refused key kept away, and brings them back with the next share", async () => {
+    const { shares, store, make } = await started();
+    await shares.close();
+    let refuse = true;
+    const again = make({
+      key: async () => {
+        if (refuse) throw new Error("The Keychain prompt was refused.");
+        return Buffer.alloc(32, 7);
+      },
+    });
+    open.push(again);
+    expect(await again.share(threadId)).toBeNull();
+    refuse = false;
+    await again.start(otherThreadId);
+    expect(store.shares.map((s) => s.threadId).sort()).toEqual(
+      [threadId, otherThreadId].sort(),
+    );
+    expect(await again.share(threadId)).not.toBeNull();
+  });
+
   it("opens the server once for starts that come together, and keeps it for one a stop races", async () => {
     const w = await world();
     const asked: (number | undefined)[] = [];

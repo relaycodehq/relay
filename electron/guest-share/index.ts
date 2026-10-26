@@ -99,15 +99,15 @@ export class GuestShares {
   private reach?: Promise<GuestReach>;
   private now: () => number;
   private stopListening?: () => void;
-  /** Links saved before this run, coming back; starting a share waits for it. */
-  readonly restored: Promise<void>;
+  /** Links saved before this run, coming back; anything touching links waits for it. */
+  private restored: Promise<void>;
+  /** Saved links that couldn't come back, as a refused Keychain prompt leaves them; saving keeps them. */
+  private unrestored: SavedGuestShare[] = [];
 
   constructor(private host: GuestSharesHost) {
     this.funnel = host.funnel ?? new Funnel();
     this.now = host.now ?? Date.now;
-    this.restored = this.restore().catch((e) =>
-      console.warn("Could not bring guest links back:", e),
-    );
+    this.restored = this.restoreLogged();
   }
 
   async share(threadId: string): Promise<GuestShare | null> {
@@ -118,6 +118,11 @@ export class GuestShares {
 
   async start(threadId: string): Promise<GuestShare> {
     await this.restored;
+    // Starting asks for the key anyway, so it asks for the links it kept away too.
+    if (this.unrestored.length) {
+      this.restored = this.restoreLogged();
+      await this.restored;
+    }
     if (!this.host.summary(threadId)) throw new Error("That thread is gone.");
     // Made before the server opens, so a stop of another link can't close it under this one.
     const link = await this.linkOf(threadId);
@@ -253,13 +258,22 @@ export class GuestShares {
     this.suggestionsChanged(link);
   }
 
+  private restoreLogged() {
+    return this.restore().catch((e) =>
+      console.warn("Could not bring guest links back:", e),
+    );
+  }
+
   private async restore() {
     const saved = this.host.saved.load();
     // Threads may have been archived, settled or deleted while Relay was closed.
     const live = saved.filter(
       (s) => s.endsAt > this.now() && !this.linkShouldEnd(s),
     );
-    for (const share of live) await this.add(share);
+    const missing = live.filter((s) => !this.threadLinks.has(s.threadId));
+    this.unrestored = missing;
+    for (const share of missing) await this.add(share);
+    this.unrestored = [];
     if (live.length < saved.length) await this.persist();
     if (!live.length) return;
     await this.listen();
@@ -286,11 +300,13 @@ export class GuestShares {
   }
 
   private persist() {
-    return this.host.saved.save(
-      [...this.threadLinks.values()].map(
-        ({ token: _, timer: __, ...saved }) => saved,
-      ),
+    const live = [...this.threadLinks.values()].map(
+      ({ token: _, timer: __, ...saved }) => saved,
     );
+    const kept = this.unrestored.filter(
+      (s) => !this.threadLinks.has(s.threadId),
+    );
+    return this.host.saved.save([...live, ...kept]);
   }
 
   private listen() {
@@ -405,7 +421,9 @@ export class GuestShares {
       input,
       this.now(),
     );
-    void this.persist();
+    this.persist().catch((e) =>
+      console.warn("Could not save a guest's suggestion:", e),
+    );
     this.suggestionsChanged(link);
     return undefined;
   }
