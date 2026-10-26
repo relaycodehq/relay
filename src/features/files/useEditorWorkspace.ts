@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore, type RefObject } from "react";
 import type { Project } from "../../../shared/projects";
 import { documents } from "../editor/documents";
 import {
@@ -15,8 +15,12 @@ import {
 } from "./editor-groups";
 import { tabId, type EditorTab } from "./editor-tabs";
 import { emptyHistory, type History } from "./navigation-history";
-import { hasUnsavedEdits, moveTabDocuments } from "./tab-documents";
-import { useClosedTabs } from "./useClosedTabs";
+import {
+  hasUnsavedEdits,
+  moveTabDocuments,
+  type TabHome,
+} from "./tab-documents";
+import { useClosedTabs, type ClosedTabs } from "./useClosedTabs";
 import { useEditorLayout } from "./useEditorLayout";
 import { useTabClosing } from "./useTabClosing";
 import { useTabOpening } from "./useTabOpening";
@@ -73,10 +77,7 @@ export function useEditorWorkspace({
     closedTabs,
   });
   /** A file or folder moved, in the project or with `outside` outside it: tabs follow. */
-  const renamed = (from: string, to: string, outside = false) => {
-    moveTabDocuments(allTabs(layout), home, from, to, outside);
-    setLayout((l) => renameInGroups(l, from, to, outside));
-  };
+  const renamed = followMove({ layout, setLayout, home, history, closedTabs });
 
   return {
     layout,
@@ -108,3 +109,20 @@ export function useEditorWorkspace({
 }
 
 export type EditorWorkspace = ReturnType<typeof useEditorWorkspace>;
+
+/**
+ * What to do when a file or folder moved, in the project or with `outside`
+ * outside it: its tabs and documents follow.
+ */
+function followMove(ws: {
+  layout: EditorLayout;
+  setLayout: ReturnType<typeof useEditorLayout>[1];
+  home: TabHome;
+  history: RefObject<History>;
+  closedTabs: ClosedTabs;
+}) {
+  return (from: string, to: string, outside = false) => {
+    moveTabDocuments(allTabs(ws.layout), ws.home, from, to, outside);
+    ws.setLayout((l) => renameInGroups(l, from, to, outside));
+  };
+}
