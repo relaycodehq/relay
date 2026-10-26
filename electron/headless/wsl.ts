@@ -19,6 +19,24 @@ export function wslDistro(
   return /microsoft/i.test(version) ? env.WSL_DISTRO_NAME : undefined;
 }
 
+/** The port a Relay in mirrored WSL takes, beside the desktop Relay's on Windows. */
+export const mirroredWslPort = 47822;
+
+/**
+ * Whether this runs in WSL with mirrored networking, which shares Windows'
+ * addresses and ports: a port taken in here is taken on Windows too.
+ */
+export async function sharesWindowsNetwork(version = readProcVersion()) {
+  if (!/microsoft/i.test(version)) return false;
+  const mode = await run("wslinfo", ["--networking-mode"], {
+    timeout: 5_000,
+  }).then(
+    ({ stdout }) => stdout.trim(),
+    () => "",
+  );
+  return mode === "mirrored";
+}
+
 function readProcVersion() {
   try {
     return readFileSync("/proc/version", "utf8");

@@ -17,7 +17,7 @@ import { watchScopes, type WatchScope } from "../../shared/watch";
 import type { GitInfo } from "../../shared/working-tree";
 import { callControl } from "./control";
 import { bold, colorful, cyan, dim, green, ok, warn, yellow } from "./format";
-import { readConfig, saveConfig } from "./launch";
+import { networkPort, readConfig, saveConfig } from "./launch";
 import { headlessPaths } from "./paths";
 import { terminalQr } from "./qr";
 import type { SpeechEngine, SpeechState } from "./speech";
@@ -94,7 +94,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
   return {
     // What's saved, which a restart puts to use.
     name: config.name ?? status.name,
-    port: config.port ?? status.remote.port,
+    port: await networkPort(config),
     autoUpdate: config.autoUpdate ?? true,
     update: status.update,
     keepAwake,

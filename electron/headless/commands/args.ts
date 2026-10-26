@@ -184,7 +184,7 @@ ${bold("Background service")}
 
 ${bold("Options")}
   --home <folder>  Where Relay keeps its data (default ~/.relay, or RELAY_HOME)
-  --port <number>  The port phones and computers connect to (default 47821)
+  --port <number>  The port phones and computers connect to (default 47821; 47822 in mirrored WSL)
   --name <name>    What phones and other computers call this one (default: its host name)
   --json           Print machine-readable output
 `;

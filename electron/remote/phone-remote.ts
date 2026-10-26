@@ -132,6 +132,8 @@ export class PhoneRemote {
   private syncing = Promise.resolve();
   /** Where devices reach this computer now: local addresses, then Tailscale's. */
   private hosts: string[] = [];
+  /** Listening only for `relay pipe`, on a free loopback port. */
+  private pipesOnly = false;
   private tunnelPorts: TunnelPorts;
 
   constructor(
@@ -398,7 +400,7 @@ export class PhoneRemote {
       const tail = tailnet?.status === "connected" ? tailnet.addresses : [];
       // Without Tailscale, only a pipe (`relay pipe`, over SSH or wsl.exe)
       // reaches it, through its loopback; no device can by an address.
-      const pipesOnly = enabled && !lan && !tail.length;
+      const pipesOnly = !!enabled && !lan && !tail.length;
       const host = !enabled
         ? undefined
         : lan
@@ -410,12 +412,16 @@ export class PhoneRemote {
           : lan
             ? [...this.lan(), ...tail].slice(0, maxHosts)
             : [host];
-      if (host === this.server.host) return;
+      const sameListener =
+        host === this.server.host && pipesOnly === this.pipesOnly;
+      if (sameListener) return;
       await this.server.close();
       this.error = undefined;
+      this.pipesOnly = pipesOnly;
       if (!host) return;
       try {
-        await this.server.listen(host, !!lan);
+        // `relay pipe` asks for the port, so it needn't be the usual one.
+        await this.server.listen(host, { lan: !!lan, anyPort: pipesOnly });
       } catch (e) {
         this.error = errorMessage(e);
       }

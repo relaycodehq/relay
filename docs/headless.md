@@ -77,7 +77,7 @@ The speech engines come from npm, each checked against the SHA-512 Relay's lockf
 | `relay uninstall [--purge]` | Stop Relay, stop starting it with the computer and remove it, `relay` on your PATH included; the desktop app's `relay` stays. `--purge` also deletes `~/.relay`: threads, their worktrees and settings. |
 | `relay run [--supervise]` | Run in the foreground, as the service does; `--supervise` starts it again after a crash, as Windows' Startup script runs it. |
 
-`--home <folder>` (or `RELAY_HOME`) runs a Relay with its data elsewhere, `--port <number>` changes the port phones and computers connect to (default 47821), and `--name <name>` what they call this computer (default: its host name). `--port` and `--name` are kept in `~/.relay/headless.json` for every start after. Most commands take `--json`.
+`--home <folder>` (or `RELAY_HOME`) runs a Relay with its data elsewhere, `--port <number>` changes the port phones and computers connect to (default 47821; 47822 in WSL with mirrored networking, where the desktop Relay on Windows has 47821), and `--name <name>` what they call this computer (default: its host name). `--port` and `--name` are kept in `~/.relay/headless.json` for every start after. Most commands take `--json`.
 
 ## How it runs
 

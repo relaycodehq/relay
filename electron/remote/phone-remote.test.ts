@@ -423,6 +423,35 @@ it("preserves explicit LAN off across enabling, offline Tailscale and startup", 
   expect((await remote.state()).lan).toBe(false);
 });
 
+it("reached only through `relay pipe`, takes any free port and leaves its own to the network", async () => {
+  const tailnet = {
+    current: { status: "missing", addresses: [] } as PhoneTailnet,
+  };
+  const { remote } = await desktop(undefined, tailnet);
+  const own = (await remote.state()).port;
+  // A desktop Relay on Windows holds it: WSL's mirrored loopback is the same one.
+  const desktopRelay = createServer().listen(own, "127.0.0.1");
+  await new Promise((resolve) => desktopRelay.once("listening", resolve));
+  cleanup.push(
+    () => new Promise<void>((resolve) => desktopRelay.close(() => resolve())),
+  );
+
+  await remote.setEnabled(true);
+  const state = await remote.state();
+  expect(state).toMatchObject({ bound: "127.0.0.1", hosts: [] });
+  expect(state.error).toBeUndefined();
+  expect(state.port).not.toBe(own);
+  const link = parsePairingUrl((await remote.pairing({ pipe: true })).url)!;
+  expect(link.port).toBe(state.port);
+  await phone({ link, device: "Windows" }).until("online");
+
+  // Reachable by an address again, it goes back to its own port.
+  await new Promise<void>((resolve) => desktopRelay.close(() => resolve()));
+  tailnet.current = { status: "connected", addresses: ["127.0.0.1"] };
+  await remote.start();
+  expect(await remote.state()).toMatchObject({ listening: true, port: own });
+});
+
 it("resumes previously enabled access with no saved LAN choice and no Tailscale", async () => {
   const { remote } = await desktop(
     undefined,

@@ -9,6 +9,7 @@ import { bold, dim, ok, warn } from "../format";
 import {
   AlreadyRunning,
   alreadyRunningCode,
+  networkPort,
   readConfig,
   restartCode,
   running,
@@ -33,8 +34,7 @@ export async function run(home: string, flags: Flags) {
     );
   await remember(home, flags);
   const config = await readConfig(home);
-  const port =
-    config.port ?? (Number(process.env.RELAY_REMOTE_PORT) || undefined);
+  const port = await networkPort(config);
   // Its own bundle, so the commands that only ask it something start quickly.
   const daemon = require(
     join(__dirname, "relay-daemon.cjs"),
