@@ -106,6 +106,7 @@ async function ripgrepResult(run: {
       rg,
       root: target.root,
       args: ripgrepArgs(query, globs, target.plain),
+      keep: pathFilter(globs),
       limit,
       timeoutMs,
       signal,

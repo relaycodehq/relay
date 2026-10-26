@@ -96,10 +96,14 @@ export function pathFilter({ include, exclude }: Globs) {
     !no.some((re) => re.test(path));
 }
 
-/** The `--glob` arguments for ripgrep, with each glob also naming what is below it. */
-export function ripgrepGlobArgs({ include, exclude }: Globs) {
+/**
+ * The `--glob` arguments that leave the excludes out of a ripgrep search,
+ * each also naming what is below it. Includes are not passed: rg's globs
+ * override .gitignore, so one would bring ignored files back in; the search
+ * filters rg's matches by them with `pathFilter` instead.
+ */
+export function ripgrepExcludeArgs(exclude: string[]) {
   const args: string[] = [];
-  for (const glob of include) args.push("--glob", glob, "--glob", `${glob}/**`);
   for (const glob of exclude)
     args.push("--glob", `!${glob}`, "--glob", `!${glob}/**`);
   return args;

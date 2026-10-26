@@ -5,7 +5,7 @@ import type {
 } from "../../shared/project-search";
 import { spawnExecutable } from "../platform/executables";
 import { terminate } from "../platform/terminate";
-import { ripgrepGlobArgs, type Globs } from "./glob";
+import { ripgrepExcludeArgs, type Globs } from "./glob";
 import { matchPreview } from "./preview";
 
 /** ripgrep refused the pattern, which another regex engine may still take (lookaround, backreferences). */
@@ -30,7 +30,7 @@ export function ripgrepArgs(
     "!.git",
     // Nothing tells a plain folder which dependencies to leave out.
     ...(plain ? ["--glob", "!node_modules"] : []),
-    ...ripgrepGlobArgs(globs),
+    ...ripgrepExcludeArgs(globs.exclude),
     "--max-filesize",
     "2M",
     // `$` ends a CRLF line before its \r, as it does when replacing.
@@ -114,11 +114,13 @@ function failureFor(stderr: string) {
 
 /**
  * Takes ripgrep's output a chunk at a time and keeps its matches, grouped by
- * file. Once `limit` matches are in, `onFull` is called and later lines are
- * ignored, as they are whenever `stopped()` says so.
+ * file, in the files `keep` lets through. Once `limit` matches are in,
+ * `onFull` is called and later lines are ignored, as they are whenever
+ * `stopped()` says so.
  */
 function collectMatches(
   limit: number,
+  keep: ((path: string) => boolean) | undefined,
   stopped: () => boolean,
   onFull: () => void,
 ) {
@@ -129,6 +131,7 @@ function collectMatches(
     if (stopped()) return;
     const found = raw ? parseRipgrepLine(raw) : null;
     if (!found) return;
+    if (keep && !keep(found.path)) return;
     const list = files.get(found.path) ?? [];
     files.set(found.path, list);
     for (const match of found.matches) {
@@ -158,19 +161,21 @@ function collectMatches(
 }
 
 /**
- * Runs ripgrep and collects its matches as they stream in. Stops it once
- * `limit` matches are in, when `signal` fires, or after `timeoutMs`; the
- * first two and the last are `truncated` unless the signal is the reason.
+ * Runs ripgrep and collects its matches as they stream in, from the files
+ * `keep` lets through. Stops it once `limit` matches are in, when `signal`
+ * fires, or after `timeoutMs`; the first two and the last are `truncated`
+ * unless the signal is the reason.
  */
 export function ripgrepSearch(options: {
   rg: string;
   root: string;
   args: string[];
+  keep?: (path: string) => boolean;
   limit: number;
   timeoutMs: number;
   signal: AbortSignal;
 }): Promise<{ files: FoundFile[]; truncated: boolean }> {
-  const { rg, root, args, limit, timeoutMs, signal } = options;
+  const { rg, root, args, keep, limit, timeoutMs, signal } = options;
   return new Promise((resolve, reject) => {
     if (signal.aborted) return resolve({ files: [], truncated: false });
     const child = spawnExecutable(rg, args, {
@@ -185,6 +190,7 @@ export function ripgrepSearch(options: {
     const stop = () => terminate(child, { graceMs: 500 });
     const collected = collectMatches(
       limit,
+      keep,
       () => truncated,
       () => {
         truncated = true;

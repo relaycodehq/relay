@@ -112,6 +112,7 @@ describe("ripgrepArgs", () => {
     expect(args).toContain("--ignore-case");
     expect(args).not.toContain("--fixed-strings");
     expect(args).not.toContain("--word-regexp");
-    expect(args.join(" ")).toContain("--glob *.ts --glob *.ts/**");
+    // ripgrep's globs override .gitignore, so the include is left to the caller.
+    expect(args.join(" ")).not.toContain("*.ts");
   });
 });

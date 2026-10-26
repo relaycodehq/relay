@@ -216,6 +216,19 @@ describe.each(engines)("searching with %s", (engine) => {
     expect(without.files.map((f) => f.path)).toEqual(["src/app.ts"]);
   });
 
+  it("leaves ignored files out even when a mask names them", async () => {
+    const r = await run(find("needle", { include: "*.log, dist" }), engine);
+    expect(r.files).toEqual([]);
+  });
+
+  it("counts only matches in files the masks let through toward the limit", async () => {
+    const r = await run(
+      find("needle", { include: "untracked.md", limit: 1 }),
+      engine,
+    );
+    expect(summary(r)).toEqual([["untracked.md", [[1, 0, 6]]]]);
+  });
+
   it("stops at the limit and says so", async () => {
     const r = await run(find("needle", { limit: 3 }), engine);
     const total = r.files.reduce((n, f) => n + f.matches.length, 0);
@@ -317,7 +330,7 @@ describe.skipIf(!rgPath)("ripgrep", () => {
   });
 
   it("gives a bad glob back as an error", async () => {
-    await expect(run(find("needle", { include: "[" }), "rg")).rejects.toThrow(
+    await expect(run(find("needle", { exclude: "[" }), "rg")).rejects.toThrow(
       /glob/,
     );
   });

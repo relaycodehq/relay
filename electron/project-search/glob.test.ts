@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseGlobs, pathFilter, ripgrepGlobArgs } from "./glob";
+import { parseGlobs, pathFilter, ripgrepExcludeArgs } from "./glob";
 
 const allows = (include: string, exclude: string, ...paths: string[]) => {
   const keep = pathFilter(parseGlobs(include, exclude))!;
@@ -77,13 +77,9 @@ describe("pathFilter", () => {
   });
 });
 
-describe("ripgrepGlobArgs", () => {
-  it("names the folder's contents too, and excludes the same way", () => {
-    expect(ripgrepGlobArgs({ include: ["src"], exclude: ["dist"] })).toEqual([
-      "--glob",
-      "src",
-      "--glob",
-      "src/**",
+describe("ripgrepExcludeArgs", () => {
+  it("excludes the folder's contents too", () => {
+    expect(ripgrepExcludeArgs(["dist"])).toEqual([
       "--glob",
       "!dist",
       "--glob",
