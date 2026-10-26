@@ -1,6 +1,6 @@
 // What only a command's output says: how its tests and checks went, and the
-// hashes of the commits it made. What `&&` skipped never ran, so it has
-// nothing to say.
+// hashes of the commits it made. What `&&` or `||` skipped never ran, so it
+// has nothing to say.
 import type { CallAction } from "./call-actions";
 import type { AgentActivity } from "./projects";
 import { baseName, type Joiner } from "./shell-words";
@@ -23,17 +23,28 @@ export function failedByItsCall(actions: CallAction[], a: AgentActivity): CallAc
 
 export type Step = { actions: CallAction[]; joinedBy?: Joiner };
 
-/** After a test or check that failed, whatever `&&` put behind it never started, so it has no verdict to show. */
+/**
+ * What `&&` put behind a test or check that failed never started, nor what
+ * `||` put behind one that passed. A step skipped leaves the shell's status
+ * as it was.
+ */
 export function actionsThatRan(steps: Step[]) {
   const ran: CallAction[] = [];
-  let lastFailed = false;
+  let last: "failed" | "passed" | undefined;
   for (const { actions, joinedBy } of steps) {
-    const skipped = joinedBy === "&&" && lastFailed;
+    const skipped = (joinedBy === "&&" && last === "failed") || (joinedBy === "||" && last === "passed");
     if (skipped) continue;
-    lastFailed = actions.some((action) => isVerdict(action) && action.failed);
+    last = verdictOf(actions);
     ran.push(...actions);
   }
   return ran;
+}
+
+/** How a step's test or check went; nothing else a command runs says. */
+function verdictOf(actions: CallAction[]) {
+  const verdicts = actions.filter(isVerdict);
+  if (!verdicts.length) return undefined;
+  return verdicts.some((action) => action.failed) ? "failed" : "passed";
 }
 
 const failedTests = /\bFAIL\b|Failed Tests|×|\b[1-9]\d* failed/;

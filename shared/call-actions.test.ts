@@ -161,6 +161,19 @@ describe("whether a test or check failed", () => {
     ]);
   });
 
+  it("leaves out what || put behind a test that passed, and keeps it behind one that failed", () => {
+    expect(commandActions("npm test || npm run lint", "Tests  3 passed")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("npm test || npm run lint", " FAIL  a.test.ts")).toEqual([
+      { kind: "test", failed: true },
+      { kind: "check", name: "lint", failed: false },
+    ]);
+    // The test failed, so the && skipped the lint and the || ran the typecheck.
+    expect(commandActions("npm test && npm run lint || npm run typecheck", " FAIL  a.test.ts")).toEqual([
+      { kind: "test", failed: true },
+      { kind: "check", name: "typecheck", failed: false },
+    ]);
+  });
+
   it("judges each of several checks by its own kind of failure", () => {
     expect(commandActions("npm run typecheck && npm run lint", "✖ 3 problems (3 errors)")).toEqual([
       { kind: "check", name: "typecheck", failed: false },
