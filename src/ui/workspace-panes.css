@@ -529,11 +529,18 @@
   .working-review > header > span:not(.split-diff-toggle) {
     display: none;
   }
-  /* The unsaved dot stays; its words don't, unless the file changed on disk. */
+  /* An unsaved file keeps a dot for its words, unless it changed on disk. */
   .editor-bar-state:not(.stale) {
     font-size: 0;
     gap: 0;
     margin-left: 6px;
+  }
+  .editor-bar-state.dirty:not(.stale)::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
   }
 }
 /* A narrow split keeps one row: the file's name, its changes and Save. */
