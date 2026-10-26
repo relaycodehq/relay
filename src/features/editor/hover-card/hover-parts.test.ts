@@ -69,6 +69,7 @@ describe("hoverParts", () => {
   it("takes rust-analyzer's module path as the owner", () => {
     const parts = hoverParts("```rust\nrelay::handoff\n```\n\n```rust\npub fn follow(id: &str)\n```\n\n---\n\nKeeps them in step.");
     expect(parts.owner).toBe("relay::handoff");
+    expect(parts.ownerIsModule).toBe(true);
     expect(parts.signature).toBe("pub fn follow(id: &str)");
     expect(parts.docs).toBe("Keeps them in step.");
   });

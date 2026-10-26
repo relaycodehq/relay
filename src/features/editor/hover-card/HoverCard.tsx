@@ -121,7 +121,7 @@ export function mountHoverCard(
   const parts = hoverParts(markdown);
   const member = !!parts.owner;
   const props: CardProps = {
-    owner: parts.owner ? { name: parts.owner, module: parts.owner.includes("::") } : undefined,
+    owner: parts.owner ? { name: parts.owner, module: !!parts.ownerIsModule } : undefined,
     signature: parts.signature
       ? highlightRuns(state, oneParamPerLine(parts.signature), member)
       : undefined,

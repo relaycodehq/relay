@@ -10,6 +10,8 @@ export type HoverParts = {
   kind?: string;
   /** The class, namespace or module the symbol belongs to. */
   owner?: string;
+  /** The owner is a module path, as rust-analyzer gives it, not a class. */
+  ownerIsModule?: boolean;
   /** The declaration, as code. */
   signature?: string;
   /** The description, as Markdown. */
@@ -81,7 +83,8 @@ export function hoverParts(markdown: string): HoverParts {
     first?.index === 0 && second && MODULE_PATH.test(first[1].trim());
   if (startsWithModulePath) owner = first[1].trim();
   const declaration = startsWithModulePath ? second : first;
-  if (!declaration) return { kind, owner, ...docsAndTags(text) };
+  const fromModulePath = startsWithModulePath ? { ownerIsModule: true } : {};
+  if (!declaration) return { kind, owner, ...fromModulePath, ...docsAndTags(text) };
 
   const used = startsWithModulePath ? [first, second] : [first];
   const rest = used.reduceRight((left, block) => cut(left, block), text);
@@ -89,6 +92,7 @@ export function hoverParts(markdown: string): HoverParts {
   return {
     kind: read.kind ?? kind,
     owner: read.owner ?? owner,
+    ...(!read.owner && fromModulePath),
     signature: read.signature,
     ...docsAndTags(rest),
   };
