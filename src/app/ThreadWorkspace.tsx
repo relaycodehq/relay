@@ -30,7 +30,8 @@ import { ThreadChanges, ThreadPanel } from "./ThreadPanes";
 import { usePaneOpens } from "./usePaneOpens";
 import { usePullThreads } from "./usePullThreads";
 import type { ShellNavigation } from "./useShellNavigation";
-import { useThreadFolder } from "./useThreadFolder";
+import { useThreadFolder, type ThreadFolder } from "./useThreadFolder";
+import { folderComputer } from "./thread-folder";
 import { useThreadTerminal } from "./useThreadTerminal";
 import { useElsewhereListed } from "../features/changes/elsewhere/useElsewhere";
 import { useThreadPreviewPanel } from "./useThreadPreviewPanel";
@@ -190,6 +191,18 @@ function PullReview({
 }
 
 /**
+ * Whether the thread's folder can have an editor window of its own. That
+ * window reads the folder here, which a thread on another computer left behind.
+ */
+function editorCanPopOut(
+  folder: Pick<ThreadFolder, "gone" | "deleted">,
+  project: Project,
+  chat: ChatSummary | undefined,
+) {
+  return !folder.gone && !folder.deleted && !folderComputer(project, chat);
+}
+
+/**
  * The thread's panes, chat, Changes and the panel, over its terminal. What
  * would leave the thread goes through `nav`, which a thread's own window
  * hands to the main one.
@@ -235,7 +248,7 @@ export function ThreadWorkspace({
 }) {
   const { nav, view, folder, panel, opens, host, terminal, setError } = tools;
   const { chat, chats, draftId, panes, pull, navigate } = nav;
-  const editorWindowUsable = !hidden && !folder.gone && !folder.deleted;
+  const editorWindowUsable = !hidden && editorCanPopOut(folder, project, chat);
   useEditorWindowShortcut(
     project.id,
     folder.where,
