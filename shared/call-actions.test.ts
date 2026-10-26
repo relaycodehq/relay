@@ -274,6 +274,18 @@ describe("commands that look like something else", () => {
     expect(commandActions("bash scripts/deploy.sh prod")).toEqual([{ kind: "run", what: "deploy.sh" }]);
   });
 
+  it("reads past a redirect wherever it points, but not a > inside quotes", () => {
+    expect(commandActions("rg foo src > out.txt")).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(commandActions(`rg "a > b" src 2>&1`)).toEqual([{ kind: "search", pattern: "a > b", where: "src" }]);
+    expect(commandActions("cat src/a.ts > src/b.ts")).toEqual([
+      { kind: "read", file: "src/a.ts" },
+      { kind: "create", file: "src/b.ts" },
+    ]);
+    expect(commandActions("cat src/a.ts > /tmp/a.txt")).toEqual([{ kind: "read", file: "src/a.ts" }]);
+    expect(shownCommand("rg foo src &> /tmp/out.txt")).toBe("rg foo src");
+    expect(shownCommand("cat src/a.ts > src/b.ts 2>&1")).toBe("cat src/a.ts > src/b.ts");
+  });
+
   it("reads each file cat printed, and nothing from sed reading what came in", () => {
     expect(commandActions("cat a.ts b.ts")).toEqual([
       { kind: "read", file: "a.ts" },

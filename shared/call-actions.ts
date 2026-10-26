@@ -19,6 +19,7 @@ import {
   shellHeaders,
   shellLeads,
   unwrapShell,
+  withoutRedirects,
   wordsOf,
   writesTo,
   type Joiner,
@@ -101,8 +102,6 @@ function searchAction(label: string): CallAction {
 const setup = new Set([...commandSetup, ...shellHeaders, "echo", "mkdir", "wc", "read"]);
 /** Words that lead into the command after them. */
 const leads = new Set([...commandWrappers, ...shellLeads]);
-/** `2>&1`, `>/dev/null`, `> /tmp/out.txt`; not a `>` inside a quoted message. */
-const redirect = /\s\d?>\s*(?:&\d|\/\S*)/g;
 
 /** Every action in a command line that ran, in order; nothing it only set up for. */
 export function commandActions(command: string, output = ""): CallAction[] {
@@ -137,7 +136,7 @@ export function shownCommand(command: string) {
   for (const { segment, joinedBy } of chain(head)) {
     if (joinedBy) between.push(joinedBy);
     if (!segmentActions(segment, "").length) continue;
-    const text = firstStage(segment).replace(redirect, "").trim();
+    const text = withoutRedirects(firstStage(segment), keepsCopy).trim();
     shown += shown ? `${joinedAs(loosest(between))}${text}` : text;
     between = [];
   }
@@ -194,7 +193,7 @@ function segmentActions(segment: string, body: string | undefined): CallAction[]
     const rest = segment.slice(assigned[0].length);
     return rest ? segmentActions(rest, body) : [];
   }
-  const [program, ...args] = pastLeads(subshellOff(segment, wordsOf(firstStage(segment).replace(redirect, ""))));
+  const [program, ...args] = pastLeads(subshellOff(segment, wordsOf(withoutRedirects(firstStage(segment)))));
   if (!program || setup.has(program)) return [];
   if (program === "cat") return catActions(segment, args, body);
   const action = programAction(program, args, segment, body);
@@ -279,18 +278,24 @@ function nlAction(segment: string, args: string[]): CallAction {
 
 /**
  * `cat > f <<EOF` writes f, `cat >> f <<EOF` adds to it, `cat <<EOF | node`
- * runs node, `cat f | head` reads f, `cat a b` reads both.
+ * runs node, `cat f | head` reads f, `cat a b` reads both, and `cat a > b`
+ * copies a into b.
  */
 function catActions(segment: string, args: string[], body: string | undefined): CallAction[] {
   const target = writesTo(segment);
-  if (target && body !== undefined) return [{ kind: target.appends ? "edit" : "create", file: target.path }];
+  const wrote: CallAction[] = target ? [{ kind: target.appends ? "edit" : "create", file: target.path }] : [];
+  if (body !== undefined && target) return wrote;
   const piped = pipedInto(firstStage(segment));
   if (piped) return segmentActions(piped, body);
   const files = positional(args);
   // Lines kept from what several files printed together aren't any one file's.
   const lines = files.length === 1 ? pipedLines(segment) : undefined;
-  return files.map((file) => readOf(file, lines));
+  const reads = files.map((file) => readOf(file, lines));
+  return target && keepsCopy(target.path) ? [...reads, ...wrote] : reads;
 }
+
+/** A copy into the project; output kept in a scratch file, sent to another stream or thrown away isn't one. */
+const keepsCopy = (path: string) => !isScratch(path) && !/^(?:&\d|\/dev\/)/.test(path);
 
 /**
  * Flags whose value is the next word, like -A 8 or rg's -t ts. rg and grep

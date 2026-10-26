@@ -177,6 +177,21 @@ export function pipedInto(segment: string) {
   return at === -1 ? undefined : segment.slice(at + 1).trim();
 }
 
+/** `2>&1`, `>/dev/null`, `&> out.txt`, `>> "a b.log"`. */
+const redirect = /(^|\s)[\d&]?>>?\s*(&\d|"[^"]*"|'[^']*'|[^\s&|;<>'"]+)/g;
+
+/**
+ * A segment without where it sends its output, but for the targets `keeps`
+ * says matter, quotes taken off; a `>` inside quotes is text.
+ */
+export function withoutRedirects(segment: string, keeps: (target: string) => boolean = () => false) {
+  const spans = quotedSpans(segment);
+  return segment.replace(redirect, (found, before: string, target: string, at: number) => {
+    const quoted = spans.some(([start, end]) => at > start && at < end);
+    return quoted || keeps(target.replace(/^(["'])(.*)\1$/, "$2")) ? found : before;
+  });
+}
+
 /** Where a segment sends its output with `>`, or adds it to with `>>`, quotes taken off. */
 export function writesTo(segment: string) {
   const found = /(?:^|\s)(>>?)\s*(?:"([^"]+)"|'([^']+)'|([^\s&|;<>'"]+))/.exec(segment);
