@@ -1,17 +1,46 @@
 import { ArrowLeft } from "lucide-react";
+import {
+  useStartedThreads,
+  type StartedThreadsView,
+} from "../agent-turn/StartedThreads";
 
 /**
- * The strip above a side conversation or a deep review's reviewer, with the
- * way back out of it.
+ * The strip above a side conversation, a deep review's reviewer or a second
+ * opinion, with the way back out of it.
  */
 export function ThreadHeader({
-  onBack,
-  label = "Back to conversation",
+  chatId,
+  onLeaveReply,
+  onBackToReview,
 }: {
-  onBack?: () => void;
-  label?: string;
+  chatId: string | undefined;
+  /** Set while a side conversation is open. */
+  onLeaveReply?: () => void;
+  onBackToReview?: () => void;
 }) {
-  if (!onBack) return null;
+  const view = useStartedThreads();
+  if (onLeaveReply)
+    return <BackButton onBack={onLeaveReply} label="Back to conversation" />;
+  if (onBackToReview)
+    return <BackButton onBack={onBackToReview} label="Back to review" />;
+  const checked = view && secondOpinionChecks(view, chatId);
+  if (!checked) return null;
+  return (
+    <BackButton
+      onBack={() => view.open(checked)}
+      label="Back to conversation"
+    />
+  );
+}
+
+/** The thread whose answer this second opinion checks, while it's listed. */
+function secondOpinionChecks(view: StartedThreadsView, chatId?: string) {
+  const thread = view.threads.find((c) => c.id === chatId);
+  if (!thread?.startedBy?.secondOpinionOn) return undefined;
+  return view.threads.find((c) => c.id === thread.startedBy!.chatId);
+}
+
+function BackButton({ onBack, label }: { onBack: () => void; label: string }) {
   return (
     <div className="thread-subheader">
       <button className="text-button" onClick={onBack}>

@@ -1,12 +1,10 @@
 import { useMemo } from "react";
-import { ChevronLeft } from "lucide-react";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import type { ChatMessage } from "../../../shared/projects";
 import type { SecondOpinionAsked as Asked } from "../../../shared/second-opinion";
 import { clock } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { RichText } from "../../ui/RichText";
-import { useStartedThreads } from "../agent-turn/StartedThreads";
 import { ImageThumbnail, type PreviewImage } from "../images/ImagePreview";
 import { useImageViewer } from "../images/ImageViewer";
 import { Folded } from "./Folded";
@@ -14,8 +12,7 @@ import "./second-opinion.css";
 
 /**
  * Atop a second opinion's thread, in place of the prompt its agent got:
- * what it was asked, like a `/btw` question atop its side thread, and the
- * way back to the thread whose answer it checks.
+ * what it was asked, like a `/btw` question atop its side thread.
  */
 export function SecondOpinionAsked({
   message: m,
@@ -30,9 +27,6 @@ export function SecondOpinionAsked({
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
 }) {
-  const view = useStartedThreads();
-  const thread = view?.threads.find((c) => c.id === chatId);
-  const lead = view?.threads.find((c) => c.id === thread?.startedBy?.chatId);
   const text = (markdown: string) => (
     <div className="markdown">
       <RichText
@@ -44,19 +38,7 @@ export function SecondOpinionAsked({
   );
   return (
     <>
-      <h2 className="reply-heading second-opinion-heading">
-        Second opinion
-        {lead && (
-          <button
-            type="button"
-            className="second-opinion-back"
-            onClick={() => view?.open(lead)}
-          >
-            <ChevronLeft size={13} />
-            {lead.title}
-          </button>
-        )}
-      </h2>
+      <h2 className="reply-heading">Second opinion</h2>
       <article
         className="project-message user side-question"
         data-message-id={m.id}
