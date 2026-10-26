@@ -4,10 +4,9 @@ import type { Project } from "../../../shared/projects";
 import { sendsMessage, useSendKey } from "../../lib/send-key";
 import { useAgentName } from "./useAgentName";
 import { useDeepReviewSetup } from "./useDeepReviewSetup";
-import { ModelField } from "../agents/ModelField";
-import { useOfferedAgents } from "../agents/registry-agents";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
+import { LeadField } from "./LeadField";
 import { ReviewersField } from "./ReviewersField";
 import { TargetField } from "./TargetField";
 
@@ -49,7 +48,6 @@ export function DeepReviewSetup({
       busy,
       onStart,
     });
-  const runnable = useOfferedAgents(setup.lead.provider);
   const count = setup.reviewers.length;
   return (
     <div className="thread-compose-wrap">
@@ -83,31 +81,11 @@ export function DeepReviewSetup({
             reviewers={setup.reviewers}
             onChange={(reviewers) => update({ reviewers })}
           />
-          <div className="deep-review-field">
-            <span className="deep-review-label">Lead</span>
-            <div className="deep-review-field-body deep-review-lead">
-              <ModelField
-                label="Lead"
-                provider={setup.lead.provider}
-                providers={runnable}
-                value={setup.lead.choice}
-                onChange={(choice, provider) =>
-                  update({ lead: { provider, choice } })
-                }
-              />
-              <span className="deep-review-note">
-                Merges and verifies the findings, then fixes them with you.
-              </span>
-              <label className="deep-review-check">
-                <input
-                  type="checkbox"
-                  checked={setup.runChecks}
-                  onChange={(e) => update({ runChecks: e.target.checked })}
-                />
-                Can run tests to verify
-              </label>
-            </div>
-          </div>
+          <LeadField
+            lead={setup.lead}
+            runChecks={setup.runChecks}
+            onChange={update}
+          />
         </div>
         <textarea
           className="composer-prompt-input deep-review-focus"

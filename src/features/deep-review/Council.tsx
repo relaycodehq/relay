@@ -11,8 +11,7 @@ import {
   CouncilRunning,
   CouncilToggle,
 } from "./council/Council";
-import { CouncilMember } from "./council/CouncilMember";
-import { useStartedThreads } from "../agent-turn/StartedThreads";
+import { ReviewerGrid } from "./ReviewerGrid";
 
 /**
  * The reviewers side by side, folded away once the lead has reported. Each
@@ -52,7 +51,6 @@ export function DeepReviewCouncil({
   onLead?: () => void;
 }) {
   const name = useAgentName();
-  const started = useStartedThreads();
   const reportsIn = useReportsIn(state);
   const { open, toggle } = useCouncilFold(state.status === "done");
   const count = state.reviewers.length;
@@ -78,39 +76,15 @@ export function DeepReviewCouncil({
         </span>
       </CouncilToggle>
       {open && (
-        <div
-          className="deep-review-grid"
-          data-count={count}
-          data-many={many || undefined}
-        >
-          {state.reviewers.map((r, i) => {
-            const thread = started?.threads.find((c) => c.id === r.chatId);
-            return (
-              <CouncilMember
-                key={r.chatId}
-                number={i + 1}
-                agent={r}
-                chatId={r.chatId}
-                live={state.status === "reviewing"}
-                projectRoot={projectRoot}
-                onOpenFile={onOpenFile}
-                onStop={
-                  onStopMember && state.status === "reviewing"
-                    ? () => onStopMember(i)
-                    : undefined
-                }
-                onResume={
-                  onResumeMember && !hasLead && state.status !== "leading"
-                    ? () => onResumeMember(i)
-                    : undefined
-                }
-                onOpen={
-                  thread && started ? () => started.open(thread) : undefined
-                }
-              />
-            );
-          })}
-        </div>
+        <ReviewerGrid
+          state={state}
+          many={many}
+          hasLead={hasLead}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+          onStopMember={onStopMember}
+          onResumeMember={onResumeMember}
+        />
       )}
       {onStop && state.status === "reviewing" && (
         <CouncilRunning busy={busy} onStop={onStop} />
