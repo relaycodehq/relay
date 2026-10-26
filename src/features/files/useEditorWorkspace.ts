@@ -96,7 +96,9 @@ export function useEditorWorkspace({
     pin: (group: string, id: string, pinned: boolean) =>
       setLayout((l) => pinIn(l, group, id, pinned)),
     move: (from: string, id: string, to: string, before: string | null) =>
-      setLayout((l) => moveToGroup(l, from, id, to, before)),
+      setLayout((l) =>
+        moveToGroup(l, from, id, to, before, (t) => hasUnsavedEdits(t, home)),
+      ),
     requestClose,
     closeMany,
     closed,

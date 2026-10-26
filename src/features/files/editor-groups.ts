@@ -151,6 +151,7 @@ export function moveToGroup(
   id: string,
   to: string,
   before: string | null = null,
+  keep?: (tab: EditorTab) => boolean,
 ): EditorLayout {
   if (from === to)
     return withGroup(layout, from, (g) => moveTab(g, id, before));
@@ -160,7 +161,10 @@ export function moveToGroup(
   if (!tab) return layout;
   // Dragged somewhere on purpose, a previewed tab stays.
   const moved = { ...tab, preview: undefined };
-  let next = withGroup(layout, to, (g) => moveTab(openTab(g, moved), id, before));
+  // A full split makes room, but not by closing a tab `keep` holds on to.
+  let next = withGroup(layout, to, (g) =>
+    moveTab(openTab(g, moved, keep), id, before),
+  );
   next = closeIn(next, from, id);
   return { ...next, focused: to };
 }
