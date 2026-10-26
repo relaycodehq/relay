@@ -155,11 +155,8 @@ const untrackedCache = new Map<string, Map<string, number>>();
 // A repository with no commits yet is compared with the empty tree.
 const trackedBase = async (root: string, head: string) =>
   head || (await git(root, ["hash-object", "-t", "tree", "/dev/null"])).trim();
-/**
- * Lines added and removed across the checkout against HEAD, untracked text
- * files included and generated ones (lockfiles) left out.
- */
-async function lineCounts(
+/** Each changed file's lines against HEAD, untracked text files included. */
+async function changedFiles(
   root: string,
   changes: WorkingChange[],
   head: string,
@@ -186,7 +183,23 @@ async function lineCounts(
       untracked.map((c) => c.path),
     ),
   ]);
-  const by = statsByKind([...numstatFiles(diff), ...untrackedFiles.files]);
+  return {
+    files: [...numstatFiles(diff), ...untrackedFiles.files],
+    partial: untrackedFiles.partial,
+  };
+}
+
+/**
+ * Lines added and removed across the checkout against HEAD, untracked text
+ * files included and generated ones (lockfiles) left out.
+ */
+async function lineCounts(
+  root: string,
+  changes: WorkingChange[],
+  head: string,
+) {
+  const { files, partial } = await changedFiles(root, changes, head);
+  const by = statsByKind(files);
   const lines = headlineStat(by);
   return {
     lines:
@@ -194,8 +207,14 @@ async function lineCounts(
       !(by.generated.additions || by.generated.deletions)
         ? lines
         : { ...lines, generated: by.generated },
-    partial: untrackedFiles.partial,
+    partial,
   };
+}
+
+/** Each file changed in the checkout, with its lines against HEAD. */
+export async function uncommittedFiles(root: string) {
+  const status = parseStatusV2(await git(root, statusArgs));
+  return (await changedFiles(root, status.changes, status.head)).files;
 }
 
 /** Reads `--numstat -z` output, where a rename's paths follow its counts as two more fields. */

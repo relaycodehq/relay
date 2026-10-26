@@ -5,7 +5,9 @@ import type {
   DeepReviewState,
   LeadAgent,
   ReviewAgent,
+  ReviewPassState,
 } from "../../../shared/deep-review";
+import { formatLines } from "../../../shared/review-passes";
 import { traitsName, useAgentName } from "./useAgentName";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { KindStatBreakdown } from "../changes/DiffStatBreakdown";
@@ -43,7 +45,8 @@ export function DeepReviewRequest({
   const name = useAgentName();
   const { scope } = state;
   const lineup = new Map<string, { agent: ReviewAgent; times: number }>();
-  for (const r of state.reviewers) {
+  // A split review asks each reviewer once a pass; the lineup is one pass's.
+  for (const r of state.reviewers.filter((r) => !r.pass)) {
     const key = `${r.provider}\n${name(r)}\n${traitsName(r)}`;
     const seen = lineup.get(key);
     if (seen) seen.times++;
@@ -90,6 +93,7 @@ export function DeepReviewRequest({
             </span>
             <AgentChip agent={state.lead} name={name(state.lead)} />
           </div>
+          {state.passes && <RequestPasses passes={state.passes} />}
           {state.focus && <p>{state.focus}</p>}
           {scope.checkout && (
             <p className="muted">
@@ -99,5 +103,25 @@ export function DeepReviewRequest({
         </div>
       </div>
     </article>
+  );
+}
+
+/** The passes a split review runs, one a line. */
+function RequestPasses({ passes }: { passes: ReviewPassState[] }) {
+  return (
+    <ol className="deep-review-passes deep-review-request-passes">
+      {passes.map((pass, i) => (
+        <li key={i}>
+          <span className="deep-review-slot">{i + 1}</span>
+          <span
+            className={`deep-review-pass-paths${pass.seams ? " muted" : ""}`}
+            title={pass.paths.join(" ")}
+          >
+            {pass.seams ? "How they fit together" : pass.paths.join(" ")}
+          </span>
+          <span className="deep-review-note">{formatLines(pass.lines)}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

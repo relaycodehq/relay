@@ -1,4 +1,4 @@
-import { PILL_MARK } from "./Pill";
+import { PILL_MARK } from "../../../lib/pill-marks";
 
 /** The skills, quotes and files copied HTML marks as pills, which a draft pastes back as pills. */
 export interface CopiedPills {

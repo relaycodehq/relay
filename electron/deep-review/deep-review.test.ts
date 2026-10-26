@@ -365,6 +365,25 @@ describe("reviewer tasks", () => {
     ).toContain('"the retries"');
   });
 
+  it("gives the review's focus to the agents' own reviews too", () => {
+    const branch = {
+      ...scope,
+      branch: "feature",
+      target: { kind: "branch" as const, base: "main" },
+    };
+    expect(
+      reviewerTask({ provider: "claude", choice }, branch, "the queue").body,
+    ).toBe(`@claude /code-review high ${scope.base}...${scope.head} the queue`);
+    const codex = reviewerTask(
+      { provider: "codex", choice },
+      branch,
+      "the queue",
+    );
+    expect(
+      codex.codex?.type === "custom" && codex.codex.instructions,
+    ).toContain('"the queue"');
+  });
+
   it("hands the lead every report as data", () => {
     const prompt = leadPrompt(
       {
@@ -771,7 +790,7 @@ it("runs each reviewer in a thread listed under the review, then the lead, and l
   );
   expect(codex!.reviewer).toMatchObject({ parent: chat.id, slot: 0 });
   expect(codex!.messages.at(-1)?.body).toContain("Queue reorder");
-  expect(claude!.messages[0]?.body).toBe("@claude /code-review high");
+  expect(claude!.messages[0]?.body).toBe("@claude /code-review high the queue");
   // The task reads as the review's, whose name leads back to it.
   expect(claude!.messages[0]).toMatchObject({
     author: "Deep review",
@@ -786,7 +805,9 @@ it("runs each reviewer in a thread listed under the review, then the lead, and l
 
   const records = await capture();
   const review = records.find((r) => r.review);
-  expect(review.review.target).toEqual({ type: "uncommittedChanges" });
+  // Its own review, told the focus the way it takes a note.
+  expect(review.review.target).toMatchObject({ type: "custom" });
+  expect(review.review.target.instructions).toContain('"the queue"');
   expect(review.args).toContain('review_model="fixture-model"');
   // Codex reviewers write nothing and never ask.
   const thread = records.find(

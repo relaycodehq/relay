@@ -3,15 +3,19 @@ import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
 import type {
   DeepReviewStart,
   ResumeReview,
+  ReviewTarget,
   ReviewSetup,
   SavedReviewSetup,
 } from "../deep-review";
 import type { FindingStatus } from "../findings";
+import type { ChangedFile } from "../review-passes";
 import type { SecondOpinionAgent } from "../second-opinion";
 
 /** Deep reviews, run inside a thread, and second opinions on one answer. */
 export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
+  /** The files a deep review of `target` would cover in project `id`, for its setup to split. */
+  deepReviewFiles(id: string, target: ReviewTarget): Promise<ChangedFile[]>;
   /** Asks `agent` for a second opinion on answer `answerId`, in a read-only thread of its own. */
   askSecondOpinion(
     id: string,

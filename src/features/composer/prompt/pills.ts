@@ -4,12 +4,12 @@ import type { PastedText } from "../../../../shared/pasted-texts";
 import {
   filePill,
   pastePill,
-  PILL_MARK,
   pillSpec,
   quotePill,
   skillPill,
   type PillLook,
 } from "./Pill";
+import { PILL_MARK } from "../../../lib/pill-marks";
 
 /** What sets one kind of pill apart; `pill` supplies what they all share. */
 interface PillKind {

@@ -2,10 +2,15 @@
 // commits or changes, their range and stats, a pull request fetched to hidden refs.
 import { currentBranchOrNull, git } from "../git/git";
 import { isRemoteOfRepo } from "../git/repository";
-import { numstatFiles } from "../git/working-tree";
+import { numstatFiles, uncommittedFiles } from "../git/working-tree";
 import { headlineStat, statsByKind } from "../../shared/diff-kinds";
 import type { Project } from "../../shared/projects";
-import type { ReviewScope, ReviewTarget } from "../../shared/deep-review";
+import type {
+  DeepReviewStart,
+  ReviewScope,
+  ReviewTarget,
+} from "../../shared/deep-review";
+import { passPlan, type ChangedFile } from "../../shared/review-passes";
 
 /** A pull request as the forge reports it. */
 export interface PullInfo {
@@ -176,4 +181,49 @@ export async function resolveScope(
       };
     }
   }
+}
+
+const numstat = [
+  "--numstat",
+  "-z",
+  "-M",
+  "--no-color",
+  "--no-ext-diff",
+  "--no-textconv",
+];
+
+/** Every file the review covers, with its lines. */
+export async function reviewedFiles(
+  root: string,
+  scope: ReviewScope,
+): Promise<ChangedFile[]> {
+  if (scope.target.kind === "uncommitted") return uncommittedFiles(root);
+  if (!scope.head) return [];
+  // A first commit has no parent to diff against.
+  const range = scope.base
+    ? ["diff", ...numstat, scope.base, scope.head]
+    : ["diff-tree", "--root", "-r", "--no-commit-id", ...numstat, scope.head];
+  return numstatFiles(await git(root, range));
+}
+
+/** A split review's passes, worked out against the files it covers; none when it isn't split. */
+export async function reviewPasses(
+  root: string,
+  scope: ReviewScope,
+  config: Pick<DeepReviewStart, "passes" | "seams">,
+) {
+  if (!config.passes?.length) return;
+  return passPlan(config.passes, await reviewedFiles(root, scope), {
+    seams: config.seams,
+  });
+}
+
+/** The files a review of `target` would cover, before it starts. */
+export async function targetFiles(
+  root: string,
+  target: ReviewTarget,
+  project: Project,
+  pull?: PullInfo,
+) {
+  return reviewedFiles(root, await resolveScope(root, target, project, pull));
 }
