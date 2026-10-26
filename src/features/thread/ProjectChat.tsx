@@ -454,9 +454,8 @@ export function ProjectChat({
       {!isEmpty && (
         <ThreadTimeline
           listed={thread.listed}
-          scroll={scroll}
+          view={view}
           bottomInset={dockHeight}
-          onJump={view.jumpTo}
         />
       )}
       <SelectionQuote

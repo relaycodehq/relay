@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -150,6 +151,7 @@ export function useThreadScroll({
     lastTop = useRef(0),
     oldest = useRef<string | undefined>(undefined);
   const [scrolledUp, setScrolledUp] = useState(false);
+  const following = useCallback(() => follow.current, []);
   const [dockHeight, setDockHeight] = useState(() =>
     isEmpty ? 0 : lastDockHeight,
   );
@@ -411,6 +413,8 @@ export function useThreadScroll({
     scrolledUp,
     /** The expanded composer's height, which the view pads its end by. */
     dockHeight,
+    /** Whether the view is pinned to the thread's end, as it is until the reader scrolls up. */
+    following,
     /** Something was sent: pin to the bottom for its answer. */
     followAnswer() {
       follow.current = true;
