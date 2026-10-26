@@ -22,8 +22,9 @@ import {
   type ReviewerTask,
 } from "../../shared/deep-review";
 import { hasCouncilReport, memberAnswer } from "../../shared/council";
-import { halted, lastAnswer, queued, unfinishedSlots } from "./council";
-import { leadPrompt, requestText } from "./prompts";
+import { lastAnswer, queued, unfinishedSlots } from "./council";
+import { haltedReview, reviewReports, startLead } from "./lead";
+import { requestText } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
 import { placeRound } from "./checkout";
@@ -471,49 +472,14 @@ export class DeepReviews {
     // in a queue goes out once this step is done.
     if (state.status !== "reviewing" || working() || members.some(queued))
       return;
-    // Claimed before anything else is awaited, so reviewers finishing together start one lead.
-    state.status = "leading";
-    // Named before it starts: another answer may sit after the request.
-    state.leadAnswer = randomUUID();
-    const reports = state.reviewers.map((reviewer, i) => ({
-      number: i + 1,
-      reviewer,
-      answer: members[i] && memberAnswer(members[i].messages),
-    }));
-    const answers = reports.map((r) => r.answer);
-    const halt = withReportsIn
-      ? answers.some(hasCouncilReport)
-        ? undefined
-        : "failed"
-      : halted(answers);
+    const reports = reviewReports(state, members);
+    const halt = haltedReview(reports, withReportsIn);
     if (halt) {
       state.status = halt;
-      delete state.leadAnswer;
       await this.host.touch(chat, state.request);
       return;
     }
-    try {
-      await this.host.lead(
-        chat,
-        {
-          id: randomUUID(),
-          body: `@${state.lead.provider}`,
-          to: state.lead.provider,
-          provider: state.lead.provider,
-          choice: state.lead.choice,
-          runtimeMode: state.runtimeMode,
-          interactionMode: "default",
-        },
-        leadPrompt(state, reports, chat),
-        state.leadAnswer,
-      );
-    } catch (e) {
-      // The lead never started; Resume tries again.
-      state.status = "stopped";
-      throw e;
-    } finally {
-      await this.host.touch(chat, state.request);
-    }
+    await startLead(this.host, chat, state, reports);
   }
 }
 
