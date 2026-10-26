@@ -1,11 +1,14 @@
+import { getChunks } from "@codemirror/merge";
 import {
   ChangeSet,
   EditorSelection,
+  Facet,
   RangeSet,
   type Range,
   StateEffect,
   StateField,
   type ChangeDesc,
+  type EditorState,
   type Text,
 } from "@codemirror/state";
 import {
@@ -75,6 +78,17 @@ const changes = StateField.define<Changes>({
       : value;
   },
 });
+
+/** The worker's hunks, while the text is still the one they were worked out for. */
+export const workedHunks = (state: EditorState) => state.field(changes, false)?.hunks;
+
+/** The text the bars compare with, for what reads a change in full. */
+export const comparedText = Facet.define<string, string | undefined>({
+  combine: (values) => values[0],
+});
+
+/** A change bar was clicked, on this line. */
+export const barClicked = StateEffect.define<number>();
 
 /**
  * The committed line number of a line in the editor. Undefined means the line
@@ -153,10 +167,64 @@ const hunksOnWorker = (committed: string) =>
     },
   );
 
+/** Each changed line's mark, from the merge view's chunks: the lines its inline changes tint. */
+function chunkMarks(state: EditorState) {
+  const { doc } = state;
+  const ranges: Range<GutterMarker>[] = [];
+  for (const chunk of getChunks(state)?.chunks ?? []) {
+    if (chunk.fromB === chunk.toB) {
+      // Lines removed just above `below`, which is past the end for the last ones.
+      const below = chunk.fromB > doc.length ? doc.lines + 1 : doc.lineAt(chunk.fromB).number;
+      if (below > 1) ranges.push(marks.above.range(doc.line(below - 1).from));
+      if (below <= doc.lines) ranges.push(marks.below.range(doc.line(below).from));
+      continue;
+    }
+    const mark = chunk.fromA === chunk.toA ? marks.added : marks.modified;
+    const last = doc.lineAt(Math.max(chunk.fromB, chunk.toB - 1)).number;
+    for (let n = doc.lineAt(chunk.fromB).number; n <= last; n++)
+      ranges.push(mark.range(doc.line(n).from));
+  }
+  return RangeSet.of<GutterMarker>(ranges, true);
+}
+
+/**
+ * While the changes show inline, the bars come from the merge view's own
+ * chunks: its diff slides a block that could sit in two places differently
+ * from the worker's, and the bars must mark the lines that are tinted.
+ */
+export const inlineBars = StateField.define<RangeSet<GutterMarker>>({
+  create: chunkMarks,
+  update(value, tr) {
+    const chunksMoved = getChunks(tr.state)?.chunks !== getChunks(tr.startState)?.chunks;
+    return chunksMoved ? chunkMarks(tr.state) : value.map(tr.changes);
+  },
+});
+
+const shownMarks = (state: EditorState) =>
+  state.field(inlineBars, false) ?? state.field(changes).marks;
+
 const gutterExtension = gutter({
   class: "cm-change-gutter",
-  markers: (view) => view.state.field(changes).marks,
+  markers: (view) => shownMarks(view.state),
+  domEventHandlers: {
+    mousedown(view, block, event) {
+      const line = view.state.doc.lineAt(block.from).number;
+      if (!marked(view.state, block.from)) return false;
+      event.preventDefault();
+      view.dispatch({ effects: barClicked.of(line) });
+      return true;
+    },
+  },
 });
+
+function marked(state: EditorState, lineStart: number) {
+  let found = false;
+  shownMarks(state).between(lineStart, lineStart, () => {
+    found = true;
+    return false;
+  });
+  return found;
+}
 
 /**
  * IDE change bars against `committed` in their own narrow gutter: green for
@@ -167,12 +235,12 @@ const gutterExtension = gutter({
 export function changeGutter(committed: string | undefined) {
   return committed === undefined
     ? [changes, gutterExtension]
-    : [changes, gutterExtension, hunksOnWorker(committed)];
+    : [changes, gutterExtension, hunksOnWorker(committed), comparedText.of(committed)];
 }
 
 /** The offset where each run of changed lines starts, in order. */
 function changeStarts(view: EditorView) {
-  const marks = view.state.field(changes, false)?.marks;
+  const marks = view.state.field(changes, false) && shownMarks(view.state);
   const starts: number[] = [];
   if (!marks) return starts;
   let lastLine = -2;

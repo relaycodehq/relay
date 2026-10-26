@@ -1,13 +1,15 @@
 import { useMemo } from "react";
 import type { ChangeBaseline } from "./editor-types";
 import type { FileDocument } from "./documents";
-import { changeGutter } from "./change-gutter";
+import { changeGutter, inlineBars } from "./change-gutter";
 import { inlineDiff } from "./deleted-lines";
 import { useEditorCompare } from "./useEditorCompare";
+import { useChangePopup } from "./change-popup/useChangePopup";
 
 /** The change bars and the lines removed since `against`, shown in place. */
 export function inlineChanges(against: string) {
-  return [changeGutter(against), inlineDiff(against)];
+  // The bars read the inline diff's chunks, so they come after it.
+  return [changeGutter(against), inlineDiff(against), inlineBars];
 }
 
 /**
@@ -40,9 +42,13 @@ export function useEditorChanges({
     setComparing(!showDiff);
     doc.showChanges(undefined);
   };
+  const popup = useChangePopup(doc, !baseline && committed !== undefined, toggleDiff);
   const extension = useMemo(
-    () => (showDiff && against !== undefined ? inlineChanges(against) : changeGutter(against)),
-    [against, showDiff],
+    () => [
+      showDiff && against !== undefined ? inlineChanges(against) : changeGutter(against),
+      popup,
+    ],
+    [against, showDiff, popup],
   );
   return { extension, showDiff, toggleDiff };
 }

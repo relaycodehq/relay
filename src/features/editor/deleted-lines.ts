@@ -9,6 +9,7 @@ import {
 } from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 import { highlightTree } from "@lezer/highlight";
+import { addedLines, changedWhole } from "./added-lines";
 import { lineFirstDiff } from "./line-first-diff";
 
 /** Longer deletions show without syntax colours, as the merge view does. */
@@ -53,8 +54,13 @@ function deletedLinesDOM(state: EditorState, text: string, changed: readonly Spa
     del.className = "cm-deletedLine";
     const line = del.appendChild(document.createElement("del"));
     let runFrom = lineFrom;
+    // A line removed whole is struck out by its tint alone, as a line added whole is.
+    const removedWhole = changedWhole(text.slice(lineFrom, lineTo), (at) =>
+      changedAt(lineFrom + at),
+    );
+    const struck = (at: number) => changedAt(at) && !removedWhole;
     const classAt = (at: number) =>
-      [syntax[at], changedAt(at) ? "cm-deletedText" : ""].filter(Boolean).join(" ");
+      [syntax[at], struck(at) ? "cm-deletedText" : ""].filter(Boolean).join(" ");
     for (let at = lineFrom + 1; at <= lineTo; at++) {
       if (at < lineTo && classAt(at) === classAt(runFrom)) continue;
       appendRun(line, text.slice(runFrom, at), classAt(runFrom));
@@ -149,5 +155,9 @@ export function inlineDiff(original: string): Extension {
     gutter: false,
     diffConfig: { override: lineFirstDiff },
   }) as Extension[];
-  return [mergeView.filter((part) => !(part instanceof StateField)), deletedLines];
+  return [
+    mergeView.filter((part) => !(part instanceof StateField)),
+    deletedLines,
+    addedLines,
+  ];
 }
