@@ -164,6 +164,10 @@ export function AgentQuestionForm({
                   : "Continue"
             }
             canSubmit={!busy && !!answers[question.id]?.some((a) => a.trim())}
+            onSkip={() => {
+              clearTimeout(timer.current);
+              void onRespond({ kind: "question", answers: null });
+            }}
             onBack={
               index > 0
                 ? () => {
@@ -184,12 +188,14 @@ function QuestionFooter({
   deferred,
   submitLabel,
   canSubmit,
+  onSkip,
   onBack,
 }: {
   question: AgentQuestion;
   deferred: boolean;
   submitLabel: string;
   canSubmit: boolean;
+  onSkip: () => void;
   /** Missing on the first question. */
   onBack?: () => void;
 }) {
@@ -202,6 +208,16 @@ function QuestionFooter({
             : `Press 1–${Math.min(question.options.length, 9)} to pick`}
         </span>
       ) : null}
+      {/* A question the agent isn't waiting on has Dismiss instead. */}
+      {!deferred && (
+        <button
+          type="button"
+          title="Let the agent decide on its own"
+          onClick={onSkip}
+        >
+          Skip
+        </button>
+      )}
       {onBack && (
         <button type="button" onClick={onBack}>
           Back

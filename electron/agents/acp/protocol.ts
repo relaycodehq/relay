@@ -321,5 +321,8 @@ export type AcpElicitation = z.infer<typeof elicitationRequestSchema>;
 /** The answer to `elicitation/create` when the user didn't fill the form. */
 export const cancelledElicitation = { action: "cancel" };
 
+/** The answer to `elicitation/create` when the user chose to skip the form. */
+export const declinedElicitation = { action: "decline" };
+
 /** JSON-RPC's code for a request that needs the user signed in first. */
 export const AUTH_REQUIRED = -32000;

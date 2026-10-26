@@ -2,10 +2,11 @@ import type { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type { AgentActivity } from "../../../shared/projects";
 import { questionAnswers } from "../../../shared/asked-questions";
-import type {
-  AskAgentRequest,
-  AgentDecision,
-  AgentQuestion,
+import {
+  SKIPPED_QUESTIONS,
+  type AskAgentRequest,
+  type AgentDecision,
+  type AgentQuestion,
 } from "../../../shared/agent-modes";
 import {
   approvalRequestSchemas,
@@ -122,6 +123,15 @@ async function askUserInput(
     });
     if (response.kind !== "question")
       throw new Error("Invalid question response.");
+    if (!response.answers) {
+      onActivity?.({ ...activity, status: "stopped" });
+      // Codex has no way to turn a question down, so the note goes in as each answer.
+      return {
+        answers: Object.fromEntries(
+          questions.map((q) => [q.id, { answers: [SKIPPED_QUESTIONS] }]),
+        ),
+      };
+    }
     onActivity?.({
       ...activity,
       status: "complete",

@@ -1,7 +1,8 @@
 import type { FormDetail, FormAnswer, FormField } from "@opencode/client";
-import type {
-  AgentQuestion,
-  AskAgentRequest,
+import {
+  SKIPPED_QUESTIONS,
+  type AgentQuestion,
+  type AskAgentRequest,
 } from "../../../shared/agent-modes";
 import { httpStatus, type NativeClient } from "./client";
 
@@ -53,6 +54,10 @@ export async function answerForm(
   );
   if (signal.aborted || response.kind !== "question") {
     await client.session.form.cancel(target);
+    return;
+  }
+  if (!response.answers) {
+    await client.session.form.cancel({ ...target, message: SKIPPED_QUESTIONS });
     return;
   }
   const native = formAnswer(form, response.answers);

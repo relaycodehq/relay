@@ -6,6 +6,7 @@ import {
 import type { AgentOptions } from "../types";
 import {
   cancelledElicitation,
+  declinedElicitation,
   elicitationRequestSchema,
   type AcpElicitation,
   type AcpFormField,
@@ -201,6 +202,10 @@ export async function answerElicitation(
   if (signal.aborted || response?.kind !== "question") {
     answered();
     return cancelledElicitation;
+  }
+  if (!response.answers) {
+    answered();
+    return declinedElicitation;
   }
   answered(questionAnswers(asked, response.answers));
   return {

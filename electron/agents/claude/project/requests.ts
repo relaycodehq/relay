@@ -1,8 +1,9 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import type { HostedHandlers } from "../../../agent-host/client";
-import type {
-  AgentQuestion,
-  AskAgentRequest,
+import {
+  SKIPPED_QUESTIONS,
+  type AgentQuestion,
+  type AskAgentRequest,
 } from "../../../../shared/agent-modes";
 import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
 import { ANSWER_LIMIT } from "../../turn-kit";
@@ -184,6 +185,8 @@ async function askQuestions(
   if (response.kind !== "question")
     return { behavior: "deny" as const, message: "No answers provided." };
   const answers = response.answers;
+  if (!answers)
+    return { behavior: "deny" as const, message: SKIPPED_QUESTIONS };
   return {
     behavior: "allow" as const,
     updatedInput: {
