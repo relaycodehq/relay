@@ -194,6 +194,12 @@ describe("touchesSecrets", () => {
       "cat ~/.ssh/config | head",
       "openssl x509 -in 'certs/server.pem'",
       "echo KEY=1 >.env",
+      "cat .env|head",
+      "cat .env&&ls",
+      "grep KEY .env;ls",
+      "docker run --env-file=.env app",
+      "grep API .env*",
+      "cat id_*",
     ])
       expect(touchesSecrets(label), label).toBe(true);
     for (const label of [
@@ -201,6 +207,8 @@ describe("touchesSecrets", () => {
       "cat .env.example",
       "rg API_KEY src",
       "/repo/src/env.ts",
+      "grep -rn TODO *",
+      "ls src/*.ts",
     ])
       expect(touchesSecrets(label), label).toBe(false);
   });

@@ -166,10 +166,44 @@ export function mayHoldSecrets(path: string) {
  * command like `cat ~/.ssh/config`. Its output then stays off the guest page.
  */
 export function touchesSecrets(label: string) {
-  return label
-    .split(/\s+/)
-    .map((word) => word.replace(/^[<>|&;'"`(]+|[;,'"`)|&]+$/g, ""))
-    .some((word) => word && mayHoldSecrets(word));
+  // Shell operators can sit right against a name: `cat .env|head`, `--env-file=.env`.
+  const words = label.match(/[^\s|&;<>()`'"=:$,{}]+/g) ?? [];
+  return words.some((word) => mayHoldSecrets(word) || globReachesSecrets(word));
+}
+
+/** Names a pattern like `.env*` or `id_*` would pick up. */
+const SECRET_SAMPLES = [
+  ".env",
+  ".env.local",
+  ".npmrc",
+  ".netrc",
+  ".git-credentials",
+  "credentials",
+  "credentials.json",
+  "secrets.json",
+  "id_rsa",
+  "id_ed25519",
+  "server.pem",
+  "server.key",
+];
+
+/** Whether a glob's file name could match a key file. A bare `*` isn't counted, as `.` isn't. */
+function globReachesSecrets(word: string) {
+  const name = word.split(/[\\/]/).at(-1) ?? "";
+  if (!/[*?[]/.test(name) || /^[*?]+$/.test(name)) return false;
+  const pattern = new RegExp(
+    `^${name
+      .replace(/\[[^\]]*\]/g, "?")
+      .replace(/[.+^()|[\]\\]/g, "\\$&")
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")}$`,
+    "i",
+  );
+  // A shell's `*` skips dotfiles unless the pattern starts with a dot.
+  const dotted = name.startsWith(".");
+  return SECRET_SAMPLES.some(
+    (sample) => (dotted || !sample.startsWith(".")) && pattern.test(sample),
+  );
 }
 
 /** The size of a regular text file; undefined for anything else or anything gone. */
