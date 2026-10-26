@@ -164,3 +164,24 @@ describe("commands that look like something else", () => {
     ]);
   });
 });
+
+describe("git and shell words around a search", () => {
+  it("reads git grep as a search of the paths after --", () => {
+    const command = `b=$(git merge-base HEAD main); git grep -n "FileEntryIcon" $b -- src/features/agent-turn | head; echo ---; git grep -n "Icon" HEAD -- src/features/agent-turn | head`;
+    expect(commandActions(command)).toEqual([
+      { kind: "search", pattern: "FileEntryIcon", where: "src/features/agent-turn" },
+      { kind: "search", pattern: "Icon", where: "src/features/agent-turn" },
+    ]);
+  });
+
+  it("takes a path but not a revision as where git grep looked, without --", () => {
+    expect(commandActions(`git grep -e "a b" -n main src/app.ts`)).toEqual([
+      { kind: "search", pattern: "a b", where: "src/app.ts" },
+    ]);
+  });
+
+  it("reads the command after a value worked out with $()", () => {
+    expect(commandActions("out=$(git rev-parse HEAD) npm test")).toEqual([{ kind: "test", failed: false }]);
+  });
+});
+

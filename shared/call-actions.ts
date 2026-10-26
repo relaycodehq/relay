@@ -135,6 +135,12 @@ export function shownCommand(command: string) {
 }
 
 function segmentAction(segment: string, body: string | undefined): CallAction | undefined {
+  // `b=$(git merge-base HEAD main)` only works out a value for what comes next.
+  const assigned = /^\s*\w+=\$\((?:[^()]|\([^()]*\))*\)\s*/.exec(segment);
+  if (assigned) {
+    const rest = segment.slice(assigned[0].length);
+    return rest ? segmentAction(rest, body) : undefined;
+  }
   const words = wordsOf(firstStage(segment).replace(redirect, ""));
   while (words[0] && (/^\w+=/.test(words[0]) || leads.has(words[0]))) words.shift();
   const [program, ...args] = words;
@@ -224,8 +230,26 @@ function searchCommand(program: string, args: string[]): CallAction {
 function gitAction(segment: string, args: string[], body: string | undefined): CallAction | undefined {
   const sub = gitSubcommand(args);
   if (sub === "add") return undefined;
+  if (sub === "grep") return gitGrep(args.slice(args.indexOf("grep") + 1));
   if (sub !== "commit") return { kind: "git", what: `git ${sub}`.trim() };
   return { kind: "commit", subject: commitSubject(segment, args, body) };
+}
+
+/** `git grep -n "x" HEAD -- src` searches src: a revision before `--` isn't a place. */
+function gitGrep(args: string[]): CallAction {
+  const split = args.indexOf("--");
+  const head = split === -1 ? args : args.slice(0, split);
+  // A flag's value isn't the pattern; -e's is.
+  const valued = /^-[ABCm]$|^--(?:context|max-count|max-depth)$/;
+  const given = head.flatMap((a, i) => (a === "-e" ? [head[i + 1] ?? ""] : []));
+  const words = head.filter((a, i) => {
+    const before = head[i - 1] ?? "";
+    return !a.startsWith("-") && !valued.test(before) && before !== "-e";
+  });
+  const [pattern = "", ...rest] = given.length ? [given.join(" | "), ...words] : words;
+  // Without `--`, a word with a slash or a dot is a path, anything else a revision.
+  const places = split === -1 ? rest.filter((w) => /[/.]/.test(w)) : args.slice(split + 1);
+  return { kind: "search", pattern, ...(places.length ? { where: places.join(" ") } : {}) };
 }
 
 /** The word after git's own options: `git -C app -c k=v status` is a status. */
