@@ -198,7 +198,7 @@ class Minimap {
     if (!context) return;
     context.scale(ratio, ratio);
     const columns = Math.floor(PAGE_WIDTH / CHAR_PX);
-    const dashes = lineDashes(state, band.first, band.last);
+    const dashes = lineDashes(state, band.first, band.last, columns);
     paintDashes(context, dashes, 0, place.lineHeight, columns, (classes) => this.colourOf(classes));
     this.slideBand(band, place);
   }

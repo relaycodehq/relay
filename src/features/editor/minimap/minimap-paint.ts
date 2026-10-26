@@ -11,9 +11,15 @@ export type Dash = { column: number; length: number; classes: string };
 /**
  * The dashes of lines `first`..`last`: each run of non-blank characters
  * that share a colour, tabs counted by the tab size, as the editor colours
- * them from what of the file is parsed so far.
+ * them from what of the file is parsed so far. A line stops at `columns`,
+ * past which nothing is drawn.
  */
-export function lineDashes(state: EditorState, first: number, last: number): Dash[][] {
+export function lineDashes(
+  state: EditorState,
+  first: number,
+  last: number,
+  columns = Infinity,
+): Dash[][] {
   const from = state.doc.line(first).from;
   const to = state.doc.line(last).to;
   const tokens: { from: number; to: number; classes: string }[] = [];
@@ -30,7 +36,7 @@ export function lineDashes(state: EditorState, first: number, last: number): Das
     const line = state.doc.line(number);
     const runs: Dash[] = [];
     let column = 0;
-    for (let at = line.from; at < line.to; at++) {
+    for (let at = line.from; at < line.to && column < columns; at++) {
       const char = line.text[at - line.from];
       if (char === "\t") {
         column += state.tabSize - (column % state.tabSize);
