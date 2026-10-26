@@ -138,7 +138,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/agent-settings/AgentDetail.tsx › AgentDetail": 290,
   "src/features/agent-settings/AgentsPanel.tsx › AgentsPanel": 238,
   "src/features/agent-tools/AgentTools.tsx › AgentTools": 268,
-  "src/features/agent-turn/AgentTurn.tsx › AgentTurn": 221,
+  "src/features/agent-turn/AgentTurn.tsx › AgentTurn": 186,
   "src/features/agent-turn/StartedChip.tsx › StartedChip": 87,
   "src/features/agent-turn/SubagentThread.tsx › Run": 97,
   "src/features/agent-turn/SubagentThread.tsx › SubagentThread": 136,

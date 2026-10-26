@@ -21,6 +21,7 @@ import {
   readTurn,
   thinkingWord,
   turnHeading,
+  type TurnHeading,
 } from "../../../shared/agent-trace";
 import { RichText } from "../../ui/RichText";
 import { isStartThreads, startedIds } from "../../../shared/started-threads";
@@ -116,32 +117,11 @@ export function AgentTurn({
   const startedIn = startedBy.every(Boolean)
     ? startedBy.flatMap((ids) => ids!)
     : undefined;
-  const label = presentation?.waiting ? (
-    "Waiting for your answer"
-  ) : heading.kind === "working" ? (
-    "Working for"
-  ) : heading.kind === "call" ? (
-    display(liveLabel(heading.activity))
-  ) : heading.kind === "writing" ? (
-    "Writing"
-  ) : heading.kind === "thinking" ? (
-    <ThinkingWord seed={headingMessage.id} />
-  ) : (
-    heading.text
-  );
+  const waiting = !!presentation?.waiting;
+  const label = headingText(heading, waiting, display, headingMessage.id);
   // Expanded, the header is the whole run and stays still; the one live row
   // below it is what moves. Folded, the header stands in for that row.
-  const HeaderIcon = presentation?.waiting
-    ? MessageCircleQuestion
-    : heading.kind === "working"
-      ? Clock3
-      : heading.kind === "call"
-        ? iconOf(heading.activity)
-        : heading.kind === "done"
-          ? heading.last
-            ? iconOf(heading.last)
-            : Brain
-          : null;
+  const HeaderIcon = headingIconOf(heading, waiting);
   const headingIcon = HeaderIcon ? (
     <HeaderIcon size={14} />
   ) : (
@@ -273,6 +253,43 @@ export function AgentTurn({
       )}
     </Container>
   );
+}
+
+/** What the heading says: a word for what the turn is doing, or the live call. */
+function headingText(
+  heading: TurnHeading,
+  waiting: boolean,
+  display: (text: string) => string,
+  seed: string,
+): ReactNode {
+  if (waiting) return "Waiting for your answer";
+  switch (heading.kind) {
+    case "working":
+      return "Working for";
+    case "call":
+      return display(liveLabel(heading.activity));
+    case "writing":
+      return "Writing";
+    case "thinking":
+      return <ThinkingWord seed={seed} />;
+    case "done":
+      return heading.text;
+  }
+}
+
+/** The heading's icon; none while thinking, where the agent's own glyph turns instead. */
+function headingIconOf(heading: TurnHeading, waiting: boolean) {
+  if (waiting) return MessageCircleQuestion;
+  switch (heading.kind) {
+    case "working":
+      return Clock3;
+    case "call":
+      return iconOf(heading.activity);
+    case "done":
+      return heading.last ? iconOf(heading.last) : Brain;
+    default:
+      return null;
+  }
 }
 
 /**

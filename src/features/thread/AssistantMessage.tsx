@@ -94,6 +94,32 @@ export interface AssistantMessageProps {
   onToggleResponse?: (id: string, expanded: boolean) => void;
 }
 
+/** The parts of a question-linked response share one heading and fold together. */
+function useResponsePresentation({
+  response,
+  continuation,
+  responseExpanded,
+  onToggleResponse,
+}: Pick<
+  AssistantMessageProps,
+  "response" | "continuation" | "responseExpanded" | "onToggleResponse"
+>) {
+  return useMemo<TurnPresentation | undefined>(
+    () =>
+      response && {
+        summary: continuation ? undefined : response.summary,
+        elapsed: response.elapsed,
+        waiting: response.waiting,
+        expanded:
+          responseExpanded ??
+          (response.waiting || response.summary.status === "streaming"),
+        onToggle: (expanded) =>
+          onToggleResponse?.(response.parts[0]!.id, expanded),
+      },
+    [response, continuation, responseExpanded, onToggleResponse],
+  );
+}
+
 /** An agent's answer: its turn, what it wrote, and what it left behind. */
 export function AssistantMessage({
   message: m,
@@ -121,20 +147,12 @@ export function AssistantMessage({
   responseExpanded,
   onToggleResponse,
 }: AssistantMessageProps) {
-  const activity = useMemo<TurnPresentation | undefined>(
-    () =>
-      response && {
-        summary: continuation ? undefined : response.summary,
-        elapsed: response.elapsed,
-        waiting: response.waiting,
-        expanded:
-          responseExpanded ??
-          (response.waiting || response.summary.status === "streaming"),
-        onToggle: (expanded) =>
-          onToggleResponse?.(response.parts[0]!.id, expanded),
-      },
-    [response, continuation, responseExpanded, onToggleResponse],
-  );
+  const activity = useResponsePresentation({
+    response,
+    continuation,
+    responseExpanded,
+    onToggleResponse,
+  });
   // The answer's own images show in its text; the strip keeps the rest.
   const shown = useMemo(
     () => (m.body ? answerImagePaths(m.body, projectRoot) : []),
