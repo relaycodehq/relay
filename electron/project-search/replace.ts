@@ -5,6 +5,7 @@ import type {
 } from "../../shared/project-search";
 import { errorMessage } from "../../shared/error-message";
 import { readWorkingFile, writeWorkingFile } from "../git/working-files";
+import { saveKept } from "../local-history";
 import { digest } from "../util/hash";
 import { replaceInText, searchRegExp } from "./matcher";
 
@@ -33,7 +34,9 @@ async function replaceInFile(
       };
     const done = replaceInText(re, current.contents, replacement, regex);
     if (!done.count) return { path, reason: "Nothing left to replace here." };
-    await writeWorkingFile(root, path, current.hash, { contents: done.text });
+    await saveKept(root, path, done.text, () =>
+      writeWorkingFile(root, path, current.hash, { contents: done.text }),
+    );
     return { path, count: done.count, version: digest(done.text) };
   } catch (e) {
     return { path, reason: errorMessage(e) };
@@ -43,8 +46,9 @@ async function replaceInFile(
 /**
  * Replaces the query's matches in each file, line by line as the search read
  * them. A file whose bytes are not the ones the search saw (`version`) is
- * left alone, so a replacement never lands on text that moved. One file
- * failing does not stop the others.
+ * left alone, so a replacement never lands on text that moved. Each write
+ * is kept in Local History like a save. One file failing does not stop the
+ * others.
  */
 export async function replaceProjectText(
   root: string,
