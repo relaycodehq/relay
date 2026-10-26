@@ -190,6 +190,7 @@ export function NameInput({
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
         e.stopPropagation();
+        if (e.nativeEvent.isComposing) return; // the key belongs to the input method
         if (e.key === "Enter" && valid) finish(true);
         else if (e.key === "Escape") finish(false);
       }}
