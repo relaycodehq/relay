@@ -63,7 +63,7 @@ export function useFileEditor(props: FileEditorProps) {
 
   useDiskCheck(doc, props.stamp);
   const save = () => void doc.save();
-  useSaveShortcut(save);
+  useSaveShortcut(save, getView);
   const saveKeys = useShortcutLabel("save");
   const unsaved = useUnsavedPrompt({ doc, closeRequest: props.closeRequest, onClose: props.onClose });
 
