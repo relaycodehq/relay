@@ -45,6 +45,17 @@ struct TraceTests {
         }
     }
 
+    @Test func threadsATurnStartedCountByTheIdsTheyReturned() throws {
+        let started: AgentActivity = try JSON.parse(
+            #"{"id":"s","kind":"tool","label":"relay: start_threads","status":"complete","mcp":{"server":"relay","tool":"start_threads"},"detail":"[{\"id\":\"a\"},{\"id\":\"b\"}]"}"#
+        ).decode()
+        let read: AgentActivity = try JSON.parse(#"{"id":"r","kind":"read","label":"a.ts","status":"complete"}"#).decode()
+        #expect(summarizeActivity([read, started]) == "Read 1 file and started 2 threads")
+        var unreadable = started
+        unreadable.detail = "Started."
+        #expect(summarizeActivity([unreadable]) == "Started 1 thread")
+    }
+
     @Test func durationsAndThinkingWordsMatch() {
         for pair in ts["durations"]!.array! {
             #expect(duration(ms: Int64(pair.array![0].int!)) == pair.array![1].string!)

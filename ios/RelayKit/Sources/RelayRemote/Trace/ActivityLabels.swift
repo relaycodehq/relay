@@ -56,9 +56,14 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
     var groups: [(kind: String, seen: [String])] = []
     var failed = Set<String>(), stopped = Set<String>(), running = Set<String>()
     var questions = 0
+    var threads = 0
     for a in activity {
         if isQuestionCall(a) && a.status == "complete" {
             questions += askedQuestions(a)?.count ?? 1
+            continue
+        }
+        if isStartThreads(a) && a.status == "complete" {
+            threads += startedIds(a.detail)?.count ?? 1
             continue
         }
         if a.status != "complete" {
@@ -87,6 +92,7 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
         if let at = counts.firstIndex(where: { $0.kind == kind }) { counts[at].n += seen.count } else { counts.append((kind, seen.count)) }
     }
     var labels = counts.compactMap { summaries[$0.kind]?($0.n) }
+    if threads > 0 { labels.append("Started \(plural(threads, "thread"))") }
     if questions > 0 { labels.append("Asked you \(plural(questions, "question"))") }
     let failures = failed.count + (dropped["failed"] ?? 0)
     if failures > 0 { labels.append("\(plural(failures, "tool call")) failed") }
