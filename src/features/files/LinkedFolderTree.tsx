@@ -36,6 +36,12 @@ export function LinkedFolderTree({
     shownPath && shownPath !== link.path && isWithin(shownPath, link.path)
       ? shownPath.slice(link.path.length + 1)
       : null;
+  // The picked folder follows a rename, and goes with it to the bin.
+  const repick = (from: string, to: string | null) =>
+    setPickedFolder((picked) => {
+      if (picked === null || !isWithin(picked, from)) return picked;
+      return to === null ? null : to + picked.slice(from.length);
+    });
   const pick = (path: string, kind: "file" | "dir", clicks?: number) =>
     kind === "file"
       ? onOpenFile(absolute(path), clicks === 1)
@@ -54,10 +60,12 @@ export function LinkedFolderTree({
       onCreated={pick}
       onMoved={(from, to) => {
         expansion.remap(from, to);
+        repick(from, to);
         onRenamed(absolute(from), absolute(to));
       }}
       onTrashed={(path) => {
         expansion.remap(path, null);
+        repick(path, null);
         onTrashed(absolute(path));
       }}
     />
