@@ -2,7 +2,7 @@
 // whether they can go on, and the lead's first turn.
 import { randomUUID } from "node:crypto";
 import { hasCouncilReport, memberAnswer } from "../../shared/council";
-import type { DeepReviewState } from "../../shared/deep-review";
+import { passStarted, type DeepReviewState } from "../../shared/deep-review";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
 import { halted } from "./council";
 import { leadPrompt } from "./prompts";
@@ -17,30 +17,39 @@ export interface LeadHost {
   touch(chat: ProjectChat, messageId: string): Promise<void>;
 }
 
-/** Each reviewer, numbered as the lead knows them, with its latest answer. */
+/** Each reviewer asked so far, numbered as the lead knows them, with its latest answer. */
 export function reviewReports(
   state: DeepReviewState,
   members: (ProjectChat | undefined)[],
 ) {
-  return state.reviewers.map((reviewer, i) => ({
-    number: i + 1,
-    reviewer,
-    answer: members[i] && memberAnswer(members[i].messages),
-  }));
+  return state.reviewers
+    .map((reviewer, i) => ({
+      number: i + 1,
+      reviewer,
+      answer: members[i] && memberAnswer(members[i].messages),
+    }))
+    .filter((r) => passStarted(state, r.reviewer));
 }
 
 /**
- * Why the reports can't go to the lead: a reviewer stopped, or none
- * reported. `withReportsIn` goes on past a stopped reviewer, as long as one
- * reported.
+ * Why the reports can't go on, to the next pass or the lead: a reviewer of
+ * the pass that just ended stopped, or none of them reported.
+ * `withReportsIn` goes on past a stopped reviewer, as long as one reported.
  */
 export function haltedReview(
+  state: DeepReviewState,
   reports: ReturnType<typeof reviewReports>,
   withReportsIn: boolean,
 ) {
-  const answers = reports.map((r) => r.answer);
-  if (!withReportsIn) return halted(answers);
-  return answers.some(hasCouncilReport) ? undefined : "failed";
+  if (withReportsIn)
+    return reports.some((r) => hasCouncilReport(r.answer))
+      ? undefined
+      : "failed";
+  // Each pass is checked as it ends, so only this one's reports are new.
+  const thisPass = reports.filter(
+    (r) => (r.reviewer.pass ?? 0) === (state.pass ?? 0),
+  );
+  return halted(thisPass.map((r) => r.answer));
 }
 
 /** Starts the lead's first turn with the reports; when it can't start, Resume tries again. */

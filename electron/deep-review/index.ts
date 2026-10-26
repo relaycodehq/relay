@@ -9,7 +9,10 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import {
+  hasNextPass,
   latestReview,
+  passSlots,
+  passStarted,
   reviewerRound,
   roundOf,
   reviewRunning,
@@ -22,7 +25,7 @@ import { hasCouncilReport, memberAnswer } from "../../shared/council";
 import { lastAnswer, queued, unfinishedSlots } from "./council";
 import { haltedReview, reviewReports, startLead } from "./lead";
 import { requestText } from "./prompts";
-import { resolveScope, type PullInfo } from "./scope";
+import { resolveScope, reviewPasses, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
 import { placeRound } from "./checkout";
 import { createReviewers, sendReviewers } from "./reviewers";
@@ -42,6 +45,8 @@ export type { DeepReviewHost };
 export class DeepReviews {
   /** Reviewers whose turn ended with their subagents still at work. */
   private awaiting = new Set<string>();
+  /** Rounds whose next pass is starting, by request: its reviewers aren't at work yet. */
+  private advancing = new Set<string>();
   constructor(private host: DeepReviewHost) {}
 
   /**
@@ -96,6 +101,7 @@ export class DeepReviews {
       prHead: pull?.headBranch,
       duringTurn,
     });
+    const passes = await reviewPasses(root, scope, config);
     const request: ChatMessage = {
       id: randomUUID(),
       role: "user",
@@ -114,6 +120,7 @@ export class DeepReviews {
       ...(config.focus ? { focus: config.focus } : {}),
       runtimeMode: config.runtimeMode,
       status: "reviewing",
+      ...(passes && { passes, pass: 0 }),
     };
     // Reviewers first: the thread only holds the review once all of them exist.
     const created = await createReviewers(this.host, chat, state, config).catch(
@@ -128,7 +135,7 @@ export class DeepReviews {
         discardCheckout(),
       ]),
     );
-    await this.ask(chat, state, [...state.reviewers.keys()]);
+    await this.ask(chat, state, passSlots(state, 0));
   }
 
   /**
@@ -194,7 +201,10 @@ export class DeepReviews {
       throw new Error("This review is already running.");
     if (state.status === "done" || state.status === "leading")
       throw new Error("The review is done. Ask the lead to continue instead.");
-    const unfinished = await unfinishedSlots(this.host, state.reviewers);
+    // Later passes' reviewers haven't been asked yet: they wait their turn.
+    const unfinished = (
+      await unfinishedSlots(this.host, state.reviewers)
+    ).filter((slot) => passStarted(state, state.reviewers[slot]!));
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
     if (unfinished.length) await this.ask(chat, state, unfinished);
@@ -217,6 +227,8 @@ export class DeepReviews {
   private async rerun(chat: ProjectChat, state: DeepReviewState, slot: number) {
     const reviewer = state.reviewers[slot];
     if (!reviewer) throw new Error("This review has no such reviewer.");
+    if (!passStarted(state, reviewer))
+      throw new Error("That reviewer's pass hasn't started yet.");
     if (leadStarted(state))
       throw new Error("The lead has the reports. Ask the lead instead.");
     if (this.host.active(reviewer.chatId))
@@ -306,7 +318,7 @@ export class DeepReviews {
     const chat = await this.host.load(chatId).catch(() => undefined);
     const state = chat && latestReview(chat);
     if (!chat || state?.status !== "reviewing") return;
-    for (const r of state.reviewers)
+    for (const r of state.reviewers.filter((r) => passStarted(state, r)))
       if (
         !kept.has(r.chatId) &&
         !hasCouncilReport(await lastAnswer(this.host, r.chatId))
@@ -400,11 +412,25 @@ export class DeepReviews {
     );
   }
 
+  /** Starts the next pass's reviewers; the lead waits for the last pass. */
+  private async nextPass(chat: ProjectChat, state: DeepReviewState) {
+    // Claimed before anything is awaited, so reviewers finishing together start it once.
+    this.advancing.add(state.request);
+    state.pass = (state.pass ?? 0) + 1;
+    try {
+      await this.host.touch(chat, state.request);
+      await this.ask(chat, state, passSlots(state, state.pass));
+    } finally {
+      this.advancing.delete(state.request);
+    }
+  }
+
   /**
    * A reviewer's turn ended, or never started: once none is at work, waiting
-   * for its subagents or has a message waiting, the lead takes every
-   * reviewer's latest answer.
-   * `withReportsIn` goes on past a stopped reviewer, as long as one reported.
+   * for its subagents or has a message waiting, the next pass starts, or
+   * after the last the lead takes every reviewer's latest answer.
+   * `withReportsIn` goes on past a stopped reviewer, as long as one reported,
+   * and skips the passes not started yet.
    */
   private async reviewerDone(
     parentId: string,
@@ -429,15 +455,21 @@ export class DeepReviews {
     // Looked at again after the loads: another reviewer's end may have handed
     // over meanwhile, a message may have started one again, and one waiting
     // in a queue goes out once this step is done.
-    if (state.status !== "reviewing" || working() || members.some(queued))
+    if (
+      state.status !== "reviewing" ||
+      working() ||
+      members.some(queued) ||
+      this.advancing.has(state.request)
+    )
       return;
     const reports = reviewReports(state, members);
-    const halt = haltedReview(reports, withReportsIn);
+    const halt = haltedReview(state, reports, withReportsIn);
     if (halt) {
       state.status = halt;
       await this.host.touch(chat, state.request);
       return;
     }
+    if (!withReportsIn && hasNextPass(state)) return this.nextPass(chat, state);
     await startLead(this.host, chat, state, reports);
   }
 }

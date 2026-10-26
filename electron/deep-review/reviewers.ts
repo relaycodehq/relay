@@ -6,11 +6,12 @@ import {
   reviewerTitle,
   type DeepReviewStart,
   type DeepReviewState,
+  type ReviewAgent,
   type ReviewerTask,
 } from "../../shared/deep-review";
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
 import { councilTurn, startSlots } from "./council";
-import { reviewerTask } from "./prompts";
+import { passTask, reviewerTask } from "./prompts";
 
 export interface ReviewersHost {
   createReviewer(
@@ -31,9 +32,21 @@ export async function createReviewers(
   config: DeepReviewStart,
 ) {
   const created: ProjectChat[] = [];
+  // A split review has every reviewer once a pass, pass by pass.
+  const passes = state.passes?.length ? [...state.passes.keys()] : [undefined];
+  const reviewers = passes.flatMap((pass) =>
+    config.reviewers.map((r): ReviewAgent & { pass?: number } =>
+      pass === undefined ? r : { ...r, pass },
+    ),
+  );
   try {
-    for (const [slot, reviewer] of config.reviewers.entries()) {
-      const { codex } = reviewerTask(reviewer, state.scope, state.focus);
+    for (const [slot, reviewer] of reviewers.entries()) {
+      const { codex } = reviewerTask(
+        reviewer,
+        state.scope,
+        state.focus,
+        passTask(state, reviewer),
+      );
       const child = await host.createReviewer(chat, {
         task: {
           parent: chat.id,
@@ -91,7 +104,12 @@ async function startReviewers(
     slots,
     async (slot) => {
       const reviewer = state.reviewers[slot]!;
-      const { body } = reviewerTask(reviewer, state.scope, state.focus);
+      const { body } = reviewerTask(
+        reviewer,
+        state.scope,
+        state.focus,
+        passTask(state, reviewer),
+      );
       await host.send(reviewer.chatId, {
         id: randomUUID(),
         body,
