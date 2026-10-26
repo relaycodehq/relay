@@ -2,113 +2,41 @@
 // no window. In a terminal it's a menu; `relay settings set <key> <value>`
 // and the subcommands do the same from a script. Everything changes in the
 // running Relay through the desktop's own calls and their validation.
-import { createInterface, type Interface } from "node:readline/promises";
-import type { AgentVersion } from "../../shared/agent-updates";
+import type { AgentVersion } from "../../../shared/agent-updates";
 import {
   runnableAgents,
   agentInfo,
   type AgentProvider,
-} from "../../shared/agents";
-import { dictationModelSize } from "../../shared/dictation";
-import { readAloudSpeeds } from "../../shared/read-aloud";
-import type { Account } from "../../shared/types";
-import type { UpdateState } from "../../shared/updates";
-import { watchScopes, type WatchScope } from "../../shared/watch";
-import type { GitInfo } from "../../shared/working-tree";
-import { callControl } from "./control";
-import { bold, colorful, cyan, dim, green, ok, warn, yellow } from "./format";
-import { networkPort, readConfig, saveConfig } from "./launch";
-import { headlessPaths } from "./paths";
-import { terminalQr } from "./qr";
-import type { SpeechEngine, SpeechState } from "./speech";
-import { errorMessage } from "../../shared/error-message";
-import { sleep } from "../util/sleep";
+} from "../../../shared/agents";
+import { dictationModelSize } from "../../../shared/dictation";
+import { readAloudSpeeds } from "../../../shared/read-aloud";
+import type { Account } from "../../../shared/types";
+import { watchScopes, type WatchScope } from "../../../shared/watch";
+import { callControl } from "../control";
+import { bold, colorful, cyan, dim, green, ok, warn, yellow } from "../format";
+import { saveConfig } from "../launch";
+import { terminalQr } from "../qr";
+import { errorMessage } from "../../../shared/error-message";
+import { sleep } from "../../util/sleep";
+import { Ask, piped, withAsk } from "./ask";
+import {
+  call,
+  control,
+  snapshot,
+  type SettingsContext,
+  type Snapshot,
+} from "./snapshot";
+import {
+  changeVoice,
+  dictationValue,
+  megabytes,
+  setUpDictation,
+  setUpVoice,
+  voiceValue,
+} from "./speech";
 
-export interface SettingsContext {
-  home: string;
-  json: boolean;
-  /** Restarts the running Relay, for what it only reads as it starts. */
-  restart(): Promise<void>;
-}
-
-/** Everything `relay settings` shows, read from the running Relay at once. */
-export interface Snapshot {
-  name: string;
-  port: number;
-  /** Installs releases as they come out; see ./auto-update. */
-  autoUpdate: boolean;
-  /** Where updates stand; "off" for a build from source, which git updates. */
-  update: UpdateState;
-  keepAwake: boolean;
-  usagePing: boolean;
-  autoSettleDays: number | null;
-  worktreeCleanupDays: number | null;
-  newThreadAgent: AgentProvider | null;
-  watchThreads: WatchScope;
-  agents: AgentVersion[];
-  git: GitInfo;
-  gitea: Account | null;
-  speech: SpeechState;
-}
-
-const megabytes = (bytes: number) =>
-  `${Math.round(bytes / 1_000_000).toLocaleString("en")} MB`;
 const cliName = (provider: string) =>
   agentInfo(provider as AgentProvider)?.cli ?? provider;
-
-function control(ctx: SettingsContext) {
-  return headlessPaths(ctx.home).control;
-}
-
-/** A call the desktop's window would make, through the running Relay. */
-function call<T>(ctx: SettingsContext, method: string, ...args: unknown[]) {
-  return callControl(control(ctx), "call", method, args) as Promise<T>;
-}
-
-export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
-  const [
-    status,
-    config,
-    keepAwake,
-    usagePing,
-    autoSettleDays,
-    worktreeCleanupDays,
-    newThreadAgent,
-    watchThreads,
-    git,
-    boot,
-    speech,
-  ] = await Promise.all([
-    callControl(control(ctx), "status"),
-    readConfig(ctx.home),
-    call<boolean>(ctx, "keepAwake"),
-    call<boolean>(ctx, "usagePing"),
-    call<number | null>(ctx, "autoSettleDays"),
-    call<number | null>(ctx, "worktreeCleanupDays"),
-    call<AgentProvider | null>(ctx, "newThreadAgent"),
-    call<WatchScope>(ctx, "watchThreads"),
-    call<GitInfo>(ctx, "gitInfo"),
-    call<{ account: Account | null }>(ctx, "bootstrap"),
-    callControl(control(ctx), "speech"),
-  ]);
-  return {
-    // What's saved, which a restart puts to use.
-    name: config.name ?? status.name,
-    port: networkPort(config),
-    autoUpdate: config.autoUpdate ?? true,
-    update: status.update,
-    keepAwake,
-    usagePing,
-    autoSettleDays,
-    worktreeCleanupDays,
-    newThreadAgent,
-    watchThreads,
-    agents: status.agents,
-    git,
-    gitea: boot.account,
-    speech,
-  };
-}
 
 // ── What each setting shows ────────────────────────────────────────────
 
@@ -149,30 +77,6 @@ function cursorValue(agent: AgentVersion | undefined) {
           : "signed in",
       )
     : yellow("signed out");
-}
-
-function dictationValue({ dictation }: SpeechState) {
-  if (!dictation.supported) return dim("not available on this computer");
-  if (!dictation.engine)
-    return dim(`not set up (${megabytes(dictationModelSize)} model)`);
-  const model = dictation.model;
-  if (model.status === "ready") return green("ready");
-  if (model.status === "downloading")
-    return `downloading, ${Math.round((model.received / model.total) * 100)}%`;
-  if (model.status === "failed") return yellow(`failed: ${model.error}`);
-  return dim("model not downloaded");
-}
-
-function voiceValue({ voice }: SpeechState) {
-  if (!voice.supported) return dim("not available on this computer");
-  const ready = voice.state.engines.filter((e) => e.model.status === "ready");
-  if (!voice.engine || !ready.length) return dim("not set up");
-  const engine =
-    ready.find((e) => e.id === voice.state.settings.engine) ?? ready[0]!;
-  const picked = voice.state.settings.voices[engine.id];
-  const name = (engine.voices.find((v) => v.id === picked) ?? engine.voices[0])
-    ?.name;
-  return `${engine.name}${name ? `, ${name}` : ""}, ${voice.state.settings.speed}×`;
 }
 
 interface Row {
@@ -297,59 +201,6 @@ function print(s: Snapshot, numbered: boolean) {
   });
 }
 
-// ── Asking ─────────────────────────────────────────────────────────────
-
-/** Prompts on the terminal; scripts give values on the command line instead. */
-class Ask {
-  constructor(private rl: Interface) {}
-
-  async text(question: string) {
-    return (await this.rl.question(`${question} `)).trim();
-  }
-
-  async yes(question: string, fallback: boolean) {
-    const answer = (
-      await this.rl.question(
-        `${question} ${dim(fallback ? "[Y/n]" : "[y/N]")} `,
-      )
-    )
-      .trim()
-      .toLowerCase();
-    return answer ? answer.startsWith("y") : fallback;
-  }
-
-  /** One of `options`, by number; undefined when left empty. */
-  async pick<T>(question: string, options: { value: T; label: string }[]) {
-    options.forEach((o, i) =>
-      console.log(`  ${String(i + 1).padStart(2)}  ${o.label}`),
-    );
-    const answer = await this.text(
-      `${question} ${dim("(number, empty to keep)")}`,
-    );
-    if (!answer) return undefined;
-    const picked = options[Number(answer) - 1];
-    if (!picked)
-      throw new Error(`Choose a number from 1 to ${options.length}.`);
-    return picked.value;
-  }
-
-  /** Typed without showing it, for tokens. */
-  async secret(question: string) {
-    process.stdout.write(`${question} `);
-    const rl = this.rl as unknown as {
-      _writeToOutput?: (text: string) => void;
-    };
-    const shown = rl._writeToOutput;
-    rl._writeToOutput = () => {};
-    try {
-      return (await this.rl.question("")).trim();
-    } finally {
-      rl._writeToOutput = shown;
-      process.stdout.write("\n");
-    }
-  }
-}
-
 // ── Changing ───────────────────────────────────────────────────────────
 
 const parseDays = (value: string, min: number) => {
@@ -444,73 +295,6 @@ export async function setValue(
   }
 }
 
-/** Follows a speech setup to its end: a line that redraws on a terminal, a line per tenth in a log. */
-async function follow(ctx: SettingsContext, engine: SpeechEngine) {
-  const leave = () => {
-    console.log(
-      "\nIt carries on in the background; relay settings shows how far it got.",
-    );
-    process.exit(130);
-  };
-  process.once("SIGINT", leave);
-  try {
-    let logged = "";
-    for (;;) {
-      const state = await callControl(control(ctx), "speech");
-      const setup = state.setup;
-      if (process.stdout.isTTY) process.stdout.write("\r\x1b[2K");
-      if (!setup || setup.engine !== engine) return;
-      if (setup.status === "failed")
-        throw new Error(setup.error ?? "Setting it up failed.");
-      if (setup.status === "done") return console.log(ok("Ready."));
-      const what =
-        setup.step === "engine"
-          ? `the ${engine === "dictation" ? "speech" : "voice"} engine`
-          : engine === "dictation"
-            ? "the model"
-            : "the voice";
-      const model =
-        engine === "dictation"
-          ? state.dictation.model
-          : state.voice.state.engines.find(
-              (e) => e.model.status === "downloading",
-            )?.model;
-      const progress =
-        setup.step === "engine"
-          ? state.download
-          : model?.status === "downloading"
-            ? model
-            : undefined;
-      const line = `Downloading ${what}…${progress ? ` ${megabytes(progress.received)}${progress.total ? ` of ${megabytes(progress.total)}` : ""}` : ""}`;
-      if (process.stdout.isTTY) process.stdout.write(line);
-      else {
-        const tenth = progress?.total
-          ? Math.floor((progress.received / progress.total) * 10)
-          : "";
-        if (`${what} ${tenth}` !== logged) console.log(line);
-        logged = `${what} ${tenth}`;
-      }
-      await sleep(process.stdout.isTTY ? 400 : 2000);
-    }
-  } finally {
-    process.off("SIGINT", leave);
-  }
-}
-
-export async function setUpDictation(ctx: SettingsContext) {
-  await callControl(control(ctx), "installSpeech", "dictation");
-  await follow(ctx, "dictation");
-  console.log("Phones dictate with this computer's speech engine now.");
-}
-
-export async function setUpVoice(ctx: SettingsContext, engine?: string) {
-  await callControl(control(ctx), "installSpeech", "voice", engine);
-  await follow(ctx, "voice");
-  console.log(
-    "Phones can have answers read aloud in this computer's voice now.",
-  );
-}
-
 export async function signInCursor(ctx: SettingsContext) {
   console.log(dim("Getting Cursor's sign-in page (the SDK downloads first)…"));
   const login = await callControl(control(ctx), "cursorSignIn");
@@ -540,13 +324,6 @@ export async function signInGitea(
 ) {
   const account = await call<Account>(ctx, "connect", server, token);
   console.log(ok(`Signed in to ${account.server} as ${account.user.login}.`));
-}
-
-/** A secret from stdin when it's piped, so it stays out of the shell's history. */
-async function piped() {
-  let text = "";
-  for await (const chunk of process.stdin) text += chunk;
-  return text.trim();
 }
 
 // ── The command ────────────────────────────────────────────────────────
@@ -647,20 +424,6 @@ export async function settingsCommand(ctx: SettingsContext, words: string[]) {
       throw new Error(
         `Unknown: relay settings ${action}. Try list, set, dictation, read-aloud, cursor or gitea.`,
       );
-  }
-}
-
-async function withAsk<T>(work: (ask: Ask) => Promise<T>) {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  rl.on("SIGINT", () => {
-    rl.close();
-    process.stdout.write("\n");
-    process.exit(130);
-  });
-  try {
-    return await work(new Ask(rl));
-  } finally {
-    rl.close();
   }
 }
 
@@ -839,73 +602,5 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
     }
     case "read-aloud":
       return changeVoice(ctx, ask, s);
-  }
-}
-
-async function changeVoice(ctx: SettingsContext, ask: Ask, s: Snapshot) {
-  const { voice } = s.speech;
-  if (!voice.supported)
-    throw new Error("Read aloud isn't available on this computer.");
-  const engines = voice.state.engines;
-  const ready = voice.engine
-    ? engines.filter((e) => e.model.status === "ready")
-    : [];
-  if (!ready.length) {
-    const engine = await ask.pick(
-      "Download which voice?",
-      engines.map((e) => ({
-        value: e.id,
-        label: `${e.name} ${dim(`${megabytes(e.size)}, ${e.credit}`)}`,
-      })),
-    );
-    if (engine) await setUpVoice(ctx, engine);
-    return;
-  }
-  const action = await ask.pick("Read aloud", [
-    { value: "voice", label: "Choose the voice" },
-    { value: "speed", label: "Choose the speed" },
-    { value: "add", label: "Download another engine" },
-    { value: "remove", label: "Remove read aloud" },
-  ]);
-  const settings = voice.state.settings;
-  if (action === "voice") {
-    const choice = await ask.pick(
-      "Voice",
-      ready.flatMap((e) =>
-        e.voices.map((v) => ({
-          value: [e.id, v.id] as const,
-          label: `${v.name} ${dim(`${v.language}, ${e.name}`)}`,
-        })),
-      ),
-    );
-    if (choice)
-      await call(ctx, "saveReadAloudSettings", {
-        ...settings,
-        engine: choice[0],
-        voices: { ...settings.voices, [choice[0]]: choice[1] },
-      });
-  } else if (action === "speed") {
-    const speed = await ask.pick(
-      "Speed",
-      readAloudSpeeds.map((x) => ({ value: x, label: `${x}×` })),
-    );
-    if (speed) await call(ctx, "saveReadAloudSettings", { ...settings, speed });
-  } else if (action === "add") {
-    const engine = await ask.pick(
-      "Download which voice?",
-      engines
-        .filter((e) => e.model.status !== "ready")
-        .map((e) => ({
-          value: e.id,
-          label: `${e.name} ${dim(megabytes(e.size))}`,
-        })),
-    );
-    if (engine) await setUpVoice(ctx, engine);
-  } else if (
-    action === "remove" &&
-    (await ask.yes("Remove every voice and the engine?", false))
-  ) {
-    await callControl(control(ctx), "removeSpeech", "voice");
-    console.log(ok("Removed."));
   }
 }
