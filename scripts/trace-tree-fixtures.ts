@@ -12,6 +12,7 @@ import {
   rowFailed,
   rowRunning,
   runSummary,
+  showsOutput,
   shortPattern,
   shortWhere,
   traceTree,
@@ -117,6 +118,10 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
     ],
   },
   {
+    name: "one call that searched, read and printed three files",
+    calls: [call("command", "rg foo src && sed -n 1,40p src/a.ts"), call("command", "cat src/b.ts src/c.ts src/d.ts")],
+  },
+  {
     name: "a script written, then running",
     calls: [
       call("file", "/tmp/a.mjs", { detail: "File created successfully at: /tmp/a.mjs" }),
@@ -143,12 +148,16 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
   },
 ];
 
+const quiet = (r: TraceRow) => r.calls.filter((c) => !showsOutput(r, c)).map((c) => c.id);
+
 const row = (r: TraceRow) => ({
   id: r.id,
   action: r.action,
   calls: r.calls.map((c) => c.id),
   ...(r.lines ? { lines: r.lines } : {}),
   ...(r.ranToo ? { ranToo: true } : {}),
+  // Calls whose output another of their rows shows.
+  ...(quiet(r).length ? { quiet: quiet(r) } : {}),
   failed: rowFailed(r),
   running: rowRunning(r),
   verb: actionVerb(r),

@@ -109,6 +109,8 @@ class TraceTreeTest {
         assertEquals("$at calls", want.getValue("calls").jsonArray.map { it.jsonPrimitive.content }, row.calls.map { it.id })
         assertEquals("$at lines", want["lines"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(), row.lines)
         assertEquals("$at ranToo", want["ranToo"]?.jsonPrimitive?.boolean ?: false, row.ranToo)
+        val quiet = row.calls.filterNot { showsOutput(row, it) }.map { it.id }
+        assertEquals("$at quiet", want["quiet"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(), quiet)
         assertEquals("$at failed", want.getValue("failed").jsonPrimitive.boolean, rowFailed(row))
         assertEquals("$at running", want.getValue("running").jsonPrimitive.boolean, rowRunning(row))
         assertEquals("$at verb", want.string("verb"), actionVerb(row))

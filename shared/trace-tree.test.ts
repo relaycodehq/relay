@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { AgentActivity } from "./projects";
-import { actionVerb, rowsOf, runSummary, traceTree, type TracePiece } from "./trace-tree";
+import { actionVerb, rowsOf, runSummary, showsOutput, traceTree, type TracePiece } from "./trace-tree";
 
 let n = 0;
 
@@ -53,6 +53,17 @@ it("says a script written and then running is running", () => {
   ]);
   const row = piece?.kind === "row" ? piece.row : undefined;
   expect(row && [actionVerb(row, true), actionVerb(row)]).toEqual(["Running", "Wrote"]);
+});
+
+it("shows a call's output under the row of the first thing it did", () => {
+  const both = call("command", "rg foo src && sed -n 1,40p src/a.ts");
+  const later = call("command", "sed -n 41,80p src/a.ts");
+  const rows = rowsOf([both, later]);
+  expect(rows.map((row) => row.calls.filter((c) => showsOutput(row, c)).map((c) => c.id))).toEqual([
+    [both.id],
+    // The read row holds both calls; the first prints under the search row.
+    [later.id],
+  ]);
 });
 
 it("keeps a failed test and a passing one as two rows", () => {

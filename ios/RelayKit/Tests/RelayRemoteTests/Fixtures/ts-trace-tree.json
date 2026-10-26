@@ -53,6 +53,9 @@
        "calls": [
         "call-1"
        ],
+       "quiet": [
+        "call-1"
+       ],
        "failed": false,
        "running": false,
        "verb": "Ran",
@@ -65,6 +68,9 @@
         "what": "make"
        },
        "calls": [
+        "call-1"
+       ],
+       "quiet": [
         "call-1"
        ],
        "failed": false,
@@ -181,6 +187,9 @@
         "where": "/tmp/audit/scripts/B/cmd/*.mjs"
        },
        "calls": [
+        "call-3"
+       ],
+       "quiet": [
         "call-3"
        ],
        "failed": false,
@@ -406,6 +415,9 @@
        "calls": [
         "call-8"
        ],
+       "quiet": [
+        "call-8"
+       ],
        "failed": false,
        "running": false,
        "verb": "Ran",
@@ -422,6 +434,9 @@
        "file": "/tmp/rgcheck.mts"
       },
       "calls": [
+       "call-8"
+      ],
+      "quiet": [
        "call-8"
       ],
       "failed": false,
@@ -442,6 +457,9 @@
        "calls": [
         "call-13"
        ],
+       "quiet": [
+        "call-13"
+       ],
        "failed": false,
        "running": false,
        "verb": "Ran",
@@ -454,6 +472,9 @@
         "what": "rgneg.mts"
        },
        "calls": [
+        "call-13"
+       ],
+       "quiet": [
         "call-13"
        ],
        "failed": false,
@@ -743,6 +764,9 @@
         "call-18",
         "call-20"
        ],
+       "quiet": [
+        "call-20"
+       ],
        "failed": false,
        "running": false,
        "verb": "Edited",
@@ -761,6 +785,9 @@
         "where": "electron/agent-host/read-only-bash.test.ts"
        },
        "calls": [
+        "call-16"
+       ],
+       "quiet": [
         "call-16"
        ],
        "failed": false,
@@ -832,6 +859,9 @@
       "calls": [
        "call-20"
       ],
+      "quiet": [
+       "call-20"
+      ],
       "failed": false,
       "running": false,
       "verb": "Tests passed",
@@ -862,6 +892,9 @@
         "what": "git show"
        },
        "calls": [
+        "call-21"
+       ],
+       "quiet": [
         "call-21"
        ],
        "failed": false,
@@ -1006,6 +1039,9 @@
        "file": "src/features/sidebar/sidebar.css"
       },
       "calls": [
+       "call-22"
+      ],
+      "quiet": [
        "call-22"
       ],
       "failed": false,
@@ -1489,10 +1525,150 @@
    "summary": "Ran 1 check, read 1 file and 2 more"
   },
   {
-   "name": "a script written, then running",
+   "name": "one call that searched, read and printed three files",
    "calls": [
     {
      "id": "call-41",
+     "kind": "command",
+     "label": "rg foo src && sed -n 1,40p src/a.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "foo",
+       "where": "src"
+      },
+      {
+       "kind": "read",
+       "file": "src/a.ts",
+       "lines": "1–40"
+      }
+     ]
+    },
+    {
+     "id": "call-42",
+     "kind": "command",
+     "label": "cat src/b.ts src/c.ts src/d.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/b.ts"
+      },
+      {
+       "kind": "read",
+       "file": "src/c.ts"
+      },
+      {
+       "kind": "read",
+       "file": "src/d.ts"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-41:0",
+      "action": {
+       "kind": "search",
+       "pattern": "foo",
+       "where": "src"
+      },
+      "calls": [
+       "call-41"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Searched",
+      "liveVerb": "Searching"
+     }
+    },
+    {
+     "kind": "branch",
+     "branch": "read",
+     "heading": "Read 4 files",
+     "rows": [
+      {
+       "id": "call-41:1",
+       "action": {
+        "kind": "read",
+        "file": "src/a.ts",
+        "lines": "1–40"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "lines": [
+        "1–40"
+       ],
+       "quiet": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      },
+      {
+       "id": "call-42:0",
+       "action": {
+        "kind": "read",
+        "file": "src/b.ts"
+       },
+       "calls": [
+        "call-42"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      },
+      {
+       "id": "call-42:1",
+       "action": {
+        "kind": "read",
+        "file": "src/c.ts"
+       },
+       "calls": [
+        "call-42"
+       ],
+       "quiet": [
+        "call-42"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      },
+      {
+       "id": "call-42:2",
+       "action": {
+        "kind": "read",
+        "file": "src/d.ts"
+       },
+       "calls": [
+        "call-42"
+       ],
+       "quiet": [
+        "call-42"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
+      }
+     ]
+    }
+   ],
+   "summary": null
+  },
+  {
+   "name": "a script written, then running",
+   "calls": [
+    {
+     "id": "call-43",
      "kind": "file",
      "label": "/tmp/a.mjs",
      "status": "complete",
@@ -1505,7 +1681,7 @@
      ]
     },
     {
-     "id": "call-42",
+     "id": "call-44",
      "kind": "command",
      "label": "node /tmp/a.mjs",
      "status": "running",
@@ -1521,14 +1697,14 @@
     {
      "kind": "row",
      "row": {
-      "id": "call-41:0",
+      "id": "call-43:0",
       "action": {
        "kind": "create",
        "file": "/tmp/a.mjs"
       },
       "calls": [
-       "call-41",
-       "call-42"
+       "call-43",
+       "call-44"
       ],
       "ranToo": true,
       "failed": false,
@@ -1544,7 +1720,7 @@
    "name": "a patch that deleted one file and edited another, then two deletes",
    "calls": [
     {
-     "id": "call-43",
+     "id": "call-45",
      "kind": "file",
      "label": "src/old.ts +1 more",
      "status": "complete",
@@ -1579,7 +1755,7 @@
      ]
     },
     {
-     "id": "call-44",
+     "id": "call-46",
      "kind": "file",
      "label": "src/b.ts",
      "status": "complete",
@@ -1604,7 +1780,7 @@
      ]
     },
     {
-     "id": "call-45",
+     "id": "call-47",
      "kind": "file",
      "label": "src/c.ts",
      "status": "complete",
@@ -1636,13 +1812,13 @@
      "heading": "Edited 4 files",
      "rows": [
       {
-       "id": "call-43:0",
+       "id": "call-45:0",
        "action": {
         "kind": "delete",
         "file": "src/old.ts"
        },
        "calls": [
-        "call-43"
+        "call-45"
        ],
        "failed": false,
        "running": false,
@@ -1650,13 +1826,16 @@
        "liveVerb": "Deleting"
       },
       {
-       "id": "call-43:1",
+       "id": "call-45:1",
        "action": {
         "kind": "edit",
         "file": "src/a.ts"
        },
        "calls": [
-        "call-43"
+        "call-45"
+       ],
+       "quiet": [
+        "call-45"
        ],
        "failed": false,
        "running": false,
@@ -1664,13 +1843,13 @@
        "liveVerb": "Editing"
       },
       {
-       "id": "call-44:0",
+       "id": "call-46:0",
        "action": {
         "kind": "delete",
         "file": "src/b.ts"
        },
        "calls": [
-        "call-44"
+        "call-46"
        ],
        "failed": false,
        "running": false,
@@ -1678,13 +1857,13 @@
        "liveVerb": "Deleting"
       },
       {
-       "id": "call-45:0",
+       "id": "call-47:0",
        "action": {
         "kind": "delete",
         "file": "src/c.ts"
        },
        "calls": [
-        "call-45"
+        "call-47"
        ],
        "failed": false,
        "running": false,
@@ -1700,7 +1879,7 @@
    "name": "git checks on a branch of their own, beside other commands",
    "calls": [
     {
-     "id": "call-46",
+     "id": "call-48",
      "kind": "command",
      "label": "git status; git diff; ls; git log; git show HEAD",
      "status": "complete",
@@ -1735,13 +1914,13 @@
      "heading": "Checked git 4 times",
      "rows": [
       {
-       "id": "call-46:0",
+       "id": "call-48:0",
        "action": {
         "kind": "git",
         "what": "git status"
        },
        "calls": [
-        "call-46"
+        "call-48"
        ],
        "failed": false,
        "running": false,
@@ -1749,13 +1928,16 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-46:1",
+       "id": "call-48:1",
        "action": {
         "kind": "git",
         "what": "git diff"
        },
        "calls": [
-        "call-46"
+        "call-48"
+       ],
+       "quiet": [
+        "call-48"
        ],
        "failed": false,
        "running": false,
@@ -1763,13 +1945,16 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-46:3",
+       "id": "call-48:3",
        "action": {
         "kind": "git",
         "what": "git log"
        },
        "calls": [
-        "call-46"
+        "call-48"
+       ],
+       "quiet": [
+        "call-48"
        ],
        "failed": false,
        "running": false,
@@ -1777,13 +1962,16 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-46:4",
+       "id": "call-48:4",
        "action": {
         "kind": "git",
         "what": "git show"
        },
        "calls": [
-        "call-46"
+        "call-48"
+       ],
+       "quiet": [
+        "call-48"
        ],
        "failed": false,
        "running": false,
@@ -1795,13 +1983,16 @@
     {
      "kind": "row",
      "row": {
-      "id": "call-46:2",
+      "id": "call-48:2",
       "action": {
        "kind": "run",
        "what": "ls"
       },
       "calls": [
-       "call-46"
+       "call-48"
+      ],
+      "quiet": [
+       "call-48"
       ],
       "failed": false,
       "running": false,
@@ -1834,7 +2025,7 @@
  "readCodes": [
   {
    "call": {
-    "id": "call-47",
+    "id": "call-49",
     "kind": "command",
     "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
     "status": "complete",
@@ -1855,7 +2046,7 @@
   },
   {
    "call": {
-    "id": "call-48",
+    "id": "call-50",
     "kind": "command",
     "label": "sed -n 115,135p pages/Player.jsx",
     "status": "complete",
@@ -1875,7 +2066,7 @@
   },
   {
    "call": {
-    "id": "call-49",
+    "id": "call-51",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1895,7 +2086,7 @@
   },
   {
    "call": {
-    "id": "call-50",
+    "id": "call-52",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1915,7 +2106,7 @@
   },
   {
    "call": {
-    "id": "call-51",
+    "id": "call-53",
     "kind": "command",
     "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
     "status": "complete",
@@ -1936,7 +2127,7 @@
   },
   {
    "call": {
-    "id": "call-52",
+    "id": "call-54",
     "kind": "command",
     "label": "cat data.tsv",
     "status": "complete",
@@ -1955,7 +2146,7 @@
   },
   {
    "call": {
-    "id": "call-53",
+    "id": "call-55",
     "kind": "command",
     "label": "cat ids.tsv",
     "status": "complete",
@@ -1974,7 +2165,7 @@
   },
   {
    "call": {
-    "id": "call-54",
+    "id": "call-56",
     "kind": "command",
     "label": "cat -n src/b.ts",
     "status": "complete",
@@ -1994,7 +2185,7 @@
   },
   {
    "call": {
-    "id": "call-55",
+    "id": "call-57",
     "kind": "command",
     "label": "nl src/c.ts",
     "status": "complete",
@@ -2014,7 +2205,7 @@
   },
   {
    "call": {
-    "id": "call-56",
+    "id": "call-58",
     "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
@@ -2036,7 +2227,7 @@
   },
   {
    "call": {
-    "id": "call-57",
+    "id": "call-59",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",

@@ -43,6 +43,7 @@ import dev.relay.android.features.thread.logic.branchOf
 import dev.relay.android.features.thread.logic.readCode
 import dev.relay.android.features.thread.logic.readCodeWhenWhole
 import dev.relay.android.features.thread.logic.rowFailed
+import dev.relay.android.features.thread.logic.showsOutput
 import dev.relay.android.features.thread.logic.rowRunning
 import dev.relay.android.features.thread.logic.traceRun
 import dev.relay.android.remote.model.AgentActivity
@@ -170,14 +171,16 @@ private fun opensTo(a: AgentActivity) = a.wroteCode == true || a.detail != null 
  * The code a call wrote for these rows, the command it ran, and what it
  * printed: not when that only confirms the code shown, but always for a
  * command, whose script printed it, and when the call failed, to say why.
+ * A call that did several things prints under the row of the first only.
  * A read of one file opens as that file's lines instead.
  */
 @Composable
 private fun CallInside(a: AgentActivity, rows: List<TraceRow>) {
     if (readCode(a) != null) return ReadInside(a)
     val wroteCode = a.wroteCode == true
-    val showsOutput = a.detail != null && (!wroteCode || a.kind == "command" || a.status == "failed")
-    if (wroteCode) WrittenCodeOf(a, shows = { writtenFor(rows, a, it) }, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
+    val printedHere = rows.any { a in it.calls && showsOutput(it, a) }
+    val showsOutput = printedHere && a.detail != null && (!wroteCode || a.kind == "command" || a.status == "failed")
+    if (wroteCode) WrittenCodeOf(a, shows = { writtenFor(rows, a, it) }, otherwise = { if (printedHere && a.detail != null && !showsOutput) Detail(a) })
     if (a.kind == "command") CommandLine(a.label)
     if (showsOutput) Detail(a)
 }

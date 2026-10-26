@@ -18,6 +18,8 @@ struct TraceTreeTests {
         ]
         if let lines = r.lines { fields["lines"] = .array(lines.map(JSON.string)) }
         if r.ranToo { fields["ranToo"] = .bool(true) }
+        let quiet = r.calls.filter { !showsOutput(r, $0) }
+        if !quiet.isEmpty { fields["quiet"] = .array(quiet.map { .string($0.id) }) }
         return .object(fields)
     }
 

@@ -28,6 +28,7 @@ import {
   rowRunning,
   shortPattern,
   shortWhere,
+  showsOutput,
   verdictStopped,
   type TraceRow,
 } from "../../../shared/trace-tree";
@@ -139,13 +140,14 @@ export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boole
   );
 }
 
-/** What a row's calls show opened: the code they wrote, then what ran and came back. */
+/** What a row's calls show opened: the code they wrote, then what ran and came back; a call's output once, under its first row. */
 function CallsOpened({ rows, onChanges }: { rows: TraceRow[]; onChanges: () => void }) {
   const { display } = useContext(Subagents);
   return (
     <div className="trace-opened">
       {callsOf(rows).map((call) => {
         const read = readCode(call);
+        const printed = rows.some((row) => row.calls.includes(call) && showsOutput(row, call));
         return (
           <div key={call.id}>
             {writtenFor(rows, call).map((file, index) => (
@@ -155,10 +157,10 @@ function CallsOpened({ rows, onChanges }: { rows: TraceRow[]; onChanges: () => v
             {!read && call.kind === "command" && (
               <pre className="trace-output">
                 <span className="trace-output-command">{shownCommand(call.label)}</span>
-                {call.detail ? `\n${call.detail}` : ""}
+                {printed && call.detail ? `\n${call.detail}` : ""}
               </pre>
             )}
-            {!read && call.kind !== "command" && showsDetail(call) && (
+            {!read && call.kind !== "command" && printed && showsDetail(call) && (
               <pre className="trace-output">{call.detail}</pre>
             )}
             {call.kind === "file" && !isScratch(call.label) && (

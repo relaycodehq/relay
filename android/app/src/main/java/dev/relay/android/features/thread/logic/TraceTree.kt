@@ -87,6 +87,22 @@ private fun shownActions(call: AgentActivity): List<IndexedValue<CallAction>> {
     return if (committed) actions.filter { it.value.kind != "git" } else actions
 }
 
+/**
+ * Whether a row shows what its call printed: a call that did several things
+ * prints it under the row of the first, and its other rows show only what ran.
+ */
+fun showsOutput(row: TraceRow, call: AgentActivity): Boolean {
+    val shown = shownActions(call)
+    if (shown.size < 2) return true
+    return sameThing(row.action, shown[0].value)
+}
+
+/** Two actions about one thing; reads of a file are, whatever lines each kept. */
+private fun sameThing(a: CallAction, b: CallAction): Boolean {
+    if (a.kind != b.kind) return false
+    return if (a.file != null && b.file != null) a.file == b.file else a == b
+}
+
 /** A row while rows are still merging into one another. */
 private class RowDraft(val id: String, val action: CallAction, call: AgentActivity) {
     val calls = mutableListOf(call)

@@ -29,7 +29,7 @@ struct RowOpened: View {
                     WrittenLoader(call: call, rows: rows, context: context)
                 }
                 if showsOutput(call) {
-                    CallOutput(call: call, context: context)
+                    CallOutput(call: call, context: context, printed: printedHere(call))
                 }
             }
         }
@@ -43,6 +43,11 @@ struct RowOpened: View {
     /// why, and a command that wrote a script shows what running it printed.
     private func showsOutput(_ call: AgentActivity) -> Bool {
         !showsWritten(call) || call.kind == "command" || call.status == "failed"
+    }
+
+    /// A call that did several things prints under the row of the first only; the others show what ran.
+    private func printedHere(_ call: AgentActivity) -> Bool {
+        rows.contains { row in row.calls.contains { $0.id == call.id } && RelayRemote.showsOutput(row, call) }
     }
 }
 
@@ -71,6 +76,8 @@ func opensToSomething(_ calls: [AgentActivity]) -> Bool {
 struct CallOutput: View {
     let call: AgentActivity
     let context: CallContext
+    /// Whether what it printed shows here, or only what it ran.
+    var printed = true
     @Environment(Connection.self) private var connection
     @State private var full: String?
 
@@ -82,7 +89,7 @@ struct CallOutput: View {
                 ReadCodeView(read: read)
             } else {
                 if call.kind == "command" { ToolOutput(text: shown(call.label)) }
-                if let output, !output.isEmpty { ToolOutput(text: output) }
+                if printed, let output, !output.isEmpty { ToolOutput(text: output) }
             }
         }
         .task { await fetchFull() }

@@ -92,6 +92,21 @@ export function rowsOf(calls: AgentActivity[]): TraceRow[] {
   return rows;
 }
 
+/**
+ * Whether a row shows what its call printed: a call that did several things
+ * prints it under the row of the first, and its other rows show only what ran.
+ */
+export function showsOutput(row: TraceRow, call: AgentActivity) {
+  const [first, second] = shownActions(call);
+  return !first || !second || sameThing(row.action, first.action);
+}
+
+/** Two actions about one thing; reads of a file are, whatever lines each kept. */
+function sameThing(a: CallAction, b: CallAction) {
+  if (a.kind !== b.kind) return false;
+  return "file" in a && "file" in b ? a.file === b.file : JSON.stringify(a) === JSON.stringify(b);
+}
+
 /** Two reads of a file together: each one's lines, or none once either took the whole file. */
 function linesOfBoth(earlier: string[] | undefined, later: string[] | undefined) {
   return earlier && later ? [...earlier, ...later] : undefined;

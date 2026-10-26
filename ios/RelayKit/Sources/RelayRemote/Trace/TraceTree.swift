@@ -84,6 +84,21 @@ func shownActions(_ call: AgentActivity) -> [(action: CallAction, index: Int)] {
     return commits ? actions.filter { $0.action.kind != "git" } : actions
 }
 
+/// Whether a row shows what its call printed: a call that did several things prints it under the
+/// row of the first, and its other rows show only what ran.
+public func showsOutput(_ row: TraceRow, _ call: AgentActivity) -> Bool {
+    let shown = shownActions(call)
+    guard shown.count > 1 else { return true }
+    return sameThing(row.action, shown[0].action)
+}
+
+/// Two actions about one thing; reads of a file are, whatever lines each kept.
+private func sameThing(_ a: CallAction, _ b: CallAction) -> Bool {
+    guard a.kind == b.kind else { return false }
+    if let file = a.file, let other = b.file { return file == other }
+    return a == b
+}
+
 /// A row per thing done; a file read twice running, or a script written then run, share one. A row
 /// is named by its call and action, so it keeps its id when a call before it finishes and grows rows.
 public func rowsOf(_ calls: [AgentActivity]) -> [TraceRow] {
