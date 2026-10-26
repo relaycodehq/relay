@@ -139,11 +139,12 @@ struct TurnTrace: View {
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 Text(duration(ms: Int64(context.date.timeIntervalSince1970 * 1000) - message.created))
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .opacity(0.7)
             }
         } else if let ended = message.ended {
+            // The summary's grey, a little quieter, as on the desktop and Android.
             Text((message.status == "cancelled" ? "Stopped after " : "") + duration(ms: ended - message.created))
-                .foregroundStyle(.tertiary)
+                .opacity(0.7)
         }
     }
 }
