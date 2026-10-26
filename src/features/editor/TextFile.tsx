@@ -1,4 +1,4 @@
-import { useEffect, type ComponentProps } from "react";
+import { useEffect, useRef, type ComponentProps } from "react";
 import type { Pull } from "../../../shared/types";
 import { documents, type DocumentSource, type FileDocument } from "./documents";
 import type { ChangeBaseline } from "./editor-types";
@@ -66,9 +66,18 @@ export function PullFileEditor({
 }) {
   const source: DocumentSource = { kind: "pull", pull };
   const doc = documents.get(source, path, baseExtensions);
+  const shown = useRef(false);
   useEffect(() => {
+    shown.current = true;
     if (line) doc.reveal(line);
-    return () => documents.close(source, path);
+    return () => {
+      shown.current = false;
+      // StrictMode runs the effect again at once in development; only an
+      // editor that stays gone lets its document go.
+      queueMicrotask(() => {
+        if (!shown.current) documents.close(source, path);
+      });
+    };
   }, [doc]);
   return (
     <FileEditor

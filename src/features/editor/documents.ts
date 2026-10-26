@@ -23,7 +23,8 @@ class DocumentStore {
       doc = new FileDocument(source, path, extensions);
       doc.subscribe(() => this.changed());
       this.docs.set(key, doc);
-      this.changed();
+      // Opened while a component renders, so its listeners hear of it after.
+      queueMicrotask(() => this.changed());
     }
     return doc;
   }
