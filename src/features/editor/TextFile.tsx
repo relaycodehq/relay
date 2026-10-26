@@ -1,6 +1,6 @@
 import { useEffect, type ComponentProps } from "react";
 import type { Pull } from "../../../shared/types";
-import { documents, type DocumentSource } from "./documents";
+import { documents, type DocumentSource, type FileDocument } from "./documents";
 import type { ChangeBaseline } from "./editor-types";
 import { FileEditor } from "./FileEditor";
 import { baseExtensions } from "./setup";
@@ -19,6 +19,9 @@ export type Reveal = {
   nonce: number;
 };
 
+/** The reveal each document last showed, by its nonce. */
+const revealed = new WeakMap<FileDocument, number>();
+
 /**
  * A text file in the editor, its document kept in the window's store so it
  * keeps edits and undo history while its tab is behind another. Whoever
@@ -36,10 +39,13 @@ export default function TextFile({
 }) {
   const doc = documents.get(source, path, baseExtensions);
   useEffect(() => {
+    // Switching back to the tab mounts this again with the same reveal, already done.
+    if (!reveal || revealed.get(doc) === reveal.nonce) return;
+    revealed.set(doc, reveal.nonce);
     // Opened from the folder's own changes, the file shows them against its last commit again.
-    if (reveal?.baseline || reveal?.changes) doc.compareWith(reveal.baseline);
-    if (reveal?.changes || reveal?.baseline) doc.showChanges(true);
-    if (reveal?.line) doc.reveal(reveal.line, reveal.column);
+    if (reveal.baseline || reveal.changes) doc.compareWith(reveal.baseline);
+    if (reveal.changes || reveal.baseline) doc.showChanges(true);
+    if (reveal.line) doc.reveal(reveal.line, reveal.column);
   }, [doc, reveal?.nonce]);
   return <FileEditor key={doc.key} doc={doc} {...props} />;
 }
