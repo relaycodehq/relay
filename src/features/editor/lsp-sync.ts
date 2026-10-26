@@ -25,6 +25,15 @@ export async function tellServerText(where: string, path: string, text: Text) {
   });
 }
 
+/** The text each file of `where` was last sent as, by path: what an answer asked for now is worked out from. */
+export function heardTexts(where: string) {
+  const prefix = fileKey(where, "");
+  const texts = new Map<string, Text>();
+  for (const [key, text] of heard)
+    if (key.startsWith(prefix)) texts.set(key.slice(prefix.length), text);
+  return texts;
+}
+
 /** The main process debounces too; this keeps big files off the bridge on every keystroke. */
 const CHANGE_DELAY = 120;
 

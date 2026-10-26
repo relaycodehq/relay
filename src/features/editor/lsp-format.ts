@@ -10,12 +10,16 @@ export async function formatWithServer(
   path: string,
   view: EditorView,
 ) {
-  await tellServerText(where, path, view.state.doc);
+  const sent = view.state.doc;
+  await tellServerText(where, path, sent);
   const edits = await lsp.format(where, path, {
     tabSize: view.state.tabSize,
     insertSpaces: !view.state.facet(indentUnit).includes("\t"),
   });
   if (!edits.length) return;
+  // The edits' positions are in the text that was sent; on newer text they land in the wrong places.
+  if (view.state.doc !== sent)
+    throw new Error("The file changed while formatting. Format it again.");
   view.dispatch({
     changes: lspChanges(view.state.doc, edits),
     userEvent: "input.format",
