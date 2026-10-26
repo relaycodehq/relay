@@ -108,9 +108,7 @@ export function reviewerTask(
     // Nor does it in a folder the branch is worked on in, whose edits and
     // later commits aren't the reviewed range.
     const codex: CodexReviewTarget =
-      (fromGit(scope) && t.kind !== "commit") ||
-      sharedFolder(scope) ||
-      asked.note
+      (fromGit(scope) && t.kind !== "commit") || sharedFolder(scope) || note
         ? { type: "custom", instructions: reviewPrompt(scope, note) }
         : t.kind === "uncommitted"
           ? { type: "uncommittedChanges" }
@@ -133,7 +131,7 @@ export function reviewerTask(
     return { body: `@${reviewer.provider} ${reviewPrompt(scope, note)}` };
   const level = claudeReviewLevel(reviewer.choice);
   // `/code-review` reads what follows its level as the user wrote it.
-  const after = asked.note ? ` ${asked.note}` : "";
+  const after = note ? ` ${note}` : "";
   if (t.kind === "uncommitted")
     return { body: `@claude /code-review ${level}${after}` };
   // Given a branch name, `/code-review` picks its own base, and given a pull
