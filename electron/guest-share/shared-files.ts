@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { open, realpath, stat } from "node:fs/promises";
 import {
   basename,
+  dirname,
   isAbsolute,
   join,
   normalize,
@@ -125,10 +126,28 @@ function workPlaces(messages: ChatMessage[], root: string | null): Place[] {
   const others = [
     ...new Set(messages.flatMap((m) => (m.elsewhere ?? []).map((e) => e.root))),
   ];
+  const labels = placeLabels(others);
   return [
     ...(root ? [{ root, label: "" }] : []),
-    ...others.map((other) => ({ root: other, label: basename(other) })),
+    ...others.map((other, i) => ({ root: other, label: labels[i]! })),
   ];
+}
+
+/**
+ * Each repository by its folder's name, with its parent's when two share
+ * one (`first/app`, `second/app`), so their files don't land on one path.
+ */
+function placeLabels(roots: string[]) {
+  const names = roots.map((r) => basename(r));
+  const labels = roots.map((r, i) =>
+    names.filter((n) => n === names[i]).length > 1
+      ? `${basename(dirname(r))}/${names[i]}`
+      : names[i]!,
+  );
+  // Parents alike too: numbered, as nothing else tells them apart.
+  return labels.map((label, i) =>
+    labels.indexOf(label) === i ? label : `${label}-${i + 1}`,
+  );
 }
 
 const inside = (root: string, path: string) => {

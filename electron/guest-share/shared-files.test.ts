@@ -74,6 +74,26 @@ describe("sharedFiles", () => {
     ]);
   });
 
+  it("tells apart repositories with the same folder name", async () => {
+    const top = await folder({
+      "first/app/config.ts": "1",
+      "second/app/config.ts": "2",
+    });
+    const messages = [
+      answer({
+        elsewhere: [
+          { root: join(top, "first/app"), paths: ["config.ts"] },
+          { root: join(top, "second/app"), paths: ["config.ts"] },
+        ],
+      }),
+    ];
+    const files = await sharedFiles(messages, null);
+    expect(files.map((f) => f.path).sort()).toEqual([
+      "first/app/config.ts",
+      "second/app/config.ts",
+    ]);
+  });
+
   it("keeps files that usually hold keys, binaries and anything outside the thread's folder private", async () => {
     const root = await folder({
       ".env": "KEY=1",
