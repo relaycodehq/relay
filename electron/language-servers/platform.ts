@@ -1,7 +1,7 @@
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import {
   executableCommand,
   findExecutable,
@@ -85,7 +85,10 @@ export const resolvePlatform: Pick<
   node: { command: process.execPath, env: { ELECTRON_RUN_AS_NODE: "1" } },
 };
 
-/** Starts a server with its pipes; Windows gets no console window. */
+/**
+ * Starts a server with its pipes; Windows gets no console window. Elsewhere
+ * it leads a process group of its own, so stopping it stops what it started.
+ */
 export function spawnServer(
   command: string,
   args: string[],
@@ -97,5 +100,11 @@ export function spawnServer(
     env: { ...process.env, ...env },
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
+    detached: process.platform !== "win32",
   });
+}
+
+/** Stops a server and whatever it started, killing them after `graceMs`. */
+export function stopServer(child: ChildProcess, graceMs = 2000) {
+  terminate(child, { group: true, graceMs });
 }

@@ -8,6 +8,7 @@ import { LoadProgress } from "./load-progress";
 import type { ServerSpec } from "./registry";
 import type { Launch, Resolution } from "./resolve";
 import { RpcConnection } from "./rpc";
+import { stopServer } from "./platform";
 import { StatusReporter } from "./status-reporter";
 
 export interface SessionTiming {
@@ -304,7 +305,7 @@ export class ServerSession {
 
   private exited(child: ChildProcess, reason: string) {
     if (child !== this.child) return;
-    child.kill();
+    stopServer(child);
     const conn = this.conn;
     this.child = undefined;
     this.conn = undefined;
@@ -449,7 +450,7 @@ export class ServerSession {
     this.finish();
     if (!this.gaveUp) this.reporter.set({ state: "stopped" });
     if (!conn || !child) {
-      child?.kill();
+      if (child) stopServer(child);
       return;
     }
     await conn
@@ -460,7 +461,7 @@ export class ServerSession {
     await new Promise<void>((resolve) => {
       if (child.exitCode !== null || child.signalCode) return resolve();
       const force = setTimeout(() => {
-        child.kill("SIGKILL");
+        stopServer(child, 0);
         resolve();
       }, this.timing.shutdownMs);
       force.unref();
@@ -477,7 +478,7 @@ export class ServerSession {
     this.finish();
     conn?.notify("exit", null);
     conn?.close();
-    child?.kill();
+    if (child) stopServer(child);
   }
 
   private finish() {
