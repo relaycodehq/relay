@@ -62,16 +62,37 @@ function hunkLines(diff: string) {
   return first === -1 ? undefined : lines.slice(first);
 }
 
+/**
+ * A patch's old code and new code apart, and where each line sits in its
+ * side, so each side highlights as the code it was; a hunk's header is
+ * in neither.
+ */
+function sidesOf(lines: string[]) {
+  const before: string[] = [];
+  const after: string[] = [];
+  const at = lines.map((line) => {
+    if (line.startsWith("@@")) return -1;
+    const mark = markOf(line);
+    if (mark !== "added") before.push(line.slice(1));
+    if (mark !== "removed") after.push(line.slice(1));
+    return mark === "removed" ? before.length - 1 : after.length - 1;
+  });
+  return { before: before.join("\n"), after: after.join("\n"), at };
+}
+
 function Patch({ path, diff }: { path: string; diff: string }) {
   const lines = hunkLines(diff);
-  const tokens = useLines(path, (lines ?? []).map((line) => line.slice(1)).join("\n"));
+  const sides = sidesOf(lines ?? []);
+  const before = useLines(path, sides.before);
+  const after = useLines(path, sides.after);
   if (!lines) return <Whole path={path} content={diff} />;
   return (
     <div className="written-hunk">
       {lines.map((line, index) => {
         if (line.startsWith("@@")) return <div key={index} className="written-line hunk-head">{line}</div>;
         const mark = markOf(line);
-        return <Line key={index} tokens={tokens[index] ?? []} gutter={gutters[mark]} mark={mark} />;
+        const side = mark === "removed" ? before : after;
+        return <Line key={index} tokens={side[sides.at[index]!] ?? []} gutter={gutters[mark]} mark={mark} />;
       })}
     </div>
   );

@@ -71,10 +71,7 @@ private func shownCode(_ file: WrittenCode) -> (hunks: [[CodeLine]], size: CodeS
     case .patch(_, let diff, _):
         // An added file from an older Codex turn is its content with no hunk.
         guard let lines = patchLines(diff) else { return wholeFile(diff, language: language) }
-        let tokens = Highlighted.lines(lines.map(\.text).joined(separator: "\n"), language: language)
-        let hunk = lines.enumerated().map { index, line in
-            CodeLine(gutter: gutter(line.mark), tokens: tokens[safe: index], text: line.text, mark: line.mark)
-        }
+        let hunk = highlightedBySide(lines, language: language)
         return ([hunk], changes([hunk]))
     }
 }
@@ -90,6 +87,21 @@ private func wholeFile(_ content: String, language: String?) -> (hunks: [[CodeLi
         CodeLine(gutter: "\(index + 1)", tokens: tokens[safe: index], text: text, mark: .same)
     }
     return ([lines], .lines(content.isEmpty ? 0 : texts.count))
+}
+
+/// A patch's lines, each highlighted with the side it came from: the old code and the new apart,
+/// as each was, and a hunk's header as neither.
+@MainActor
+private func highlightedBySide(_ lines: [DiffLine], language: String?) -> [CodeLine] {
+    let isHead = { (line: DiffLine) in line.mark == .same && line.text.hasPrefix("@@") }
+    let code = lines.filter { !isHead($0) }
+    let side = { (kept: LineMark) in code.filter { $0.mark != kept }.map(\.text).joined(separator: "\n") }
+    let before = Highlighted.lines(side(.added), language: language)
+    let after = Highlighted.lines(side(.removed), language: language)
+    var coded = marked(code, before: before, after: after).makeIterator()
+    return lines.map { line in
+        isHead(line) ? CodeLine(gutter: "", tokens: nil, text: line.text, mark: .same) : coded.next()!
+    }
 }
 
 private func changes(_ hunks: [[CodeLine]]) -> CodeSize {

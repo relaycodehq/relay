@@ -51,6 +51,15 @@ class WrittenLinesTest {
     }
 
     @Test
+    fun aPatchsOldAndNewCodeHighlightApart() {
+        val view = writtenView(WrittenCode("patch", "x.ts", diff = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"))
+        assertEquals("keep\nold", view.before)
+        assertEquals("keep\nnew", view.after)
+        for (line in view.lines.filter { it.mark != LineMark.Hunk })
+            assertEquals(line.text, (if (line.before) view.before else view.after).split("\n")[line.index])
+    }
+
+    @Test
     fun aNewlineEndingAnEditStartsNoLine() {
         val view = writtenView(WrittenCode("swap", "x.ts", edits = listOf(WrittenEdit("a\n", "b\n"))))
         assertEquals(listOf("R a", "A b"), marks(view))

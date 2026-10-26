@@ -65,18 +65,26 @@ private fun patchView(diff: String): WrittenView {
     val raw = withoutLastNewline(diff.split("\n"))
     val firstHunk = raw.indexOfFirst { it.startsWith("@@") }
     if (firstHunk == -1) return wholeView(diff)
-    val body = raw.drop(firstHunk)
-    val code = body.joinToString("\n") { if (it.startsWith("@@")) "" else it.drop(1) }
-    val lines = body.mapIndexed { i, line ->
+    // The old code and the new apart, so each side highlights as the code it was.
+    val before = mutableListOf<String>()
+    val after = mutableListOf<String>()
+    val lines = raw.drop(firstHunk).map { line ->
         val mark = when {
             line.startsWith("@@") -> LineMark.Hunk
             line.startsWith("+") -> LineMark.Added
             line.startsWith("-") -> LineMark.Removed
             else -> LineMark.Same
         }
-        WrittenLine(mark, if (mark == LineMark.Hunk) line else line.drop(1), i)
+        val text = line.drop(1)
+        if (mark == LineMark.Same || mark == LineMark.Removed) before += text
+        if (mark == LineMark.Same || mark == LineMark.Added) after += text
+        when (mark) {
+            LineMark.Hunk -> WrittenLine(mark, line, -1)
+            LineMark.Removed -> WrittenLine(mark, text, before.size - 1, before = true)
+            else -> WrittenLine(mark, text, after.size - 1)
+        }
     }
-    return WrittenView(code, code, lines)
+    return WrittenView(before.joinToString("\n"), after.joinToString("\n"), lines)
 }
 
 /** Past the desktop's limit before any of it fit: only the path is left to show. */
