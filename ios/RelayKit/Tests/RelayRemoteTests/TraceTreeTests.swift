@@ -35,18 +35,20 @@ struct TraceTreeTests {
         }
     }
 
-    @Test func piecesMatch() throws {
+    @Test func piecesAndSummariesMatch() throws {
         let cases = try #require(ts["cases"]?.array)
         #expect(!cases.isEmpty)
         for c in cases {
             let name = c["name"]!.string!
             let calls: [AgentActivity] = try c["calls"]!.decode()
-            let got = try traceTree(calls).map(piece)
+            let run = traceRun(calls)
+            let got = try run.pieces.map(piece)
             let want = c["pieces"]!.array!
             #expect(got.count == want.count, "\(name)")
             for (index, (mine, theirs)) in zip(got, want).enumerated() {
                 #expect(mine == theirs, "\(name), piece \(index)")
             }
+            #expect(run.summary == (try #require(c["summary"])).string, "\(name), summary")
         }
     }
 

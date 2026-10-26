@@ -62,9 +62,17 @@ public func rowFailed(_ row: TraceRow) -> Bool {
 
 /// A run of calls between two lines of commentary, as rows, pairs and branches.
 public func traceTree(_ calls: [AgentActivity]) -> [TracePiece] {
-    branches(rowsOf(calls)).flatMap { kind, rows in
+    traceRun(calls).pieces
+}
+
+/// A run's tree and, once it's longer than two lines, its folded line, from one pass over the calls.
+/// A tree of two lines or fewer has no folded line: it shows as it is.
+public func traceRun(_ calls: [AgentActivity]) -> (pieces: [TracePiece], summary: String?) {
+    let grouped = branches(rowsOf(calls))
+    let tree = grouped.flatMap { kind, rows in
         kind == .run ? commandRuns(rows).flatMap { pieces(kind, $0) } : pieces(kind, rows)
     }
+    return (tree, tree.count < 3 ? nil : summaryOf(grouped))
 }
 
 /// What a call did worth a row, each with where it stands among the call's actions: a commit's own
@@ -222,7 +230,7 @@ public func branchHeading(_ kind: BranchKind, _ rows: [TraceRow]) -> String {
     }
 }
 
-/// "once", "twice", "3 times".
+/// "once", "twice", "3 times": a run's folded line can name one or two.
 private func times(_ count: Int) -> String {
     switch count {
     case 1: "once"
@@ -239,6 +247,22 @@ private func runHeading(_ rows: [TraceRow]) -> String {
     })
     guard programs.count == 1, let program = programs.first else { return "Ran \(plural(rows.count, "command"))" }
     return rows.count == 1 ? "Ran \(program)" : "Ran \(program) \(rows.count) times"
+}
+
+/// How many kinds a folded run's line names before "and N more".
+private let summaryKinds = 3
+
+/// A run the agent has moved on from, as one line: "Searched twice, read 4 files and ran 3 commands".
+private func summaryOf(_ grouped: [(BranchKind, [TraceRow])]) -> String {
+    let parts = grouped.enumerated().map { index, branch in
+        let heading = branchHeading(branch.0, branch.1)
+        return index == 0 ? heading : heading.prefix(1).lowercased() + heading.dropFirst()
+    }
+    if parts.count > summaryKinds {
+        return parts.prefix(summaryKinds - 1).joined(separator: ", ") + " and \(parts.count - summaryKinds + 1) more"
+    }
+    guard let last = parts.last, parts.count > 1 else { return parts.first ?? "" }
+    return parts.dropLast().joined(separator: ", ") + " and " + last
 }
 
 /// The verb a row leads with, past or, while it runs, present. Tools draw their own row.
