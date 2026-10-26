@@ -48,10 +48,6 @@ import {
   SchedulesPage,
   SchedulesTitle,
 } from "../features/schedules/SchedulesPage";
-import {
-  ProcessesPage,
-  ProcessesTitle,
-} from "../features/processes/ProcessesPage";
 import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import {
@@ -97,11 +93,12 @@ export default function ProjectShell() {
       : undefined;
   };
   const usage = nav.surface === "usage";
-  const processes = nav.surface === "processes";
   const schedules = nav.surface === "schedules";
-  const { toggleUsage, toggleProcesses, toggleSchedules, scheduleShown } =
-    useToolPages(nav, lock);
-  // Pull requests, Usage or Processes instead of a project.
+  const { toggleUsage, toggleSchedules, scheduleShown } = useToolPages(
+    nav,
+    lock,
+  );
+  // Pull requests, Usage or Schedules instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
   const settings = useSettingsPage(nav.selected, nav.chatId, nav.surface);
@@ -202,8 +199,6 @@ export default function ProjectShell() {
         );
       case "usage":
         return <UsageTitle onBack={toggleUsage} />;
-      case "processes":
-        return <ProcessesTitle onBack={toggleProcesses} />;
       case "schedules":
         return <SchedulesTitle onBack={toggleSchedules} />;
       case "project":
@@ -245,12 +240,6 @@ export default function ProjectShell() {
         return (
           <div className="project-legacy" hidden={settings.open}>
             <UsagePage onOpenChat={openChatById} />
-          </div>
-        );
-      case "processes":
-        return (
-          <div className="project-legacy" hidden={settings.open}>
-            <ProcessesPage onOpenChat={openChatById} />
           </div>
         );
       case "schedules":
@@ -380,7 +369,7 @@ export default function ProjectShell() {
             projects={projects.data ?? []}
             showing={
               elsewhere
-                ? { inbox, usage, processes, schedules }
+                ? { inbox, usage, schedules }
                 : {
                     projectId: project?.id,
                     chatId: chat?.id,
@@ -402,7 +391,6 @@ export default function ProjectShell() {
               else nav.setInbox(true);
             }}
             onUsage={toggleUsage}
-            onProcesses={toggleProcesses}
             onSchedules={toggleSchedules}
           />
           {projects.error && <ErrorBox error={projects.error} />}

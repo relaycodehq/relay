@@ -64,14 +64,13 @@ interface SidebarShowing {
   /** The Pull requests page. */
   inbox?: boolean;
   usage?: boolean;
-  processes?: boolean;
   schedules?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox, usage, processes, schedules },
+  showing: { projectId, chatId, draftId, inbox, usage, schedules },
   onOpen,
   onPickNew,
   onNewScratch,
@@ -79,7 +78,6 @@ export function ProjectSidebar({
   onAdd,
   onInbox,
   onUsage,
-  onProcesses,
   onSchedules,
   onSettings,
   onAttention,
@@ -101,7 +99,6 @@ export function ProjectSidebar({
   onAdd: (page: AddProjectPage) => void;
   onInbox: () => void;
   onUsage?: () => void;
-  onProcesses?: () => void;
   onSchedules?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
@@ -408,8 +405,6 @@ export function ProjectSidebar({
         onInbox={onInbox}
         usage={usage}
         onUsage={onUsage}
-        processes={processes}
-        onProcesses={onProcesses}
         schedules={schedules}
         onSchedules={onSchedules}
         onSettings={onSettings}

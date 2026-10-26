@@ -87,7 +87,7 @@ export function createDispatch(
     draftHandlers(ctx),
     computerHandlers(ctx),
     usageHandlers(ctx),
-    processHandlers(ctx),
+    processHandlers(),
     scheduleHandlers(ctx),
     bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.

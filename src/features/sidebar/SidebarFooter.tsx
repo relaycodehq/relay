@@ -3,7 +3,6 @@ import { Menu } from "@base-ui/react/menu";
 import {
   CalendarSync,
   ChartColumn,
-  Cpu,
   Ellipsis,
   GitPullRequest,
   Settings2,
@@ -30,8 +29,6 @@ export function SidebarFooter({
   onInbox,
   usage,
   onUsage,
-  processes,
-  onProcesses,
   schedules,
   onSchedules,
   onSettings,
@@ -45,9 +42,6 @@ export function SidebarFooter({
   /** Whether the Usage page is showing. */
   usage?: boolean;
   onUsage?: () => void;
-  /** Whether the Processes page is showing. */
-  processes?: boolean;
-  onProcesses?: () => void;
   /** Whether the Schedules page is showing. */
   schedules?: boolean;
   onSchedules?: () => void;
@@ -85,7 +79,7 @@ export function SidebarFooter({
         <span className="sb-footer-separator" aria-hidden="true" />
         <Menu.Root>
           <Menu.Trigger
-            className={`icon-button sb-footer-more ${usage || processes || schedules ? "active" : ""}`}
+            className={`icon-button sb-footer-more ${usage || schedules ? "active" : ""}`}
             aria-label="More tools"
             title="More tools"
           >
@@ -99,14 +93,6 @@ export function SidebarFooter({
               onClick={onUsage}
             >
               Usage
-            </MenuAction>
-            <MenuAction
-              icon={<Cpu size={15} />}
-              aria-current={processes ? "page" : undefined}
-              disabled={!onProcesses}
-              onClick={onProcesses}
-            >
-              Processes
             </MenuAction>
             <MenuAction
               icon={<CalendarSync size={15} />}
