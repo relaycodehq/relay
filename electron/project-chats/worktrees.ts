@@ -859,13 +859,13 @@ export class ThreadWorktrees {
     });
   }
 
-  /** Where the thread's terminal opens: its worktree, or the project's checkout. */
-  async terminalFolder(projectId: string, id: string) {
+  /** Where the thread's terminal opens: its worktree, or the project's checkout; `make` false leaves a cleaned-up review folder unmade. */
+  async terminalFolder(projectId: string, id: string, make = true) {
     const chat = await this.core.storage.load(id);
     if (chat.projectId !== projectId)
       throw new Error("This thread belongs to another project.");
     // A review's fixes, and the files its answers changed, are in its folder.
-    const review = await this.councils.root(chat);
+    const review = await this.councils.root(chat, make);
     if (review) return review;
     const worktree = chat.worktree;
     if (!worktree)

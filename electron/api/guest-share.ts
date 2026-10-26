@@ -29,9 +29,10 @@ export function guestShareHandlers(ctx: ApiContext) {
   const shares = new GuestShares({
     thread: (id) => chats.get(id),
     summary: (id) => ctx.store.get().chats?.find((c) => c.id === id),
+    // Read with every update a guest gets, so a cleaned-up review folder isn't made again.
     root: (thread) =>
       chats.worktrees
-        .terminalFolder(thread.projectId, thread.id)
+        .terminalFolder(thread.projectId, thread.id, false)
         .catch(() => null),
     media: chats.files,
     renderPage: (threadId, renderId, page) =>
