@@ -44,6 +44,7 @@ import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.rowRunning
 import dev.relay.android.features.thread.logic.traceTree
 import dev.relay.android.remote.model.AgentActivity
+import dev.relay.android.remote.model.CallAction
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
@@ -85,14 +86,14 @@ private fun ActionRow(row: TraceRow, modifier: Modifier = Modifier) {
         return
     }
     val running = rowRunning(row)
-    OpenableRow(row.calls, modifier, icon = { RowIcon(actionIcon(row.action.kind), running, rowFailed(row)) }, under = { LookedAt(row) }) {
+    OpenableRow(listOf(row), modifier, icon = { RowIcon(actionIcon(row.action.kind), running, rowFailed(row)) }, under = { LookedAt(row) }) {
         ActionLabel(row, live = running)
     }
 }
 
 @Composable
 private fun PairRow(first: TraceRow, second: TraceRow) {
-    OpenableRow(first.calls + second.calls, icon = { RowIcon(actionIcon(first.action.kind), running = false, failed = false) }) {
+    OpenableRow(listOf(first, second), icon = { RowIcon(actionIcon(first.action.kind), running = false, failed = false) }) {
         PairLabel(first, second)
     }
 }
@@ -115,14 +116,14 @@ private fun RowIcon(icon: ImageVector, running: Boolean, failed: Boolean) {
 /** A row that opens to its calls when there's something inside them to show. */
 @Composable
 private fun OpenableRow(
-    calls: List<AgentActivity>,
+    rows: List<TraceRow>,
     modifier: Modifier = Modifier,
     icon: @Composable () -> Unit,
     under: @Composable () -> Unit = {},
     label: @Composable () -> Unit,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val inside = calls.distinctBy { it.id }.filter(::opensTo)
+    val inside = rows.flatMap { it.calls }.distinctBy { it.id }.filter(::opensTo)
     val press = if (inside.isEmpty()) Modifier else Modifier.pressable(onClick = { open = !open }, scale = false)
     Column(modifier) {
         Row(press.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -131,7 +132,7 @@ private fun OpenableRow(
             Box(Modifier.weight(1f).heightIn(min = LINE).padding(vertical = 3.dp), contentAlignment = Alignment.CenterStart) { label() }
         }
         under()
-        if (open) inside.forEach { key(it.id) { CallInside(it) } }
+        if (open) inside.forEach { key(it.id) { CallInside(it, rows) } }
     }
 }
 
@@ -139,19 +140,33 @@ private fun OpenableRow(
 private fun opensTo(a: AgentActivity) = a.wroteCode == true || a.detail != null || a.kind == "command"
 
 /**
- * The code a call wrote, the command it ran, and what it printed: not when
- * that only confirms the code shown, but always when the call failed, to say why.
+ * The code a call wrote for these rows, the command it ran, and what it
+ * printed: not when that only confirms the code shown, but always for a
+ * command, whose script printed it, and when the call failed, to say why.
  * A read of one file opens as that file's lines instead.
  */
 @Composable
-private fun CallInside(a: AgentActivity) {
+private fun CallInside(a: AgentActivity, rows: List<TraceRow>) {
     if (readCode(a) != null) return ReadInside(a)
     val wroteCode = a.wroteCode == true
-    val showsOutput = a.detail != null && (!wroteCode || a.status == "failed")
-    if (wroteCode) WrittenCodeOf(a, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
+    val showsOutput = a.detail != null && (!wroteCode || a.kind == "command" || a.status == "failed")
+    if (wroteCode) WrittenCodeOf(a, shows = { writtenFor(rows, a, it) }, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
     if (a.kind == "command") CommandLine(a.label)
     if (showsOutput) Detail(a)
 }
+
+/**
+ * Whether a file a call wrote belongs under these rows: a call that wrote
+ * three files has a row for each. A file none of the call's actions names,
+ * its opener cut off the label, goes with whichever row opens.
+ */
+private fun writtenFor(rows: List<TraceRow>, call: AgentActivity, path: String): Boolean {
+    val about = rows.mapNotNull { writtenFile(it.action) }.toSet()
+    val named = call.actions.orEmpty().mapNotNull(::writtenFile).toSet()
+    return path in about || path !in named
+}
+
+private fun writtenFile(action: CallAction) = if (action.kind == "edit" || action.kind == "create") action.file else null
 
 /** A read of one file: its lines once the whole output is here, and plain as before until then. */
 @Composable
@@ -181,7 +196,7 @@ private fun Branch(branch: TracePiece.Branch) {
     val c = RelayTheme.colors
     var open by rememberSaveable { mutableStateOf(false) }
     val running = branch.rows.any(::rowRunning)
-    val failed = branch.kind == BranchKind.Check && branch.rows.any(::rowFailed)
+    val failed = branch.rows.any(::rowFailed)
     Column {
         Step(Modifier.pressable(onClick = { open = !open }, scale = false)) {
             RowIcon(branchIcon(branch), running, failed = false)
@@ -204,6 +219,7 @@ private fun branchIcon(branch: TracePiece.Branch): ImageVector = when (branch.ki
     BranchKind.Web -> actionIcon("web")
     BranchKind.Edit -> actionIcon("edit")
     BranchKind.Run -> actionIcon("run")
+    BranchKind.Git -> actionIcon("git")
     BranchKind.Check -> actionIcon("test")
     BranchKind.Commit -> actionIcon("commit")
     BranchKind.Tool -> if (allAgents(branch.rows)) TablerIcons.Outline.Robot else actionIcon("tool")

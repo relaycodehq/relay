@@ -13,13 +13,13 @@ data class TraceRow(
     val id: String,
     val action: CallAction,
     val calls: List<AgentActivity>,
-    /** A file read more than once: each read's lines. */
+    /** The lines each read of the file printed; none when a read took it whole. */
     val lines: List<String> = emptyList(),
     /** A script written, then run straight after. */
     val ranToo: Boolean = false,
 )
 
-enum class BranchKind { Read, Search, Web, Edit, Run, Check, Commit, Tool }
+enum class BranchKind { Read, Search, Web, Edit, Run, Git, Check, Commit, Tool }
 
 sealed interface TracePiece {
     val id: String
@@ -42,6 +42,12 @@ fun toldByActions(calls: List<AgentActivity>) = calls.isNotEmpty() && calls.all 
 
 fun rowRunning(row: TraceRow) = row.calls.any { it.status == "running" }
 
+/** A test or check stopped before it said how it went. */
+fun verdictStopped(row: TraceRow): Boolean {
+    val ranChecks = row.action.kind == "test" || row.action.kind == "check"
+    return ranChecks && !row.action.failed && row.calls.any { it.status == "stopped" }
+}
+
 /** A test or check fails by its result; anything else only when its call failed. */
 fun rowFailed(row: TraceRow): Boolean {
     val ranChecks = row.action.kind == "test" || row.action.kind == "check"
@@ -60,12 +66,16 @@ fun leadRow(call: AgentActivity): TraceRow? = rowsOf(listOf(call)).firstOrNull()
 
 private fun actionsOf(call: AgentActivity) = call.actions ?: listOf(CallAction("tool"))
 
-/** What a call did worth a row: a commit's own `git log` says nothing new, and a running call has only started its first part. */
-private fun shownActions(call: AgentActivity): List<CallAction> {
-    val actions = actionsOf(call)
+/**
+ * What a call did worth a row, each with where it stands among the call's
+ * actions: a commit's own `git log` says nothing new, and a running call has
+ * only started its first part.
+ */
+private fun shownActions(call: AgentActivity): List<IndexedValue<CallAction>> {
+    val actions = actionsOf(call).withIndex().toList()
     if (call.status == "running") return actions.take(1)
-    val committed = actions.any { it.kind == "commit" }
-    return if (committed) actions.filter { it.kind != "git" } else actions
+    val committed = actions.any { it.value.kind == "commit" }
+    return if (committed) actions.filter { it.value.kind != "git" } else actions
 }
 
 /** A row while rows are still merging into one another. */
@@ -78,17 +88,26 @@ private class RowDraft(val id: String, val action: CallAction, call: AgentActivi
         if (calls.none { it === call }) calls += call
     }
 
+    /** Another read's lines; none once either read took the whole file. */
+    fun readAgain(later: List<String>) {
+        if (lines.isEmpty() || later.isEmpty()) lines.clear() else lines += later
+    }
+
     fun row() = TraceRow(id, action, calls.toList(), lines.toList(), ranToo)
 }
 
-/** A row per thing done; a file read twice running, or a script written then run, share one. */
+/**
+ * A row per thing done; a file read twice running, or a script written then
+ * run, share one. A row is named by its call and action, so it keeps its id
+ * when a call before it finishes and grows rows.
+ */
 private fun rowsOf(calls: List<AgentActivity>): List<RowDraft> {
     val rows = mutableListOf<RowDraft>()
-    for (call in calls) for (action in shownActions(call)) {
+    for (call in calls) for ((index, action) in shownActions(call)) {
         val last = rows.lastOrNull()
         if (last != null && sameRead(last.action, action)) {
             last.addOnce(call)
-            if (action.kind == "read" && action.lines != null) last.lines += action.lines
+            last.readAgain(listOfNotNull(action.lines))
             continue
         }
         if (last != null && ranWhatItWrote(last.action, action)) {
@@ -96,7 +115,7 @@ private fun rowsOf(calls: List<AgentActivity>): List<RowDraft> {
             last.ranToo = true
             continue
         }
-        val row = RowDraft("${call.id}:${rows.size}", action, call)
+        val row = RowDraft("${call.id}:$index", action, call)
         if (action.kind == "read" && action.lines != null) row.lines += action.lines
         rows += row
     }
@@ -118,6 +137,7 @@ fun branchOf(action: CallAction): BranchKind = when (action.kind) {
     "edit", "create" -> if (isScratch(action.file.orEmpty())) BranchKind.Run else BranchKind.Edit
     "test", "check" -> BranchKind.Check
     "commit" -> BranchKind.Commit
+    "git" -> BranchKind.Git
     "tool" -> BranchKind.Tool
     else -> BranchKind.Run
 }
@@ -134,7 +154,7 @@ private fun branches(rows: List<RowDraft>): List<kotlin.Pair<BranchKind, List<Ro
         }
         val newCalls = row.calls.filter { call -> earlier.calls.none { it === call } }
         earlier.calls += newCalls
-        earlier.lines += row.lines
+        earlier.readAgain(row.lines)
     }
     return byKind.map { (kind, list) -> kind to list }
 }
@@ -180,21 +200,28 @@ private fun distinctFiles(rows: List<TraceRow>) = rows.map { it.action.file ?: i
 /** "Read 4 files", "Ran rg 3 times", "Ran 2 checks · 1 failed". */
 fun branchHeading(kind: BranchKind, rows: List<TraceRow>): String = when (kind) {
     BranchKind.Read -> "Read ${plural(distinctFiles(rows), "file")}"
-    BranchKind.Search -> "Searched ${plural(rows.size, "time")}"
-    BranchKind.Web -> "Searched the web ${plural(rows.size, "time")}"
+    BranchKind.Search -> "Searched ${times(rows.size)}"
+    BranchKind.Web -> "Searched the web ${times(rows.size)}"
     BranchKind.Edit -> "Edited ${plural(distinctFiles(rows), "file")}"
     BranchKind.Run -> runHeading(rows)
+    BranchKind.Git -> "Checked git ${times(rows.size)}"
     BranchKind.Check -> checksHeading(rows)
-    BranchKind.Commit -> "Committed ${plural(rows.size, "time")}"
+    BranchKind.Commit -> "Committed ${times(rows.size)}"
     BranchKind.Tool -> toolsHeading(rows)
 }
 
-/** Commands all of one program say which: "Ran rg 3 times". Others count the commands themselves: `a; b; c` is one. */
+/** "once", "twice", "3 times". */
+private fun times(count: Int) = when (count) {
+    1 -> "once"
+    2 -> "twice"
+    else -> "$count times"
+}
+
+/** Commands all of one program say which: "Ran rg 3 times". Counted as the rows under it. */
 private fun runHeading(rows: List<TraceRow>): String {
     val programs = rows.map { if (it.action.kind == "run") it.action.what.orEmpty().split(" ")[0] else it.id }.toSet()
-    if (programs.size == 1) return "Ran ${programs.first()} ${rows.size} times"
-    val commands = rows.flatMap { row -> row.calls.map { it.id } }.toSet().size
-    return "Ran ${plural(commands, "command")}"
+    if (programs.size != 1) return "Ran ${plural(rows.size, "command")}"
+    return if (rows.size == 1) "Ran ${programs.first()}" else "Ran ${programs.first()} ${rows.size} times"
 }
 
 private fun checksHeading(rows: List<TraceRow>): String {
@@ -218,8 +245,8 @@ fun actionVerb(row: TraceRow, live: Boolean = false): String {
         "web" -> if (live) "Searching the web for" else "Searched the web for"
         "edit" -> if (live) "Editing" else "Edited"
         "create" -> if (live) "Writing" else "Wrote"
-        "test" -> testVerb(a, live)
-        "check" -> checkVerb(a, live)
+        "test" -> testVerb(row, live)
+        "check" -> checkVerb(row, live)
         "commit" -> if (live) "Committing" else "Committed"
         "git" -> if (live) "Checking" else "Checked"
         "run" -> if (live) "Running" else "Ran"
@@ -227,17 +254,18 @@ fun actionVerb(row: TraceRow, live: Boolean = false): String {
     }
 }
 
-private fun testVerb(a: CallAction, live: Boolean) = when {
-    live -> "Running tests"
-    a.failed -> "Tests failed"
-    else -> "Tests passed"
+private fun testVerb(row: TraceRow, live: Boolean) = if (live) "Running tests" else "Tests ${verdictWord(row)}"
+
+private fun checkVerb(row: TraceRow, live: Boolean): String {
+    val name = row.action.name.orEmpty()
+    if (live) return "Running $name"
+    return "${name.replaceFirstChar { it.uppercaseChar() }} ${verdictWord(row)}"
 }
 
-private fun checkVerb(a: CallAction, live: Boolean): String {
-    val name = a.name.orEmpty()
-    if (live) return "Running $name"
-    val outcome = if (a.failed) "failed" else "passed"
-    return "${name.replaceFirstChar { it.uppercaseChar() }} $outcome"
+private fun verdictWord(row: TraceRow) = when {
+    rowFailed(row) -> "failed"
+    verdictStopped(row) -> "stopped"
+    else -> "passed"
 }
 
 private val PATTERN_ANCHORS = Regex("^\\^|\\\\b|\\$$")

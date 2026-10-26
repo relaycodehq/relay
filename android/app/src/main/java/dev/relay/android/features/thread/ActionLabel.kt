@@ -26,6 +26,7 @@ import dev.relay.android.features.thread.logic.baseName
 import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.shortPattern
 import dev.relay.android.features.thread.logic.shortWhere
+import dev.relay.android.features.thread.logic.verdictStopped
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.theme.RelayTheme
@@ -140,14 +141,14 @@ private fun ActionObject(row: TraceRow, withWhere: Boolean) {
     }
 }
 
-/** A test's or check's result after its words: a red ✕, or a green ✓ when it passed. */
+/** A test's or check's result after its words: a red ✕, or a green ✓ when it passed; nothing when it stopped first. */
 @Composable
 private fun Outcome(row: TraceRow) {
     val a = row.action
     if (a.kind != "test" && a.kind != "check") return
     val c = RelayTheme.colors
     if (a.failed) Icon(TablerIcons.Outline.X, "failed", size = 13.dp, tint = c.destructive)
-    else Icon(TablerIcons.Outline.Check, "passed", size = 13.dp, tint = c.success)
+    else if (!verdictStopped(row)) Icon(TablerIcons.Outline.Check, "passed", size = 13.dp, tint = c.success)
 }
 
 @Composable

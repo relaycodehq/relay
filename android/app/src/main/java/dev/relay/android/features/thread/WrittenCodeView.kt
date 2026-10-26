@@ -62,7 +62,7 @@ private sealed interface Written {
 
 /** Fetches what [a] wrote as its row opens; [otherwise] shows when the desktop can't say. */
 @Composable
-internal fun WrittenCodeOf(a: AgentActivity, otherwise: @Composable () -> Unit) {
+internal fun WrittenCodeOf(a: AgentActivity, shows: (path: String) -> Boolean, otherwise: @Composable () -> Unit) {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current
     val canAsk = remote != null && trace.chatId.isNotEmpty() && (remote.overview.value?.bridge ?: 1) >= Bridge.TRACE_TREE
@@ -70,7 +70,7 @@ internal fun WrittenCodeOf(a: AgentActivity, otherwise: @Composable () -> Unit) 
     val written by produceState<Written>(Written.Loading, trace.chatId, trace.messageId, a.id) {
         value = try {
             val files = remote.client.value?.activityWritten(trace.chatId, trace.messageId, a.id)
-            if (files.isNullOrEmpty()) Written.Missing else Written.Files(files)
+            if (files.isNullOrEmpty()) Written.Missing else Written.Files(files.filter { shows(it.path) })
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

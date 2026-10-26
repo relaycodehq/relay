@@ -13,6 +13,9 @@ data class ReadCode(val file: String, val code: String, val first: Long? = null)
 /** A line `cat -n` style: its number, a tab (an arrow in older Claude Code), then the line. */
 private val numberedLine = Regex("""\s*(\d+)(?:\t|→)(.*)""")
 
+/** Commands that number what they print: `nl`, `cat -n`. Any other output's leading numbers are the file's own. */
+private val numbersItsLines = Regex("""(?:^|[\s;&|('"])(?:nl\s|cat\s+-[A-Za-z]*n)""")
+
 private data class NumberedLine(val n: Long, val text: String)
 
 /** The file a call read and the lines it printed; none for a call that read several, or failed. */
@@ -24,8 +27,9 @@ fun readCode(call: AgentActivity): ReadCode? {
     val file = read.file.orEmpty()
     val lines = detail.removeSuffix("\n").split("\n")
     val numbered = numberedRun(lines)
-    // Claude's Read always numbers its lines; a command's output only counts as numbered when most of it is.
-    val isNumbered = numbered.isNotEmpty() && (call.kind == "read" || numbered.size * 2 >= lines.size)
+    // Claude's Read always numbers its lines; a command's output only when the command numbers them and most of it is.
+    val numberedByCommand = numbersItsLines.containsMatchIn(call.label) && numbered.size * 2 >= lines.size
+    val isNumbered = numbered.isNotEmpty() && (call.kind == "read" || numberedByCommand)
     if (isNumbered) return ReadCode(file, numbered.joinToString("\n") { it.text }, numbered.first().n)
     return ReadCode(file, lines.joinToString("\n"), rangeStart(lines, read.lines))
 }

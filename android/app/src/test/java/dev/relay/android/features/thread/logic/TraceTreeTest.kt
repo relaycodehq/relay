@@ -102,6 +102,7 @@ class TraceTreeTest {
     }
 
     private fun assertRow(at: String, want: JsonObject, row: TraceRow) {
+        assertEquals("$at id", want.string("id"), row.id)
         assertEquals("$at action", RemoteJson.decodeFromJsonElement<CallAction>(want.getValue("action")), row.action)
         assertEquals("$at calls", want.getValue("calls").jsonArray.map { it.jsonPrimitive.content }, row.calls.map { it.id })
         assertEquals("$at lines", want["lines"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty(), row.lines)
