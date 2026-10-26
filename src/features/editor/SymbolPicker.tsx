@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Loading } from "../../ui/ui";
 import { usePickerList } from "./usePickerList";
 import "./symbol-picker.css";
+import { useReturnFocus } from "../../lib/focus-return";
 
 /** A place to jump to, 1-based. */
 export type PickItem = {
@@ -94,6 +95,8 @@ export function SymbolPicker({
   onPick: (item: PickItem) => void;
   onClose: () => void;
 }) {
+  // Closed, the keys go back to the editor that asked.
+  useReturnFocus();
   const { filter, setFilter, selected, setSelected, shown, input, list, onKeyDown } =
     usePickerList(items, onPick, onClose);
 
