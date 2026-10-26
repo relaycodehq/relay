@@ -21,14 +21,21 @@ export const duplicate: Command = (view) => {
   return true;
 };
 
-/** ⌃⇧G: drop the occurrence ⌃G added last. */
+/**
+ * ⌃⇧G: drop the occurrence ⌃G added last. ⌃G keeps the first selection as
+ * the main one and adds each next match after the others, so the one to drop
+ * is the last, or the one just before the main once the search wrapped.
+ */
 export const unselectOccurrence: StateCommand = ({ state, dispatch }) => {
   const { ranges, mainIndex } = state.selection;
   if (ranges.length < 2) return false;
-  const kept = ranges.filter((_, i) => i !== mainIndex);
+  const last = ranges.length - 1;
+  const dropped = last === mainIndex ? mainIndex - 1 : last;
+  const kept = ranges.filter((_, i) => i !== dropped);
+  const main = dropped < mainIndex ? mainIndex - 1 : mainIndex;
   dispatch(
     state.update({
-      selection: EditorSelection.create(kept, kept.length - 1),
+      selection: EditorSelection.create(kept, main),
       scrollIntoView: true,
       userEvent: "select",
     }),
