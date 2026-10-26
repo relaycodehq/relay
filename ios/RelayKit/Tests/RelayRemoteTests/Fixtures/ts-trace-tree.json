@@ -740,7 +740,7 @@
    ]
   },
   {
-   "name": "a file read twice, a commit, and a picture",
+   "name": "a file read twice, a commit, and two pictures",
    "calls": [
     {
      "id": "call-21",
@@ -793,45 +793,71 @@
        "file": "/tmp/shots/dim-light.png"
       }
      ]
+    },
+    {
+     "id": "call-24",
+     "kind": "read",
+     "label": "/tmp/shots/dim-dark.png",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "image",
+       "file": "/tmp/shots/dim-dark.png"
+      }
+     ]
     }
    ],
    "pieces": [
     {
-     "kind": "row",
-     "row": {
-      "action": {
-       "kind": "read",
-       "file": "src/features/sidebar/sidebar.css",
-       "lines": "890–900"
+     "kind": "branch",
+     "branch": "read",
+     "heading": "Read 3 files",
+     "rows": [
+      {
+       "action": {
+        "kind": "read",
+        "file": "src/features/sidebar/sidebar.css",
+        "lines": "890–900"
+       },
+       "calls": [
+        "call-21"
+       ],
+       "lines": [
+        "890–900",
+        "892–900"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Read",
+       "liveVerb": "Reading"
       },
-      "calls": [
-       "call-21"
-      ],
-      "lines": [
-       "890–900",
-       "892–900"
-      ],
-      "failed": false,
-      "running": false,
-      "verb": "Read",
-      "liveVerb": "Reading"
-     }
-    },
-    {
-     "kind": "row",
-     "row": {
-      "action": {
-       "kind": "image",
-       "file": "/tmp/shots/dim-light.png"
+      {
+       "action": {
+        "kind": "image",
+        "file": "/tmp/shots/dim-light.png"
+       },
+       "calls": [
+        "call-23"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Looked at",
+       "liveVerb": "Looking at"
       },
-      "calls": [
-       "call-23"
-      ],
-      "failed": false,
-      "running": false,
-      "verb": "Looked at",
-      "liveVerb": "Looking at"
-     }
+      {
+       "action": {
+        "kind": "image",
+        "file": "/tmp/shots/dim-dark.png"
+       },
+       "calls": [
+        "call-24"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Looked at",
+       "liveVerb": "Looking at"
+      }
+     ]
     },
     {
      "kind": "row",
@@ -872,19 +898,19 @@
    "name": "a run still going",
    "calls": [
     {
-     "id": "call-24",
+     "id": "call-25",
      "kind": "command",
      "label": "bash -c \"printf '[%s] ' rg x\"",
      "status": "complete",
      "actions": [
       {
        "kind": "run",
-       "what": "shell snippet"
+       "what": "printf"
       }
      ]
     },
     {
-     "id": "call-25",
+     "id": "call-26",
      "kind": "command",
      "label": "npm run typecheck >/tmp/tc.txt 2>&1; echo \"tc $?\"; git add a.ts && git commit -qm \"Let rg take its flags\"",
      "status": "running",
@@ -907,10 +933,10 @@
      "row": {
       "action": {
        "kind": "run",
-       "what": "shell snippet"
+       "what": "printf"
       },
       "calls": [
-       "call-24"
+       "call-25"
       ],
       "failed": false,
       "running": false,
@@ -927,7 +953,7 @@
        "failed": false
       },
       "calls": [
-       "call-25"
+       "call-26"
       ],
       "failed": false,
       "running": true,
@@ -941,7 +967,7 @@
    "name": "tools, agents, the web and a failed read",
    "calls": [
     {
-     "id": "call-26",
+     "id": "call-27",
      "kind": "search",
      "label": "useThreadScroll in src",
      "status": "complete",
@@ -954,7 +980,7 @@
      ]
     },
     {
-     "id": "call-27",
+     "id": "call-28",
      "kind": "search",
      "label": "thread-scroll in tests",
      "status": "complete",
@@ -967,7 +993,7 @@
      ]
     },
     {
-     "id": "call-28",
+     "id": "call-29",
      "kind": "web",
      "label": "shiki line diff",
      "status": "complete",
@@ -979,7 +1005,7 @@
      ]
     },
     {
-     "id": "call-29",
+     "id": "call-30",
      "kind": "agent",
      "label": "Find the scroll code",
      "status": "complete",
@@ -990,7 +1016,7 @@
      ]
     },
     {
-     "id": "call-30",
+     "id": "call-31",
      "kind": "agent",
      "label": "Check the phone apps",
      "status": "complete",
@@ -1001,7 +1027,7 @@
      ]
     },
     {
-     "id": "call-31",
+     "id": "call-32",
      "kind": "tool",
      "label": "relay: screenshot",
      "status": "complete",
@@ -1012,7 +1038,7 @@
      ]
     },
     {
-     "id": "call-32",
+     "id": "call-33",
      "kind": "read",
      "label": "src/missing.ts",
      "status": "failed",
@@ -1024,7 +1050,7 @@
      ]
     },
     {
-     "id": "call-33",
+     "id": "call-34",
      "kind": "read",
      "label": "src/app/shell.css",
      "status": "complete",
@@ -1047,7 +1073,7 @@
         "where": "src"
        },
        "calls": [
-        "call-26"
+        "call-27"
        ],
        "failed": false,
        "running": false,
@@ -1061,7 +1087,7 @@
         "where": "tests"
        },
        "calls": [
-        "call-27"
+        "call-28"
        ],
        "failed": false,
        "running": false,
@@ -1078,7 +1104,7 @@
        "query": "shiki line diff"
       },
       "calls": [
-       "call-28"
+       "call-29"
       ],
       "failed": false,
       "running": false,
@@ -1091,18 +1117,6 @@
      "branch": "tool",
      "heading": "Used 3 tools",
      "rows": [
-      {
-       "action": {
-        "kind": "tool"
-       },
-       "calls": [
-        "call-29"
-       ],
-       "failed": false,
-       "running": false,
-       "verb": "",
-       "liveVerb": ""
-      },
       {
        "action": {
         "kind": "tool"
@@ -1126,6 +1140,18 @@
        "running": false,
        "verb": "",
        "liveVerb": ""
+      },
+      {
+       "action": {
+        "kind": "tool"
+       },
+       "calls": [
+        "call-32"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "",
+       "liveVerb": ""
       }
      ]
     },
@@ -1137,7 +1163,7 @@
        "file": "src/missing.ts"
       },
       "calls": [
-       "call-32"
+       "call-33"
       ],
       "failed": true,
       "running": false,
@@ -1153,7 +1179,7 @@
        "file": "src/app/shell.css"
       },
       "calls": [
-       "call-33"
+       "call-34"
       ],
       "failed": false,
       "running": false,

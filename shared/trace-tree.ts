@@ -58,7 +58,7 @@ export function rowsOf(calls: AgentActivity[]): TraceRow[] {
         continue;
       }
       if (last && ranWhatItWrote(last.action, action)) {
-        last.calls.push(call);
+        if (!last.calls.includes(call)) last.calls.push(call);
         last.ranToo = true;
         continue;
       }
@@ -155,7 +155,8 @@ function pairable([a, b]: [TraceRow, TraceRow]) {
   return sameAction && settled && Boolean(a.ranToo) === Boolean(b.ranToo);
 }
 
-const pairVerbs = new Set<CallAction["kind"]>(["read", "image", "search", "web", "edit", "create", "run", "git"]);
+/** Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail. */
+const pairVerbs = new Set<CallAction["kind"]>(["read", "search", "web", "edit", "create", "run", "git"]);
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 

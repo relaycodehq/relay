@@ -70,13 +70,14 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
     ],
   },
   {
-    name: "a file read twice, a commit, and a picture",
+    name: "a file read twice, a commit, and two pictures",
     calls: [
       call("command", "sed -n 890,900p src/features/sidebar/sidebar.css && sed -i '' '898s/.*/  color: var(--muted);/' src/features/sidebar/sidebar.css && sed -n 892,900p src/features/sidebar/sidebar.css"),
       call("command", `git add src/features/sidebar/sidebar.css && git commit -q -m "Show the branch line in muted grey" && git log --oneline -1`, {
         detail: "4484e535 Show the branch line in muted grey",
       }),
       call("read", "/tmp/shots/dim-light.png"),
+      call("read", "/tmp/shots/dim-dark.png"),
     ],
   },
   {

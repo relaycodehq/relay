@@ -65,3 +65,13 @@ it("shows only the first part of a call still running", () => {
   const pieces = traceTree([call("command", "npm run typecheck && git commit -qm x", { status: "running" })]);
   expect(outline(pieces)).toEqual(["check"]);
 });
+
+it("keeps two pictures as two rows, each with its thumbnail", () => {
+  expect(outline(traceTree([call("read", "a.png"), call("read", "b.png")]))).toEqual(["image", "image"]);
+});
+
+it("takes a script written and run in one command for one call", () => {
+  const both = call("command", "cat > /tmp/check.py <<'EOF'\nprint(1)\nEOF\npython3 /tmp/check.py");
+  const [piece] = traceTree([both]);
+  expect(piece?.kind === "row" && piece.row).toMatchObject({ ranToo: true, calls: [both] });
+});
