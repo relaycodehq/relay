@@ -51,8 +51,10 @@
 .agent-activity[open] .agent-run-chevron {
   transform: rotate(90deg);
 }
+/* Open, the run sits under the heading's words, past its icon and gap. */
 .agent-trace {
   margin-top: 6px;
+  margin-left: 21px;
 }
 .agent-commentary {
   margin: 6px 0 8px;
