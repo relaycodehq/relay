@@ -25,13 +25,12 @@ export function StartDialogs({
 }) {
   return (
     <>
-      {guestLink && !starts.adding && (
+      {guestLink && (
         <GuestImport
           link={guestLink}
           projects={projects}
           current={current}
           onOpen={onOpenChat}
-          onAddProject={() => starts.addProject()}
           onClose={onCloseGuest}
         />
       )}

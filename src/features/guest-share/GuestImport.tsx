@@ -4,6 +4,7 @@ import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { projectChatsQuery } from "../../lib/workspace-queries";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
+import { AddProjectPalette } from "../add-project/AddProjectPalette";
 import { NewThreadPicker } from "../projects/NewThreadPicker";
 import "./guest-share.css";
 
@@ -16,7 +17,6 @@ export function GuestImport({
   projects,
   current,
   onOpen,
-  onAddProject,
   onClose,
 }: {
   link: string;
@@ -24,10 +24,9 @@ export function GuestImport({
   projects: Project[] | undefined;
   current: string | null;
   onOpen: (project: Project, thread: ChatSummary) => void;
-  /** Hides the picker while adding; it comes back with the new project listed. */
-  onAddProject: () => void;
   onClose: () => void;
 }) {
+  const [adding, setAdding] = useState(false);
   const { copying, error, copyInto } = useGuestCopy(link, (project, thread) => {
     onClose();
     onOpen(project, thread);
@@ -45,6 +44,17 @@ export function GuestImport({
       </Modal>
     );
   const own = projects?.filter((p) => !p.scratch && !p.computer);
+  if (adding)
+    return (
+      <AddProjectPalette
+        projects={own ?? []}
+        onClose={() => setAdding(false)}
+        onDone={(p) => {
+          setAdding(false);
+          void copyInto(async () => p);
+        }}
+      />
+    );
   return (
     <NewThreadPicker
       title="Continue shared thread in…"
@@ -52,7 +62,7 @@ export function GuestImport({
       projects={own}
       current={current}
       onSelect={(p) => void copyInto(async () => p)}
-      onAdd={onAddProject}
+      onAdd={() => setAdding(true)}
       onScratch={() => void copyInto(() => api.createScratch())}
       onClose={onClose}
     />

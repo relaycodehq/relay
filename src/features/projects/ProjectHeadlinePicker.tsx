@@ -67,7 +67,10 @@ export function ProjectHeadlinePicker({
               current={project.id}
               input={input}
               onSelect={select}
-              onAdd={onAdd}
+              onAdd={() => {
+                setOpen(false);
+                onAdd();
+              }}
               onClose={() => setOpen(false)}
             />
           </Popover.Popup>

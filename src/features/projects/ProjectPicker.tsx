@@ -58,10 +58,8 @@ export function ProjectPicker({
       <button
         type="button"
         className="headline-project-add"
-        onClick={() => {
-          onClose();
-          onAdd();
-        }}
+        // The caller closes what it needs: an import picker stays to take the new project.
+        onClick={onAdd}
       >
         <FolderPlus size={15} aria-hidden />
         Add project folder
