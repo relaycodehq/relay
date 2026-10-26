@@ -8,6 +8,8 @@ import type { FileMentions } from "./useFileMentions";
 import "./file-mentions.css";
 
 const HEIGHT = 340;
+/** The least the menu is tall, so a short list still has room for the peek beside it. */
+const PEEK_ROOM = 240;
 const changeLetter = { modified: "M", added: "A", deleted: "D", conflict: "!" };
 
 /** `text` with the characters at `positions` (counted from `offset`) marked. */
@@ -163,7 +165,7 @@ export function FileMentionMenu({
   return createPortal(
     <div
       className="mention-menu"
-      style={style}
+      style={{ ...style, minHeight: Math.min(PEEK_ROOM, Number(style.maxHeight ?? PEEK_ROOM)) }}
       onMouseDown={(e) => e.preventDefault()}
     >
       <div className="mention-split">
