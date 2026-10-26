@@ -534,6 +534,16 @@ body {
 .rw-columns[data-split] {
   grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
 }
+/* The editor takes the thread's place, so the code gets the whole window. */
+.rw-columns[data-files] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.rw-columns[data-files] > .rw-chat {
+  display: none;
+}
+.rw-columns[data-files] > .rw-editor {
+  border-left: 0;
+}
 /* A film: clicks and the wheel go through it to the page. */
 .rw {
   pointer-events: none;
@@ -2316,10 +2326,6 @@ body {
   }
   .rw-columns[data-split] {
     grid-template-columns: minmax(0, 1fr);
-  }
-  /* The editor gets the whole window; the thread would leave it a few lines. */
-  .rw-columns[data-files] > .rw-chat {
-    display: none;
   }
   /* No room to unfold: just the phone. */
   .sync,
