@@ -68,8 +68,8 @@ interface Built {
 /**
  * The threads shared with guests. Each link's token is an HMAC of its share
  * under a key kept for this Relay, so links survive a restart without any
- * token being saved. A link ends when it's stopped, its thread is settled or
- * archived, or after GUEST_SHARE_HOURS.
+ * token being saved. A link ends when it's stopped, its thread is settled,
+ * archived or handed off, or after GUEST_SHARE_HOURS.
  */
 export class GuestShares {
   private links = new Map<string, Link>();
@@ -418,7 +418,7 @@ export class GuestShares {
     });
   }
 
-  /** Ends the link of a thread settled or archived after it was shared. */
+  /** Ends the link of a thread settled, archived or handed off after it was shared. */
   private watchThreads() {
     if (this.stopListening) return;
     this.stopListening = this.host.onSummaries(() => {
@@ -430,6 +430,8 @@ export class GuestShares {
   private linkShouldEnd(link: SavedGuestShare) {
     const thread = this.host.summary(link.threadId);
     if (!thread || thread.archivedAt) return true;
+    // Its turns run on the other computer now, and suggestions can't be sent from here.
+    if (thread.sentTo || thread.cameFrom?.returnedAt) return true;
     const settledByHand = !thread.settleWhenDone && chatSettled(thread);
     return settledByHand && thread.settledAt! >= link.startedAt;
   }

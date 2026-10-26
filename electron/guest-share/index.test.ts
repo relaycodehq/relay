@@ -528,6 +528,14 @@ describe("GuestShares", () => {
     await expect(fetch(link)).rejects.toThrow();
   });
 
+  it("ends the link when the thread is handed to another computer", async () => {
+    const { summary, changed, link, store } = await started();
+    summary.sentTo = { computer: "mini" } as ChatSummary["sentTo"];
+    changed();
+    await expect.poll(() => store.shares).toEqual([]);
+    await expect(fetch(link)).rejects.toThrow();
+  });
+
   it("refuses suggestions that aren't a name and a message, or come too fast", async () => {
     const { link } = await started();
     const bad = await fetch(`${link}/suggest`, {
