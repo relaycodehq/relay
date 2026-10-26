@@ -1,4 +1,3 @@
-import { realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { app } from "electron";
 import { LocalHistoryStore } from "./store";
@@ -6,6 +5,8 @@ import { LocalHistoryStore } from "./store";
 export { LocalHistoryStore } from "./store";
 import { currentText, saveWithHistory } from "./save-hook";
 export { recordTurnHistory } from "./turn";
+import { historyKey } from "./history-key";
+export { historyKey };
 export { revertToVersion } from "./revert";
 
 let shared: LocalHistoryStore | null | undefined;
@@ -24,15 +25,6 @@ export function localHistory() {
   return shared;
 }
 
-/**
- * The key a file's versions are kept under: its real path, so the same file
- * reached through a link or a worktree-relative path shares one history.
- * `root` is the folder the file's path is relative to.
- */
-export async function historyKey(root: string, path: string) {
-  const full = join(await realpath(root), path);
-  return realpath(full).catch(() => full);
-}
 
 /**
  * Runs a project file's `save`, keeping what it wrote in the file's history.
