@@ -177,6 +177,23 @@ describe.each(engines)("searching with %s", (engine) => {
     ]);
   });
 
+  it("ends a CRLF line before its \\r, as replace does", async () => {
+    await put("crlf.txt", "a;\r\nb;\n");
+    const r = await run(
+      find(";$", { regex: true, include: "crlf.txt" }),
+      engine,
+    );
+    expect(summary(r)).toEqual([
+      [
+        "crlf.txt",
+        [
+          [1, 1, 1],
+          [2, 1, 1],
+        ],
+      ],
+    ]);
+  });
+
   it("treats regex characters literally in a plain query", async () => {
     await put("lit.txt", "a.b a+b\n");
     const r = await run(find("a.b"), engine);

@@ -33,6 +33,8 @@ export function ripgrepArgs(
     ...ripgrepGlobArgs(globs),
     "--max-filesize",
     "2M",
+    // `$` ends a CRLF line before its \r, as it does when replacing.
+    "--crlf",
     query.caseSensitive ? "--case-sensitive" : "--ignore-case",
     ...(query.wholeWord ? ["--word-regexp"] : []),
     ...(query.regex ? [] : ["--fixed-strings"]),

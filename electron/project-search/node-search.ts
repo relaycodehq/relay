@@ -49,7 +49,8 @@ async function readText(root: string, path: string) {
 /** The matches in `text`, line by line, at most `room` of them; `full` says there were more. */
 function matchesIn(text: string, re: RegExp, room: number) {
   const matches = [];
-  for (const [i, line] of text.split("\n").entries()) {
+  // A CRLF line ends before its \r, as ripgrep's --crlf and replace read it.
+  for (const [i, line] of text.split(/\r?\n/).entries()) {
     for (const hit of hitsIn(re, line)) {
       if (matches.length >= room) return { matches, full: true };
       matches.push(matchPreview(line, i + 1, hit.index, hit.length));
