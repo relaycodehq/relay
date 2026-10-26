@@ -58,7 +58,11 @@ function resolve(name: string): Promise<Resolved> {
 export function useEditorTheme(): Extension | undefined {
   const mode = useTheme();
   const themes = useSyntaxThemes();
-  const name = themes[mode];
+  return useEditorThemeNamed(themes[mode]);
+}
+
+/** The editor's highlighting for the Shiki theme `name`, for a page that has its own theme. */
+export function useEditorThemeNamed(name: string): Extension | undefined {
   const [resolved, setResolved] = useState<Resolved | undefined>(() => last);
   useEffect(() => {
     let current = true;
