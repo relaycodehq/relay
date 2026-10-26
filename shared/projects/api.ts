@@ -19,7 +19,9 @@ import type { CiStatus } from "../ci";
 import type { ProviderCommand } from "../commands";
 import type { ContextReport } from "../context-report";
 import type { WatchClose, WatchReview, WatchSpendSummary } from "../watch";
-import type { ApplyCommitSplit, CommitSplitPlan } from "../commit-split";
+import type { PartialCommitApi } from "../commit-split";
+import type { BlameApi } from "../file-authors";
+import type { OpenWithApi } from "../open-with";
 import type { HelperPick } from "../settings";
 import type { ElsewhereChanges } from "../elsewhere";
 import type {
@@ -45,14 +47,7 @@ import type {
   TerminalSessionPick,
 } from "../terminal-sessions";
 import type { SubagentDetail, SubagentRun } from "../subagents";
-import type {
-  BlameQuery,
-  FilePair,
-  LineBlame,
-  LocalFile,
-  Page,
-  ProjectPull,
-} from "../types";
+import type { FilePair, LocalFile, Page, ProjectPull } from "../types";
 import type {
   ChangeArea,
   GitAction,
@@ -435,7 +430,7 @@ export interface ProjectWorktreeApi {
   recreateAgentWorktree(chatId: string): Promise<ChatSummary>;
 }
 
-export interface ProjectFilesApi {
+export interface ProjectFilesApi extends OpenWithApi {
   projectFiles(where: string): Promise<string[]>;
   projectFile(where: string, path: string): Promise<LocalFile>;
   /** A bounded text excerpt for a file mention, without editor or Git metadata. */
@@ -447,12 +442,8 @@ export interface ProjectFilesApi {
   projectImage(where: string, path: string): Promise<string>;
   /** Where the player streams a video file from. */
   projectVideo(where: string, path: string): Promise<string>;
-  /** Opens a folder in Finder, or selects a file in its folder; "" is the root. */
-  revealProjectPath(where: string, path: string): Promise<void>;
   /** Where a file sits on disk, whether or not it's there now. */
   projectAbsolutePath(where: string, path: string): Promise<string>;
-  /** Opens a file in the app the system picks for it. */
-  openProjectPath(where: string, path: string): Promise<void>;
   createProjectEntry(
     where: string,
     path: string,
@@ -471,7 +462,7 @@ export interface ProjectFilesApi {
 }
 
 /** Changes, commits, branches and pull requests. */
-export interface ProjectGitApi {
+export interface ProjectGitApi extends PartialCommitApi {
   projectWorkingTree(where: string): Promise<WorkingTree>;
   /**
    * The calling window now shows `where`'s working tree, or none: Relay says
@@ -517,15 +508,6 @@ export interface ProjectGitApi {
     paths: string[],
     pick?: HelperPick | null,
   ): Promise<string>;
-  /** A model's split of every uncommitted change into commits, not yet made. */
-  projectPlanCommitSplit(
-    where: string,
-    note?: string,
-  ): Promise<CommitSplitPlan>;
-  projectApplyCommitSplit(
-    where: string,
-    split: ApplyCommitSplit,
-  ): Promise<WorkingTree>;
   /** Merging the current branch into `base`, the default branch when omitted. */
   projectMergePlan(where: string, base?: string): Promise<MergePlan>;
   projectMergeBranch(where: string, input: MergeBranch): Promise<MergeResult>;
@@ -572,7 +554,7 @@ export interface ProjectGitApi {
 }
 
 /** Type checks, symbols and blame on the working copy. */
-export interface ProjectChecksApi {
+export interface ProjectChecksApi extends BlameApi {
   localCheckInfo(where: string): Promise<ProjectCheckInfo>;
   localCheckState(
     where: string,
@@ -603,5 +585,4 @@ export interface ProjectChecksApi {
     head: string,
     query: SymbolQuery,
   ): Promise<SymbolResult>;
-  localBlame(where: string, query: BlameQuery): Promise<LineBlame>;
 }

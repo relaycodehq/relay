@@ -24,7 +24,8 @@ vi.mock("../agents", () => ({
     },
   }),
 }));
-const { generateCommitMessage } = await import("./commit-messages");
+const { generateChangeCommitMessage, generateCommitMessage } =
+  await import("./commit-messages");
 const { NotInstalledError } = await import("../platform/executables");
 const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -67,6 +68,25 @@ it("asks for a commit message under commit-message instructions, not a thread ti
   expect(runs[0].job).not.toMatchObject({
     instructions: expect.stringMatching(/title/),
   });
+});
+
+it("writes one change's message from that change, not the file's other edits", async () => {
+  await changedRepo();
+  const message = await generateChangeCommitMessage(
+    root,
+    {
+      path: "limit.ts",
+      committed: "export const limit = 1;\n",
+      content: "export const limit = 1;\nexport const max = 3;\n",
+    },
+    defaultAISettings,
+    new AbortController().signal,
+  );
+
+  expect(message).toBe("Raise the limit");
+  expect(runs[0].prompt).toMatch(/Files:\nM limit\.ts\n/);
+  expect(runs[0].prompt).toMatch(/^\+export const max = 3;$/m);
+  expect(runs[0].prompt).not.toMatch(/limit = 2/);
 });
 
 it("drafts with the commit-message model, not the line questions'", async () => {

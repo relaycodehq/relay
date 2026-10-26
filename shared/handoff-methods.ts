@@ -46,6 +46,8 @@ export const handoffFolderMethods = [
   "projectCommitMessage",
   "projectPlanCommitSplit",
   "projectApplyCommitSplit",
+  "projectCommitFileChange",
+  "projectChangeCommitMessage",
   "projectBranchPulls",
   "projectMergePlan",
   "projectMergeBranch",
@@ -74,6 +76,7 @@ export const handoffFolderMethods = [
   "renameProjectEntry",
   "trashProjectEntry",
   "localBlame",
+  "localFileAuthors",
   "inspectLocalSymbol",
 ] as const satisfies readonly ApiMethod[];
 /**
@@ -116,6 +119,7 @@ export const handoffHereOnlyMethods = [
   "projectAbsolutePath",
   "revealProjectPath",
   "openProjectPath",
+  "openProjectPathWith",
   "revealProjectWorktree",
 ] as const satisfies readonly ApiMethod[];
 export type HandoffHereOnlyMethod = (typeof handoffHereOnlyMethods)[number];
@@ -129,3 +133,35 @@ export const handoffMethods = [
   ...handoffFolderMethods,
   ...handoffWorktreeMethods,
 ] as const satisfies readonly HandoffMethod[];
+
+/**
+ * Calls a computer forwards (`projectCall`, `handoffCall`, `computerCall`)
+ * that wait on the network, git, a model or an install. Given up on early,
+ * they'd still finish there, and trying again would push or open a pull
+ * request twice; `slowRemoteCall` gives them the slow timeout.
+ */
+export const slowForwardedMethods = new Set<string>([
+  "addingStart",
+  "githubRepos",
+  "createProject",
+  "projectGitAction",
+  "projectCommitMessage",
+  "projectPlanCommitSplit",
+  "projectApplyCommitSplit",
+  "projectCommitFileChange",
+  "projectChangeCommitMessage",
+  "projectBranchPulls",
+  "projectMergePlan",
+  "projectMergeBranch",
+  "projectDeleteBranch",
+  "projectCatchUp",
+  "projectRebase",
+  "projectPreparePull",
+  "projectCreatePull",
+  "projectChangeBranch",
+  "sendProjectChat",
+  "compactProjectChat",
+  "rerunWorktreeSetup",
+  "checkAgentVersions",
+  "installAgent",
+] satisfies ApiMethod[]);

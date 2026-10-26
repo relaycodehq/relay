@@ -35,6 +35,7 @@ import type {
   StartedBy,
 } from "./projects";
 import type { Api, ApiMethod } from "./types";
+import { slowForwardedMethods } from "./handoff-methods";
 import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
 import type { RouteKind } from "./remote-routes";
@@ -917,36 +918,6 @@ export const slowRemoteMethods: readonly RemoteMethod[] = [
   "handoffUpload",
   "handoffDownload",
 ];
-
-/**
- * Calls a computer forwards (`projectCall`, `handoffCall`, `computerCall`)
- * that wait on the network, git, a model or an install. Given up on early,
- * they'd still finish there, and trying again would push or open a pull
- * request twice; they get `slowRemoteMethods`' time.
- */
-const slowForwardedMethods = new Set<string>([
-  "addingStart",
-  "githubRepos",
-  "createProject",
-  "projectGitAction",
-  "projectCommitMessage",
-  "projectPlanCommitSplit",
-  "projectApplyCommitSplit",
-  "projectBranchPulls",
-  "projectMergePlan",
-  "projectMergeBranch",
-  "projectDeleteBranch",
-  "projectCatchUp",
-  "projectRebase",
-  "projectPreparePull",
-  "projectCreatePull",
-  "projectChangeBranch",
-  "sendProjectChat",
-  "compactProjectChat",
-  "rerunWorktreeSetup",
-  "checkAgentVersions",
-  "installAgent",
-] satisfies ApiMethod[]);
 
 /** Whether the call gets the slow timeout, by its method and, when it forwards one, that one's. */
 export function slowRemoteCall(method: RemoteMethod, args: unknown[]) {

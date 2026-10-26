@@ -426,6 +426,16 @@ async function outgoing(
   );
 }
 
+/** Refuses a commit made outside a branch, mid-operation or over conflicts. */
+export function assertCommittable(state: WorkingTree) {
+  if (!state.branch || state.operation)
+    throw new Error(
+      "Finish the current Git operation on a branch before committing here.",
+    );
+  if (state.changes.some((c) => c.conflict))
+    throw new Error("Resolve and stage all merge conflicts first.");
+}
+
 const queue = keyedQueue();
 export async function flushGitOperations() {
   await Promise.allSettled(queue.pending());
