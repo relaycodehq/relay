@@ -79,31 +79,7 @@ export function TabMenu({
             {tab.pinned ? "Unpin Tab" : "Pin Tab"}
           </ContextMenuItem>
           <ContextMenu.Separator className="sb-menu-separator" />
-          <ContextMenuItem
-            icon={<Copy size={13} />}
-            onClick={() => actions.onCopyPath(tab)}
-          >
-            Copy Path
-          </ContextMenuItem>
-          {!tab.outside && (
-            <>
-              <ContextMenuItem onClick={() => actions.onCopyRelativePath(tab)}>
-                Copy Relative Path
-              </ContextMenuItem>
-              <ContextMenuItem
-                icon={<LocateFixed size={13} />}
-                onClick={() => actions.onRevealInList(tab)}
-              >
-                Reveal in file list
-              </ContextMenuItem>
-            </>
-          )}
-          <ContextMenuItem
-            icon={<FolderOpen size={13} />}
-            onClick={() => actions.onShowInFileManager(tab)}
-          >
-            {revealLabel}
-          </ContextMenuItem>
+          <PathItems tab={tab} actions={actions} />
           <ContextMenu.Separator className="sb-menu-separator" />
           <ContextMenuItem
             icon={<Columns2 size={13} />}
@@ -149,4 +125,43 @@ function CloseItems({
       </ContextMenuItem>
     );
   });
+}
+
+/** Copy the path, show the file in the list or in the file manager. */
+function PathItems({
+  tab,
+  actions,
+}: {
+  tab: EditorTab;
+  actions: TabMenuActions;
+}) {
+  return (
+    <>
+      <ContextMenuItem
+        icon={<Copy size={13} />}
+        onClick={() => actions.onCopyPath(tab)}
+      >
+        Copy Path
+      </ContextMenuItem>
+      {!tab.outside && (
+        <>
+          <ContextMenuItem onClick={() => actions.onCopyRelativePath(tab)}>
+            Copy Relative Path
+          </ContextMenuItem>
+          <ContextMenuItem
+            icon={<LocateFixed size={13} />}
+            onClick={() => actions.onRevealInList(tab)}
+          >
+            Reveal in file list
+          </ContextMenuItem>
+        </>
+      )}
+      <ContextMenuItem
+        icon={<FolderOpen size={13} />}
+        onClick={() => actions.onShowInFileManager(tab)}
+      >
+        {revealLabel}
+      </ContextMenuItem>
+    </>
+  );
 }
