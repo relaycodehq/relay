@@ -42,12 +42,15 @@ function useClosing(live: boolean, watching: boolean) {
 export function Run({
   calls,
   live,
+  only,
   arrived,
   onChanges,
 }: {
   calls: AgentActivity[];
   /** The agent is still on it: its rows show one by one, ungrouped. */
   live: boolean;
+  /** The turn's only run, which its heading already sums up. */
+  only: boolean;
   /** The turn was on screen before this run came in, so it moves rather than appears. */
   arrived: boolean;
   onChanges: () => void;
@@ -64,7 +67,7 @@ export function Run({
     <>
       {!live && (
         <GrowIn key="grouped" grow={closing}>
-          <ClosedRun calls={calls} onChanges={onChanges} />
+          <ClosedRun calls={calls} only={only} onChanges={onChanges} />
         </GrowIn>
       )}
       {(live || closing) && (

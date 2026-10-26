@@ -8,8 +8,7 @@ import {
   actionVerb,
   branchOf,
   rowFailed,
-  runSummary,
-  traceTree,
+  traceRun,
   type BranchKind,
   type TracePiece,
   type TraceRow,
@@ -49,7 +48,7 @@ const branchIcons: Record<BranchKind, keyof typeof actionIcons> = {
 
 function Branch({ piece, onChanges }: { piece: Extract<TracePiece, { kind: "branch" }>; onChanges: () => void }) {
   const Icon = actionIcons[branchIcons[piece.branch]];
-  const failed = piece.branch === "check" && piece.rows.some(rowFailed);
+  const failed = piece.rows.some(rowFailed);
   return (
     <Fold
       className={`agent-step trace-branch${failed ? " failed" : ""}`}
@@ -73,9 +72,9 @@ function Branch({ piece, onChanges }: { piece: Extract<TracePiece, { kind: "bran
 
 /** The run's tree and its folded line, built again only when one of its calls changed: the turn hands over a new array every render. */
 function usePieces(calls: AgentActivity[]) {
-  const built = useRef<{ calls: AgentActivity[]; pieces: TracePiece[]; summary?: string }>(undefined);
+  const built = useRef<{ calls: AgentActivity[] } & ReturnType<typeof traceRun>>(undefined);
   const same = built.current?.calls.length === calls.length && calls.every((c, i) => c === built.current!.calls[i]);
-  if (!same) built.current = { calls, pieces: traceTree(calls), summary: runSummary(calls) };
+  if (!same) built.current = { calls, ...traceRun(calls) };
   return built.current!;
 }
 
@@ -94,6 +93,10 @@ const pieceKey = (piece: TracePiece) => (piece.kind === "row" ? piece.row.id : p
 
 export function TraceRun({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
   const { pieces } = usePieces(calls);
+  return <Pieces pieces={pieces} onChanges={onChanges} />;
+}
+
+function Pieces({ pieces, onChanges }: { pieces: TracePiece[]; onChanges: () => void }) {
   return (
     <>
       {pieces.map((piece) => (
@@ -102,6 +105,9 @@ export function TraceRun({ calls, onChanges }: { calls: AgentActivity[]; onChang
     </>
   );
 }
+
+const piecesFailed = (pieces: TracePiece[]) =>
+  pieces.some((piece) => (piece.kind === "row" ? rowFailed(piece.row) : piece.rows.some(rowFailed)));
 
 /** What kind the run started with, for its folded line's icon. */
 function firstKind(piece: TracePiece): BranchKind {
@@ -112,14 +118,16 @@ function firstKind(piece: TracePiece): BranchKind {
 /**
  * A run the agent has moved on from, once a line of commentary or the end of
  * the turn closed it: one line when its tree is long, opening to that tree.
+ * The turn's only run shows its tree as it is, since the turn's heading
+ * already says what it did.
  */
-export function ClosedRun({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
+export function ClosedRun({ calls, only, onChanges }: { calls: AgentActivity[]; only: boolean; onChanges: () => void }) {
   const { pieces, summary } = usePieces(calls);
-  if (!summary) return <TraceRun calls={calls} onChanges={onChanges} />;
+  if (!summary || only) return <Pieces pieces={pieces} onChanges={onChanges} />;
   const Icon = actionIcons[branchIcons[firstKind(pieces[0]!)]];
   return (
     <Fold
-      className="agent-step trace-branch trace-closed"
+      className={`agent-step trace-branch trace-closed${piecesFailed(pieces) ? " failed" : ""}`}
       summary={
         <summary className="agent-step-heading">
           <Icon size={14} />

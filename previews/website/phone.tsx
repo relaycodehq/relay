@@ -46,7 +46,6 @@ import {
   summarizeActivity,
 } from "../../shared/activity-labels";
 import {
-  batchHead,
   groupTrace,
   readTurn,
   turnHeading,
@@ -301,6 +300,10 @@ function Step({
 }
 
 // features/thread/AgentRun.kt
+/** The call a live batch shows: the one running, else the latest. */
+const batchHead = (activity: AgentActivity[]) =>
+  [...activity].reverse().find((a) => a.status === "running") ?? activity.at(-1)!;
+
 function AgentRun({ message }: { message: ChatMessage }) {
   useNow(1000);
   const turn = readTurn(message);
@@ -343,7 +346,7 @@ function AgentRun({ message }: { message: ChatMessage }) {
             if (part.kind === "commentary")
               return <Markdown key={part.id} text={part.text} small />;
             if (index === parts.length - 1) {
-              const { head } = batchHead(part.activity);
+              const head = batchHead(part.activity);
               const running = head.status === "running";
               return (
                 <Step key={part.id} icon={icons[head.kind]} running={running}>

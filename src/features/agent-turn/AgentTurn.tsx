@@ -263,6 +263,7 @@ function TraceParts({
           index === parts.length - 1 &&
           !isQuestionCall(part.activity[0]!)
         }
+        only={parts.every((p) => p === part || p.kind === "commentary")}
         arrived={drawn}
         onChanges={onChanges}
       />

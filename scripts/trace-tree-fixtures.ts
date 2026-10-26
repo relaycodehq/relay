@@ -116,6 +116,10 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
       call("command", "rg foo src"),
     ],
   },
+  {
+    name: "git checks on a branch of their own, beside other commands",
+    calls: [call("command", "git status; git diff; ls; git log; git show HEAD")],
+  },
 ];
 
 const row = (r: TraceRow) => ({

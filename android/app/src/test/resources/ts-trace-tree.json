@@ -28,7 +28,7 @@
     {
      "kind": "branch",
      "branch": "run",
-     "heading": "Ran 1 command",
+     "heading": "Ran 3 commands",
      "rows": [
       {
        "id": "call-1:0",
@@ -249,7 +249,7 @@
      "actions": [
       {
        "kind": "run",
-       "what": "c8-views.mjs"
+       "what": "run.sh"
       }
      ]
     },
@@ -356,10 +356,8 @@
        "file": "/tmp/f9/c8-views.mjs"
       },
       "calls": [
-       "call-6",
-       "call-7"
+       "call-6"
       ],
-      "ranToo": true,
       "failed": false,
       "running": false,
       "verb": "Wrote",
@@ -367,8 +365,24 @@
      }
     },
     {
-     "kind": "pair",
+     "kind": "branch",
+     "branch": "run",
+     "heading": "Ran 3 commands",
      "rows": [
+      {
+       "id": "call-7:0",
+       "action": {
+        "kind": "run",
+        "what": "run.sh"
+       },
+       "calls": [
+        "call-7"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      },
       {
        "id": "call-8:0",
        "action": {
@@ -543,7 +557,7 @@
      ]
     }
    ],
-   "summary": "Ran 4 commands, searched twice and 2 more"
+   "summary": "Ran 7 commands, searched twice and 2 more"
   },
   {
    "name": "edits, a failing then passing test, git checks",
@@ -568,7 +582,7 @@
      "actions": [
       {
        "kind": "run",
-       "what": "c8-views.mjs"
+       "what": "run.sh"
       }
      ]
     },
@@ -677,10 +691,8 @@
        "file": "/tmp/f9/c8-views.mjs"
       },
       "calls": [
-       "call-14",
-       "call-15"
+       "call-14"
       ],
-      "ranToo": true,
       "failed": false,
       "running": false,
       "verb": "Edited",
@@ -688,37 +700,21 @@
      }
     },
     {
-     "kind": "pair",
-     "rows": [
-      {
-       "id": "call-21:0",
-       "action": {
-        "kind": "git",
-        "what": "git log"
-       },
-       "calls": [
-        "call-21"
-       ],
-       "failed": false,
-       "running": false,
-       "verb": "Checked",
-       "liveVerb": "Checking"
+     "kind": "row",
+     "row": {
+      "id": "call-15:0",
+      "action": {
+       "kind": "run",
+       "what": "run.sh"
       },
-      {
-       "id": "call-21:1",
-       "action": {
-        "kind": "git",
-        "what": "git show"
-       },
-       "calls": [
-        "call-21"
-       ],
-       "failed": false,
-       "running": false,
-       "verb": "Checked",
-       "liveVerb": "Checking"
-      }
-     ]
+      "calls": [
+       "call-15"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Ran",
+      "liveVerb": "Running"
+     }
     },
     {
      "kind": "pair",
@@ -841,9 +837,42 @@
       "verb": "Tests passed",
       "liveVerb": "Running tests"
      }
+    },
+    {
+     "kind": "pair",
+     "rows": [
+      {
+       "id": "call-21:0",
+       "action": {
+        "kind": "git",
+        "what": "git log"
+       },
+       "calls": [
+        "call-21"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      },
+      {
+       "id": "call-21:1",
+       "action": {
+        "kind": "git",
+        "what": "git show"
+       },
+       "calls": [
+        "call-21"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      }
+     ]
     }
    ],
-   "summary": "Ran 3 commands, edited 2 files and 3 more"
+   "summary": "Ran 2 commands, edited 2 files and 4 more"
   },
   {
    "name": "a file read twice, a commit, and two pictures",
@@ -1458,6 +1487,122 @@
     }
    ],
    "summary": "Ran 1 check, read 1 file and 2 more"
+  },
+  {
+   "name": "git checks on a branch of their own, beside other commands",
+   "calls": [
+    {
+     "id": "call-41",
+     "kind": "command",
+     "label": "git status; git diff; ls; git log; git show HEAD",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "git",
+       "what": "git status"
+      },
+      {
+       "kind": "git",
+       "what": "git diff"
+      },
+      {
+       "kind": "run",
+       "what": "ls"
+      },
+      {
+       "kind": "git",
+       "what": "git log"
+      },
+      {
+       "kind": "git",
+       "what": "git show"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "branch",
+     "branch": "git",
+     "heading": "Checked git 4 times",
+     "rows": [
+      {
+       "id": "call-41:0",
+       "action": {
+        "kind": "git",
+        "what": "git status"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      },
+      {
+       "id": "call-41:1",
+       "action": {
+        "kind": "git",
+        "what": "git diff"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      },
+      {
+       "id": "call-41:3",
+       "action": {
+        "kind": "git",
+        "what": "git log"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      },
+      {
+       "id": "call-41:4",
+       "action": {
+        "kind": "git",
+        "what": "git show"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Checked",
+       "liveVerb": "Checking"
+      }
+     ]
+    },
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-41:2",
+      "action": {
+       "kind": "run",
+       "what": "ls"
+      },
+      "calls": [
+       "call-41"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Ran",
+      "liveVerb": "Running"
+     }
+    }
+   ],
+   "summary": null
   }
  ],
  "shortPatterns": [
@@ -1481,7 +1626,7 @@
  "readCodes": [
   {
    "call": {
-    "id": "call-41",
+    "id": "call-42",
     "kind": "command",
     "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
     "status": "complete",
@@ -1502,7 +1647,7 @@
   },
   {
    "call": {
-    "id": "call-42",
+    "id": "call-43",
     "kind": "command",
     "label": "sed -n 115,135p pages/Player.jsx",
     "status": "complete",
@@ -1522,7 +1667,7 @@
   },
   {
    "call": {
-    "id": "call-43",
+    "id": "call-44",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1542,7 +1687,7 @@
   },
   {
    "call": {
-    "id": "call-44",
+    "id": "call-45",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1562,7 +1707,7 @@
   },
   {
    "call": {
-    "id": "call-45",
+    "id": "call-46",
     "kind": "command",
     "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
     "status": "complete",
@@ -1583,7 +1728,7 @@
   },
   {
    "call": {
-    "id": "call-46",
+    "id": "call-47",
     "kind": "command",
     "label": "cat data.tsv",
     "status": "complete",
@@ -1602,7 +1747,7 @@
   },
   {
    "call": {
-    "id": "call-47",
+    "id": "call-48",
     "kind": "command",
     "label": "cat ids.tsv",
     "status": "complete",
@@ -1621,7 +1766,7 @@
   },
   {
    "call": {
-    "id": "call-48",
+    "id": "call-49",
     "kind": "command",
     "label": "cat -n src/b.ts",
     "status": "complete",
@@ -1641,7 +1786,7 @@
   },
   {
    "call": {
-    "id": "call-49",
+    "id": "call-50",
     "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
@@ -1663,7 +1808,7 @@
   },
   {
    "call": {
-    "id": "call-50",
+    "id": "call-51",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",
