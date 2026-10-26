@@ -28,7 +28,6 @@ import {
   shortWhere,
   type TraceRow,
 } from "../../../shared/trace-tree";
-import { Spinner } from "../../ui/ui";
 import { Fold, Subagents } from "./ToolRow";
 import { ReadCode } from "./ReadCode";
 import { WrittenCode } from "./WrittenCode";
@@ -121,10 +120,12 @@ function Outcome({ action }: { action: CallAction }) {
   return action.failed ? <X size={12} className="trace-bad" /> : <Check size={12} className="trace-good" />;
 }
 
+/** `live` while its call runs: the verb says so and shines, the row's one moving part. */
 export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boolean }) {
   return (
     <span className="trace-label">
-      <span className="trace-verb">{actionVerb(row, live)}</span> <ActionObject row={row} />
+      <span className={live ? "trace-verb live-shine" : "trace-verb"}>{actionVerb(row, live)}</span>{" "}
+      <ActionObject row={row} />
       {row.ranToo && <span className="trace-then">and ran it</span>}
       {!live && <Outcome action={row.action} />}
     </span>
@@ -214,7 +215,7 @@ export function ActionRow({ row, onChanges }: { row: TraceRow; onChanges: () => 
   const Icon = actionIcons[row.action.kind];
   return (
     <RowShell
-      icon={running ? <Spinner size={14} /> : <Icon size={14} />}
+      icon={<Icon size={14} />}
       label={<ActionLabel row={row} live={running} />}
       calls={row.calls}
       failed={rowFailed(row)}

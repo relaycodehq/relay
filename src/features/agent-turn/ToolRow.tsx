@@ -157,6 +157,26 @@ export function Fold({
   );
 }
 
+/** A question waiting on the reader shows a still spinner; any other call its icon, or the picture it read. */
+function ToolIcon({
+  activity,
+  read,
+  Icon,
+}: {
+  activity: AgentActivity;
+  read: ReturnType<typeof useImageRead>;
+  Icon: ReturnType<typeof iconOf>;
+}) {
+  if (activity.status === "running" && isQuestionCall(activity))
+    return <Spinner size={14} steady />;
+  if (read) return <ReadIcon image={read.image} />;
+  return <Icon size={14} />;
+}
+
+/** "Waiting for your answer" while it waits, "Asked you 2 questions" once answered. */
+const questionWords = (a: AgentActivity) =>
+  a.status === "running" ? liveLabel(a) : doneLabel(a);
+
 export function ToolRow({
   activity: a,
   label,
@@ -173,21 +193,14 @@ export function ToolRow({
   const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
   const read = useImageRead(a);
   if (asked) return <AnsweredQuestions questions={asked} />;
+  // A running call keeps its icon and its words shine; a question waiting on the reader doesn't move.
+  const shines = a.status === "running" && !isQuestionCall(a);
+  const wordsClass = [a.kind === "command" && "mono", shines && "live-shine"].filter(Boolean).join(" ");
   const heading = (
     <>
-      {a.status === "running" ? (
-        <Spinner size={14} steady={isQuestionCall(a)} />
-      ) : read ? (
-        <ReadIcon image={read.image} />
-      ) : (
-        <Icon size={14} />
-      )}
-      <span className={a.kind === "command" ? "mono" : undefined}>
-        {isQuestionCall(a)
-          ? a.status === "running"
-            ? liveLabel(a)
-            : doneLabel(a)
-          : label}
+      <ToolIcon activity={a} read={read} Icon={Icon} />
+      <span className={wordsClass || undefined}>
+        {isQuestionCall(a) ? questionWords(a) : label}
       </span>
       <Progress activity={a} />
       {isStartThreads(a) && <StartedThreadMarks ids={startedIds(a.detail)} />}
