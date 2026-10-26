@@ -96,6 +96,26 @@ describe("importGuestThread", () => {
     expect(await readdir(dir)).toEqual([]);
   });
 
+  it("keeps the note whole JSON, newest messages first in line", async () => {
+    const long = "x".repeat(100_000);
+    const { h, created } = await host(() =>
+      Response.json({
+        ...bundle,
+        messages: [
+          ...bundle.messages,
+          { role: "assistant", from: "Codex", body: long, created: 4 },
+        ],
+      }),
+    );
+    await importGuestThread(h, projectId, link);
+    const note = created[0]!.note;
+    const kept = JSON.parse(note.slice(note.indexOf("\n[") + 1)) as {
+      body: string;
+    }[];
+    expect(kept.at(-1)!.body).toMatch(/^x+… \(cut\)$/);
+    expect(note.length).toBeLessThan(61_000);
+  });
+
   it("moves copied times back when the sharer's clock ran ahead", async () => {
     const ahead = Date.now() + 10 * 60_000;
     const { h, created } = await host(() =>
