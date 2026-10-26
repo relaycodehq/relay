@@ -171,7 +171,11 @@ export class GuestShares {
     if (!this.links.size) await this.inTurn(() => this.closeWhenUnused());
   }
 
-  /** Stops serving, as Relay quits; the links come back with it. */
+  /**
+   * Stops serving; the links come back with the next start. Quitting needs
+   * none of it: the server goes with the process, and Funnel takes its route
+   * off as the process exits.
+   */
   close() {
     return this.shutDown({ ended: false });
   }

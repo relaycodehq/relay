@@ -92,6 +92,8 @@ export const fixUrlIn = (output: string) =>
 export class Funnel {
   /** The port our path is on now, to take it off again. */
   private port?: number;
+  /** Ports our path stayed on after taking it off failed, tried again as Relay exits. */
+  private left = new Set<number>();
 
   constructor(private run: FunnelRun = runTailscale) {}
 
@@ -141,6 +143,8 @@ export class Funnel {
         ...(fixUrlIn(on.output) ? { fixUrl: fixUrlIn(on.output) } : {}),
       };
     this.port = port;
+    this.left.delete(port);
+    process.off("exit", this.closeAtExit);
     process.once("exit", this.closeAtExit);
     const origin = port === 443 ? `https://${host}` : `https://${host}:${port}`;
     return { public: true, url: `${origin}${FUNNEL_PATH}` };
@@ -151,15 +155,22 @@ export class Funnel {
     const port = this.port;
     if (!port) return;
     this.port = undefined;
-    process.off("exit", this.closeAtExit);
     const off = await this.run(offArgs(port), 10_000);
-    if (!off.ok)
+    if (!off.ok) {
+      // Left up, the route would publish whatever takes the local port next: tried again at exit.
       console.warn("Could not turn Tailscale Funnel off:", off.output);
+      if (this.port !== port) this.left.add(port);
+      return;
+    }
+    const nothingPublished = !this.port && !this.left.size;
+    if (nothingPublished) process.off("exit", this.closeAtExit);
   }
 
   /** Quitting Relay ends every link, so nothing should stay published after it. */
   private closeAtExit = () => {
-    if (this.port) this.run.sync(offArgs(this.port));
+    const ports = new Set(this.left);
+    if (this.port) ports.add(this.port);
+    for (const port of ports) this.run.sync(offArgs(port));
   };
 }
 

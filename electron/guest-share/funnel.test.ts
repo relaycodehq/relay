@@ -115,6 +115,26 @@ describe("Funnel", () => {
     ]);
   });
 
+  it("takes the path off again as Relay exits when turning it off failed", async () => {
+    const cli = fakeCli({
+      "status --json": { ok: true, output: running },
+      "funnel status --json": { ok: true, output: serving({}) },
+      "funnel --https=8443 --set-path": { ok: false, output: "busy" },
+    });
+    const before = new Set(process.listeners("exit"));
+    const funnel = new Funnel(cli.run);
+    await funnel.open(47410);
+    await funnel.close();
+    const atExit = process.listeners("exit").filter((l) => !before.has(l));
+    expect(atExit).toHaveLength(1);
+    process.off("exit", atExit[0]!);
+    cli.calls.length = 0;
+    atExit[0]!(0);
+    expect(cli.calls).toEqual([
+      ["funnel", "--https=8443", `--set-path=${FUNNEL_PATH}`, "off"],
+    ]);
+  });
+
   it("says Funnel is off for the tailnet and where to turn it on", async () => {
     const fix = "https://login.tailscale.com/f/funnel?node=abc";
     const cli = fakeCli({
