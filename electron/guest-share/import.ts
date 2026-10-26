@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, normalize, relative, sep } from "node:path";
 import {
   agentName,
@@ -54,17 +54,23 @@ export async function importGuestThread(
   const bundle = await downloadBundle(host.fetch, link);
   const id = randomUUID();
   const folder = host.filesDir(id);
-  const saved = await saveFiles(folder, bundle.files);
   const shift = clockShift(bundle);
-  return host.create(projectId, {
-    id,
-    title: bundle.title || "Shared thread",
-    messages: bundle.messages.map((m) => importedMessage(m, shift)),
-    note: importNote(
-      bundle,
-      saved.length ? { folder, paths: saved } : undefined,
-    ),
-  });
+  try {
+    const saved = await saveFiles(folder, bundle.files);
+    return await host.create(projectId, {
+      id,
+      title: bundle.title || "Shared thread",
+      messages: bundle.messages.map((m) => importedMessage(m, shift)),
+      note: importNote(
+        bundle,
+        saved.length ? { folder, paths: saved } : undefined,
+      ),
+    });
+  } catch (e) {
+    // No thread to keep them for.
+    await rm(folder, { recursive: true, force: true }).catch(() => {});
+    throw e;
+  }
 }
 
 async function downloadBundle(

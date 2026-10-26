@@ -83,6 +83,19 @@ describe("importGuestThread", () => {
     expect(asked).toEqual([`${link}/bundle`]);
   });
 
+  it("removes the saved files when the thread can't be made", async () => {
+    const { h, dir } = await host(() => Response.json(bundle));
+    h.create = async () => {
+      throw new Error(
+        "A shared thread carries on in a project on this computer.",
+      );
+    };
+    await expect(importGuestThread(h, projectId, link)).rejects.toThrow(
+      /this computer/,
+    );
+    expect(await readdir(dir)).toEqual([]);
+  });
+
   it("moves copied times back when the sharer's clock ran ahead", async () => {
     const ahead = Date.now() + 10 * 60_000;
     const { h, created } = await host(() =>
