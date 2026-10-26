@@ -1,12 +1,12 @@
-import { useState } from "react";
 import { MAX_REVIEWERS, passCount } from "../../../../shared/deep-review";
 import { formatLines, leftOut, readLines } from "../../../../shared/review-passes";
 import { PASS_LINES, passPerFolder } from "../../../../shared/suggest-passes";
+import { PassTree } from "./PassTree";
 import type { ReviewPasses } from "./useReviewPasses";
 
 /**
  * How a review is split into passes, each reviewed by every reviewer in
- * turn, and why: one line a pass, written out to edit.
+ * turn, and why; the change's folders, to move between passes.
  */
 export function PassesField({
   passes: p,
@@ -15,25 +15,14 @@ export function PassesField({
   passes: ReviewPasses;
   reviewers: number;
 }) {
-  const [editing, setEditing] = useState(false);
   if (!p.files) return null;
-  const split = p.passes.length > 0;
+  const files = p.files;
+  const split = p.shown.length > 0;
   return (
     <div className="deep-review-field">
       <span className="deep-review-label">Passes</span>
       <div className="deep-review-field-body">
-        {editing ? (
-          <textarea
-            className="deep-review-passes-text"
-            aria-label="Passes, one a line"
-            rows={Math.max(3, p.passes.length + 1)}
-            value={p.text}
-            spellCheck={false}
-            onChange={(e) => p.write(e.target.value)}
-          />
-        ) : (
-          split && <PassList passes={p} />
-        )}
+        {split && <PassTree passes={p} files={files} />}
         <PassNotes passes={p} reviewers={reviewers} />
         <div className="deep-review-pass-actions">
           {split && (
@@ -55,51 +44,13 @@ export function PassesField({
           <button
             type="button"
             className="text-button"
-            onClick={() => {
-              p.setPasses(split ? [] : passPerFolder(p.files!));
-              setEditing(false);
-            }}
+            onClick={() => p.setPasses(split ? [] : passPerFolder(files))}
           >
             {split ? "One pass" : "Split"}
           </button>
-          {split && (
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => setEditing(!editing)}
-            >
-              {editing ? "Done" : "Edit"}
-            </button>
-          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function PassList({ passes: p }: { passes: ReviewPasses }) {
-  return (
-    <ol className="deep-review-passes">
-      {p.passes.map((pass, i) => (
-        <li key={i}>
-          <span className="deep-review-slot">{i + 1}</span>
-          <span className="deep-review-pass-paths" title={pass.join(" ")}>
-            {pass.join(" ")}
-          </span>
-          <span className="deep-review-note">
-            {formatLines(p.coverage?.passes[i]?.lines ?? 0)}
-          </span>
-        </li>
-      ))}
-      {p.seams && (
-        <li>
-          <span className="deep-review-slot">{p.passes.length + 1}</span>
-          <span className="deep-review-pass-paths muted">
-            How they fit together, over the whole change
-          </span>
-        </li>
-      )}
-    </ol>
   );
 }
 

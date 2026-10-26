@@ -1,21 +1,17 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ReviewTarget } from "../../../../shared/deep-review";
-import {
-  parsePasses,
-  passCoverage,
-  passesText,
-  type ReviewPass,
-} from "../../../../shared/review-passes";
+import { passCoverage, type ReviewPass } from "../../../../shared/review-passes";
 import { suggestPasses } from "../../../../shared/suggest-passes";
 import { api } from "../../../lib/api";
 import { readJson, writeJson } from "../../../lib/persisted-store";
+import { runnablePasses } from "./pass-tree";
 
 const seamsKey = "deep-review-seams";
 
 /**
  * The passes a new deep review runs in: Relay's suggestion for what it
- * reviews, until you write your own. Changing what it reviews starts over
+ * reviews, until you change them. Changing what it reviews starts over
  * from the suggestion.
  */
 export function useReviewPasses(
@@ -35,25 +31,24 @@ export function useReviewPasses(
     () => suggestPasses(files.data ?? []),
     [files.data],
   );
-  const [written, setWritten] = useState<{ key: string; text: string }>();
-  const edited = written?.key === key;
-  const text = edited ? written.text : passesText(suggested);
-  const passes = parsePasses(text);
+  const [changed, setChanged] = useState<{ key: string; shown: ReviewPass[] }>();
+  const edited = changed?.key === key;
+  const shown = edited ? changed.shown : suggested;
+  const passes = runnablePasses(shown);
   const [seams, keepSeams] = useState(() => readJson(seamsKey) !== false);
   return {
     files: files.data,
     edited,
-    text,
+    /** The passes the setup shows: a pass emptied by a move stays, so the rest keep their numbers. */
+    shown,
     passes,
     coverage: files.data ? passCoverage(passes, files.data) : undefined,
     /** A last pass over how the parts fit together, which only a split review has. */
     seams: seams && passes.length > 1,
     seamsOn: seams,
-    write: (next: string) => setWritten({ key, text: next }),
-    setPasses: (next: ReviewPass[]) =>
-      setWritten({ key, text: passesText(next) }),
+    setPasses: (next: ReviewPass[]) => setChanged({ key, shown: next }),
     /** Back to what Relay suggests. */
-    reset: () => setWritten(undefined),
+    reset: () => setChanged(undefined),
     setSeams: (on: boolean) => {
       keepSeams(on);
       writeJson(seamsKey, on);

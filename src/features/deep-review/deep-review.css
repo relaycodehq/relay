@@ -236,12 +236,6 @@
   margin-left: auto;
   font-variant-numeric: tabular-nums;
 }
-.project-composer .deep-review-passes-text {
-  resize: vertical;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-}
 .deep-review-request-passes {
   gap: 4px;
   margin: 2px 0;
