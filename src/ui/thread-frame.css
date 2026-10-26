@@ -15,6 +15,9 @@
   background: var(--sidebar);
   font-size: 12px;
 }
+.thread-frame > header:last-child {
+  border-bottom: 0;
+}
 .thread-frame > header b {
   min-width: 0;
   overflow: hidden;
