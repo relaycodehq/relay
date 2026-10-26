@@ -3,6 +3,7 @@ export const GUEST_STYLE = `
 :root { color-scheme: light dark; --bg: #fbfbfc; --fg: #303237; --muted: #898b93; --line: #e2e3e6; --card: #fff; --soft: #f4f4f6; --accent: #6565a9; --accent-fg: #fff; --code: #f6f6f8; }
 @media (prefers-color-scheme: dark) { :root { --bg: #18181b; --fg: #e7e7ea; --muted: #94949f; --line: #2e2e33; --card: #1f1f23; --soft: #26262b; --accent: #a3a3e6; --accent-fg: #18181b; --code: #232328; } }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
 a { color: var(--accent); }
 button { font: inherit; cursor: pointer; color: var(--fg); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; }
