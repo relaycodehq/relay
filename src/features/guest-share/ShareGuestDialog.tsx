@@ -8,7 +8,7 @@ import {
 } from "../../../shared/guest-share";
 import { api } from "../../lib/api";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
-import { guestShareKey } from "./useGuestShare";
+import { guestShareKey, useGuestShare } from "./useGuestShare";
 import "./guest-share.css";
 
 /**
@@ -23,7 +23,8 @@ export function ShareGuestDialog({
   onClose: () => void;
 }) {
   const qc = useQueryClient();
-  const [share, setShare] = useState<GuestShare>();
+  // What the main process says, so a link that ends while this is open shows it.
+  const share = useGuestShare(threadId).data ?? undefined;
   const [error, setError] = useState<unknown>();
   const [starting, setStarting] = useState(true);
   const start = async () => {
@@ -31,7 +32,6 @@ export function ShareGuestDialog({
     setError(undefined);
     try {
       const started = await api.startGuestShare(threadId);
-      setShare(started);
       qc.setQueryData(guestShareKey(threadId), started);
     } catch (e) {
       setError(e);
@@ -42,8 +42,13 @@ export function ShareGuestDialog({
   // Once, as the dialog opens; a second start hands back the same link.
   useEffect(() => void start(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const stop = async () => {
-    await api.stopGuestShare(threadId).catch(setError);
-    onClose();
+    try {
+      await api.stopGuestShare(threadId);
+      onClose();
+    } catch (e) {
+      // The link may still come back after a restart: stay open to say so.
+      setError(e);
+    }
   };
   return (
     <Modal
