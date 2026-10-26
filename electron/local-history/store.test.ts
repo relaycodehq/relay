@@ -144,6 +144,17 @@ it("treats a corrupt index as no history instead of failing", async () => {
   expect(await again.list("/p/a.ts")).toHaveLength(1);
 });
 
+it("sweeps away a corrupt index and the text only it pointed at", async () => {
+  const store = open();
+  await store.record("/p/a.ts", "one", "save");
+  const index = (await tree("files")).find((f) => f.endsWith("index.json"))!;
+  await writeFile(join(dir, index), '{"version":1,"entries":[{"id":');
+  const swept = await store.sweep();
+  expect(swept.removedBlobs).toBe(1);
+  expect(await tree("files")).toEqual([]);
+  expect(await blobs()).toEqual([]);
+});
+
 it("keeps at most the newest 100 versions of a file, dropping the oldest", async () => {
   const store = open({ maxEntriesPerFile: 3 });
   for (const n of [1, 2, 3, 4, 5])

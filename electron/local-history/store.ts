@@ -361,10 +361,9 @@ export class LocalHistoryStore {
     const indexes: Index[] = [];
     for (const name of names) {
       const path = join(this.dir, "files", name, "index.json");
-      const parsed = await readFile(path, "utf8").then(
-        (text) => indexSchema.safeParse(JSON.parse(text)),
-        () => null,
-      );
+      const parsed = await readFile(path, "utf8")
+        .then((text) => indexSchema.safeParse(JSON.parse(text)))
+        .catch(() => null);
       const readable =
         parsed?.success && digest(parsed.data.path).slice(0, 32) === name;
       if (readable) indexes.push(parsed.data);
