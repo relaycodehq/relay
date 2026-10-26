@@ -240,6 +240,20 @@ export function suggestPasses(files: readonly ChangedFile[]): ReviewPass[] {
   return passes.length > 1 ? tidy(passes.map((p) => p.paths)) : [];
 }
 
+/** A pass for each top folder, the files at the top together: a start for splitting what Relay would keep whole. */
+export function passPerFolder(files: readonly ChangedFile[]): ReviewPass[] {
+  const read = files.filter((f) => readLines(f) > 0).map((f) => f.path);
+  const top = read.filter((path) => !path.includes("/")).sort();
+  const folders = [
+    ...new Set(
+      read
+        .filter((path) => path.includes("/"))
+        .map((path) => path.slice(0, path.indexOf("/") + 1)),
+    ),
+  ].sort();
+  return [...folders.map((f) => [f]), ...(top.length ? [top] : [])];
+}
+
 /**
  * Drops a path its pass already holds through a folder above it, unless
  * another pass names something in between, which the path takes back.

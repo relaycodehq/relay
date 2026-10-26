@@ -217,3 +217,13 @@ export async function reviewPasses(
     seams: config.seams,
   });
 }
+
+/** The files a review of `target` would cover, before it starts. */
+export async function targetFiles(
+  root: string,
+  target: ReviewTarget,
+  project: Project,
+  pull?: PullInfo,
+) {
+  return reviewedFiles(root, await resolveScope(root, target, project, pull));
+}

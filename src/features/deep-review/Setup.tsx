@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
-import type { DeepReviewStart } from "../../../shared/deep-review";
+import {
+  MAX_REVIEWERS,
+  passCount,
+  type DeepReviewStart,
+} from "../../../shared/deep-review";
 import type { Project } from "../../../shared/projects";
 import { sendsMessage, useSendKey } from "../../lib/send-key";
 import { useAgentName } from "./useAgentName";
@@ -7,6 +11,8 @@ import { useDeepReviewSetup } from "./useDeepReviewSetup";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
 import { LeadField } from "./LeadField";
+import { PassesField } from "./PassesField";
+import type { ReviewPasses } from "./useReviewPasses";
 import { ReviewersField } from "./ReviewersField";
 import { TargetField } from "./TargetField";
 
@@ -38,7 +44,7 @@ export function DeepReviewSetup({
 }) {
   const name = useAgentName();
   const sendKey = useSendKey();
-  const { setup, update, focus, setFocus, pick, choice, start } =
+  const { setup, update, focus, setFocus, pick, passes, runs, choice, start } =
     useDeepReviewSetup({
       projectId: project.id,
       draftId,
@@ -81,6 +87,7 @@ export function DeepReviewSetup({
             reviewers={setup.reviewers}
             onChange={(reviewers) => update({ reviewers })}
           />
+          <PassesField passes={passes} reviewers={count} />
           <LeadField
             lead={setup.lead}
             runChecks={setup.runChecks}
@@ -108,14 +115,11 @@ export function DeepReviewSetup({
             onLoad={(saved) => update(saved)}
           />
           <span className="spacer" />
-          <span className="deep-review-hint">
-            {count} {count === 1 ? "reviewer" : "reviewers"} and a lead · runs
-            on your plan usage
-          </span>
+          <span className="deep-review-hint">{lineup(count, passes)}</span>
           <button
             type="submit"
             className="primary deep-review-start"
-            disabled={!pick.target || busy}
+            disabled={!pick.target || busy || runs > MAX_REVIEWERS}
           >
             Start deep review
           </button>
@@ -123,4 +127,11 @@ export function DeepReviewSetup({
       </form>
     </div>
   );
+}
+
+/** "3 reviewers in 4 passes and a lead · runs on your plan usage". */
+function lineup(count: number, passes: ReviewPasses) {
+  const reviewers = `${count} ${count === 1 ? "reviewer" : "reviewers"}`;
+  const split = passes.passes.length ? ` in ${passCount(passes)} passes` : "";
+  return `${reviewers}${split} and a lead · runs on your plan usage`;
 }

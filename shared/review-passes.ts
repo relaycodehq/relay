@@ -3,6 +3,7 @@
 // skims the part it got to last. What each pass covers; suggest-passes.ts
 // proposes them.
 import { diffKind } from "./diff-kinds";
+import { formatTokens } from "./tokens";
 
 export interface ChangedFile {
   path: string;
@@ -23,6 +24,10 @@ export const leftOut = (path: string) => {
   const kind = diffKind(path);
   return kind === "generated" || kind === "fixtures";
 };
+
+/** "1.8k lines". */
+export const formatLines = (n: number) =>
+  `${formatTokens(n)} ${n === 1 ? "line" : "lines"}`;
 
 /** The lines a reviewer reads in a file. */
 export const readLines = (f: ChangedFile) =>

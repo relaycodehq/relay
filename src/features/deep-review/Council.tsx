@@ -66,14 +66,7 @@ export function DeepReviewCouncil({
       <CouncilToggle open={open} onToggle={toggle} members={glyphs}>
         <Telescope size={14} />
         <strong>Council</strong>
-        <span>
-          {count} {count === 1 ? "reviewer" : "reviewers"}
-          {state.status === "reviewing"
-            ? " at work"
-            : kept !== undefined
-              ? ` · ${kept} ${kept === 1 ? "finding" : "findings"} kept`
-              : ""}
-        </span>
+        <span>{summary(state, kept)}</span>
       </CouncilToggle>
       {open && (
         <ReviewerGrid
@@ -128,6 +121,22 @@ export function DeepReviewCouncil({
       )}
     </section>
   );
+}
+
+/** "3 reviewers at work", "3 reviewers · pass 2 of 4 at work", "3 reviewers · 4 passes · 5 findings kept". */
+function summary(state: DeepReviewState, kept: number | undefined) {
+  const passes = state.passes?.length ?? 0;
+  const count = passes
+    ? state.reviewers.length / passes
+    : state.reviewers.length;
+  const who = `${count} ${count === 1 ? "reviewer" : "reviewers"}`;
+  if (state.status === "reviewing")
+    return passes
+      ? `${who} · pass ${(state.pass ?? 0) + 1} of ${passes} at work`
+      : `${who} at work`;
+  const split = passes ? ` · ${passes} passes` : "";
+  if (kept === undefined) return `${who}${split}`;
+  return `${who}${split} · ${kept} ${kept === 1 ? "finding" : "findings"} kept`;
 }
 
 /** How many reviewers' reports a stopped review holds, from their threads. */
