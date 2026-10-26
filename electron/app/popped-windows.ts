@@ -95,9 +95,6 @@ export class PoppedWindows<T> {
       win: this.hooks.make(bounds && this.onScreen(bounds), () => {
         if (!entry.closingToQuit) return;
         entry.closingToQuit = false;
-        this.quitting = false;
-        // Windows closed earlier in the quit skipped saving, so save the list again.
-        this.save();
         this.hooks.quitCancelled();
       }),
     };
@@ -138,6 +135,14 @@ export class PoppedWindows<T> {
     void loadPage(entry.win, this.kind.search(entry.item));
     this.save();
     this.changed();
+  }
+
+  /** The quit stopped, here or at another kind of window. */
+  quitCancelled() {
+    if (!this.quitting) return;
+    this.quitting = false;
+    // Windows closed earlier in the quit skipped saving, so save the list again.
+    this.save();
   }
 
   /** Closes the next window on the way to quitting; false once none is left. */

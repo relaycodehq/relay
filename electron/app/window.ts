@@ -83,17 +83,27 @@ export class AppWindow {
       make: this.popOutMaker({ width: 1100, height: 900 }),
       changed: (state) => this.send("relay:thread-windows", state),
       pageGone: (win) => hooks.pageGone(win),
-      quitCancelled: () => hooks.quitCancelled(),
+      quitCancelled: () => this.quitCancelled(),
       returned: (thread) => this.openThread(thread),
     });
     this.editors = new EditorWindows({
       make: this.popOutMaker({ width: 1200, height: 900 }),
       changed: (state) => this.send("relay:editor-windows", state),
       pageGone: (win) => hooks.pageGone(win),
-      quitCancelled: () => hooks.quitCancelled(),
+      quitCancelled: () => this.quitCancelled(),
       main: () => this.win,
       returned: (win) => (win ? showWindow(win) : this.open()),
     });
+  }
+
+  /**
+   * A window's unsaved-edits prompt kept it open, so Relay isn't quitting:
+   * the windows closed before it, of any kind, save as they move again.
+   */
+  private quitCancelled() {
+    this.editors.quitCancelled();
+    this.threads.quitCancelled();
+    this.hooks.quitCancelled();
   }
 
   /** Builds a popped-out window where it was saved, else at `size`. */
@@ -304,7 +314,7 @@ export class AppWindow {
       },
       () => {
         this.closingToQuit = false;
-        this.hooks.quitCancelled();
+        this.quitCancelled();
       },
     );
     this.win = win;
