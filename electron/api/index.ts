@@ -15,6 +15,7 @@ import { computerHandlers } from "./computers";
 import type { ApiContext, Handlers } from "./context";
 import { desktopHandlers } from "./desktop";
 import { draftHandlers } from "./drafts";
+import { commitMessageHandlers } from "./commit-messages";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { elsewhereHandlers } from "./elsewhere";
@@ -61,6 +62,7 @@ export function createDispatch(
     localHistoryHandlers(ctx),
     projectSearchHandlers(ctx),
     gitHandlers(ctx),
+    commitMessageHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
     deepReviewHandlers(ctx),

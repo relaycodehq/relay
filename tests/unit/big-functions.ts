@@ -35,7 +35,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/api/context.ts › apiContext": 106,
   "electron/api/desktop.ts › desktopHandlers": 151,
   "electron/api/elsewhere.ts › elsewhereHandlers": 236,
-  "electron/api/git.ts › gitHandlers": 154,
+  "electron/api/git.ts › gitHandlers": 128,
   "electron/api/projects.ts › projectHandlers": 411,
   "electron/api/review-checkout.ts › reviewCheckoutHandlers": 127,
   "electron/api/reviews.ts › reviewHandlers": 164,

@@ -6,19 +6,13 @@ import {
   applyCommitSplitSchema,
   commitFileChangeSchema,
   commitSplitNoteSchema,
-  fileChangeSchema,
 } from "../../shared/commit-split";
 import {
   commitShaSchema,
   historyLimitSchema,
   historyScopeSchema,
 } from "../../shared/history";
-import {
-  helperOffMessage,
-  helperOn,
-  helperPickSchema,
-  type HelperPick,
-} from "../../shared/settings";
+import { helperOffMessage, helperOn } from "../../shared/settings";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
@@ -36,10 +30,6 @@ import {
   changeBranch,
 } from "../git/branches";
 import { commitFileChange } from "../git/commit-change";
-import {
-  generateChangeCommitMessage,
-  generateCommitMessage,
-} from "../git/commit-messages";
 import { applyCommitSplit, planCommitSplit } from "../git/commit-split";
 import { commitDetail, commitDiff, commitLog } from "../git/history";
 import { performGitAction } from "../git/git-actions";
@@ -53,24 +43,6 @@ const branchNameSchema = z.string().min(1).max(250);
 /** Git in a project's checkout or a thread's worktree: changes, history, branches, commits. */
 export function gitHandlers(ctx: ApiContext) {
   const { store, projects, projectChats, projectChecks, placeRoot } = ctx;
-  /** What writes a commit message here: `picked`, else the project's own pick, else the app's. */
-  const commitMessageSettings = (where: string, picked?: HelperPick | null) => {
-    const settings = store.aiSettings();
-    if (!helperOn(settings, "commitMessage"))
-      throw new Error(helperOffMessage("Commit messages"));
-    const pick =
-      picked === undefined
-        ? projects.get(parseWorkspaceId(where).projectId).settings
-            ?.commitMessage
-        : picked;
-    return pick
-      ? {
-          ...settings,
-          commitMessage: pick.choice,
-          commitMessageProvider: pick.provider,
-        }
-      : settings;
-  };
   return {
     projectWorkingTree: takes([workspaceIdSchema], async (where) =>
       workingTree(await placeRoot(where)),
@@ -164,35 +136,6 @@ export function gitHandlers(ctx: ApiContext) {
     projectDeleteBranch: takes(
       [workspaceIdSchema, branchNameSchema],
       async (where, name) => deleteMergedBranch(await placeRoot(where), name),
-    ),
-    projectCommitMessage: takes(
-      [
-        workspaceIdSchema,
-        z.array(workingPathSchema).min(1).max(1000),
-        // The sheet's own pick, which may not have finished saving yet.
-        helperPickSchema.nullable().optional(),
-      ],
-      async (where, paths, picked) => {
-        const settings = commitMessageSettings(where, picked);
-        return generateCommitMessage(
-          await placeRoot(where),
-          paths,
-          settings,
-          AbortSignal.timeout(120_000),
-        );
-      },
-    ),
-    projectChangeCommitMessage: takes(
-      [workspaceIdSchema, fileChangeSchema],
-      async (where, change) => {
-        const settings = commitMessageSettings(where);
-        return generateChangeCommitMessage(
-          await placeRoot(where),
-          change,
-          settings,
-          AbortSignal.timeout(120_000),
-        );
-      },
     ),
     projectPlanCommitSplit: takes(
       [workspaceIdSchema, commitSplitNoteSchema.optional()],
