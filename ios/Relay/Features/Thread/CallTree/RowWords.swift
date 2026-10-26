@@ -17,6 +17,11 @@ struct RowWords {
         add(Text(verbatim: words).foregroundStyle(failed ? colors.destructive : colors.muted))
     }
 
+    /// A running row's verb, which the band crosses.
+    mutating func sayShining(_ words: String) {
+        add(Text(verbatim: words).foregroundStyle(colors.muted).customAttribute(Shining()))
+    }
+
     /// Words that follow on, quieter than the verb: "and ran it".
     mutating func aside(_ words: String) {
         add(Text(verbatim: words).foregroundStyle(colors.faint))
@@ -69,9 +74,11 @@ nonisolated struct Chip: TextAttribute {
     let id: Int
 }
 
-/// Draws each chip's rounded box behind its text, a box per line when a chip wraps.
+/// Draws each chip's rounded box behind its text, a box per line when a chip wraps, and the band
+/// across a running row's verb.
 nonisolated struct ChipBoxes: TextRenderer {
     let fill: Color
+    var shine: ShineBand?
 
     func draw(layout: Text.Layout, in context: inout GraphicsContext) {
         for line in layout {
@@ -84,7 +91,13 @@ nonisolated struct ChipBoxes: TextRenderer {
             for box in boxes.values {
                 context.fill(Path(roundedRect: box.insetBy(dx: 0, dy: -1.5), cornerRadius: 4), with: .color(fill))
             }
-            context.draw(line)
+            guard let shine else {
+                context.draw(line)
+                continue
+            }
+            for run in line {
+                if run[Shining.self] != nil { shine.draw(run, in: &context) } else { context.draw(run) }
+            }
         }
     }
 }
@@ -94,7 +107,7 @@ extension RowWords {
     mutating func tell(_ row: TraceRow) {
         let live = rowRunning(row)
         let failed = rowFailed(row)
-        say(actionVerb(row, live: live), failed: failed)
+        if live { sayShining(actionVerb(row, live: true)) } else { say(actionVerb(row), failed: failed) }
         switch row.action {
         case .test(let target, _):
             if let target {

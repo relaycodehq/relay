@@ -103,9 +103,12 @@ struct ToolRow: View {
         } else {
             let text = shown(activity.label)
             HStack(spacing: 4) {
-                Text(text)
-                    .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
-                    .lineLimit(open ? 6 : 1)
+                ShineClock(running: activity.status == "running") { band in
+                    Text(text)
+                        .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
+                        .lineLimit(open ? 6 : 1)
+                        .textRenderer(ShiningText(band: band))
+                }
                 if activity.kind == "agent", let progress = activity.progress, !progress.isEmpty {
                     Text("· \(progress)").lineLimit(1).foregroundStyle(.tertiary)
                 }

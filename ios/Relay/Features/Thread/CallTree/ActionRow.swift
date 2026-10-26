@@ -33,7 +33,9 @@ struct ActionRow: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 icon.frame(width: 16)
-                words.textRenderer(ChipBoxes(fill: colors.foreground.opacity(0.07)))
+                ShineClock(running: rows.contains(where: rowRunning)) { band in
+                    words.textRenderer(ChipBoxes(fill: colors.foreground.opacity(0.07), shine: band))
+                }
                 Spacer(minLength: 0)
             }
             .font(.footnote)
