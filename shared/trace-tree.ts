@@ -4,7 +4,8 @@
 // kind stay a row ("Read a.ts and b.ts"). The desktop and both phone apps
 // draw this; RelayKit and the Android tests hold their ports to its fixtures.
 import type { AgentActivity } from "./projects";
-import { baseName, callActions, isScratch, type CallAction } from "./call-actions";
+import { callActions, isScratch, type CallAction } from "./call-actions";
+import { baseName } from "./shell-words";
 
 /** One row: a thing done, by one call or a few that did the same thing. */
 export interface TraceRow {

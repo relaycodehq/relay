@@ -4,7 +4,9 @@
 // shell parsing lives here only.
 import { isImagePath } from "./answer-images";
 import type { AgentActivity, WrittenCode } from "./projects";
+import { actionsThatRan, failedByItsCall, outcomes, type Step } from "./call-verdicts";
 import {
+  baseName,
   chain,
   firstStage,
   heredocOpened,
@@ -64,22 +66,6 @@ function actionsOf(a: AgentActivity): CallAction[] {
   }
 }
 
-type Verdict = Extract<CallAction, { kind: "test" | "check" }>;
-
-const isVerdict = (action: CallAction): action is Verdict => action.kind === "test" || action.kind === "check";
-
-/**
- * A command that failed failed its test or check, when the output didn't say
- * and nothing ran after it: in `npm test && git push`, the push may be what failed.
- */
-function failedByItsCall(actions: CallAction[], a: AgentActivity): CallAction[] {
-  if (a.status !== "failed") return actions;
-  if (actions.some((action) => isVerdict(action) && action.failed)) return actions;
-  const last = actions.at(-1);
-  if (!last || !isVerdict(last)) return actions;
-  return [...actions.slice(0, -1), { ...last, failed: true }];
-}
-
 /** A whole file written is made, unless the tool said it was there already; an edit or a patch changes part of one. */
 function fileActions(a: AgentActivity): CallAction[] {
   if (a.written?.length) {
@@ -114,8 +100,6 @@ const leads = new Set(["npx", "sudo", "do", "then", "else", "if", "!", "time", "
 /** `2>&1`, `>/dev/null`, `> /tmp/out.txt`; not a `>` inside a quoted message. */
 const redirect = /\s\d?>\s*(?:&\d|\/\S*)/g;
 
-type Step = { actions: CallAction[]; joinedBy?: Joiner };
-
 /** Every action in a command line that ran, in order; nothing it only set up for. */
 export function commandActions(command: string, output = ""): CallAction[] {
   const { head, bodies } = heredocs(unwrapShell(command));
@@ -129,19 +113,6 @@ export function commandActions(command: string, output = ""): CallAction[] {
   if (!actions.length) return [{ kind: "run", what: onlySetup(head) }];
   const judge = outcomes(actions, output);
   return actionsThatRan(steps.map((step) => ({ ...step, actions: step.actions.map(judge) })));
-}
-
-/** After a test or check that failed, whatever `&&` put behind it never started, so it has no verdict to show. */
-function actionsThatRan(steps: Step[]) {
-  const ran: CallAction[] = [];
-  let lastFailed = false;
-  for (const { actions, joinedBy } of steps) {
-    const skipped = joinedBy === "&&" && lastFailed;
-    if (skipped) continue;
-    lastFailed = actions.some((action) => isVerdict(action) && action.failed);
-    ran.push(...actions);
-  }
-  return ran;
 }
 
 /** A command that only set up, like `echo hi`, or a loop that ran nothing it could name. */
@@ -414,68 +385,6 @@ function scriptAction(program: string, args: string[], body: string | undefined)
   return file && changesIt ? { kind: "edit", file } : { kind: "run", what: `${program} script` };
 }
 
-const failedTests = /\bFAIL\b|Failed Tests|×|\b[1-9]\d* failed/;
-const failedChecks = /^tc [1-9]|error TS\d+|^npm (?:ERR!|error)|✖ \d+ problems?|Code style issues found/m;
-
-/** What each kind of check prints when it fails, to tell several checks in one command apart. */
-const checkFailures: [name: RegExp, failure: RegExp][] = [
-  [/^(?:typecheck|tsc|types)/, /^tc [1-9]|error TS\d+/m],
-  [/^lint/, /✖ \d+ problems?/],
-  [/^format/, /Code style issues found/],
-];
-
-/** What only the output says: a test run's result, a commit's hash. */
-function outcomes(actions: CallAction[], output: string) {
-  const severalTests = actions.filter((a) => a.kind === "test").length > 1;
-  const severalChecks = actions.filter((a) => a.kind === "check").length > 1;
-  const commits = actions.filter((a) => a.kind === "commit");
-  const hashes = commitHashes(output, commits.length);
-  return (action: CallAction): CallAction => {
-    switch (action.kind) {
-      case "test":
-        return { ...action, failed: testFailed(action.target, output, severalTests) };
-      case "check":
-        return { ...action, failed: checkFailed(action.name, output, severalChecks) };
-      case "commit": {
-        const hash = hashes[commits.indexOf(action)];
-        return hash ? { ...action, hash } : action;
-      }
-      default:
-        return action;
-    }
-  };
-}
-
-/**
- * Each commit's hash: `git commit` prints "[branch abc1234] subject" for
- * each, "[main (root-commit) abc1234]" for a first one; `git log --oneline`
- * prints "abc1234 subject", which only one commit can be sure is its own.
- */
-function commitHashes(output: string, commits: number) {
-  const own = [...output.matchAll(/^\[[^\]\n]*\s([0-9a-f]{7,40})\]/gm)].map((found) => found[1]!);
-  if (own.length) return own;
-  const logged = /^([0-9a-f]{7,40})\s/m.exec(output)?.[1];
-  return logged && commits === 1 ? [logged] : [];
-}
-
-/**
- * With several checks in one command, each is judged by its own kind of
- * failure, or npm's error naming its script; alone, by any failure.
- */
-function checkFailed(name: string, output: string, severalChecks: boolean) {
-  if (!severalChecks) return failedChecks.test(output);
-  const own = checkFailures.find(([names]) => names.test(name))?.[1];
-  const npmNamesIt = output.split("\n").some((line) => /^npm (?:ERR!|error)/.test(line) && line.includes(name));
-  return Boolean(own?.test(output)) || npmNamesIt;
-}
-
-/** With several test runs in one command, each is judged by the failures that name its file. */
-function testFailed(target: string | undefined, output: string, severalTests: boolean) {
-  if (!severalTests || !target) return failedTests.test(output);
-  const name = baseName(target);
-  return output.split("\n").some((line) => failedTests.test(line) && line.includes(name));
-}
-
 /** Files a command writes from a heredoc: `cat > f <<EOF`, `cat <<EOF > f`, `tee f <<EOF`; `cat >> f` adds the body. */
 export function writtenByCommand(command: string): WrittenCode[] {
   const { head, bodies } = heredocs(unwrapShell(command));
@@ -493,8 +402,6 @@ export function writtenByCommand(command: string): WrittenCode[] {
 }
 
 const isAppend = (segment: string) => writesTo(segment)?.appends || /\btee\s+(?:-a|--append)\b/.test(segment);
-
-export const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
 
 /** Scratch files an agent writes for itself, outside any project. */
 export const isScratch = (path: string) => /^\/(?:private\/)?tmp\//.test(path);

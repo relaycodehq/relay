@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import type { AgentActivity } from "../../../shared/projects";
 import { readCode } from "../../../shared/read-code";
-import { baseName, callActions, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
+import { callActions, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
+import { baseName } from "../../../shared/shell-words";
 import {
   actionVerb,
   rowFailed,

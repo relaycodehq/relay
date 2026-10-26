@@ -3,7 +3,7 @@
 // that fold open into a tree.
 import { useContext, useRef } from "react";
 import type { AgentActivity } from "../../../shared/projects";
-import { baseName } from "../../../shared/call-actions";
+import { baseName } from "../../../shared/shell-words";
 import {
   actionVerb,
   branchOf,

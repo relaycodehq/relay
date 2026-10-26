@@ -167,3 +167,6 @@ export function writesTo(segment: string) {
   if (!found) return undefined;
   return { path: (found[2] ?? found[3] ?? found[4])!, appends: found[1] === ">>" };
 }
+
+/** The last part of a path: a program's name, a file's. */
+export const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
