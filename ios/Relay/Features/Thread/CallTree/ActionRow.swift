@@ -67,13 +67,10 @@ struct ActionRow: View {
         return words.text
     }
 
-    @ViewBuilder private var icon: some View {
-        if rows.contains(where: rowRunning) {
-            Spinner(size: 13)
-        } else {
-            Image(systemName: actionSymbol(rows[0].action))
-                .foregroundStyle(rows.contains(where: rowFailed) ? colors.destructive : colors.muted)
-        }
+    /// A running row keeps the icon of what it does; its verb says it's running.
+    private var icon: some View {
+        Image(systemName: actionSymbol(rows[0].action))
+            .foregroundStyle(rows.contains(where: rowFailed) ? colors.destructive : colors.muted)
     }
 
     private func showsPicture(_ call: AgentActivity) -> Bool {

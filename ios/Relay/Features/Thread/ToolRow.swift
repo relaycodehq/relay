@@ -76,13 +76,10 @@ struct ToolRow: View {
         }
     }
 
-    @ViewBuilder private var icon: some View {
-        if activity.status == "running" {
-            Spinner(size: 13)
-        } else {
-            Image(systemName: symbol)
-                .foregroundStyle(activity.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-        }
+    /// A running call keeps the icon of what it does, and a question waiting on you its still mark.
+    private var icon: some View {
+        Image(systemName: symbol)
+            .foregroundStyle(activity.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
     }
 
     private var symbol: String {
