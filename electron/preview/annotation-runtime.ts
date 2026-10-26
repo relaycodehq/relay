@@ -215,7 +215,8 @@ export const annotationRuntime = String.raw`
     let scroller = document.scrollingElement;
     for (let el = under; el; el = el.parentElement)
       if ((dy && scrolls(el, "y", dy)) || (dx && scrolls(el, "x", dx))) { scroller = el; break; }
-    scroller?.scrollBy(dx, dy);
+    // CSS smooth scrolling would restart on each wheel tick and lose distance.
+    scroller?.scrollBy({ left: dx, top: dy, behavior: "instant" });
   };
   input.addEventListener("input", () => {
     save.disabled = !input.value.trim();

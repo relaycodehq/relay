@@ -36,7 +36,7 @@ test("browser feedback stays anchored in the page and sends as structured contex
       body{margin:32px;background:#f5f7f3;color:#203438;font:20px system-ui}h1{font-size:30px}
       section{display:flex;gap:20px}button{width:260px;height:220px;border:0;border-radius:26px;background:#254742;color:#fff;text-align:left;padding:28px;font:700 30px system-ui}
       button small{display:block;color:#c8c39e;font-size:24px;margin-bottom:80px}#map{background:radial-gradient(circle at 110% 0,#587b68,#254742 80%)}
-      .space{height:1400px}
+      html,#pane{scroll-behavior:smooth}.space{height:1400px}
       #pane{height:90px;overflow:auto;border:1px solid}#pane div{height:600px}
       </style><div id=pane><div>Scrolls inside</div></div><h1>Your applications</h1><section><button id=map><small>MS</small>Map tiles</button><button id=gps><small>GL</small>GPS logger</button></section><div class=space></div>
       <script>window.clicked=0;document.getElementById('map').onclick=()=>window.clicked++;</script>`);
@@ -46,7 +46,11 @@ test("browser feedback stays anchored in the page and sends as structured contex
   const env = relayEnv();
   delete env.RELAY_DEV_URL;
   const app = await electron.launch({
-    env: { ...env, RELAY_TEST_DATA: join(root, "data") },
+    env: {
+      ...env,
+      RELAY_TEST_DATA: join(root, "data"),
+      RELAY_TEST_SMOOTH_SCROLLING: "1",
+    },
   });
   const page = await app.firstWindow();
   await page.emulateMedia({ colorScheme: "dark" });
@@ -201,28 +205,42 @@ test("browser feedback stays anchored in the page and sends as structured contex
         "document.getElementById('relay-element-inspector').shadowRoot",
       ),
     ).toBeNull();
-    // The wheel scrolls a pane under the overlay, not only the page.
+    // Every wheel tick must count, even when the page asks for smooth scrolling.
     const pane = await query(
       "(() => {const b=document.getElementById('pane').getBoundingClientRect();return {x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2)}})()",
     );
-    await app.evaluate(
-      ({ webContents }, { origin, pane }) =>
-        webContents
-          .getAllWebContents()
-          .find((wc) => wc.getURL().startsWith(origin))!
-          .sendInputEvent({
-            type: "mouseWheel",
-            ...pane,
-            deltaX: 0,
-            deltaY: -120,
-          }),
-      { origin, pane },
-    );
+    const wheel = (point: { x: number; y: number }) =>
+      app.evaluate(
+        ({ webContents }, { origin, point }) =>
+          webContents
+            .getAllWebContents()
+            .find((wc) => wc.getURL().startsWith(origin))!
+            .sendInputEvent({
+              type: "mouseWheel",
+              ...point,
+              deltaX: 0,
+              deltaY: -60,
+            }),
+        { origin, point },
+      );
+    for (let tick = 0; tick < 6; tick++) {
+      await wheel(pane);
+      await page.waitForTimeout(16);
+    }
     await expect
       .poll(() => query("document.getElementById('pane').scrollTop"))
-      .toBeGreaterThan(0);
+      .toBe(360);
     expect(await query("scrollY")).toBe(0);
-    await query("document.getElementById('pane').scrollTop = 0");
+    await query(
+      "document.getElementById('pane').scrollTo({ top: 0, behavior: 'instant' })",
+    );
+    // The same forwarding applies to the whole page outside the pane.
+    for (let tick = 0; tick < 6; tick++) {
+      await wheel({ x: 16, y: 150 });
+      await page.waitForTimeout(16);
+    }
+    await expect.poll(() => query("scrollY")).toBe(360);
+    await query("window.scrollTo({ top: 0, behavior: 'instant' })");
     // Enter on Cancel cancels; only the comment box saves on Enter.
     await pointer("#gps");
     await type("Not this one");
