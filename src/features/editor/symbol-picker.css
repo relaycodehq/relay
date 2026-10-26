@@ -29,7 +29,11 @@
 .symbol-picker-head > span {
   color: var(--muted);
 }
-.symbol-picker > input {
+/* Always focused, so no ring; the global 100% width would overflow the margins. */
+.symbol-picker > input,
+.symbol-picker > input:focus-visible {
+  width: auto;
+  outline: none;
   margin: 0 10px 8px;
   padding: 6px 9px;
   border: 1px solid var(--border);
@@ -38,12 +42,13 @@
   color: var(--text);
   font-size: 12px;
 }
+/* Rows inset with a rounded highlight, as in the command palette. */
 .symbol-picker-list {
   overflow-y: auto;
-  padding-bottom: 6px;
+  padding: 0 7px 7px;
 }
 .symbol-picker-empty {
-  margin: 10px 14px 14px;
+  margin: 10px 7px 14px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -51,7 +56,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  padding: 8px 14px 3px;
+  padding: 10px 7px 4px;
   font-size: 11px;
   font-weight: 500;
 }
@@ -65,19 +70,20 @@
 .symbol-picker-row {
   display: flex;
   align-items: baseline;
+  justify-content: flex-start;
   gap: 10px;
   width: 100%;
   min-height: 0;
-  padding: 4px 14px 4px 24px;
+  padding: 4px 8px 4px 10px;
   border: 0;
-  border-radius: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font-size: 12px;
   text-align: left;
 }
 .symbol-picker-row[aria-selected="true"] {
-  background: var(--selected);
+  background: var(--hover);
 }
 .symbol-picker-line {
   min-width: 3ch;
@@ -90,7 +96,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: var(--code-font-size, 12px);
+  font-size: calc(var(--code-font-size, 12px) - 1px);
 }
 .symbol-picker-name {
   font-family: var(--font-mono);
