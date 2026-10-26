@@ -13,6 +13,7 @@ import {
 import "./styles.css";
 import { initAppearance } from "./lib/appearance";
 import { initWindowFocus } from "./lib/window-focus";
+import { initCleanCopy } from "./lib/clean-copy";
 import { initFocusRing } from "./lib/focus-ring";
 import { initContextMenuKey } from "./lib/context-menu-key";
 import { initTypography } from "./lib/typography";
@@ -55,6 +56,7 @@ function startApp() {
   initTypography();
   initChatWidth();
   initWindowFocus();
+  initCleanCopy();
   initFocusRing();
   initContextMenuKey();
   initShortcuts();
