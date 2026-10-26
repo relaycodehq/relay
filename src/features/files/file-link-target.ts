@@ -12,9 +12,13 @@ export type SideView = "files" | "changes" | "branch";
 
 /**
  * What other parts of the app ask Files to show: a file, a version of one
- * kept in snapshots.ts, or a view of the sidebar.
+ * kept in snapshots.ts (`outside` when its path is outside the project), or
+ * a view of the sidebar.
  */
-export type FilesRequest = FileTarget | { snapshot: string; path: string } | { view: SideView };
+export type FilesRequest =
+  | FileTarget
+  | { snapshot: string; path: string; outside?: boolean }
+  | { view: SideView };
 
 /**
  * The change a link clicked in the chat opens with its changes: a folder

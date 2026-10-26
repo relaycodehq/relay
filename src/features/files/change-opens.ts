@@ -20,13 +20,13 @@ export function workingChange(
   if (media) {
     const sides = { deletions: before, additions: "Now" };
     keepSnapshot(snapshotId, { path: file.path, label: `${before} → now`, media, sides });
-    return { snapshot: snapshotId, path: file.path };
+    return { snapshot: snapshotId, path: file.path, outside: file.outside };
   }
   if (pair.binary) return { ...file, directory: false };
   const old = pair.old?.contents ?? "";
   if (!pair.next) {
     keepSnapshot(snapshotId, { path: file.path, label: `${before}, deleted since`, text: old });
-    return { snapshot: snapshotId, path: file.path };
+    return { snapshot: snapshotId, path: file.path, outside: file.outside };
   }
   return { ...file, directory: false, changes: true, baseline: { label: before, text: old } };
 }
