@@ -3,6 +3,8 @@ package dev.relay.android.features.thread.logic
 import dev.relay.android.remote.model.WrittenCode
 import dev.relay.android.remote.model.WrittenEdit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WrittenLinesTest {
@@ -31,6 +33,21 @@ class WrittenLinesTest {
         val diff = "--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
         val view = writtenView(WrittenCode("patch", "x.ts", diff = diff))
         assertEquals(listOf("H @@ -1,2 +1,2 @@", "S keep", "R old", "A new"), marks(view))
+    }
+
+    @Test
+    fun aPatchsHeadersEndAtItsFirstHunk() {
+        val diff = "diff --git a/x b/x\nindex 1..2\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n--- old rule\n+++ new rule\n"
+        val view = writtenView(WrittenCode("patch", "x.md", diff = diff))
+        assertEquals(listOf("H @@ -1 +1 @@", "R -- old rule", "A ++ new rule"), marks(view))
+    }
+
+    @Test
+    fun aFileCutBeforeAnyOfItFitKeptNothing() {
+        assertTrue(keptNothing(WrittenCode("whole", "x.ts", content = "", cut = true)))
+        assertTrue(keptNothing(WrittenCode("swap", "x.ts", edits = listOf(WrittenEdit("", "")), cut = true)))
+        assertFalse(keptNothing(WrittenCode("patch", "x.ts", diff = "@@ -1 +1 @@", cut = true)))
+        assertFalse(keptNothing(WrittenCode("whole", "x.ts", content = "")))
     }
 
     @Test

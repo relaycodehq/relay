@@ -38,6 +38,7 @@ import dev.relay.android.features.markdown.styledLine
 import dev.relay.android.features.thread.logic.LineMark
 import dev.relay.android.features.thread.logic.WrittenLine
 import dev.relay.android.features.thread.logic.WrittenView
+import dev.relay.android.features.thread.logic.keptNothing
 import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.writtenView
 import dev.relay.android.remote.Bridge
@@ -97,8 +98,10 @@ internal fun WrittenFile(code: WrittenCode, named: Boolean = false) {
     val language = remember(code.path) { languageFor(code.path) }
     val before = remember(view, c.isDark) { highlighted(view.before, language, c) }
     val after = remember(view, c.isDark) { highlighted(view.after, language, c) }
+    val nothingKept = keptNothing(code)
     Column(Modifier.fillMaxWidth().clip(Radii.smShape).background(c.code).ring(c.border, Radii.smShape)) {
-        WrittenHeader(code, view, named)
+        WrittenHeader(code, view, named = named || nothingKept, nothingKept)
+        if (nothingKept) return@Column
         SelectionContainer(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
             Column(Modifier.padding(bottom = 6.dp)) {
                 val gutter = if (view.diff) 18.dp else (view.lines.size.toString().length * 8 + 12).dp
@@ -118,12 +121,13 @@ private fun highlighted(text: String, language: String?, c: RelayColors): List<A
 }
 
 @Composable
-private fun WrittenHeader(code: WrittenCode, view: WrittenView, named: Boolean) {
+private fun WrittenHeader(code: WrittenCode, view: WrittenView, named: Boolean, nothingKept: Boolean) {
     val c = RelayTheme.colors
     val style = RelayTheme.type.monoSm
     Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (named) Text(LocalTrace.current.display(code.path), Modifier.weight(1f, fill = false), style = style, color = c.mutedForeground, maxLines = 1)
-        if (view.diff) {
+        if (nothingKept) Text("too long to keep", style = style, color = c.faint)
+        else if (view.diff) {
             Text("+${view.added}", style = style, color = c.additionText)
             Text("−${view.removed}", style = style, color = c.deletionText)
         } else Text(plural(view.lines.size, "line"), style = style, color = c.faint)

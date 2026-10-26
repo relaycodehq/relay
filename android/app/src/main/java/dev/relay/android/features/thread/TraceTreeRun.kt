@@ -136,14 +136,17 @@ private fun OpenableRow(
 /** Whether a call has anything to show opened: code it wrote, output, or the command itself. */
 private fun opensTo(a: AgentActivity) = a.wroteCode == true || a.detail != null || a.kind == "command"
 
-/** The code a call wrote, else the command it ran and what that printed. */
+/**
+ * The code a call wrote, the command it ran, and what it printed: not when
+ * that only confirms the code shown, but always when the call failed, to say why.
+ */
 @Composable
 private fun CallInside(a: AgentActivity) {
-    val output = @Composable {
-        if (a.kind == "command") CommandLine(a.label)
-        if (a.detail != null) Detail(a)
-    }
-    if (a.wroteCode == true) WrittenCodeOf(a, otherwise = output) else output()
+    val wroteCode = a.wroteCode == true
+    val showsOutput = a.detail != null && (!wroteCode || a.status == "failed")
+    if (wroteCode) WrittenCodeOf(a, otherwise = { if (a.detail != null && !showsOutput) Detail(a) })
+    if (a.kind == "command") CommandLine(a.label)
+    if (showsOutput) Detail(a)
 }
 
 /** What ran, as typed: the row says what it did, this says how. */

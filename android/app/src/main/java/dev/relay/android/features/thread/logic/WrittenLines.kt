@@ -53,20 +53,21 @@ private fun swapView(edits: List<kotlin.Pair<String, String>>): WrittenView {
     return WrittenView(before, after, lines)
 }
 
-private val HUNK = Regex("^@@")
-
 /**
- * A unified diff by its marks. Codex sends a new file's patch as its bare
- * content, with no hunk to mark anything; that reads as the whole file.
+ * A unified diff by its marks, from its first hunk on: the `---`/`+++` file
+ * headers come before it, and after it a line starting `---` is a removed
+ * line. Codex sends a new file's patch as its bare content, with no hunk to
+ * mark anything; that reads as the whole file.
  */
 private fun patchView(diff: String): WrittenView {
-    val raw = diff.split("\n")
-    if (raw.none { HUNK.containsMatchIn(it) }) return wholeView(diff)
-    val body = withoutLastNewline(raw).filter { !it.startsWith("--- ") && !it.startsWith("+++ ") }
-    val code = body.joinToString("\n") { if (HUNK.containsMatchIn(it)) "" else it.drop(1) }
+    val raw = withoutLastNewline(diff.split("\n"))
+    val firstHunk = raw.indexOfFirst { it.startsWith("@@") }
+    if (firstHunk == -1) return wholeView(diff)
+    val body = raw.drop(firstHunk)
+    val code = body.joinToString("\n") { if (it.startsWith("@@")) "" else it.drop(1) }
     val lines = body.mapIndexed { i, line ->
         val mark = when {
-            HUNK.containsMatchIn(line) -> LineMark.Hunk
+            line.startsWith("@@") -> LineMark.Hunk
             line.startsWith("+") -> LineMark.Added
             line.startsWith("-") -> LineMark.Removed
             else -> LineMark.Same
@@ -76,8 +77,18 @@ private fun patchView(diff: String): WrittenView {
     return WrittenView(code, code, lines)
 }
 
+/** Past the desktop's limit before any of it fit: only the path is left to show. */
+fun keptNothing(code: WrittenCode): Boolean {
+    if (!code.cut) return false
+    return when (code.kind) {
+        "swap" -> code.edits.orEmpty().all { it.old.isEmpty() && it.new.isEmpty() }
+        "patch" -> code.diff.isNullOrEmpty()
+        else -> code.content.isNullOrEmpty()
+    }
+}
+
 /** Past this many line pairs a passage shows as all removed, then all added. */
-private const val MAX_DIFF_CELLS = 4_000_000
+private const val MAX_DIFF_CELLS = 2_000_000
 
 /**
  * The lines of [old] and [new] marked by a longest common subsequence: kept
