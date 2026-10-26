@@ -51,6 +51,8 @@ import {
   renameEntry,
 } from "../projects/project-files";
 import { projectIcon } from "../projects/project-icon";
+import { openWith, openWithApps } from "../open-with";
+import { openWithAppIdSchema } from "../../shared/open-with";
 import { branchPulls } from "../pull-requests/pull-request-create";
 import {
   computerIdSchema,
@@ -375,6 +377,12 @@ export function projectHandlers(ctx: ApiContext) {
       [fileRootSchema, workingPathSchema],
       async (where, path) =>
         openPath(entryPath((await fileRoot(where)).root, path)),
+    ),
+    openWithApps: () => openWithApps(),
+    openProjectPathWith: takes(
+      [fileRootSchema, workingPathSchema, openWithAppIdSchema],
+      async (where, path, appId) =>
+        openWith(appId, await entryPath((await fileRoot(where)).root, path)),
     ),
     createProjectEntry: takes(
       [workspaceIdSchema, workingPathSchema, z.enum(["file", "dir"])],
