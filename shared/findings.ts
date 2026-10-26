@@ -43,9 +43,11 @@ const droppedFindingSchema = z.object({
   reviewers: reviewerNumbersSchema,
 });
 
+// A big change reviewed in passes can keep well over 50; one over the cap
+// fails the whole report, so it publishes nothing.
 const reportSchema = z.object({
-  findings: z.array(findingSchema).max(50),
-  dropped: z.array(droppedFindingSchema).max(50).catch([]),
+  findings: z.array(findingSchema).max(300),
+  dropped: z.array(droppedFindingSchema).max(300).catch([]),
 });
 
 export type FindingsReport = z.infer<typeof reportSchema>;
