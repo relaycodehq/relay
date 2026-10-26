@@ -471,8 +471,28 @@ async function menu(ctx: SettingsContext) {
   });
 }
 
+/** Settings the menu turns on or off with one question. */
+const switches: Partial<
+  Record<string, { question: string; on(s: Snapshot): boolean }>
+> = {
+  "keep-awake": {
+    question: "Keep the computer from idling to sleep while Relay runs?",
+    on: (s) => s.keepAwake,
+  },
+  "usage-ping": {
+    question:
+      "Tell relaycode.io once a day that Relay is in use (version and system, no ID)?",
+    on: (s) => s.usagePing,
+  },
+};
+
 /** Asks for one setting's new value in the menu. */
 async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
+  const toggle = switches[row.key];
+  if (toggle) {
+    const on = await ask.yes(toggle.question, toggle.on(s));
+    return setValue(ctx, row.key, on ? "on" : "off");
+  }
   switch (row.key) {
     case "name": {
       const name = await ask.text(`Name ${dim(`(now ${s.name})`)}:`);
@@ -493,28 +513,6 @@ async function change(ctx: SettingsContext, ask: Ask, row: Row, s: Snapshot) {
         (await ask.yes(
           "Install new releases by themselves, once no thread is working?",
           s.autoUpdate,
-        ))
-          ? "on"
-          : "off",
-      );
-    case "keep-awake":
-      return setValue(
-        ctx,
-        "keep-awake",
-        (await ask.yes(
-          "Keep the computer from idling to sleep while Relay runs?",
-          s.keepAwake,
-        ))
-          ? "on"
-          : "off",
-      );
-    case "usage-ping":
-      return setValue(
-        ctx,
-        "usage-ping",
-        (await ask.yes(
-          "Tell relaycode.io once a day that Relay is in use (version and system, no ID)?",
-          s.usagePing,
         ))
           ? "on"
           : "off",

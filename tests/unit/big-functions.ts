@@ -65,7 +65,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/headless/daemon.ts › runDaemon": 295,
   "electron/headless/jpeg.ts › encodeJpeg": 133,
   "electron/headless/png.ts › decodePng": 127,
-  "electron/headless/settings/index.ts › change": 132,
+  "electron/headless/settings/index.ts › change": 115,
   "electron/headless/settings/index.ts › settingsCommand": 98,
   "electron/html-renders/agent-tools.ts › answerRenderTool": 108,
   "electron/html-renders/look.ts › lookAtPage": 124,
