@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -70,24 +69,6 @@ fun actionIcon(kind: String): ImageVector = when (kind) {
     "web" -> TablerIcons.Outline.World
     "run" -> TablerIcons.Outline.Terminal2
     else -> TablerIcons.Outline.Tool
-}
-
-/** A file's language mark and its colour; the one place a trace row has colour that isn't a status. */
-private fun fileTypeIcon(path: String): Pair<ImageVector, Color>? = when (path.substringAfterLast('.').lowercase()) {
-    "ts", "mts", "cts" -> TablerIcons.Outline.BrandTypescript to Color(0xFF4F8FD8)
-    "tsx", "jsx" -> TablerIcons.Outline.BrandReact to Color(0xFF4FC3DC)
-    "js", "mjs", "cjs" -> TablerIcons.Outline.BrandJavascript to Color(0xFFD9B92E)
-    "kt", "kts" -> TablerIcons.Outline.BrandKotlin to Color(0xFFA97BFF)
-    "py" -> TablerIcons.Outline.BrandPython to Color(0xFF5A9BD5)
-    "swift" -> TablerIcons.Outline.BrandSwift to Color(0xFFF05138)
-    "rs" -> TablerIcons.Outline.BrandRust to Color(0xFFDEA584)
-    "go" -> TablerIcons.Outline.BrandGolang to Color(0xFF00ADD8)
-    "css" -> TablerIcons.Outline.BrandCss3 to Color(0xFF5B8DEF)
-    "html" -> TablerIcons.Outline.BrandHtml5 to Color(0xFFE5643A)
-    "json" -> TablerIcons.Outline.Braces to Color(0xFFC9B44A)
-    "md" -> TablerIcons.Outline.Markdown to Color.Unspecified
-    "png", "jpg", "jpeg", "gif", "webp" -> TablerIcons.Outline.Photo to Color.Unspecified
-    else -> null
 }
 
 /** Which folder a path sits in, by name. */
@@ -192,7 +173,7 @@ private fun Where(where: String) {
 @Composable
 private fun chipText() = RelayTheme.type.monoSm.copy(fontSize = 12.sp, lineHeight = 17.sp)
 
-/** A file: its language mark, its folder dimmed, its name, and a dimmed [note] such as the lines read. */
+/** A file: its folder dimmed, its name, and a dimmed [note] such as the lines read. The row's icon already says what was done to it. */
 @Composable
 internal fun FileChip(path: String, note: String? = null) {
     val c = RelayTheme.colors
@@ -203,9 +184,6 @@ internal fun FileChip(path: String, note: String? = null) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        fileTypeIcon(shown)?.let { (icon, tint) ->
-            Icon(icon, null, size = 12.dp, tint = if (tint == Color.Unspecified) c.mutedForeground else tint)
-        }
         val name = buildAnnotatedString {
             if (folder.isNotEmpty()) withStyle(SpanStyle(color = c.mutedForeground)) { append("$folder/") }
             append(baseName(shown))
