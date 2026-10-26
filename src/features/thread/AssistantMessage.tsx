@@ -160,8 +160,8 @@ export function AssistantMessage({
   });
   // The answer's own images show in its text; the strip keeps the rest.
   const shown = useMemo(
-    () => (m.body ? answerImagePaths(m.body, projectRoot) : []),
-    [m.body, projectRoot],
+    () => (m.body && !m.imported ? answerImagePaths(m.body, projectRoot) : []),
+    [m.body, m.imported, projectRoot],
   );
   const read = useMemo(
     () =>
@@ -179,6 +179,8 @@ export function AssistantMessage({
   );
   const answerImage = useCallback(
     (src: string, alt: string) => {
+      // A copied answer's paths were on the sharer's computer, not in this checkout.
+      if (m.imported) return alt || null;
       const video = chatId && localVideoPath(src, projectRoot);
       if (video)
         return (
@@ -196,7 +198,7 @@ export function AssistantMessage({
         <AnswerImage image={image} alt={alt} onOpen={() => open(image.key)} />
       );
     },
-    [chatId, m.id, projectRoot, open],
+    [chatId, m.id, m.imported, projectRoot, open],
   );
   const failure = m.error ? agentError(m.error) : undefined;
   // A saved synthetic API notice belongs in the error's details. Only an

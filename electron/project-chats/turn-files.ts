@@ -60,6 +60,8 @@ export class TurnFiles {
     if (
       message.role !== "assistant" ||
       !message.body ||
+      // A copied answer names paths on the computer it came from.
+      message.imported ||
       !root ||
       !answerImagePaths(message.body, root).includes(path)
     )
@@ -77,6 +79,7 @@ export class TurnFiles {
     if (
       message?.role !== "assistant" ||
       !message.body ||
+      message.imported ||
       !root ||
       !answerVideoPaths(message.body, root).includes(path)
     )
