@@ -153,39 +153,63 @@ export function AgentQuestionForm({
               }}
             />
           )}
-          <footer>
-            {question.options?.length && !deferred ? (
-              <span className="agent-question-hint">
-                {question.multiple
-                  ? "Pick any that apply"
-                  : `Press 1–${Math.min(question.options.length, 9)} to pick`}
-              </span>
-            ) : null}
-            {index > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  clearTimeout(timer.current);
-                  setIndex(index - 1);
-                }}
-              >
-                Back
-              </button>
-            )}
-            <button
-              type="submit"
-              className="primary"
-              disabled={busy || !answers[question.id]?.some((a) => a.trim())}
-            >
-              {index < questions.length - 1
+          <QuestionFooter
+            question={question}
+            deferred={deferred}
+            submitLabel={
+              index < questions.length - 1
                 ? "Next"
                 : deferred
                   ? "Send answer"
-                  : "Continue"}
-            </button>
-          </footer>
+                  : "Continue"
+            }
+            canSubmit={!busy && !!answers[question.id]?.some((a) => a.trim())}
+            onBack={
+              index > 0
+                ? () => {
+                    clearTimeout(timer.current);
+                    setIndex(index - 1);
+                  }
+                : undefined
+            }
+          />
         </fieldset>
       )}
     </form>
+  );
+}
+
+function QuestionFooter({
+  question,
+  deferred,
+  submitLabel,
+  canSubmit,
+  onBack,
+}: {
+  question: AgentQuestion;
+  deferred: boolean;
+  submitLabel: string;
+  canSubmit: boolean;
+  /** Missing on the first question. */
+  onBack?: () => void;
+}) {
+  return (
+    <footer>
+      {question.options?.length && !deferred ? (
+        <span className="agent-question-hint">
+          {question.multiple
+            ? "Pick any that apply"
+            : `Press 1–${Math.min(question.options.length, 9)} to pick`}
+        </span>
+      ) : null}
+      {onBack && (
+        <button type="button" onClick={onBack}>
+          Back
+        </button>
+      )}
+      <button type="submit" className="primary" disabled={!canSubmit}>
+        {submitLabel}
+      </button>
+    </footer>
   );
 }
