@@ -87,9 +87,12 @@ export function useTabClosing({
 
   /** A file or folder went to the Trash, in the project or with `outside` outside it: its tabs close, edits and all. */
   const trashed = (path: string, outside = false) => {
-    for (const tab of allTabs(layout))
-      if (tabIsWithin(tab, path, outside)) closeDocument(tab);
+    const gone = (tab: EditorTab) => tabIsWithin(tab, path, outside);
+    for (const tab of allTabs(layout)) if (gone(tab)) closeDocument(tab);
     setLayout((l) => dropInGroups(l, path, outside));
+    // Back, Forward and Reopen Closed Tab can't return to them either.
+    history.current = forget(history.current, gone);
+    closedTabs.forget(gone);
   };
 
   return { closing, closed, requestClose, closeMany, trashed };

@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { EditorLayout } from "./editor-groups";
+import type { EditorTab } from "./editor-tabs";
 import { nextToReopen, rememberClosed, type ClosedTab } from "./closed-tabs";
 
 /**
@@ -13,6 +14,10 @@ export function useClosedTabs(where: string) {
     remember: (closed: ClosedTab[]) => {
       if (closed.length)
         memory.current.stack = rememberClosed(memory.current.stack, closed);
+    },
+    /** Drops closed tabs on files that went, which can't be reopened. */
+    forget: (gone: (tab: EditorTab) => boolean) => {
+      memory.current.stack = memory.current.stack.filter((c) => !gone(c.tab));
     },
     /** Takes the tab to reopen off the stack, if there is one. */
     takeNext: (layout: EditorLayout) => {

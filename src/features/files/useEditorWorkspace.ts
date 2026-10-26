@@ -13,8 +13,8 @@ import {
   split,
   type EditorLayout,
 } from "./editor-groups";
-import { tabId, type EditorTab } from "./editor-tabs";
-import { emptyHistory, type History } from "./navigation-history";
+import { tabId, tabIsWithin, type EditorTab } from "./editor-tabs";
+import { emptyHistory, forget, type History } from "./navigation-history";
 import {
   hasUnsavedEdits,
   moveTabDocuments,
@@ -112,7 +112,8 @@ export type EditorWorkspace = ReturnType<typeof useEditorWorkspace>;
 
 /**
  * What to do when a file or folder moved, in the project or with `outside`
- * outside it: its tabs and documents follow.
+ * outside it: its tabs and documents follow, and places at the old path are
+ * forgotten.
  */
 function followMove(ws: {
   layout: EditorLayout;
@@ -124,5 +125,8 @@ function followMove(ws: {
   return (from: string, to: string, outside = false) => {
     moveTabDocuments(allTabs(ws.layout), ws.home, from, to, outside);
     ws.setLayout((l) => renameInGroups(l, from, to, outside));
+    const gone = (tab: EditorTab) => tabIsWithin(tab, from, outside);
+    ws.history.current = forget(ws.history.current, gone);
+    ws.closedTabs.forget(gone);
   };
 }
