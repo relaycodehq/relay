@@ -323,8 +323,29 @@ function gitAction(segment: string, args: string[], body: string | undefined): C
   const sub = gitSubcommand(args);
   if (sub === "add") return undefined;
   if (sub === "grep") return gitGrep(args.slice(args.indexOf("grep") + 1));
-  if (sub !== "commit") return { kind: "git", what: `git ${sub}`.trim() };
-  return { kind: "commit", subject: commitSubject(segment, args, body) };
+  if (sub === "commit") return { kind: "commit", subject: commitSubject(segment, args, body) };
+  const what = `git ${sub}`.trim();
+  // A push or a reset changed something, so it ran rather than checked.
+  return onlyLooks(sub, args.slice(args.indexOf(sub) + 1)) ? { kind: "git", what } : { kind: "run", what };
+}
+
+/** Git commands that only look. */
+const gitLookups = new Set([
+  "", "status", "diff", "log", "show", "blame", "rev-parse", "rev-list", "ls-files", "ls-tree", "describe", "reflog",
+  "shortlog", "cat-file", "merge-base", "for-each-ref", "show-ref", "name-rev", "cherry", "range-diff", "whatchanged",
+]);
+
+/** Commands that list when given no names: `git branch`, `git tag -l`, `git remote -v`, `git stash list`. */
+const listsUnnamed = new Set(["branch", "tag", "remote", "worktree"]);
+
+/** Whether a git command only looks, its words past the subcommand in `rest`. */
+function onlyLooks(sub: string, rest: string[]) {
+  if (gitLookups.has(sub)) return true;
+  const names = positional(rest);
+  if (sub === "stash") return names[0] === "list" || names[0] === "show";
+  if (sub === "config") return names.length <= 1 && !rest.some((a) => /^--(?:unset|add|replace|rename|remove)/.test(a));
+  if (!listsUnnamed.has(sub)) return false;
+  return !names.length || rest.includes("-l") || rest.includes("--list") || /^(?:list|show|get-url)$/.test(names[0]!);
 }
 
 /** `git grep -n "x" HEAD -- src` searches src: a revision before `--` isn't a place. */

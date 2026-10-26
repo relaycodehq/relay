@@ -189,7 +189,7 @@ describe("whether a test or check failed", () => {
     const call = { id: "t", kind: "command" as const, status: "failed" as const, label: "npm test && git push", detail: "Tests 12 passed" };
     expect(callActions(call)).toEqual([
       { kind: "test", failed: false },
-      { kind: "git", what: "git push" },
+      { kind: "run", what: "git push" },
     ]);
   });
 
@@ -304,6 +304,25 @@ describe("commands that look like something else", () => {
 });
 
 describe("git and shell words around a search", () => {
+  it("checks with git commands that only look, and runs the ones that change something", () => {
+    const actions = (command: string) => commandActions(command).map((a) => `${a.kind} ${"what" in a ? a.what : ""}`);
+    expect(actions("git status; git -C app diff --stat; git branch -a; git stash list; git remote -v; git config user.name")).toEqual([
+      "git git status",
+      "git git diff",
+      "git git branch",
+      "git git stash",
+      "git git remote",
+      "git git config",
+    ]);
+    expect(actions("git push origin main; git reset --hard HEAD~1; git branch -D old; git stash; git checkout main")).toEqual([
+      "run git push",
+      "run git reset",
+      "run git branch",
+      "run git stash",
+      "run git checkout",
+    ]);
+  });
+
   it("reads git grep as a search of the paths after --", () => {
     const command = `b=$(git merge-base HEAD main); git grep -n "FileEntryIcon" $b -- src/features/agent-turn | head; echo ---; git grep -n "Icon" HEAD -- src/features/agent-turn | head`;
     expect(commandActions(command)).toEqual([
