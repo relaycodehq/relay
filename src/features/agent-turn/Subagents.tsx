@@ -27,9 +27,10 @@ import {
   modelName,
   subagentNow,
   subagentUse,
-  took,
   type SubagentRun,
 } from "../../../shared/subagents";
+import { AgentMarksRow } from "./AgentMarks";
+import { markState, standing } from "./TurnAgents";
 import "./subagents.css";
 import "../changes/branch-picker.css";
 
@@ -167,21 +168,17 @@ function Peek({
   const root = projectRoot.replace(/\/+$/, "") + "/";
   const display = (text: string) => text.split(root).join("");
   const row = (r: SubagentRun) => (
-    <button
+    <AgentMarksRow
       key={r.id}
-      type="button"
-      className="subagents-item"
+      provider={r.provider ?? "claude"}
+      state={markState(r)}
+      name={r.description}
+      meta={standing(r, now)}
       aria-current={r === run}
       onMouseEnter={() => setFocus(r.id)}
       onFocus={() => setFocus(r.id)}
       onClick={() => onOpen(r.id)}
-    >
-      <SubagentStatus run={r} />
-      <span className="subagents-name">{r.description}</span>
-      <span className="subagents-time">
-        {took((r.ended ?? now) - r.started)}
-      </span>
-    </button>
+    />
   );
   return (
     <div className="subagents-peek">
@@ -189,7 +186,7 @@ function Peek({
         <div className="subagents-card-head">
           <b>Subagents</b>
           <span>
-            {batch.length - working.length} of {batch.length} done
+            {batch.length - working.length} of {batch.length} back
           </span>
           {working.length === 0 && (
             <button
