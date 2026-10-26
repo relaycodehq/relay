@@ -1208,6 +1208,167 @@
    "plain"
   ]
  ],
+ "readCodes": [
+  {
+   "call": {
+    "id": "call-35",
+    "kind": "command",
+    "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
+    "status": "complete",
+    "detail": "a\nb\nc\n",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "pages/Player.jsx",
+      "lines": "115–117"
+     }
+    ]
+   },
+   "read": {
+    "file": "pages/Player.jsx",
+    "code": "a\nb\nc",
+    "first": 115
+   }
+  },
+  {
+   "call": {
+    "id": "call-36",
+    "kind": "command",
+    "label": "sed -n 115,135p pages/Player.jsx",
+    "status": "complete",
+    "detail": "a\nb\n",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "pages/Player.jsx",
+      "lines": "115–135"
+     }
+    ]
+   },
+   "read": {
+    "file": "pages/Player.jsx",
+    "code": "a\nb"
+   }
+  },
+  {
+   "call": {
+    "id": "call-37",
+    "kind": "read",
+    "label": "src/a.ts",
+    "status": "complete",
+    "detail": "10\tconst a = 1;\n11\t\n12\tconst b = 2;\n\n<system-reminder>\nmalware\n</system-reminder>",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "src/a.ts"
+     }
+    ]
+   },
+   "read": {
+    "file": "src/a.ts",
+    "code": "const a = 1;\n\nconst b = 2;",
+    "first": 10
+   }
+  },
+  {
+   "call": {
+    "id": "call-38",
+    "kind": "read",
+    "label": "src/a.ts",
+    "status": "complete",
+    "detail": "6\tnd of a long line\n117\tnext();\n118\tdone();",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "src/a.ts"
+     }
+    ]
+   },
+   "read": {
+    "file": "src/a.ts",
+    "code": "next();\ndone();",
+    "first": 117
+   }
+  },
+  {
+   "call": {
+    "id": "call-39",
+    "kind": "command",
+    "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
+    "status": "complete",
+    "detail": "    40\tapp.on();\n    41\tquit();\n",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "electron/main.ts",
+      "lines": "40–41"
+     }
+    ]
+   },
+   "read": {
+    "file": "electron/main.ts",
+    "code": "app.on();\nquit();",
+    "first": 40
+   }
+  },
+  {
+   "call": {
+    "id": "call-40",
+    "kind": "command",
+    "label": "cat data.tsv",
+    "status": "complete",
+    "detail": "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "data.tsv"
+     }
+    ]
+   },
+   "read": {
+    "file": "data.tsv",
+    "code": "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw"
+   }
+  },
+  {
+   "call": {
+    "id": "call-41",
+    "kind": "command",
+    "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
+    "status": "complete",
+    "detail": "x\ny\nz\nw",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "a.ts",
+      "lines": "1–2"
+     },
+     {
+      "kind": "read",
+      "file": "b.ts",
+      "lines": "1–2"
+     }
+    ]
+   },
+   "read": null
+  },
+  {
+   "call": {
+    "id": "call-42",
+    "kind": "command",
+    "label": "cat missing.ts",
+    "status": "failed",
+    "detail": "No such file",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "missing.ts"
+     }
+    ]
+   },
+   "read": null
+  }
+ ],
  "shortWheres": [
   [
    "src",

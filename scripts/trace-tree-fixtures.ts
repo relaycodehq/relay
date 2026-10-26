@@ -6,6 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { AgentActivity } from "../shared/projects";
 import { callActions } from "../shared/call-actions";
+import { readCode } from "../shared/read-code";
 import {
   actionVerb,
   rowFailed,
@@ -124,11 +125,23 @@ const piece = (p: TracePiece) => {
   }
 };
 
+const reads = [
+  call("command", "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'", { detail: "a\nb\nc\n" }),
+  call("command", "sed -n 115,135p pages/Player.jsx", { detail: "a\nb\n" }),
+  call("read", "src/a.ts", { detail: "10\tconst a = 1;\n11\t\n12\tconst b = 2;\n\n<system-reminder>\nmalware\n</system-reminder>" }),
+  call("read", "src/a.ts", { detail: "6\tnd of a long line\n117\tnext();\n118\tdone();" }),
+  call("command", "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"", { detail: "    40\tapp.on();\n    41\tquit();\n" }),
+  call("command", "cat data.tsv", { detail: "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw" }),
+  call("command", "sed -n 1,2p a.ts; sed -n 1,2p b.ts", { detail: "x\ny\nz\nw" }),
+  call("command", "cat missing.ts", { detail: "No such file", status: "failed" }),
+];
+
 const fixture = {
   cases: cases.map((c) => ({ name: c.name, calls: c.calls, pieces: traceTree(c.calls).map(piece) })),
   shortPatterns: ["^\\.sb-age\\b\\|^\\.sb-age {", "rg\\b\\|rgFlags", "color: color-mix(in srgb, var(--muted) 70%, transparent);", "plain"].map(
     (p) => [p, shortPattern(p)],
   ),
+  readCodes: reads.map((c) => ({ call: c, read: readCode(c) ?? null })),
   shortWheres: ["src", "/private/tmp/relay-audit/scripts/B /tmp/x", "src/features/sidebar/*.tsx"].map((w) => [w, shortWhere(w)]),
 };
 

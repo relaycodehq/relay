@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { AgentActivity } from "../../../shared/projects";
+import { readCode } from "../../../shared/read-code";
 import { baseName, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
 import {
   actionVerb,
@@ -30,6 +31,7 @@ import {
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { Spinner } from "../../ui/ui";
 import { Fold, Subagents } from "./ToolRow";
+import { ReadCode } from "./ReadCode";
 import { WrittenCode } from "./WrittenCode";
 
 export const actionIcons: Record<CallAction["kind"], typeof FileText> = {
@@ -162,27 +164,31 @@ export function CallsOpened({ calls, onChanges }: { calls: AgentActivity[]; onCh
   const { display } = useContext(Subagents);
   return (
     <div className="trace-opened">
-      {calls.map((call) => (
-        <div key={call.id}>
-          {call.written?.map((file) => (
-            <WrittenCode key={file.path} file={file} shownPath={display(file.path)} />
-          ))}
-          {call.kind === "command" && (
-            <pre className="trace-output">
-              <span className="trace-output-command">{shownCommand(call.label)}</span>
-              {call.detail ? `\n${call.detail}` : ""}
-            </pre>
-          )}
-          {call.kind !== "command" && showsDetail(call) && (
-            <pre className="trace-output">{call.detail}</pre>
-          )}
-          {call.kind === "file" && !isScratch(call.label) && (
-            <button className="trace-changes" onClick={onChanges}>
-              Open working changes
-            </button>
-          )}
-        </div>
-      ))}
+      {calls.map((call) => {
+        const read = readCode(call);
+        return (
+          <div key={call.id}>
+            {call.written?.map((file) => (
+              <WrittenCode key={file.path} file={file} shownPath={display(file.path)} />
+            ))}
+            {read && <ReadCode read={read} />}
+            {!read && call.kind === "command" && (
+              <pre className="trace-output">
+                <span className="trace-output-command">{shownCommand(call.label)}</span>
+                {call.detail ? `\n${call.detail}` : ""}
+              </pre>
+            )}
+            {!read && call.kind !== "command" && showsDetail(call) && (
+              <pre className="trace-output">{call.detail}</pre>
+            )}
+            {call.kind === "file" && !isScratch(call.label) && (
+              <button className="trace-changes" onClick={onChanges}>
+                Open working changes
+              </button>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -147,7 +147,7 @@
 }
 .written-gutter {
   flex: none;
-  width: 34px;
+  width: max(34px, calc(var(--gutter-digits, 0) * 1ch + 10px));
   padding-right: 10px;
   text-align: right;
   color: var(--muted);

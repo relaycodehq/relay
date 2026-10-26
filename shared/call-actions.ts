@@ -142,6 +142,8 @@ function segmentAction(segment: string, body: string | undefined): CallAction | 
   switch (program) {
     case "sed":
       return sedAction(args);
+    case "nl":
+      return nlAction(segment, args);
     case "cat":
       return catAction(segment, args, body);
     case "tee": {
@@ -174,12 +176,26 @@ function segmentAction(segment: string, body: string | undefined): CallAction | 
   }
 }
 
+/** The lines `sed -n 10,40p` prints: "10–40". */
+function printedLines(args: string[]) {
+  const range = /^(\d+),(\d+)p$/.exec(args.find((a) => /^\d+,\d+p$/.test(a)) ?? "");
+  return range ? `${range[1]}–${range[2]}` : undefined;
+}
+
+const readOf = (file: string, lines: string | undefined): CallAction =>
+  lines ? { kind: "read", file, lines } : { kind: "read", file };
+
 /** `sed -n 10,40p file` reads lines; `sed -i` edits. */
 function sedAction(args: string[]): CallAction {
   const file = positional(args).at(-1) ?? "";
   if (args.some((a) => a.startsWith("-i"))) return { kind: "edit", file };
-  const range = /^(\d+),(\d+)p$/.exec(args.find((a) => /^\d+,\d+p$/.test(a)) ?? "");
-  return range ? { kind: "read", file, lines: `${range[1]}–${range[2]}` } : { kind: "read", file };
+  return readOf(file, printedLines(args));
+}
+
+/** `nl -ba file | sed -n 40,90p` reads those lines with their numbers. */
+function nlAction(segment: string, args: string[]): CallAction {
+  const file = positional(args)[0] ?? "";
+  return readOf(file, printedLines(wordsOf(pipedInto(segment) ?? "")));
 }
 
 /** `cat > f <<EOF` writes f, `cat <<EOF | node` runs node, `cat f` reads f. */
