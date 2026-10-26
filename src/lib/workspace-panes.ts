@@ -155,6 +155,17 @@ export const shownPanes = ({
 }: Pick<PaneLayout, "order" | "open" | "zoomed">) =>
   order.filter((id) => (zoomed ? id === zoomed : open[id]));
 
+/** The panes asked for, but Changes only in a review, and the chat when none is left. */
+function shownInThread(
+  layout: Pick<PaneLayout, "order" | "open" | "zoomed">,
+  reviewing: boolean,
+): PaneId[] {
+  const asked = shownPanes(layout).filter(
+    (id) => id !== "changes" || reviewing,
+  );
+  return asked.length ? asked : ["chat"];
+}
+
 /**
  * The `shown` panes that fit `room` px side by side. The latest opened goes
  * first, even when nothing fits, then the chat, then the rest from the most
@@ -325,8 +336,7 @@ export function useWorkspacePanes(thread: string, reviewing: boolean) {
       setLayout((l) => ({ ...l, weights: { ...l.weights, ...weights } })),
     [],
   );
-  const asked = shownPanes(layout).filter((id) => id !== "changes" || reviewing);
-  const shown: PaneId[] = asked.length ? asked : ["chat"];
+  const shown = shownInThread(layout, reviewing);
   const visible = fitPanes(shown, layout.recent, room);
   return {
     layout,
