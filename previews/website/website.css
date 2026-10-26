@@ -639,6 +639,94 @@ body {
     opacity 0.16s;
 }
 
+/* Files pane: the app's editor on a sample file */
+.rw-editor {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-left: 1px solid var(--border);
+  animation: pane-in 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.rw-editor-code {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.rw-editor-code .local-editor-surface {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.rw-spot {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: none;
+}
+.rw-tip {
+  position: absolute;
+  z-index: 3;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.28);
+  font-size: 12px;
+  animation: tip-in 0.16s ease-out;
+}
+.rw-tip-error {
+  padding: 8px 11px;
+  color: var(--danger);
+  max-width: 300px;
+}
+.rw-tip-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 7px 14px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+}
+.rw-tip-action kbd {
+  font-family: var(--font-sans);
+  font-size: 11px;
+}
+.rw-usages {
+  position: absolute;
+  z-index: 4;
+  inset: 12% 12px auto;
+  display: flex;
+  justify-content: center;
+  animation: tip-in 0.18s ease-out;
+}
+.rw-usages .symbol-picker {
+  width: 100%;
+  max-height: none;
+}
+.rw-editor .editor-bar svg {
+  color: var(--muted);
+}
+.rw-editor-errors {
+  color: var(--danger);
+}
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
 /* Changes pane */
 .rw-changes {
   display: flex;
@@ -2229,6 +2317,10 @@ body {
   .rw-columns[data-split] {
     grid-template-columns: minmax(0, 1fr);
   }
+  /* The editor gets the whole window; the thread would leave it a few lines. */
+  .rw-columns[data-files] > .rw-chat {
+    display: none;
+  }
   /* No room to unfold: just the phone. */
   .sync,
   .sync[data-open] {
@@ -2269,6 +2361,16 @@ body {
   }
   .hero-facts li + li::before {
     display: none;
+  }
+}
+
+/* Four pane buttons need the room the window's lights take. */
+@media (max-width: 520px) {
+  .rw-lights {
+    display: none;
+  }
+  .rw-panes {
+    margin-inline: auto;
   }
 }
 

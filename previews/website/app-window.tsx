@@ -4,7 +4,7 @@
 // through it, and the visitor's pointer and wheel pass straight through.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { GitCompareArrows, MessageSquare, SquareTerminal } from "lucide-react";
+import { Code, GitCompareArrows, MessageSquare, SquareTerminal } from "lucide-react";
 import { ProjectSidebar } from "../../src/features/sidebar/ProjectSidebar";
 import { Message } from "../../src/features/thread/ProjectMessage";
 import { AgentRequestCard } from "../../src/features/thread/AgentRequestCard";
@@ -37,6 +37,7 @@ import {
 } from "./sample";
 import { playing } from "./stubs";
 import { ChangesPane, TerminalDrawer } from "./panes";
+import { EditorPane } from "./editor-pane";
 import { Mark } from "./parts";
 import { reducedMotion, useLiveTurn } from "./motion";
 import { scripts, useAutopilot, type Stop } from "./autopilot";
@@ -316,6 +317,7 @@ export function AppWindow({
   const [open, setOpen] = useState("shortcuts");
   const [changes, setChanges] = useState(false);
   const [terminal, setTerminal] = useState(false);
+  const [files, setFiles] = useState(false);
   const [run, setRun] = useState(0);
 
   const serve = (on: boolean) => {
@@ -328,6 +330,7 @@ export function AppWindow({
     setOpen("shortcuts");
     setChanges(false);
     setTerminal(false);
+    setFiles(stop === "editor" && reducedMotion());
     serve(false);
     setRun((value) => value + 1);
   }, [stop]);
@@ -335,7 +338,11 @@ export function AppWindow({
   const pointer = useAutopilot(frame, scripts[stop], active, run, onDone);
   const chat = chats.find((c) => c.id === open) ?? chats[0];
   const settled =
-    stop === "review" || stop === "terminal" || changes || terminal;
+    stop === "review" ||
+    stop === "terminal" ||
+    stop === "editor" ||
+    changes ||
+    terminal;
   // Set before the sidebar's first fetch, which runs ahead of this component's effects.
   playing.settled = settled;
   useEffect(() => {
@@ -358,7 +365,7 @@ export function AppWindow({
           {chat.projectId} <i>/</i> <strong>{chat.title}</strong>
         </span>
         <span className="rw-panes" role="group" aria-label="Panes">
-          <button type="button" aria-pressed={!changes}>
+          <button type="button" aria-pressed={!changes && !files}>
             <MessageSquare size={13} /> Chat
           </button>
           <button
@@ -371,6 +378,14 @@ export function AppWindow({
             <span className="rw-delta">
               <b>+103</b> <i>−3</i>
             </span>
+          </button>
+          <button
+            type="button"
+            data-rw="files"
+            aria-pressed={files}
+            onClick={() => setFiles(!files)}
+          >
+            <Code size={13} /> Files
           </button>
           <button
             type="button"
@@ -398,7 +413,11 @@ export function AppWindow({
           />
         </aside>
         <div className="rw-main">
-          <div className="rw-columns" data-split={changes || undefined}>
+          <div
+            className="rw-columns"
+            data-split={changes || files || undefined}
+            data-files={files || undefined}
+          >
             <div className="rw-chat">
               {open === "review" ? (
                 <ReviewThread key={run} />
@@ -421,6 +440,7 @@ export function AppWindow({
               ) : null}
             </div>
             {changes ? <ChangesPane /> : null}
+            {files ? <EditorPane /> : null}
           </div>
           {terminal ? <TerminalDrawer onServing={() => serve(true)} /> : null}
         </div>

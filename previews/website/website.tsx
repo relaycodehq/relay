@@ -90,6 +90,11 @@ const tour: { stop: Stop; title: string; text: string }[] = [
     title: "Open a terminal",
     text: "Each thread has its own terminal. Running lists the processes that stay active.",
   },
+  {
+    stop: "editor",
+    title: "Edit the code",
+    text: "Files has a code editor with language servers. Local history keeps each save and each agent turn.",
+  },
 ];
 
 /** Tilts the window up from the page as it scrolls into view. */

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { reducedMotion } from "./motion";
 
-export type Stop = "threads" | "review" | "deep" | "terminal";
+export type Stop = "threads" | "review" | "deep" | "terminal" | "editor";
 
 /** One move of the on-screen pointer: where to, whether to click, how long to rest after. */
 interface Act {
@@ -56,6 +56,14 @@ export const scripts: Record<Stop, Act[]> = {
     },
     { to: ".running-tasks-list li:first-child", rest: 3400 },
     { to: ".running-tasks-header", click: true, rest: 900 },
+  ],
+  // Open Files, ask the call what it is, list its usages, then show the error.
+  editor: [
+    tidy,
+    { to: "[data-rw='files']", click: true, rest: 1800 },
+    { to: "[data-rw-symbol]", click: true, rest: 3600 },
+    { to: "[data-rw-usages]", click: true, rest: 3800 },
+    { to: "[data-rw-error]", click: true, rest: 3200 },
   ],
 };
 
