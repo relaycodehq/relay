@@ -83,7 +83,7 @@ Relay combines thread handoffs between your own computers with deep reviews wher
 | **Review edits** | Inspect working-tree and per-turn diffs beside the conversation; roll back or redo a turn's edits. Stage, commit, split changes into commits and push; browse history in a commit graph. |
 | **Deep review** | Pick changes, a branch, a commit or a PR. Several reviewers read the code, then a lead checks their findings and fixes what holds up. Save setups for reuse. |
 | **Work in isolation** | Give a thread a Git worktree, even mid-conversation, carry selected uncommitted changes with it, and merge its branch back. Git, Files and future turns follow the selected workspace. |
-| **Edit and check files** | Browse and find files by name, edit with syntax highlighting, and preview Markdown. Supported TypeScript/JavaScript and Angular projects get language checks, definitions and usages. |
+| **Edit and check files** | A code editor with language servers for TypeScript, PHP, Python, Rust and C++: errors, completions, definitions, usages and renames. Search Everywhere and Find in Files with replace, local history of every save and agent turn, and a pop-out editor window. |
 | **Use a terminal** | Each thread has its own shell; Tasks shows processes agents left running, with stop and restart controls. |
 | **See the result** | Open a browser preview beside the thread. Agents can show interactive pages and visual choices inline; the Device tab embeds Android emulators and iOS simulators through Expo Device Hub. |
 | **Review pull requests** | GitHub through your `gh` login, Azure DevOps through your `az` login, or Gitea, with CI status in the title bar. |
