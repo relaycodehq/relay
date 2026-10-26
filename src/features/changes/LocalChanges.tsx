@@ -46,7 +46,7 @@ export function LocalChanges({
   chatId,
   onOpenThread,
   agentRunning,
-  onOpenChange,
+  opens = { here: true },
   onOpenElsewhere,
 }: {
   pull?: Pull;
@@ -65,14 +65,14 @@ export function LocalChanges({
   /** The thread's agent is at work in this folder. */
   agentRunning?: boolean;
   /**
-   * Just the list, beside the editor: a picked file opens there with its
-   * changes inline rather than as a diff here.
+   * Where a picked file opens: as a diff here, or beside the editor, which
+   * shows it with its changes inline while this is just the list.
    */
-  onOpenChange?: (change: { path: string; area: ListArea }) => void;
+  opens?: { here: true } | { here: false; open: (change: { path: string; area: ListArea }) => void };
   /** Opens a changed file of another repository the thread's agents worked in. */
   onOpenElsewhere?: (pick: ElsewherePick) => void;
 }) {
-  const listOnly = !!onOpenChange;
+  const listOnly = !opens.here;
   const [split, setSplit] = useSplitDiff();
   const splits = helperOn(useAISettings().data, "split");
   const { selected, setSelected, message, setMessage, grouped, setGrouped } =
@@ -104,7 +104,7 @@ export function LocalChanges({
   const sections = tree ? changeSections(tree.changes) : [];
   const pickAndOpen = (path: string, area: ListArea) => {
     pick(path, area);
-    onOpenChange?.({ path, area });
+    if (!opens.here) opens.open({ path, area });
   };
   const elsewhere = useElsewhere(chatId).data;
   return (

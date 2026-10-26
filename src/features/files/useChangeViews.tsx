@@ -67,7 +67,7 @@ export function useChangeViews({
       content: (
         <LocalChanges
           projectId={where}
-          onOpenChange={({ path }) => open({ path }, { changes: true })}
+          opens={{ here: false, open: ({ path }) => open({ path }, { changes: true }) }}
           onOpenElsewhere={openElsewhere}
           {...thread}
         />
