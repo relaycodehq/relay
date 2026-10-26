@@ -12,6 +12,8 @@ import {
 let state: EditorWindowsState = { open: [], focused: null, waiting: [] };
 const listeners = new Set<() => void>();
 const takingHandoff = new Set<string>();
+/** Workspaces whose editor is on its way to a window of its own, hidden here meanwhile. */
+const leaving = new Set<string>();
 
 /** Files other windows asked this window's editor to open; the editor window's Files listen. */
 export const editorOpens = requestChannel<FilesRequest>();
@@ -31,9 +33,13 @@ async function takeHandoff(where: string) {
   }
 }
 
+function notify() {
+  listeners.forEach((listener) => listener());
+}
+
 function applyState(next: EditorWindowsState) {
   state = next;
-  listeners.forEach((listener) => listener());
+  notify();
   // Held for one window of them; the others get nothing and leave it be.
   for (const where of next.waiting) void takeHandoff(where);
 }
@@ -59,14 +65,22 @@ export const useEditorElsewhere = (where: string) =>
 
 /** Whether this window knows `where`'s editor to be in a window of its own. */
 export const isEditorElsewhere = (where: string) =>
-  state.open.some((w) => w.where === where);
+  leaving.has(where) || state.open.some((w) => w.where === where);
 
 /** Pops the workspace's editor out, its unsaved edits with it, or brings its window up. */
 export async function popOutEditor(projectId: string, where: string) {
-  const buffers = collectUnsaved(where);
-  await api.openEditorWindow(projectId, where, buffers);
-  // The window has them now; two copies of one edit would be one too many.
-  discardWorkspace(where);
+  // Hidden first, so nothing is typed here after its edits are collected.
+  leaving.add(where);
+  notify();
+  try {
+    const buffers = collectUnsaved(where);
+    await api.openEditorWindow(projectId, where, buffers);
+    // The window has them now; two copies of one edit would be one too many.
+    discardWorkspace(where);
+  } finally {
+    leaving.delete(where);
+    notify();
+  }
 }
 
 /**
