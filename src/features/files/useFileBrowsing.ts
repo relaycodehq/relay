@@ -9,6 +9,12 @@ import type { EditorWorkspace } from "./useEditorWorkspace";
 /** How the sidebar is being used: the folder picked, the name typed to find files, what it shows and whether it shows. */
 export type FileBrowsing = ReturnType<typeof useFileBrowsing>;
 
+/** Which list the side shows: the branch's view when asked for, else the changes or the files. */
+function sideViewOf(branchInFront: boolean, changesInFront: boolean): SideView {
+  if (branchInFront) return "branch";
+  return changesInFront ? "changes" : "files";
+}
+
 /**
  * The sidebar's state, and the files, folders, versions, searches and views
  * other parts of the app ask it to show (a link clicked in the chat, a change).
@@ -31,7 +37,7 @@ export function useFileBrowsing({
   const [changesInFront, setChangesInFront] = useStoredFlag("relay-editor-side-changes");
   // The worktree's view is for when it's asked for; a restart starts back on the files or changes.
   const [branchInFront, setBranchInFront] = useState(false);
-  const sideView: SideView = branchInFront ? "branch" : changesInFront ? "changes" : "files";
+  const sideView = sideViewOf(branchInFront, changesInFront);
   const showSideView = (view: SideView) => {
     setBranchInFront(view === "branch");
     if (view !== "branch") setChangesInFront(view === "changes");
@@ -80,6 +86,8 @@ export function useFileBrowsing({
     /** Shows the list and puts the caret in its find box. */
     focusFilter: () => {
       setListHidden(false);
+      // The find box is the files list's; Changes or Against has none.
+      showSideView("files");
       requestAnimationFrame(() => filterInput.current?.focus());
     },
   };
