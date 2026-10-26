@@ -1,7 +1,12 @@
 import { EditorView } from "@codemirror/view";
 
-const mix = (color: string, amount: number, base = "var(--code-background)") =>
-  `color-mix(in srgb, ${color} ${amount}%, ${base})`;
+// Highlights mix into the code's ground; over frosted glass the ground is
+// see-through, and `--code-mix-base` makes them plain tints instead.
+const mix = (
+  color: string,
+  amount: number,
+  base = "var(--code-mix-base, var(--code-background))",
+) => `color-mix(in srgb, ${color} ${amount}%, ${base})`;
 
 /**
  * The editor's chrome in Relay's palette. Token colours come from the syntax
@@ -30,6 +35,11 @@ export const editorChrome = EditorView.theme({
     lineHeight: "1.65",
   },
   ".cm-content": { caretColor: "var(--code-foreground)", padding: "6px 0" },
+  // The app's slim scrollbars, which its stylesheet can't give the editor in its shadow root.
+  ".cm-scroller::-webkit-scrollbar": { width: "6px", height: "6px" },
+  ".cm-scroller::-webkit-scrollbar-thumb": { background: mix("var(--code-foreground)", 17), borderRadius: "5px" },
+  ".cm-scroller::-webkit-scrollbar-thumb:hover": { background: mix("var(--code-foreground)", 30) },
+  ".cm-scroller::-webkit-scrollbar-track, .cm-scroller::-webkit-scrollbar-corner": { background: "transparent" },
   ".cm-line": { padding: "0 12px 0 6px" },
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--code-foreground)",
@@ -58,16 +68,18 @@ export const editorChrome = EditorView.theme({
     backgroundColor: mix("var(--danger)", 30),
   },
   ".cm-gutters": {
-    backgroundColor: "var(--code-background)",
+    backgroundColor: "var(--code-gutter-background, var(--code-background))",
     color: mix("var(--code-foreground)", 38),
     border: "none",
+    // PhpStorm's one line between the gutter and the code, down the whole file.
+    borderRight: `1px solid ${mix("var(--code-foreground)", 10)}`,
   },
   ".cm-lineNumbers .cm-gutterElement": {
     padding: "0 4px 0 14px",
     minWidth: "3ch",
   },
   ".cm-activeLineGutter": {
-    backgroundColor: "transparent",
+    backgroundColor: mix("var(--code-foreground)", 4),
     color: mix("var(--code-foreground)", 80),
   },
   ".cm-foldGutter .cm-gutterElement": {
@@ -76,7 +88,9 @@ export const editorChrome = EditorView.theme({
     opacity: "0",
     transition: "opacity 120ms",
   },
-  ".cm-gutters:hover .cm-foldGutter .cm-gutterElement": { opacity: "1" },
+  // A folded region keeps its marker; the ones that could fold show on hover.
+  ".cm-gutters:hover .cm-foldGutter .cm-gutterElement, .cm-foldGutter .cm-gutterElement:has(.cm-fold-closed)":
+    { opacity: "1" },
   ".cm-foldPlaceholder": {
     backgroundColor: mix("var(--code-foreground)", 10),
     border: "none",
@@ -84,17 +98,20 @@ export const editorChrome = EditorView.theme({
     padding: "0 4px",
     borderRadius: "3px",
   },
-  ".cm-change-gutter": { width: "6px" },
+  ".cm-change-gutter": { width: "8px" },
   ".cm-change-gutter .cm-gutterElement": { position: "relative" },
+  ".cm-change-added, .cm-change-modified, .cm-change-removed-above-line, .cm-change-removed-below-line":
+    { cursor: "pointer" },
+  // Soft like PhpStorm's: the theme's colour a third of the way into the code's ground.
   ".cm-change-added, .cm-change-modified": {
     backgroundImage:
       "linear-gradient(var(--editor-change, transparent), var(--editor-change, transparent))",
-    backgroundSize: "3px 100%",
+    backgroundSize: "6px 100%",
     backgroundRepeat: "no-repeat",
     backgroundPosition: "left",
   },
-  ".cm-change-added": { "--editor-change": "var(--editor-added)" },
-  ".cm-change-modified": { "--editor-change": "var(--editor-modified)" },
+  ".cm-change-added": { "--editor-change": mix("var(--editor-added)", 34) },
+  ".cm-change-modified": { "--editor-change": mix("var(--editor-modified)", 34) },
   ".cm-change-removed-above-line::before, .cm-change-removed-below-line::after":
     {
       content: '""',
@@ -102,7 +119,7 @@ export const editorChrome = EditorView.theme({
       left: "0",
       width: "6px",
       height: "8px",
-      background: "var(--editor-removed)",
+      background: mix("var(--editor-removed)", 55),
       clipPath: "polygon(0 0, 100% 50%, 0 100%)",
       zIndex: "1",
       pointerEvents: "none",
@@ -110,7 +127,7 @@ export const editorChrome = EditorView.theme({
   ".cm-change-removed-above-line::before": { top: "-4px" },
   ".cm-change-removed-below-line::after": { bottom: "-4px" },
   ".cm-panels": {
-    backgroundColor: "var(--toolbar)",
+    backgroundColor: "var(--editor-chrome, var(--toolbar))",
     color: "var(--text)",
     fontFamily: "var(--font-sans)",
   },
