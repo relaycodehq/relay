@@ -1,10 +1,83 @@
 {
  "cases": [
   {
-   "name": "searches interleaved with a read",
+   "name": "one line running three programs is one command",
    "calls": [
     {
      "id": "call-1",
+     "kind": "command",
+     "label": "node a.js; python3 b.py; make build",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "run",
+       "what": "a.js"
+      },
+      {
+       "kind": "run",
+       "what": "b.py"
+      },
+      {
+       "kind": "run",
+       "what": "make"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "branch",
+     "branch": "run",
+     "heading": "Ran 1 command",
+     "rows": [
+      {
+       "action": {
+        "kind": "run",
+        "what": "a.js"
+       },
+       "calls": [
+        "call-1"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      },
+      {
+       "action": {
+        "kind": "run",
+        "what": "b.py"
+       },
+       "calls": [
+        "call-1"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      },
+      {
+       "action": {
+        "kind": "run",
+        "what": "make"
+       },
+       "calls": [
+        "call-1"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Ran",
+       "liveVerb": "Running"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "searches interleaved with a read",
+   "calls": [
+    {
+     "id": "call-2",
      "kind": "command",
      "label": "grep -n \"rg\\b\\|rgFlags\" electron/agent-host/read-only-bash.ts | head -20; wc -l electron/agent-host/read-only-bash.ts",
      "status": "complete",
@@ -17,7 +90,7 @@
      ]
     },
     {
-     "id": "call-2",
+     "id": "call-3",
      "kind": "command",
      "label": "grep -rl \"Activity\" /tmp/audit/scripts/B /tmp/audit/scripts/B/cmd 2>/dev/null | head -3; grep -rh \"Activity\" /tmp/audit/scripts/B/cmd/*.mjs | head",
      "status": "complete",
@@ -35,7 +108,7 @@
      ]
     },
     {
-     "id": "call-3",
+     "id": "call-4",
      "kind": "read",
      "label": "electron/agent-host/read-only-bash.ts",
      "status": "complete",
@@ -47,7 +120,7 @@
      ]
     },
     {
-     "id": "call-4",
+     "id": "call-5",
      "kind": "command",
      "label": "grep -n \"Activity\" -B2 -A6 /tmp/audit/scripts/B/cmd/run15.mjs | head -30",
      "status": "complete",
@@ -73,7 +146,7 @@
         "where": "electron/agent-host/read-only-bash.ts"
        },
        "calls": [
-        "call-1"
+        "call-2"
        ],
        "failed": false,
        "running": false,
@@ -87,7 +160,7 @@
         "where": "/tmp/audit/scripts/B /tmp/audit/scripts/B/cmd"
        },
        "calls": [
-        "call-2"
+        "call-3"
        ],
        "failed": false,
        "running": false,
@@ -101,7 +174,7 @@
         "where": "/tmp/audit/scripts/B/cmd/*.mjs"
        },
        "calls": [
-        "call-2"
+        "call-3"
        ],
        "failed": false,
        "running": false,
@@ -115,7 +188,7 @@
         "where": "/tmp/audit/scripts/B/cmd/run15.mjs"
        },
        "calls": [
-        "call-4"
+        "call-5"
        ],
        "failed": false,
        "running": false,
@@ -132,7 +205,7 @@
        "file": "electron/agent-host/read-only-bash.ts"
       },
       "calls": [
-       "call-3"
+       "call-4"
       ],
       "failed": false,
       "running": false,
@@ -146,7 +219,7 @@
    "name": "scripts written to /tmp split the commands",
    "calls": [
     {
-     "id": "call-5",
+     "id": "call-6",
      "kind": "file",
      "label": "/tmp/f9/c8-views.mjs",
      "status": "complete",
@@ -159,7 +232,7 @@
      ]
     },
     {
-     "id": "call-6",
+     "id": "call-7",
      "kind": "command",
      "label": "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs",
      "status": "complete",
@@ -171,7 +244,7 @@
      ]
     },
     {
-     "id": "call-7",
+     "id": "call-8",
      "kind": "command",
      "label": "rg --version | head -1; rg --help | grep -oE 'x' > /tmp/rgflags.txt; cat > /tmp/rgcheck.mts <<'EOF'\nimport { readFileSync } from \"node:fs\";\nEOF",
      "status": "complete",
@@ -191,7 +264,7 @@
      ]
     },
     {
-     "id": "call-8",
+     "id": "call-9",
      "kind": "command",
      "label": "cd /tmp && mkdir -p rgneg && echo hi > rgneg/a.txt; for f in hidden follow; do rg --no-$f x rgneg; done",
      "status": "complete",
@@ -204,7 +277,7 @@
      ]
     },
     {
-     "id": "call-9",
+     "id": "call-10",
      "kind": "command",
      "label": "grep -rn \"activity\" src/features/sidebar/*.tsx | head",
      "status": "complete",
@@ -217,7 +290,7 @@
      ]
     },
     {
-     "id": "call-10",
+     "id": "call-11",
      "kind": "file",
      "label": "electron/agent-host/read-only-bash.ts",
      "status": "complete",
@@ -229,7 +302,7 @@
      ]
     },
     {
-     "id": "call-11",
+     "id": "call-12",
      "kind": "command",
      "label": "sed -n 160,180p src/features/sidebar/ProjectSidebar.tsx",
      "status": "complete",
@@ -242,7 +315,7 @@
      ]
     },
     {
-     "id": "call-12",
+     "id": "call-13",
      "kind": "command",
      "label": "sed -n 107,110p electron/agent-host/read-only-bash.ts; npx tsx /tmp/rgcheck.mts 2>&1 | grep -v \"npm notice\"; npx tsx /tmp/rgneg.mts | head -2",
      "status": "complete",
@@ -272,8 +345,8 @@
        "file": "/tmp/f9/c8-views.mjs"
       },
       "calls": [
-       "call-5",
-       "call-6"
+       "call-6",
+       "call-7"
       ],
       "ranToo": true,
       "failed": false,
@@ -291,7 +364,7 @@
         "what": "rg --version"
        },
        "calls": [
-        "call-7"
+        "call-8"
        ],
        "failed": false,
        "running": false,
@@ -304,7 +377,7 @@
         "what": "rg --help"
        },
        "calls": [
-        "call-7"
+        "call-8"
        ],
        "failed": false,
        "running": false,
@@ -321,7 +394,7 @@
        "file": "/tmp/rgcheck.mts"
       },
       "calls": [
-       "call-7"
+       "call-8"
       ],
       "failed": false,
       "running": false,
@@ -338,7 +411,7 @@
         "what": "rgcheck.mts"
        },
        "calls": [
-        "call-12"
+        "call-13"
        ],
        "failed": false,
        "running": false,
@@ -351,7 +424,7 @@
         "what": "rgneg.mts"
        },
        "calls": [
-        "call-12"
+        "call-13"
        ],
        "failed": false,
        "running": false,
@@ -370,7 +443,7 @@
         "where": "rgneg"
        },
        "calls": [
-        "call-8"
+        "call-9"
        ],
        "failed": false,
        "running": false,
@@ -384,7 +457,7 @@
         "where": "src/features/sidebar/*.tsx"
        },
        "calls": [
-        "call-9"
+        "call-10"
        ],
        "failed": false,
        "running": false,
@@ -401,7 +474,7 @@
        "file": "electron/agent-host/read-only-bash.ts"
       },
       "calls": [
-       "call-10"
+       "call-11"
       ],
       "failed": false,
       "running": false,
@@ -419,7 +492,7 @@
         "lines": "160–180"
        },
        "calls": [
-        "call-11"
+        "call-12"
        ],
        "lines": [
         "160–180"
@@ -436,7 +509,7 @@
         "lines": "107–110"
        },
        "calls": [
-        "call-12"
+        "call-13"
        ],
        "lines": [
         "107–110"
@@ -454,7 +527,7 @@
    "name": "edits, a failing then passing test, git checks",
    "calls": [
     {
-     "id": "call-13",
+     "id": "call-14",
      "kind": "file",
      "label": "/tmp/f9/c8-views.mjs",
      "status": "complete",
@@ -466,7 +539,7 @@
      ]
     },
     {
-     "id": "call-14",
+     "id": "call-15",
      "kind": "command",
      "label": "sh /tmp/f9/run.sh /tmp/f9/c8-views.mjs",
      "status": "complete",
@@ -478,7 +551,7 @@
      ]
     },
     {
-     "id": "call-15",
+     "id": "call-16",
      "kind": "command",
      "label": "python3 - <<'EOF'\np=\"electron/agent-host/read-only-bash.ts\"\ns=open(p).read()\ns=s.replace(\"a\",\"b\")\nopen(p,\"w\").write(s)\nEOF\ngrep -n \"hostname-bin\" electron/agent-host/read-only-bash.test.ts | head -30",
      "status": "complete",
@@ -495,7 +568,7 @@
      ]
     },
     {
-     "id": "call-16",
+     "id": "call-17",
      "kind": "read",
      "label": "electron/agent-host/read-only-bash.test.ts",
      "status": "complete",
@@ -507,7 +580,7 @@
      ]
     },
     {
-     "id": "call-17",
+     "id": "call-18",
      "kind": "command",
      "label": "python3 - <<'EOF'\np=\"electron/agent-host/read-only-bash.test.ts\"\ns=open(p).read()\ns=s.replace(\"x\",\"y\",1)\nEOF",
      "status": "complete",
@@ -519,7 +592,7 @@
      ]
     },
     {
-     "id": "call-18",
+     "id": "call-19",
      "kind": "command",
      "label": "npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -20",
      "status": "complete",
@@ -533,7 +606,7 @@
      ]
     },
     {
-     "id": "call-19",
+     "id": "call-20",
      "kind": "command",
      "label": "grep -n \"const disguised\" -A4 electron/agent-host/read-only-bash.ts; sed -i '' \"s/a/b/\" electron/agent-host/read-only-bash.test.ts && npx vitest run electron/agent-host/read-only-bash.test.ts 2>&1 | tail -3",
      "status": "complete",
@@ -556,7 +629,7 @@
      ]
     },
     {
-     "id": "call-20",
+     "id": "call-21",
      "kind": "command",
      "label": "git log --format='%h %s' -- electron/agent-host/read-only-bash.ts | tail -3; git show 02111667:electron/agent-host/read-only-bash.ts | grep -n disg",
      "status": "complete",
@@ -581,8 +654,8 @@
        "file": "/tmp/f9/c8-views.mjs"
       },
       "calls": [
-       "call-13",
-       "call-14"
+       "call-14",
+       "call-15"
       ],
       "ranToo": true,
       "failed": false,
@@ -600,7 +673,7 @@
         "what": "git log"
        },
        "calls": [
-        "call-20"
+        "call-21"
        ],
        "failed": false,
        "running": false,
@@ -613,7 +686,7 @@
         "what": "git show"
        },
        "calls": [
-        "call-20"
+        "call-21"
        ],
        "failed": false,
        "running": false,
@@ -631,7 +704,7 @@
         "file": "electron/agent-host/read-only-bash.ts"
        },
        "calls": [
-        "call-15"
+        "call-16"
        ],
        "failed": false,
        "running": false,
@@ -644,8 +717,8 @@
         "file": "electron/agent-host/read-only-bash.test.ts"
        },
        "calls": [
-        "call-17",
-        "call-19"
+        "call-18",
+        "call-20"
        ],
        "failed": false,
        "running": false,
@@ -664,7 +737,7 @@
         "where": "electron/agent-host/read-only-bash.test.ts"
        },
        "calls": [
-        "call-15"
+        "call-16"
        ],
        "failed": false,
        "running": false,
@@ -678,7 +751,7 @@
         "where": "electron/agent-host/read-only-bash.ts"
        },
        "calls": [
-        "call-19"
+        "call-20"
        ],
        "failed": false,
        "running": false,
@@ -695,7 +768,7 @@
        "file": "electron/agent-host/read-only-bash.test.ts"
       },
       "calls": [
-       "call-16"
+       "call-17"
       ],
       "failed": false,
       "running": false,
@@ -712,7 +785,7 @@
        "failed": true
       },
       "calls": [
-       "call-18"
+       "call-19"
       ],
       "failed": true,
       "running": false,
@@ -729,7 +802,7 @@
        "failed": false
       },
       "calls": [
-       "call-19"
+       "call-20"
       ],
       "failed": false,
       "running": false,
@@ -743,7 +816,7 @@
    "name": "a file read twice, a commit, and two pictures",
    "calls": [
     {
-     "id": "call-21",
+     "id": "call-22",
      "kind": "command",
      "label": "sed -n 890,900p src/features/sidebar/sidebar.css && sed -i '' '898s/.*/  color: var(--muted);/' src/features/sidebar/sidebar.css && sed -n 892,900p src/features/sidebar/sidebar.css",
      "status": "complete",
@@ -765,7 +838,7 @@
      ]
     },
     {
-     "id": "call-22",
+     "id": "call-23",
      "kind": "command",
      "label": "git add src/features/sidebar/sidebar.css && git commit -q -m \"Show the branch line in muted grey\" && git log --oneline -1",
      "status": "complete",
@@ -783,7 +856,7 @@
      ]
     },
     {
-     "id": "call-23",
+     "id": "call-24",
      "kind": "read",
      "label": "/tmp/shots/dim-light.png",
      "status": "complete",
@@ -795,7 +868,7 @@
      ]
     },
     {
-     "id": "call-24",
+     "id": "call-25",
      "kind": "read",
      "label": "/tmp/shots/dim-dark.png",
      "status": "complete",
@@ -820,7 +893,7 @@
         "lines": "890–900"
        },
        "calls": [
-        "call-21"
+        "call-22"
        ],
        "lines": [
         "890–900",
@@ -837,7 +910,7 @@
         "file": "/tmp/shots/dim-light.png"
        },
        "calls": [
-        "call-23"
+        "call-24"
        ],
        "failed": false,
        "running": false,
@@ -850,7 +923,7 @@
         "file": "/tmp/shots/dim-dark.png"
        },
        "calls": [
-        "call-24"
+        "call-25"
        ],
        "failed": false,
        "running": false,
@@ -867,7 +940,7 @@
        "file": "src/features/sidebar/sidebar.css"
       },
       "calls": [
-       "call-21"
+       "call-22"
       ],
       "failed": false,
       "running": false,
@@ -884,7 +957,7 @@
        "hash": "4484e535"
       },
       "calls": [
-       "call-22"
+       "call-23"
       ],
       "failed": false,
       "running": false,
@@ -898,7 +971,7 @@
    "name": "a run still going",
    "calls": [
     {
-     "id": "call-25",
+     "id": "call-26",
      "kind": "command",
      "label": "bash -c \"printf '[%s] ' rg x\"",
      "status": "complete",
@@ -910,7 +983,7 @@
      ]
     },
     {
-     "id": "call-26",
+     "id": "call-27",
      "kind": "command",
      "label": "npm run typecheck >/tmp/tc.txt 2>&1; echo \"tc $?\"; git add a.ts && git commit -qm \"Let rg take its flags\"",
      "status": "running",
@@ -936,7 +1009,7 @@
        "what": "printf"
       },
       "calls": [
-       "call-25"
+       "call-26"
       ],
       "failed": false,
       "running": false,
@@ -953,7 +1026,7 @@
        "failed": false
       },
       "calls": [
-       "call-26"
+       "call-27"
       ],
       "failed": false,
       "running": true,
@@ -967,7 +1040,7 @@
    "name": "tools, agents, the web and a failed read",
    "calls": [
     {
-     "id": "call-27",
+     "id": "call-28",
      "kind": "search",
      "label": "useThreadScroll in src",
      "status": "complete",
@@ -980,7 +1053,7 @@
      ]
     },
     {
-     "id": "call-28",
+     "id": "call-29",
      "kind": "search",
      "label": "thread-scroll in tests",
      "status": "complete",
@@ -993,7 +1066,7 @@
      ]
     },
     {
-     "id": "call-29",
+     "id": "call-30",
      "kind": "web",
      "label": "shiki line diff",
      "status": "complete",
@@ -1005,7 +1078,7 @@
      ]
     },
     {
-     "id": "call-30",
+     "id": "call-31",
      "kind": "agent",
      "label": "Find the scroll code",
      "status": "complete",
@@ -1016,7 +1089,7 @@
      ]
     },
     {
-     "id": "call-31",
+     "id": "call-32",
      "kind": "agent",
      "label": "Check the phone apps",
      "status": "complete",
@@ -1027,7 +1100,7 @@
      ]
     },
     {
-     "id": "call-32",
+     "id": "call-33",
      "kind": "tool",
      "label": "relay: screenshot",
      "status": "complete",
@@ -1038,7 +1111,7 @@
      ]
     },
     {
-     "id": "call-33",
+     "id": "call-34",
      "kind": "read",
      "label": "src/missing.ts",
      "status": "failed",
@@ -1050,7 +1123,7 @@
      ]
     },
     {
-     "id": "call-34",
+     "id": "call-35",
      "kind": "read",
      "label": "src/app/shell.css",
      "status": "complete",
@@ -1073,7 +1146,7 @@
         "where": "src"
        },
        "calls": [
-        "call-27"
+        "call-28"
        ],
        "failed": false,
        "running": false,
@@ -1087,7 +1160,7 @@
         "where": "tests"
        },
        "calls": [
-        "call-28"
+        "call-29"
        ],
        "failed": false,
        "running": false,
@@ -1104,7 +1177,7 @@
        "query": "shiki line diff"
       },
       "calls": [
-       "call-29"
+       "call-30"
       ],
       "failed": false,
       "running": false,
@@ -1117,18 +1190,6 @@
      "branch": "tool",
      "heading": "Used 3 tools",
      "rows": [
-      {
-       "action": {
-        "kind": "tool"
-       },
-       "calls": [
-        "call-30"
-       ],
-       "failed": false,
-       "running": false,
-       "verb": "",
-       "liveVerb": ""
-      },
       {
        "action": {
         "kind": "tool"
@@ -1152,6 +1213,18 @@
        "running": false,
        "verb": "",
        "liveVerb": ""
+      },
+      {
+       "action": {
+        "kind": "tool"
+       },
+       "calls": [
+        "call-33"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "",
+       "liveVerb": ""
       }
      ]
     },
@@ -1163,7 +1236,7 @@
        "file": "src/missing.ts"
       },
       "calls": [
-       "call-33"
+       "call-34"
       ],
       "failed": true,
       "running": false,
@@ -1179,7 +1252,7 @@
        "file": "src/app/shell.css"
       },
       "calls": [
-       "call-34"
+       "call-35"
       ],
       "failed": false,
       "running": false,
@@ -1211,7 +1284,7 @@
  "readCodes": [
   {
    "call": {
-    "id": "call-35",
+    "id": "call-36",
     "kind": "command",
     "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
     "status": "complete",
@@ -1232,7 +1305,7 @@
   },
   {
    "call": {
-    "id": "call-36",
+    "id": "call-37",
     "kind": "command",
     "label": "sed -n 115,135p pages/Player.jsx",
     "status": "complete",
@@ -1252,7 +1325,7 @@
   },
   {
    "call": {
-    "id": "call-37",
+    "id": "call-38",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1272,7 +1345,7 @@
   },
   {
    "call": {
-    "id": "call-38",
+    "id": "call-39",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1292,7 +1365,7 @@
   },
   {
    "call": {
-    "id": "call-39",
+    "id": "call-40",
     "kind": "command",
     "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
     "status": "complete",
@@ -1313,7 +1386,7 @@
   },
   {
    "call": {
-    "id": "call-40",
+    "id": "call-41",
     "kind": "command",
     "label": "cat data.tsv",
     "status": "complete",
@@ -1332,7 +1405,7 @@
   },
   {
    "call": {
-    "id": "call-41",
+    "id": "call-42",
     "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
@@ -1354,7 +1427,7 @@
   },
   {
    "call": {
-    "id": "call-42",
+    "id": "call-43",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",

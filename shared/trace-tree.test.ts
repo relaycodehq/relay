@@ -75,3 +75,11 @@ it("takes a script written and run in one command for one call", () => {
   const [piece] = traceTree([both]);
   expect(piece?.kind === "row" && piece.row).toMatchObject({ ranToo: true, calls: [both] });
 });
+
+it("counts commands as the calls that ran them, not the parts of one line", () => {
+  const oneLine = traceTree([call("command", "node a.js; python3 b.py; make build")]);
+  expect(outline(oneLine)).toEqual(["Ran 1 command: run, run, run"]);
+  const three = traceTree([call("command", "node a.js"), call("command", "python3 b.py"), call("command", "make")]);
+  expect(outline(three)).toEqual(["Ran 3 commands: run, run, run"]);
+});
+

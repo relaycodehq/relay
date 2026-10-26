@@ -32,6 +32,10 @@ const call = (
 
 const cases: { name: string; calls: AgentActivity[] }[] = [
   {
+    name: "one line running three programs is one command",
+    calls: [call("command", "node a.js; python3 b.py; make build")],
+  },
+  {
     name: "searches interleaved with a read",
     calls: [
       call("command", `grep -n "rg\\b\\|rgFlags" electron/agent-host/read-only-bash.ts | head -20; wc -l electron/agent-host/read-only-bash.ts`),

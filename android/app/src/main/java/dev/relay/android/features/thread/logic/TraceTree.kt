@@ -189,10 +189,12 @@ fun branchHeading(kind: BranchKind, rows: List<TraceRow>): String = when (kind) 
     BranchKind.Tool -> toolsHeading(rows)
 }
 
-/** Commands all of one program say which: "Ran rg 3 times". */
+/** Commands all of one program say which: "Ran rg 3 times". Others count the commands themselves: `a; b; c` is one. */
 private fun runHeading(rows: List<TraceRow>): String {
     val programs = rows.map { if (it.action.kind == "run") it.action.what.orEmpty().split(" ")[0] else it.id }.toSet()
-    return if (programs.size == 1) "Ran ${programs.first()} ${rows.size} times" else "Ran ${plural(rows.size, "command")}"
+    if (programs.size == 1) return "Ran ${programs.first()} ${rows.size} times"
+    val commands = rows.flatMap { row -> row.calls.map { it.id } }.toSet().size
+    return "Ran ${plural(commands, "command")}"
 }
 
 private fun checksHeading(rows: List<TraceRow>): String {

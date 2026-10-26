@@ -202,14 +202,16 @@ public func branchHeading(_ kind: BranchKind, _ rows: [TraceRow]) -> String {
     }
 }
 
-/// Commands all of one program say which: "Ran rg 3 times".
+/// Commands all of one program say which: "Ran rg 3 times". Others count the commands themselves:
+/// `a; b; c` is one.
 private func runHeading(_ rows: [TraceRow]) -> String {
     let programs = Set(rows.map { row in
         guard case .run(let what) = row.action else { return row.id }
         return String(what.split(separator: " ", omittingEmptySubsequences: false)[0])
     })
     if programs.count == 1, let program = programs.first { return "Ran \(program) \(rows.count) times" }
-    return "Ran \(plural(rows.count, "command"))"
+    let commands = Set(rows.flatMap { row in row.calls.map(\.id) }).count
+    return "Ran \(plural(commands, "command"))"
 }
 
 /// The verb a row leads with, past or, while it runs, present. Tools draw their own row.

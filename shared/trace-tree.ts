@@ -189,11 +189,16 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
   }
 }
 
-/** Commands all of one program say which: "Ran rg 3 times". */
+/**
+ * Commands all of one program say which: "Ran rg 3 times". Others count the
+ * commands themselves, like the turn's heading: `a; b; c` is one command.
+ */
 function runHeading(rows: TraceRow[]) {
   const programs = new Set(rows.map((r) => (r.action.kind === "run" ? r.action.what.split(" ")[0] : r.id)));
   const [program] = programs;
-  return programs.size === 1 ? `Ran ${program} ${rows.length} times` : `Ran ${plural(rows.length, "command")}`;
+  if (programs.size === 1) return `Ran ${program} ${rows.length} times`;
+  const commands = new Set(rows.flatMap((r) => r.calls.map((c) => c.id))).size;
+  return `Ran ${plural(commands, "command")}`;
 }
 
 /** The verb a row leads with, past or, while it runs, present. Tools draw their own row. */
