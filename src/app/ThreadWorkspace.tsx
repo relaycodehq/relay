@@ -258,7 +258,7 @@ export function ThreadWorkspace({
   const review =
     chat?.reviewer && chats.data?.find((c) => c.id === chat.reviewer?.parent);
   const codeOpen =
-    panes.layout.open.changes ||
+    panes.shown.includes("changes") ||
     (panes.layout.open.panel && panel.has("files"));
   const row = usePaneRow(panes.measure);
   const openThread = (id: string) => {
