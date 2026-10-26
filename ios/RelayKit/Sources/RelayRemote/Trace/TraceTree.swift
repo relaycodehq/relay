@@ -266,8 +266,10 @@ private func summaryOf(_ grouped: [(BranchKind, [TraceRow])]) -> String {
 }
 
 /// The verb a row leads with, past or, while it runs, present. Tools draw their own row.
+/// A script written and then running is running.
 public func actionVerb(_ row: TraceRow, live: Bool = false) -> String {
-    switch row.action {
+    if live, row.ranToo { return "Running" }
+    return switch row.action {
     case .read: live ? "Reading" : "Read"
     case .image: live ? "Looking at" : "Looked at"
     case .search: live ? "Searching" : "Searched"

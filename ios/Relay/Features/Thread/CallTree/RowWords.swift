@@ -129,7 +129,7 @@ extension RowWords {
             say(" ")
             object(row, withPlace: true)
         }
-        if row.ranToo { aside(" and ran it") }
+        if row.ranToo, !live { aside(" and ran it") }
     }
 
     /// Two rows one verb carries: "Read a.ts and b.ts"; two searches of one place say it once.

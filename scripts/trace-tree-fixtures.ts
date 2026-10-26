@@ -117,6 +117,13 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
     ],
   },
   {
+    name: "a script written, then running",
+    calls: [
+      call("file", "/tmp/a.mjs", { detail: "File created successfully at: /tmp/a.mjs" }),
+      call("command", "node /tmp/a.mjs", { status: "running" }),
+    ],
+  },
+  {
     name: "a patch that deleted one file and edited another, then two deletes",
     calls: [
       call("file", "src/old.ts +1 more", {

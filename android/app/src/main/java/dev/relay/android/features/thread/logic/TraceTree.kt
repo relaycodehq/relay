@@ -261,6 +261,8 @@ private fun summaryOf(grouped: List<kotlin.Pair<BranchKind, List<TraceRow>>>): S
 /** The verb a row leads with, past or, while it runs, present. Tools draw their own row. */
 fun actionVerb(row: TraceRow, live: Boolean = false): String {
     val a = row.action
+    // A script written and then running is running.
+    if (live && row.ranToo) return "Running"
     return when (a.kind) {
         "read" -> if (live) "Reading" else "Read"
         "image" -> if (live) "Looking at" else "Looked at"

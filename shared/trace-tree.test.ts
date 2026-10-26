@@ -46,6 +46,15 @@ it("splits commands at each script written for them", () => {
   expect(pieces[0]).toMatchObject({ row: { ranToo: true } });
 });
 
+it("says a script written and then running is running", () => {
+  const [piece] = traceTree([
+    call("file", "/tmp/a.mjs", { detail: "File created successfully at: /tmp/a.mjs" }),
+    call("command", "node /tmp/a.mjs", { status: "running" }),
+  ]);
+  const row = piece?.kind === "row" ? piece.row : undefined;
+  expect(row && [actionVerb(row, true), actionVerb(row)]).toEqual(["Running", "Wrote"]);
+});
+
 it("keeps a failed test and a passing one as two rows", () => {
   const pieces = traceTree([
     call("command", "npx vitest run a.test.ts", { detail: "FAIL a.test.ts" }),

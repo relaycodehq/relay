@@ -256,9 +256,13 @@ function summaryOf(grouped: ReturnType<typeof branches>) {
   return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 
-/** The verb a row leads with, past or, while it runs, present. Tools draw their own row. */
+/**
+ * The verb a row leads with, past or, while it runs, present. Tools draw
+ * their own row. A script written and then running is running.
+ */
 export function actionVerb(row: TraceRow, live = false): string {
   const a = row.action;
+  if (live && row.ranToo) return "Running";
   switch (a.kind) {
     case "read":
       return live ? "Reading" : "Read";

@@ -88,7 +88,7 @@ internal fun ActionLabel(row: TraceRow, live: Boolean) {
     LabelLine {
         Verb(actionVerb(row, live), failed, if (live) Modifier.shine() else Modifier)
         ActionObject(row, withWhere = true)
-        if (row.ranToo) Muted("and ran it")
+        if (row.ranToo && !live) Muted("and ran it")
         if (!live) Outcome(row)
     }
 }

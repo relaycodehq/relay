@@ -133,7 +133,7 @@ export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boole
     <span className="trace-label">
       <span className={live ? "trace-verb live-shine" : "trace-verb"}>{actionVerb(row, live)}</span>{" "}
       <ActionObject row={row} />
-      {row.ranToo && <span className="trace-then">and ran it</span>}
+      {row.ranToo && !live && <span className="trace-then">and ran it</span>}
       {!live && <Outcome row={row} />}
     </span>
   );
