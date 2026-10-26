@@ -28,7 +28,6 @@ import {
   shortWhere,
   type TraceRow,
 } from "../../../shared/trace-tree";
-import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { Spinner } from "../../ui/ui";
 import { Fold, Subagents } from "./ToolRow";
 import { ReadCode } from "./ReadCode";
@@ -49,14 +48,13 @@ export const actionIcons: Record<CallAction["kind"], typeof FileText> = {
   tool: Wrench,
 };
 
-/** A file as the trace names it: its icon, its folder dimmed, then its name. */
+/** A file as the trace names it: its folder dimmed, then its name. The row's icon already says what was done to it. */
 export function FileChip({ path, lines }: { path: string; lines?: string[] }) {
   const { display } = useContext(Subagents);
   const shown = display(path);
   const folder = shown.split("/").filter(Boolean).at(-2);
   return (
     <span className="trace-chip" title={shown}>
-      <FileEntryIcon path={path} directory={false} />
       <span>
         {folder && <span className="trace-chip-dim">{folder}/</span>}
         {baseName(shown)}
