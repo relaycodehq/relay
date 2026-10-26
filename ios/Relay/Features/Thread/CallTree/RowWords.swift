@@ -147,7 +147,7 @@ extension RowWords {
     private mutating func object(_ row: TraceRow, withPlace: Bool) {
         switch row.action {
         case .read(let file, _): self.file(file, lines: row.lines)
-        case .image(let file), .edit(let file), .create(let file): self.file(file)
+        case .image(let file), .edit(let file), .create(let file), .delete(let file): self.file(file)
         case .search(let pattern, let place):
             code(shortPattern(pattern))
             if withPlace, let place { searched(in: place) }
@@ -185,6 +185,7 @@ func actionSymbol(_ action: CallAction) -> String {
     case .web: "globe"
     case .edit: "pencil"
     case .create: "doc.badge.plus"
+    case .delete: "trash"
     case .test: "flask"
     case .check: "checkmark.seal"
     case .commit, .git: "circle.and.line.horizontal"

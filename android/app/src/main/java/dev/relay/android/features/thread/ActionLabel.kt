@@ -52,6 +52,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Photo
 import io.github.lyxnx.compose.ui.tablericons.outline.Search
 import io.github.lyxnx.compose.ui.tablericons.outline.Terminal2
 import io.github.lyxnx.compose.ui.tablericons.outline.Tool
+import io.github.lyxnx.compose.ui.tablericons.outline.Trash
 import io.github.lyxnx.compose.ui.tablericons.outline.World
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 
@@ -64,6 +65,7 @@ fun actionIcon(kind: String): ImageVector = when (kind) {
     "search" -> TablerIcons.Outline.Search
     "edit" -> TablerIcons.Outline.FilePencil
     "create" -> TablerIcons.Outline.FilePlus
+    "delete" -> TablerIcons.Outline.Trash
     "test", "check" -> TablerIcons.Outline.Flask
     "commit", "git" -> TablerIcons.Outline.GitCommit
     "web" -> TablerIcons.Outline.World
@@ -121,7 +123,7 @@ private fun ActionObject(row: TraceRow, withWhere: Boolean) {
     val a = row.action
     when (a.kind) {
         "read" -> FileChip(a.file.orEmpty(), row.lines.joinToString(", ") { "L$it" }.ifEmpty { null })
-        "image", "edit", "create" -> FileChip(a.file.orEmpty())
+        "image", "edit", "create", "delete" -> FileChip(a.file.orEmpty())
         "search" -> {
             CodeChip(shortPattern(a.pattern.orEmpty()))
             if (withWhere && a.where != null) Where(a.where)

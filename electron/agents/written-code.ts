@@ -48,7 +48,7 @@ export function codexWritten(changes: unknown[]): WrittenCode[] {
         case "add":
           return [{ kind: "whole", path, content: diff }];
         case "delete":
-          return [{ kind: "swap", path, edits: [{ old: diff, new: "" }] }];
+          return [{ kind: "swap", path, edits: [{ old: diff, new: "" }], deleted: true }];
         default:
           return [{ kind: "patch", path, diff }];
       }

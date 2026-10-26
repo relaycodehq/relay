@@ -7,6 +7,7 @@ import {
   FilePen,
   FilePlus2,
   FileText,
+  FileX2,
   FlaskConical,
   GitCommitHorizontal,
   Globe,
@@ -41,6 +42,7 @@ export const actionIcons: Record<CallAction["kind"], typeof FileText> = {
   web: Globe,
   edit: FilePen,
   create: FilePlus2,
+  delete: FileX2,
   test: FlaskConical,
   check: ListChecks,
   commit: GitCommitHorizontal,
@@ -89,6 +91,7 @@ export function ActionObject({ row, withWhere = true }: { row: TraceRow; withWhe
     case "image":
     case "edit":
     case "create":
+    case "delete":
       return <FileChip path={a.file} />;
     case "search":
       return (
@@ -172,7 +175,8 @@ function CallsOpened({ rows, onChanges }: { rows: TraceRow[]; onChanges: () => v
 
 const callsOf = (rows: TraceRow[]) => [...new Set(rows.flatMap((row) => row.calls))];
 
-const filesWritten = (action: CallAction) => (action.kind === "edit" || action.kind === "create" ? [action.file] : []);
+const filesWritten = (action: CallAction) =>
+  action.kind === "edit" || action.kind === "create" || action.kind === "delete" ? [action.file] : [];
 
 /**
  * The code a call wrote that these rows are about: a call that wrote three

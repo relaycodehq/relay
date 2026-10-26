@@ -10,7 +10,7 @@ it("keeps a Codex file added whole, a deleted one as removed and an update as it
     ]),
   ).toEqual([
     { kind: "whole", path: "new.ts", content: "export {};" },
-    { kind: "swap", path: "old.ts", edits: [{ old: "gone", new: "" }] },
+    { kind: "swap", path: "old.ts", edits: [{ old: "gone", new: "" }], deleted: true },
     { kind: "patch", path: "a.ts", diff: "@@ -1 +1 @@\n-a\n+b" },
   ]);
 });

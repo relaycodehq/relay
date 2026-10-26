@@ -56,7 +56,7 @@ private func writtenFor(_ rows: [TraceRow], _ call: AgentActivity, path: String)
 }
 
 private func writtenFile(_ action: CallAction) -> String? {
-    action.kind == "edit" || action.kind == "create" ? action.file : nil
+    ["edit", "create", "delete"].contains(action.kind) ? action.file : nil
 }
 
 /// Whether a row has anything to open to.

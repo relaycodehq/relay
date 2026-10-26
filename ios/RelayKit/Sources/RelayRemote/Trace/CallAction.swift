@@ -10,6 +10,7 @@ public enum CallAction: Sendable, Equatable {
     case search(pattern: String, place: String?)
     case edit(file: String)
     case create(file: String)
+    case delete(file: String)
     case test(target: String?, failed: Bool)
     case check(name: String, failed: Bool)
     case commit(hash: String?, subject: String)
@@ -22,7 +23,7 @@ public enum CallAction: Sendable, Equatable {
     /// The file it read or wrote, for the actions that have one.
     public var file: String? {
         switch self {
-        case .read(let file, _), .image(let file), .edit(let file), .create(let file): file
+        case .read(let file, _), .image(let file), .edit(let file), .create(let file), .delete(let file): file
         default: nil
         }
     }
@@ -34,6 +35,7 @@ public enum CallAction: Sendable, Equatable {
         case .search: "search"
         case .edit: "edit"
         case .create: "create"
+        case .delete: "delete"
         case .test: "test"
         case .check: "check"
         case .commit: "commit"
@@ -61,6 +63,7 @@ extension CallAction: Codable {
         case "search": self = .search(pattern: text(.pattern) ?? "", place: text(.where))
         case "edit": self = .edit(file: text(.file) ?? "")
         case "create": self = .create(file: text(.file) ?? "")
+        case "delete": self = .delete(file: text(.file) ?? "")
         case "test": self = .test(target: text(.target), failed: failed)
         case "check": self = .check(name: text(.name) ?? "check", failed: failed)
         case "commit": self = .commit(hash: text(.hash), subject: text(.subject) ?? "")
@@ -78,7 +81,7 @@ extension CallAction: Codable {
         case .read(let file, let lines):
             try c.encode(file, forKey: .file)
             try c.encodeIfPresent(lines, forKey: .lines)
-        case .image(let file), .edit(let file), .create(let file):
+        case .image(let file), .edit(let file), .create(let file), .delete(let file):
             try c.encode(file, forKey: .file)
         case .search(let pattern, let place):
             try c.encode(pattern, forKey: .pattern)

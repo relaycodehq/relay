@@ -117,6 +117,7 @@ export function branchOf(action: CallAction): BranchKind {
       return "web";
     case "edit":
     case "create":
+    case "delete":
       return isScratch(action.file) ? "run" : "edit";
     case "test":
     case "check":
@@ -187,7 +188,7 @@ function pairable([a, b]: [TraceRow, TraceRow]) {
 }
 
 /** Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail. */
-const pairVerbs = new Set<CallAction["kind"]>(["read", "search", "web", "edit", "create", "run", "git"]);
+const pairVerbs = new Set<CallAction["kind"]>(["read", "search", "web", "edit", "create", "delete", "run", "git"]);
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
@@ -271,6 +272,8 @@ export function actionVerb(row: TraceRow, live = false): string {
       return live ? "Editing" : "Edited";
     case "create":
       return live ? "Writing" : "Wrote";
+    case "delete":
+      return live ? "Deleting" : "Deleted";
     case "test":
       if (live) return "Running tests";
       return `Tests ${verdictWord(row)}`;

@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
  * `shared/call-actions.ts` CallAction, flattened: [kind] says which fields are
  * set, and a kind this app doesn't know yet still decodes.
  *
- * read{file,lines?} · image{file} · search{pattern,where?} · edit{file} · create{file} ·
+ * read{file,lines?} · image{file} · search{pattern,where?} · edit{file} · create{file} · delete{file} ·
  * test{target?,failed} · check{name,failed} · commit{hash?,subject} · git{what} ·
  * run{what} · web{query} · tool
  */

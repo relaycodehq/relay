@@ -138,7 +138,7 @@ public func branchOf(_ action: CallAction) -> BranchKind {
     case .read, .image: .read
     case .search: .search
     case .web: .web
-    case .edit(let file), .create(let file): isScratch(file) ? .run : .edit
+    case .edit(let file), .create(let file), .delete(let file): isScratch(file) ? .run : .edit
     case .test, .check: .check
     case .commit: .commit
     case .git: .git
@@ -198,7 +198,7 @@ private func pieces(_ kind: BranchKind, _ rows: [TraceRow]) -> [TracePiece] {
 }
 
 /// Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail.
-private let pairVerbs: Set<String> = ["read", "search", "web", "edit", "create", "run", "git"]
+private let pairVerbs: Set<String> = ["read", "search", "web", "edit", "create", "delete", "run", "git"]
 
 /// Two rows one verb can carry: same action, both settled and fine, said the same way.
 private func pairable(_ a: TraceRow, _ b: TraceRow) -> Bool {
@@ -274,6 +274,7 @@ public func actionVerb(_ row: TraceRow, live: Bool = false) -> String {
     case .web: live ? "Searching the web for" : "Searched the web for"
     case .edit: live ? "Editing" : "Edited"
     case .create: live ? "Writing" : "Wrote"
+    case .delete: live ? "Deleting" : "Deleted"
     case .test: live ? "Running tests" : "Tests \(verdictWord(row))"
     case .check(let name, _): live ? "Running \(name)" : "\(capitalized(name)) \(verdictWord(row))"
     case .commit: live ? "Committing" : "Committed"

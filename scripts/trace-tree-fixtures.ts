@@ -117,6 +117,20 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
     ],
   },
   {
+    name: "a patch that deleted one file and edited another, then two deletes",
+    calls: [
+      call("file", "src/old.ts +1 more", {
+        detail: "src/old.ts\nsrc/a.ts",
+        written: [
+          { kind: "swap", path: "src/old.ts", edits: [{ old: "export {};", new: "" }], deleted: true },
+          { kind: "patch", path: "src/a.ts", diff: "@@ -1 +1 @@\n-a\n+b\n" },
+        ],
+      }),
+      call("file", "src/b.ts", { written: [{ kind: "swap", path: "src/b.ts", edits: [{ old: "b", new: "" }], deleted: true }] }),
+      call("file", "src/c.ts", { written: [{ kind: "swap", path: "src/c.ts", edits: [{ old: "c", new: "" }], deleted: true }] }),
+    ],
+  },
+  {
     name: "git checks on a branch of their own, beside other commands",
     calls: [call("command", "git status; git diff; ls; git log; git show HEAD")],
   },

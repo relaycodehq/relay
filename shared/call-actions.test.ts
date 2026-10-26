@@ -123,20 +123,22 @@ describe("what Codex ran", () => {
     ]);
   });
 
-  it("names each file a patch changed, made or edited", () => {
+  it("names each file a patch made, edited or deleted", () => {
     const call = {
       id: "p",
       kind: "file" as const,
       status: "complete" as const,
-      label: "a.ts +1 more",
+      label: "a.ts +2 more",
       written: [
         { kind: "whole" as const, path: "a.ts", content: "x" },
         { kind: "patch" as const, path: "b.ts", diff: "@@ -1 +1 @@\n-a\n+b" },
+        { kind: "swap" as const, path: "c.ts", edits: [{ old: "c", new: "" }], deleted: true as const },
       ],
     };
     expect(callActions(call)).toEqual([
       { kind: "create", file: "a.ts" },
       { kind: "edit", file: "b.ts" },
+      { kind: "delete", file: "c.ts" },
     ]);
     expect(callActions({ id: "q", kind: "file", status: "complete", label: "a.ts +1 more", detail: "boom" })).toEqual([
       { kind: "edit", file: "a.ts +1 more" },

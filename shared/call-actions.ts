@@ -32,6 +32,7 @@ export type CallAction =
   | { kind: "search"; pattern: string; where?: string }
   | { kind: "edit"; file: string }
   | { kind: "create"; file: string }
+  | { kind: "delete"; file: string }
   | { kind: "test"; target?: string; failed: boolean }
   | { kind: "check"; name: string; failed: boolean }
   | { kind: "commit"; hash?: string; subject: string }
@@ -76,10 +77,15 @@ function fileActions(a: AgentActivity): CallAction[] {
   if (a.written?.length) {
     // Claude's Write over an existing file answers as its Edit does.
     const overwrote = /^The file .+ has been updated/.test(a.detail ?? "");
-    return a.written.map((w) => ({ kind: w.kind === "whole" && !overwrote ? "create" : "edit", file: w.path }));
+    return a.written.map((w) => ({ kind: writtenKind(w, overwrote), file: w.path }));
   }
   const made = /^File created successfully/.test(a.detail ?? "");
   return filesNamed(a).map((file) => ({ kind: made ? "create" : "edit", file }));
+}
+
+function writtenKind(w: WrittenCode, overwrote: boolean) {
+  if (w.kind === "swap" && w.deleted) return "delete";
+  return w.kind === "whole" && !overwrote ? "create" : "edit";
 }
 
 /** "a.ts +2 more" lists every path in its detail; any other detail is output. */

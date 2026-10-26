@@ -1489,10 +1489,166 @@
    "summary": "Ran 1 check, read 1 file and 2 more"
   },
   {
-   "name": "git checks on a branch of their own, beside other commands",
+   "name": "a patch that deleted one file and edited another, then two deletes",
    "calls": [
     {
      "id": "call-41",
+     "kind": "file",
+     "label": "src/old.ts +1 more",
+     "status": "complete",
+     "detail": "src/old.ts\nsrc/a.ts",
+     "written": [
+      {
+       "kind": "swap",
+       "path": "src/old.ts",
+       "edits": [
+        {
+         "old": "export {};",
+         "new": ""
+        }
+       ],
+       "deleted": true
+      },
+      {
+       "kind": "patch",
+       "path": "src/a.ts",
+       "diff": "@@ -1 +1 @@\n-a\n+b\n"
+      }
+     ],
+     "actions": [
+      {
+       "kind": "delete",
+       "file": "src/old.ts"
+      },
+      {
+       "kind": "edit",
+       "file": "src/a.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-42",
+     "kind": "file",
+     "label": "src/b.ts",
+     "status": "complete",
+     "written": [
+      {
+       "kind": "swap",
+       "path": "src/b.ts",
+       "edits": [
+        {
+         "old": "b",
+         "new": ""
+        }
+       ],
+       "deleted": true
+      }
+     ],
+     "actions": [
+      {
+       "kind": "delete",
+       "file": "src/b.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-43",
+     "kind": "file",
+     "label": "src/c.ts",
+     "status": "complete",
+     "written": [
+      {
+       "kind": "swap",
+       "path": "src/c.ts",
+       "edits": [
+        {
+         "old": "c",
+         "new": ""
+        }
+       ],
+       "deleted": true
+      }
+     ],
+     "actions": [
+      {
+       "kind": "delete",
+       "file": "src/c.ts"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "branch",
+     "branch": "edit",
+     "heading": "Edited 4 files",
+     "rows": [
+      {
+       "id": "call-41:0",
+       "action": {
+        "kind": "delete",
+        "file": "src/old.ts"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Deleted",
+       "liveVerb": "Deleting"
+      },
+      {
+       "id": "call-41:1",
+       "action": {
+        "kind": "edit",
+        "file": "src/a.ts"
+       },
+       "calls": [
+        "call-41"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Edited",
+       "liveVerb": "Editing"
+      },
+      {
+       "id": "call-42:0",
+       "action": {
+        "kind": "delete",
+        "file": "src/b.ts"
+       },
+       "calls": [
+        "call-42"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Deleted",
+       "liveVerb": "Deleting"
+      },
+      {
+       "id": "call-43:0",
+       "action": {
+        "kind": "delete",
+        "file": "src/c.ts"
+       },
+       "calls": [
+        "call-43"
+       ],
+       "failed": false,
+       "running": false,
+       "verb": "Deleted",
+       "liveVerb": "Deleting"
+      }
+     ]
+    }
+   ],
+   "summary": null
+  },
+  {
+   "name": "git checks on a branch of their own, beside other commands",
+   "calls": [
+    {
+     "id": "call-44",
      "kind": "command",
      "label": "git status; git diff; ls; git log; git show HEAD",
      "status": "complete",
@@ -1527,13 +1683,13 @@
      "heading": "Checked git 4 times",
      "rows": [
       {
-       "id": "call-41:0",
+       "id": "call-44:0",
        "action": {
         "kind": "git",
         "what": "git status"
        },
        "calls": [
-        "call-41"
+        "call-44"
        ],
        "failed": false,
        "running": false,
@@ -1541,13 +1697,13 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-41:1",
+       "id": "call-44:1",
        "action": {
         "kind": "git",
         "what": "git diff"
        },
        "calls": [
-        "call-41"
+        "call-44"
        ],
        "failed": false,
        "running": false,
@@ -1555,13 +1711,13 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-41:3",
+       "id": "call-44:3",
        "action": {
         "kind": "git",
         "what": "git log"
        },
        "calls": [
-        "call-41"
+        "call-44"
        ],
        "failed": false,
        "running": false,
@@ -1569,13 +1725,13 @@
        "liveVerb": "Checking"
       },
       {
-       "id": "call-41:4",
+       "id": "call-44:4",
        "action": {
         "kind": "git",
         "what": "git show"
        },
        "calls": [
-        "call-41"
+        "call-44"
        ],
        "failed": false,
        "running": false,
@@ -1587,13 +1743,13 @@
     {
      "kind": "row",
      "row": {
-      "id": "call-41:2",
+      "id": "call-44:2",
       "action": {
        "kind": "run",
        "what": "ls"
       },
       "calls": [
-       "call-41"
+       "call-44"
       ],
       "failed": false,
       "running": false,
@@ -1626,7 +1782,7 @@
  "readCodes": [
   {
    "call": {
-    "id": "call-42",
+    "id": "call-45",
     "kind": "command",
     "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
     "status": "complete",
@@ -1647,7 +1803,7 @@
   },
   {
    "call": {
-    "id": "call-43",
+    "id": "call-46",
     "kind": "command",
     "label": "sed -n 115,135p pages/Player.jsx",
     "status": "complete",
@@ -1667,7 +1823,7 @@
   },
   {
    "call": {
-    "id": "call-44",
+    "id": "call-47",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1687,7 +1843,7 @@
   },
   {
    "call": {
-    "id": "call-45",
+    "id": "call-48",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1707,7 +1863,7 @@
   },
   {
    "call": {
-    "id": "call-46",
+    "id": "call-49",
     "kind": "command",
     "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
     "status": "complete",
@@ -1728,7 +1884,7 @@
   },
   {
    "call": {
-    "id": "call-47",
+    "id": "call-50",
     "kind": "command",
     "label": "cat data.tsv",
     "status": "complete",
@@ -1747,7 +1903,7 @@
   },
   {
    "call": {
-    "id": "call-48",
+    "id": "call-51",
     "kind": "command",
     "label": "cat ids.tsv",
     "status": "complete",
@@ -1766,7 +1922,7 @@
   },
   {
    "call": {
-    "id": "call-49",
+    "id": "call-52",
     "kind": "command",
     "label": "cat -n src/b.ts",
     "status": "complete",
@@ -1786,7 +1942,7 @@
   },
   {
    "call": {
-    "id": "call-50",
+    "id": "call-53",
     "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
@@ -1808,7 +1964,7 @@
   },
   {
    "call": {
-    "id": "call-51",
+    "id": "call-54",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",

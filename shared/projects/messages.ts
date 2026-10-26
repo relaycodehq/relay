@@ -255,6 +255,8 @@ export type WrittenCode =
       kind: "swap";
       path: string;
       edits: { old: string; new: string }[];
+      /** The file was deleted; its one edit takes out all it held. */
+      deleted?: true;
       cut?: true;
     }
   | { kind: "patch"; path: string; diff: string; cut?: true };

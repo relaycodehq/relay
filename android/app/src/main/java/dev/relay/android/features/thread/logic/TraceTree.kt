@@ -143,7 +143,7 @@ fun branchOf(action: CallAction): BranchKind = when (action.kind) {
     "read", "image" -> BranchKind.Read
     "search" -> BranchKind.Search
     "web" -> BranchKind.Web
-    "edit", "create" -> if (isScratch(action.file.orEmpty())) BranchKind.Run else BranchKind.Edit
+    "edit", "create", "delete" -> if (isScratch(action.file.orEmpty())) BranchKind.Run else BranchKind.Edit
     "test", "check" -> BranchKind.Check
     "commit" -> BranchKind.Commit
     "git" -> BranchKind.Git
@@ -195,7 +195,7 @@ private fun pieces(kind: BranchKind, rows: List<TraceRow>): List<TracePiece> = w
 }
 
 /** Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail. */
-private val pairVerbs = setOf("read", "search", "web", "edit", "create", "run", "git")
+private val pairVerbs = setOf("read", "search", "web", "edit", "create", "delete", "run", "git")
 
 /** Two rows one verb can carry: same action, both settled and fine, said the same way. */
 private fun pairable(a: TraceRow, b: TraceRow): Boolean {
@@ -268,6 +268,7 @@ fun actionVerb(row: TraceRow, live: Boolean = false): String {
         "web" -> if (live) "Searching the web for" else "Searched the web for"
         "edit" -> if (live) "Editing" else "Edited"
         "create" -> if (live) "Writing" else "Wrote"
+        "delete" -> if (live) "Deleting" else "Deleted"
         "test" -> testVerb(row, live)
         "check" -> checkVerb(row, live)
         "commit" -> if (live) "Committing" else "Committed"

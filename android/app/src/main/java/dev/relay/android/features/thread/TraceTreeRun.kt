@@ -193,7 +193,7 @@ private fun writtenFor(rows: List<TraceRow>, call: AgentActivity, path: String):
     return path in about || path !in named
 }
 
-private fun writtenFile(action: CallAction) = if (action.kind == "edit" || action.kind == "create") action.file else null
+private fun writtenFile(action: CallAction) = if (action.kind in setOf("edit", "create", "delete")) action.file else null
 
 /** A read of one file: its lines once the whole output is here, and plain as before until then. */
 @Composable
