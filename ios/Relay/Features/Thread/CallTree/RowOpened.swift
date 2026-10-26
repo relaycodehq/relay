@@ -92,7 +92,8 @@ struct CallOutput: View {
                 if printed, let output, !output.isEmpty { ToolOutput(text: output) }
             }
         }
-        .task { await fetchFull() }
+        // Output still coming in is cut again with every update; the rest is fetched once it's all there.
+        .task(id: "\(call.status) \(call.detailCut ?? 0)") { await fetchFull() }
     }
 
     /// Numbering a preview cut in the middle would drop its end, so it shows plain until the rest comes.
@@ -117,7 +118,7 @@ struct CallOutput: View {
     }
 
     private func fetchFull() async {
-        guard full == nil, context.canFetch, (call.detailCut ?? 0) > 0 else { return }
+        guard call.status != "running", context.canFetch, (call.detailCut ?? 0) > 0 else { return }
         full = try? await connection.activityDetail(context.chatId, message: context.messageId, activity: call.id)
     }
 }

@@ -323,10 +323,12 @@ internal fun Detail(a: AgentActivity, detail: String = fetchedDetail(a) ?: a.det
 internal fun fetchedDetail(a: AgentActivity): String? {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current
-    var whole by remember(a.id) { mutableStateOf<String?>(null) }
+    // Output still coming in is cut again with every update; the rest is fetched once it's all there.
+    val settled = a.status != "running"
+    var whole by remember(a.id, a.detailCut, settled) { mutableStateOf<String?>(null) }
     val cut = (a.detailCut ?: 0) > 0 && (remote?.overview?.value?.bridge ?: 1) >= Bridge.ACTIVITY_DETAIL
-    LaunchedEffect(cut, trace.chatId, trace.messageId, a.id) {
-        if (!cut || trace.chatId.isEmpty() || remote == null) return@LaunchedEffect
+    LaunchedEffect(cut, settled, a.detailCut, trace.chatId, trace.messageId, a.id) {
+        if (!cut || !settled || trace.chatId.isEmpty() || remote == null) return@LaunchedEffect
         try {
             whole = remote.client.value?.activityDetail(trace.chatId, trace.messageId, a.id) ?: return@LaunchedEffect
         } catch (e: kotlinx.coroutines.CancellationException) {
