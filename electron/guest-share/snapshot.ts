@@ -167,29 +167,7 @@ function guestMessage(
   snapshot: GuestSnapshot,
 ): GuestMessage {
   const own = (kind: string, key: string) => mediaId(m.id, kind, key);
-  const answerMedia = new Map<
-    string,
-    { id: string; kind: "image" | "video" }
-  >();
-  // A copied answer naming a path names one on someone else's computer.
-  if (m.role === "assistant" && root && !m.imported) {
-    for (const path of answerImagePaths(m.body, root)) {
-      const id = own("image", path);
-      answerMedia.set(path, { id, kind: "image" });
-      snapshot.media.set(id, {
-        kind: "image",
-        dataUrl: () => media.readImage(chatId, m.id, path),
-      });
-    }
-    for (const path of answerVideoPaths(m.body, root)) {
-      const id = own("video", path);
-      answerMedia.set(path, { id, kind: "video" });
-      snapshot.media.set(id, {
-        kind: "video",
-        path: () => media.turnVideoPath(chatId, m.id, path),
-      });
-    }
-  }
+  const answerMedia = answerMediaOf(chatId, m, root, media, snapshot);
   const html = renderedBody(m, shared.key, root, {
     media: (src) => {
       if (!root) return undefined;
@@ -231,21 +209,56 @@ function guestMessage(
     streaming: m.status === "streaming",
     ...(activities.length ? { activities } : {}),
     ...(m.renders?.length
-      ? {
-          renders: m.renders.map(({ id, title, pages }) => ({
-            id,
-            key: shared.renderKey(id),
-            title: redacted(title),
-            pages: pages.map(({ label, heights }) => ({
-              ...(label ? { label: redacted(label) } : {}),
-              ...(heights ? { heights } : {}),
-            })),
-          })),
-        }
+      ? { renders: guestRenders(m.renders, shared.renderKey) }
       : {}),
     ...(images.length ? { images } : {}),
     ...(preview ? { preview } : {}),
   };
+}
+
+/** Images and videos an answer names on this computer, by path. */
+function answerMediaOf(
+  chatId: string,
+  m: ChatMessage,
+  root: string | null,
+  media: ThreadMedia,
+  snapshot: GuestSnapshot,
+): Map<string, { id: string; kind: "image" | "video" }> {
+  const found = new Map<string, { id: string; kind: "image" | "video" }>();
+  // A copied answer naming a path names one on someone else's computer.
+  if (m.role !== "assistant" || !root || m.imported) return found;
+  for (const path of answerImagePaths(m.body, root)) {
+    const id = mediaId(m.id, "image", path);
+    found.set(path, { id, kind: "image" });
+    snapshot.media.set(id, {
+      kind: "image",
+      dataUrl: () => media.readImage(chatId, m.id, path),
+    });
+  }
+  for (const path of answerVideoPaths(m.body, root)) {
+    const id = mediaId(m.id, "video", path);
+    found.set(path, { id, kind: "video" });
+    snapshot.media.set(id, {
+      kind: "video",
+      path: () => media.turnVideoPath(chatId, m.id, path),
+    });
+  }
+  return found;
+}
+
+function guestRenders(
+  renders: NonNullable<ChatMessage["renders"]>,
+  renderKey: (renderId: string) => string,
+) {
+  return renders.map(({ id, title, pages }) => ({
+    id,
+    key: renderKey(id),
+    title: redacted(title),
+    pages: pages.map(({ label, heights }) => ({
+      ...(label ? { label: redacted(label) } : {}),
+      ...(heights ? { heights } : {}),
+    })),
+  }));
 }
 
 function guestActivities(

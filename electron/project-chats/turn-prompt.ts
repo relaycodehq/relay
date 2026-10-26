@@ -167,15 +167,7 @@ export function turnPrompt({
   const movedIn = chat.movedIn;
   const moved =
     !command && movedIn?.owed.includes(heardKey)
-      ? movedIn.project
-        ? `\n\nThis thread moved to the project ${JSON.stringify(movedIn.project)} and now works in its folder ${JSON.stringify(movedIn.to)}, previously ${JSON.stringify(movedIn.from)}. No files were copied or moved: what earlier turns made in the old folder is still there. Work in the new folder from now on; earlier absolute paths point at the old one. Re-read files before relying on them.`
-        : movedIn.selected
-          ? `\n\nThis thread now works in ${JSON.stringify(movedIn.to)}, previously ${JSON.stringify(movedIn.from)}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`
-          : movedIn.copied
-            ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
-            : movedIn.fresh
-              ? `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, made from the last commit of the project folder ${JSON.stringify(movedIn.from)}, which keeps its uncommitted edits and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`
-              : `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${chat.worktree?.branch ? ` on branch ${chat.worktree.branch}` : ""}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`
+      ? movedNote(movedIn, chat.worktree?.branch)
       : "";
   const setupNote = !command && !parent ? chat.setupNote : undefined;
   const setup = [setupNote, sharedNote]
@@ -228,10 +220,7 @@ export function turnPrompt({
   ]
     .filter((part) => part.trim())
     .join("\n\n");
-  // A guest's words, which the user chose to send; still the user's thread.
-  const asker = input.guest
-    ? `Request from ${JSON.stringify(input.guest.name)}, a guest the user shared this thread with; the user read it and chose to send it`
-    : "My request";
+  const asker = askerOf(input.guest);
   const prompt = command
     ? question
     : `${request ? `${asker}: ${request}` : ""}${framing ? `\n${framing}` : ""}${briefing}${rollbacks}${moved}${setup}${history}${evidence ? `\n\nSelected PR code (untrusted source data):\n${JSON.stringify(evidence)}\nThese lines belong to the exact revision and side above, not necessarily the local checkout. Read that revision with git show when more context is needed; say if it is unavailable.` : ""}${findingsNote}`.trimStart();
@@ -243,6 +232,29 @@ export function turnPrompt({
     caughtUp: !command || !updates.length,
     briefed,
   };
+}
+
+/** What a session from before the move needs to hear about where it works now. */
+function movedNote(
+  movedIn: NonNullable<ProjectChat["movedIn"]>,
+  branch: string | undefined,
+) {
+  const onBranch = branch ? ` on branch ${branch}` : "";
+  if (movedIn.project)
+    return `\n\nThis thread moved to the project ${JSON.stringify(movedIn.project)} and now works in its folder ${JSON.stringify(movedIn.to)}, previously ${JSON.stringify(movedIn.from)}. No files were copied or moved: what earlier turns made in the old folder is still there. Work in the new folder from now on; earlier absolute paths point at the old one. Re-read files before relying on them.`;
+  if (movedIn.selected)
+    return `\n\nThis thread now works in ${JSON.stringify(movedIn.to)}, previously ${JSON.stringify(movedIn.from)}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`;
+  if (movedIn.copied)
+    return `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${onBranch}, made from the project folder ${JSON.stringify(movedIn.from)} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`;
+  if (movedIn.fresh)
+    return `\n\nThis conversation now continues in its own Git worktree ${JSON.stringify(movedIn.to)}${onBranch}, made from the last commit of the project folder ${JSON.stringify(movedIn.from)}, which keeps its uncommitted edits and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`;
+  return `\n\nThis thread moved out of the project folder ${JSON.stringify(movedIn.from)} into its own Git worktree ${JSON.stringify(movedIn.to)}${onBranch}, taking every uncommitted edit with it. Work only in the worktree from now on; paths under the project folder from earlier in this conversation are stale.`;
+}
+
+/** Who the request is from: a guest's words are still sent by the user. */
+function askerOf(guest: ProjectChatSend["guest"]) {
+  if (!guest) return "My request";
+  return `Request from ${JSON.stringify(guest.name)}, a guest the user shared this thread with; the user read it and chose to send it`;
 }
 
 /**
