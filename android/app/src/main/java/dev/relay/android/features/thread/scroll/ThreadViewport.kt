@@ -14,16 +14,32 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.scrollBy
 import androidx.compose.ui.semantics.scrollToIndex
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.dp
 import dev.relay.android.features.thread.ThreadScroll
 import dev.relay.android.features.thread.HistoryLoadResult
 import android.os.Trace
 import dev.relay.android.features.diagnostics.scrollTouches
+import kotlin.math.min
+
+/** The widest the conversation reads; a wider pane, like an unfolded Fold without its sidebar, centres it. */
+private val ReadingWidth = 640.dp
+
+/**
+ * Lays a thread row, or the dock, out no wider than [ReadingWidth], centred.
+ * The list itself stays full width, so a thumb on the screen's edge still scrolls it.
+ */
+internal fun Modifier.readingColumn() = layout { measurable, constraints ->
+    val width = min(constraints.maxWidth, ReadingWidth.roundToPx())
+    val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+    layout(constraints.maxWidth, placeable.height) { placeable.placeRelative((constraints.maxWidth - width) / 2, 0) }
+}
 
 /** One viewport shared by the real conversation, gallery and device tests. */
 @Composable
@@ -66,7 +82,7 @@ internal fun ThreadViewport(
                 verticalArrangement = Arrangement.Bottom,
                 content = content,
             )
-            Column(content = dock)
+            Column(Modifier.readingColumn(), content = dock)
         },
     ) { children, constraints ->
         scroll.diagnostics.viewportMeasured()

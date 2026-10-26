@@ -32,6 +32,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import dev.relay.android.features.diagnostics.LocalScrollTrace
 import dev.relay.android.features.diagnostics.scrollGeometry
 import dev.relay.android.features.thread.scroll.ThreadViewport
+import dev.relay.android.features.thread.scroll.readingColumn
 import dev.relay.android.features.thread.scroll.ContentSignature
 import dev.relay.android.features.thread.scroll.StableGeometryState
 import dev.relay.android.features.thread.scroll.stableGeometry
@@ -417,7 +418,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                 },
             ) {
                 if (earlier != null) item("earlier") {
-                    Box(Modifier.onSizeChanged { measurements.size("earlier", it) }) {
+                    Box(Modifier.readingColumn().onSizeChanged { measurements.size("earlier", it) }) {
                         Earlier(earlier, history > loadedHistory || history < Bridge.MAX_REMOTE_HISTORY) {
                             trace.event("load_earlier", "earlier" to earlier)
                             scope.launch {
@@ -435,7 +436,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                 }
                 // Never zero high: an empty item isn't "visible", so the list couldn't tell it's at the bottom.
                 item("end") {
-                    Column(Modifier.heightIn(min = 1.dp).stableGeometry(geometry.getOrPut("end") { StableGeometryState() }, scroll.reading || scroll.touching).onSizeChanged { measurements.size("end", it) }) {
+                    Column(Modifier.readingColumn().heightIn(min = 1.dp).stableGeometry(geometry.getOrPut("end") { StableGeometryState() }, scroll.reading || scroll.touching).onSizeChanged { measurements.size("end", it) }) {
                         val newest = listed.lastOrNull()
                         if (running && newest?.role == "user") AwaitingAnswer(composer.settings?.provider ?: t?.settings?.provider ?: "claude", newest.id)
                         if (canResume) Row(
