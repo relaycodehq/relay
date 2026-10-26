@@ -116,6 +116,19 @@ describe("importGuestThread", () => {
     expect(note.length).toBeLessThan(61_000);
   });
 
+  it("refuses times a Date can't hold", async () => {
+    const { h, created } = await host(() =>
+      Response.json({
+        ...bundle,
+        messages: [{ ...bundle.messages[0]!, created: -1e300 }],
+      }),
+    );
+    await expect(importGuestThread(h, projectId, link)).rejects.toThrow(
+      /shared Relay thread/,
+    );
+    expect(created).toEqual([]);
+  });
+
   it("moves copied times back when the sharer's clock ran ahead", async () => {
     const ahead = Date.now() + 10 * 60_000;
     const { h, created } = await host(() =>

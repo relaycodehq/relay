@@ -167,6 +167,9 @@ export interface GuestDelta {
   suggestions?: GuestPageView["suggestions"];
 }
 
+/** The latest time a Date can stand for. */
+const MAX_DATE = 8_640_000_000_000_000;
+
 /** What a bundle's title and authors may run to; longer ones are cut before sending. */
 export const BUNDLE_TITLE_CHARS = 300;
 export const BUNDLE_AUTHOR_CHARS = 100;
@@ -180,7 +183,8 @@ export const guestBundleSchema = z.object({
         role: z.enum(["user", "assistant"]),
         from: z.string().max(BUNDLE_AUTHOR_CHARS),
         body: z.string().max(200_000),
-        created: z.number(),
+        // Within what a Date can hold, even once moved back for the sharer's clock.
+        created: z.number().int().min(0).max(MAX_DATE),
       }),
     )
     .max(500),
