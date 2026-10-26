@@ -122,6 +122,17 @@ public enum WrittenCode: Sendable, Equatable {
     }
 }
 
+extension WrittenCode {
+    /// Past the desktop's limit before any of it fit: only the path is left.
+    public var keptNothing: Bool {
+        switch self {
+        case .whole(_, let content, let cut): cut && content.isEmpty
+        case .patch(_, let diff, let cut): cut && diff.isEmpty
+        case .swap(_, let edits, let cut): cut && edits.allSatisfy { $0.old.isEmpty && $0.new.isEmpty }
+        }
+    }
+}
+
 public struct SwappedText: Codable, Sendable, Equatable {
     public var old: String
     public var new: String

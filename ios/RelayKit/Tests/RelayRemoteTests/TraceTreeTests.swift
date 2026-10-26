@@ -67,6 +67,23 @@ struct TraceTreeTests {
         }
     }
 
+    @Test func aScriptWrittenAndRunInOneCommandIsOneCall() throws {
+        let both: AgentActivity = try JSON.parse(
+            #"{"id":"both","kind":"command","label":"cat > /tmp/check.py <<'EOF'","status":"complete","actions":[{"kind":"create","file":"/tmp/check.py"},{"kind":"run","what":"check.py"}]}"#
+        ).decode()
+        let rows = rowsOf([both])
+        #expect(rows.count == 1)
+        #expect(rows[0].ranToo)
+        #expect(rows[0].calls.map(\.id) == ["both"])
+    }
+
+    @Test func aWriteCutBeforeAnyOfItFitKeptNothing() {
+        #expect(WrittenCode.whole(path: "a.ts", content: "", cut: true).keptNothing)
+        #expect(WrittenCode.swap(path: "a.ts", edits: [SwappedText(old: "", new: "")], cut: true).keptNothing)
+        #expect(!WrittenCode.whole(path: "a.ts", content: "", cut: false).keptNothing)
+        #expect(!WrittenCode.patch(path: "a.ts", diff: "@@", cut: true).keptNothing)
+    }
+
     @Test func anActionANewerDesktopInventsKeepsARowOfItsOwn() throws {
         let action: CallAction = try JSON.parse(#"{"kind":"deploy","where":"prod"}"#).decode()
         #expect(action == .tool)
@@ -104,11 +121,35 @@ struct LineDiffTests {
         #expect(lineDiff("a", "a") == [DiffLine(.same, "a")])
     }
 
-    @Test func patchLinesKeepHeadersAsContext() {
-        let lines = patchLines("--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n keep\n-gone\n+came")
-        #expect(lines.map(\.mark) == [.same, .same, .same, .same, .removed, .added])
-        #expect(lines[3].text == "keep")
+    @Test func aPatchStartsAtItsFirstHunk() throws {
+        let lines = try #require(patchLines("diff --git a/x.ts b/x.ts\nindex 1..2\n--- a/x.ts\n+++ b/x.ts\n@@ -1,2 +1,2 @@\n keep\n-gone\n+came"))
+        #expect(lines.map(\.mark) == [.same, .same, .removed, .added])
+        #expect(lines[1].text == "keep")
         let counts = changeCounts(lines)
         #expect(counts.added == 1 && counts.removed == 1)
+    }
+
+    @Test func linesLikeHeadersInsideAHunkAreContent() throws {
+        let lines = try #require(patchLines("@@ -1 +1 @@\n----\n+++x"))
+        #expect(lines == [DiffLine(.same, "@@ -1 +1 @@"), DiffLine(.removed, "---"), DiffLine(.added, "++x")])
+    }
+
+    @Test func aPatchWithNoHunkIsAWholeFile() {
+        #expect(patchLines("export const a = 1;\nexport const b = 2;") == nil)
+    }
+
+    @Test func aHugeChangeIsReplacedWholeInsteadOfTabled() {
+        let old = (0..<2_000).map { "old \($0)" }.joined(separator: "\n")
+        let new = (0..<2_000).map { "new \($0)" }.joined(separator: "\n")
+        let diff = lineDiff("same\n" + old + "\nend", "same\n" + new + "\nend")
+        #expect(diff.first == DiffLine(.same, "same"))
+        #expect(diff.last == DiffLine(.same, "end"))
+        #expect(Array(diff[1...2_000]).allSatisfy { $0.mark == .removed })
+        #expect(Array(diff[2_001...4_000]).allSatisfy { $0.mark == .added })
+    }
+
+    @Test func whatTheEndsShareStaysContext() {
+        let diff = lineDiff("a\nb\nx\nc\nd", "a\nb\ny\nc\nd")
+        #expect(diff.map(\.mark) == [.same, .same, .removed, .added, .same, .same])
     }
 }

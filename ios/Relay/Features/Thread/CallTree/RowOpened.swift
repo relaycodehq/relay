@@ -26,7 +26,8 @@ struct RowOpened: View {
             ForEach(calls) { call in
                 if showsWritten(call) {
                     WrittenLoader(call: call, context: context)
-                } else {
+                }
+                if showsOutput(call) {
                     CallOutput(call: call, context: context)
                 }
             }
@@ -35,6 +36,11 @@ struct RowOpened: View {
 
     private func showsWritten(_ call: AgentActivity) -> Bool {
         call.wroteCode == true && context.canFetch && connection.canOpenWritten
+    }
+
+    /// What a call printed, unless it only confirms the code shown above it; a failure always says why.
+    private func showsOutput(_ call: AgentActivity) -> Bool {
+        !showsWritten(call) || call.status == "failed"
     }
 }
 
@@ -91,7 +97,8 @@ private struct WrittenLoader: View {
                     }
                 }
             } else if missing {
-                CallOutput(call: call, context: context)
+                // A failed call's output already shows beside this.
+                if call.status != "failed" { CallOutput(call: call, context: context) }
             } else {
                 Spinner(size: 13).padding(.vertical, 4)
             }

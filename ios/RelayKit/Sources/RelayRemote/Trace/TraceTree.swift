@@ -79,7 +79,8 @@ public func rowsOf(_ calls: [AgentActivity]) -> [TraceRow] {
                 continue
             }
             if let last = rows.indices.last, ranWhatItWrote(rows[last].action, action) {
-                rows[last].calls.append(call)
+                // A command that writes a script and runs it is one call, said once.
+                if !rows[last].calls.contains(where: { $0.id == call.id }) { rows[last].calls.append(call) }
                 rows[last].ranToo = true
                 continue
             }
@@ -169,7 +170,8 @@ private func pieces(_ kind: BranchKind, _ rows: [TraceRow]) -> [TracePiece] {
     }
 }
 
-private let pairVerbs: Set<String> = ["read", "image", "search", "web", "edit", "create", "run", "git"]
+/// Kinds two rows of can share one line; two pictures keep their own rows, each with its thumbnail.
+private let pairVerbs: Set<String> = ["read", "search", "web", "edit", "create", "run", "git"]
 
 /// Two rows one verb can carry: same action, both settled and fine, said the same way.
 private func pairable(_ a: TraceRow, _ b: TraceRow) -> Bool {

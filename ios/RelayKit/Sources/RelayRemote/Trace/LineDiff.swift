@@ -17,11 +17,33 @@ public struct DiffLine: Sendable, Equatable {
     }
 }
 
+/// The most cells the common-run table may have; past it the middle reads as replaced whole.
+public let maxDiffCells = 2_000_000
+
 /// `old` turned into `new` through their longest common run of lines; within a change the
 /// removed lines come before the added ones.
 public func lineDiff(_ old: String, _ new: String) -> [DiffLine] {
     let before = old.components(separatedBy: "\n")
     let after = new.components(separatedBy: "\n")
+    // The lines both start and end with need no table.
+    var head = 0
+    while head < before.count, head < after.count, before[head] == after[head] { head += 1 }
+    var tail = 0
+    while tail < before.count - head, tail < after.count - head,
+        before[before.count - 1 - tail] == after[after.count - 1 - tail]
+    {
+        tail += 1
+    }
+    let removed = Array(before[head..<(before.count - tail)])
+    let added = Array(after[head..<(after.count - tail)])
+    let middle =
+        removed.count * added.count > maxDiffCells
+        ? removed.map { DiffLine(.removed, $0) } + added.map { DiffLine(.added, $0) }
+        : commonRunDiff(removed, added)
+    return before[..<head].map { DiffLine(.same, $0) } + middle + after[(after.count - tail)...].map { DiffLine(.same, $0) }
+}
+
+private func commonRunDiff(_ before: [String], _ after: [String]) -> [DiffLine] {
     // kept[i][j]: how many lines `before[i...]` and `after[j...]` have in common.
     var kept = Array(repeating: Array(repeating: 0, count: after.count + 1), count: before.count + 1)
     for i in stride(from: before.count - 1, through: 0, by: -1) {
@@ -48,11 +70,15 @@ public func lineDiff(_ old: String, _ new: String) -> [DiffLine] {
     return lines
 }
 
-/// A unified diff's lines, marked by their first character; its file and hunk headers are context.
-public func patchLines(_ diff: String) -> [DiffLine] {
-    diff.components(separatedBy: "\n").map { line in
-        if line.hasPrefix("+") && !line.hasPrefix("+++") { return DiffLine(.added, String(line.dropFirst())) }
-        if line.hasPrefix("-") && !line.hasPrefix("---") { return DiffLine(.removed, String(line.dropFirst())) }
+/// A unified diff's lines from its first hunk on, marked by their first character; the file
+/// headers before it go. Nil when it has no hunk, as an added file's whole content.
+public func patchLines(_ diff: String) -> [DiffLine]? {
+    let lines = diff.components(separatedBy: "\n")
+    guard let first = lines.firstIndex(where: { $0.hasPrefix("@@") }) else { return nil }
+    return lines[first...].map { line in
+        if line.hasPrefix("@@") { return DiffLine(.same, line) }
+        if line.hasPrefix("+") { return DiffLine(.added, String(line.dropFirst())) }
+        if line.hasPrefix("-") { return DiffLine(.removed, String(line.dropFirst())) }
         return DiffLine(.same, line.hasPrefix(" ") ? String(line.dropFirst()) : line)
     }
 }
