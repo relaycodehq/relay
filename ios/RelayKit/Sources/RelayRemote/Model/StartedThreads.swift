@@ -14,8 +14,9 @@ public func startedIds(_ result: String?) -> [String]? {
 }
 
 /// The lead's started threads: needing you first, then working, then done; each oldest first.
+/// A second opinion isn't among them: it shows under the answer it checks.
 public func startedOf(_ lead: String, _ chats: [RemoteChatSummary]) -> [RemoteChatSummary] {
-    chats.filter { $0.startedBy?.chatId == lead }.sorted(by: byStanding)
+    chats.filter { $0.startedBy?.chatId == lead && !isSecondOpinion($0) }.sorted(by: byStanding)
 }
 
 public func familyLive(_ started: [RemoteChatSummary]) -> Bool {

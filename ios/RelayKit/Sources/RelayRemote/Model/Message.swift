@@ -51,6 +51,8 @@ public struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     public var author: String?
     public var authorId: String?
     public var fromThread: String?
+    /// On the message that asks a second opinion: what it asks about, shown in place of the prompt.
+    public var secondOpinion: SecondOpinionAsked?
     public var seq: Int64?
     public var parentId: String?
     public var pending: Bool?

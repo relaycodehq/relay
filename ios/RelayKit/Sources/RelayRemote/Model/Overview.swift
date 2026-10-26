@@ -118,6 +118,8 @@ public struct StartedBy: Codable, Sendable, Equatable {
     public var chatId: String
     public var agent: String
     public var sendsApproved: Bool?
+    /// It's a second opinion on this answer of the lead's, by message id.
+    public var secondOpinionOn: String?
 }
 
 public struct LimitResume: Codable, Sendable, Equatable {

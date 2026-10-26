@@ -16,9 +16,14 @@ struct MessageActions: View {
     @State private var forking = false
     @State private var selecting = false
     @State private var failure: String?
+    @State private var askingOpinion = false
 
     /// Only a finished answer on the main conversation forks.
     private var forks: Bool { message.status == "complete" && message.parentId == nil && message.side != true }
+    /// Where the computer takes it, on a finished answer of the main conversation.
+    private var asksOpinion: Bool {
+        replies && offersSecondOpinion(message) && (connection.overview?.bridge ?? 0) >= Bridge.secondOpinion
+    }
 
     var body: some View {
         // The speed and cost go first when the row runs out of room.
@@ -30,6 +35,7 @@ struct MessageActions: View {
         .foregroundStyle(colors.faint)
         .padding(.top, 2)
         .selectTextSheet(isPresented: $selecting, message.body)
+        .sheet(isPresented: $askingOpinion) { SecondOpinionSheet(chatId: chatId, answer: message) }
         .alert("Couldn't fork it", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
         } message: {
             Text(failure ?? "")
@@ -95,6 +101,12 @@ struct MessageActions: View {
             }
             if forks {
                 Button("Fork from here", systemImage: "arrow.triangle.branch") { fork() }
+            }
+            if asksOpinion {
+                Button { askingOpinion = true } label: {
+                    Label("Second Opinion…", systemImage: "bubble.left.and.text.bubble.right")
+                    Text("Another agent checks this answer.")
+                }
             }
             QuoteItem(text: message.body)
             if !message.body.isEmpty {

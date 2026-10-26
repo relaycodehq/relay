@@ -34,6 +34,8 @@ public enum Bridge {
     public static let tunnel = 23
     /// A thread's calls say what they did (`actions`) and whether they wrote code; `activityWritten`.
     public static let traceTree = 35
+    /// Phones may ask another agent for a second opinion on an answer and send it back.
+    public static let secondOpinion = 36
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22
@@ -50,6 +52,6 @@ public enum Bridge {
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
         "regenerateProjectChatTitle", "search", "pullCiStatus", "pullMergeReadiness", "mergePull",
-        "submitReview", "comment",
+        "submitReview", "comment", "askSecondOpinion",
     ]
 }
