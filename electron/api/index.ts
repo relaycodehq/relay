@@ -7,6 +7,7 @@ import { openCodeHandlers } from "./opencode";
 import { agentToolHandlers } from "./agent-tools";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
+import { deepReviewHandlers } from "./deep-reviews";
 import { bugReportHandlers } from "./bug-reports";
 import { checkHandlers } from "./checks";
 import { combine } from "./combine";
@@ -53,6 +54,7 @@ export function createDispatch(
     gitHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
+    deepReviewHandlers(ctx),
     secondOpinionHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
