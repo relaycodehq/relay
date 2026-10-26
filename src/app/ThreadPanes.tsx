@@ -85,10 +85,12 @@ export function ThreadChanges({
   };
 }) {
   const [slots, setSlots] = useState<PaneSlots>(NO_SLOTS);
-  // Editing takes over from the diff, so Review steps aside for Files.
+  const editorElsewhere = useEditorElsewhere(where);
+  // Editing takes over from the diff, so Review steps aside for Files; not
+  // for an editor in its own window, which leaves this one as it was.
   const editFile = (path: string, line?: number) => {
-    if (opens.openInEditor({ path, line, directory: false }))
-      opens.togglePane("changes");
+    const opened = opens.openInEditor({ path, line, directory: false });
+    if (opened && !editorElsewhere) opens.togglePane("changes");
   };
   const reviewFile = `relay-project-review-file:${project.id}:${pull.number}`;
   return (
