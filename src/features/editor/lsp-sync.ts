@@ -51,13 +51,25 @@ export function syncWithServer(doc: FileDocument) {
   let openedPath: string | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const open = () => {
-    if (openedPath || !doc.state) return;
+    if (openedPath || !doc.state || !servedBy(doc)) return;
     openedPath = doc.path;
     heard.set(fileKey(where, openedPath), doc.state.doc);
     void lsp.open(where, openedPath, doc.text()).catch(() => {});
   };
+  const close = () => {
+    clearTimeout(timer);
+    if (!openedPath) return;
+    heard.delete(fileKey(where, openedPath));
+    void lsp.close(where, openedPath).catch(() => {});
+    openedPath = undefined;
+  };
+  // A renamed file is a different document to the server: close the old path, open the new.
+  const followRename = () => {
+    if (openedPath && openedPath !== doc.path) close();
+    open();
+  };
   open();
-  const offStatus = doc.subscribe(open);
+  const offStatus = doc.subscribe(followRename);
   let heardText = doc.state?.doc;
   const offState = doc.onState((state) => {
     if (!openedPath) return open();
@@ -73,12 +85,9 @@ export function syncWithServer(doc: FileDocument) {
     if (openedPath) void lsp.save(where, openedPath).catch(() => {});
   });
   doc.onDispose(() => {
-    clearTimeout(timer);
     offStatus();
     offState();
     offSave();
-    if (!openedPath) return;
-    heard.delete(fileKey(where, openedPath));
-    void lsp.close(where, openedPath).catch(() => {});
+    close();
   });
 }
