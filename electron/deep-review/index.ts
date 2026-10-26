@@ -13,7 +13,6 @@ import type { AgentProvider } from "../../shared/agents";
 import {
   latestReview,
   reviewerRound,
-  reviewerTitle,
   roundOf,
   reviewRunning,
   reviewThreadTitle,
@@ -23,18 +22,12 @@ import {
   type ReviewerTask,
 } from "../../shared/deep-review";
 import { hasCouncilReport, memberAnswer } from "../../shared/council";
-import {
-  councilTurn,
-  halted,
-  lastAnswer,
-  queued,
-  startSlots,
-  unfinishedSlots,
-} from "./council";
-import { leadPrompt, requestText, reviewerTask } from "./prompts";
+import { halted, lastAnswer, queued, unfinishedSlots } from "./council";
+import { leadPrompt, requestText } from "./prompts";
 import { resolveScope, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
-import { discardReviewCheckout, openReviewCheckout } from "./checkout";
+import { placeRound } from "./checkout";
+import { createReviewers, sendReviewers } from "./reviewers";
 import { followFixes } from "./fixes";
 export {
   ensureReviewCheckout,
@@ -138,36 +131,11 @@ export class DeepReviews {
         : undefined;
     const root = await (folder?.(chat) ?? this.host.root(chat.projectId));
     const scope = await resolveScope(root, config.target, project, pull);
-    // Reviewers read the code around the changes, so they work where it's
-    // checked out. Without that they still read it from Git. Another
-    // thread's agent stays in its own folder, so nothing is checked out.
-    let putBack: (() => Promise<unknown>) | undefined;
-    const checkout = own
-      ? await openReviewCheckout(
-          root,
-          scope,
-          this.host.worktrees,
-          chat.id,
-          pull?.headBranch,
-          { inUse: duringTurn, moved: (back) => (putBack = back) },
-        ).catch((e: unknown) => {
-          console.warn("Could not check out the reviewed code for review:", e);
-          return undefined;
-        })
-      : undefined;
-    if (checkout) scope.checkout = checkout;
-    else scope.folder = root;
-    // An earlier round's folder stays when this one doesn't start, back
-    // where that round had it.
-    const kept =
-      !!checkout &&
-      chat.reviews?.some((r) => r.scope.checkout?.path === checkout.path);
-    const discardCheckout = () =>
-      !checkout
-        ? undefined
-        : kept
-          ? putBack?.()
-          : discardReviewCheckout(checkout);
+    const discardCheckout = await placeRound(root, scope, chat, {
+      worktrees: this.host.worktrees,
+      prHead: pull?.headBranch,
+      duringTurn,
+    });
     const request: ChatMessage = {
       id: randomUUID(),
       role: "user",
@@ -188,12 +156,32 @@ export class DeepReviews {
       status: "reviewing",
     };
     // Reviewers first: the thread only holds the review once all of them exist.
-    const created = await this.createReviewers(chat, state, config).catch(
+    const created = await createReviewers(this.host, chat, state, config).catch(
       async (error: unknown) => {
         await Promise.allSettled([discardCheckout()]);
         throw error;
       },
     );
+    await this.holdRound(chat, request, state, { own, first }, () =>
+      Promise.allSettled([
+        ...created.map((c) => this.host.discard(c)),
+        discardCheckout(),
+      ]),
+    );
+    await this.ask(chat, state, [...state.reviewers.keys()]);
+  }
+
+  /**
+   * Puts the round in its thread and saves it. When saving fails, the
+   * thread goes back to how it was and `undo` throws away what the round made.
+   */
+  private async holdRound(
+    chat: ProjectChat,
+    request: ChatMessage,
+    state: DeepReviewState,
+    { own, first }: { own: boolean; first: boolean },
+    undo: () => Promise<unknown>,
+  ) {
     const before = {
       title: chat.title,
       updated: chat.updated,
@@ -201,9 +189,9 @@ export class DeepReviews {
     };
     chat.messages.push(request);
     // A review's own thread is named after what its first round covers.
-    if (own && first) chat.title = reviewThreadTitle(scope);
+    if (own && first) chat.title = reviewThreadTitle(state.scope);
     chat.updated = Date.now();
-    if (own) chat.branch = scope.branch ?? chat.branch;
+    if (own) chat.branch = state.scope.branch ?? chat.branch;
     (chat.reviews ??= []).push(state);
     try {
       await this.host.touch(chat, request.id);
@@ -213,43 +201,9 @@ export class DeepReviews {
       Object.assign(chat, before);
       chat.reviews.pop();
       if (!chat.reviews.length) delete chat.reviews;
-      await Promise.allSettled([
-        ...created.map((c) => this.host.discard(c)),
-        discardCheckout(),
-      ]);
+      await undo();
       throw error;
     }
-    await this.sendReviewers(chat, state, [...state.reviewers.keys()]);
-  }
-
-  /** A thread for each reviewer; those made before one failed are deleted again. */
-  private async createReviewers(
-    chat: ProjectChat,
-    state: DeepReviewState,
-    config: DeepReviewStart,
-  ) {
-    const created: ProjectChat[] = [];
-    try {
-      for (const [slot, reviewer] of config.reviewers.entries()) {
-        const { codex } = reviewerTask(reviewer, state.scope, state.focus);
-        const child = await this.host.createReviewer(chat, {
-          task: {
-            parent: chat.id,
-            round: state.request,
-            slot,
-            ...(codex ? { codex } : {}),
-          },
-          title: reviewerTitle(slot, reviewer),
-          by: config.lead.provider,
-        });
-        created.push(child);
-        state.reviewers.push({ ...reviewer, chatId: child.id });
-      }
-    } catch (error) {
-      await Promise.allSettled(created.map((c) => this.host.discard(c)));
-      throw error;
-    }
-    return created;
   }
 
   /**
@@ -283,7 +237,7 @@ export class DeepReviews {
     const unfinished = await unfinishedSlots(this.host, state.reviewers);
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    if (unfinished.length) await this.sendReviewers(chat, state, unfinished);
+    if (unfinished.length) await this.ask(chat, state, unfinished);
     else await this.reviewerDone(chat.id, state.request);
   }
 
@@ -309,7 +263,7 @@ export class DeepReviews {
       throw new Error("This reviewer is already at work.");
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    await this.sendReviewers(chat, state, [slot]);
+    await this.ask(chat, state, [slot]);
   }
 
   /**
@@ -479,51 +433,10 @@ export class DeepReviews {
     }
   }
 
-  private async sendReviewers(
-    chat: ProjectChat,
-    state: DeepReviewState,
-    slots: number[],
-  ) {
-    try {
-      await this.startReviewers(chat, state, slots);
-    } catch (error) {
-      // Nothing is running that would ever hand over to the lead, so leave
-      // the review where Resume picks it up.
-      if (
-        state.status === "reviewing" &&
-        !state.reviewers.some((r) => this.host.active(r.chatId))
-      ) {
-        state.status = "failed";
-        await this.host
-          .touch(chat, state.request)
-          .catch((e) => console.warn("Could not save the failed review:", e));
-      }
-      throw error;
-    }
-  }
-
-  private async startReviewers(
-    chat: ProjectChat,
-    state: DeepReviewState,
-    slots: number[],
-  ) {
-    await startSlots(
-      slots,
-      async (slot) => {
-        const reviewer = state.reviewers[slot]!;
-        const { body } = reviewerTask(reviewer, state.scope, state.focus);
-        await this.host.send(reviewer.chatId, {
-          id: randomUUID(),
-          body,
-          to: reviewer.provider,
-          provider: reviewer.provider,
-          choice: reviewer.choice,
-          ...councilTurn,
-          // Signed by the review, whose name opens it from the reviewer's thread.
-          fromThread: { id: chat.id, name: "Deep review" },
-        });
-      },
-      () => this.reviewerDone(chat.id, state.request),
+  /** Asks `slots` for their reviews; one that can't start counts as done. */
+  private ask(chat: ProjectChat, state: DeepReviewState, slots: number[]) {
+    return sendReviewers(this.host, chat, state, slots, () =>
+      this.reviewerDone(chat.id, state.request),
     );
   }
 
