@@ -142,8 +142,10 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     LaunchedEffect(inFront) { if (inFront) model.load() }
     val actions = remember { ThreadActions(remote, id, model, scope, failures, nav) }
     val composer = remember { ComposerState(screenFollows = true) }
+    val opinions = remember { SecondOpinions(remote, id, scope) }
     var sheet by remember { mutableStateOf<Sheet?>(null) }
     var acting by remember { mutableStateOf<ChatMessage?>(null) }
+    var opinionOn by remember { mutableStateOf<ChatMessage?>(null) }
     val messageStates = remember { mutableMapOf<String, MessageViewState>() }
     var viewing by remember { mutableStateOf<MessageViewing?>(null) }
     val onViewMessageImage = remember { { next: MessageViewing -> viewing = next } }
@@ -207,6 +209,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val byId = remember(all) { all.associateBy { it.id } }
     val setupId = if (rootId == null) remember(listed) { latestSetup(listed)?.id } else null
     // Side conversations: `/btw` questions and messages someone replied to.
+    LaunchedEffect(all) { opinions.sent += all.mapNotNull { it.fromThread } }
     val sides = remember(all, counts) { all.filter { it.parentId == null && (it.side == true || counts.containsKey(it.id)) } }
     val running = if (rootId != null) listed.any { it.status == "streaming" } else thread?.running ?: summary?.running ?: false
     val lastAnswer = listed.lastOrNull(::isAnswer)
@@ -316,7 +319,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
 
     val title = if (rootId != null) "Replies" else t?.title ?: summary?.title ?: made?.title ?: ""
     CompositionLocalProvider(LocalThreadRemote provides remote, LocalFailures provides failures, LocalReadingBack provides !pinned,
-        LocalSavedCopy provides (fetched == 0L), LocalScrollTrace provides trace) {
+        LocalSavedCopy provides (fetched == 0L), LocalScrollTrace provides trace, LocalSecondOpinions provides opinions) {
         val line = composer.line
         Screen(
             title,
@@ -528,10 +531,12 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                     onFork = { actions.fork(m) },
                     onQuote = if (projectId != null) ({ composer.quote(it) }) else null,
                     onShare = { runCatching { shareText(context, it) }.onFailure { e -> failures.alert(e, "Couldn't share it") } },
+                    onSecondOpinion = if (rootId == null && bridge >= Bridge.SECOND_OPINION) ({ opinionOn = m }) else null,
                 ),
                 onClose = { acting = null },
             )
         }
+        opinionOn?.let { m -> SecondOpinionSheet(remote, m.provider, { provider, model -> opinions.ask(m.id, provider, model) }) { opinionOn = null } }
         FailureDialog(failures)
         viewing?.let { v -> Lightbox(remote, v.images, v.index) { viewing = null } }
     }

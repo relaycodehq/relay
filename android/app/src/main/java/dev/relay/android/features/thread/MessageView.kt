@@ -231,8 +231,10 @@ internal fun MessageView(
             if (user) strip(Modifier.align(Alignment.End))
             if (user) {
                 val body = withoutMention(m.body)
+                val asked = m.secondOpinion
+                if (asked != null) SecondOpinionAskedView(asked, root)
                 // A screenshot sent on its own leaves nothing for the bubble to hold.
-                if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
+                else if (body.isNotBlank()) UserBubble(body, side = m.side == true, pending = m.pending == true)
                 val takeBack = on.onTakeBack?.takeIf { m.id in on.held }
                 Row(
                     Modifier.align(Alignment.End),
@@ -289,6 +291,7 @@ internal fun MessageView(
                     onFork = on.onFork?.takeIf { m.status == "complete" && m.parentId == null && m.side != true }?.let { fork -> { fork(m) } },
                     onMore = on.onActions?.let { more -> { more(m) } },
                 )
+                if (!user && m.status != "streaming") SecondOpinionCards(chatId, m, root)
                 val openReplies = on.onReplies
                 if (replies > 0 && openReplies != null) Row(
                     Modifier.pressable(onClick = { openReplies(m) }, scale = false),

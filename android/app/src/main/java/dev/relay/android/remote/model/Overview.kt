@@ -107,7 +107,14 @@ data class ThreadGoal(
     val updated: Long,
 )
 
-@Serializable data class StartedBy(val chatId: String, val agent: String, val sendsApproved: Boolean? = null)
+@Serializable
+data class StartedBy(
+    val chatId: String,
+    val agent: String,
+    val sendsApproved: Boolean? = null,
+    /** It's a second opinion on this answer of the lead's, by message id. */
+    val secondOpinionOn: String? = null,
+)
 
 @Serializable
 data class LimitResume(val messageId: String, val provider: String, val at: Long, val off: Boolean? = null)
