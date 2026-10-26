@@ -85,7 +85,8 @@ else if (cmd === "logins" && sub === "helper") {
       name: "Or connect a Gitea server",
     });
     const noHost = page.getByRole("heading", {
-      name: "No pull requests yet",
+      name: "Sign in to GitHub",
+      exact: true,
     });
 
     // Off, the Pull requests page and Integrations never mention Gitea, and
