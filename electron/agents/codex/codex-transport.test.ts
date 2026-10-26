@@ -218,6 +218,18 @@ it("fails what is still waiting when the run ends, without reporting it", async 
   expect(onError).not.toHaveBeenCalled();
 });
 
+it("takes a finished command whose output runs to megabytes", async () => {
+  const codex = fakeCodex();
+  const { notifications, onError, close } = await connect(codex);
+  const aggregatedOutput = "x".repeat(5 * 1024 * 1024);
+  const item = { id: "c", type: "commandExecution", aggregatedOutput };
+  codex.say({ method: "item/completed", params: { item } });
+  await vi.waitFor(() => expect(notifications).toHaveLength(1));
+  expect(notifications[0]).toEqual(["item/completed", { item }]);
+  expect(onError).not.toHaveBeenCalled();
+  close();
+});
+
 describe("a broken connection", () => {
   const breaks: [
     string,
@@ -227,9 +239,9 @@ describe("a broken connection", () => {
     ["a line that isn't JSON", (c) => c.say("{not json\n"), "isn't JSON"],
     ["Codex closing its output", (c) => c.stdout.end(), "connection closed"],
     [
-      "a line over 4 MiB",
-      (c) => c.say("x".repeat(4 * 1024 * 1024 + 1)),
-      "exceeds 4 MiB",
+      "a line over 64 MiB",
+      (c) => c.say("x".repeat(64 * 1024 * 1024 + 1)),
+      "exceeds 64 MiB",
     ],
   ];
 

@@ -1,7 +1,7 @@
 // Codex keeps each session as `<home>/sessions/YYYY/MM/DD/rollout-…-<id>.jsonl`:
 // `session_meta` first, then what happened, turn by turn. Its app server's
 // `thread/read` returns the same, but a long session's answer outgrows the
-// 4 MiB frame Relay allows, so the file is read instead.
+// frame Relay allows, so the file is read instead.
 import { fileURLToPath } from "node:url";
 import type { AgentActivity } from "../../shared/projects";
 import { codexActivity } from "../agents/activity";

@@ -34,7 +34,10 @@ type Pending = {
   timer: NodeJS.Timeout;
 };
 
-const MAX_FRAME = 4 * 1024 * 1024;
+// A finished command carries its whole output in one frame, so a verbose
+// build or test run can send megabytes; the cap only stops a broken Codex.
+const MAX_FRAME_MIB = 64;
+const MAX_FRAME = MAX_FRAME_MIB * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_ACTIVE_REQUESTS = 32;
 
@@ -205,7 +208,7 @@ export async function withCodexTransport<T>(
 
   function read(chunk: Buffer | string) {
     const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
-    if (!fits(bytes)) return terminate("Codex response frame exceeds 4 MiB.");
+    if (!fits(bytes)) return terminate(`Codex response frame exceeds ${MAX_FRAME_MIB} MiB.`);
     lines(decoder.write(bytes));
   }
 
