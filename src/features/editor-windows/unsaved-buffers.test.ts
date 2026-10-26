@@ -97,6 +97,17 @@ it("saves over the version the text was edited over, so a file changed meanwhile
   );
 });
 
+it("keeps the text of a file that can't be read here, since the other window has let go of it", async () => {
+  mocks.read.mockRejectedValueOnce(new Error("No such file"));
+  await adoptBuffers(where, [
+    { path: "a.ts", text: "edited\n", version: "v1" },
+  ]);
+  const a = documents.find(source, "a.ts")!;
+  expect(a.status.dirty).toBe(true);
+  expect(a.text()).toBe("edited\n");
+  expect(collectUnsaved(where)).toEqual([{ path: "a.ts", text: "edited\n" }]);
+});
+
 it("leaves typing that began before the handoff arrived alone", async () => {
   await adoptBuffers(where, [{ path: "a.ts", text: "first\n" }]);
   await adoptBuffers(where, [{ path: "a.ts", text: "second\n" }]);

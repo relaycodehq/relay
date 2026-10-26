@@ -219,9 +219,12 @@ export class FileDocument {
     }
   }
 
-  /** The version on disk the edits are made over, as read or last saved; a save over any other is refused. */
+  /**
+   * The version on disk the edits are made over, as read or last saved; a
+   * save over any other is refused. Undefined until the file has been read.
+   */
   get diskVersion() {
-    return this.version;
+    return this.file ? this.version : undefined;
   }
 
   /**
@@ -238,6 +241,18 @@ export class FileDocument {
     if (editedOver === undefined || editedOver === this.version) return;
     this.version = editedOver;
     this.set({ changedOnDisk: true });
+  }
+
+  /**
+   * Keeps unsaved text carried over from another window when the file can't
+   * be read here (it was deleted, say), so the edits aren't lost with it.
+   * With nothing read, there is no version on disk to save over.
+   */
+  keepUnread(text: string) {
+    if (this.state) return;
+    this.config = [EditorState.lineSeparator.of(lineBreakOf(text)), this.extensions(text)];
+    this.state = EditorState.create({ doc: text, extensions: this.config });
+    this.set({ dirty: true });
   }
 
   /** Looks at the disk. A change is taken without asking when there are no edits to lose. */

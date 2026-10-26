@@ -65,16 +65,16 @@ export function discardWorkspace(where: string) {
     documents.close(doc.source, doc.path, true);
 }
 
-/** Resolves once the document has been read; false if reading failed. */
+/** Resolves once the document has been read, or reading it failed. */
 function whenRead(doc: FileDocument) {
-  return new Promise<boolean>((resolve) => {
+  return new Promise<void>((resolve) => {
     const settled = () =>
       !!doc.status.error || (!!doc.state && !doc.status.loading);
-    if (settled()) return resolve(!doc.status.error);
+    if (settled()) return resolve();
     const off = doc.subscribe(() => {
       if (!settled()) return;
       off();
-      resolve(!doc.status.error);
+      resolve();
     });
   });
 }
@@ -82,6 +82,7 @@ function whenRead(doc: FileDocument) {
 /**
  * Opens a document for each buffer and sets its text as an edit once the
  * file is read, so it is unsaved and undoable as it was in the other window.
+ * A file that can't be read keeps the text as its own, unsaved.
  * The tabs showing them are already in storage.
  */
 export async function adoptBuffers(where: string, buffers: UnsavedBuffer[]) {
@@ -95,9 +96,12 @@ export async function adoptBuffers(where: string, buffers: UnsavedBuffer[]) {
         buffer.plain,
       );
       const doc = documents.get(source, path, baseExtensions);
+      await whenRead(doc);
       // Typing already in it is newer than what was handed over.
-      if ((await whenRead(doc)) && !doc.status.dirty)
-        doc.adopt(buffer.text, buffer.version);
+      if (doc.status.dirty) return;
+      // The other window has let go of the text, so it stays even if the file can't be read.
+      if (doc.state) doc.adopt(buffer.text, buffer.version);
+      else doc.keepUnread(buffer.text);
     }),
   );
 }
