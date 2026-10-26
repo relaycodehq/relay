@@ -11,6 +11,7 @@ import {
   actionVerb,
   rowFailed,
   rowRunning,
+  runSummary,
   shortPattern,
   shortWhere,
   traceTree,
@@ -141,7 +142,12 @@ const reads = [
 ];
 
 const fixture = {
-  cases: cases.map((c) => ({ name: c.name, calls: c.calls, pieces: traceTree(c.calls).map(piece) })),
+  cases: cases.map((c) => ({
+    name: c.name,
+    calls: c.calls,
+    pieces: traceTree(c.calls).map(piece),
+    summary: runSummary(c.calls) ?? null,
+  })),
   shortPatterns: ["^\\.sb-age\\b\\|^\\.sb-age {", "rg\\b\\|rgFlags", "color: color-mix(in srgb, var(--muted) 70%, transparent);", "plain"].map(
     (p) => [p, shortPattern(p)],
   ),

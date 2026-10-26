@@ -160,6 +160,12 @@ const pairVerbs = new Set<CallAction["kind"]>(["read", "search", "web", "edit", 
 
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
 
+/** "once", "twice", "3 times": a run's folded line can name one or two. */
+function times(count: number) {
+  if (count === 1) return "once";
+  return count === 2 ? "twice" : `${count} times`;
+}
+
 const distinctFiles = (rows: TraceRow[]) =>
   new Set(rows.map((r) => ("file" in r.action ? r.action.file : r.id))).size;
 
@@ -169,9 +175,9 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
     case "read":
       return `Read ${plural(distinctFiles(rows), "file")}`;
     case "search":
-      return `Searched ${plural(rows.length, "time")}`;
+      return `Searched ${times(rows.length)}`;
     case "web":
-      return `Searched the web ${plural(rows.length, "time")}`;
+      return `Searched the web ${times(rows.length)}`;
     case "edit":
       return `Edited ${plural(distinctFiles(rows), "file")}`;
     case "run":
@@ -181,7 +187,7 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
       return `Ran ${plural(rows.length, "check")}${failed ? ` · ${failed} failed` : ""}`;
     }
     case "commit":
-      return `Committed ${plural(rows.length, "time")}`;
+      return `Committed ${times(rows.length)}`;
     case "tool":
       return rows.every((r) => r.calls.every((c) => c.kind === "agent"))
         ? `Ran ${plural(rows.length, "agent")}`
@@ -196,9 +202,27 @@ export function branchHeading(kind: BranchKind, rows: TraceRow[]) {
 function runHeading(rows: TraceRow[]) {
   const programs = new Set(rows.map((r) => (r.action.kind === "run" ? r.action.what.split(" ")[0] : r.id)));
   const [program] = programs;
-  if (programs.size === 1) return `Ran ${program} ${rows.length} times`;
+  if (programs.size === 1) return rows.length === 1 ? `Ran ${program}` : `Ran ${program} ${rows.length} times`;
   const commands = new Set(rows.flatMap((r) => r.calls.map((c) => c.id))).size;
   return `Ran ${plural(commands, "command")}`;
+}
+
+/** How many kinds a folded run's line names before "and N more". */
+const summaryKinds = 3;
+
+/**
+ * A run the agent has moved on from, as one line: "Searched 2 times, read 4
+ * files and ran 3 commands". None for a tree of two lines or fewer, which
+ * shows as it is.
+ */
+export function runSummary(calls: AgentActivity[]): string | undefined {
+  if (traceTree(calls).length < 3) return undefined;
+  const parts = branches(rowsOf(calls)).map(([kind, rows], i) => {
+    const heading = branchHeading(kind, rows);
+    return i === 0 ? heading : heading.charAt(0).toLowerCase() + heading.slice(1);
+  });
+  if (parts.length > summaryKinds) return `${parts.slice(0, summaryKinds - 1).join(", ")} and ${parts.length - summaryKinds + 1} more`;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 
 /** The verb a row leads with, past or, while it runs, present. Tools draw their own row. */

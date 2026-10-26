@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { AgentActivity } from "./projects";
-import { traceTree, type TracePiece } from "./trace-tree";
+import { runSummary, traceTree, type TracePiece } from "./trace-tree";
 
 let n = 0;
 
@@ -81,5 +81,30 @@ it("counts commands as the calls that ran them, not the parts of one line", () =
   expect(outline(oneLine)).toEqual(["Ran 1 command: run, run, run"]);
   const three = traceTree([call("command", "node a.js"), call("command", "python3 b.py"), call("command", "make")]);
   expect(outline(three)).toEqual(["Ran 3 commands: run, run, run"]);
+});
+
+it("folds a run of three lines or more into one, and leaves shorter ones be", () => {
+  const short = [call("command", "grep -n a src/a.ts"), call("read", "src/a.ts")];
+  expect(runSummary(short)).toBeUndefined();
+  const long = [
+    call("command", "grep -n a src/a.ts"),
+    call("read", "src/a.ts"),
+    call("command", "git diff"),
+    call("command", "grep -n b src/b.ts"),
+    call("read", "src/b.ts"),
+    call("command", "date"),
+  ];
+  expect(runSummary(long)).toBe("Searched twice, read 2 files and ran 2 commands");
+});
+
+it("names three kinds at most in a folded run's line", () => {
+  const calls = [
+    call("command", "grep -n a src/a.ts"),
+    call("read", "src/a.ts"),
+    call("command", "date"),
+    call("command", "npm run lint"),
+    call("command", "git commit -m 'x'"),
+  ];
+  expect(runSummary(calls)).toBe("Searched once, read 1 file and 3 more");
 });
 

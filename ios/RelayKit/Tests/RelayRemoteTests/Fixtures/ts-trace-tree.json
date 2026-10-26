@@ -71,7 +71,8 @@
       }
      ]
     }
-   ]
+   ],
+   "summary": null
   },
   {
    "name": "searches interleaved with a read",
@@ -213,7 +214,8 @@
       "liveVerb": "Reading"
      }
     }
-   ]
+   ],
+   "summary": null
   },
   {
    "name": "scripts written to /tmp split the commands",
@@ -521,7 +523,8 @@
       }
      ]
     }
-   ]
+   ],
+   "summary": "Ran 4 commands, searched twice and 2 more"
   },
   {
    "name": "edits, a failing then passing test, git checks",
@@ -810,7 +813,8 @@
       "liveVerb": "Running tests"
      }
     }
-   ]
+   ],
+   "summary": "Ran 3 commands, edited 2 files and 3 more"
   },
   {
    "name": "a file read twice, a commit, and two pictures",
@@ -965,7 +969,8 @@
       "liveVerb": "Committing"
      }
     }
-   ]
+   ],
+   "summary": "Read 3 files, edited 1 file and committed once"
   },
   {
    "name": "a run still going",
@@ -1034,7 +1039,8 @@
       "liveVerb": "Running typecheck"
      }
     }
-   ]
+   ],
+   "summary": null
   },
   {
    "name": "tools, agents, the web and a failed read",
@@ -1260,7 +1266,8 @@
       "liveVerb": "Reading"
      }
     }
-   ]
+   ],
+   "summary": "Searched twice, searched the web once and 2 more"
   }
  ],
  "shortPatterns": [

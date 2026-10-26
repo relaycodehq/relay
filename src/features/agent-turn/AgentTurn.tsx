@@ -46,7 +46,7 @@ import {
   useImageRead,
   type ReadImages,
 } from "./ToolRow";
-import { TraceRun } from "./TraceRun";
+import { ClosedRun, TraceRun } from "./TraceRun";
 import { useFoldAway } from "./useFoldAway";
 import { ActionLabel, actionIcons } from "./ActionRow";
 import { growIn } from "../../lib/fold-motion";
@@ -292,7 +292,12 @@ function TraceParts({
         onChanges={onChanges}
       />
     ) : (
-      <TraceRun key={part.id} calls={part.activity} onChanges={onChanges} />
+      <ClosedRun
+        key={part.id}
+        calls={part.activity}
+        arrived={drawn}
+        onChanges={onChanges}
+      />
     ),
   );
 }

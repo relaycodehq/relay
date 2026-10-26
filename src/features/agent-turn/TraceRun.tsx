@@ -6,7 +6,9 @@ import type { AgentActivity } from "../../../shared/projects";
 import { baseName } from "../../../shared/call-actions";
 import {
   actionVerb,
+  branchOf,
   rowFailed,
+  runSummary,
   traceTree,
   type BranchKind,
   type TracePiece,
@@ -68,28 +70,78 @@ function Branch({ piece, onChanges }: { piece: Extract<TracePiece, { kind: "bran
   );
 }
 
-/** The run's tree, built again only when one of its calls changed: the turn hands over a new array every render. */
+/** The run's tree and its folded line, built again only when one of its calls changed: the turn hands over a new array every render. */
 function usePieces(calls: AgentActivity[]) {
-  const built = useRef<{ calls: AgentActivity[]; pieces: TracePiece[] }>(undefined);
+  const built = useRef<{ calls: AgentActivity[]; pieces: TracePiece[]; summary?: string }>(undefined);
   const same = built.current?.calls.length === calls.length && calls.every((c, i) => c === built.current!.calls[i]);
-  if (!same) built.current = { calls, pieces: traceTree(calls) };
-  return built.current!.pieces;
+  if (!same) built.current = { calls, pieces: traceTree(calls), summary: runSummary(calls) };
+  return built.current!;
 }
 
+function Piece({ piece, onChanges }: { piece: TracePiece; onChanges: () => void }) {
+  switch (piece.kind) {
+    case "row":
+      return <Row row={piece.row} onChanges={onChanges} />;
+    case "pair":
+      return <PairRow rows={piece.rows} onChanges={onChanges} />;
+    case "branch":
+      return <Branch piece={piece} onChanges={onChanges} />;
+  }
+}
+
+const pieceKey = (piece: TracePiece) => (piece.kind === "row" ? piece.row.id : piece.rows[0]!.id);
+
 export function TraceRun({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
-  const pieces = usePieces(calls);
+  const { pieces } = usePieces(calls);
   return (
     <>
-      {pieces.map((piece) => {
-        switch (piece.kind) {
-          case "row":
-            return <Row key={piece.row.id} row={piece.row} onChanges={onChanges} />;
-          case "pair":
-            return <PairRow key={piece.rows[0].id} rows={piece.rows} onChanges={onChanges} />;
-          case "branch":
-            return <Branch key={piece.rows[0]!.id} piece={piece} onChanges={onChanges} />;
-        }
-      })}
+      {pieces.map((piece) => (
+        <Piece key={pieceKey(piece)} piece={piece} onChanges={onChanges} />
+      ))}
     </>
+  );
+}
+
+/** What kind the run started with, for its folded line's icon. */
+function firstKind(piece: TracePiece): BranchKind {
+  if (piece.kind === "branch") return piece.branch;
+  return branchOf(piece.kind === "row" ? piece.row.action : piece.rows[0].action);
+}
+
+/**
+ * A run the agent has moved on from, once a line of commentary or the end of
+ * the turn closed it: one line when its tree is long, opening to that tree.
+ * `arrived` fades the line in as it takes over from the live row.
+ */
+export function ClosedRun({
+  calls,
+  arrived,
+  onChanges,
+}: {
+  calls: AgentActivity[];
+  arrived: boolean;
+  onChanges: () => void;
+}) {
+  const { pieces, summary } = usePieces(calls);
+  if (!summary) return <TraceRun calls={calls} onChanges={onChanges} />;
+  const Icon = actionIcons[branchIcons[firstKind(pieces[0]!)]];
+  return (
+    <Fold
+      className={`agent-step trace-branch trace-closed${arrived ? " arrived" : ""}`}
+      summary={
+        <summary className="agent-step-heading">
+          <Icon size={14} />
+          <span>{summary}</span>
+        </summary>
+      }
+    >
+      <div className="trace-tree">
+        {pieces.map((piece) => (
+          <div key={pieceKey(piece)} className="trace-tree-row">
+            <Piece piece={piece} onChanges={onChanges} />
+          </div>
+        ))}
+      </div>
+    </Fold>
   );
 }
