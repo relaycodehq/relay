@@ -50,9 +50,7 @@ export default function EditorWindowShell({
     document.title = [file, name].filter(Boolean).join(" – ") || "Relay";
   }, [viewing?.path, name]);
   // Another window asks for the editor back: this one holds the unsaved edits.
-  useEffect(() => {
-    answerEditorReturn(setError);
-  }, []);
+  useEffect(() => answerEditorReturn(setError), []);
   // A project that's been removed has no editor to keep.
   const projectRemoved = !!projects.data && !project;
   useEffect(() => {
