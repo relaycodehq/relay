@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type RefObject,
 } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 
@@ -91,6 +92,25 @@ function pinToBottom(view: HTMLElement) {
   const last = messages[messages.length - 1];
   if (last) layoutAnchor(view, last);
   view.scrollTop = view.scrollHeight;
+}
+
+/**
+ * The folded composer shows the draft's first line, not wherever the caret
+ * last scrolled it to.
+ */
+function useDraftFromItsTop(composerDock: RefObject<HTMLDivElement | null>, folded: boolean) {
+  useEffect(() => {
+    const dock = composerDock.current;
+    if (!dock || !folded) return;
+    const toTop = (event?: FocusEvent) => {
+      const next = event ? event.relatedTarget : document.activeElement;
+      if (next instanceof Node && dock.contains(next)) return;
+      dock.querySelector(".composer-prompt-input")?.scrollTo({ top: 0 });
+    };
+    toTop();
+    dock.addEventListener("focusout", toTop);
+    return () => dock.removeEventListener("focusout", toTop);
+  }, [composerDock, folded]);
 }
 
 export type ThreadScroll = ReturnType<typeof useThreadScroll>;
@@ -229,20 +249,7 @@ export function useThreadScroll({
       dock.removeEventListener("transitionend", measure);
     };
   }, [isEmpty, scrolledUp]);
-  // The folded composer shows the draft's first line, not wherever the caret
-  // last scrolled it to.
-  useEffect(() => {
-    const dock = composerDock.current;
-    if (!dock || !scrolledUp) return;
-    const toTop = (event?: FocusEvent) => {
-      const next = event ? event.relatedTarget : document.activeElement;
-      if (next instanceof Node && dock.contains(next)) return;
-      dock.querySelector(".composer-prompt-input")?.scrollTo({ top: 0 });
-    };
-    toTop();
-    dock.addEventListener("focusout", toTop);
-    return () => dock.removeEventListener("focusout", toTop);
-  }, [scrolledUp]);
+  useDraftFromItsTop(composerDock, scrolledUp);
   // The padding lands a render after the measurement, and a thread opens with
   // none, so re-pin once it has. Pinning before it would leave the end of the
   // thread under the composer, and the next scroll event would stop following.

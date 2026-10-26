@@ -48,33 +48,17 @@ function tickScale(i: number, pointer: number | null, active: number) {
 }
 
 /**
- * A rail of one tick per prompt beside the thread: the turn being read is
- * lit, hovering one shows its prompt and how the answer starts, and clicking
- * jumps there, however far up it is.
+ * Which turn the view shows, and the rail's room: where the view starts, how
+ * tall it is above the composer, and how much room is left of the message
+ * column.
  */
-export function ThreadTimeline({
-  listed,
-  scroll,
-  bottomInset,
-  onJump,
-}: {
-  listed: ChatMessage[];
-  /** The thread's scrolling view, which says which turn is being read. The
-   * rail sits beside it, in the same positioned parent. */
-  scroll: RefObject<HTMLDivElement | null>;
-  /** The composer docked over the view's end; the rail centres above it. */
-  bottomInset: number;
-  onJump: (id: string) => void;
-}) {
-  const { turns, turnOf } = useMemo(() => timelineTurns(listed), [listed]);
+function useRailPlace(
+  scroll: RefObject<HTMLDivElement | null>,
+  turnOf: Map<string, number>,
+  bottomInset: number,
+) {
   const [active, setActive] = useState(-1);
-  const [pointer, setPointer] = useState<number | null>(null);
-  // Where the view starts, how tall it is above the composer, and how much
-  // room is left of the message column.
   const [room, setRoom] = useState({ top: 0, height: 0, reach: 0 });
-  const rail = useRef<HTMLDivElement>(null);
-  const ids = useId();
-
   useEffect(() => {
     const view = scroll.current;
     if (!view) return;
@@ -106,7 +90,34 @@ export function ThreadTimeline({
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [scroll, turns, turnOf, bottomInset]);
+  }, [scroll, turnOf, bottomInset]);
+  return { active, room };
+}
+
+/**
+ * A rail of one tick per prompt beside the thread: the turn being read is
+ * lit, hovering one shows its prompt and how the answer starts, and clicking
+ * jumps there, however far up it is.
+ */
+export function ThreadTimeline({
+  listed,
+  scroll,
+  bottomInset,
+  onJump,
+}: {
+  listed: ChatMessage[];
+  /** The thread's scrolling view, which says which turn is being read. The
+   * rail sits beside it, in the same positioned parent. */
+  scroll: RefObject<HTMLDivElement | null>;
+  /** The composer docked over the view's end; the rail centres above it. */
+  bottomInset: number;
+  onJump: (id: string) => void;
+}) {
+  const { turns, turnOf } = useMemo(() => timelineTurns(listed), [listed]);
+  const { active, room } = useRailPlace(scroll, turnOf, bottomInset);
+  const [pointer, setPointer] = useState<number | null>(null);
+  const rail = useRef<HTMLDivElement>(null);
+  const ids = useId();
 
   if (turns.length < 2) return null;
   const pitch = Math.max(
