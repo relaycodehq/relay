@@ -34,12 +34,12 @@ function CodeReferenceChip({
           <span className="code-ref-label">{ref.label}</span>
           <ChevronDown size={12} className="code-ref-caret" />
         </button>
-        {/* Like a file link in the chat, this opens the file with its changes. */}
+        {/* Like a file link in the chat, this opens the file with its changes: in Files, or a PR thread's Review. */}
         {onOpen && (
           <button
             type="button"
-            aria-label={`Show ${ref.path} in the editor`}
-            title="Show in the editor"
+            aria-label={`Show ${ref.path} with its changes`}
+            title="Show with its changes"
             onClick={onOpen}
           >
             <FileDiff size={12} />
