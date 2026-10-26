@@ -21,6 +21,7 @@ import { PullReviewPane } from "../features/review/PullReviewPane";
 import { HostPrompt } from "../features/pulls/host-prompt";
 import { ProjectHistory } from "../features/changes/ProjectHistory";
 import { ProjectFiles } from "../features/files/ProjectFiles";
+import { useUnsavedIn } from "../features/editor/documents";
 import { EditorElsewhere } from "../features/editor-windows/EditorElsewhere";
 import {
   popOutEditor,
@@ -179,10 +180,10 @@ function PanelFiles({
   onOpenThread?: (chatId: string) => void;
   links?: readonly LinkedFolder[];
 }) {
-  const { locked } = useNavigationLock();
+  const unsavedHere = useUnsavedIn(where);
   const editorElsewhere = useEditorElsewhere(where);
   // An unsaved edit stays on screen, to copy out before it goes.
-  if ((gone || deleted) && !locked)
+  if ((gone || deleted) && !unsavedHere)
     return <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />;
   if (editorElsewhere)
     return (

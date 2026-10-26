@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from "react";
 import type { Extension } from "@codemirror/state";
 import { FileDocument, keyOf, type DocumentSource } from "./file-document";
 
@@ -73,3 +74,14 @@ export const documents = new DocumentStore();
 window.addEventListener("beforeunload", (event) => {
   if (documents.unsaved().length) event.preventDefault();
 });
+
+/** Whether a document of the folder `where` holds edits not on disk yet. */
+export function useUnsavedIn(where: string) {
+  return useSyncExternalStore(
+    (listener) => documents.subscribe(listener),
+    () =>
+      documents
+        .unsaved()
+        .some((doc) => doc.source.kind === "project" && doc.source.where === where),
+  );
+}
