@@ -45,7 +45,10 @@ function FileResult(
         <IconButton
           label={row.excluded ? "Include in replace" : "Leave out of replace"}
           className="ps-exclude"
-          onClick={props.onToggleLeftOut}
+          onClick={(e) => {
+            e.stopPropagation(); // the row's click folds it
+            props.onToggleLeftOut();
+          }}
         >
           <X size={12} />
         </IconButton>

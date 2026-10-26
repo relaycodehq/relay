@@ -3,6 +3,7 @@ import {
   useRef,
   useId,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactNode,
   Component,
   type ErrorInfo,
@@ -34,7 +35,7 @@ export function IconButton({
 }: {
   label: string;
   children: ReactNode;
-  onClick?: () => void;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   active?: boolean;
   disabled?: boolean;
   className?: string;
