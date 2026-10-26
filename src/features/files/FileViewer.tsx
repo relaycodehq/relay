@@ -10,7 +10,8 @@ import { FileCode2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { ErrorBox, Loading } from "../../ui/ui";
 import type { WorkingChange } from "../../../shared/working-tree";
-import { FileBar, OtherFile, RevealButtons } from "./FileViews";
+import { FileBar, OtherFile } from "./FileViews";
+import { OpenWithButton } from "./OpenWithButton";
 import { MediaFile } from "./MediaFile";
 import { usePoll } from "../../lib/poll";
 const TextFile = lazy(() => import("../editor/TextFile"));
@@ -53,12 +54,12 @@ export function FileViewer({
   if (info.error)
     return (
       <div className="files-main">
-        <FileBar lead={lead} path={shownPath ?? path} />
         <div className="empty project-editor-empty">
           <FileCode2 size={28} />
           <h2>Can’t open this file</h2>
           <ErrorBox error={info.error} />
         </div>
+        <FileBar lead={lead} path={shownPath ?? path} />
       </div>
     );
   if (!info.data) return <Loading text="Opening…" />;
@@ -78,7 +79,7 @@ export function FileViewer({
           inline
           lead={lead}
           actions={
-            <RevealButtons
+            <OpenWithButton
               where={where}
               path={path}
               external

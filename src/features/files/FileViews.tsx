@@ -7,9 +7,10 @@ import { formatSize } from "../../lib/file-tree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { EditorPath } from "../../ui/EditorPath";
 import { revealLabel } from "../../lib/mod-key";
+import { OpenWithButton } from "./OpenWithButton";
 import "./file-browser.css";
 
-/** The path across the top of a viewer, in the editor bar's style, with room for actions. */
+/** The path under a viewer, in the editor's status line style, with its actions at the end. */
 export function FileBar({
   lead,
   path,
@@ -28,40 +29,9 @@ export function FileBar({
       <EditorPath path={path}>
         {detail && <span className="editor-bar-state">{detail}</span>}
       </EditorPath>
+      <span className="editor-bar-gap" />
       {children}
     </div>
-  );
-}
-
-export function RevealButtons({
-  where,
-  path,
-  external,
-  onError,
-}: {
-  where: string;
-  path: string;
-  /** A file the system can open in another app. */
-  external?: boolean;
-  onError: (error: unknown) => void;
-}) {
-  return (
-    <>
-      {external && (
-        <IconButton
-          label="Open with default app"
-          onClick={() => void api.openProjectPath(where, path).catch(onError)}
-        >
-          <ExternalLink size={15} />
-        </IconButton>
-      )}
-      <IconButton
-        label={revealLabel}
-        onClick={() => void api.revealProjectPath(where, path).catch(onError)}
-      >
-        <FolderOpen size={15} />
-      </IconButton>
-    </>
   );
 }
 
@@ -95,6 +65,25 @@ export function ImageFile({
   });
   return (
     <section className="image-file" aria-label="Image">
+      {!!(error || image.error) && <ErrorBox error={error || image.error} />}
+      <div className={`image-file-stage ${actual ? "actual" : ""}`}>
+        {image.data ? (
+          <img
+            src={image.data}
+            alt={info.path.split("/").pop()}
+            title={actual ? "Fit to window" : "Actual size"}
+            onLoad={(e) =>
+              setNatural({
+                width: e.currentTarget.naturalWidth,
+                height: e.currentTarget.naturalHeight,
+              })
+            }
+            onClick={() => setActual((v) => !v)}
+          />
+        ) : (
+          !image.error && <Loading text="Opening image…" />
+        )}
+      </div>
       <FileBar
         lead={lead}
         path={shownPath}
@@ -116,32 +105,13 @@ export function ImageFile({
           <Copy size={15} />
         </IconButton>
         <span className="divider" />
-        <RevealButtons
+        <OpenWithButton
           where={where}
           path={info.path}
           external
           onError={setError}
         />
       </FileBar>
-      {!!(error || image.error) && <ErrorBox error={error || image.error} />}
-      <div className={`image-file-stage ${actual ? "actual" : ""}`}>
-        {image.data ? (
-          <img
-            src={image.data}
-            alt={info.path.split("/").pop()}
-            title={actual ? "Fit to window" : "Actual size"}
-            onLoad={(e) =>
-              setNatural({
-                width: e.currentTarget.naturalWidth,
-                height: e.currentTarget.naturalHeight,
-              })
-            }
-            onClick={() => setActual((v) => !v)}
-          />
-        ) : (
-          !image.error && <Loading text="Opening image…" />
-        )}
-      </div>
     </section>
   );
 }
@@ -175,24 +145,6 @@ export function VideoFile({
   });
   return (
     <section className="image-file" aria-label="Video">
-      <FileBar
-        lead={lead}
-        path={shownPath}
-        detail={[
-          size && `${size.width} × ${size.height}`,
-          formatSize(info.size),
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      >
-        {actions}
-        <RevealButtons
-          where={where}
-          path={info.path}
-          external
-          onError={setError}
-        />
-      </FileBar>
       {!!(error || video.error) && <ErrorBox error={error || video.error} />}
       <div className="image-file-stage">
         {video.data ? (
@@ -215,6 +167,24 @@ export function VideoFile({
           !video.error && <Loading text="Opening video…" />
         )}
       </div>
+      <FileBar
+        lead={lead}
+        path={shownPath}
+        detail={[
+          size && `${size.width} × ${size.height}`,
+          formatSize(info.size),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        {actions}
+        <OpenWithButton
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
     </section>
   );
 }
@@ -235,14 +205,6 @@ export function OtherFile({
   const [error, setError] = useState<unknown>();
   return (
     <section className="other-file" aria-label="File">
-      <FileBar lead={lead} path={shownPath} detail={formatSize(info.size)}>
-        <RevealButtons
-          where={where}
-          path={info.path}
-          external
-          onError={setError}
-        />
-      </FileBar>
       <div className="empty project-editor-empty">
         <FileQuestion size={28} />
         <h2>{info.path.split("/").pop()}</h2>
@@ -265,6 +227,14 @@ export function OtherFile({
         </div>
         {!!error && <ErrorBox error={error} />}
       </div>
+      <FileBar lead={lead} path={shownPath} detail={formatSize(info.size)}>
+        <OpenWithButton
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
     </section>
   );
 }

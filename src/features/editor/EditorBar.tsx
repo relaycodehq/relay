@@ -1,20 +1,22 @@
 import type { ReactNode } from "react";
-import type { EditorView } from "@codemirror/view";
 import { Diff, X } from "lucide-react";
 import type { DocumentStatus } from "./documents";
 import { EditorPath } from "../../ui/EditorPath";
 import { IconButton } from "../../ui/ui";
-import { DiskState, EditHistory, ReloadButton, saveState } from "./controls";
+import { DiskState, saveState } from "./controls";
 
-/** The inline editor's bar: its path and state, then its controls. */
+/**
+ * The inline editor's status line, under the code: the file, what reads it
+ * and what checks found, then what its changes show against and Save.
+ */
 export function EditorBar({
   lead,
   path,
   title,
   status,
-  view,
   modes,
   servers,
+  checks,
   actions,
   base,
   compare,
@@ -30,11 +32,12 @@ export function EditorBar({
   /** The path on hover, when the bar's path isn't the whole story. */
   title?: string;
   status: DocumentStatus;
-  view: () => EditorView | undefined;
   /** How a Markdown file shows: code, preview or both. */
   modes?: ReactNode;
   /** Where the language servers stand, as muted text. */
   servers?: ReactNode;
+  /** Where the project's checks stand on this file. */
+  checks?: ReactNode;
   actions?: ReactNode;
   base: string;
   compare: boolean;
@@ -59,32 +62,30 @@ export function EditorBar({
         </DiskState>
       </EditorPath>
       {servers}
+      {checks}
+      <span className="editor-bar-gap" />
       {baseline && (
         <span className="editor-bar-baseline">
           Changes since {baseline.label}
           <IconButton label={`Show changes since ${base} instead`} onClick={baseline.onDrop}>
-            <X size={13} />
+            <X size={12} />
           </IconButton>
         </span>
       )}
-      <span className="divider" />
       {modes}
-      <EditHistory size={15} view={view} />
-      <span className="editor-bar-actions">
-        <ReloadButton size={15} status={status} onReload={onReload} />
-        {actions}
-      </span>
       {onCompare && (
         <IconButton
           label={`Show changes since ${base}`}
           active={compare}
           onClick={onCompare}
         >
-          <Diff size={15} />
+          <Diff size={14} />
         </IconButton>
       )}
+      <span className="editor-bar-actions">{actions}</span>
       <button
-        className="primary"
+        type="button"
+        className="editor-save"
         aria-label="Save locally"
         title={`Save to the local folder${saveKeys && ` (${saveKeys})`}`}
         disabled={!status.dirty || status.saving || status.loading}

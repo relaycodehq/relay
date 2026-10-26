@@ -31,18 +31,19 @@ export function DeletedFile({
   const ask = useAskSelection(path, label, onAsk);
   return (
     <section className="project-inline-editor deleted-file" aria-label="Deleted file">
+      <SnapshotView path={path} text={text} label={`${path}, deleted`} extensions={ask} />
       <div className="editor-bar">
         {lead}
         <EditorPath path={path}>
           <span className="editor-bar-state">Deleted · {label}’s version</span>
         </EditorPath>
+        <span className="editor-bar-gap" />
         {onRestore && (
-          <button className="primary" disabled={restoring} onClick={onRestore}>
+          <button className="editor-save" disabled={restoring} onClick={onRestore}>
             Restore
           </button>
         )}
       </div>
-      <SnapshotView path={path} text={text} label={`${path}, deleted`} extensions={ask} />
     </section>
   );
 }

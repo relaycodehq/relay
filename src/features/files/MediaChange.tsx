@@ -37,13 +37,11 @@ export function MediaChange({
   const [split, setSplit] = useSplitDiff();
   return (
     <section className="image-file media-change" aria-label="Changes">
-      <header>
-        <FileBar lead={lead} path={path} detail={detail}>
-          <SplitDiffToggle split={split} onChange={setSplit} />
-          {children}
-        </FileBar>
-      </header>
       <ImageDiff images={media.sources} video={media.video} sideLabels={sides} split={split} />
+      <FileBar lead={lead} path={path} detail={detail}>
+        <SplitDiffToggle split={split} onChange={setSplit} />
+        {children}
+      </FileBar>
     </section>
   );
 }

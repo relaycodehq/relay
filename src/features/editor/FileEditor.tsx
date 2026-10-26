@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { FolderGit2, History } from "lucide-react";
 import type { LocalFile } from "../../../shared/types";
 import { ErrorBox, IconButton, Modal } from "../../ui/ui";
@@ -44,19 +44,45 @@ function InlineFileEditor(props: FileEditorProps) {
   return (
     <section className="project-inline-editor" aria-label="Code editor">
       <Overlays editor={editor} />
+      {!!editor.error && <ErrorBox error={editor.error} />}
+      {showHistory && where !== undefined && (
+        <LocalHistoryDialog
+          where={where}
+          path={path}
+          current={doc.text()}
+          theme={editor.theme}
+          view={editor.getView}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
+      {editor.unsaved.prompt}
+      {editor.blame.overlay}
+      {markdownIn === undefined ? (
+        code
+      ) : (
+        <MarkdownSplitView
+          mode={markdownMode}
+          where={markdownIn}
+          path={path}
+          text={editor.text ?? ""}
+          onOpenLink={props.onOpenLink}
+        >
+          {code}
+        </MarkdownSplitView>
+      )}
       <EditorBar
         lead={props.lead}
         path={props.shownPath ?? path}
         title={props.shownPath ?? file?.path ?? path}
         status={status}
-        view={editor.getView}
         modes={markdownIn && <MarkdownModes mode={markdownMode} onMode={setMarkdownMode} />}
         servers={intelligence.served ? <LspStatusText where={where} /> : undefined}
+        checks={<EditorChecks editor={editor} checks={props.checks} />}
         actions={
           <>
             {where !== undefined && (
               <IconButton label="Local history" onClick={() => setShowHistory(true)}>
-                <History size={15} />
+                <History size={14} />
               </IconButton>
             )}
             {props.actions}
@@ -75,33 +101,6 @@ function InlineFileEditor(props: FileEditorProps) {
         onSave={editor.save}
         onReload={editor.unsaved.requestReload}
       />
-      {!!editor.error && <ErrorBox error={editor.error} />}
-      {showHistory && where !== undefined && (
-        <LocalHistoryDialog
-          where={where}
-          path={path}
-          current={doc.text()}
-          theme={editor.theme}
-          view={editor.getView}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
-      {editor.unsaved.prompt}
-      <Checked editor={editor} checks={props.checks}>
-        {markdownIn === undefined ? (
-          code
-        ) : (
-          <MarkdownSplitView
-            mode={markdownMode}
-            where={markdownIn}
-            path={path}
-            text={editor.text ?? ""}
-            onOpenLink={props.onOpenLink}
-          >
-            {code}
-          </MarkdownSplitView>
-        )}
-      </Checked>
     </section>
   );
 }
@@ -125,9 +124,9 @@ function ModalFileEditor(props: FileEditorProps) {
         <FolderPrompt status={status} onLoad={(link) => void doc.load(link)} />
       ) : (
         <>
-          <Checked editor={editor} checks={props.checks}>
-            <Code editor={editor} />
-          </Checked>
+          <EditorChecks editor={editor} checks={props.checks} />
+          {editor.blame.overlay}
+          <Code editor={editor} />
           <EditorFooter
             status={status}
             saveKeys={editor.saveKeys}
@@ -152,28 +151,22 @@ function Overlays({ editor }: { editor: FileEditorState }) {
   );
 }
 
-/** The code with the checks' problem list and blame's card beside it. */
-function Checked({
+/** Where the project's checks stand on the file, and its problems to jump to. */
+function EditorChecks({
   editor,
   checks,
-  children,
 }: {
   editor: FileEditorState;
   checks: FileEditorProps["checks"];
-  children: ReactNode;
 }) {
   return (
-    <>
-      <CheckPanel
-        checks={checks}
-        path={editor.doc.path}
-        hash={editor.hash}
-        problems={editor.intelligence.problems}
-        editor={editor.getView}
-      />
-      {editor.blame.overlay}
-      {children}
-    </>
+    <CheckPanel
+      checks={checks}
+      path={editor.doc.path}
+      hash={editor.hash}
+      problems={editor.intelligence.problems}
+      editor={editor.getView}
+    />
   );
 }
 

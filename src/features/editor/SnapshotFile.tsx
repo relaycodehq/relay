@@ -34,14 +34,15 @@ export function SnapshotFile({
   );
   return (
     <section className="project-inline-editor snapshot-file" aria-label="File version">
+      <SnapshotView path={path} text={text} label={`${path} at ${label}`} extensions={extensions} />
       <div className="editor-bar">
         {lead}
         <EditorPath path={path}>
           <span className="editor-bar-state">{label} · read-only</span>
         </EditorPath>
+        <span className="editor-bar-gap" />
         {baseline && <span className="editor-bar-baseline">Changes since {baseline.label}</span>}
       </div>
-      <SnapshotView path={path} text={text} label={`${path} at ${label}`} extensions={extensions} />
     </section>
   );
 }
