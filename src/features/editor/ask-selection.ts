@@ -62,7 +62,11 @@ export function askSelection(ask: (view: EditorView) => void, keys: string): Ext
   };
   const field = StateField.define<readonly Tooltip[]>({
     create: tooltip,
-    update: (value, tr) => (tr.docChanged || tr.selection ? tooltip(tr.state) : value),
+    update(value, tr) {
+      // A match the find bar selected isn't something picked to ask about.
+      if (tr.isUserEvent("select.search")) return [];
+      return tr.docChanged || tr.selection ? tooltip(tr.state) : value;
+    },
     provide: (f) => showTooltip.computeN([f], (state) => state.field(f)),
   });
   return [

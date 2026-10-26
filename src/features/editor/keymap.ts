@@ -11,7 +11,6 @@ import {
   findNext,
   findPrevious,
   gotoLine,
-  openSearchPanel,
   selectNextOccurrence,
   selectSelectionMatches,
 } from "@codemirror/search";
@@ -20,6 +19,7 @@ import { nextDiagnostic, previousDiagnostic } from "@codemirror/lint";
 import { EditorSelection, Facet, Prec } from "@codemirror/state";
 import { EditorView, keymap, type Command, type KeyBinding } from "@codemirror/view";
 import { stepChange } from "./change-gutter";
+import { openFind, openReplace } from "./find-bar/find-bar";
 import {
   duplicate,
   joinLines,
@@ -96,8 +96,8 @@ const phpstormKeys: KeyBinding[] = [
   { key: "Ctrl-Shift-g", run: unselectOccurrence },
   { key: "Ctrl-Mod-g", run: selectSelectionMatches },
   { key: "Mod-l", run: gotoLine },
-  { key: "Mod-f", run: openSearchPanel },
-  { key: "Mod-r", run: openSearchPanel },
+  { key: "Mod-f", run: openFind },
+  { key: "Mod-r", run: openReplace },
   { key: "Mod-g", run: findNext, shift: findPrevious },
   { key: "F3", run: findNext, shift: findPrevious },
   // PhpStorm's Next and Previous Highlighted Error.
