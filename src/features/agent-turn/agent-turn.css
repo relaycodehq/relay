@@ -68,6 +68,10 @@
   background: color-mix(in srgb, var(--text) 12%, transparent);
   pointer-events: none;
 }
+/* While a call runs the thinking line only holds its room; the line stops at the last real row. */
+.agent-trace:has(> .agent-thinking.reserved)::before {
+  bottom: 26px;
+}
 .agent-commentary {
   margin: 6px 0 8px;
   color: var(--text);

@@ -206,7 +206,7 @@ export function AgentTurn({
               {/* The line keeps its height while a call runs, so each call
                 doesn't shrink the trace and jolt the thread pinned below. */}
               {live && !message.body && (
-                <div className="agent-step agent-thinking">
+                <div className={`agent-step agent-thinking${thinking ? "" : " reserved"}`}>
                   <div className="agent-step-heading">
                     {thinking && (
                       <>
