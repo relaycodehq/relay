@@ -12,6 +12,8 @@ import {
 let state: EditorWindowsState = { open: [], focused: null, waiting: [] };
 const listeners = new Set<() => void>();
 const takingHandoff = new Set<string>();
+/** Workspaces with more held for this window while it was taking the last. */
+const handoffAgain = new Set<string>();
 /** Workspaces whose editor is on its way to a window of its own, hidden here meanwhile. */
 const leaving = new Set<string>();
 
@@ -26,7 +28,7 @@ function filesRequestOf(target: EditorFileTarget): FilesRequest {
 
 /** Takes what the main process holds for `where`, if it's for this window. */
 async function takeHandoff(where: string) {
-  if (takingHandoff.has(where)) return;
+  if (takingHandoff.has(where)) return void handoffAgain.add(where);
   takingHandoff.add(where);
   try {
     const { buffers, opens } = await api.takeEditorHandoff(where);
@@ -36,6 +38,7 @@ async function takeHandoff(where: string) {
     console.warn("Could not take the editor's handoff:", e);
   } finally {
     takingHandoff.delete(where);
+    if (handoffAgain.delete(where)) void takeHandoff(where);
   }
 }
 
