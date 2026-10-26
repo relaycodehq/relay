@@ -1,9 +1,10 @@
-import { createElement, useState } from "react";
+import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { ArrowDown, ArrowUp, Copy, Diff, SendHorizontal, Undo2, WandSparkles } from "lucide-react";
 import { errorMessage } from "../../../../shared/error-message";
 import { IconButton, Spinner } from "../../../ui/ui";
+import { useCommitDraft } from "./useCommitDraft";
 import type { CodeRun } from "../hover-card/highlight-runs";
 import "./change-popup.css";
 
@@ -28,29 +29,7 @@ export type ChangePopupProps = {
 /** PhpStorm's change popup: step through the changes, roll one back, or commit just it. */
 function ChangePopup(props: ChangePopupProps) {
   const { removed, commit, suggest } = props;
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState<"commit" | "suggest">();
-  const [error, setError] = useState<unknown>();
-
-  async function run(kind: "commit" | "suggest", work: () => Promise<void>) {
-    setBusy(kind);
-    setError(undefined);
-    try {
-      await work();
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(undefined);
-    }
-  }
-  const send = () => {
-    if (!commit || !message.trim() || busy) return;
-    void run("commit", () => commit(message.trim()));
-  };
-  const write = () => {
-    if (!suggest || busy) return;
-    void run("suggest", async () => setMessage(await suggest()));
-  };
+  const { message, setMessage, busy, error, send, write } = useCommitDraft(commit, suggest);
 
   return (
     <div
