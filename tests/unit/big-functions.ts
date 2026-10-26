@@ -170,7 +170,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/changes/LocalChanges.tsx › LocalChanges": 264,
   "src/features/changes/MergeSheet.tsx › MergeSheet": 306,
   "src/features/changes/ProjectBranchPicker.tsx › ProjectBranchPicker": 173,
-  "src/features/changes/ProjectHistory.tsx › ProjectHistory": 130,
+  "src/features/changes/ProjectHistory.tsx › ProjectHistory": 117,
   "src/features/changes/branch-options.ts › branchOptions": 102,
   "src/features/changes/elsewhere/ElsewhereGroups.tsx › Group": 136,
   "src/features/changes/local/ChangeList.tsx › Section": 85,

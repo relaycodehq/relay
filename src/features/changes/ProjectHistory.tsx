@@ -71,21 +71,7 @@ export function ProjectHistory({
     <section className="project-history" aria-label="Commit history">
       {slots.actions &&
         createPortal(
-          <div className="history-scope" role="group" aria-label="Branches">
-            {(["head", "all"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={scope === s}
-                onClick={() => changeScope(s)}
-              >
-                {s === "head" ? "Current" : "All"}
-                <span className="history-scope-word">
-                  {s === "head" ? "branch" : "branches"}
-                </span>
-              </button>
-            ))}
-          </div>,
+          <ScopeSwitch scope={scope} onChange={changeScope} />,
           slots.actions,
         )}
       <div
@@ -150,6 +136,32 @@ export function ProjectHistory({
         />
       )}
     </section>
+  );
+}
+
+function ScopeSwitch({
+  scope,
+  onChange,
+}: {
+  scope: HistoryScope;
+  onChange: (scope: HistoryScope) => void;
+}) {
+  return (
+    <div className="history-scope" role="group" aria-label="Branches">
+      {(["head", "all"] as const).map((s) => (
+        <button
+          key={s}
+          type="button"
+          aria-pressed={scope === s}
+          onClick={() => onChange(s)}
+        >
+          {s === "head" ? "Current" : "All"}
+          <span className="history-scope-word">
+            {s === "head" ? "branch" : "branches"}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 
