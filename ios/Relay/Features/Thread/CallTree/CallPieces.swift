@@ -36,7 +36,7 @@ private struct Branch: View {
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     icon.frame(width: 16)
-                    Text(heading).foregroundStyle(checkFailed ? colors.destructive : colors.muted)
+                    Text(heading).foregroundStyle(failed ? colors.destructive : colors.muted)
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .rotationEffect(.degrees(open ? 90 : 0))
@@ -71,8 +71,8 @@ private struct Branch: View {
         }
     }
 
-    private var checkFailed: Bool {
-        kind == .check && rows.contains(where: rowFailed)
+    private var failed: Bool {
+        rows.contains(where: rowFailed)
     }
 }
 
