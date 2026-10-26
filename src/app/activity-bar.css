@@ -58,6 +58,17 @@
   background: var(--accent-soft);
   color: var(--primary);
 }
+/* Something waiting behind the button. It sits clear of the icon instead of
+   ringed off it: a ring shows as a halo over the frost and the hover. */
+.activity-bar-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 /* The timer's icon at the bar's size; its status glyph tucks into the corner. */
 .activity-bar .clockify-trigger svg:not(.clockify-badge svg) {
   width: 19px;

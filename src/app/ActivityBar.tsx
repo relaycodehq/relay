@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { ClockifyTimer } from "../features/plugins/ClockifyTimer";
 import { openThreadSearch } from "../features/sidebar/thread-search";
+import { usePutOffRelayUpdate } from "../features/updates/put-off";
 import type { PullsTarget } from "../features/pulls/pull-board";
 import type { useSettingsPage } from "../features/settings/useSettingsPage";
 import type { NavigationLock } from "../lib/navigation-lock";
@@ -87,6 +88,7 @@ export function ActivityBar(props: BarProps) {
   const tracked = nav.surface === "project" ? nav : undefined;
   const searchKeys = useShortcutLabel("search-threads");
   const settingsKeys = useShortcutLabel("settings");
+  const putOffUpdate = usePutOffRelayUpdate();
   return (
     <nav className="activity-bar" aria-label="Activity bar">
       <BarButton
@@ -135,6 +137,7 @@ export function ActivityBar(props: BarProps) {
       <BarButton
         label="Open settings"
         keys={settingsKeys}
+        dot={putOffUpdate}
         current={page === "settings"}
         onClick={bar.toggleSettings}
       >
@@ -147,12 +150,15 @@ export function ActivityBar(props: BarProps) {
 function BarButton({
   label,
   keys = "",
+  dot,
   current = false,
   onClick,
   children,
 }: {
   label: string;
   keys?: string;
+  /** Something waiting there, which the dot marks and the tooltip names. */
+  dot?: string;
   current?: boolean;
   onClick: () => void;
   children: ReactNode;
@@ -163,10 +169,11 @@ function BarButton({
       className={`activity-bar-button ${current ? "active" : ""}`}
       aria-label={label}
       aria-current={current ? "page" : undefined}
-      title={`${label}  ${keys}`.trim()}
+      title={[`${label}  ${keys}`.trim(), dot].filter(Boolean).join(" · ")}
       onClick={onClick}
     >
       {children}
+      {dot && <span className="activity-bar-dot" aria-hidden="true" />}
     </button>
   );
 }
