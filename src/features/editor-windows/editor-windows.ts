@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { EditorWindowsState } from "../../../shared/editor-windows";
+import type { EditorFileTarget, EditorWindowsState } from "../../../shared/editor-windows";
 import { api } from "../../lib/api";
 import { requestChannel } from "../../lib/request-channel";
 import type { FilesRequest, FileTarget } from "../files/file-link-target";
@@ -18,6 +18,12 @@ const leaving = new Set<string>();
 /** Files other windows asked this window's editor to open; the editor window's Files listen. */
 export const editorOpens = requestChannel<FilesRequest>();
 
+/** What Files opens for a target another window sent: a commit's version, or the file. */
+function filesRequestOf(target: EditorFileTarget): FilesRequest {
+  if (target.snapshot) return { snapshot: target.snapshot, path: target.path };
+  return target;
+}
+
 /** Takes what the main process holds for `where`, if it's for this window. */
 async function takeHandoff(where: string) {
   if (takingHandoff.has(where)) return;
@@ -25,7 +31,7 @@ async function takeHandoff(where: string) {
   try {
     const { buffers, opens } = await api.takeEditorHandoff(where);
     if (buffers.length) await adoptBuffers(where, buffers);
-    for (const target of opens) editorOpens.send(target);
+    for (const target of opens) editorOpens.send(filesRequestOf(target));
   } catch (e) {
     console.warn("Could not take the editor's handoff:", e);
   } finally {

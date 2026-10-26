@@ -60,6 +60,8 @@ export interface EditorFileTarget {
   /** Shows the file's changes inline, against its last commit unless `baseline` says otherwise. */
   changes?: boolean;
   baseline?: ChangeBaseline;
+  /** Opens the file as it was at this commit, read-only, instead of the file on disk. */
+  snapshot?: string;
 }
 
 /** What a window takes for a workspace: buffers to adopt, files to open. */
@@ -91,6 +93,7 @@ export const editorFileTargetSchema = z.object({
   baseline: z
     .object({ label: z.string().min(1).max(200), text: z.string().max(64_000_000) })
     .optional(),
+  snapshot: z.string().min(1).max(200).optional(),
 });
 
 const savedSchema = z.object({

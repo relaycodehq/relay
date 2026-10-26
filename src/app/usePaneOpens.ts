@@ -130,7 +130,7 @@ export function usePaneOpens(
       else {
         const file =
           "snapshot" in target
-            ? { path: target.path, directory: false }
+            ? { path: target.path, directory: false, snapshot: target.snapshot }
             : target;
         void openInEditorWindow(folder.where, file).catch(onError);
       }
