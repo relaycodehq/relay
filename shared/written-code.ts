@@ -38,7 +38,10 @@ function keptOf(file: WrittenCode, take: (text: string) => string): WrittenCode 
       return { ...file, content: take(file.content) };
     case "patch":
       return { ...file, diff: take(file.diff) };
-    case "swap":
-      return { ...file, edits: file.edits.map((e) => ({ old: take(e.old), new: take(e.new) })) };
+    case "swap": {
+      // An edit the limit took all of is gone, not a blank passage.
+      const edits = file.edits.map((e) => ({ old: take(e.old), new: take(e.new) }));
+      return { ...file, edits: edits.filter((e) => e.old || e.new) };
+    }
   }
 }

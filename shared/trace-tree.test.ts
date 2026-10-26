@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { AgentActivity } from "./projects";
-import { runSummary, traceTree, type TracePiece } from "./trace-tree";
+import { actionVerb, rowsOf, runSummary, traceTree, type TracePiece } from "./trace-tree";
 
 let n = 0;
 
@@ -35,7 +35,7 @@ it("groups by what the calls did, not the order they came in", () => {
 it("splits commands at each script written for them", () => {
   const pieces = traceTree([
     call("file", "/tmp/a.mjs", { detail: "File created successfully at: /tmp/a.mjs" }),
-    call("command", "sh /tmp/run.sh /tmp/a.mjs"),
+    call("command", "node /tmp/a.mjs"),
     call("command", "rg --version"),
     call("command", "cat > /tmp/b.mts <<'EOF'\nx\nEOF"),
     call("command", "make"),
@@ -59,6 +59,23 @@ it("joins a file read again to its first read", () => {
     call("command", "sed -n 1,10p a.css && sed -i '' 's/a/b/' a.css && sed -n 5,9p a.css"),
   ]);
   expect(piece).toMatchObject({ kind: "row", row: { action: { kind: "read" }, lines: ["1–10", "5–9"] } });
+});
+
+it("drops a re-read's lines once a read took the whole file", () => {
+  const [piece] = traceTree([call("command", "sed -n 1,20p a.ts"), call("command", "cat a.ts")]);
+  expect(piece?.kind === "row" && piece.row.lines).toBeUndefined();
+});
+
+it("says a test stopped before it finished stopped, not passed", () => {
+  const [row] = rowsOf([call("command", "npm test", { status: "stopped" })]);
+  expect(actionVerb(row!)).toBe("Tests stopped");
+});
+
+it("keeps a row's id when a call before it finishes and grows rows", () => {
+  const running = call("command", "npm test && npm run lint", { status: "running" });
+  const after = call("command", "rg foo src");
+  const ids = (calls: AgentActivity[]) => rowsOf(calls).map((r) => r.id);
+  expect(ids([running, after]).at(-1)).toBe(ids([{ ...running, status: "complete" }, after]).at(-1));
 });
 
 it("shows only the first part of a call still running", () => {

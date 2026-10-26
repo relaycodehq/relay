@@ -130,18 +130,6 @@ export function turnHeading(
   return message.body ? { kind: "writing" } : { kind: "thinking" };
 }
 
-/**
- * The batch still being worked on shows one row: its running call, else its
- * latest. The ones before fold behind it until commentary or the end of the
- * turn closes the batch and it gets its "Ran 6 commands" summary.
- */
-export function batchHead(activity: AgentActivity[]) {
-  const head =
-    [...activity].reverse().find((a) => a.status === "running") ??
-    activity.at(-1)!;
-  return { head, earlier: activity.filter((a) => a !== head) };
-}
-
 const thinkingWords = [
   "Thinking",
   "Pondering",

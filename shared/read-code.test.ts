@@ -43,6 +43,12 @@ describe("readCode", () => {
   it("doesn't take a command's tab-separated output for line numbers", () => {
     const data = "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw";
     expect(readCode(call("command", "cat data.tsv", data))).toEqual({ file: "data.tsv", code: data });
+    const ids = "001\tann\n002\tbob\n003\tcam";
+    expect(readCode(call("command", "cat data.tsv", ids))).toEqual({ file: "data.tsv", code: ids });
+  });
+
+  it("takes cat -n's numbers off", () => {
+    expect(readCode(call("command", "cat -n a.ts", "     1\tx\n     2\ty"))).toEqual({ file: "a.ts", code: "x\ny", first: 1 });
   });
 
   it("shows nothing as code for several files at once or a failed read", () => {

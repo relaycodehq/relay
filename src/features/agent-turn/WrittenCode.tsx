@@ -18,6 +18,9 @@ function Whole({ path, content }: { path: string; content: string }) {
 
 const gutters: Record<Mark, string> = { removed: "−", added: "+", same: "" };
 
+/** A passage's lines; an empty one, like what a deletion leaves, has none. */
+const linesOf = (text: string) => (text ? text.split("\n") : []);
+
 /** One swapped passage, line by line: only what changed is tinted, the rest is context. */
 function Swap({ path, edit }: { path: string; edit: { old: string; new: string } }) {
   const before = useLines(path, edit.old);
@@ -25,7 +28,7 @@ function Swap({ path, edit }: { path: string; edit: { old: string; new: string }
   const rows: { tokens: ThemedToken[]; mark: Mark }[] = [];
   let old = 0;
   let next = 0;
-  for (const part of diffArrays(edit.old.split("\n"), edit.new.split("\n")))
+  for (const part of diffArrays(linesOf(edit.old), linesOf(edit.new)))
     for (let i = 0; i < part.value.length; i++) {
       if (part.removed) rows.push({ tokens: before[old++] ?? [], mark: "removed" });
       else if (part.added) rows.push({ tokens: after[next++] ?? [], mark: "added" });
@@ -49,7 +52,6 @@ function markOf(line: string): Mark {
   return "same";
 }
 
-/** A unified diff's lines, tinted by their sign and highlighted as one file. */
 /** A diff's lines from its first hunk on; none when it has no hunks, as an added file's whole content. */
 function hunkLines(diff: string) {
   const lines = diff.split("\n");
@@ -92,7 +94,7 @@ function size(file: Written) {
   if (file.kind === "patch" && !hunkLines(file.diff)) return `${file.diff.split("\n").length} lines`;
   const changed =
     file.kind === "swap"
-      ? file.edits.flatMap((e) => diffArrays(e.old.split("\n"), e.new.split("\n")))
+      ? file.edits.flatMap((e) => diffArrays(linesOf(e.old), linesOf(e.new)))
       : (hunkLines(file.diff) ?? []).map((line) => ({
           added: line.startsWith("+"),
           removed: line.startsWith("-"),
@@ -111,12 +113,12 @@ export function WrittenCode({ file, shownPath }: { file: Written; shownPath: str
         <span>{size(file)}</span>
       </div>
       {!keptNothing(file) && (
-      <pre className="written-body">
-        {file.kind === "whole" && <Whole path={file.path} content={file.content} />}
-        {file.kind === "swap" && file.edits.map((edit, index) => <Swap key={index} path={file.path} edit={edit} />)}
-        {file.kind === "patch" && <Patch path={file.path} diff={file.diff} />}
-        {file.cut && <div className="written-cut">Cut here: the rest was too long to keep</div>}
-      </pre>
+        <pre className="written-body">
+          {file.kind === "whole" && <Whole path={file.path} content={file.content} />}
+          {file.kind === "swap" && file.edits.map((edit, index) => <Swap key={index} path={file.path} edit={edit} />)}
+          {file.kind === "patch" && <Patch path={file.path} diff={file.diff} />}
+          {file.cut && <div className="written-cut">Cut here: the rest was too long to keep</div>}
+        </pre>
       )}
     </div>
   );

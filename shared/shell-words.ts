@@ -20,7 +20,8 @@ function quotedSpans(line: string) {
   let start = 0;
   for (let i = 0; i < line.length; i++) {
     const c = line[i]!;
-    if (quote) {
+    if (escapes(c, quote)) i++;
+    else if (quote) {
       if (c === quote) {
         spans.push([start, i]);
         quote = "";
@@ -34,18 +35,29 @@ function quotedSpans(line: string) {
   return spans;
 }
 
+/** A backslash takes the next character as text, except inside single quotes. */
+const escapes = (c: string, quote: string) => c === "\\" && quote !== "'";
+
 /**
  * The delimiter of the first heredoc a line opens, `EOF` in `cat <<'EOF'`.
  * Quoted text isn't one, except inside a `"$(…)"`, where the shell runs it.
+ * A here-string (`<<< word`) and a shift (`$((1 << 3))`) have no body.
  */
 export function heredocOpened(line: string): string | undefined {
   const spans = quotedSpans(line);
-  for (const found of line.matchAll(/<<-?\s*(['"]?)(\w+)\1/g)) {
+  for (const found of line.matchAll(/(?<!<)<<(?!<)-?\s*(['"]?)([A-Za-z_]\w*)\1/g)) {
+    if (inArithmetic(line, found.index)) continue;
     const span = spans.find(([start, end]) => found.index > start && found.index < end);
     const substituted = span && line[span[0]] === '"' && line.slice(span[0], found.index).includes("$(");
     if (!span || substituted) return found[2];
   }
   return undefined;
+}
+
+/** Whether a spot on a line sits inside a `$(( … ))`. */
+function inArithmetic(line: string, at: number) {
+  const before = line.slice(0, at);
+  return before.lastIndexOf("$((") > before.lastIndexOf("))");
 }
 
 /** The command without its heredoc bodies, which come back in the order they were opened. */
@@ -65,13 +77,31 @@ export function heredocs(command: string) {
   return { head: head.join("\n"), bodies };
 }
 
-/** Splits on ; && || and newlines, minding quotes. */
-export function segments(line: string) {
-  const out: string[] = [];
+/** What joins a command to the one before it. */
+export type Joiner = "&&" | "||" | ";" | "\n";
+
+/** The commands of a line, each with what joined it to the one before; splits on ; && || and newlines, minding quotes. */
+export function chain(line: string) {
+  const out: { segment: string; joinedBy?: Joiner }[] = [];
+  let joinedBy: Joiner | undefined;
   let quote = "";
   let current = "";
+  const end = (next: Joiner) => {
+    const segment = current.trim();
+    current = "";
+    // A blank line, or the newline after `&&`, joins nothing.
+    if (!segment) return;
+    out.push({ segment, ...(joinedBy ? { joinedBy } : {}) });
+    joinedBy = next;
+  };
   for (let i = 0; i < line.length; i++) {
     const c = line[i]!;
+    if (escapes(c, quote)) {
+      // A backslash before a newline carries the command on to the next line.
+      current += line[i + 1] === "\n" ? " " : line.slice(i, i + 2);
+      i++;
+      continue;
+    }
     if (quote) {
       if (c === quote) quote = "";
       current += c;
@@ -80,17 +110,17 @@ export function segments(line: string) {
     if (c === "'" || c === '"') quote = c;
     const pair = line.slice(i, i + 2);
     if (pair === "&&" || pair === "||") {
-      out.push(current);
-      current = "";
+      end(pair);
       i++;
-    } else if (c === ";" || c === "\n") {
-      out.push(current);
-      current = "";
-    } else current += c;
+    } else if (c === ";" || c === "\n") end(c);
+    else current += c;
   }
-  out.push(current);
-  return out.map((s) => s.trim()).filter(Boolean);
+  end(";");
+  return out;
 }
+
+/** The commands of a line, without what joins them. */
+export const segments = (line: string) => chain(line).map((link) => link.segment);
 
 /** Words with their quotes taken off. */
 export function wordsOf(segment: string) {
@@ -108,7 +138,8 @@ function pipeAt(segment: string) {
   let quote = "";
   for (let i = 0; i < segment.length; i++) {
     const c = segment[i]!;
-    if (quote) {
+    if (escapes(c, quote)) i++;
+    else if (quote) {
       if (c === quote) quote = "";
     } else if (c === "'" || c === '"') quote = c;
     else if (c === "|" && segment[i + 1] !== "|") return i;
@@ -130,8 +161,9 @@ export function pipedInto(segment: string) {
   return at === -1 ? undefined : segment.slice(at + 1).trim();
 }
 
-/** Where a segment sends its output with `>`, quotes taken off. */
+/** Where a segment sends its output with `>`, or adds it to with `>>`, quotes taken off. */
 export function writesTo(segment: string) {
-  const found = /(?:^|\s)>\s*(?:"([^"]+)"|'([^']+)'|([^\s&|;<>'"]+))/.exec(segment);
-  return found ? (found[1] ?? found[2] ?? found[3]) : undefined;
+  const found = /(?:^|\s)(>>?)\s*(?:"([^"]+)"|'([^']+)'|([^\s&|;<>'"]+))/.exec(segment);
+  if (!found) return undefined;
+  return { path: (found[2] ?? found[3] ?? found[4])!, appends: found[1] === ">>" };
 }

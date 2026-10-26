@@ -31,6 +31,7 @@
      "heading": "Ran 1 command",
      "rows": [
       {
+       "id": "call-1:0",
        "action": {
         "kind": "run",
         "what": "a.js"
@@ -44,6 +45,7 @@
        "liveVerb": "Running"
       },
       {
+       "id": "call-1:1",
        "action": {
         "kind": "run",
         "what": "b.py"
@@ -57,6 +59,7 @@
        "liveVerb": "Running"
       },
       {
+       "id": "call-1:2",
        "action": {
         "kind": "run",
         "what": "make"
@@ -141,6 +144,7 @@
      "heading": "Searched 4 times",
      "rows": [
       {
+       "id": "call-2:0",
        "action": {
         "kind": "search",
         "pattern": "rg\\b\\|rgFlags",
@@ -155,6 +159,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-3:0",
        "action": {
         "kind": "search",
         "pattern": "Activity",
@@ -169,6 +174,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-3:1",
        "action": {
         "kind": "search",
         "pattern": "Activity",
@@ -183,6 +189,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-5:0",
        "action": {
         "kind": "search",
         "pattern": "Activity",
@@ -201,6 +208,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-4:0",
       "action": {
        "kind": "read",
        "file": "electron/agent-host/read-only-bash.ts"
@@ -342,6 +350,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-6:0",
       "action": {
        "kind": "create",
        "file": "/tmp/f9/c8-views.mjs"
@@ -361,6 +370,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-8:0",
        "action": {
         "kind": "run",
         "what": "rg --version"
@@ -374,6 +384,7 @@
        "liveVerb": "Running"
       },
       {
+       "id": "call-8:1",
        "action": {
         "kind": "run",
         "what": "rg --help"
@@ -391,6 +402,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-8:2",
       "action": {
        "kind": "create",
        "file": "/tmp/rgcheck.mts"
@@ -408,6 +420,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-13:1",
        "action": {
         "kind": "run",
         "what": "rgcheck.mts"
@@ -421,6 +434,7 @@
        "liveVerb": "Running"
       },
       {
+       "id": "call-13:2",
        "action": {
         "kind": "run",
         "what": "rgneg.mts"
@@ -439,6 +453,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-9:0",
        "action": {
         "kind": "search",
         "pattern": "x",
@@ -453,6 +468,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-10:0",
        "action": {
         "kind": "search",
         "pattern": "activity",
@@ -471,6 +487,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-11:0",
       "action": {
        "kind": "edit",
        "file": "electron/agent-host/read-only-bash.ts"
@@ -488,6 +505,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-12:0",
        "action": {
         "kind": "read",
         "file": "src/features/sidebar/ProjectSidebar.tsx",
@@ -505,6 +523,7 @@
        "liveVerb": "Reading"
       },
       {
+       "id": "call-13:0",
        "action": {
         "kind": "read",
         "file": "electron/agent-host/read-only-bash.ts",
@@ -652,6 +671,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-14:0",
       "action": {
        "kind": "edit",
        "file": "/tmp/f9/c8-views.mjs"
@@ -671,6 +691,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-21:0",
        "action": {
         "kind": "git",
         "what": "git log"
@@ -684,6 +705,7 @@
        "liveVerb": "Checking"
       },
       {
+       "id": "call-21:1",
        "action": {
         "kind": "git",
         "what": "git show"
@@ -702,6 +724,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-16:0",
        "action": {
         "kind": "edit",
         "file": "electron/agent-host/read-only-bash.ts"
@@ -715,6 +738,7 @@
        "liveVerb": "Editing"
       },
       {
+       "id": "call-18:0",
        "action": {
         "kind": "edit",
         "file": "electron/agent-host/read-only-bash.test.ts"
@@ -734,6 +758,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-16:1",
        "action": {
         "kind": "search",
         "pattern": "hostname-bin",
@@ -748,6 +773,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-20:0",
        "action": {
         "kind": "search",
         "pattern": "const disguised",
@@ -766,6 +792,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-17:0",
       "action": {
        "kind": "read",
        "file": "electron/agent-host/read-only-bash.test.ts"
@@ -782,6 +809,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-19:0",
       "action": {
        "kind": "test",
        "target": "electron/agent-host/read-only-bash.test.ts",
@@ -799,6 +827,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-20:2",
       "action": {
        "kind": "test",
        "target": "electron/agent-host/read-only-bash.test.ts",
@@ -891,6 +920,7 @@
      "heading": "Read 3 files",
      "rows": [
       {
+       "id": "call-22:0",
        "action": {
         "kind": "read",
         "file": "src/features/sidebar/sidebar.css",
@@ -909,6 +939,7 @@
        "liveVerb": "Reading"
       },
       {
+       "id": "call-24:0",
        "action": {
         "kind": "image",
         "file": "/tmp/shots/dim-light.png"
@@ -922,6 +953,7 @@
        "liveVerb": "Looking at"
       },
       {
+       "id": "call-25:0",
        "action": {
         "kind": "image",
         "file": "/tmp/shots/dim-dark.png"
@@ -939,6 +971,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-22:1",
       "action": {
        "kind": "edit",
        "file": "src/features/sidebar/sidebar.css"
@@ -955,6 +988,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-23:0",
       "action": {
        "kind": "commit",
        "subject": "Show the branch line in muted grey",
@@ -1009,6 +1043,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-26:0",
       "action": {
        "kind": "run",
        "what": "printf"
@@ -1025,6 +1060,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-27:0",
       "action": {
        "kind": "check",
        "name": "typecheck",
@@ -1146,6 +1182,7 @@
      "kind": "pair",
      "rows": [
       {
+       "id": "call-28:0",
        "action": {
         "kind": "search",
         "pattern": "useThreadScroll",
@@ -1160,6 +1197,7 @@
        "liveVerb": "Searching"
       },
       {
+       "id": "call-29:0",
        "action": {
         "kind": "search",
         "pattern": "thread-scroll",
@@ -1178,6 +1216,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-30:0",
       "action": {
        "kind": "web",
        "query": "shiki line diff"
@@ -1197,6 +1236,7 @@
      "heading": "Used 3 tools",
      "rows": [
       {
+       "id": "call-31:0",
        "action": {
         "kind": "tool"
        },
@@ -1209,6 +1249,7 @@
        "liveVerb": ""
       },
       {
+       "id": "call-32:0",
        "action": {
         "kind": "tool"
        },
@@ -1221,6 +1262,7 @@
        "liveVerb": ""
       },
       {
+       "id": "call-33:0",
        "action": {
         "kind": "tool"
        },
@@ -1237,6 +1279,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-34:0",
       "action": {
        "kind": "read",
        "file": "src/missing.ts"
@@ -1253,6 +1296,7 @@
     {
      "kind": "row",
      "row": {
+      "id": "call-35:0",
       "action": {
        "kind": "read",
        "file": "src/app/shell.css"
@@ -1268,6 +1312,152 @@
     }
    ],
    "summary": "Searched twice, searched the web once and 2 more"
+  },
+  {
+   "name": "a stopped test, a file read in part then whole, a row behind a running call",
+   "calls": [
+    {
+     "id": "call-36",
+     "kind": "command",
+     "label": "npm test",
+     "status": "stopped",
+     "actions": [
+      {
+       "kind": "test",
+       "failed": false
+      }
+     ]
+    },
+    {
+     "id": "call-37",
+     "kind": "command",
+     "label": "sed -n 1,20p src/a.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/a.ts",
+       "lines": "1–20"
+      }
+     ]
+    },
+    {
+     "id": "call-38",
+     "kind": "command",
+     "label": "cat src/a.ts",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "read",
+       "file": "src/a.ts"
+      }
+     ]
+    },
+    {
+     "id": "call-39",
+     "kind": "command",
+     "label": "git status && npm run lint",
+     "status": "running",
+     "actions": [
+      {
+       "kind": "git",
+       "what": "git status"
+      },
+      {
+       "kind": "check",
+       "name": "lint",
+       "failed": false
+      }
+     ]
+    },
+    {
+     "id": "call-40",
+     "kind": "command",
+     "label": "rg foo src",
+     "status": "complete",
+     "actions": [
+      {
+       "kind": "search",
+       "pattern": "foo",
+       "where": "src"
+      }
+     ]
+    }
+   ],
+   "pieces": [
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-36:0",
+      "action": {
+       "kind": "test",
+       "failed": false
+      },
+      "calls": [
+       "call-36"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Tests stopped",
+      "liveVerb": "Running tests"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-37:0",
+      "action": {
+       "kind": "read",
+       "file": "src/a.ts",
+       "lines": "1–20"
+      },
+      "calls": [
+       "call-37",
+       "call-38"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Read",
+      "liveVerb": "Reading"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-39:0",
+      "action": {
+       "kind": "git",
+       "what": "git status"
+      },
+      "calls": [
+       "call-39"
+      ],
+      "failed": false,
+      "running": true,
+      "verb": "Checked",
+      "liveVerb": "Checking"
+     }
+    },
+    {
+     "kind": "row",
+     "row": {
+      "id": "call-40:0",
+      "action": {
+       "kind": "search",
+       "pattern": "foo",
+       "where": "src"
+      },
+      "calls": [
+       "call-40"
+      ],
+      "failed": false,
+      "running": false,
+      "verb": "Searched",
+      "liveVerb": "Searching"
+     }
+    }
+   ],
+   "summary": "Ran 1 check, read 1 file and 2 more"
   }
  ],
  "shortPatterns": [
@@ -1291,7 +1481,7 @@
  "readCodes": [
   {
    "call": {
-    "id": "call-36",
+    "id": "call-41",
     "kind": "command",
     "label": "/bin/zsh -lc 'sed -n 115,117p pages/Player.jsx'",
     "status": "complete",
@@ -1312,7 +1502,7 @@
   },
   {
    "call": {
-    "id": "call-37",
+    "id": "call-42",
     "kind": "command",
     "label": "sed -n 115,135p pages/Player.jsx",
     "status": "complete",
@@ -1332,7 +1522,7 @@
   },
   {
    "call": {
-    "id": "call-38",
+    "id": "call-43",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1352,7 +1542,7 @@
   },
   {
    "call": {
-    "id": "call-39",
+    "id": "call-44",
     "kind": "read",
     "label": "src/a.ts",
     "status": "complete",
@@ -1372,7 +1562,7 @@
   },
   {
    "call": {
-    "id": "call-40",
+    "id": "call-45",
     "kind": "command",
     "label": "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"",
     "status": "complete",
@@ -1393,7 +1583,7 @@
   },
   {
    "call": {
-    "id": "call-41",
+    "id": "call-46",
     "kind": "command",
     "label": "cat data.tsv",
     "status": "complete",
@@ -1412,7 +1602,46 @@
   },
   {
    "call": {
-    "id": "call-42",
+    "id": "call-47",
+    "kind": "command",
+    "label": "cat ids.tsv",
+    "status": "complete",
+    "detail": "001\tann\n002\tbob\n003\tcam",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "ids.tsv"
+     }
+    ]
+   },
+   "read": {
+    "file": "ids.tsv",
+    "code": "001\tann\n002\tbob\n003\tcam"
+   }
+  },
+  {
+   "call": {
+    "id": "call-48",
+    "kind": "command",
+    "label": "cat -n src/b.ts",
+    "status": "complete",
+    "detail": "     1\tx\n     2\ty",
+    "actions": [
+     {
+      "kind": "read",
+      "file": "src/b.ts"
+     }
+    ]
+   },
+   "read": {
+    "file": "src/b.ts",
+    "code": "x\ny",
+    "first": 1
+   }
+  },
+  {
+   "call": {
+    "id": "call-49",
     "kind": "command",
     "label": "sed -n 1,2p a.ts; sed -n 1,2p b.ts",
     "status": "complete",
@@ -1434,7 +1663,7 @@
   },
   {
    "call": {
-    "id": "call-43",
+    "id": "call-50",
     "kind": "command",
     "label": "cat missing.ts",
     "status": "failed",

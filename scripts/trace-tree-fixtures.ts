@@ -106,9 +106,20 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
       call("read", "src/app/shell.css"),
     ],
   },
+  {
+    name: "a stopped test, a file read in part then whole, a row behind a running call",
+    calls: [
+      call("command", "npm test", { status: "stopped" }),
+      call("command", "sed -n 1,20p src/a.ts"),
+      call("command", "cat src/a.ts"),
+      call("command", "git status && npm run lint", { status: "running" }),
+      call("command", "rg foo src"),
+    ],
+  },
 ];
 
 const row = (r: TraceRow) => ({
+  id: r.id,
   action: r.action,
   calls: r.calls.map((c) => c.id),
   ...(r.lines ? { lines: r.lines } : {}),
@@ -137,6 +148,8 @@ const reads = [
   call("read", "src/a.ts", { detail: "6\tnd of a long line\n117\tnext();\n118\tdone();" }),
   call("command", "/bin/zsh -lc \"nl -ba electron/main.ts | sed -n '40,41p'\"", { detail: "    40\tapp.on();\n    41\tquit();\n" }),
   call("command", "cat data.tsv", { detail: "1\tann\n2\tbob\nname\tage\nx\ty\nz\tw" }),
+  call("command", "cat ids.tsv", { detail: "001\tann\n002\tbob\n003\tcam" }),
+  call("command", "cat -n src/b.ts", { detail: "     1\tx\n     2\ty" }),
   call("command", "sed -n 1,2p a.ts; sed -n 1,2p b.ts", { detail: "x\ny\nz\nw" }),
   call("command", "cat missing.ts", { detail: "No such file", status: "failed" }),
 ];

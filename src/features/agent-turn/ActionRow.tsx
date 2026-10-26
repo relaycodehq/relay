@@ -19,13 +19,14 @@ import {
 } from "lucide-react";
 import type { AgentActivity } from "../../../shared/projects";
 import { readCode } from "../../../shared/read-code";
-import { baseName, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
+import { baseName, callActions, isScratch, shownCommand, type CallAction } from "../../../shared/call-actions";
 import {
   actionVerb,
   rowFailed,
   rowRunning,
   shortPattern,
   shortWhere,
+  verdictStopped,
   type TraceRow,
 } from "../../../shared/trace-tree";
 import { Fold, Subagents } from "./ToolRow";
@@ -114,10 +115,12 @@ export function ActionObject({ row, withWhere = true }: { row: TraceRow; withWhe
   }
 }
 
-/** A finished test or check says how it went beside its verb. */
-function Outcome({ action }: { action: CallAction }) {
+/** A finished test or check says how it went beside its verb; one stopped first says nothing more. */
+function Outcome({ row }: { row: TraceRow }) {
+  const { action } = row;
   if (action.kind !== "test" && action.kind !== "check") return null;
-  return action.failed ? <X size={12} className="trace-bad" /> : <Check size={12} className="trace-good" />;
+  if (action.failed) return <X size={12} className="trace-bad" />;
+  return verdictStopped(row) ? null : <Check size={12} className="trace-good" />;
 }
 
 /** `live` while its call runs: the verb says so and shines, the row's one moving part. */
@@ -127,22 +130,22 @@ export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boole
       <span className={live ? "trace-verb live-shine" : "trace-verb"}>{actionVerb(row, live)}</span>{" "}
       <ActionObject row={row} />
       {row.ranToo && <span className="trace-then">and ran it</span>}
-      {!live && <Outcome action={row.action} />}
+      {!live && <Outcome row={row} />}
     </span>
   );
 }
 
 /** What a row's calls show opened: the code they wrote, then what ran and came back. */
-export function CallsOpened({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
+function CallsOpened({ rows, onChanges }: { rows: TraceRow[]; onChanges: () => void }) {
   const { display } = useContext(Subagents);
   return (
     <div className="trace-opened">
-      {calls.map((call) => {
+      {callsOf(rows).map((call) => {
         const read = readCode(call);
         return (
           <div key={call.id}>
-            {call.written?.map((file) => (
-              <WrittenCode key={file.path} file={file} shownPath={display(file.path)} />
+            {writtenFor(rows, call).map((file, index) => (
+              <WrittenCode key={`${index}:${file.path}`} file={file} shownPath={display(file.path)} />
             ))}
             {read && <ReadCode read={read} />}
             {!read && call.kind === "command" && (
@@ -166,6 +169,21 @@ export function CallsOpened({ calls, onChanges }: { calls: AgentActivity[]; onCh
   );
 }
 
+const callsOf = (rows: TraceRow[]) => [...new Set(rows.flatMap((row) => row.calls))];
+
+const filesWritten = (action: CallAction) => (action.kind === "edit" || action.kind === "create" ? [action.file] : []);
+
+/**
+ * The code a call wrote that these rows are about: a call that wrote three
+ * files has a row for each. A file none of the call's actions names, its
+ * opener cut off the label, goes with whichever row opens.
+ */
+function writtenFor(rows: TraceRow[], call: AgentActivity) {
+  const about = new Set(rows.flatMap((row) => filesWritten(row.action)));
+  const named = new Set(callActions(call).flatMap(filesWritten));
+  return (call.written ?? []).filter((file) => about.has(file.path) || !named.has(file.path));
+}
+
 /** What a call printed, unless it only confirms the code shown above it; a failure always says why. */
 const showsDetail = (call: AgentActivity) =>
   Boolean(call.detail) && (!call.written?.length || call.status === "failed");
@@ -177,13 +195,13 @@ const opens = (calls: AgentActivity[]) =>
 function RowShell({
   icon,
   label,
-  calls,
+  rows,
   failed,
   onChanges,
 }: {
   icon: ReactNode;
   label: ReactNode;
-  calls: AgentActivity[];
+  rows: TraceRow[];
   failed: boolean;
   onChanges: () => void;
 }) {
@@ -194,7 +212,7 @@ function RowShell({
       {label}
     </>
   );
-  if (!opens(calls))
+  if (!opens(callsOf(rows)))
     return (
       <div className={`agent-step trace-row${state}`}>
         <div className="agent-step-heading">{heading}</div>
@@ -205,7 +223,7 @@ function RowShell({
       className={`agent-step trace-row${state}`}
       summary={<summary className="agent-step-heading">{heading}</summary>}
     >
-      <CallsOpened calls={calls} onChanges={onChanges} />
+      <CallsOpened rows={rows} onChanges={onChanges} />
     </Fold>
   );
 }
@@ -217,7 +235,7 @@ export function ActionRow({ row, onChanges }: { row: TraceRow; onChanges: () => 
     <RowShell
       icon={<Icon size={14} />}
       label={<ActionLabel row={row} live={running} />}
-      calls={row.calls}
+      rows={[row]}
       failed={rowFailed(row)}
       onChanges={onChanges}
     />
@@ -244,7 +262,7 @@ export function PairRow({ rows, onChanges }: { rows: [TraceRow, TraceRow]; onCha
     <RowShell
       icon={<Icon size={14} />}
       label={label}
-      calls={[...first.calls, ...second.calls.filter((c) => !first.calls.includes(c))]}
+      rows={rows}
       failed={false}
       onChanges={onChanges}
     />

@@ -11,7 +11,7 @@ export interface TraceRow {
   id: string;
   action: CallAction;
   calls: AgentActivity[];
-  /** A file read more than once: each read's lines. */
+  /** The lines each read of the file printed; none when a read took it whole. */
   lines?: string[];
   /** A script written, then run straight after. */
   ranToo?: boolean;
@@ -26,6 +26,12 @@ export type TracePiece =
 
 export const rowRunning = (row: TraceRow) => row.calls.some((c) => c.status === "running");
 
+/** A test or check stopped before it said how it went. */
+export const verdictStopped = (row: TraceRow) =>
+  (row.action.kind === "test" || row.action.kind === "check") &&
+  !row.action.failed &&
+  row.calls.some((c) => c.status === "stopped");
+
 /** A test or check fails by its result; anything else only when its call failed. */
 export function rowFailed(row: TraceRow) {
   if (row.action.kind === "test" || row.action.kind === "check") return row.action.failed;
@@ -33,28 +39,45 @@ export function rowFailed(row: TraceRow) {
 }
 
 /** A run of calls between two lines of commentary, as rows, pairs and branches. */
-export function traceTree(calls: AgentActivity[]): TracePiece[] {
-  return branches(rowsOf(calls)).flatMap(([kind, rows]) =>
+export const traceTree = (calls: AgentActivity[]) => traceRun(calls).pieces;
+
+/**
+ * A run's tree and, once it's longer than two lines, its folded line, from
+ * one pass over the calls.
+ */
+export function traceRun(calls: AgentActivity[]): { pieces: TracePiece[]; summary?: string } {
+  const grouped = branches(rowsOf(calls));
+  const tree = grouped.flatMap(([kind, rows]) =>
     kind === "run" ? commandRuns(rows).flatMap((run) => pieces(kind, run)) : pieces(kind, rows),
   );
+  return tree.length < 3 ? { pieces: tree } : { pieces: tree, summary: summaryOf(grouped) };
 }
 
-/** What a call did worth a row: a commit's own `git log` says nothing new, and a running call has only started its first part. */
+/**
+ * What a call did worth a row, each with where it stands among the call's
+ * actions: a commit's own `git log` says nothing new, and a running call has
+ * only started its first part.
+ */
 function shownActions(call: AgentActivity) {
-  const actions = callActions(call);
+  const actions = callActions(call).map((action, index) => ({ action, index }));
   if (call.status === "running") return actions.slice(0, 1);
-  return actions.some((a) => a.kind === "commit") ? actions.filter((a) => a.kind !== "git") : actions;
+  const commits = actions.some(({ action }) => action.kind === "commit");
+  return commits ? actions.filter(({ action }) => action.kind !== "git") : actions;
 }
 
-/** A row per thing done; a file read twice running, or a script written then run, share one. */
+/**
+ * A row per thing done; a file read twice running, or a script written then
+ * run, share one. A row is named by its call and action, so it keeps its id
+ * when a call before it finishes and grows rows.
+ */
 export function rowsOf(calls: AgentActivity[]): TraceRow[] {
   const rows: TraceRow[] = [];
   for (const call of calls)
-    for (const action of shownActions(call)) {
+    for (const { action, index } of shownActions(call)) {
       const last = rows.at(-1);
       if (last && sameRead(last.action, action)) {
         if (!last.calls.includes(call)) last.calls.push(call);
-        if (action.kind === "read" && action.lines) last.lines = [...(last.lines ?? []), action.lines];
+        last.lines = linesOfBoth(last.lines, action.kind === "read" && action.lines ? [action.lines] : undefined);
         continue;
       }
       if (last && ranWhatItWrote(last.action, action)) {
@@ -63,9 +86,14 @@ export function rowsOf(calls: AgentActivity[]): TraceRow[] {
         continue;
       }
       const lines = action.kind === "read" && action.lines ? [action.lines] : undefined;
-      rows.push({ id: `${call.id}:${rows.length}`, action, calls: [call], ...(lines ? { lines } : {}) });
+      rows.push({ id: `${call.id}:${index}`, action, calls: [call], ...(lines ? { lines } : {}) });
     }
   return rows;
+}
+
+/** Two reads of a file together: each one's lines, or none once either took the whole file. */
+function linesOfBoth(earlier: string[] | undefined, later: string[] | undefined) {
+  return earlier && later ? [...earlier, ...later] : undefined;
 }
 
 const sameRead = (a: CallAction, b: CallAction) =>
@@ -112,7 +140,7 @@ function branches(rows: TraceRow[]) {
     const earlier = branch.find((r) => sameFile(r, row));
     if (earlier) {
       earlier.calls.push(...row.calls.filter((c) => !earlier.calls.includes(c)));
-      if (row.lines) earlier.lines = [...(earlier.lines ?? []), ...row.lines];
+      earlier.lines = linesOfBoth(earlier.lines, row.lines);
     } else byKind.set(kind, [...branch, row]);
   }
   return [...byKind];
@@ -215,9 +243,10 @@ const summaryKinds = 3;
  * files and ran 3 commands". None for a tree of two lines or fewer, which
  * shows as it is.
  */
-export function runSummary(calls: AgentActivity[]): string | undefined {
-  if (traceTree(calls).length < 3) return undefined;
-  const parts = branches(rowsOf(calls)).map(([kind, rows], i) => {
+export const runSummary = (calls: AgentActivity[]) => traceRun(calls).summary;
+
+function summaryOf(grouped: ReturnType<typeof branches>) {
+  const parts = grouped.map(([kind, rows], i) => {
     const heading = branchHeading(kind, rows);
     return i === 0 ? heading : heading.charAt(0).toLowerCase() + heading.slice(1);
   });
@@ -243,10 +272,10 @@ export function actionVerb(row: TraceRow, live = false): string {
       return live ? "Writing" : "Wrote";
     case "test":
       if (live) return "Running tests";
-      return a.failed ? "Tests failed" : "Tests passed";
+      return `Tests ${verdictWord(row)}`;
     case "check":
       if (live) return `Running ${a.name}`;
-      return `${capitalized(a.name)} ${a.failed ? "failed" : "passed"}`;
+      return `${capitalized(a.name)} ${verdictWord(row)}`;
     case "commit":
       return live ? "Committing" : "Committed";
     case "git":
@@ -256,6 +285,11 @@ export function actionVerb(row: TraceRow, live = false): string {
     case "tool":
       return "";
   }
+}
+
+function verdictWord(row: TraceRow) {
+  if (rowFailed(row)) return "failed";
+  return verdictStopped(row) ? "stopped" : "passed";
 }
 
 const capitalized = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);

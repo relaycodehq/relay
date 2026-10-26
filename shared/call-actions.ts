@@ -5,6 +5,7 @@
 import { isImagePath } from "./answer-images";
 import type { AgentActivity, WrittenCode } from "./projects";
 import {
+  chain,
   firstStage,
   heredocOpened,
   heredocs,
@@ -14,6 +15,7 @@ import {
   unwrapShell,
   wordsOf,
   writesTo,
+  type Joiner,
 } from "./shell-words";
 import { capWritten } from "./written-code";
 
@@ -66,19 +68,25 @@ type Verdict = Extract<CallAction, { kind: "test" | "check" }>;
 
 const isVerdict = (action: CallAction): action is Verdict => action.kind === "test" || action.kind === "check";
 
-/** A command that failed failed its last test or check, when the output didn't say which. */
+/**
+ * A command that failed failed its test or check, when the output didn't say
+ * and nothing ran after it: in `npm test && git push`, the push may be what failed.
+ */
 function failedByItsCall(actions: CallAction[], a: AgentActivity): CallAction[] {
   if (a.status !== "failed") return actions;
   if (actions.some((action) => isVerdict(action) && action.failed)) return actions;
-  const last = actions.map(isVerdict).lastIndexOf(true);
-  if (last === -1) return actions;
-  return actions.map((action, i) => (i === last ? { ...action, failed: true } : action));
+  const last = actions.at(-1);
+  if (!last || !isVerdict(last)) return actions;
+  return [...actions.slice(0, -1), { ...last, failed: true }];
 }
 
-/** A whole file written is made; an edit or a patch changes part of one. */
+/** A whole file written is made, unless the tool said it was there already; an edit or a patch changes part of one. */
 function fileActions(a: AgentActivity): CallAction[] {
-  if (a.written?.length)
-    return a.written.map((w) => ({ kind: w.kind === "whole" ? "create" : "edit", file: w.path }));
+  if (a.written?.length) {
+    // Claude's Write over an existing file answers as its Edit does.
+    const overwrote = /^The file .+ has been updated/.test(a.detail ?? "");
+    return a.written.map((w) => ({ kind: w.kind === "whole" && !overwrote ? "create" : "edit", file: w.path }));
+  }
   const made = /^File created successfully/.test(a.detail ?? "");
   return filesNamed(a).map((file) => ({ kind: made ? "create" : "edit", file }));
 }
@@ -106,32 +114,72 @@ const leads = new Set(["npx", "sudo", "do", "then", "else", "if", "!", "time", "
 /** `2>&1`, `>/dev/null`, `> /tmp/out.txt`; not a `>` inside a quoted message. */
 const redirect = /\s\d?>\s*(?:&\d|\/\S*)/g;
 
-/** Every action in a command line, in order; nothing it only set up for. */
+type Step = { actions: CallAction[]; joinedBy?: Joiner };
+
+/** Every action in a command line that ran, in order; nothing it only set up for. */
 export function commandActions(command: string, output = ""): CallAction[] {
   const { head, bodies } = heredocs(unwrapShell(command));
   let next = 0;
-  const actions: CallAction[] = [];
-  for (const segment of segments(head)) {
+  const steps: Step[] = [];
+  for (const { segment, joinedBy } of chain(head)) {
     const body = heredocOpened(segment) ? bodies[next++] : undefined;
-    const action = segmentAction(segment, body);
-    if (action) actions.push(action);
+    steps.push({ actions: segmentActions(segment, body), joinedBy });
   }
+  const actions = steps.flatMap((step) => step.actions);
   if (!actions.length) return [{ kind: "run", what: onlySetup(head) }];
-  const severalTests = actions.filter((a) => a.kind === "test").length > 1;
-  return actions.map((action) => withOutcome(action, output, severalTests));
+  const judge = outcomes(actions, output);
+  return actionsThatRan(steps.map((step) => ({ ...step, actions: step.actions.map(judge) })));
+}
+
+/** After a test or check that failed, whatever `&&` put behind it never started, so it has no verdict to show. */
+function actionsThatRan(steps: Step[]) {
+  const ran: CallAction[] = [];
+  let lastFailed = false;
+  for (const { actions, joinedBy } of steps) {
+    const skipped = joinedBy === "&&" && lastFailed;
+    if (skipped) continue;
+    lastFailed = actions.some((action) => isVerdict(action) && action.failed);
+    ran.push(...actions);
+  }
+  return ran;
 }
 
 /** A command that only set up, like `echo hi`, or a loop that ran nothing it could name. */
 function onlySetup(head: string) {
-  if (/^\s*(?:cd [^;&]+(?:&&|;)\s*)*.*\bfor\b/.test(head)) return "shell loop";
-  return wordsOf(segments(head)[0] ?? "")[0] ?? "command";
+  const commands = segments(head);
+  if (commands.some((segment) => wordsOf(segment)[0] === "for")) return "shell loop";
+  return wordsOf(commands[0] ?? "")[0] ?? "command";
 }
 
-/** The command as you'd retype it: no shell wrapper, no `cd`, no `| head`, no heredoc body. */
+/** The command as you'd retype it: no shell wrapper, no `cd` or `echo`, no `| head`, no heredoc body. */
 export function shownCommand(command: string) {
   const { head } = heredocs(unwrapShell(command));
-  const first = segments(head).find((s) => segmentAction(s, "") !== undefined);
-  return (first ? firstStage(first).replace(redirect, "") : head.split("\n")[0]!).trim();
+  let shown = "";
+  // What joined the commands left out between two shown ones.
+  let between: Joiner[] = [];
+  for (const { segment, joinedBy } of chain(head)) {
+    if (joinedBy) between.push(joinedBy);
+    if (!segmentActions(segment, "").length) continue;
+    const text = firstStage(segment).replace(redirect, "").trim();
+    shown += shown ? `${joinedAs(loosest(between))}${text}` : text;
+    between = [];
+  }
+  return shown || head.split("\n")[0]!.trim();
+}
+
+/**
+ * How two shown commands relate past the ones left out between them:
+ * `npm test; cd sub && npm run lint` runs the lint whatever the tests did.
+ */
+function loosest(joiners: Joiner[]) {
+  if (joiners.includes("\n")) return "\n";
+  if (joiners.includes(";")) return ";";
+  return joiners.at(-1);
+}
+
+function joinedAs(joiner: Joiner | undefined) {
+  if (joiner === "\n") return "\n";
+  return joiner === "&&" || joiner === "||" ? ` ${joiner} ` : "; ";
 }
 
 /** `timeout`'s flags that take a value, so the value isn't read as the duration. */
@@ -161,25 +209,31 @@ function pastLeads(words: string[]) {
   }
 }
 
-function segmentAction(segment: string, body: string | undefined): CallAction | undefined {
+/** What one command of a line did: nothing when it only set up, a read of each file `cat a b` printed. */
+function segmentActions(segment: string, body: string | undefined): CallAction[] {
   // `b=$(git merge-base HEAD main)` only works out a value for what comes next.
   const assigned = /^\s*\w+=\$\((?:[^()]|\([^()]*\))*\)\s*/.exec(segment);
   if (assigned) {
     const rest = segment.slice(assigned[0].length);
-    return rest ? segmentAction(rest, body) : undefined;
+    return rest ? segmentActions(rest, body) : [];
   }
   const [program, ...args] = pastLeads(subshellOff(segment, wordsOf(firstStage(segment).replace(redirect, ""))));
-  if (!program || setup.has(program)) return undefined;
+  if (!program || setup.has(program)) return [];
+  if (program === "cat") return catActions(segment, args, body);
+  const action = programAction(program, args, segment, body);
+  return action ? [action] : [];
+}
+
+function programAction(program: string, args: string[], segment: string, body: string | undefined): CallAction | undefined {
   switch (program) {
     case "sed":
       return sedAction(args);
     case "nl":
       return nlAction(segment, args);
-    case "cat":
-      return catAction(segment, args, body);
     case "tee": {
       const file = positional(args)[0];
-      return body !== undefined && file ? { kind: "create", file } : undefined;
+      if (body === undefined || !file) return undefined;
+      return { kind: args.includes("-a") || args.includes("--append") ? "edit" : "create", file };
     }
     case "grep":
     case "rg":
@@ -187,7 +241,7 @@ function segmentAction(segment: string, body: string | undefined): CallAction | 
     case "git":
       return gitAction(segment, args, body);
     case "vitest":
-      return { kind: "test", target: positional(args.slice(1))[0], failed: false };
+      return vitestAction(args);
     case "npm":
     case "pnpm":
     case "yarn":
@@ -201,7 +255,8 @@ function segmentAction(segment: string, body: string | undefined): CallAction | 
     case "zsh":
     case "tsx":
       if (/^-\w*c$/.test(args[0] ?? "")) return { kind: "run", what: "shell snippet" };
-      return { kind: "run", what: baseName(positional(args).at(-1) ?? program) };
+      // The script is the first word after the flags; the rest are its arguments.
+      return { kind: "run", what: baseName(positional(args)[0] ?? program) };
     default:
       return { kind: "run", what: baseName(program) };
   }
@@ -213,12 +268,28 @@ function printedLines(args: string[]) {
   return range ? `${range[1]}–${range[2]}` : undefined;
 }
 
+/** The lines a read piped into `sed -n 10,40p` or `head -n 50` kept: "10–40", "1–50". */
+function pipedLines(segment: string) {
+  const words = wordsOf(pipedInto(segment) ?? "");
+  if (words[0] === "sed") return printedLines(words);
+  if (words[0] !== "head") return undefined;
+  const [flag = "", value = ""] = words.slice(1);
+  const count = /^-n?(\d+)$/.exec(flag)?.[1] ?? (flag === "-n" && /^\d+$/.test(value) ? value : undefined);
+  return count ? `1–${count}` : undefined;
+}
+
 const readOf = (file: string, lines: string | undefined): CallAction =>
   lines ? { kind: "read", file, lines } : { kind: "read", file };
 
-/** `sed -n 10,40p file` reads lines; `sed -i` edits. */
+/** Flags that hand sed its script, so no word after the flags is. */
+const sedScript = /^-[ef]$|^--(?:expression|file)$/;
+
+/** `sed -n 10,40p file` reads lines; `sed -i` edits. Without a file it only trims what came in. */
 function sedAction(args: string[]): CallAction {
-  const file = positional(args).at(-1) ?? "";
+  const words = positional(args).filter((a) => !sedScript.test(args[args.indexOf(a) - 1] ?? ""));
+  const files = args.some((a) => sedScript.test(a)) ? words : words.slice(1);
+  const file = files.at(-1);
+  if (!file) return { kind: "run", what: "sed" };
   if (args.some((a) => a.startsWith("-i"))) return { kind: "edit", file };
   return readOf(file, printedLines(args));
 }
@@ -226,23 +297,37 @@ function sedAction(args: string[]): CallAction {
 /** `nl -ba file | sed -n 40,90p` reads those lines with their numbers. */
 function nlAction(segment: string, args: string[]): CallAction {
   const file = positional(args)[0] ?? "";
-  return readOf(file, printedLines(wordsOf(pipedInto(segment) ?? "")));
+  return readOf(file, pipedLines(segment));
 }
 
-/** `cat > f <<EOF` writes f, `cat <<EOF | node` runs node, `cat f` reads f. */
-function catAction(segment: string, args: string[], body: string | undefined): CallAction | undefined {
+/**
+ * `cat > f <<EOF` writes f, `cat >> f <<EOF` adds to it, `cat <<EOF | node`
+ * runs node, `cat f | head` reads f, `cat a b` reads both.
+ */
+function catActions(segment: string, args: string[], body: string | undefined): CallAction[] {
   const target = writesTo(segment);
-  if (target && body !== undefined) return { kind: "create", file: target };
+  if (target && body !== undefined) return [{ kind: target.appends ? "edit" : "create", file: target.path }];
   const piped = pipedInto(firstStage(segment));
-  if (piped) return segmentAction(piped, body);
-  const file = positional(args)[0];
-  return file ? { kind: "read", file } : undefined;
+  if (piped) return segmentActions(piped, body);
+  const files = positional(args);
+  // Lines kept from what several files printed together aren't any one file's.
+  const lines = files.length === 1 ? pipedLines(segment) : undefined;
+  return files.map((file) => readOf(file, lines));
 }
 
-function searchCommand(program: string, args: string[]): CallAction {
+/**
+ * Flags whose value is the next word, like -A 8 or rg's -t ts. rg and grep
+ * differ: grep's -E and -r take none, rg's take an encoding and a replacement.
+ */
+const valuedFlags = {
+  grep: /^-[ABCmefdD]$|^--(?:context|max-count|include|exclude|exclude-dir|regexp|file|directories|devices|label|color|colour)$/,
+  rg: /^-[ABCmegftTjMEdr]$|^--(?:context|max-count|glob|iglob|type|type-not|type-add|type-clear|regexp|file|threads|max-depth|max-columns|max-filesize|encoding|replace|sort|sortr|colors|color|pre|pre-glob|context-separator|field-match-separator|path-separator|engine|ignore-file)$/,
+};
+
+function searchCommand(program: "grep" | "rg", args: string[]): CallAction {
   if (args[0] === "--version" || args[0] === "--help") return { kind: "run", what: `${program} ${args[0]}` };
-  // A flag's value, like -A 8, isn't the pattern; -e's is, and then every other word is a path.
-  const valued = /^-[ABCmegf]$|^--(?:context|max-count|glob|type|include|exclude|regexp)$/;
+  // A flag's value isn't the pattern; -e's is, and then every other word is a path.
+  const valued = valuedFlags[program];
   const given = args.flatMap((a, i) => {
     if (a === "-e" || a === "--regexp") return [args[i + 1] ?? ""];
     return a.startsWith("--regexp=") ? [a.slice("--regexp=".length)] : [];
@@ -289,18 +374,32 @@ function gitSubcommand(args: string[]) {
 /** `-m "subject"`, or the first line of the heredoc that `-m "$(cat <<EOF` or `-F -` reads it from. */
 function commitSubject(segment: string, args: string[], body: string | undefined) {
   // Read off the raw text: a cut-off label leaves the message's quote open.
-  const message = /\s-\w*m\s+(["'])((?:(?!\1)[^\n])*)/.exec(segment)?.[2] ?? "";
+  const quoted = /\s-\w*m\s+(?:"((?:\\.|[^"\\\n])*)|'([^'\n]*))/.exec(segment);
+  // Inside double quotes \" is a quote; inside single quotes a backslash is just one.
+  const message = quoted?.[1]?.replace(/\\(["\\$`])/g, "$1") ?? quoted?.[2] ?? "";
   const fromStdin = args.some((a, i) => (a === "-F" || a === "--file") && args[i + 1] === "-");
   const fromHeredoc = message.startsWith("$(cat") || fromStdin;
   if (!fromHeredoc || body === undefined) return message;
   return body.split("\n").map((line) => line.trim()).find(Boolean) ?? "";
 }
 
-/** `npm test` tests, `npm run lint` checks; `npm install` or `npm run dev` only runs. */
+/** `vitest run a.test.ts`, or `vitest a.test.ts`, which watches but in an agent's shell runs once. */
+function vitestAction(args: string[]): CallAction {
+  const words = positional(args);
+  const target = /^(?:run|watch|related|dev)$/.test(words[0] ?? "") ? words[1] : words[0];
+  return target ? { kind: "test", target, failed: false } : { kind: "test", failed: false };
+}
+
+/**
+ * `npm test` tests, `npm run lint` checks; `npm install` or `npm run dev`
+ * only runs, and so do `format` and `lint:fix`, which change files rather
+ * than pass or fail.
+ */
 function packageScript(program: string, args: string[]): CallAction {
   const script = (args[0] === "run" ? args[1] : args[0]) ?? "";
   if (/^(?:test|t|vitest|jest)(?::|$)/.test(script)) return { kind: "test", failed: false };
-  if (/^(?:lint|typecheck|check|format|tsc|types)(?::|$)/.test(script)) return { kind: "check", name: script, failed: false };
+  const fixes = /^format$|:(?:fix|write)$/.test(script) || args.some((a) => a === "--fix" || a === "--write");
+  if (!fixes && /^(?:lint|typecheck|check|format|tsc|types)(?::|$)/.test(script)) return { kind: "check", name: script, failed: false };
   return { kind: "run", what: `${program} ${script}`.trim() };
 }
 
@@ -310,30 +409,64 @@ function scriptAction(program: string, args: string[], body: string | undefined)
   const script = positional(args)[0];
   if (body === undefined && !inline && script) return { kind: "run", what: baseName(script) };
   const file = body && /\bp\s*=\s*["']([^"']+)["']/.exec(body)?.[1];
-  // Labels are cut, so the write at the end may be gone; a replace says enough.
-  const changesIt = body && /open\(p,\s*["']w["']\)|\.write(?:_text)?\(|\.replace\(/.test(body);
+  // Labels are cut, so the write at the end may be gone; a replace kept for writing back says enough.
+  const changesIt = body && /open\(p,\s*["']w["']\)|\.write(?:_text)?\(|\b(\w+)\s*=\s*\1\.replace\(/.test(body);
   return file && changesIt ? { kind: "edit", file } : { kind: "run", what: `${program} script` };
 }
 
 const failedTests = /\bFAIL\b|Failed Tests|×|\b[1-9]\d* failed/;
 const failedChecks = /^tc [1-9]|error TS\d+|^npm (?:ERR!|error)|✖ \d+ problems?|Code style issues found/m;
 
+/** What each kind of check prints when it fails, to tell several checks in one command apart. */
+const checkFailures: [name: RegExp, failure: RegExp][] = [
+  [/^(?:typecheck|tsc|types)/, /^tc [1-9]|error TS\d+/m],
+  [/^lint/, /✖ \d+ problems?/],
+  [/^format/, /Code style issues found/],
+];
+
 /** What only the output says: a test run's result, a commit's hash. */
-function withOutcome(action: CallAction, output: string, severalTests: boolean): CallAction {
-  switch (action.kind) {
-    case "test":
-      return { ...action, failed: testFailed(action.target, output, severalTests) };
-    case "check":
-      return { ...action, failed: failedChecks.test(output) };
-    case "commit": {
-      // `git commit` prints "[branch abc1234] subject", `git log --oneline` "abc1234 subject".
-      const found = /^(?:\[\S+\s+([0-9a-f]{7,40})\]|([0-9a-f]{7,40}))\s/m.exec(output);
-      const hash = found?.[1] ?? found?.[2];
-      return hash ? { ...action, hash } : action;
+function outcomes(actions: CallAction[], output: string) {
+  const severalTests = actions.filter((a) => a.kind === "test").length > 1;
+  const severalChecks = actions.filter((a) => a.kind === "check").length > 1;
+  const commits = actions.filter((a) => a.kind === "commit");
+  const hashes = commitHashes(output, commits.length);
+  return (action: CallAction): CallAction => {
+    switch (action.kind) {
+      case "test":
+        return { ...action, failed: testFailed(action.target, output, severalTests) };
+      case "check":
+        return { ...action, failed: checkFailed(action.name, output, severalChecks) };
+      case "commit": {
+        const hash = hashes[commits.indexOf(action)];
+        return hash ? { ...action, hash } : action;
+      }
+      default:
+        return action;
     }
-    default:
-      return action;
-  }
+  };
+}
+
+/**
+ * Each commit's hash: `git commit` prints "[branch abc1234] subject" for
+ * each, "[main (root-commit) abc1234]" for a first one; `git log --oneline`
+ * prints "abc1234 subject", which only one commit can be sure is its own.
+ */
+function commitHashes(output: string, commits: number) {
+  const own = [...output.matchAll(/^\[[^\]\n]*\s([0-9a-f]{7,40})\]/gm)].map((found) => found[1]!);
+  if (own.length) return own;
+  const logged = /^([0-9a-f]{7,40})\s/m.exec(output)?.[1];
+  return logged && commits === 1 ? [logged] : [];
+}
+
+/**
+ * With several checks in one command, each is judged by its own kind of
+ * failure, or npm's error naming its script; alone, by any failure.
+ */
+function checkFailed(name: string, output: string, severalChecks: boolean) {
+  if (!severalChecks) return failedChecks.test(output);
+  const own = checkFailures.find(([names]) => names.test(name))?.[1];
+  const npmNamesIt = output.split("\n").some((line) => /^npm (?:ERR!|error)/.test(line) && line.includes(name));
+  return Boolean(own?.test(output)) || npmNamesIt;
 }
 
 /** With several test runs in one command, each is judged by the failures that name its file. */
@@ -343,7 +476,7 @@ function testFailed(target: string | undefined, output: string, severalTests: bo
   return output.split("\n").some((line) => failedTests.test(line) && line.includes(name));
 }
 
-/** Files a command writes from a heredoc: `cat > f <<EOF`, `cat <<EOF > f`, `tee f <<EOF`. */
+/** Files a command writes from a heredoc: `cat > f <<EOF`, `cat <<EOF > f`, `tee f <<EOF`; `cat >> f` adds the body. */
 export function writtenByCommand(command: string): WrittenCode[] {
   const { head, bodies } = heredocs(unwrapShell(command));
   let next = 0;
@@ -351,11 +484,15 @@ export function writtenByCommand(command: string): WrittenCode[] {
   for (const segment of segments(head)) {
     if (!heredocOpened(segment)) continue;
     const body = bodies[next++];
-    const action = body === undefined ? undefined : segmentAction(segment, body);
+    const [action] = body === undefined ? [] : segmentActions(segment, body);
     if (action?.kind === "create") files.push({ kind: "whole", path: action.file, content: body! });
+    if (action?.kind === "edit" && isAppend(segment))
+      files.push({ kind: "swap", path: action.file, edits: [{ old: "", new: body! }] });
   }
   return capWritten(files);
 }
+
+const isAppend = (segment: string) => writesTo(segment)?.appends || /\btee\s+(?:-a|--append)\b/.test(segment);
 
 export const baseName = (path: string) => path.split("/").filter(Boolean).at(-1) ?? path;
 

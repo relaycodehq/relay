@@ -9,6 +9,9 @@ export type ReadCode = { file: string; code: string; first?: number };
 /** A line `cat -n` style: its number, a tab (an arrow in older Claude Code), then the line. */
 const numberedLine = /^\s*(\d+)(?:\t|→)(.*)$/;
 
+/** Commands that number what they print: `nl`, `cat -n`. Any other output's leading numbers are the file's own. */
+const numbersItsLines = /(?:^|[\s;&|('"])(?:nl\s|cat\s+-[A-Za-z]*n)/;
+
 /** The file a call read and the lines it printed; none for a call that read several, or failed. */
 export function readCode(call: AgentActivity): ReadCode | undefined {
   if (!call.detail || call.status === "failed") return undefined;
@@ -17,8 +20,9 @@ export function readCode(call: AgentActivity): ReadCode | undefined {
   if (read?.kind !== "read") return undefined;
   const lines = call.detail.replace(/\n$/, "").split("\n");
   const numbered = numberedRun(lines);
-  // Claude's Read always numbers its lines; a command's output only counts as numbered when most of it is.
-  const isNumbered = numbered.length > 0 && (call.kind === "read" || numbered.length * 2 >= lines.length);
+  // Claude's Read always numbers its lines; a command's output only when the command numbers them and most of it is.
+  const numberedByCommand = numbersItsLines.test(call.label) && numbered.length * 2 >= lines.length;
+  const isNumbered = numbered.length > 0 && (call.kind === "read" || numberedByCommand);
   if (isNumbered) return { file: read.file, code: numbered.map((l) => l.text).join("\n"), first: numbered[0]!.n };
   const first = rangeStart(lines, read.lines);
   return { file: read.file, code: lines.join("\n"), ...(first ? { first } : {}) };
