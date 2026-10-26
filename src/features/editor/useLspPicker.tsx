@@ -9,8 +9,14 @@ export type Picker = {
   items?: PickItem[];
 };
 
-/** The list the language server's answers pop up, and a pick that opens its place. */
-export function useLspPicker(onOpen: (target: OpenTarget) => void) {
+/**
+ * The list the language server's answers pop up, and a pick that opens its
+ * place. `loadingText` is what the server is busy with, when it is.
+ */
+export function useLspPicker(
+  onOpen: (target: OpenTarget) => void,
+  loadingText?: string,
+) {
   const [picker, setPicker] = useState<Picker>();
   const jump = (item: PickItem) => {
     setPicker(undefined);
@@ -26,6 +32,7 @@ export function useLspPicker(onOpen: (target: OpenTarget) => void) {
       title={picker.title}
       items={picker.items}
       loading={!picker.items}
+      loadingText={loadingText}
       empty={picker.empty}
       onPick={jump}
       onClose={() => setPicker(undefined)}

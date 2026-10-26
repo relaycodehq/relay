@@ -43,6 +43,16 @@ export function summarizeStatuses(statuses: readonly LspServerStatus[]) {
   return mostUrgent ? describeStatus(mostUrgent) : null;
 }
 
+/** What `server` says it is loading, when it is; a question to it waits for that. */
+export function loadingMessage(
+  statuses: readonly LspServerStatus[],
+  server: string | undefined,
+) {
+  const status = statuses.find((s) => s.server === server);
+  if (status?.state !== "indexing" || !status.message) return undefined;
+  return status.message.endsWith("…") ? status.message : `${status.message}…`;
+}
+
 /** `statuses` with `next` in place of the same server's earlier one. */
 export function mergeStatus(
   statuses: readonly LspServerStatus[],

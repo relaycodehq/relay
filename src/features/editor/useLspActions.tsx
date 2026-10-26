@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import type { EditorView } from "@codemirror/view";
+import { lspServerFor } from "../../../shared/language-servers";
+import { loadingMessage } from "../language-servers/status";
+import { useLspStatus } from "../language-servers/useLspStatus";
 import type { OpenTarget } from "./editor-types";
 import type { FileDocument } from "./documents";
 import { formatWithServer } from "./lsp-format";
@@ -41,7 +44,9 @@ export function useLspActions({
   onOpen,
   onError,
 }: LspActionsInput) {
-  const { show, jump, view } = useLspPicker(onOpen);
+  const statuses = useLspStatus(where);
+  const server = lspServerFor(doc.path)?.server;
+  const { show, jump, view } = useLspPicker(onOpen, loadingMessage(statuses, server));
   const diagnostics = useLspDiagnostics(where, doc.path, enabled);
   const rename = useLspRename({ doc, where, enabled, onError });
 

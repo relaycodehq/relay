@@ -83,6 +83,7 @@ export function SymbolPicker({
   title,
   items,
   loading = false,
+  loadingText = "Asking the language server…",
   empty,
   onPick,
   onClose,
@@ -90,6 +91,7 @@ export function SymbolPicker({
   title: string;
   items: PickItem[] | undefined;
   loading?: boolean;
+  loadingText?: string;
   /** What it says when nothing was found. */
   empty: string;
   onPick: (item: PickItem) => void;
@@ -139,7 +141,7 @@ export function SymbolPicker({
           onChange={(e) => setFilter(e.target.value)}
         />
         <div className="symbol-picker-list" ref={list} role="listbox">
-          {waiting && <Loading text="Asking the language server…" />}
+          {waiting && <Loading text={loadingText} />}
           {!waiting && !shown.length && <p className="symbol-picker-empty">{nothingShown}</p>}
           {rows}
         </div>
