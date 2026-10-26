@@ -19,7 +19,7 @@ import { Fold, Subagents, ToolRow } from "./ToolRow";
 import "./trace-tree.css";
 
 /** Tools, agents, questions and pictures keep the row that knows them; the rest say what they did. */
-function Row({ row, onChanges }: { row: TraceRow; onChanges: () => void }) {
+export function Row({ row, onChanges }: { row: TraceRow; onChanges: () => void }) {
   const { display } = useContext(Subagents);
   const ownRow = row.action.kind === "tool" || row.action.kind === "image";
   if (!ownRow) return <ActionRow row={row} onChanges={onChanges} />;
@@ -111,23 +111,14 @@ function firstKind(piece: TracePiece): BranchKind {
 /**
  * A run the agent has moved on from, once a line of commentary or the end of
  * the turn closed it: one line when its tree is long, opening to that tree.
- * `arrived` fades the line in as it takes over from the live row.
  */
-export function ClosedRun({
-  calls,
-  arrived,
-  onChanges,
-}: {
-  calls: AgentActivity[];
-  arrived: boolean;
-  onChanges: () => void;
-}) {
+export function ClosedRun({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
   const { pieces, summary } = usePieces(calls);
   if (!summary) return <TraceRun calls={calls} onChanges={onChanges} />;
   const Icon = actionIcons[branchIcons[firstKind(pieces[0]!)]];
   return (
     <Fold
-      className={`agent-step trace-branch trace-closed${arrived ? " arrived" : ""}`}
+      className="agent-step trace-branch trace-closed"
       summary={
         <summary className="agent-step-heading">
           <Icon size={14} />

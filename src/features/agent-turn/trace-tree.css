@@ -178,13 +178,3 @@
   color: var(--muted);
   font-style: italic;
 }
-/* A run that just closed fades its folded line in over the live row it takes
-   the place of; the height stays one line, so nothing below moves. */
-.trace-closed.arrived {
-  animation: trace-closed-in 200ms ease-out;
-}
-@keyframes trace-closed-in {
-  from {
-    opacity: 0;
-  }
-}

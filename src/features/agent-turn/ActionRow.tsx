@@ -121,20 +121,10 @@ function Outcome({ action }: { action: CallAction }) {
   return action.failed ? <X size={12} className="trace-bad" /> : <Check size={12} className="trace-good" />;
 }
 
-export function ActionLabel({
-  row,
-  live = false,
-  shine = false,
-}: {
-  row: TraceRow;
-  live?: boolean;
-  /** The verb shimmers: the turn's one live row. */
-  shine?: boolean;
-}) {
+export function ActionLabel({ row, live = false }: { row: TraceRow; live?: boolean }) {
   return (
     <span className="trace-label">
-      <span className={shine ? "trace-verb live-shine" : "trace-verb"}>{actionVerb(row, live)}</span>{" "}
-      <ActionObject row={row} />
+      <span className="trace-verb">{actionVerb(row, live)}</span> <ActionObject row={row} />
       {row.ranToo && <span className="trace-then">and ran it</span>}
       {!live && <Outcome action={row.action} />}
     </span>

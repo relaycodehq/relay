@@ -1,29 +1,18 @@
 import { useNow } from "../../lib/useNow";
 // One summary line per turn; under it the commentary, and between lines of it
-// the tool calls grouped by what they did (TraceRun).
-import {
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+// the tool calls: one by one while the agent works on them, then grouped by
+// what they did (Run).
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Brain,
   ChevronRight,
   Clock3,
   MessageCircleQuestion,
 } from "lucide-react";
-import type { AgentActivity, ChatMessage } from "../../../shared/projects";
+import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
+import { duration, liveLabel } from "../../../shared/activity-labels";
 import {
-  doneLabel,
-  duration,
-  liveLabel,
-} from "../../../shared/activity-labels";
-import {
-  batchHead,
   groupTrace,
   readTurn,
   thinkingWord,
@@ -35,22 +24,9 @@ import { isStartThreads, startedIds } from "../../../shared/started-threads";
 import { isQuestionCall } from "../../../shared/asked-questions";
 import { StartedHeading, StartedThreadMarks } from "./StartedThreads";
 import { WorkingAgentsHeading } from "./TurnAgents";
-import {
-  iconOf,
-  ImageReadPeek,
-  Progress,
-  ReadIcon,
-  SubagentRows,
-  Subagents,
-  TurnImages,
-  useImageRead,
-  type ReadImages,
-} from "./ToolRow";
-import { ClosedRun, TraceRun } from "./TraceRun";
+import { iconOf, Subagents, TurnImages, type ReadImages } from "./ToolRow";
+import { Run } from "./Run";
 import { useFoldAway } from "./useFoldAway";
-import { ActionLabel, actionIcons } from "./ActionRow";
-import { growIn } from "../../lib/fold-motion";
-import { rowsOf } from "../../../shared/trace-tree";
 import "./agent-trace.css";
 import "./agent-turn.css";
 
@@ -223,7 +199,6 @@ export function AgentTurn({
               <TraceParts
                 shown={shown}
                 live={live}
-                display={display}
                 projectRoot={projectRoot}
                 onOpenFile={onOpenFile}
                 onChanges={onChanges}
@@ -255,14 +230,12 @@ export function AgentTurn({
 function TraceParts({
   shown,
   live,
-  display,
   projectRoot,
   onOpenFile,
   onChanges,
 }: {
   shown: ReturnType<typeof readTurn>["shown"];
   live: boolean;
-  display: (text: string) => string;
   projectRoot: string;
   onOpenFile: (target: ProjectFileLink) => void;
   onChanges: () => void;
@@ -281,20 +254,15 @@ function TraceParts({
           onOpenFile={onOpenFile}
         />
       </div>
-    ) : live &&
-      index === parts.length - 1 &&
-      !isQuestionCall(part.activity[0]!) ? (
-      <OpenBatch
-        key={part.id}
-        activity={part.activity}
-        arrived={drawn}
-        display={display}
-        onChanges={onChanges}
-      />
     ) : (
-      <ClosedRun
+      <Run
         key={part.id}
         calls={part.activity}
+        live={
+          live &&
+          index === parts.length - 1 &&
+          !isQuestionCall(part.activity[0]!)
+        }
         arrived={drawn}
         onChanges={onChanges}
       />
@@ -362,81 +330,4 @@ function ThinkingWord({ seed }: { seed: string }) {
 /** Claude's turning asterisk, or a terminal braille spinner for the other agents. */
 function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
   return <span className={`thinking-glyph ${provider}`} aria-hidden />;
-}
-
-/**
- * The batch still being worked on: one row names the latest call, and the
- * ones before it fold behind that row. It gets its "Ran 6 commands" summary
- * only once commentary or the end of the turn closes it.
- */
-function OpenBatch({
-  activity,
-  arrived,
-  display,
-  onChanges,
-}: {
-  activity: AgentActivity[];
-  /** It came in while the turn was on screen, not with the thread. */
-  arrived: boolean;
-  display: (text: string) => string;
-  onChanges: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const { head, earlier } = batchHead(activity);
-  const running = head.status === "running";
-  const headRow = rowsOf([head])[0];
-  const toldByAction = headRow && headRow.action.kind !== "tool" && headRow.action.kind !== "image";
-  // The tree's icon for what the call did, so a read looks the same however it was done.
-  const Icon = toldByAction ? actionIcons[headRow.action.kind] : iconOf(head);
-  const calls = useContext(Subagents).calls.get(head.id) ?? [];
-  const folded = earlier.length > 0 || calls.length > 0;
-  // With nothing folded behind it, an image's row opens the image instead.
-  const read = useImageRead(head);
-  const batch = useRef<HTMLDivElement>(null);
-  // A batch that arrives while the reader watches grows in, rather than
-  // pushing the pinned thread up in one frame; later heads swap in place.
-  useLayoutEffect(() => {
-    const growing = arrived && batch.current ? growIn(batch.current) : undefined;
-    return () => growing?.cancel();
-  }, []);
-  return (
-    <div className={`agent-batch ${head.status}`} ref={batch}>
-      <ImageReadPeek
-        image={read?.image}
-        onOpen={read?.open}
-        trigger={
-          <button
-            type="button"
-            className="agent-step-heading agent-batch-head"
-            aria-expanded={folded ? open : undefined}
-            disabled={!folded && !read}
-            onClick={folded ? () => setOpen(!open) : read?.open}
-          />
-        }
-      >
-        <span className="agent-batch-row" title={display(head.label)}>
-          {read ? <ReadIcon image={read.image} /> : <Icon size={14} />}
-          {toldByAction ? (
-            // Running or done, the same words: only the verb changes, and shines while it runs.
-            <ActionLabel row={headRow} live={running} shine={running} />
-          ) : (
-            <span className={running ? "live-shine" : undefined}>
-              {display(running ? liveLabel(head) : doneLabel(head))}
-            </span>
-          )}
-          <Progress activity={head} />
-        </span>
-        {folded && <ChevronRight size={13} className="agent-batch-chevron" />}
-      </ImageReadPeek>
-      {/* The live agent's own calls first; the batch's earlier calls fold behind it. */}
-      {open && calls.length > 0 && (
-        <SubagentRows calls={calls} onChanges={onChanges} />
-      )}
-      {open && earlier.length > 0 && (
-        <div className="agent-group-rows">
-          <TraceRun calls={earlier} onChanges={onChanges} />
-        </div>
-      )}
-    </div>
-  );
 }

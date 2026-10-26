@@ -133,8 +133,9 @@ it("renders an active turn, then folds its trace after completion", () => {
       {...props}
     />,
   );
-  // The live row reads like the finished one; only its verb shines.
-  expect(running).toContain('class="trace-verb live-shine">Reading</span>');
+  // While the run is open each call has its own row; the running one turns a spinner.
+  expect(running).toContain('class="spinner"');
+  expect(running).toContain('class="trace-verb">Reading</span>');
   expect(running).toContain('<span class="trace-chip-dim">src/</span>cache.ts');
   const command = (id: string) => ({
     kind: "activity" as const,
