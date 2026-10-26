@@ -28,6 +28,14 @@ describe("hoverParts", () => {
     ]);
   });
 
+  it("keeps one group for a tag that comes back after another", () => {
+    const parts = hoverParts(
+      "```ts\n(function) f(a: number, b: number): void\n```\n*@param* `a` — one\n\n*@throws* — never\n\n*@param* `b` — two",
+    );
+    expect(parts.tags.map((t) => t.label)).toEqual(["Params", "Throws"]);
+    expect(parts.tags[0].entries).toEqual(["`a` — one", "`b` — two"]);
+  });
+
   it("drops the import line TypeScript adds under an imported class", () => {
     const parts = hoverParts("```typescript\n(alias) new HandoffFollowing(): HandoffFollowing\nimport HandoffFollowing\n```");
     expect(parts.signature).toBe("new HandoffFollowing(): HandoffFollowing");

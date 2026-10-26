@@ -125,20 +125,23 @@ function docsAndTags(text: string) {
   const firstTag = lines.findIndex((line) => TAG_LINE.test(line));
   if (firstTag < 0) return { docs: lines.join("\n"), tags: [] };
   const tags: DocTag[] = [];
+  let tag: DocTag | undefined;
   let entry: string[] | undefined;
   const finish = () => {
-    if (entry) tags[tags.length - 1].entries.push(entry.join("\n").trim());
+    if (entry) tag?.entries.push(entry.join("\n").trim());
   };
   for (const line of lines.slice(firstTag)) {
-    const tag = TAG_LINE.exec(line);
-    if (!tag) {
+    const found = TAG_LINE.exec(line);
+    if (!found) {
       entry?.push(line);
       continue;
     }
     finish();
-    const label = TAG_LABELS[tag[1]] ?? tag[1][0].toUpperCase() + tag[1].slice(1);
-    if (tags.at(-1)?.label !== label) tags.push({ label, entries: [] });
-    entry = [tag[2]];
+    const label = TAG_LABELS[found[1]] ?? found[1][0].toUpperCase() + found[1].slice(1);
+    // A tag seen before, with others between, adds to its own group.
+    tag = tags.find((t) => t.label === label);
+    if (!tag) tags.push((tag = { label, entries: [] }));
+    entry = [found[2]];
   }
   finish();
   for (const tag of tags) tag.entries = tag.entries.filter(Boolean);
