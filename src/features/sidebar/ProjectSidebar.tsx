@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Plus, Search } from "lucide-react";
+import { Bell, Plus } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type {
   AgentProvider,
@@ -44,10 +44,11 @@ import { ErrorBox } from "../../ui/ui";
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
-import { SidebarFooter } from "./SidebarFooter";
+import { UpdateToasts } from "../updates/UpdateToasts";
 import { SnoozePickDialog } from "./SnoozeMenu";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchPalette } from "./SearchPalette";
+import { onOpenThreadSearch } from "./thread-search";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
@@ -61,24 +62,17 @@ interface SidebarShowing {
   chatId?: string;
   /** The unsent thread that's open, when no thread is. */
   draftId?: string;
-  /** The Pull requests page. */
-  inbox?: boolean;
-  usage?: boolean;
-  schedules?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox, usage, schedules },
+  showing: { projectId, chatId, draftId },
   onOpen,
   onPickNew,
   onNewScratch,
   onSendDraft,
   onAdd,
-  onInbox,
-  onUsage,
-  onSchedules,
   onSettings,
   onAttention,
 }: {
@@ -97,9 +91,6 @@ export function ProjectSidebar({
   onSendDraft: () => void;
   /** Add a project, the menu having named how. */
   onAdd: (page: AddProjectPage) => void;
-  onInbox: () => void;
-  onUsage?: () => void;
-  onSchedules?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -121,7 +112,9 @@ export function ProjectSidebar({
   const [error, setError] = useState<string>();
   // The open thread's import offer stands its new projects in the tree.
   const plan = useShownPlan();
-  const treeProjects = plan ? plannedProjects(realProjects, plan) : realProjects;
+  const treeProjects = plan
+    ? plannedProjects(realProjects, plan)
+    : realProjects;
   const groups = useProjectGroups(
     treeProjects,
     folds.setOpen,
@@ -148,10 +141,10 @@ export function ProjectSidebar({
   // A deep review shows as one thread: its reviewers open from the review,
   // which stays picked while one of them is open.
   const everything = listed.filter((c) => !c.reviewer);
-  const shown =
-    listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
+  const shown = listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
   const [searching, setSearching] = useState(false);
   useShortcut("search-threads", true, () => setSearching(true));
+  useEffect(() => onOpenThreadSearch(() => setSearching(true)), []);
   const projectKey = (id: string) => (scratchIds.has(id) ? SCRATCHPAD : id);
   const filtering = useThreadFilter();
   // A removed project's id would hide everything, with nothing to untick.
@@ -243,7 +236,6 @@ export function ProjectSidebar({
   };
   const newThreadKeys = useShortcutLabel("new-thread");
   const activityKeys = useShortcutLabel("activity");
-  const searchKeys = useShortcutLabel("search-threads");
   // The filter offers the projects with threads, the one whose threads
   // changed last first, and the agents threads ran.
   const latest = new Map<string, { project: Project; at: number }>();
@@ -277,14 +269,6 @@ export function ProjectSidebar({
             "Threads"
           )}
         </h2>
-        <button
-          className="sb-top-button"
-          aria-label="Search threads"
-          title={`Search threads  ${searchKeys}`.trim()}
-          onClick={() => setSearching(true)}
-        >
-          <Search size={15} />
-        </button>
         <FilterMenu
           state={filtering}
           filter={filter}
@@ -397,18 +381,10 @@ export function ProjectSidebar({
           onClose={() => actions.setMoving(undefined)}
         />
       )}
-      <SidebarFooter
-        projectId={projectId}
-        projectName={projects.find((p) => p.id === projectId)?.name}
-        chatId={chatId}
-        inbox={inbox}
-        onInbox={onInbox}
-        usage={usage}
-        onUsage={onUsage}
-        schedules={schedules}
-        onSchedules={onSchedules}
-        onSettings={onSettings}
-      />
+      {/* Relay's and the agents' updates rise from the sidebar's bottom edge. */}
+      <div className="sb-footer-area">
+        <UpdateToasts onAgentDetails={() => onSettings("agents")} />
+      </div>
     </div>
   );
 }

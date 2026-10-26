@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 
-test("Usage closes from its back button and from the sidebar menu that opened it", async () => {
+test("Usage closes from its back button and its bar button, which also uncovers it from Settings", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-usage-"))),
     repo = join(root, "project");
   const git = (...args: string[]) =>
@@ -44,14 +44,12 @@ test("Usage closes from its back button and from the sidebar menu that opened it
     await adding
       .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
-    const more = page
-      .locator(".sb-footer")
-      .getByRole("button", { name: "More tools", exact: true });
-    const openUsage = async () => {
-      await more.click();
-      await page.getByRole("menuitem", { name: "Usage", exact: true }).click();
-      await expect(page.getByRole("menu")).toBeHidden();
-    };
+    const bar = page.getByRole("navigation", { name: "Activity bar" });
+    const openUsage = () =>
+      bar.getByRole("button", { name: "Usage", exact: true }).click();
+    const openSettings = () =>
+      bar.getByRole("button", { name: "Open settings", exact: true }).click();
+    const settings = page.locator(".settings-screen");
     const heading = page.getByRole("heading", { name: "Usage", level: 1 });
     const project = page
       .locator(".project-window-title")
@@ -72,6 +70,28 @@ test("Usage closes from its back button and from the sidebar menu that opened it
     await openUsage();
     await expect(heading).toBeHidden();
     await expect(project).toBeVisible();
+
+    // Settings covers the page but not the bar, so the page's button brings
+    // the page back instead of leaving it.
+    await openUsage();
+    await openSettings();
+    await expect(settings).toBeVisible();
+    await expect(heading).toBeHidden();
+    await openUsage();
+    await expect(settings).toBeHidden();
+    await expect(heading).toBeVisible();
+
+    const pulls = bar.getByRole("button", {
+      name: "Pull requests",
+      exact: true,
+    });
+    await pulls.click();
+    await expect(pulls).toHaveAttribute("aria-current", "page");
+    await openSettings();
+    await expect(pulls).not.toHaveAttribute("aria-current", "page");
+    await pulls.click();
+    await expect(settings).toBeHidden();
+    await expect(pulls).toHaveAttribute("aria-current", "page");
   } finally {
     await app.close();
   }

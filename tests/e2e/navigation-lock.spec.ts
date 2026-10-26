@@ -69,7 +69,8 @@ test("an unsaved file holds every way out with the same message until it's saved
       .click();
     await expect(toast.getByRole("alert")).toHaveText(LOCKED);
     await dismiss();
-    await sidebar
+    await page
+      .getByRole("navigation", { name: "Activity bar" })
       .getByRole("button", { name: "Pull requests", exact: true })
       .click();
     await expect(toast.getByRole("alert")).toHaveText(LOCKED);

@@ -28,8 +28,12 @@ import { show as showWindow } from "./popped-windows";
 /** The window whose page made the API call running now. */
 const callers = new AsyncLocalStorage<BrowserWindow | null>();
 const pageErrorLimit = 100;
-/** The main window's narrowest, with the projects sidebar and without it (a thread window's). */
-const MAIN_MIN_WIDTH = { sidebar: 1050, alone: 560 };
+/**
+ * The main window's narrowest, with the projects sidebar and without it (a
+ * thread window's). With the sidebar it counts the activity bar's 52px on top
+ * of the 1050 the sidebar and the panes need.
+ */
+const MAIN_MIN_WIDTH = { sidebar: 1102, alone: 560 };
 
 /** Where the main window's size and state are kept between runs. */
 export interface MainWindowStore {

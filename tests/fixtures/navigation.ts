@@ -20,7 +20,7 @@ export async function openSignIn(page: Page) {
 /** Settings → Integrations with the Gitea row's details open. */
 export async function openGiteaSettings(page: Page) {
   await page
-    .getByRole("complementary", { name: "Projects" })
+    .getByRole("navigation", { name: "Activity bar" })
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("button", { name: "Integrations", exact: true }).click();
@@ -33,10 +33,10 @@ export async function openGiteaSettings(page: Page) {
     await chevron.click();
   return page.getByRole("region", { name: "Source control" });
 }
-/** The sidebar's Pull requests: opens the page, and on it goes back to the board. */
+/** The activity bar's Pull requests: opens the page, and on it goes back to the board. */
 export const pullsNav = (page: Page) =>
   page
-    .getByRole("complementary", { name: "Projects" })
+    .getByRole("navigation", { name: "Activity bar" })
     .getByRole("button", { name: "Pull requests", exact: true });
 /** Opens the Pull requests page where it was left, unless it's showing. */
 export async function openInbox(page: Page) {

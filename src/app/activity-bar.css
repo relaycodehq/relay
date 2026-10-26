@@ -1,0 +1,81 @@
+/* The activity bar: one column of icons down the window's left edge. */
+:root {
+  --activity-bar-width: 52px;
+}
+/* The bar sits in the row's padding, so the width the row measures
+   (useSidebarVisibility) is still what the sidebar and the panes share. */
+.project-layout:has(> .activity-bar) {
+  padding-left: var(--activity-bar-width);
+}
+.project-layout:has(> .activity-bar) > .projects-sidebar.overlay {
+  left: var(--activity-bar-width);
+}
+/* The window's darkest edge, an anchor rather than part of the sidebar. */
+.activity-bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  /* Over the hidden sidebar, which slides out from under it. */
+  z-index: 41;
+  width: var(--activity-bar-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 0 12px;
+  background: var(--sidebar);
+  border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+/* Over frosted glass it lets the frost through like the sidebar, a shade
+   darker so it still reads as the edge, with the sidebar's see-through hover
+   and selection. */
+:root[data-glass] .activity-bar {
+  --hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --selected: color-mix(in srgb, var(--text) 12%, transparent);
+  background:
+    linear-gradient(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.08)),
+    color-mix(in srgb, var(--sidebar) var(--glass-sidebar), transparent);
+  border-right-color: var(--sidebar-edge);
+}
+.activity-bar-button,
+.activity-bar .clockify-trigger {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+.activity-bar-button:hover,
+.activity-bar .clockify-trigger:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.activity-bar-button.active {
+  background: var(--selected);
+  color: var(--text);
+}
+/* The timer's icon at the bar's size; its status glyph tucks into the corner. */
+.activity-bar .clockify-trigger svg:not(.clockify-badge svg) {
+  width: 19px;
+  height: 19px;
+}
+.activity-bar .clockify-badge {
+  right: 7px;
+  bottom: 7px;
+}
+.activity-bar-fill {
+  flex: 1;
+}
+/* Settings stands apart from the rest. */
+.activity-bar-line {
+  width: 22px;
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border);
+}

@@ -89,7 +89,7 @@ else if (cmd === "logins" && sub === "helper") {
     });
 
     // Off, the Pull requests page and Integrations never mention Gitea, and
-    // the footer shows the version instead of an account.
+    // the titlebar shows the version instead of an account.
     await expect(page.locator(".sb-version")).toBeVisible();
     await pullsNav(page).click();
     await expect(noHost).toBeVisible();

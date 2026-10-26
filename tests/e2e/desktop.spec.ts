@@ -192,7 +192,8 @@ test("native app: connect, lazy review, inline threads, drafts, restart, large d
   await expect(
     page.getByRole("heading", { name: "Binary or Git LFS file" }),
   ).toBeVisible();
-  await sidebarPane
+  await page
+    .getByRole("navigation", { name: "Activity bar" })
     .getByRole("button", { name: "Open settings", exact: true })
     .click();
   await page.getByRole("radio", { name: "Dark", exact: true }).click();

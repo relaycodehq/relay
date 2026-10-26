@@ -50,6 +50,7 @@ import {
 } from "../features/schedules/SchedulesPage";
 import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
+import { ActivityBar } from "./ActivityBar";
 import {
   ThreadHeaderActions,
   ThreadWorkspace,
@@ -83,7 +84,7 @@ export default function ProjectShell() {
   const lock = useNavigationLockRoot((message) => setError(new Error(message)));
   const view = useThreadView();
   const nav = useShellNavigation(projects.data, lock, view);
-  const { project, chat, draftId, panes, inbox, navigate } = nav;
+  const { project, chat, draftId, panes, navigate } = nav;
   /** A deep review's reviewer is reached from its review, and leads back to it. */
   const reviewOf = (c: ChatSummary | undefined) => {
     const parent = c?.reviewer?.parent;
@@ -92,8 +93,6 @@ export default function ProjectShell() {
       ? { title: review.title, open: () => void navigate(project, review) }
       : undefined;
   };
-  const usage = nav.surface === "usage";
-  const schedules = nav.surface === "schedules";
   const { toggleUsage, toggleSchedules, scheduleShown } = useToolPages(
     nav,
     lock,
@@ -353,6 +352,15 @@ export default function ProjectShell() {
         </div>
       </header>
       <div className="project-layout" ref={sidebar.layoutRef}>
+        <ActivityBar
+          nav={nav}
+          settings={settings}
+          sidebar={sidebar}
+          lock={lock}
+          goToPulls={pullsPage.go}
+          onUsage={toggleUsage}
+          onSchedules={toggleSchedules}
+        />
         <aside
           ref={sidebar.asideRef}
           className={`projects-sidebar ${sidebar.hidden ? "overlay" : ""} ${sidebar.peek ? "peek" : ""}`}
@@ -369,7 +377,7 @@ export default function ProjectShell() {
             projects={projects.data ?? []}
             showing={
               elsewhere
-                ? { inbox, usage, schedules }
+                ? {}
                 : {
                     projectId: project?.id,
                     chatId: chat?.id,
@@ -383,15 +391,6 @@ export default function ProjectShell() {
             onAdd={starts.addProject}
             onAttention={setAttention}
             onSettings={settings.show}
-            onInbox={() => {
-              // From the page itself it goes back to the board; from anywhere
-              // else it returns to where the page was left.
-              if (lock.blocked()) return;
-              if (inbox) pullsPage.go({ to: "board" });
-              else nav.setInbox(true);
-            }}
-            onUsage={toggleUsage}
-            onSchedules={toggleSchedules}
           />
           {projects.error && <ErrorBox error={projects.error} />}
         </aside>

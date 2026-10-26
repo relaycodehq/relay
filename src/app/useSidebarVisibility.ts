@@ -15,11 +15,21 @@ import {
   type SidebarChoice,
 } from "./sidebar-choice";
 
-/** How close to the window's left edge the pointer peeks a hidden sidebar. */
+/** How close to the activity bar's right edge the pointer peeks a hidden sidebar. */
 const EDGE_PEEK_WIDTH = 12;
 const BESIDE_PANE_KEY = "relay-projects-hidden-beside-pane";
 
 export type SidebarVisibility = ReturnType<typeof useSidebarVisibility>;
+
+/** The row's content edge, right of the activity bar that sits in its padding. */
+function edgeStart(layout: HTMLElement | null) {
+  if (!layout) return 0;
+  const padding = parseFloat(getComputedStyle(layout).paddingLeft);
+  return layout.getBoundingClientRect().left + padding;
+}
+
+const onEdge = (x: number, start: number) =>
+  x >= start && x <= start + EDGE_PEEK_WIDTH;
 
 /**
  * Whether the projects sidebar shows, and its peek while hidden. The user's
@@ -126,10 +136,10 @@ export function useSidebarVisibility(
 }
 
 /**
- * Resting the pointer along the window's left edge peeks the hidden sidebar
- * too. It's watched rather than covered, so the edge still takes clicks and
- * selections; the short dwell keeps a pointer flung past it, or a drag, from
- * opening it.
+ * Resting the pointer along the activity bar's right edge peeks the hidden
+ * sidebar too. It's watched rather than covered, so the edge still takes
+ * clicks and selections; the short dwell keeps a pointer flung past it, or a
+ * drag, from opening it.
  */
 function useEdgePeek({
   hidden,
@@ -150,13 +160,14 @@ function useEdgePeek({
   useEffect(() => {
     if (!edgePeekOn) return;
     let timer: number | undefined;
+    const start = edgeStart(layout);
     const cancel = () => {
       window.clearTimeout(timer);
       timer = undefined;
     };
     const onMove = (e: MouseEvent) => {
       const top = layout?.getBoundingClientRect().top ?? 0;
-      if (e.buttons || e.clientX > EDGE_PEEK_WIDTH || e.clientY < top)
+      if (e.buttons || !onEdge(e.clientX, start) || e.clientY < top)
         return cancel();
       timer ??= window.setTimeout(() => {
         if (popupOpen()) return;
@@ -178,10 +189,11 @@ function useEdgePeek({
   useEffect(() => {
     if (!peek || !peekFromEdge.current) return;
     peekFromEdge.current = false;
+    const start = edgeStart(layout);
     const onMove = (e: MouseEvent) => {
       const inside =
         e.target instanceof Node && asideRef.current?.contains(e.target);
-      if (!inside && e.clientX <= EDGE_PEEK_WIDTH) return;
+      if (!inside && onEdge(e.clientX, start)) return;
       if (!inside) peekClose();
       window.removeEventListener("mousemove", onMove);
     };

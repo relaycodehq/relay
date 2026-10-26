@@ -5,11 +5,11 @@ import { Popover } from "@base-ui/react/popover";
 import {
   Check,
   ChevronRight,
-  Clock,
   Minus,
   Pause,
   Play,
   Square,
+  Timer,
   X,
 } from "lucide-react";
 import {
@@ -79,7 +79,7 @@ function DayClock({
 
 /**
  * The day's timer while the Clockify plugin is on: a quiet icon in the
- * sidebar footer, with a small glyph on it saying whether it runs.
+ * activity bar, with a small glyph on it saying whether it runs.
  * Hovering opens what you're on, the day's total and the controls.
  */
 export function ClockifyTimer({
@@ -280,7 +280,7 @@ export function ClockifyTimer({
           className="icon-button clockify-trigger"
           aria-label={label}
         >
-          <Clock size={15} />
+          <Timer size={15} />
           {Badge && (
             <span className="clockify-badge" aria-hidden>
               <Badge
@@ -294,8 +294,8 @@ export function ClockifyTimer({
         <Popover.Portal>
           <Popover.Positioner
             className="composer-popup-positioner"
-            side="top"
-            align="center"
+            side="right"
+            align="end"
             sideOffset={8}
           >
             <Popover.Popup

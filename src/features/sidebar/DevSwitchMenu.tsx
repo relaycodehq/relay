@@ -84,7 +84,7 @@ export function DevSwitchMark({ children }: { children: ReactNode }) {
 }
 
 /**
- * The worktree's name in the footer while Relay runs from one, so it is never
+ * The worktree's name by the mark while Relay runs from one, so it is never
  * mistaken for main. Nothing on main.
  */
 export function DevCheckoutLabel() {
@@ -101,7 +101,7 @@ export function DevCheckoutLabel() {
         <GitBranch size={13} />
         <span>{nameOf(running)}</span>
       </Menu.Trigger>
-      <MenuPopup side="top" align="start">
+      <MenuPopup side="bottom" align="start">
         <div className="sb-menu-heading">Run Relay from</div>
         {rows(state, (c, current) => (
           <MenuAction

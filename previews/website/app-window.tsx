@@ -409,7 +409,6 @@ export function AppWindow({
             onSendDraft={() => {}}
             onAdd={() => {}}
             onSettings={() => {}}
-            onInbox={() => {}}
           />
         </aside>
         <div className="rw-main">
