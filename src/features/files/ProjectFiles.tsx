@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { CodeReference } from "../../../shared/code-references";
-import type { Project } from "../../../shared/projects";
+import type { LinkedFolder, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import type { FilesRequest } from "./file-link-target";
@@ -44,6 +44,8 @@ type ProjectFilesProps = {
   inWorktree?: boolean;
   /** Offers to open the editor in a window of its own, at the end of the tabs. */
   onPopOut?: () => void;
+  /** The folders linked to the thread with `/add-dir`, shown under the project's own. */
+  links?: readonly LinkedFolder[];
 };
 
 /**
@@ -59,6 +61,7 @@ export function ProjectFiles({
   onViewing,
   opens,
   onPopOut,
+  links = [],
   ...thread
 }: ProjectFilesProps) {
   // Refreshed by the shell's working-tree poll.
@@ -82,6 +85,14 @@ export function ProjectFiles({
 
   const { frontTab } = workspace;
   const shownPath = frontTab && !frontTab.outside ? frontTab.path : null;
+  const linked = {
+    links,
+    shownPath: frontTab?.outside ? frontTab.path : null,
+    onOpenFile: (path: string, preview: boolean) =>
+      workspace.open({ path, outside: true, ...(preview && { preview }) }),
+    onRenamed: (from: string, to: string) => workspace.renamed(from, to, true),
+    onTrashed: (path: string) => workspace.trashed(path, true),
+  };
   useEffect(() => {
     onViewing({ path: shownPath, viewed: 0, total: 0 });
   }, [shownPath, onViewing]);
@@ -108,6 +119,7 @@ export function ProjectFiles({
         browsing={browsing}
         expansion={expansion}
         shownPath={shownPath}
+        linked={linked}
         {...thread}
       />
       <EditorPane

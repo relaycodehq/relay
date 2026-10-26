@@ -1,25 +1,12 @@
-import {
-  Fragment,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ContextMenu } from "@base-ui/react/context-menu";
 import {
   ChevronRight,
   ChevronsDownUp,
-  Copy,
-  ExternalLink,
   FilePlus,
   FolderOpen,
   FolderPlus,
-  Pencil,
-  Trash2,
 } from "lucide-react";
-import { isEntryName } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import {
   joinPath,
@@ -29,9 +16,9 @@ import {
 } from "../../lib/file-tree";
 import { directoryKey, useDirectories, type useExpanded } from "./useFileTree";
 import { workingTreeKey } from "../../lib/working-tree-key";
-import { ContextMenuItem } from "../../ui/ContextMenuItem";
 import { ErrorBox, IconButton, Modal } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
+import { FileTreeRow, NameInput } from "./FileTreeRow";
 import "../../ui/tree.css";
 import "./file-browser.css";
 import { revealLabel } from "../../lib/mod-key";
@@ -48,6 +35,7 @@ export function FileTree({
   lockedPath,
   expansion,
   watched,
+  fold,
   onSelect,
   onMoved,
   onTrashed,
@@ -56,23 +44,26 @@ export function FileTree({
   active: boolean;
   where: string;
   title: string;
+  /** With other folders' trees beside it, it folds away under its title; `path` says where it is. */
+  fold?: { open: boolean; path?: string; onToggle: () => void };
   selected: string | null;
   /** The file with unsaved edits: it and the folders around it stay as they are. */
   lockedPath: string | null;
   expansion: ReturnType<typeof useExpanded>;
   /** The shell refreshes open folders when the checkout changes. */
   watched: boolean;
-  onSelect: (path: string, kind: "file" | "dir") => void;
+  onSelect: (path: string, kind: "file" | "dir", clicks?: number) => void;
   onMoved: (from: string, to: string) => void;
   onTrashed: (path: string) => void;
   onCreated: (path: string, kind: "file" | "dir") => void;
 }) {
   const queryClient = useQueryClient();
+  const shown = fold?.open ?? true;
   const directories = useDirectories(
     where,
     expansion.expanded,
     watched,
-    active,
+    active && shown,
   );
   const rows = useMemo(
     () => treeRows(directories.listings, expansion.expanded),
@@ -195,110 +186,138 @@ export function FileTree({
   );
 
   return (
-    <div className="file-tree">
+    <div className={`file-tree ${shown ? "" : "folded"}`}>
       <div className="file-tree-head">
-        <strong title={title}>{title}</strong>
-        <IconButton
-          label="New file"
-          onClick={() => startCreate(selectedDir(selected, rows), "file")}
-        >
-          <FilePlus size={14} />
-        </IconButton>
-        <IconButton
-          label="New folder"
-          onClick={() => startCreate(selectedDir(selected, rows), "dir")}
-        >
-          <FolderPlus size={14} />
-        </IconButton>
-        <IconButton
-          label="Collapse folders"
-          disabled={!expansion.expanded.size || !!lockedPath}
-          onClick={() => [...expansion.expanded].forEach(expansion.collapse)}
-        >
-          <ChevronsDownUp size={14} />
-        </IconButton>
-        <IconButton
-          label={revealLabel}
-          onClick={() => void run(() => api.revealProjectPath(where, ""))}
-        >
-          <FolderOpen size={14} />
-        </IconButton>
+        {fold ? (
+          <button
+            type="button"
+            className="file-tree-fold"
+            aria-expanded={fold.open}
+            title={fold.path ?? title}
+            onClick={fold.onToggle}
+          >
+            <ChevronRight size={12} className={fold.open ? "open" : ""} />
+            <strong>{title}</strong>
+          </button>
+        ) : (
+          <strong title={title}>{title}</strong>
+        )}
+        {shown && (
+          <>
+            <IconButton
+              label="New file"
+              onClick={() => startCreate(selectedDir(selected, rows), "file")}
+            >
+              <FilePlus size={14} />
+            </IconButton>
+            <IconButton
+              label="New folder"
+              onClick={() => startCreate(selectedDir(selected, rows), "dir")}
+            >
+              <FolderPlus size={14} />
+            </IconButton>
+            <IconButton
+              label="Collapse folders"
+              disabled={!expansion.expanded.size || !!lockedPath}
+              onClick={() =>
+                [...expansion.expanded].forEach(expansion.collapse)
+              }
+            >
+              <ChevronsDownUp size={14} />
+            </IconButton>
+            <IconButton
+              label={revealLabel}
+              onClick={() => void run(() => api.revealProjectPath(where, ""))}
+            >
+              <FolderOpen size={14} />
+            </IconButton>
+          </>
+        )}
       </div>
-      <div
-        className="file-tree-body"
-        ref={body}
-        role="tree"
-        onKeyDown={onKeyDown}
-      >
-        {!!directories.error && <ErrorBox error={directories.error} />}
-        {editing?.mode === "create" &&
-          editing.dir === "" &&
-          createRow(editing.kind, 0)}
-        {rows.map((row) => (
-          <Fragment key={row.path}>
-            {editing?.mode === "rename" && editing.path === row.path ? (
-              <div
-                className="file-tree-row tree-row editing"
-                style={{ "--depth": row.depth } as never}
-              >
-                <span className="tree-twist" />
-                <FileEntryIcon path={row.path} directory={row.kind === "dir"} />
-                <NameInput
-                  initial={row.name}
-                  onSubmit={submit}
-                  onCancel={() => setEditing(null)}
+      {shown && (
+        <div
+          className="file-tree-body"
+          ref={body}
+          role="tree"
+          onKeyDown={onKeyDown}
+        >
+          {!!directories.error && <ErrorBox error={directories.error} />}
+          {editing?.mode === "create" &&
+            editing.dir === "" &&
+            createRow(editing.kind, 0)}
+          {rows.map((row) => (
+            <Fragment key={row.path}>
+              {editing?.mode === "rename" && editing.path === row.path ? (
+                <div
+                  className="file-tree-row tree-row editing"
+                  style={{ "--depth": row.depth } as never}
+                >
+                  <span className="tree-twist" />
+                  <FileEntryIcon
+                    path={row.path}
+                    directory={row.kind === "dir"}
+                  />
+                  <NameInput
+                    initial={row.name}
+                    onSubmit={submit}
+                    onCancel={() => setEditing(null)}
+                  />
+                </div>
+              ) : (
+                <FileTreeRow
+                  row={row}
+                  selected={selected === row.path}
+                  blocked={!!lockedPath && row.path !== lockedPath}
+                  frozen={locked(row.path)}
+                  onSelect={onSelect}
+                  expansion={expansion}
+                  onCreate={startCreate}
+                  onRename={() =>
+                    setEditing({ mode: "rename", path: row.path })
+                  }
+                  onTrash={() => requestTrash(row)}
+                  onReveal={() =>
+                    void run(() => api.revealProjectPath(where, row.path))
+                  }
+                  onOpenExternal={() =>
+                    void run(() => api.openProjectPath(where, row.path))
+                  }
                 />
-              </div>
-            ) : (
-              <Row
-                row={row}
-                selected={selected === row.path}
-                blocked={!!lockedPath && row.path !== lockedPath}
-                frozen={locked(row.path)}
-                onSelect={onSelect}
-                expansion={expansion}
-                onCreate={startCreate}
-                onRename={() => setEditing({ mode: "rename", path: row.path })}
-                onTrash={() => requestTrash(row)}
-                onReveal={() =>
-                  void run(() => api.revealProjectPath(where, row.path))
-                }
-                onOpenExternal={() =>
-                  void run(() => api.openProjectPath(where, row.path))
-                }
-              />
-            )}
-            {row.loading && (
-              <div
-                className="file-tree-hint"
-                style={{ "--depth": row.depth + 1 } as never}
-              >
-                Loading…
-              </div>
-            )}
-            {row.open &&
-              !row.loading &&
-              directories.listings[row.path]?.entries.length === 0 &&
-              !(editing?.mode === "create" && editing.dir === row.path) && (
+              )}
+              {row.loading && (
                 <div
                   className="file-tree-hint"
                   style={{ "--depth": row.depth + 1 } as never}
                 >
-                  Empty
+                  Loading…
                 </div>
               )}
-            {editing?.mode === "create" &&
-              editing.dir === row.path &&
-              createRow(editing.kind, row.depth + 1)}
-          </Fragment>
-        ))}
-        {rows.length === 0 && !directories.error && !editing && (
-          <div className="file-tree-hint">This folder is empty.</div>
-        )}
-        {directories.listings[""]?.truncated && (
-          <div className="file-tree-hint">Showing the first 5,000 entries.</div>
-        )}
-      </div>
+              {row.open &&
+                !row.loading &&
+                directories.listings[row.path]?.entries.length === 0 &&
+                !(editing?.mode === "create" && editing.dir === row.path) && (
+                  <div
+                    className="file-tree-hint"
+                    style={{ "--depth": row.depth + 1 } as never}
+                  >
+                    Empty
+                  </div>
+                )}
+              {editing?.mode === "create" &&
+                editing.dir === row.path &&
+                createRow(editing.kind, row.depth + 1)}
+            </Fragment>
+          ))}
+          {rows.length === 0 && !directories.error && !editing && (
+            <div className="file-tree-hint">This folder is empty.</div>
+          )}
+          {directories.listings[""]?.truncated && (
+            <div className="file-tree-hint">
+              Showing the first 5,000 entries.
+            </div>
+          )}
+        </div>
+      )}
       {!!error && <ErrorBox error={error} />}
       {trashing && (
         <Modal
@@ -335,184 +354,4 @@ function selectedDir(selected: string | null, rows: TreeRow[]) {
   return rows.find((r) => r.path === selected)?.kind === "dir"
     ? selected
     : parentOf(selected);
-}
-
-function Row({
-  row,
-  selected,
-  blocked,
-  frozen,
-  expansion,
-  onSelect,
-  onCreate,
-  onRename,
-  onTrash,
-  onReveal,
-  onOpenExternal,
-}: {
-  row: TreeRow;
-  selected: boolean;
-  blocked: boolean;
-  frozen: boolean;
-  expansion: ReturnType<typeof useExpanded>;
-  onSelect: (path: string, kind: "file" | "dir") => void;
-  onCreate: (dir: string, kind: "file" | "dir") => void;
-  onRename: () => void;
-  onTrash: () => void;
-  onReveal: () => void;
-  onOpenExternal: () => void;
-}) {
-  const dir = row.kind === "dir";
-  const link = row.kind === "link";
-  return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger
-        render={
-          <div
-            className={`file-tree-row tree-row ${selected ? "selected" : ""} ${row.ignored ? "ignored" : ""}`}
-            style={{ "--depth": row.depth } as never}
-          />
-        }
-      >
-        {dir ? (
-          <button
-            type="button"
-            className="tree-twist"
-            tabIndex={-1}
-            aria-label={row.open ? "Collapse" : "Expand"}
-            disabled={frozen}
-            onClick={() => expansion.toggle(row.path)}
-          >
-            <ChevronRight size={12} className={row.open ? "open" : ""} />
-          </button>
-        ) : (
-          <span className="tree-twist" />
-        )}
-        <button
-          type="button"
-          role="treeitem"
-          aria-selected={selected}
-          aria-expanded={dir ? row.open : undefined}
-          data-path={row.path}
-          className="file-tree-name-button"
-          title={link ? `${row.path} (link)` : row.path}
-          // Unsaved edits keep the pane on their file; folders can still open beside it.
-          disabled={link || (blocked && !dir)}
-          onClick={() => {
-            if (!blocked) onSelect(row.path, dir ? "dir" : "file");
-            if (dir && !frozen) expansion.toggle(row.path);
-          }}
-        >
-          <FileEntryIcon path={row.path} directory={dir} />
-          <span>{row.name}</span>
-        </button>
-      </ContextMenu.Trigger>
-      <ContextMenu.Portal>
-        <ContextMenu.Positioner className="sb-menu-positioner">
-          <ContextMenu.Popup className="sb-menu">
-            {dir && (
-              <>
-                <ContextMenuItem
-                  icon={<FilePlus size={13} />}
-                  onClick={() => onCreate(row.path, "file")}
-                >
-                  New file
-                </ContextMenuItem>
-                <ContextMenuItem
-                  icon={<FolderPlus size={13} />}
-                  onClick={() => onCreate(row.path, "dir")}
-                >
-                  New folder
-                </ContextMenuItem>
-                <ContextMenu.Separator className="sb-menu-separator" />
-              </>
-            )}
-            <ContextMenuItem icon={<FolderOpen size={13} />} onClick={onReveal}>
-              {revealLabel}
-            </ContextMenuItem>
-            {!dir && !link && (
-              <ContextMenuItem
-                icon={<ExternalLink size={13} />}
-                onClick={onOpenExternal}
-              >
-                Open with default app
-              </ContextMenuItem>
-            )}
-            <ContextMenuItem
-              icon={<Copy size={13} />}
-              onClick={() => void api.writeClipboard(row.path)}
-            >
-              Copy relative path
-            </ContextMenuItem>
-            <ContextMenu.Separator className="sb-menu-separator" />
-            <ContextMenuItem
-              icon={<Pencil size={13} />}
-              disabled={frozen}
-              hint="F2"
-              onClick={onRename}
-            >
-              Rename
-            </ContextMenuItem>
-            <ContextMenuItem
-              icon={<Trash2 size={13} />}
-              disabled={frozen}
-              onClick={onTrash}
-            >
-              Move to Trash
-            </ContextMenuItem>
-          </ContextMenu.Popup>
-        </ContextMenu.Positioner>
-      </ContextMenu.Portal>
-    </ContextMenu.Root>
-  );
-}
-
-function NameInput({
-  initial,
-  placeholder,
-  onSubmit,
-  onCancel,
-}: {
-  initial: string;
-  placeholder?: string;
-  onSubmit: (name: string) => void;
-  onCancel: () => void;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  const [value, setValue] = useState(initial);
-  const done = useRef(false);
-  const valid = isEntryName(value.trim());
-  useEffect(() => {
-    const el = input.current;
-    if (!el) return;
-    el.focus();
-    // Renaming replaces the name, not the extension.
-    const dot = initial.lastIndexOf(".");
-    el.setSelectionRange(0, dot > 0 ? dot : initial.length);
-  }, []);
-  const finish = (commit: boolean) => {
-    if (done.current) return;
-    done.current = true;
-    const name = value.trim();
-    if (commit && valid && name !== initial) onSubmit(name);
-    else onCancel();
-  };
-  return (
-    <input
-      ref={input}
-      className="file-tree-name"
-      aria-label="Name"
-      aria-invalid={!!value.trim() && !valid}
-      placeholder={placeholder}
-      value={value}
-      spellCheck={false}
-      onChange={(e) => setValue(e.target.value)}
-      onKeyDown={(e) => {
-        e.stopPropagation();
-        if (e.key === "Enter" && valid) finish(true);
-        else if (e.key === "Escape") finish(false);
-      }}
-      onBlur={() => finish(true)}
-    />
-  );
 }

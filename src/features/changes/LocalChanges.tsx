@@ -112,15 +112,18 @@ export function LocalChanges({
       className={`local-changes${listOnly ? " list-only" : ""}`}
       aria-label="Local changes"
     >
-      <ChangesToolbar
-        projectId={projectId}
-        slots={slots}
-        tree={tree}
-        busy={busy}
-        onRefresh={() => void state.refetch()}
-        onPush={() => setPush(true)}
-        agentRunning={agentRunning}
-      />
+      {/* Beside the editor the thread's header has the branch and its Push. */}
+      {!listOnly && (
+        <ChangesToolbar
+          projectId={projectId}
+          slots={slots}
+          tree={tree}
+          busy={busy}
+          onRefresh={() => void state.refetch()}
+          onPush={() => setPush(true)}
+          agentRunning={agentRunning}
+        />
+      )}
       {state.error && (
         <>
           <ErrorBox error={state.error} />

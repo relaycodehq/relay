@@ -342,6 +342,7 @@ export function ThreadWorkspace({
               agentRunning={!!chat?.running}
               inWorktree={!!chat?.worktree}
               onOpenThread={openThread}
+              links={chat?.links}
             />
           )}
         </Pane>

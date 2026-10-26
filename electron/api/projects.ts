@@ -88,7 +88,7 @@ export function projectHandlers(ctx: ApiContext) {
     const client = await clientFor(known);
     return { client, repo: await projects.linked(projectId, client) };
   }
-  /** A file an answer names outside the project opens from its own folder, like a plain one. */
+  /** A file outside the project, one an answer names or in a linked folder, opens from its folder, like a plain one. */
   async function fileRoot(where: string) {
     return workspaceIdSchema.safeParse(where).success
       ? place(where)
@@ -336,9 +336,9 @@ export function projectHandlers(ctx: ApiContext) {
       projects.files(await place(where)),
     ),
     projectDirectory: takes(
-      [workspaceIdSchema, folderPathSchema],
+      [fileRootSchema, folderPathSchema],
       async (where, dir) => {
-        const { root, plain } = await place(where);
+        const { root, plain } = await fileRoot(where);
         return listDirectory(root, dir, plain);
       },
     ),
@@ -385,19 +385,19 @@ export function projectHandlers(ctx: ApiContext) {
         openWith(appId, await entryPath((await fileRoot(where)).root, path)),
     ),
     createProjectEntry: takes(
-      [workspaceIdSchema, workingPathSchema, z.enum(["file", "dir"])],
+      [fileRootSchema, workingPathSchema, z.enum(["file", "dir"])],
       async (where, path, kind) =>
-        createEntry((await place(where)).root, path, kind),
+        createEntry((await fileRoot(where)).root, path, kind),
     ),
     renameProjectEntry: takes(
-      [workspaceIdSchema, workingPathSchema, workingPathSchema],
+      [fileRootSchema, workingPathSchema, workingPathSchema],
       async (where, from, to) =>
-        renameEntry((await place(where)).root, from, to),
+        renameEntry((await fileRoot(where)).root, from, to),
     ),
     trashProjectEntry: takes(
-      [workspaceIdSchema, workingPathSchema],
+      [fileRootSchema, workingPathSchema],
       async (where, path) =>
-        shell.trashItem(await entryPath((await place(where)).root, path)),
+        shell.trashItem(await entryPath((await fileRoot(where)).root, path)),
     ),
     projectFile: takes(
       [fileRootSchema, workingPathSchema],

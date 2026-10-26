@@ -162,6 +162,10 @@
   color: var(--text);
   font-weight: 600;
 }
+/* No chevron or checkbox before this title, so it lines up with the views above it. */
+.local-changes .working-file-list section > header.branch-changes-head {
+  padding-left: 12px;
+}
 .change-section-count {
   flex: none;
   white-space: nowrap;

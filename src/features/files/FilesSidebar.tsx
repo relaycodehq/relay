@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { ErrorBox } from "../../ui/ui";
 import { PaneResizer } from "../../ui/PaneResizer";
 import type { ChecksController } from "../checks/useProjectChecks";
-import { FileSide } from "./FileSide";
+import { FileSide, type LinkedFiles } from "./FileSide";
 import { SidebarViews } from "./SidebarViews";
 import { useChangeViews, type ThreadChangesProps } from "./useChangeViews";
 import type { EditorWorkspace } from "./useEditorWorkspace";
@@ -26,7 +27,11 @@ type FilesSidebarProps = ThreadChangesProps & {
   expansion: ReturnType<typeof useExpanded>;
   /** The file in front. */
   shownPath: string | null;
+  linked: LinkedFiles;
 };
+
+const MIN_WIDTH = 160;
+const MAX_WIDTH = 600;
 
 /**
  * The editor's sidebar, resizable and hideable: the folder's files, its
@@ -46,9 +51,11 @@ export function FilesSidebar({
   browsing,
   expansion,
   shownPath,
+  linked,
   ...thread
 }: FilesSidebarProps) {
   const { open } = workspace;
+  const [namesWidth, setNamesWidth] = useState(0);
   const changes = useChangeViews({
     where,
     plain,
@@ -72,19 +79,35 @@ export function FilesSidebar({
       folder={browsing.folder}
       expansion={expansion}
       checks={checks}
-      onOpenFile={(path) => open({ path })}
+      onOpenFile={(path, preview) =>
+        open(preview ? { path, preview: true } : { path })
+      }
       onPickFolder={browsing.setFolder}
       onRenamed={workspace.renamed}
       onTrashed={workspace.trashed}
+      linked={linked}
     />
   );
+  // Never narrower than the view names over it, border included, nor wider than the list may be.
+  const minWidth = Math.min(Math.max(MIN_WIDTH, namesWidth + 1), MAX_WIDTH);
   return (
-    <aside className="project-file-list" hidden={browsing.listHidden}>
-      <PaneResizer pane="files" label="Resize file list" initial={210} min={160} max={600} />
+    <aside
+      className="project-file-list"
+      hidden={browsing.listHidden}
+      style={{ minWidth: `min(${minWidth}px, 60%)` }}
+    >
+      <PaneResizer
+        pane="files"
+        label="Resize file list"
+        initial={210}
+        min={minWidth}
+        max={MAX_WIDTH}
+      />
       <SidebarViews
         views={[{ id: "files", label: "Files", content: files }, ...changes.views]}
         shown={browsing.sideView}
         onShow={browsing.showSideView}
+        onNamesWidth={setNamesWidth}
       />
       {!!changes.error && <ErrorBox error={changes.error} />}
     </aside>

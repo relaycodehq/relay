@@ -44,7 +44,7 @@ export function BranchChanges({
           <div className="working-file-list">
             <section>
               {/* The view's tab already names the branch and counts the files. */}
-              <header>
+              <header className="branch-changes-head">
                 <strong>Not in {status.from} yet</strong>
                 <ListViewToggle grouped={grouped} onGrouped={setGrouped} />
               </header>

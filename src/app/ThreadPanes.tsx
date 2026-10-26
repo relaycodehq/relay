@@ -5,7 +5,7 @@ import {
   GitPullRequest,
   X,
 } from "lucide-react";
-import type { Project } from "../../shared/projects";
+import type { LinkedFolder, Project } from "../../shared/projects";
 import type { QuestionTarget } from "../../shared/questions";
 import type { SourceControlKind } from "../../shared/source-control";
 import type { Account, Pull, PullRef } from "../../shared/types";
@@ -150,6 +150,7 @@ export function ThreadPanel({
   agentRunning,
   inWorktree,
   onOpenThread,
+  links,
 }: {
   project: Project;
   chatId: string | null;
@@ -165,6 +166,8 @@ export function ThreadPanel({
   /** The thread works in a worktree Relay made, which Files compares with its source branch. */
   inWorktree?: boolean;
   onOpenThread?: (chatId: string) => void;
+  /** The folders linked to the thread with `/add-dir`, which Files shows beside the project's. */
+  links?: readonly LinkedFolder[];
 }) {
   const { locked } = useNavigationLock();
   const editorElsewhere = useEditorElsewhere(where);
@@ -266,6 +269,7 @@ export function ThreadPanel({
         inWorktree={inWorktree}
         onOpenThread={onOpenThread}
         onPopOut={() => void popOutEditor(project.id, where).catch(onError)}
+        links={links}
       />
     );
   }
