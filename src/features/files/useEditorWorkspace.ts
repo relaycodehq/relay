@@ -13,14 +13,9 @@ import {
   split,
   type EditorLayout,
 } from "./editor-groups";
-import { tabId, tabIsWithin, type EditorTab } from "./editor-tabs";
+import { tabId, type EditorTab } from "./editor-tabs";
 import { emptyHistory, type History } from "./navigation-history";
-import {
-  closeTabDocument,
-  hasUnsavedEdits,
-  tabDocument,
-} from "./tab-documents";
-import { outsideSource } from "./OutsideFile";
+import { hasUnsavedEdits, moveTabDocuments } from "./tab-documents";
 import { useClosedTabs } from "./useClosedTabs";
 import { useEditorLayout } from "./useEditorLayout";
 import { useTabClosing } from "./useTabClosing";
@@ -70,31 +65,16 @@ export function useEditorWorkspace({
     closedTabs,
     expand,
   });
-  const { closing, closed, requestClose, closeMany, trashed } = useTabClosing(
-    { layout, setLayout, home, history, closedTabs },
-  );
-  /**
-   * A file or folder moved, in the project or with `outside` outside it:
-   * tabs and documents on it or under it follow. A file outside keeps its
-   * document only when it stays in its folder, which the document is kept by.
-   */
+  const { closing, closed, requestClose, closeMany, trashed } = useTabClosing({
+    layout,
+    setLayout,
+    home,
+    history,
+    closedTabs,
+  });
+  /** A file or folder moved, in the project or with `outside` outside it: tabs follow. */
   const renamed = (from: string, to: string, outside = false) => {
-    for (const tab of allTabs(layout)) {
-      if (!tabIsWithin(tab, from, outside)) continue;
-      const moved = { ...tab, path: to + tab.path.slice(from.length) };
-      const sameFolder =
-        !outside ||
-        outsideSource(tab.path).source.where ===
-          outsideSource(moved.path).source.where;
-      const before = tabDocument(tab, home);
-      if (sameFolder)
-        documents.rename(
-          before.source,
-          before.path,
-          tabDocument(moved, home).path,
-        );
-      else closeTabDocument(tab, home);
-    }
+    moveTabDocuments(allTabs(layout), home, from, to, outside);
     setLayout((l) => renameInGroups(l, from, to, outside));
   };
 
@@ -106,8 +86,7 @@ export function useEditorWorkspace({
     ...opening,
     focus: (group: string) => setLayout((l) => focusGroup(l, group)),
     /** A previewed tab stays open when another file is looked at. */
-    keep: (group: string, id: string) =>
-      setLayout((l) => keepIn(l, group, id)),
+    keep: (group: string, id: string) => setLayout((l) => keepIn(l, group, id)),
     /** Splits `group`, showing its front tab or the tab `shown`. */
     split: (
       group: string,
