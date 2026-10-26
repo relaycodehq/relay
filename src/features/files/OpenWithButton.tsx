@@ -49,20 +49,11 @@ export function OpenWithButton({
   external?: boolean;
   onError: (error: unknown) => void;
 }) {
-  const apps = useQuery({
-    queryKey: ["open-with-apps"],
-    queryFn: () => api.openWithApps(),
-    staleTime: 60_000,
-  });
-  const editors = (apps.data ?? []).map((app) =>
-    editorOpener(app, where, path),
+  const { pending, editors, system, main } = useOpeners(
+    where,
+    path,
+    !!external,
   );
-  const system = systemOpeners(where, path, !!external);
-  const preferredId = preferredOpener.use();
-  const main =
-    [...editors, ...system].find((opener) => opener.id === preferredId) ??
-    editors[0] ??
-    system[0];
   const open = (opener: Opener) => void opener.open().catch(onError);
   const pick = (opener: Opener) => {
     preferredOpener.set(opener.id);
@@ -89,10 +80,10 @@ export function OpenWithButton({
         title={main.action}
         aria-label={main.action}
         // Until the list is in, the main part would flash the file manager.
-        disabled={apps.isPending}
+        disabled={pending}
         onClick={() => open(main)}
       >
-        {apps.isPending ? <span className="open-with-icon" /> : main.icon}
+        {pending ? <span className="open-with-icon" /> : main.icon}
       </button>
       <Menu.Root>
         <Menu.Trigger
@@ -121,6 +112,25 @@ export function OpenWithButton({
       </Menu.Root>
     </div>
   );
+}
+
+/** Every way found to open the file, and the one the button's main part uses. */
+function useOpeners(where: string, path: string, external: boolean) {
+  const apps = useQuery({
+    queryKey: ["open-with-apps"],
+    queryFn: () => api.openWithApps(),
+    staleTime: 60_000,
+  });
+  const editors = (apps.data ?? []).map((app) =>
+    editorOpener(app, where, path),
+  );
+  const system = systemOpeners(where, path, external);
+  const preferredId = preferredOpener.use();
+  const main =
+    [...editors, ...system].find((opener) => opener.id === preferredId) ??
+    editors[0] ??
+    system[0];
+  return { pending: apps.isPending, editors, system, main };
 }
 
 function editorOpener(app: OpenWithApp, where: string, path: string): Opener {
