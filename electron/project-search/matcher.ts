@@ -44,6 +44,15 @@ export function searchRegExp(query: Pattern): RegExp {
   }
 }
 
+/**
+ * Moves `re` past an empty match at `at`. In Unicode mode that is a whole
+ * surrogate pair: stopping inside one makes `exec` match at its start again.
+ */
+function stepPastEmpty(re: RegExp, line: string, at: number) {
+  const pair = re.unicode && (line.codePointAt(at) ?? 0) > 0xffff;
+  re.lastIndex = at + (pair ? 2 : 1);
+}
+
 export interface Hit {
   index: number;
   length: number;
@@ -54,7 +63,7 @@ export function hitsIn(re: RegExp, line: string): Hit[] {
   const hits: Hit[] = [];
   re.lastIndex = 0;
   for (let m = re.exec(line); m; m = re.exec(line)) {
-    if (m[0] === "") re.lastIndex++;
+    if (m[0] === "") stepPastEmpty(re, line, m.index);
     else hits.push({ index: m.index, length: m[0].length });
   }
   return hits;
@@ -94,7 +103,7 @@ export function replaceInLine(
   re.lastIndex = 0;
   for (let m = re.exec(line); m; m = re.exec(line)) {
     if (m[0] === "") {
-      re.lastIndex++;
+      stepPastEmpty(re, line, m.index);
       continue;
     }
     count++;

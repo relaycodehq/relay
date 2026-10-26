@@ -49,6 +49,11 @@ describe("searchRegExp", () => {
     );
   });
 
+  it("steps over an emoji after an empty match instead of looping", () => {
+    const re = searchRegExp(query("^|foo", { regex: true }));
+    expect(hitsIn(re, "\u{1F600} foo")).toEqual([{ index: 3, length: 3 }]);
+  });
+
   it("takes escapes unicode mode refuses", () => {
     const re = searchRegExp(query("a\\-b", { regex: true }));
     expect(hitsIn(re, "a-b")).toHaveLength(1);
@@ -100,6 +105,13 @@ describe("replaceInText", () => {
     expect(
       replace("a\nb\na", "^a$", "z", { regex: true, caseSensitive: true }),
     ).toEqual({ text: "z\nb\nz", count: 2 });
+  });
+
+  it("replaces next to an emoji after an empty match", () => {
+    expect(replace("\u{1F600} foo", "^|foo", "x", { regex: true })).toEqual({
+      text: "\u{1F600} x",
+      count: 1,
+    });
   });
 
   it("counts nothing for text without a match", () => {
