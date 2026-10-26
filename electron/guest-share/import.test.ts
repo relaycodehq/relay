@@ -77,6 +77,12 @@ describe("importGuestThread", () => {
     expect(shared!.note).toContain("Start one from the sidebar");
   });
 
+  it("asks for the bundle at the link's path, whatever query or fragment it carries", async () => {
+    const { h, asked } = await host(() => Response.json(bundle));
+    await importGuestThread(h, projectId, `${link}?utm=x#top`);
+    expect(asked).toEqual([`${link}/bundle`]);
+  });
+
   it("moves copied times back when the sharer's clock ran ahead", async () => {
     const ahead = Date.now() + 10 * 60_000;
     const { h, created } = await host(() =>

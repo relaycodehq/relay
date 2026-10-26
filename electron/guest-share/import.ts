@@ -71,7 +71,12 @@ async function downloadBundle(
   fetcher: typeof fetch,
   link: string,
 ): Promise<GuestBundle> {
-  const res = await fetcher(`${link.replace(/\/+$/, "")}/bundle`, {
+  // The page's own address may carry a query or a fragment the route doesn't.
+  const url = new URL(link);
+  url.pathname = `${url.pathname.replace(/\/+$/, "")}/bundle`;
+  url.search = "";
+  url.hash = "";
+  const res = await fetcher(url.href, {
     redirect: "error",
     signal: AbortSignal.timeout(60_000),
   }).catch(() => {
