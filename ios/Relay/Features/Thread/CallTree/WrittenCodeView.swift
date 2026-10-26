@@ -95,14 +95,6 @@ private func changes(_ hunks: [[CodeLine]]) -> CodeSize {
     return .changes(added: lines.count { $0.mark == .added }, removed: lines.count { $0.mark == .removed })
 }
 
-/// One line as shown: its gutter, its tokens (or plain text past what was highlighted) and how it changed.
-struct CodeLine {
-    let gutter: String
-    let tokens: [CodeToken]?
-    let text: String
-    let mark: LineMark
-}
-
 /// Diff lines with their highlighting, taken from whichever side each line came from.
 private func marked(_ diff: [DiffLine], before: [[CodeToken]], after: [[CodeToken]]) -> [CodeLine] {
     var old = 0
@@ -130,91 +122,5 @@ private func gutter(_ mark: LineMark) -> String {
     case .added: "+"
     case .removed: "−"
     case .same: ""
-    }
-}
-
-extension Array {
-    fileprivate subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
-    }
-}
-
-/// Rows past this many are counted rather than drawn: a box of thousands of lines stalls the thread.
-private let shownLineLimit = 800
-
-/// The lines in a box that scrolls both ways, tinted rows as wide as the box.
-private struct CodeLines: View {
-    let hunks: [[CodeLine]]
-    let cut: Bool
-    @Environment(\.colors) private var colors
-    @State private var width: CGFloat = 0
-
-    var body: some View {
-        let shown = firstLines(of: hunks)
-        ScrollView([.vertical, .horizontal]) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(shown.hunks.enumerated()), id: \.offset) { index, hunk in
-                    if index > 0 { Divider().overlay(colors.border).padding(.vertical, 4) }
-                    ForEach(Array(hunk.enumerated()), id: \.offset) { _, line in row(line) }
-                }
-                if shown.left > 0 {
-                    Text(verbatim: "…\(plural(shown.left, "more line")) not shown")
-                        .foregroundStyle(colors.muted)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 4)
-                }
-                if cut {
-                    Text(verbatim: "…cut")
-                        .foregroundStyle(colors.muted)
-                        .padding(.horizontal, 10)
-                        .padding(.top, 4)
-                }
-            }
-            .font(.mono(.caption))
-            .padding(.vertical, 6)
-            .frame(minWidth: width, alignment: .leading)
-        }
-        .scrollIndicators(.hidden)
-        .onGeometryChange(for: CGFloat.self, of: \.size.width) { width = $0 }
-        .frame(maxHeight: 280)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(.codeBackground)
-    }
-
-    /// The lines a phone draws at once without stalling, and how many are left past them.
-    private func firstLines(of hunks: [[CodeLine]]) -> (hunks: [[CodeLine]], left: Int) {
-        var room = shownLineLimit
-        var kept: [[CodeLine]] = []
-        for hunk in hunks where room > 0 {
-            kept.append(Array(hunk.prefix(room)))
-            room -= kept[kept.count - 1].count
-        }
-        let total = hunks.reduce(0) { $0 + $1.count }
-        return (kept, total - (shownLineLimit - room))
-    }
-
-    private func row(_ line: CodeLine) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(verbatim: line.gutter)
-                .foregroundStyle(line.mark == .same ? colors.faint : signColor(line.mark))
-                .frame(width: 28, alignment: .trailing)
-            Text(line.tokens.map { styledLine($0, dark: colors.dark) } ?? AttributedString(line.text))
-                .fixedSize()
-        }
-        .padding(.trailing, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(tint(line.mark))
-    }
-
-    private func signColor(_ mark: LineMark) -> Color {
-        mark == .added ? colors.additionText : colors.deletionText
-    }
-
-    private func tint(_ mark: LineMark) -> Color {
-        switch mark {
-        case .added: colors.diffAddition
-        case .removed: colors.diffDeletion
-        case .same: .clear
-        }
     }
 }
