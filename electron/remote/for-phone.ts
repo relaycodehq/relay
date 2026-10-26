@@ -42,13 +42,17 @@ function cutDetail(a: AgentActivity): AgentActivity {
   };
 }
 
+/** What a call wrote, for a phone that opened its row; a file that may hold secrets has only its path, so the phone shows the call's output instead. */
+export const writtenForPhone = (call: AgentActivity | undefined) =>
+  call?.written?.filter((file) => !file.secret) ?? null;
+
 /** A call with what it did spelled out, and its written code swapped for a mark. */
 function forPhoneCall(a: AgentActivity): AgentActivity {
   const { written, ...call } = cutDetail(a);
   return {
     ...call,
     actions: callActions(a),
-    ...(written?.length ? { wroteCode: true as const } : {}),
+    ...(written?.some((file) => !file.secret) ? { wroteCode: true as const } : {}),
   };
 }
 

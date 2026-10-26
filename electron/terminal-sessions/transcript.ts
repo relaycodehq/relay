@@ -5,6 +5,7 @@ import type {
   ForkPoint,
 } from "../../shared/projects";
 import type { TerminalAgent } from "../../shared/terminal-sessions";
+import { writtenInAnswer } from "../../shared/written-code";
 
 /** As many trace rows as Relay keeps for one of its own answers. */
 const TRACE_LIMIT = 100;
@@ -68,8 +69,10 @@ export class Transcript {
   activity(activity: AgentActivity, at: number) {
     const answer = this.open(at);
     this.flush();
-    const index = (answer.trace ?? []).findIndex((e) => e.id === activity.id);
-    const entry = { kind: "activity" as const, id: activity.id, activity };
+    const trace = answer.trace ?? [];
+    const index = trace.findIndex((e) => e.id === activity.id);
+    const before = index >= 0 ? trace.slice(0, index) : trace;
+    const entry = { kind: "activity" as const, id: activity.id, activity: writtenInAnswer(activity, before) };
     if (index >= 0) answer.trace![index] = entry;
     else this.trace(entry);
   }

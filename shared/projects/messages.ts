@@ -249,17 +249,21 @@ export interface AgentActivity {
  * What a call wrote into one file: all of it, the passages it swapped, or a
  * patch. `cut` when it ran past `writtenLimit` and lost its end.
  */
-export type WrittenCode =
-  | { kind: "whole"; path: string; content: string; cut?: true }
+export type WrittenCode = {
+  path: string;
+  cut?: true;
+  /** Nothing kept: the file looks like it holds keys or passwords. */
+  secret?: true;
+} & (
+  | { kind: "whole"; content: string }
   | {
       kind: "swap";
-      path: string;
       edits: { old: string; new: string }[];
       /** The file was deleted; its one edit takes out all it held. */
       deleted?: true;
-      cut?: true;
     }
-  | { kind: "patch"; path: string; diff: string; cut?: true };
+  | { kind: "patch"; diff: string }
+);
 
 export type TraceDropped = Partial<
   Record<AgentActivity["kind"] | "failed", number>

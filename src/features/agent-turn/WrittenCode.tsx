@@ -74,7 +74,7 @@ function Patch({ path, diff }: { path: string; diff: string }) {
   );
 }
 
-/** Past the limit before any of it fit: only the path is left. */
+/** Past the limit before any of it fit, or a file that may hold secrets: only the path is left. */
 function keptNothing(file: Written) {
   if (!file.cut) return false;
   switch (file.kind) {
@@ -89,7 +89,7 @@ function keptNothing(file: Written) {
 
 /** "+17 −2" for an edit, "24 lines" for a file written whole. */
 function size(file: Written) {
-  if (keptNothing(file)) return "too long to keep";
+  if (keptNothing(file)) return file.secret ? "not kept, may hold secrets" : "too long to keep";
   if (file.kind === "whole") return `${file.content.split("\n").length} lines`;
   if (file.kind === "patch" && !hunkLines(file.diff)) return `${file.diff.split("\n").length} lines`;
   const changed =

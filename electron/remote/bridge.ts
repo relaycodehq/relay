@@ -50,7 +50,7 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import { phoneIcon } from "./svg-icon";
-import { callIn, forPhone, forPhoneRun } from "./for-phone";
+import { callIn, forPhone, forPhoneRun, writtenForPhone } from "./for-phone";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
 import type {
@@ -333,7 +333,7 @@ export class RemoteBridge {
     activityDetail: async (chatId, messageId, id) =>
       callIn(await this.host.chat(chatId), messageId, id)?.detail ?? null,
     activityWritten: async (chatId, messageId, id) =>
-      callIn(await this.host.chat(chatId), messageId, id)?.written ?? null,
+      writtenForPhone(callIn(await this.host.chat(chatId), messageId, id)),
     image: async (source, max) => {
       const dataUrl = (await this.host.dispatch(
         ...((source.kind === "attached"

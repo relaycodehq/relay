@@ -15,6 +15,7 @@ import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
 import type { ImportOffer } from "../../shared/import-offer";
 import { addStreamed, type Streamed } from "../../shared/usage";
+import { writtenInAnswer } from "../../shared/written-code";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -189,7 +190,8 @@ export class AnswerRecorder {
     if (this.stopped) return;
     const trace = (this.message.trace ??= []);
     const index = trace.findIndex((a) => a.id === activity.id);
-    const entry = { kind: "activity" as const, id: activity.id, activity };
+    const before = index >= 0 ? trace.slice(0, index) : trace;
+    const entry = { kind: "activity" as const, id: activity.id, activity: writtenInAnswer(activity, before) };
     if (index >= 0) trace[index] = entry;
     // A busy subagent mustn't crowd out the agent's own later calls.
     else if (
