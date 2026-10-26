@@ -89,7 +89,7 @@ export function controlApi({
       return { ...pairing, remote: await remote.state() };
     },
     update: (check) => (check ? updater.check() : updater.install()),
-    remote: (enabled) => remote.setEnabled(enabled),
+    remote: (enabled) => remote.setEnabled(enabled, { keepPipes: true }),
     removeDevice: (id) => remote.revoke(id),
     projects: () => projects.list(login.client),
     addProject: (path) => projects.add(path, login.client),

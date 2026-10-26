@@ -485,6 +485,23 @@ it("lets a computer paired through a pipe in on its loopback alone, phone access
   });
 });
 
+it("keeps letting a computer paired before pipes had their own setting in once phone access goes off", async () => {
+  const { remote } = await desktop();
+  const link = parsePairingUrl((await remote.pairing()).url)!;
+  await phone({ link, device: "Windows", kind: "computer" }).until("online");
+  await remote.setEnabled(false, { keepPipes: true });
+  expect(await remote.state()).toMatchObject({
+    enabled: false,
+    listening: false,
+    bound: "127.0.0.1",
+  });
+
+  // With no computer paired, off is off.
+  const { remote: alone } = await desktop();
+  await alone.setEnabled(false, { keepPipes: true });
+  expect((await alone.state()).bound).toBeUndefined();
+});
+
 it("resumes previously enabled access with no saved LAN choice and no Tailscale", async () => {
   const { remote } = await desktop(
     undefined,

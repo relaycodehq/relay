@@ -22,6 +22,8 @@ export interface SettingsContext {
 export interface Snapshot {
   name: string;
   port: number;
+  /** Phones and computers reach it over Tailscale or the local network. */
+  phoneAccess: boolean;
   /** Installs releases as they come out; see ./auto-update. */
   autoUpdate: boolean;
   /** Where updates stand; "off" for a build from source, which git updates. */
@@ -43,7 +45,11 @@ export function control(ctx: SettingsContext) {
 }
 
 /** A call the desktop's window would make, through the running Relay. */
-export function call<T>(ctx: SettingsContext, method: string, ...args: unknown[]) {
+export function call<T>(
+  ctx: SettingsContext,
+  method: string,
+  ...args: unknown[]
+) {
   return callControl(control(ctx), "call", method, args) as Promise<T>;
 }
 
@@ -77,6 +83,7 @@ export async function snapshot(ctx: SettingsContext): Promise<Snapshot> {
     // What's saved, which a restart puts to use.
     name: config.name ?? status.name,
     port: networkPort(config),
+    phoneAccess: !!status.remote.enabled,
     autoUpdate: config.autoUpdate ?? true,
     update: status.update,
     keepAwake,

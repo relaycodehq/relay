@@ -128,11 +128,10 @@ export const nodeCodec: Codec = {
 /** WSL's mirrored networking shares Windows' ports, so the other Relay may hold this one. */
 function portTaken(port: number) {
   const taken = `Port ${port} is taken by another app.`;
-  const moves = `relay restart --port ${port + 1}`;
   if (process.platform === "win32")
-    return `${taken} If it's Relay in WSL, ${moves} there moves it.`;
+    return `${taken} If it's Relay in WSL, relay settings set phone-access off there frees it.`;
   if (inWsl())
-    return `${taken} If it's Relay on Windows, ${moves} moves this one.`;
+    return `${taken} If it's Relay on Windows, relay restart --port ${port + 1} moves this one.`;
   return taken;
 }
 

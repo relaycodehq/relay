@@ -70,6 +70,9 @@ export async function setValue(
     case "usage-ping":
       await call(ctx, "saveUsagePing", parseOn(value));
       return;
+    case "phone-access":
+      await callControl(control(ctx), "remote", parseOn(value));
+      return;
     case "auto-settle":
       await call(ctx, "saveAutoSettleDays", parseDays(value, 1));
       return;
@@ -301,6 +304,11 @@ const switches: Partial<
   "keep-awake": {
     question: "Keep the computer from idling to sleep while Relay runs?",
     on: (s) => s.keepAwake,
+  },
+  "phone-access": {
+    question:
+      "Let phones and computers reach Relay over Tailscale or the local network? Computers paired through ssh or wsl.exe get in either way.",
+    on: (s) => s.phoneAccess,
   },
   "usage-ping": {
     question:

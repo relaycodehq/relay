@@ -318,8 +318,18 @@ export class PhoneRemote {
     };
   }
 
-  /** Enables access using the saved network choice, including an explicit LAN off. */
-  async setEnabled(enabled: boolean) {
+  /**
+   * Enables access using the saved network choice, including an explicit LAN
+   * off. With `keepPipes`, computers already paired keep coming in through
+   * `relay pipe` once it's off, as those that paired before pipes were their
+   * own setting may.
+   */
+  async setEnabled(enabled: boolean, { keepPipes = false } = {}) {
+    const computerPaired = this.devices
+      .list()
+      .some((d) => d.kind === "computer");
+    if (!enabled && keepPipes && computerPaired)
+      await this.devices.setPipes(true);
     await this.devices.setEnabled(enabled);
     if (enabled) await this.follow();
     else {

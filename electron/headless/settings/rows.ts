@@ -145,6 +145,12 @@ export const rows: Row[] = [
         : dim("not signed in"),
   },
   {
+    key: "phone-access",
+    section: "Phones",
+    label: "Phone access",
+    value: (s) => (s.phoneAccess ? "on" : "off"),
+  },
+  {
     key: "dictation",
     section: "Phones",
     label: "Dictation",

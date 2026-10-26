@@ -43,7 +43,7 @@ On current Relay versions, the handed-off conversation stays live on the laptop:
 
 A code works once, for ten minutes. `relay devices` lists what's paired; `relay devices remove <name>` disconnects one at once.
 
-In WSL, Relay stays off the network until `relay pair` pairs a phone or a computer by its address. Relay on Windows reaches it through wsl.exe instead, and with WSL's mirrored networking a Relay listening in WSL takes the port Relay on Windows needs. One that already listens there can move with `relay restart --port 47822`.
+In WSL, Relay stays off the network until `relay pair` pairs a phone or a computer by its address. Relay on Windows reaches it through wsl.exe instead, and with WSL's mirrored networking a Relay listening in WSL takes the port Relay on Windows needs. One that already listens there gives the port back with `relay settings set phone-access off`; computers paired through wsl.exe still get in.
 
 ## Settings
 
@@ -51,7 +51,7 @@ In WSL, Relay stays off the network until `relay pair` pairs a phone or a comput
 relay settings
 ```
 
-In a terminal it's a menu of what the desktop's Settings would set: the name and port, installing updates by themselves, keeping the computer awake, counting it as a user (one ping a day with no ID; `relay settings set usage-ping off` stops it), when quiet threads settle and settled worktrees go, which agent new threads start with, each agent CLI's path (or let Relay find it), Git, and Claude's "Flag what I'd miss". It also sets up what a phone uses this computer for:
+In a terminal it's a menu of what the desktop's Settings would set: the name and port, phone access, installing updates by themselves, keeping the computer awake, counting it as a user (one ping a day with no ID; `relay settings set usage-ping off` stops it), when quiet threads settle and settled worktrees go, which agent new threads start with, each agent CLI's path (or let Relay find it), Git, and Claude's "Flag what I'd miss". It also sets up what a phone uses this computer for:
 
 - **Dictation.** Downloads the speech engine and the 671 MB model, then phones dictate with this computer as they would with a desktop.
 - **Read aloud.** Downloads onnxruntime and a voice (Pocket TTS or Supertonic 3); choose the voice and speed there too.
