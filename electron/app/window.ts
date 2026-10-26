@@ -22,6 +22,7 @@ import { badgeDot } from "./badge-dot";
 import { isRelayPage, loadPage } from "./page";
 import { ThreadWindows } from "./thread-windows";
 import { EditorWindows } from "./editor-windows";
+import { rememberPlace } from "./main-window-place";
 import { show as showWindow } from "./popped-windows";
 
 /** The window whose page made the API call running now. */
@@ -68,7 +69,6 @@ export class AppWindow {
    * the first frame instead of once the page has loaded its appearance.
    */
   clear = false;
-  private placing?: NodeJS.Timeout;
 
   constructor(
     private hooks: {
@@ -335,33 +335,9 @@ export class AppWindow {
       this.show();
       if (saved?.fullScreen) win.setFullScreen(true);
       // Only from here on: before, it would save the size it was built with.
-      for (const event of [
-        "resize",
-        "move",
-        "maximize",
-        "unmaximize",
-        "enter-full-screen",
-        "leave-full-screen",
-      ] as const)
-        win.on(event as "resize", () => this.savePlaceSoon(win));
-      win.on("close", () => this.savePlace(win));
+      rememberPlace(win, () => this.place);
     });
     void loadPage(win);
-  }
-
-  private savePlaceSoon(win: BrowserWindow) {
-    clearTimeout(this.placing);
-    this.placing = setTimeout(() => this.savePlace(win), 500);
-  }
-
-  private savePlace(win: BrowserWindow) {
-    clearTimeout(this.placing);
-    if (!this.place || win.isDestroyed()) return;
-    this.place.save({
-      bounds: win.getNormalBounds(),
-      maximized: win.isMaximized(),
-      fullScreen: win.isFullScreen(),
-    });
   }
 
   /**
