@@ -51,7 +51,7 @@ export function EditorTabs({
   onMove: (from: string, id: string, before: string | null) => void;
 }) {
   const strip = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<string>();
+  const [dragging, setDragging] = useDraggedTab(tabs);
   const folderHint = folderHints(tabs);
   useEffect(() => {
     strip.current
@@ -98,4 +98,15 @@ export function EditorTabs({
       {trail}
     </div>
   );
+}
+
+/** The tab being dragged out of this strip, until its drag ends or it leaves the split. */
+function useDraggedTab(tabs: EditorTab[]) {
+  const [dragging, setDragging] = useState<string>();
+  // Dropped in another split, the tab leaves this one before its drag-end can say so.
+  const draggedAway = !!dragging && !tabs.some((t) => tabId(t) === dragging);
+  useEffect(() => {
+    if (draggedAway) setDragging(undefined);
+  }, [draggedAway]);
+  return [dragging, setDragging] as const;
 }
