@@ -309,6 +309,15 @@ describe("git and shell words around a search", () => {
   it("reads the command after a value worked out with $()", () => {
     expect(commandActions("out=$(git rev-parse HEAD) npm test")).toEqual([{ kind: "test", failed: false }]);
   });
+
+  it("doesn't split a $() at the separators or pipes inside it", () => {
+    expect(commandActions("root=$(cd app && pwd); rg foo $root")).toEqual([
+      { kind: "search", pattern: "foo", where: "$root" },
+    ]);
+    expect(commandActions("files=$(git ls-files | grep test); npx vitest run $files")).toEqual([
+      { kind: "test", target: "$files", failed: false },
+    ]);
+  });
 });
 
 describe("words before the program", () => {

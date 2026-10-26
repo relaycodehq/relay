@@ -80,11 +80,13 @@ export function heredocs(command: string) {
 /** What joins a command to the one before it. */
 export type Joiner = "&&" | "||" | ";" | "\n";
 
-/** The commands of a line, each with what joined it to the one before; splits on ; && || and newlines, minding quotes. */
+/** The commands of a line, each with what joined it to the one before; splits on ; && || and newlines, minding quotes and `$( … )`. */
 export function chain(line: string) {
   const out: { segment: string; joinedBy?: Joiner }[] = [];
   let joinedBy: Joiner | undefined;
   let quote = "";
+  // How deep in `$( … )`, whose separators belong to the value it works out.
+  let depth = 0;
   let current = "";
   const end = (next: Joiner) => {
     const segment = current.trim();
@@ -108,8 +110,10 @@ export function chain(line: string) {
       continue;
     }
     if (c === "'" || c === '"') quote = c;
+    depth = depthAfter(line, i, depth);
     const pair = line.slice(i, i + 2);
-    if (pair === "&&" || pair === "||") {
+    if (depth) current += c;
+    else if (pair === "&&" || pair === "||") {
       end(pair);
       i++;
     } else if (c === ";" || c === "\n") end(c);
@@ -117,6 +121,14 @@ export function chain(line: string) {
   }
   end(";");
   return out;
+}
+
+/** How deep in `$( … )` a line is past its character at `i`; a bare `(` opens a subshell, which splits. */
+function depthAfter(line: string, i: number, depth: number) {
+  const c = line[i];
+  if (c === "(" && (depth || line[i - 1] === "$")) return depth + 1;
+  if (c === ")" && depth) return depth - 1;
+  return depth;
 }
 
 /** The commands of a line, without what joins them. */
@@ -133,16 +145,20 @@ export const positional = (args: string[]) => args.filter((a) => !/^[-<>]/.test(
 /** Programs that only trim what the one before them printed. */
 const filters = new Set(["head", "tail", "cut", "sort", "uniq", "wc", "awk", "grep", "sed", "tr"]);
 
-/** Where a segment's first `|` is, outside quotes; -1 when it has none. */
+/** Where a segment's first `|` is, outside quotes and `$( … )`; -1 when it has none. */
 function pipeAt(segment: string) {
   let quote = "";
+  let depth = 0;
   for (let i = 0; i < segment.length; i++) {
     const c = segment[i]!;
     if (escapes(c, quote)) i++;
     else if (quote) {
       if (c === quote) quote = "";
     } else if (c === "'" || c === '"') quote = c;
-    else if (c === "|" && segment[i + 1] !== "|") return i;
+    else {
+      depth = depthAfter(segment, i, depth);
+      if (!depth && c === "|" && segment[i + 1] !== "|") return i;
+    }
   }
   return -1;
 }
