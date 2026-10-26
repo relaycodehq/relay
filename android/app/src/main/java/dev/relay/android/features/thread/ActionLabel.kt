@@ -5,13 +5,26 @@ package dev.relay.android.features.thread
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,6 +70,8 @@ import io.github.lyxnx.compose.ui.tablericons.outline.World
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 
 private val CHIP_SHAPE = RoundedCornerShape(5.dp)
+private val WORD_GAP = 5.dp
+private val EDGE_FADE = 28.dp
 
 /** What each kind of action leads its row with. */
 fun actionIcon(kind: String): ImageVector = when (kind) {
@@ -108,13 +123,41 @@ internal fun PairLabel(first: TraceRow, second: TraceRow) {
     }
 }
 
+/** The words on one line at their full width; what runs past the edge fades out instead of wrapping. */
 @Composable
 private fun LabelLine(content: @Composable () -> Unit) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        itemVerticalAlignment = Alignment.CenterVertically,
-    ) { content() }
+    var overflows by remember { mutableStateOf(false) }
+    val fade = Modifier
+        .graphicsLayer {
+            clip = true
+            compositingStrategy = if (overflows) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        }
+        .drawWithContent {
+            drawContent()
+            if (!overflows) return@drawWithContent
+            val width = EDGE_FADE.toPx()
+            drawRect(
+                Brush.horizontalGradient(listOf(Color.Black, Color.Transparent), startX = size.width - width, endX = size.width),
+                topLeft = Offset(size.width - width, 0f),
+                size = Size(width, size.height),
+                blendMode = BlendMode.DstIn,
+            )
+        }
+    Layout(content, fade) { measurables, constraints ->
+        val gap = WORD_GAP.roundToPx()
+        val pieces = measurables.map { it.measure(Constraints()) }
+        val full = pieces.sumOf { it.width } + gap * (pieces.size - 1).coerceAtLeast(0)
+        val width = full.coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = (pieces.maxOfOrNull { it.height } ?: 0).coerceIn(constraints.minHeight, constraints.maxHeight)
+        overflows = full > width
+        layout(width, height) {
+            var x = 0
+            for (piece in pieces) {
+                piece.place(x, (height - piece.height) / 2)
+                x += piece.width + gap
+            }
+        }
+    }
 }
 
 /** What follows the verb: the file, pattern or program it acted on. */

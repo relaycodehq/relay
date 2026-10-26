@@ -155,7 +155,6 @@ private fun OpenableRow(
     val press = if (inside.isEmpty()) Modifier else Modifier.pressable(onClick = { open = !open }, scale = false)
     Column(modifier) {
         Row(press.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            // The icon sits on the first line however many the words wrap onto.
             Box(Modifier.height(LINE), contentAlignment = Alignment.Center) { icon() }
             Box(Modifier.weight(1f).heightIn(min = LINE).padding(vertical = 3.dp), contentAlignment = Alignment.CenterStart) { label() }
         }
