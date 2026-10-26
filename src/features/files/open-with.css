@@ -1,0 +1,53 @@
+/* The status line's Open button: the preferred app's icon and an arrow, as
+   quiet as the line's other icons. */
+.open-with {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.open-with > .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+}
+.open-with > .icon-button.open-with-main {
+  width: 24px;
+  border-radius: 6px 0 0 6px;
+}
+.open-with > .icon-button.open-with-more {
+  width: 14px;
+  border-radius: 0 6px 6px 0;
+}
+/* Both halves light up together and read as one button; the gap between
+   them is the divider. */
+.open-with:hover > .icon-button:not(:disabled),
+.open-with > .icon-button[data-popup-open] {
+  background: var(--hover);
+}
+.open-with-icon {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+/* The app's own colours stay out of the line until it's pointed at. */
+.open-with-main > img.open-with-icon {
+  filter: grayscale(1);
+  opacity: 0.75;
+}
+.open-with:hover .open-with-main > img.open-with-icon {
+  filter: none;
+  opacity: 1;
+}
+.open-with-menu .composer-select-item {
+  justify-content: flex-start;
+  gap: 9px;
+}
+.open-with-menu .open-with-name {
+  flex: 1;
+}
+.open-with-menu .open-with-check {
+  color: var(--muted);
+}

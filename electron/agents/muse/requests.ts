@@ -189,14 +189,15 @@ export class MuseRequests {
       .catch(() => undefined);
     if (signal.aborted) return;
     this.open.delete(request.userInputId);
-    if (response?.kind !== "question") return cancel();
+    const answers = response?.kind === "question" ? response.answers : null;
+    if (!answers) return cancel();
     await this.connection
       .request("userInput/answer", {
         commandId: commandId(),
         sessionId: request.sessionId,
         userInputId: request.userInputId,
         answers: request.questions.map((q) => {
-          const given = response.answers[q.id] ?? [];
+          const given = answers[q.id] ?? [];
           const labels = given.filter((a) => q.options.some((o) => o.label === a));
           const free = given.filter((a) => !labels.includes(a)).join("\n");
           return {

@@ -35,14 +35,19 @@ fun takenBack(item: RemoteQueued, images: List<PastedImage> = emptyList()): Take
 /** What waits in the queue list: everything but the steers held a moment, which show as sent. */
 fun waitingInQueue(queue: List<RemoteQueued>?): List<RemoteQueued> = queue.orEmpty().filter { it.held != true }
 
-/** The steers held a moment in this conversation, as the messages they become. */
-fun heldSteers(queue: List<RemoteQueued>?, rootId: String?, now: Long): List<ChatMessage> =
-    queue.orEmpty().filter { it.held == true && it.parentId == rootId }.map {
+/**
+ * The steers held a moment in this conversation, as the messages they become. One the
+ * thread already holds is left out: the message keeps the steer's id, so it would show twice.
+ */
+fun heldSteers(queue: List<RemoteQueued>?, rootId: String?, messages: List<ChatMessage>, now: Long): List<ChatMessage> {
+    val landed = messages.mapTo(HashSet()) { it.id }
+    return queue.orEmpty().filter { it.held == true && it.parentId == rootId && it.id !in landed }.map {
         ChatMessage(
             id = it.id, role = "user", body = it.body, status = "complete", created = it.created ?: now,
             provider = it.to ?: it.settings?.provider ?: "claude", version = 0, parentId = it.parentId,
         )
     }
+}
 
 /** A queued reply taken back on the main screen, bound for its side conversation's composer (mobile/src/remote/taken-back.ts). */
 data class HandedBack(

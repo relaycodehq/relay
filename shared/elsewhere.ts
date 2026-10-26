@@ -1,6 +1,6 @@
 // Edits a thread's agents made outside the folder the thread works in: in
-// another clone, another worktree or another project. The Changes pane lists
-// them under their own repository, beside the thread's folder.
+// another clone, another worktree or another project. The editor's Changes
+// view lists them under their own repository, beside the thread's folder.
 import type { TurnFileChange } from "./projects/messages";
 
 /** One repository a turn's file tools wrote in, by its top folder. */

@@ -33,8 +33,9 @@ const LOCKFILES = new Set([
 
 const GENERATED = /(^|\/)__generated__\/|\.min\.(js|css)$|\.pb\.go$|_pb2\.py$/;
 // Data tests read rather than tests themselves; snapshots are rewritten whole.
+// Swift packages keep theirs in `Fixtures/`, JVM projects in test resources.
 const FIXTURES =
-  /(^|\/)(__mocks__|__fixtures__|__snapshots__|mocks?|fixtures?|testdata)\/|\.snap$/;
+  /(^|\/)(__mocks__|__fixtures__|__snapshots__|mocks?|fixtures?|testdata)\/|(^|\/)src\/(test|androidTest)\/resources\/|\.snap$/i;
 const TEST_DIR =
   /(^|\/)(tests?|Tests|__tests__|spec|e2e|androidTest|testFixtures|\w+Tests)\//;
 const TEST_FILE =

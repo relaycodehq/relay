@@ -7,9 +7,9 @@ import kotlin.math.roundToLong
 // The phone's side of shared/remote.ts's `uploadFile` (bridge 33): a file goes
 // up in chunks into the computer's paste folder, and the message names it.
 
-/** What a phone uploads per `uploadFile` call, before base64 (shared/remote.ts fileUploadChunk). */
+/** What a phone uploads per `uploadFile` call, before base64 (shared/remote-models.ts fileUploadChunk). */
 const val FILE_UPLOAD_CHUNK = 1024 * 1024
-/** The largest file a phone may attach (shared/remote.ts maxUploadBytes). */
+/** The largest file a phone may attach (shared/remote-models.ts maxUploadBytes). */
 const val MAX_UPLOAD_BYTES = 200L * 1024 * 1024
 
 const val FILES_NEED_UPDATE = "Update Relay on your computer to attach files."

@@ -139,7 +139,7 @@ fun parseHex(value: String?): Color? {
 }
 
 /**
- * The desktop's PhonePalette (shared/remote.ts: kind, sidebar, surface,
+ * The desktop's PhonePalette (shared/remote-models.ts: kind, sidebar, surface,
  * toolbar, inbox, text, muted, border, hover, selected, accent, accentSoft,
  * onAccent, send, onSend, diffAddition, diffDeletion) laid onto Hexta's tokens. Keys it
  * doesn't send keep Hexta's value for that kind.

@@ -35,6 +35,24 @@ struct ImagesTests {
             ])
     }
 
+    @Test func readsABareImagePathWithSpaces() {
+        let body = "![shot](/Users/me/Library/Application Support/Relay/shot.png)"
+        #expect(answerImagePaths(body, root: root) == ["/Users/me/Library/Application Support/Relay/shot.png"])
+        #expect(bracketSpacedImagePaths(body) == "![shot](</Users/me/Library/Application Support/Relay/shot.png>)")
+    }
+
+    @Test func leavesCodeAndOtherDestinationsUnbracketed() {
+        let untouched = [
+            "![plain](/tmp/shot.png) ![done](</tmp/my shot.png>)",
+            "A [link](/tmp/a b.png) and ![doc](/tmp/a b.pdf)",
+            "`![code](/tmp/a b.png)`",
+            "```md",
+            "![fenced](/tmp/a b.png)",
+            "```",
+        ].joined(separator: "\n")
+        #expect(bracketSpacedImagePaths(untouched) == untouched)
+    }
+
     private func message(_ status: String) throws -> ChatMessage {
         func read(_ id: String, _ path: String, _ status: String = "complete") -> String {
             #"{"kind":"activity","id":"\#(id)","activity":{"id":"\#(id)","kind":"read","label":"\#(path)","status":"\#(status)"}}"#

@@ -21,10 +21,10 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
-import type { Root } from "mdast";
 import type { Position } from "unist";
-import type { PluggableList, Plugin } from "unified";
+import type { PluggableList } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
+import { keepIndent, typedSyntax } from "./typed-markdown";
 import {
   chatFileLink,
   type ProjectFileLink,
@@ -38,6 +38,7 @@ import {
   markdownBlocks,
   mathClosed,
 } from "../lib/markdown-blocks";
+import { bracketSpacedImagePaths } from "../../shared/answer-images";
 import { normalizeMath } from "../../shared/math-delimiters";
 import { inlineCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
@@ -229,61 +230,22 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
   );
 }
 
-// The default drops data: and file: URLs; an image may use either, a link may not.
-const urlTransform: UrlTransform = (url, key, node) =>
-  key === "src" &&
-  node.tagName === "img" &&
-  /^(?:data:image\/|file:)/i.test(url)
-    ? url
-    : defaultUrlTransform(url);
+// The default drops data: and file: URLs, and reads a Windows drive as a
+// protocol. An image may use data: or file:. A link keeps a file: URL or a drive
+// path for `a` to show as a file chip; only http(s) and mailto become a real href.
+// Markdown hands over a drive path's backslashes as %5C.
+const urlTransform: UrlTransform = (url, key, node) => {
+  if (key === "src" && node.tagName === "img")
+    return /^(?:data:image\/|file:)/i.test(url)
+      ? url
+      : defaultUrlTransform(url);
+  if (key === "href" && /^(?:file:|[A-Za-z]:(?:\/|%5C))/i.test(url)) return url;
+  return defaultUrlTransform(url);
+};
+
 // GitHub's allowlist, so a README's HTML can't restyle or script the app.
 const htmlPlugins = [rehypeRaw, rehypeSanitize];
 
-/**
- * What someone typed reads as typed: of the block syntax only fences and
- * quotes (the composer's quote pill sends one) are kept, and of the inline
- * syntax only code spans and links. A `#` comment, a `-` line, `*args` or
- * `~/src and ~/dist` stay text.
- */
-const typedSyntax: Plugin<[], Root> = function () {
-  // The key remark-parse reads; its types aren't a direct dependency.
-  const data = this.data() as { micromarkExtensions?: object[] };
-  (data.micromarkExtensions ??= []).push({
-    disable: {
-      null: [
-        "headingAtx",
-        "setextUnderline",
-        "list",
-        "thematicBreak",
-        "codeIndented",
-        "htmlFlow",
-        "htmlText",
-        "definition",
-        "table",
-        "attention",
-        "strikethrough",
-        "characterEscape",
-        "characterReference",
-        "hardBreakEscape",
-      ],
-    },
-  });
-};
-
-const typedFence =
-  /((?<![^\n])[ \t]{0,3}```[\s\S]*?(?:\n[ \t]{0,3}```[^\n]*|$))/;
-/** The parser drops the spaces a line starts with; no-break ones survive it. */
-const keepIndent = (text: string) =>
-  text
-    .split(typedFence)
-    .map((part, i) =>
-      i % 2
-        ? part
-        : part.replace(/^[ \t]+(?=\S)/gm, (indent) =>
-            indent.replace(/\t/g, "    ").replace(/ /g, "\u00a0"),
-          ),
-    )
-    .join("");
 const MarkdownBlock = memo(function MarkdownBlock({
   text,
   components,
@@ -458,7 +420,7 @@ export const RichText = memo(function RichText({
   const citedBlocks = useRef<ReadonlyMap<string, string>>(new Map());
   const blocks = useMemo(() => {
     const split = markdownBlocks(
-      typed ? keepIndent(text) : normalizeMath(text),
+      typed ? keepIndent(text) : normalizeMath(bracketSpacedImagePaths(text)),
     );
     if (typed || html) return split;
     const last = citedBlocks.current,

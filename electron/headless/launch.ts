@@ -3,6 +3,7 @@ import { closeSync, mkdirSync, openSync } from "node:fs";
 import { lstat, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { defaultRemotePort } from "../../shared/remote-pairing";
 import { callControl, NotRunning, type DaemonStatus } from "./control";
 import { headlessPaths, privateDirectory } from "./paths";
 import { lockPath } from "./lock";
@@ -31,6 +32,10 @@ const configSchema = z
   .loose();
 /** What `relay` was told once and keeps: `headless.json` in the home folder. */
 export type HeadlessConfig = z.infer<typeof configSchema>;
+
+/** The port phones and computers connect to: the saved one, else the environment's, else Relay's own. */
+export const networkPort = (config: HeadlessConfig) =>
+  config.port ?? (Number(process.env.RELAY_REMOTE_PORT) || defaultRemotePort);
 
 export async function readConfig(home: string): Promise<HeadlessConfig> {
   const text = await readFile(headlessPaths(home).config, "utf8").catch(

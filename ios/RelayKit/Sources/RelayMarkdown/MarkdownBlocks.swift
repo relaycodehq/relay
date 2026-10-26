@@ -1,5 +1,6 @@
 import Foundation
 import Markdown
+import RelayRemote
 
 /// An answer's markdown as blocks to draw, as Android's MarkdownModel: text
 /// runs carry Foundation's inline intents (bold, code, links…), which
@@ -73,7 +74,7 @@ extension AttributeDynamicLookup {
 
 /// The blocks of an answer, its math in any of the ways agents write it (`normalizeMath`).
 public func markdownBlocks(_ text: String) -> [MdBlock] {
-    let math = MathText(normalizeMath(text))
+    let math = MathText(normalizeMath(bracketSpacedImagePaths(text)))
     return Reader(math: math).blocks(Document(parsing: math.text).children)
 }
 

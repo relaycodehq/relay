@@ -164,7 +164,9 @@ function answerCallbacks(
     onContext: (usage) => answer.context(usage),
     onCost: (usd) => answer.cost(usd),
     onUsage: (usage) => {
-      if (usage.streamed && !usage.subagent) answer.streamed(usage.streamed);
+      if (usage.subagent) return;
+      answer.tokens(usage.tokens);
+      if (usage.streamed) answer.streamed(usage.streamed);
     },
     onText: (body) => answer.text(body),
     onPlan: (body) => answer.plan(body),
@@ -249,7 +251,11 @@ async function linksOf(core: ChatCore, chat: ProjectChat, root: string) {
   return threadLinks(project, own, root).map(({ from, ...link }) => link);
 }
 
-/** Who started the thread, for a started thread's agent; a reviewer reports to its council instead. */
+/**
+ * Who started the thread, for a started thread's agent. A reviewer reports
+ * to its council instead, and a second opinion must not learn that an agent
+ * wrote what it checks.
+ */
 function startedNoteFor(
   core: ChatCore,
   chat: ProjectChat,
@@ -257,7 +263,7 @@ function startedNoteFor(
   canMessage: boolean,
 ) {
   const by = chat.startedBy;
-  if (!by || chat.reviewer) return undefined;
+  if (!by || chat.reviewer || by.secondOpinionOn) return undefined;
   const lead = (core.store.get().chats ?? []).find((c) => c.id === by.chatId);
   if (!lead) return undefined;
   return startedNote({

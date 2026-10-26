@@ -1,14 +1,20 @@
 package dev.relay.android.remote
 
-/** `shared/remote.ts` bridge versions: what a desktop speaking at least that many takes. */
+/** `shared/remote-bridges.ts` bridge versions: what a desktop speaking at least that many takes. */
 object Bridge {
     /** This app's own bridge, sent with `pair`/`auth`. */
-    const val VERSION = 33
+    const val VERSION = 36
     const val MESSAGE_BATCHES = 31
     /** Sends may ask for the `read-only` runtime mode. */
     const val READ_ONLY_MODE = 32
     /** Phones may attach any file (`uploadFile`). */
     const val FILES = 33
+    /** Phones may check whether a pull request merges and merge it. */
+    const val MERGE = 34
+    /** Calls carry what they did (`actions`), and `activityWritten` returns the code one wrote. */
+    const val TRACE_TREE = 35
+    /** Phones may ask another agent for a second opinion on an answer and send it back. */
+    const val SECOND_OPINION = 36
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11
@@ -50,7 +56,8 @@ object Bridge {
     val slowPhoneMethods = setOf(
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
-        "regenerateProjectChatTitle", "search", "pullCiStatus", "submitReview", "comment",
+        "regenerateProjectChatTitle", "search", "pullCiStatus", "pullMergeReadiness", "mergePull",
+        "submitReview", "comment", "askSecondOpinion",
     )
 
     /** `phoneDesktopMethods`: the desktop's own calls a phone may make through `desktop`. */
@@ -69,7 +76,8 @@ object Bridge {
         "projectMergePlan", "projectMergeBranch", "projectCommitMessage", "projectBranches",
         "projectChangeBranch", "projectHistory", "projectCommit", "projectFiles", "projectFile",
         "projectTasks", "stopProjectTask", "restartProjectTask",
-        "pullServers", "hostAccount", "search", "pull", "pullCiStatus", "files", "reviews", "discussion",
-        "comment", "submitReview",
+        "pullServers", "hostAccount", "search", "pull", "pullCiStatus", "pullMergeReadiness", "mergePull",
+        "files", "reviews", "discussion",
+        "comment", "submitReview", "askSecondOpinion", "sendSecondOpinion",
     )
 }

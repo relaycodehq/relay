@@ -12,6 +12,7 @@ import type {
   ReviewComment,
   Draft,
 } from "../../shared/types";
+import type { MergeMethod, MergeReadiness } from "../../shared/pull-readiness";
 import { diffPaths } from "./diff-paths";
 import { filePair } from "./file-pair";
 import {
@@ -23,7 +24,8 @@ import {
   type SearchFilter,
 } from "./host";
 import { mergedPulls } from "./merged";
-import { HostRequests, type RequestOptions } from "./request";
+import { giteaMerge, giteaMergeReadiness } from "./gitea-merge";
+import { HostRequests, responseMessage, type RequestOptions } from "./request";
 import { normalizeServer, parsePullUrl } from "../../shared/validation";
 const MAX_FILE = 2 * 1024 * 1024;
 
@@ -92,7 +94,7 @@ export class Gitea implements PullHost {
           }
         }
         if (!response.ok) {
-          await response.body?.cancel();
+          const message = await responseMessage(response);
           throw new ApiError(
             response.status,
             response.status === 401
@@ -103,7 +105,10 @@ export class Gitea implements PullHost {
                   ? "Not found, or your token cannot access this repository."
                   : response.status === 429
                     ? "Gitea is rate limiting requests. Wait a moment, then retry."
-                    : `Gitea returned HTTP ${response.status}. Please retry.`,
+                    : [405, 409, 422].includes(response.status) && message
+                      ? `Gitea refused this: ${message}`
+                      : `Gitea returned HTTP ${response.status}. Please retry.`,
+            message,
           );
         }
         return response;
@@ -336,6 +341,20 @@ export class Gitea implements PullHost {
         },
       })
     ).data;
+  }
+
+  /**
+   * The waits before asking again about a PR Gitea calls unmergeable: it
+   * says so while it is still checking for conflicts, too.
+   */
+  mergeableRechecks = [750, 1500];
+
+  mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    return giteaMergeReadiness(this, r);
+  }
+
+  merge(r: PullRef, head: string, method: MergeMethod) {
+    return giteaMerge(this, r, head, method);
   }
 
   /** A page of the repository's pulls, newest first. */

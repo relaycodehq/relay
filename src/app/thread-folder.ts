@@ -7,7 +7,9 @@ import type {
 import {
   agentWorktreeUnavailable,
   threadWorktree,
+  type Project,
 } from "../../shared/projects";
+import { liveAway } from "../../shared/handoff";
 
 /** Where a pane would read a thread's worktree that was deleted under it. */
 export const WORKTREE_DELETED =
@@ -15,6 +17,19 @@ export const WORKTREE_DELETED =
 
 const WORKTREE_PENDING =
   "The terminal opens in this thread's worktree, which its first message makes";
+
+/**
+ * The computer the thread's panes read its folder on when it isn't this one:
+ * the one a project lives on, or the one a live handoff's thread is on.
+ */
+export function folderComputer(
+  project: Project | undefined,
+  chat: ChatSummary | undefined,
+) {
+  if (project?.computer) return project.computer.name;
+  if (chat?.sentTo?.folder && liveAway(chat)) return chat.sentTo.computer;
+  return undefined;
+}
 
 /** The thread while it works in a worktree on disk; otherwise its folder is the project's checkout. */
 export const worktreeThread = (chat: ChatSummary | undefined) =>

@@ -4,6 +4,7 @@ import dev.relay.android.remote.model.CiStatus
 import dev.relay.android.remote.model.HostAccount
 import dev.relay.android.remote.model.HostPage
 import dev.relay.android.remote.model.IssueHit
+import dev.relay.android.remote.model.MergeReadiness
 import dev.relay.android.remote.model.PullComment
 import dev.relay.android.remote.model.PullDetail
 import dev.relay.android.remote.model.PullFile
@@ -54,4 +55,11 @@ suspend fun RemoteClient.commentOnPull(r: PullRef, body: String) {
 /** [event] "APPROVED" | "REQUEST_CHANGES" | "COMMENT", on the [head] commit the phone saw. */
 suspend fun RemoteClient.reviewPull(r: PullRef, head: String, event: String, body: String) {
     desktop("submitReview", listOf(ref(r), s(head), s(event), s(body), JsonArray(emptyList())))
+}
+
+suspend fun RemoteClient.pullMergeReadiness(r: PullRef): MergeReadiness = desktop("pullMergeReadiness", listOf(ref(r))).to()
+
+/** Merges with [method] "merge" | "squash" | "rebase", if the PR is still at the [head] the phone saw. */
+suspend fun RemoteClient.mergePull(r: PullRef, head: String, method: String) {
+    desktop("mergePull", listOf(ref(r), s(head), s(method)))
 }

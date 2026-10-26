@@ -89,6 +89,10 @@ public final class DraftStore {
     @ObservationIgnored private var typedTimer: (() -> Void)?
     @ObservationIgnored private var files: [String: URL] = [:]
     @ObservationIgnored private var running: [UUID: Task<Void, Never>] = [:]
+    /// Counts each time the phone hears how a draft stands on the computer; read it before asking for an overview.
+    @ObservationIgnored public private(set) var heardCount: Int64 = 0
+    /// The `heardCount` each draft was last heard at.
+    @ObservationIgnored private var heardAt: [String: [String: Int64]] = [:]
 
     /// The pause after typing before an edit goes.
     public static let pause: Int64 = 400
@@ -102,6 +106,11 @@ public final class DraftStore {
 
     private func id(_ computer: String, _ key: String) -> String { "\(computer)\n\(key)" }
     private func now() -> Int64 { timers.now() }
+    private func heardNow(_ computer: String, _ key: String) {
+        heardCount += 1
+        heardAt[computer, default: [:]][key] = heardCount
+    }
+
     private func leaving(_ copy: DraftCopy) -> Bool { copy.leaving.map { now() - $0 < Self.leavingFor } ?? false }
 
     private func notifyKey(_ computer: String, _ key: String) { keyChanges[id(computer, key), default: 0] += 1 }
@@ -206,8 +215,8 @@ public final class DraftStore {
         load(computer)
     }
 
-    /// Online with a fresh overview: lines the drafts here up with the computer's.
-    public func online(_ computer: String, link to: any DraftLink, overview: RemoteOverview) async {
+    /// Online with a fresh overview, asked for when `heardCount` was `askedAt`: lines the drafts here up with the computer's.
+    public func online(_ computer: String, link to: any DraftLink, overview: RemoteOverview, askedAt: Int64? = nil) async {
         load(computer)
         guard (overview.bridge ?? 1) >= Bridge.drafts, let drafts = overview.drafts else {
             // A computer from before sharing: drafts stay here.
@@ -215,10 +224,18 @@ public final class DraftStore {
             return
         }
         link = (computer, to)
+        // Heard of since the overview was asked for, so it may list them as they were before:
+        // a draft pushed on reconnect would read as deleted there.
+        let asked = askedAt ?? heardCount
+        let newer = Set((heardAt[computer] ?? [:]).filter { $0.value > asked }.keys)
+        let listed = drafts.filter { !newer.contains($0.key) }
         var map = copies[computer] ?? [:]
-        theirs[computer] = Dictionary(drafts.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
-        let local = map.filter { isShareableDraftKey($0.key) && !leaving($0.value) }.map { (key: $0.key, draft: $0.value as any LocalDraft) }
-        let plan = reconcileDrafts(local, drafts)
+        var there = (theirs[computer] ?? [:]).filter { newer.contains($0.key) }
+        for draft in listed { there[draft.key] = draft }
+        theirs[computer] = there
+        let local = map.filter { isShareableDraftKey($0.key) && !leaving($0.value) && (!newer.contains($0.key) || $0.value.dirty != nil) }
+            .map { (key: $0.key, draft: $0.value as any LocalDraft) }
+        let plan = reconcileDrafts(local, listed)
         for draft in plan.take {
             if let copy = map[draft.key], leaving(copy) { continue }
             map[draft.key] = DraftCopy(draft.body, synced: draft.rev)
@@ -229,7 +246,6 @@ public final class DraftStore {
             notifyKey(computer, key)
         }
         // Gone from the computer meanwhile: a send through it is done.
-        let there = theirs[computer] ?? [:]
         map = map.filter { $0.value.leaving == nil || there[$0.key] != nil }
         copies[computer] = map
         changed(computer)
@@ -243,6 +259,7 @@ public final class DraftStore {
     /// A draft changed on the computer, or on another phone.
     public func heard(_ computer: String, _ change: DraftChange) {
         let key = change.key
+        heardNow(computer, key)
         theirs[computer, default: [:]][key] = change.draft
         let copy = copies[computer]?[key]
         let busy = copy?.dirty != nil || held.contains(id(computer, key)) || pushing.contains(id(computer, key))
@@ -318,6 +335,7 @@ public final class DraftStore {
 
     /// The computer took a write: `after` is how the draft stands now.
     private func settle(_ computer: String, _ key: String, _ after: SharedDraft?, editedAt: Int64) {
+        heardNow(computer, key)
         theirs[computer, default: [:]][key] = after
         guard var copy = copies[computer]?[key] else { return changed(computer) }
         // Typed again meanwhile: the next push goes from this version.
@@ -370,7 +388,9 @@ public final class DraftStore {
         guard let to = link, to.computer == computer else { throw RemoteCallError.notConnected("Wait for your computer to come back.") }
         pushTimers.removeValue(forKey: id(computer, key))?()
         await push(computer, key)
-        if let after = try await to.link.other(key: key, drop: drop) {
+        let after = try await to.link.other(key: key, drop: drop)
+        heardNow(computer, key)
+        if let after {
             theirs[computer, default: [:]][key] = after
             copies[computer, default: [:]][key] = DraftCopy(after.body, synced: after.rev)
         }
@@ -455,6 +475,7 @@ public final class DraftStore {
         theirs[computer] = nil
         slots[computer] = nil
         devices[computer] = nil
+        heardAt[computer] = nil
         loaded.remove(computer)
         if link?.computer == computer { link = nil }
         saveTimers.removeValue(forKey: computer)?()

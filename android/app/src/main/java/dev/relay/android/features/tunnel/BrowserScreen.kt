@@ -57,6 +57,7 @@ import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.ButtonVariant
 import dev.relay.android.ui.EmptyState
 import dev.relay.android.ui.IconButton
+import dev.relay.android.ui.LocalPaneToggle
 import dev.relay.android.ui.LocalScreenNotice
 import dev.relay.android.ui.ProgressBar
 import dev.relay.android.ui.Screen
@@ -215,6 +216,8 @@ private fun ComputerBrowser(remote: Remote, tunnels: TunnelListeners, ports: Tun
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            // Its own bar instead of TopBar, so the sidebar button has to be drawn here.
+            LocalPaneToggle.current?.invoke()
             IconButton(TablerIcons.Outline.X, "Close", { nav.pop() })
             TextField(
                 text,

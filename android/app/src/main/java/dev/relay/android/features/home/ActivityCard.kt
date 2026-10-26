@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -23,8 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.relay.android.remote.model.RemoteChatSummary
@@ -107,19 +111,9 @@ fun ActivityCard(
             Row(Modifier.heightIn(min = 16.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 when {
                     draft != null && family == null -> DraftLine(draft, Modifier.weight(1f))
-                    family != null -> Row(
-                        Modifier.weight(1f).pressable(onClick = family.onFold, scale = false),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    family != null -> {
                         Text("$projectName · ", style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
-                        Icon(
-                            if (family.open) TablerIcons.Outline.ChevronDown else TablerIcons.Outline.ChevronRight,
-                            if (family.open) "Fold the threads it started" else "Show the threads it started",
-                            tint = c.mutedForeground,
-                            size = 12.dp,
-                        )
-                        Text(familyLine(family.started), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
+                        FamilyFold(family)
                     }
                     else -> Text(
                         listOfNotNull(projectName, stateLine(shown, now), if (chat.scope == "pr") "Pull request" else chat.branch).joinToString(" · "),
@@ -135,6 +129,36 @@ fun ActivityCard(
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             CardState(shown, unread, now)
             Box(Modifier.size(16.dp), contentAlignment = Alignment.Center) { StateGlyph(shown, unread, draft != null) }
+        }
+    }
+}
+
+/**
+ * The lead card's "› 4 threads · all done", which folds its started threads; the rest of the
+ * card opens the lead. Compose would grow this 16dp line to a 48dp target that covers the title.
+ */
+@Composable
+private fun FamilyFold(family: CardFamily) {
+    val c = RelayTheme.colors
+    val config = LocalViewConfiguration.current
+    val shortTarget = remember(config) {
+        object : ViewConfiguration by config {
+            override val minimumTouchTargetSize = DpSize(48.dp, 24.dp)
+        }
+    }
+    CompositionLocalProvider(LocalViewConfiguration provides shortTarget) {
+        Row(
+            Modifier.pressable(onClick = family.onFold, scale = false),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (family.open) TablerIcons.Outline.ChevronDown else TablerIcons.Outline.ChevronRight,
+                if (family.open) "Fold the threads it started" else "Show the threads it started",
+                tint = c.mutedForeground,
+                size = 12.dp,
+            )
+            Text(familyLine(family.started), style = RelayTheme.type.xs, color = c.mutedForeground, maxLines = 1)
         }
     }
 }

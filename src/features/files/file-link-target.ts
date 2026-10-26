@@ -1,18 +1,29 @@
+import type { EditorFileTarget } from "../../../shared/editor-windows";
 import {
   matchLink,
   type ProjectFileLink,
 } from "../../../shared/project-file-links";
 
 /** A file for the Files pane to open. */
-export type FileTarget = ProjectFileLink & {
-  /** Lists the files matching this instead of opening one. */
-  search?: string;
-};
+export type FileTarget = ProjectFileLink & Omit<EditorFileTarget, keyof ProjectFileLink>;
+
+/** What the sidebar shows: the folder's files, its changes, or what its worktree has that the source branch doesn't. */
+export type SideView = "files" | "changes" | "branch";
 
 /**
- * The change a link clicked in the chat selects in Changes: a folder with
- * changes in it, or the one changed file it names. None when it names no
- * change, or several.
+ * What other parts of the app ask Files to show: a file, a version of one
+ * kept in snapshots.ts (`outside` when its path is outside the project), or
+ * a view of the sidebar.
+ */
+export type FilesRequest =
+  | FileTarget
+  | { snapshot: string; path: string; outside?: boolean }
+  | { view: SideView };
+
+/**
+ * The change a link clicked in the chat opens with its changes: a folder
+ * with changes in it, or the one changed file it names. None when it names
+ * no change, or several.
  */
 export function changedTarget(
   link: ProjectFileLink,

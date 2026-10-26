@@ -25,7 +25,8 @@ export interface ControlApi {
   update(check: boolean): Promise<UpdateState>;
   /**
    * Turns phone access on if needed, then opens a fresh pairing code; `pipe`
-   * for a computer pairing over SSH or wsl.exe, which needs no network.
+   * for a computer pairing over SSH or wsl.exe, which turns on only what that
+   * needs, its loopback, and leaves phone access as it is.
    */
   pair(pipe?: boolean): Promise<PhonePairing & { remote: PhoneRemoteState }>;
   remote(enabled: boolean): Promise<PhoneRemoteState>;

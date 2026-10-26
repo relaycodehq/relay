@@ -84,7 +84,7 @@ private fun colorOf(kind: TokenKind, c: RelayColors): Color {
     return Color(hex)
 }
 
-private fun styled(line: List<CodeToken>, c: RelayColors): AnnotatedString = buildAnnotatedString {
+internal fun styledLine(line: List<CodeToken>, c: RelayColors): AnnotatedString = buildAnnotatedString {
     if (line.isEmpty()) append(" ")
     for (token in line) {
         val color = colorOf(token.kind, c)
@@ -99,7 +99,7 @@ internal fun CodeBlock(language: String, code: String, modifier: Modifier = Modi
     val lines = remember(code, language) {
         highlight(code.lineSequence().take(MAX_CODE_LINES).joinToString("\n"), languageFor(language))
     }
-    val text = remember(lines, c.isDark) { lines.map { styled(it, c) } }
+    val text = remember(lines, c.isDark) { lines.map { styledLine(it, c) } }
     var open by rememberSaveable { mutableStateOf(false) }
     val folded = !open && text.size > FOLDED_CODE_LINES + 3
     val shown = if (folded) text.subList(0, FOLDED_CODE_LINES) else text
@@ -195,7 +195,7 @@ fun Code(code: String, path: String, modifier: Modifier = Modifier) {
     val lines = remember(code, path) {
         highlight(code.lineSequence().take(MAX_CODE_LINES).joinToString("\n"), languageFor(path))
     }
-    val text = remember(lines, c.isDark) { lines.map { styled(it, c) } }
+    val text = remember(lines, c.isDark) { lines.map { styledLine(it, c) } }
     val gutter = (text.size.toString().length * 8 + 12).dp
     SelectionContainer(modifier) {
         LazyColumn {

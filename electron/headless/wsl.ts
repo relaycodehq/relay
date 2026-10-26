@@ -3,10 +3,10 @@
 // Windows Relay holds the distributions it uses awake; for a Relay in WSL
 // that nothing on Windows holds, `.wslconfig` can turn the timeout off.
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { inWsl } from "../platform/wsl";
 import { writeFileAtomic } from "../util/atomic-write";
 
 const run = promisify(execFile);
@@ -14,17 +14,9 @@ const run = promisify(execFile);
 /** The WSL distribution this runs in, if it does. */
 export function wslDistro(
   env: NodeJS.ProcessEnv = process.env,
-  version = readProcVersion(),
+  version?: string,
 ): string | undefined {
-  return /microsoft/i.test(version) ? env.WSL_DISTRO_NAME : undefined;
-}
-
-function readProcVersion() {
-  try {
-    return readFileSync("/proc/version", "utf8");
-  } catch {
-    return "";
-  }
+  return inWsl(version) ? env.WSL_DISTRO_NAME : undefined;
 }
 
 const generalHeader = /^\s*\[general\]\s*$/i;

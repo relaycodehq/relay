@@ -142,6 +142,22 @@ struct DraftStoreTests {
         #expect(computer.main[chat]?.origin == "phone:me")
     }
 
+    @Test func anOverviewAskedForBeforeTheDraftWentDoesntDropIt() async {
+        let drafts = store()
+        drafts.editText(pc, chat, "Typed in flight mode")
+        // Back online: a refresh is asked for before the draft reaches the computer, and answered after.
+        let before = computer.overview()
+        let askedAt = drafts.heardCount
+        await drafts.online(pc, link: computer, overview: computer.overview())
+        #expect(computer.main[chat]?.text == "Typed in flight mode")
+        await drafts.online(pc, link: computer, overview: before, askedAt: askedAt)
+        #expect(drafts.text(pc, chat) == "Typed in flight mode")
+        // One asked for after it heard does drop it.
+        computer.main[chat] = nil
+        await drafts.online(pc, link: computer, overview: computer.overview(), askedAt: drafts.heardCount)
+        #expect(drafts.text(pc, chat) == "")
+    }
+
     @Test func takesTheComputersDraftsAndDropsTheOnesGoneThere() async {
         let drafts = store()
         await drafts.online(pc, link: computer, overview: computer.overview())

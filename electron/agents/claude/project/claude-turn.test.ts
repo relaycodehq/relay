@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { runClaudeProject } from "./index";
-import type {
-  AgentRequest,
-  AgentResponse,
+import {
+  SKIPPED_QUESTIONS,
+  type AgentRequest,
+  type AgentResponse,
 } from "../../../../shared/agent-modes";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
@@ -564,6 +565,11 @@ it("asks the user what Claude's tools need, and passes their answers back", asyn
   expect(await ask("AskUserQuestion", questions)).toEqual({
     behavior: "deny",
     message: "No answers provided.",
+  });
+  reply = { kind: "question", answers: null };
+  expect(await ask("AskUserQuestion", questions)).toEqual({
+    behavior: "deny",
+    message: SKIPPED_QUESTIONS,
   });
 
   const rule = {

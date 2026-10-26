@@ -35,6 +35,7 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "send_to_thread" to "Messaged a started thread",
     "wait_for_threads" to "Waited for started threads",
     "stop_thread" to "Stopped a started thread",
+    "message_lead" to "Messaged its lead",
     "hand_off_thread" to "Moved a thread to another computer",
     "settle_thread" to "Settled a started thread",
     "settle_this_thread" to "Settles this thread when done",
@@ -48,6 +49,7 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "usage_limits" to "Checked usage limits",
     "list_agents" to "Listed agents",
     "list_projects" to "Listed projects",
+    "move_to_project" to "Moved the thread to another project",
     "add_project" to "Added a project",
     "restart_relay" to "Restarted Relay",
     "report_relay_problem" to "Drafted a report about Relay",
@@ -79,7 +81,8 @@ fun isQuestionCall(a: AgentActivity) =
     a.kind == "tool" && (a.label == "AskUserQuestion" || a.label == "request_user_input")
 
 // `"Question"="Answer"`, up to the next pair, the closing sentence or the end.
-private val PAIR = Regex("\"([^\"]+?)\"=\"([\\s\\S]*?)\"(?=, \"[^\"]+?\"=\"|\\.(?:\\s|$)|$)")
+// A pair starts after `: ` or `, `, so a question may quote words itself.
+private val PAIR = Regex("[:,] \"([\\s\\S]+?)\"=\"([\\s\\S]*?)\"(?=, \"[\\s\\S]+?\"=\"|\\.(?:\\s|$)|$)")
 
 /** A finished native call's questions and answers; null when there's nothing to read. */
 fun askedQuestions(a: AgentActivity): List<AskedQuestion>? {
@@ -138,7 +141,7 @@ fun summarizeActivity(activity: List<AgentActivity>, dropped: Map<String, Int>? 
     return "${parts.dropLast(1).joinToString(", ")}, and ${parts.last()}"
 }
 
-private fun baseName(path: String) = path.split("/").lastOrNull { it.isNotEmpty() } ?: path
+fun baseName(path: String) = path.split("/").lastOrNull { it.isNotEmpty() } ?: path
 
 private val commandWrappers = setOf("sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx")
 private val commandSetup = setOf(

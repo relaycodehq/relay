@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { FilePair, Side } from "../../../shared/types";
+import "./image-diff.css";
 
 type Images = NonNullable<FilePair["images"]>;
 

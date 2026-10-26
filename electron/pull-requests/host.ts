@@ -13,6 +13,7 @@ import type {
   Review,
   ReviewComment,
 } from "../../shared/types";
+import type { MergeMethod, MergeReadiness } from "../../shared/pull-readiness";
 
 export type { PullListing };
 
@@ -21,6 +22,8 @@ export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
+    /** The host's own reason, when its error came with one. */
+    public reason?: string,
   ) {
     super(message);
   }
@@ -122,6 +125,9 @@ export interface PullHost {
     body: string,
     drafts: Draft[],
   ): Promise<Review>;
+  mergeReadiness(r: PullRef): Promise<MergeReadiness>;
+  /** Merges the PR, refusing once a commit arrived after `head`. */
+  merge(r: PullRef, head: string, method: MergeMethod): Promise<void>;
   repository(r: Repo): Promise<RepositoryInfo>;
   /** Whether this sign-in sees `r` under that name; false for one it can't. */
   hasRepository(r: Repo): Promise<boolean>;

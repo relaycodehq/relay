@@ -338,7 +338,7 @@ export function remoteServices({
       chat: (id, known) => (known ? chats.changes(id, known) : chats.get(id)),
       cost: (id) => chats.cost(id),
       version,
-      // The bridge forwards only its allowlist; see shared/remote.ts.
+      // The bridge forwards only its allowlist; see shared/remote-methods.ts.
       dispatch,
       renderPage: (chatId, renderId, page) =>
         chats.renderPage(chatId, renderId, page),

@@ -12,6 +12,7 @@ import dev.relay.android.features.diagnostics.LocalScrollTrace
 import dev.relay.android.features.diagnostics.ThreadMeasurements
 import dev.relay.android.features.renders.MessageRenders
 import dev.relay.android.features.thread.scroll.StableGeometryState
+import dev.relay.android.features.thread.scroll.readingColumn
 import dev.relay.android.features.thread.scroll.stableGeometry
 import dev.relay.android.remote.model.WorkspaceMove
 
@@ -37,6 +38,7 @@ internal fun ThreadRowView(
     val transient = row is ThreadMessageRow.Content && row.section in setOf(MessageSection.Header, MessageSection.Footer)
     CompositionLocalProvider(LocalScrollTrace provides messageTrace) {
         Column(Modifier
+            .readingColumn()
             .then(if (transient) Modifier.stableGeometry(geometry, holding) else Modifier)
             .onSizeChanged { measurements.size(row.key, it) }) {
             when (row) {

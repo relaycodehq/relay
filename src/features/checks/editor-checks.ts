@@ -1,4 +1,3 @@
-import type { Marker } from "@pierre/diffs/edit";
 import {
   diagnosticSeverity,
   diagnosticSummary,
@@ -38,8 +37,19 @@ export function checkStatus(
 
 const rank = { info: 0, warning: 1, error: 2 };
 
+/** A problem's place in 0-based lines and characters. */
+export type ProblemMarker = {
+  start: { line: number; character: number };
+  end: { line: number; character: number };
+  severity: ProjectDiagnostic["severity"];
+  message: string;
+  source?: string;
+};
+
 /** Squiggles for the problems that have a place, errors last so they win overlaps. */
-export const problemMarkers = (problems: ProjectDiagnostic[]): Marker[] =>
+export const problemMarkers = (
+  problems: ProjectDiagnostic[],
+): ProblemMarker[] =>
   problems
     .filter((d) => d.line && d.column)
     .sort((a, b) => rank[a.severity] - rank[b.severity])

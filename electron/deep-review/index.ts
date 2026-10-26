@@ -5,44 +5,32 @@
 import { randomUUID } from "node:crypto";
 import type {
   ChatMessage,
-  Project,
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import type { AgentProvider } from "../../shared/agents";
 import {
+  hasNextPass,
   latestReview,
+  passSlots,
+  passStarted,
   reviewerRound,
-  reviewerTitle,
   roundOf,
-  workingReview,
   reviewRunning,
   reviewThreadTitle,
   type DeepReviewStart,
   type DeepReviewState,
   type ResumeReview,
-  type ReviewerTask,
 } from "../../shared/deep-review";
 import { hasCouncilReport, memberAnswer } from "../../shared/council";
-import {
-  councilTurn,
-  halted,
-  lastAnswer,
-  queued,
-  startSlots,
-  unfinishedSlots,
-} from "./council";
-import { leadPrompt, requestText, reviewerTask } from "./prompts";
-import { resolveScope, type PullInfo } from "./scope";
+import { lastAnswer, queued, unfinishedSlots } from "./council";
+import { haltedReview, reviewReports, startLead } from "./lead";
+import { requestText } from "./prompts";
+import { resolveScope, reviewPasses, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
-import {
-  discardReviewCheckout,
-  followReviewedBranch,
-  needsCheckout,
-  openReviewCheckout,
-} from "./checkout";
-import { noteWorkspaceMove } from "../../shared/workspace-moves";
-import { fixesFit, roundsOfFindings } from "./rounds";
+import { placeRound } from "./checkout";
+import { createReviewers, sendReviewers } from "./reviewers";
+import { followFixes } from "./fixes";
+import type { DeepReviewHost } from "./host";
 export {
   ensureReviewCheckout,
   reviewCheckoutsIn,
@@ -52,50 +40,13 @@ export {
 export { migrateReviewRounds } from "./rounds";
 export { forgePulls } from "./pull-info";
 export type { PullInfo };
-
-export interface DeepReviewHost {
-  load(id: string): Promise<ProjectChat>;
-  project(id: string): Project;
-  root(projectId: string): Promise<string>;
-  /** The folder Relay makes worktrees in; reviews make theirs in a folder of their own there. */
-  worktrees: string;
-  /** A reviewer's thread, listed under the review as if `by`, its lead, had started it. */
-  createReviewer(
-    parent: ProjectChat,
-    reviewer: { task: ReviewerTask; title: string; by: AgentProvider },
-  ): Promise<ProjectChat>;
-  send(chatId: string, input: ProjectChatSend): Promise<void>;
-  /** Starts the lead's turn in the review thread, its answer `answer`; it runs on after this returns. */
-  lead(
-    chat: ProjectChat,
-    input: ProjectChatSend,
-    prompt: string,
-    answer: string,
-  ): Promise<void>;
-  active(chatId: string): boolean;
-  /** A turn is at work in the thread, one its agent started beside another included. */
-  answering(chatId: string): boolean;
-  /** Its agent has subagents at work in the background; they start another turn when they end. */
-  waiting(chatId: string): boolean;
-  /** Its agent's session still runs, so what it waits for can start a turn. */
-  live(chatId: string): boolean;
-  /** Waits for a turn that's stopped or finished to give its thread back, and the review step its end takes. */
-  finished(chatId: string): Promise<void>;
-  /** As `finished`, for a reviewer, and what its end does after: its queue and the review's next step. */
-  windDown(chatId: string): Promise<void>;
-  /** Stops a reviewer's turn and holds what's queued for it, as its own Stop does. */
-  stop(chatId: string): void;
-  /** Ends a thread's agent processes; it resumes their sessions if it runs again. */
-  close(chatId: string): void;
-  /** Saves the thread and tells the renderer this message, and so the review, changed. */
-  touch(chat: ProjectChat, messageId: string): Promise<void>;
-  /** Deletes a reviewer thread whose review never started. */
-  discard(chat: ProjectChat): Promise<void>;
-}
+export type { DeepReviewHost };
 
 export class DeepReviews {
   /** Reviewers whose turn ended with their subagents still at work. */
   private awaiting = new Set<string>();
+  /** Rounds whose next pass is starting, by request: its reviewers aren't at work yet. */
+  private advancing = new Set<string>();
   constructor(private host: DeepReviewHost) {}
 
   /**
@@ -145,36 +96,12 @@ export class DeepReviews {
         : undefined;
     const root = await (folder?.(chat) ?? this.host.root(chat.projectId));
     const scope = await resolveScope(root, config.target, project, pull);
-    // Reviewers read the code around the changes, so they work where it's
-    // checked out. Without that they still read it from Git. Another
-    // thread's agent stays in its own folder, so nothing is checked out.
-    let putBack: (() => Promise<unknown>) | undefined;
-    const checkout = own
-      ? await openReviewCheckout(
-          root,
-          scope,
-          this.host.worktrees,
-          chat.id,
-          pull?.headBranch,
-          { inUse: duringTurn, moved: (back) => (putBack = back) },
-        ).catch((e: unknown) => {
-          console.warn("Could not check out the reviewed code for review:", e);
-          return undefined;
-        })
-      : undefined;
-    if (checkout) scope.checkout = checkout;
-    else scope.folder = root;
-    // An earlier round's folder stays when this one doesn't start, back
-    // where that round had it.
-    const kept =
-      !!checkout &&
-      chat.reviews?.some((r) => r.scope.checkout?.path === checkout.path);
-    const discardCheckout = () =>
-      !checkout
-        ? undefined
-        : kept
-          ? putBack?.()
-          : discardReviewCheckout(checkout);
+    const discardCheckout = await placeRound(root, scope, chat, {
+      worktrees: this.host.worktrees,
+      prHead: pull?.headBranch,
+      duringTurn,
+    });
+    const passes = await reviewPasses(root, scope, config);
     const request: ChatMessage = {
       id: randomUUID(),
       role: "user",
@@ -193,32 +120,35 @@ export class DeepReviews {
       ...(config.focus ? { focus: config.focus } : {}),
       runtimeMode: config.runtimeMode,
       status: "reviewing",
+      ...(passes && { passes, pass: 0 }),
     };
     // Reviewers first: the thread only holds the review once all of them exist.
-    const created: ProjectChat[] = [];
-    try {
-      for (const [slot, reviewer] of config.reviewers.entries()) {
-        const { codex } = reviewerTask(reviewer, scope, state.focus);
-        const child = await this.host.createReviewer(chat, {
-          task: {
-            parent: chat.id,
-            round: request.id,
-            slot,
-            ...(codex ? { codex } : {}),
-          },
-          title: reviewerTitle(slot, reviewer),
-          by: config.lead.provider,
-        });
-        created.push(child);
-        state.reviewers.push({ ...reviewer, chatId: child.id });
-      }
-    } catch (error) {
-      await Promise.allSettled([
+    const created = await createReviewers(this.host, chat, state, config).catch(
+      async (error: unknown) => {
+        await Promise.allSettled([discardCheckout()]);
+        throw error;
+      },
+    );
+    await this.holdRound(chat, request, state, { own, first }, () =>
+      Promise.allSettled([
         ...created.map((c) => this.host.discard(c)),
         discardCheckout(),
-      ]);
-      throw error;
-    }
+      ]),
+    );
+    await this.ask(chat, state, passSlots(state, 0));
+  }
+
+  /**
+   * Puts the round in its thread and saves it. When saving fails, the
+   * thread goes back to how it was and `undo` throws away what the round made.
+   */
+  private async holdRound(
+    chat: ProjectChat,
+    request: ChatMessage,
+    state: DeepReviewState,
+    { own, first }: { own: boolean; first: boolean },
+    undo: () => Promise<unknown>,
+  ) {
     const before = {
       title: chat.title,
       updated: chat.updated,
@@ -226,9 +156,9 @@ export class DeepReviews {
     };
     chat.messages.push(request);
     // A review's own thread is named after what its first round covers.
-    if (own && first) chat.title = reviewThreadTitle(scope);
+    if (own && first) chat.title = reviewThreadTitle(state.scope);
     chat.updated = Date.now();
-    if (own) chat.branch = scope.branch ?? chat.branch;
+    if (own) chat.branch = state.scope.branch ?? chat.branch;
     (chat.reviews ??= []).push(state);
     try {
       await this.host.touch(chat, request.id);
@@ -238,13 +168,9 @@ export class DeepReviews {
       Object.assign(chat, before);
       chat.reviews.pop();
       if (!chat.reviews.length) delete chat.reviews;
-      await Promise.allSettled([
-        ...created.map((c) => this.host.discard(c)),
-        discardCheckout(),
-      ]);
+      await undo();
       throw error;
     }
-    await this.sendReviewers(chat, state, [...state.reviewers.keys()]);
   }
 
   /**
@@ -275,10 +201,13 @@ export class DeepReviews {
       throw new Error("This review is already running.");
     if (state.status === "done" || state.status === "leading")
       throw new Error("The review is done. Ask the lead to continue instead.");
-    const unfinished = await unfinishedSlots(this.host, state.reviewers);
+    // Later passes' reviewers haven't been asked yet: they wait their turn.
+    const unfinished = (
+      await unfinishedSlots(this.host, state.reviewers)
+    ).filter((slot) => passStarted(state, state.reviewers[slot]!));
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    if (unfinished.length) await this.sendReviewers(chat, state, unfinished);
+    if (unfinished.length) await this.ask(chat, state, unfinished);
     else await this.reviewerDone(chat.id, state.request);
   }
 
@@ -298,13 +227,15 @@ export class DeepReviews {
   private async rerun(chat: ProjectChat, state: DeepReviewState, slot: number) {
     const reviewer = state.reviewers[slot];
     if (!reviewer) throw new Error("This review has no such reviewer.");
+    if (!passStarted(state, reviewer))
+      throw new Error("That reviewer's pass hasn't started yet.");
     if (leadStarted(state))
       throw new Error("The lead has the reports. Ask the lead instead.");
     if (this.host.active(reviewer.chatId))
       throw new Error("This reviewer is already at work.");
     state.status = "reviewing";
     await this.host.touch(chat, state.request);
-    await this.sendReviewers(chat, state, [slot]);
+    await this.ask(chat, state, [slot]);
   }
 
   /**
@@ -387,7 +318,7 @@ export class DeepReviews {
     const chat = await this.host.load(chatId).catch(() => undefined);
     const state = chat && latestReview(chat);
     if (!chat || state?.status !== "reviewing") return;
-    for (const r of state.reviewers)
+    for (const r of state.reviewers.filter((r) => passStarted(state, r)))
       if (
         !kept.has(r.chatId) &&
         !hasCouncilReport(await lastAnswer(this.host, r.chatId))
@@ -421,83 +352,7 @@ export class DeepReviews {
    */
   async fixing(chat: ProjectChat, input: ProjectChatSend) {
     if (this.reviewing(chat)) return;
-    const state = workingReview(chat);
-    const fixing = !!input.fixes?.length;
-    if (fixing) this.fixesHere(chat, input.fixes!, state);
-    const checkout = state?.scope.checkout;
-    if (!state?.scope.head || !checkout) return;
-    const next = await followReviewedBranch(
-      await this.host.root(chat.projectId),
-      checkout,
-      {
-        head: state.scope.head,
-        dir: this.host.worktrees,
-        chatId: chat.id,
-        fixing,
-      },
-    ).catch((e: unknown) => {
-      console.warn("Could not follow the reviewed branch:", e);
-      if (!fixing) return checkout;
-      const branch = checkout.branch ?? checkout.pr?.head;
-      throw new Error(
-        `Relay couldn't check out ${branch ?? "the reviewed branch"} for the fix. Check it out in a folder of your own and ask again; the review follows it there.`,
-      );
-    });
-    if (next === checkout) return;
-    state.scope.checkout = next;
-    if (next.path !== checkout.path) {
-      noteWorkspaceMove(chat, {
-        how: "switched",
-        to: next.path,
-        ...(next.branch ? { branch: next.branch } : {}),
-      });
-      // The lead's session hears it too: its first turn wasn't one that
-      // notes what it heard. A session not told of an earlier move yet
-      // still works where that one started.
-      const pending = chat.movedIn;
-      chat.movedIn = {
-        from: pending?.from ?? checkout.path,
-        to: next.path,
-        owed: [
-          ...new Set([
-            ...(pending?.owed ?? []),
-            ...Object.keys(chat.scopeHeard ?? {}),
-            `${state.lead.provider}:main`,
-            ...(input.provider ? [`${input.provider}:main`] : []),
-          ]),
-        ],
-        selected: true,
-      };
-      // Its session started in the old folder.
-      this.host.close(chat.id);
-    }
-    await this.host.touch(chat, state.request);
-  }
-
-  /**
-   * Refuses fixes that would land on other code than the findings are
-   * about: the round's reviewers read it from Git, as it wasn't checked out
-   * where the thread works, or a later round moved the thread on to other
-   * code, or the thread itself moved to another branch.
-   */
-  private fixesHere(
-    chat: ProjectChat,
-    ids: string[],
-    working: DeepReviewState | undefined,
-  ) {
-    const rounds = roundsOfFindings(chat, ids);
-    const away = rounds.find(
-      (r) => !r.scope.checkout && needsCheckout(r.scope),
-    );
-    if (away)
-      throw new Error(
-        `Those findings are from the review of ${away.scope.label}, which isn't checked out where this thread works. Review it from a deep review thread to fix them there.`,
-      );
-    const elsewhere = rounds.find((r) => !fixesFit(chat, r, working));
-    if (elsewhere)
-      throw new Error(
-        `Those findings are from the review of ${elsewhere.scope.label}, and this thread works on ${working?.scope.label ?? chat.branch ?? "other code"} now. Review ${elsewhere.scope.label} again to fix them there.`,
-      );
+    await followFixes(this.host, chat, input);
   }
 
   /**
@@ -550,59 +405,32 @@ export class DeepReviews {
     }
   }
 
-  private async sendReviewers(
-    chat: ProjectChat,
-    state: DeepReviewState,
-    slots: number[],
-  ) {
-    try {
-      await this.startReviewers(chat, state, slots);
-    } catch (error) {
-      // Nothing is running that would ever hand over to the lead, so leave
-      // the review where Resume picks it up.
-      if (
-        state.status === "reviewing" &&
-        !state.reviewers.some((r) => this.host.active(r.chatId))
-      ) {
-        state.status = "failed";
-        await this.host
-          .touch(chat, state.request)
-          .catch((e) => console.warn("Could not save the failed review:", e));
-      }
-      throw error;
-    }
+  /** Asks `slots` for their reviews; one that can't start counts as done. */
+  private ask(chat: ProjectChat, state: DeepReviewState, slots: number[]) {
+    return sendReviewers(this.host, chat, state, slots, () =>
+      this.reviewerDone(chat.id, state.request),
+    );
   }
 
-  private async startReviewers(
-    chat: ProjectChat,
-    state: DeepReviewState,
-    slots: number[],
-  ) {
-    await startSlots(
-      slots,
-      async (slot) => {
-        const reviewer = state.reviewers[slot]!;
-        const { body } = reviewerTask(reviewer, state.scope, state.focus);
-        await this.host.send(reviewer.chatId, {
-          id: randomUUID(),
-          body,
-          to: reviewer.provider,
-          provider: reviewer.provider,
-          choice: reviewer.choice,
-          ...councilTurn,
-          // Signed by the review, whose name opens it from the reviewer's thread.
-          fromThread: { id: chat.id, name: "Deep review" },
-        });
-      },
-      () => this.reviewerDone(chat.id, state.request),
-    );
+  /** Starts the next pass's reviewers; the lead waits for the last pass. */
+  private async nextPass(chat: ProjectChat, state: DeepReviewState) {
+    // Claimed before anything is awaited, so reviewers finishing together start it once.
+    this.advancing.add(state.request);
+    state.pass = (state.pass ?? 0) + 1;
+    try {
+      await this.host.touch(chat, state.request);
+      await this.ask(chat, state, passSlots(state, state.pass));
+    } finally {
+      this.advancing.delete(state.request);
+    }
   }
 
   /**
    * A reviewer's turn ended, or never started: once none is at work, waiting
-   * for its subagents or has a message waiting, the lead takes every
-   * reviewer's latest answer.
-   * `withReportsIn` goes on past a stopped reviewer, as long as one reported.
+   * for its subagents or has a message waiting, the next pass starts, or
+   * after the last the lead takes every reviewer's latest answer.
+   * `withReportsIn` goes on past a stopped reviewer, as long as one reported,
+   * and skips the passes not started yet.
    */
   private async reviewerDone(
     parentId: string,
@@ -627,51 +455,22 @@ export class DeepReviews {
     // Looked at again after the loads: another reviewer's end may have handed
     // over meanwhile, a message may have started one again, and one waiting
     // in a queue goes out once this step is done.
-    if (state.status !== "reviewing" || working() || members.some(queued))
+    if (
+      state.status !== "reviewing" ||
+      working() ||
+      members.some(queued) ||
+      this.advancing.has(state.request)
+    )
       return;
-    // Claimed before anything else is awaited, so reviewers finishing together start one lead.
-    state.status = "leading";
-    // Named before it starts: another answer may sit after the request.
-    state.leadAnswer = randomUUID();
-    const reports = state.reviewers.map((reviewer, i) => ({
-      number: i + 1,
-      reviewer,
-      answer: members[i] && memberAnswer(members[i].messages),
-    }));
-    const answers = reports.map((r) => r.answer);
-    const halt = withReportsIn
-      ? answers.some(hasCouncilReport)
-        ? undefined
-        : "failed"
-      : halted(answers);
+    const reports = reviewReports(state, members);
+    const halt = haltedReview(state, reports, withReportsIn);
     if (halt) {
       state.status = halt;
-      delete state.leadAnswer;
       await this.host.touch(chat, state.request);
       return;
     }
-    try {
-      await this.host.lead(
-        chat,
-        {
-          id: randomUUID(),
-          body: `@${state.lead.provider}`,
-          to: state.lead.provider,
-          provider: state.lead.provider,
-          choice: state.lead.choice,
-          runtimeMode: state.runtimeMode,
-          interactionMode: "default",
-        },
-        leadPrompt(state, reports, chat),
-        state.leadAnswer,
-      );
-    } catch (e) {
-      // The lead never started; Resume tries again.
-      state.status = "stopped";
-      throw e;
-    } finally {
-      await this.host.touch(chat, state.request);
-    }
+    if (!withReportsIn && hasNextPass(state)) return this.nextPass(chat, state);
+    await startLead(this.host, chat, state, reports);
   }
 }
 

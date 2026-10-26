@@ -8,7 +8,9 @@ import {
   importsOf,
 } from "./layout-graph";
 import { bigFiles } from "./big-files";
+import { bigFunctions } from "./big-functions";
 import { missingBlankLines } from "./blank-lines";
+import { functionLengths } from "./function-lengths";
 
 // The folder rules from AGENTS.md ("Where code goes"), checked so they hold
 // without anyone remembering them.
@@ -17,6 +19,9 @@ const root = resolve(__dirname, "../..");
 
 /** Lines a source file may have, unless big-files.ts lists it. */
 const FILE_LINE_LIMIT = 500;
+
+/** Lines a named function may have, unless big-functions.ts lists it. */
+const FUNCTION_LINE_LIMIT = 80;
 
 function sources(folder: string, kind = /\.(ts|tsx)$/): string[] {
   return readdirSync(join(root, folder), {
@@ -134,6 +139,41 @@ describe("source layout", () => {
       else if (size < ceiling - 50)
         problems.push(
           `${file} shrank to ${size}: lower its ceiling in big-files.ts`,
+        );
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it("keeps functions from growing past their line limit", () => {
+    const lengths = new Map<string, number>(
+      ["src", "electron", "shared"]
+        .flatMap((folder) => sources(folder))
+        .filter(
+          (file) => !/\.test\.tsx?$/.test(file) && !file.endsWith(".d.ts"),
+        )
+        .flatMap((file) =>
+          [...functionLengths(readFileSync(join(root, file), "utf8"))].map(
+            ([name, length]) => [`${file} › ${name}`, length] as const,
+          ),
+        ),
+    );
+    const problems: string[] = [];
+    for (const [fn, length] of lengths) {
+      const ceiling = bigFunctions[fn] ?? FUNCTION_LINE_LIMIT;
+      if (length > ceiling)
+        problems.push(
+          `${fn} has ${length} lines, over its ${ceiling}: split out what it does besides its job`,
+        );
+    }
+    for (const [fn, ceiling] of Object.entries(bigFunctions)) {
+      const length = lengths.get(fn);
+      if (length === undefined || length <= FUNCTION_LINE_LIMIT)
+        problems.push(
+          `${fn} is gone or under the limit: drop it from big-functions.ts`,
+        );
+      else if (length < ceiling - 20)
+        problems.push(
+          `${fn} shrank to ${length}: lower its ceiling in big-functions.ts`,
         );
     }
     expect(problems).toEqual([]);

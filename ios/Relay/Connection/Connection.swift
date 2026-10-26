@@ -310,6 +310,7 @@ final class Connection {
     }
 
     private func fetchOverview(_ client: RemoteClient) async throws {
+        let asked = drafts.heardCount
         let fresh = try await client.overview()
         guard self.client === client else { return }
         overview = fresh
@@ -319,7 +320,7 @@ final class Connection {
         if let active { cache.save(active, fresh) }
         lookForMissingProjects()
         if status.state == .online, let active {
-            await drafts.online(active, link: ClientDrafts(client: client), overview: fresh)
+            await drafts.online(active, link: ClientDrafts(client: client), overview: fresh, askedAt: asked)
         }
     }
 
@@ -761,6 +762,14 @@ final class Connection {
         guard let client else { throw PairingError("Not connected.") }
         return try await client.activityDetail(chatId: chatId, messageId: message, activityId: activity)
     }
+
+    /// The code a call wrote, which the thread leaves out.
+    func activityWritten(_ chatId: String, message: String, activity: String) async throws -> [WrittenCode]? {
+        guard let client else { throw PairingError("Not connected.") }
+        return try await client.activityWritten(chatId: chatId, messageId: message, activityId: activity)
+    }
+
+    var canOpenWritten: Bool { (overview?.bridge ?? 0) >= Bridge.traceTree }
 
     func stop(_ chatId: String) async throws {
         try await client?.cancelProjectChat(chatId: chatId)

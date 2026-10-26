@@ -60,6 +60,8 @@ import dev.relay.android.lib.navigation.LocalNavigator
 import dev.relay.android.remote.PairingLink
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.parsePairingUrl
+import dev.relay.android.features.updates.AppUpdateButton
+import dev.relay.android.features.updates.Updates
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonSize
 import dev.relay.android.ui.ButtonVariant
@@ -77,7 +79,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.X
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-/** shared/remote.ts's tailscaleAndroid. */
+/** shared/remote-pairing.ts's tailscaleAndroid. */
 private const val TAILSCALE_PLAY = "https://play.google.com/store/apps/details?id=com.tailscale.ipn"
 private const val NOT_A_CODE = "That isn't a Relay pairing code."
 private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's settings for Relay, or paste the pairing link instead."
@@ -89,7 +91,7 @@ private const val NO_CAMERA = "Relay can't use the camera. Allow it in Android's
  * pairing going through. A relay-remote:// link (`link`) asks before pairing.
  */
 @Composable
-fun PairScreen(remote: Remote, link: String?) {
+fun PairScreen(remote: Remote, updates: Updates, link: String?, stopRelay: () -> Unit) {
     val nav = LocalNavigator.current
     val context = LocalContext.current
     val uri = LocalUriHandler.current
@@ -187,6 +189,11 @@ fun PairScreen(remote: Remote, link: String?) {
                 variant = ButtonVariant.Secondary,
                 tint = if (covers) Color.White else null,
             )
+            // Paired, updates are in Settings; with nothing paired this is the only way to them.
+            if (face == PairingScan.Face.Idle && computers.isEmpty()) AppUpdateButton(
+                updates,
+                Modifier.align(Alignment.TopEnd).padding(end = 16.dp, top = 8.dp),
+            )
 
             Column(
                 Modifier.align(Alignment.BottomCenter).widthIn(max = 440.dp).fillMaxWidth()
@@ -245,6 +252,13 @@ fun PairScreen(remote: Remote, link: String?) {
                                 Text("Get Tailscale", style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium))
                                 Icon(TablerIcons.Outline.ExternalLink, null, tint = c.mutedForeground, size = 12.dp)
                             }
+                            // Paired, it's in Settings; with nothing paired this is the only way to stop.
+                            if (computers.isEmpty()) Text(
+                                "Stop Relay",
+                                Modifier.pressable(stopRelay, role = Role.Button).padding(vertical = 4.dp),
+                                style = RelayTheme.type.xs,
+                                color = c.mutedForeground,
+                            )
                         }
                     }
                     Shown(face == PairingScan.Face.Paired, away = 46.dp) {

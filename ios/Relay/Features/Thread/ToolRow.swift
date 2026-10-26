@@ -67,7 +67,7 @@ struct ToolRow: View {
                             .font(.footnote)
                         }
                     } else if let detail, !detail.isEmpty {
-                        Detail(text: detail)
+                        ToolOutput(text: detail)
                     }
                 }
                 .padding(.leading, 24)
@@ -76,13 +76,10 @@ struct ToolRow: View {
         }
     }
 
-    @ViewBuilder private var icon: some View {
-        if activity.status == "running" {
-            Spinner(size: 13)
-        } else {
-            Image(systemName: symbol)
-                .foregroundStyle(activity.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-        }
+    /// A running call keeps the icon of what it does, and a question waiting on you its still mark.
+    private var icon: some View {
+        Image(systemName: symbol)
+            .foregroundStyle(activity.status == "failed" ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
     }
 
     private var symbol: String {
@@ -106,9 +103,12 @@ struct ToolRow: View {
         } else {
             let text = shown(activity.label)
             HStack(spacing: 4) {
-                Text(text)
-                    .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
-                    .lineLimit(open ? 6 : 1)
+                ShineClock(running: activity.status == "running") { band in
+                    Text(text)
+                        .font(activity.kind == "command" ? .mono(.footnote) : .footnote)
+                        .lineLimit(open ? 6 : 1)
+                        .textRenderer(ShiningText(band: band))
+                }
                 if activity.kind == "agent", let progress = activity.progress, !progress.isEmpty {
                     Text("· \(progress)").lineLimit(1).foregroundStyle(.tertiary)
                 }
@@ -129,7 +129,8 @@ struct ToolRow: View {
     }
 }
 
-private struct Detail: View {
+/// A call's output in a box that scrolls both ways and stops growing at a few lines.
+struct ToolOutput: View {
     let text: String
 
     var body: some View {

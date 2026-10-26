@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode, Ref, RefObject } from "react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { threadWorktree } from "../../shared/projects";
-import type { Account } from "../../shared/types";
+import type { Account, PullRef } from "../../shared/types";
 import type { SettingsCategory } from "../lib/settings-page";
 import { LOCKED_MESSAGE, type NavigationLock } from "../lib/navigation-lock";
 import { paneFrame, usePaneRow, type PaneId } from "../lib/workspace-panes";
@@ -23,13 +23,15 @@ import { FolderGone } from "../features/projects/FolderGone";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { RunningTasks } from "../features/terminal/RunningTasks";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
+import { useEditorWindowShortcut } from "../features/editor-windows/EditorWindowButtons";
 import { Pane } from "../ui/WorkspacePanes";
 import { TerminalToggle, ThreadPaneToggles } from "./ShellTitlebar";
 import { ThreadChanges, ThreadPanel } from "./ThreadPanes";
 import { usePaneOpens } from "./usePaneOpens";
 import { usePullThreads } from "./usePullThreads";
 import type { ShellNavigation } from "./useShellNavigation";
-import { useThreadFolder } from "./useThreadFolder";
+import { useThreadFolder, type ThreadFolder } from "./useThreadFolder";
+import { folderComputer } from "./thread-folder";
 import { useThreadTerminal } from "./useThreadTerminal";
 import { useElsewhereListed } from "../features/changes/elsewhere/useElsewhere";
 import { useThreadPreviewPanel } from "./useThreadPreviewPanel";
@@ -143,6 +145,7 @@ export function ThreadHeaderActions({
           filesOpen={panel.has("files")}
           unseen={!panes.layout.open.panel && !!panel.unseen}
           onToggle={opens.togglePane}
+          onChanges={() => opens.openCode("changes")}
         />
         <span className="header-strip-sep" aria-hidden="true" />
         <TerminalToggle terminal={terminal} />
@@ -151,13 +154,61 @@ export function ThreadHeaderActions({
   );
 }
 
+/** A PR thread's Review, wired to the repository host and the thread's PR. */
+function PullReview({
+  tools: { folder, view, opens, prs, host, setError },
+  project,
+  pull,
+  onConnect,
+}: {
+  tools: ThreadTools;
+  project: Project;
+  pull: PullRef;
+  onConnect?: () => void;
+}) {
+  return (
+    <ThreadChanges
+      project={project}
+      pull={pull}
+      folder={folder}
+      view={view}
+      opens={opens}
+      review={{
+        account: host.account,
+        kind: host.kind,
+        error: host.error,
+        checking: host.checking,
+        onRecheck: host.recheck,
+        onDiscuss: (target, pr) =>
+          void prs
+            .open(pr)
+            .then(() => opens.askAbout(target, pr))
+            .catch(setError),
+        onConnect,
+      }}
+    />
+  );
+}
+
+/**
+ * Whether the thread's folder can have an editor window of its own. That
+ * window reads the folder here, which a thread on another computer left behind.
+ */
+function editorCanPopOut(
+  folder: Pick<ThreadFolder, "gone" | "deleted">,
+  project: Project,
+  chat: ChatSummary | undefined,
+) {
+  return !folder.gone && !folder.deleted && !folderComputer(project, chat);
+}
+
 /**
  * The thread's panes, chat, Changes and the panel, over its terminal. What
  * would leave the thread goes through `nav`, which a thread's own window
  * hands to the main one.
  */
 export function ThreadWorkspace({
-  tools: { nav, view, folder, panel, opens, prs, host, terminal, setError },
+  tools,
   project,
   projects,
   allProjects,
@@ -195,14 +246,26 @@ export function ThreadWorkspace({
   onSettings: (at: SettingsCategory, projectId?: string) => void;
   onLinkProject?: () => void;
 }) {
+  const { nav, view, folder, panel, opens, host, terminal, setError } = tools;
   const { chat, chats, draftId, panes, pull, navigate } = nav;
+  const editorWindowUsable = !hidden && editorCanPopOut(folder, project, chat);
+  useEditorWindowShortcut(
+    project.id,
+    folder.where,
+    editorWindowUsable,
+    setError,
+  );
   const review =
-    chat?.reviewer &&
-    chats.data?.find((c) => c.id === chat.reviewer?.parent);
+    chat?.reviewer && chats.data?.find((c) => c.id === chat.reviewer?.parent);
   const codeOpen =
-    panes.layout.open.changes ||
+    panes.shown.includes("changes") ||
     (panes.layout.open.panel && panel.has("files"));
   const row = usePaneRow(panes.measure);
+  const openThread = (id: string) => {
+    const c = everyThread.find((t) => t.id === id);
+    if (c)
+      navigate(allProjects.find((p) => p.id === c.projectId) ?? project, c);
+  };
   const previewPanel = useThreadPreviewPanel(
     project.id,
     panel,
@@ -291,37 +354,12 @@ export function ThreadWorkspace({
           />
         </Pane>
         <Pane id="changes" label="Changes" {...frame("changes")}>
-          {panes.layout.open.changes && (
-            <ThreadChanges
+          {panes.layout.open.changes && pull && (
+            <PullReview
+              tools={tools}
               project={project}
               pull={pull}
-              folder={folder}
-              view={view}
-              chatId={chat?.id}
-              inWorktree={!!chat?.worktree}
-              agentRunning={!!chat?.running}
-              onOpenThread={(id) => {
-                const c = everyThread.find((t) => t.id === id);
-                if (c)
-                  navigate(
-                    allProjects.find((p) => p.id === c.projectId) ?? project,
-                    c,
-                  );
-              }}
-              opens={opens}
-              review={{
-                account: host.account,
-                kind: host.kind,
-                error: host.error,
-                checking: host.checking,
-                onRecheck: host.recheck,
-                onDiscuss: (target, pr) =>
-                  void prs
-                    .open(pr)
-                    .then(() => opens.askAbout(target, pr))
-                    .catch(setError),
-                onConnect: onLinkProject,
-              }}
+              onConnect={onLinkProject}
             />
           )}
         </Pane>
@@ -336,6 +374,11 @@ export function ThreadWorkspace({
               panel={panel}
               zoomed={panes.layout.zoomed === "panel"}
               onZoom={(on) => panes.zoom(on ? "panel" : undefined)}
+              onError={setError}
+              agentRunning={!!chat?.running}
+              inWorktree={!!chat?.worktree}
+              onOpenThread={openThread}
+              links={chat?.links}
             />
           )}
         </Pane>

@@ -51,6 +51,8 @@ public struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     public var author: String?
     public var authorId: String?
     public var fromThread: String?
+    /// On the message that asks a second opinion: what it asks about, shown in place of the prompt.
+    public var secondOpinion: SecondOpinionAsked?
     public var seq: Int64?
     public var parentId: String?
     public var pending: Bool?
@@ -73,6 +75,10 @@ public struct AgentActivity: Codable, Sendable, Equatable, Identifiable {
     public var progress: String?
     public var mcp: McpCall?
     public var image: String?
+    /// What the call did, read by the desktop from its command or tool; from `Bridge.traceTree`.
+    public var actions: [CallAction]?
+    /// The call wrote code, left out of the thread; `activityWritten` has it.
+    public var wroteCode: Bool?
 }
 
 public struct McpCall: Codable, Sendable, Equatable {

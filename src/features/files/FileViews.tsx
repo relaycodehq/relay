@@ -5,11 +5,12 @@ import { type FileInfo } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import { formatSize } from "../../lib/file-tree";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { EditorPath } from "./EditorPath";
+import { EditorPath } from "../../ui/EditorPath";
 import { revealLabel } from "../../lib/mod-key";
+import { OpenWithButton } from "./OpenWithButton";
 import "./file-browser.css";
 
-/** The path across the top of a viewer, in the editor bar's style, with room for actions. */
+/** The path under a viewer, in the editor's status line style, with its actions at the end. */
 export function FileBar({
   lead,
   path,
@@ -28,40 +29,9 @@ export function FileBar({
       <EditorPath path={path}>
         {detail && <span className="editor-bar-state">{detail}</span>}
       </EditorPath>
+      <span className="editor-bar-gap" />
       {children}
     </div>
-  );
-}
-
-export function RevealButtons({
-  where,
-  path,
-  external,
-  onError,
-}: {
-  where: string;
-  path: string;
-  /** A file the system can open in another app. */
-  external?: boolean;
-  onError: (error: unknown) => void;
-}) {
-  return (
-    <>
-      {external && (
-        <IconButton
-          label="Open with default app"
-          onClick={() => void api.openProjectPath(where, path).catch(onError)}
-        >
-          <ExternalLink size={15} />
-        </IconButton>
-      )}
-      <IconButton
-        label={revealLabel}
-        onClick={() => void api.revealProjectPath(where, path).catch(onError)}
-      >
-        <FolderOpen size={15} />
-      </IconButton>
-    </>
   );
 }
 
@@ -72,6 +42,7 @@ export function ImageFile({
   info,
   lead,
   shownPath = info.path,
+  actions,
 }: {
   active: boolean;
   where: string;
@@ -79,6 +50,8 @@ export function ImageFile({
   lead?: ReactNode;
   /** What the bar shows instead of the path, like a file's full path outside the project. */
   shownPath?: string;
+  /** First in the bar, before its own buttons. */
+  actions?: ReactNode;
 }) {
   const [error, setError] = useState<unknown>();
   const [actual, setActual] = useState(false);
@@ -92,33 +65,6 @@ export function ImageFile({
   });
   return (
     <section className="image-file" aria-label="Image">
-      <FileBar
-        lead={lead}
-        path={shownPath}
-        detail={[
-          natural && `${natural.width} × ${natural.height}`,
-          formatSize(info.size),
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      >
-        <IconButton
-          label="Copy image"
-          disabled={!image.data}
-          onClick={() =>
-            void api.writeClipboardImage(image.data!).catch(setError)
-          }
-        >
-          <Copy size={15} />
-        </IconButton>
-        <span className="divider" />
-        <RevealButtons
-          where={where}
-          path={info.path}
-          external
-          onError={setError}
-        />
-      </FileBar>
       {!!(error || image.error) && <ErrorBox error={error || image.error} />}
       <div className={`image-file-stage ${actual ? "actual" : ""}`}>
         {image.data ? (
@@ -138,6 +84,34 @@ export function ImageFile({
           !image.error && <Loading text="Opening image…" />
         )}
       </div>
+      <FileBar
+        lead={lead}
+        path={shownPath}
+        detail={[
+          natural && `${natural.width} × ${natural.height}`,
+          formatSize(info.size),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        {actions}
+        <IconButton
+          label="Copy image"
+          disabled={!image.data}
+          onClick={() =>
+            void api.writeClipboardImage(image.data!).catch(setError)
+          }
+        >
+          <Copy size={15} />
+        </IconButton>
+        <span className="divider" />
+        <OpenWithButton
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
     </section>
   );
 }
@@ -149,6 +123,7 @@ export function VideoFile({
   info,
   lead,
   shownPath = info.path,
+  actions,
 }: {
   active: boolean;
   where: string;
@@ -156,6 +131,8 @@ export function VideoFile({
   lead?: ReactNode;
   /** What the bar shows instead of the path, like a file's full path outside the project. */
   shownPath?: string;
+  /** First in the bar, before its own buttons. */
+  actions?: ReactNode;
 }) {
   const [error, setError] = useState<unknown>();
   const [size, setSize] = useState<{ width: number; height: number }>();
@@ -168,23 +145,6 @@ export function VideoFile({
   });
   return (
     <section className="image-file" aria-label="Video">
-      <FileBar
-        lead={lead}
-        path={shownPath}
-        detail={[
-          size && `${size.width} × ${size.height}`,
-          formatSize(info.size),
-        ]
-          .filter(Boolean)
-          .join(" · ")}
-      >
-        <RevealButtons
-          where={where}
-          path={info.path}
-          external
-          onError={setError}
-        />
-      </FileBar>
       {!!(error || video.error) && <ErrorBox error={error || video.error} />}
       <div className="image-file-stage">
         {video.data ? (
@@ -207,6 +167,24 @@ export function VideoFile({
           !video.error && <Loading text="Opening video…" />
         )}
       </div>
+      <FileBar
+        lead={lead}
+        path={shownPath}
+        detail={[
+          size && `${size.width} × ${size.height}`,
+          formatSize(info.size),
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        {actions}
+        <OpenWithButton
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
     </section>
   );
 }
@@ -227,14 +205,6 @@ export function OtherFile({
   const [error, setError] = useState<unknown>();
   return (
     <section className="other-file" aria-label="File">
-      <FileBar lead={lead} path={shownPath} detail={formatSize(info.size)}>
-        <RevealButtons
-          where={where}
-          path={info.path}
-          external
-          onError={setError}
-        />
-      </FileBar>
       <div className="empty project-editor-empty">
         <FileQuestion size={28} />
         <h2>{info.path.split("/").pop()}</h2>
@@ -257,6 +227,14 @@ export function OtherFile({
         </div>
         {!!error && <ErrorBox error={error} />}
       </div>
+      <FileBar lead={lead} path={shownPath} detail={formatSize(info.size)}>
+        <OpenWithButton
+          where={where}
+          path={info.path}
+          external
+          onError={setError}
+        />
+      </FileBar>
     </section>
   );
 }

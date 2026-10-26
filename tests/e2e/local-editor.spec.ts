@@ -87,15 +87,16 @@ test("edit the highlighted local file, use keyboard commands and save only to th
   const editor = dialog.getByRole("textbox", { name: path, exact: true });
   await expect(editor).toBeVisible();
   await expect
-    .poll(() => editor.locator("span[style]").count())
+    .poll(() => editor.locator("span[class]").count())
     .toBeGreaterThan(5);
   await editor.press(`${modifier}+End`);
   await editor.press("Enter");
   await editor.pressSequentially("// Local review fix");
-  const surface = dialog.locator(".local-edit-code");
-  await expect
-    .poll(() => surface.evaluate((e) => e.scrollTop))
-    .toBeGreaterThan(0);
+  const surface = dialog.locator(".cm-scroller");
+  // The file fits the dialog: the caret's line shows without scrolling away.
+  await expect(
+    editor.locator(".cm-line", { hasText: "// Local review fix" }),
+  ).toBeInViewport();
   await expect(dialog.getByRole("status")).toHaveText("Unsaved changes");
   await editor.press(`${modifier}+d`);
   await expect
@@ -113,24 +114,24 @@ test("edit the highlighted local file, use keyboard commands and save only to th
     .toBe(1);
   await editor.press(`${modifier}+f`);
   await expect(
-    dialog.getByPlaceholder("Search", { exact: true }),
+    dialog.getByPlaceholder("Find", { exact: true }),
   ).toBeVisible();
   await dialog
-    .getByPlaceholder("Search", { exact: true })
+    .getByPlaceholder("Find", { exact: true })
     .fill("Local review fix");
-  await dialog.getByPlaceholder("Search", { exact: true }).press("Escape");
+  await dialog.getByPlaceholder("Find", { exact: true }).press("Escape");
   await editor.press(`${modifier}+r`);
   await expect(
     dialog.getByPlaceholder("Replace", { exact: true }),
   ).toBeVisible();
   await dialog
-    .getByPlaceholder("Search", { exact: true })
+    .getByPlaceholder("Find", { exact: true })
     .fill("Local review fix");
   await dialog
     .getByPlaceholder("Replace", { exact: true })
     .fill("Local correction");
   await dialog
-    .getByRole("button", { name: "Replace All", exact: true })
+    .getByRole("button", { name: /^replace all$/i })
     .click();
   await expect(editor).toContainText("Local correction");
   await dialog.getByPlaceholder("Replace", { exact: true }).press("Escape");

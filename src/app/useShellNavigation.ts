@@ -26,7 +26,7 @@ import { projectChatsQuery } from "../lib/workspace-queries";
 import { readText, writeText } from "../lib/persisted-store";
 
 /** What the main pane shows: a project, the Pull requests page or Usage. */
-export type Surface = "project" | "inbox" | "usage" | "processes" | "schedules";
+export type Surface = "project" | "inbox" | "usage" | "schedules";
 
 export type ShellNavigation = ReturnType<typeof useShellNavigation>;
 
@@ -64,13 +64,12 @@ export function useShellNavigation(
   /** Where the unsent thread will work, as its picker changes. */
   const [draftWorkspace, setDraftWorkspace] =
     useState<ChatWorkspace>("checkout");
-  /** A page shown instead of a project: Pull requests, Usage, Processes or Schedules. */
+  /** A page shown instead of a project: Pull requests, Usage or Schedules. */
   const [surface, setSurface] = useState<Surface>(() => {
     if (pinned) return "project";
     const saved = readText("relay-surface");
     return saved === "inbox" ||
       saved === "usage" ||
-      saved === "processes" ||
       saved === "schedules"
       ? saved
       : "project";
@@ -84,7 +83,6 @@ export function useShellNavigation(
       projects?.[0]);
   // Which of the project's unsent threads shows while no thread is open.
   const draftId = project ? currentNewThread(project.id) : "";
-  const panes = useWorkspacePanes(chatId ?? draftId);
   const [restoredProject, setRestoredProject] = useState<string>();
   const qc = useQueryClient();
   const chats = useQuery({
@@ -107,6 +105,7 @@ export function useShellNavigation(
   // A PR thread reviews its PR; any other thread shows the working tree.
   const scope = chat?.scope ?? draftScope;
   const pull = scope.kind === "pr" ? scope.ref : null;
+  const panes = useWorkspacePanes(chatId ?? draftId, !!pull);
   useEffect(() => {
     if (pinned) panes.switchTo(pinned.chatId);
     else if (project) {
@@ -115,7 +114,6 @@ export function useShellNavigation(
       setChatId(saved || null);
       setDraftScope(loadDraftScope(currentNewThread(project.id)));
       panes.switchTo(saved || currentNewThread(project.id));
-      view.closeTurn();
       setRestoredProject(project.id);
     }
   }, [project?.id]);

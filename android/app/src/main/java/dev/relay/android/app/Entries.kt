@@ -45,14 +45,14 @@ import dev.relay.android.ui.theme.RelayTheme
  */
 fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> Boolean) {
     entry<Route.Home> { if (wide()) PaneEmpty() else Animated { AppHome(container, pane = false, selected = null) } }
-    entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope) }
+    entry<Route.Settings> { SettingsScreen(container.remote, container.updates, container.notifications, container.lock, container.prefs.themeMode, container.prefs::setTheme, container.scope, container.relayStop::stop) }
     entry<Route.Gallery> { GalleryScreen() }
     entry<Route.Licences> { LicencesScreen() }
 
     // Relay's own colours, dark on black whatever the theme: pairing another computer shouldn't
     // wear the one already paired's, and the field glows best on black.
     entry<Route.Pair> {
-        RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, it.link) }
+        RelayTheme(HextaDark.copy(background = Color.Black)) { PairScreen(container.remote, container.updates, it.link, container.relayStop::stop) }
     }
     // Home's New thread button flies into the screen as its Send; one opened from a draft or a project slides in.
     entry<Route.NewThread>(metadata = { if (it == Route.NewThread()) mapOf(MORPHS_IN to true) else emptyMap() }) { route ->

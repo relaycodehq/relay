@@ -83,6 +83,12 @@ export class RemoteDevices {
     });
   }
 
+  async setPipes(pipes: boolean) {
+    await this.store.update((s) => {
+      s.phoneRemote = { ...s.phoneRemote, pipes };
+    });
+  }
+
   /** Made once and kept: phones pin its public half. */
   async key(): Promise<KeyPair> {
     if (this.keyPair) return this.keyPair;

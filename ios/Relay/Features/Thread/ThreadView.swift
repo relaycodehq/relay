@@ -39,7 +39,8 @@ struct ThreadView: View {
     /// come last, shown at once, before the thread itself has loaded.
     /// Steers held a moment show as the messages they become, between the two.
     private var shown: [ChatMessage] {
-        connection.conversation(chatId, rootId: rootId) + heldSteers(thread?.queue, rootId: rootId, now: nowMs())
+        let own = connection.conversation(chatId, rootId: rootId)
+        return own + heldSteers(thread?.queue, rootId: rootId, messages: own, now: nowMs())
             + connection.outgoing(chatId, rootId: rootId)
     }
     /// Sent from this phone, which it shows before the computer has it; one typed on the

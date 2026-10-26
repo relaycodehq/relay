@@ -6,7 +6,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it("waits the slow time for a push or pull request a computer forwards, not for reading a file", () => {
+it("waits the slow time for a push, pull request or search a computer forwards, not for reading a file", () => {
   expect(slowRemoteCall("projectCall", ["p", "projectCreatePull", []])).toBe(
     true,
   );
@@ -15,6 +15,12 @@ it("waits the slow time for a push or pull request a computer forwards, not for 
   );
   expect(slowRemoteCall("computerCall", ["installAgent", []])).toBe(true);
   expect(slowRemoteCall("receiveHandoff", ["h"])).toBe(true);
+  expect(slowRemoteCall("handoffCall", ["h", "searchProjectText", []])).toBe(
+    true,
+  );
+  expect(slowRemoteCall("projectCall", ["p", "replaceProjectText", []])).toBe(
+    true,
+  );
   expect(slowRemoteCall("projectCall", ["p", "projectFiles", []])).toBe(false);
 });
 

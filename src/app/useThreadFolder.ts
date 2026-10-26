@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { workspaceId } from "../../shared/workspaces";
-import { liveAway } from "../../shared/handoff";
 import {
   agentWorktreeKey,
   agentWorktreeUnavailable,
@@ -9,7 +8,11 @@ import {
   threadWorktree,
 } from "../../shared/projects";
 import { api } from "../lib/api";
-import { agentWorkingIn, worktreeThread } from "./thread-folder";
+import {
+  agentWorkingIn,
+  folderComputer,
+  worktreeThread,
+} from "./thread-folder";
 import { useProjectChecks } from "../features/checks/useProjectChecks";
 import { directoryKey } from "../features/files/useFileTree";
 import type { ShellNavigation } from "./useShellNavigation";
@@ -36,11 +39,7 @@ export function useThreadFolder({
   const deleted = agentWorktreeUnavailable(chat);
   // Live on another computer, the panes show its worktree there; a project
   // that lives on one shows its folder there.
-  const away = project?.computer
-    ? project.computer.name
-    : chat?.sentTo?.folder && liveAway(chat)
-      ? chat.sentTo.computer
-      : undefined;
+  const away = folderComputer(project, chat);
   const where = project
     ? workspaceId(
         project.id,
@@ -124,7 +123,7 @@ export function useThreadFolder({
  * watches the one place each window last asked for. A hidden window refreshes
  * once it shows again, as the poll it replaces waited.
  */
-function useTreeWatch(where: string | null) {
+export function useTreeWatch(where: string | null) {
   const qc = useQueryClient();
   const [watched, setWatched] = useState<string | null>(null);
   useEffect(() => {

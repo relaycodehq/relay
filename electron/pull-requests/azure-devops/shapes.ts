@@ -13,6 +13,8 @@ import type {
 } from "../../../shared/types";
 import { pullWebUrl } from "../../../shared/source-control";
 
+export const VERSION = "api-version=7.1";
+
 export interface AzIdentity {
   id: string;
   displayName?: string;
@@ -48,6 +50,16 @@ export interface AzPull {
   targetRefName: string;
   lastMergeSourceCommit?: { commitId: string };
   lastMergeTargetCommit?: { commitId: string };
+  /** Azure's trial merge of the PR into its target. */
+  mergeStatus?:
+    | "notSet"
+    | "queued"
+    | "conflicts"
+    | "succeeded"
+    | "rejectedByPolicy"
+    | "failure";
+  /** Why the last completion's merge failed, when it did. */
+  mergeFailureMessage?: string;
   reviewers?: AzReviewer[];
   labels?: { id: string; name: string; active?: boolean }[];
   repository: AzRepository;

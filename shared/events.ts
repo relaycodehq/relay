@@ -2,6 +2,7 @@ import type { DeviceHubState } from "./devices";
 import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
 import type { PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
+import type { EditorWindowsState } from "./editor-windows";
 import type { PlaySoundEvent } from "./sounds";
 import type {
   MainWindowCommand,
@@ -36,6 +37,9 @@ export interface RelayEvents {
   "relay:preview-reveal": PreviewReveal;
   "relay:play-sound": PlaySoundEvent;
   "relay:thread-windows": ThreadWindowsState;
+  "relay:editor-windows": EditorWindowsState;
+  /** Put this workspace's editor back: its window hands over its unsaved edits and closes. */
+  "relay:editor-return": string;
   /** Show this thread in the main window, as one popped out goes back. */
   "relay:open-thread": ThreadWindow;
   /** This thread moved to another project; a window showing it follows. */
@@ -60,4 +64,10 @@ export interface RelayEvents {
   "relay:schedules": import("./schedules").Schedule[];
   /** settings.json changed outside the window it goes to. */
   "relay:settings-file": import("./settings-file").SettingsFileState;
+  /** What a language server reports for a file now; the editor shows these as markers. */
+  "relay:lsp-diagnostics": import("./language-servers").LspDiagnosticsEvent;
+  /** The code the compiler leaves out of a file; the editor greys it. */
+  "relay:lsp-inactive-lines": import("./language-servers").LspInactiveLinesEvent;
+  /** A language server starts, loads, downloads, stops or fails. */
+  "relay:lsp-status": import("./language-servers").LspStatusEvent;
 }

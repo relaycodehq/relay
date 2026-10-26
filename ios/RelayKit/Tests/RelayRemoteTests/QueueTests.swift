@@ -38,10 +38,16 @@ private let settings = #"{"provider":"claude","choice":{"model":"opus"},"runtime
         try queued(#"{"id":"q","body":"after that"}"#),
     ]
     #expect(waitingInQueue(queue).map(\.id) == ["q"])
-    let held = try #require(heldSteers(queue, now: 5000).first)
-    #expect(heldSteers(queue, now: 5000).count == 1)
+    let held = try #require(heldSteers(queue, messages: [], now: 5000).first)
+    #expect(heldSteers(queue, messages: [], now: 5000).count == 1)
     #expect(held.id == "s" && held.role == "user" && held.created == 1000 && held.provider == "codex")
-    #expect(heldSteers(queue, rootId: "root", now: 5000).map(\.id) == ["r"])
+    #expect(heldSteers(queue, rootId: "root", messages: [], now: 5000).map(\.id) == ["r"])
+}
+
+@Test func leavesOutASteerTheThreadAlreadyHolds() throws {
+    let queue = [try queued(#"{"id":"s","body":"use the other cache","created":1000,"held":true}"#)]
+    let landed = heldSteers(queue, messages: [], now: 5000)
+    #expect(heldSteers(queue, messages: landed, now: 5000).isEmpty)
 }
 
 @Test func aFailedSendTakenBackToEditBringsBackWhoItWasFor() throws {

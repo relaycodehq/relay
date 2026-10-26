@@ -1,0 +1,371 @@
+import { describe, expect, it } from "vitest";
+import { callActions, commandActions, shownCommand, writtenByCommand } from "./call-actions";
+import { capWritten, writtenLimit } from "./written-code";
+
+describe("commandActions", () => {
+  it("reads sed, cat and grep as the reads and searches they are", () => {
+    expect(commandActions("cd app && sed -n 160,180p src/a.tsx | head -5")).toEqual([
+      { kind: "read", file: "src/a.tsx", lines: "160–180" },
+    ]);
+    expect(commandActions(`grep -rn -A8 "foo" src --include='*.css' | head -20`)).toEqual([
+      { kind: "search", pattern: "foo", where: "src" },
+    ]);
+  });
+
+  it("takes a python script that rewrites a file for an edit of it", () => {
+    const command = `python3 - <<'EOF'\np="src/a.ts"\ns=open(p).read()\ns=s.replace("a","b")\nEOF\ngrep -n x src/a.ts`;
+    expect(commandActions(command)).toEqual([
+      { kind: "edit", file: "src/a.ts" },
+      { kind: "search", pattern: "x", where: "src/a.ts" },
+    ]);
+  });
+
+  it("tells a test run's result and a commit's hash from the output", () => {
+    expect(commandActions("npx vitest run a.test.ts", " FAIL  a.test.ts > b")).toEqual([
+      { kind: "test", target: "a.test.ts", failed: true },
+    ]);
+    expect(
+      commandActions(`npm run typecheck >/tmp/tc.txt 2>&1; git add a.ts && git commit -qm "Let rg's flags through"`, "tc 0\n32ef54ed Let"),
+    ).toEqual([
+      { kind: "check", name: "typecheck", failed: false },
+      { kind: "commit", subject: "Let rg's flags through", hash: "32ef54ed" },
+    ]);
+  });
+
+  it("keeps a commit's subject when the label was cut inside the message", () => {
+    expect(commandActions(`git commit -qm "Let a reviewer's rg take \`rg -g '*.{ts}'`)).toEqual([
+      { kind: "commit", subject: "Let a reviewer's rg take `rg -g '*.{ts}'" },
+    ]);
+  });
+
+  it("names a loop it can't see into, and a command that only set up", () => {
+    expect(commandActions("cd /tmp && mkdir -p x; for f in a b")).toEqual([{ kind: "run", what: "shell loop" }]);
+    expect(commandActions("echo three")).toEqual([{ kind: "run", what: "echo" }]);
+    expect(commandActions(`echo "waiting for build"`)).toEqual([{ kind: "run", what: "echo" }]);
+  });
+});
+
+it("shows a command without its cd, filters and heredoc body", () => {
+  expect(shownCommand("cd /tmp && sed -n 1,2p a.ts 2>&1 | head -3")).toBe("sed -n 1,2p a.ts");
+  expect(shownCommand("python3 - <<'EOF'\nprint(1)\nEOF")).toBe("python3 - <<'EOF'");
+});
+
+it("shows every command that did something, joined as they were", () => {
+  expect(shownCommand("git status --short; git reset --hard HEAD~1")).toBe("git status --short; git reset --hard HEAD~1");
+  expect(shownCommand("cd app && npm test && echo ok\nnpm run lint")).toBe("npm test\nnpm run lint");
+  expect(shownCommand("npm test; cd sub && npm run lint")).toBe("npm test; npm run lint");
+});
+
+it("keeps what a heredoc writes to a file", () => {
+  expect(writtenByCommand("rg --version; cat > /tmp/a.mts <<'EOF'\nimport x from \"y\";\nEOF\nnpx tsx /tmp/a.mts")).toEqual([
+    { kind: "whole", path: "/tmp/a.mts", content: 'import x from "y";' },
+  ]);
+  expect(writtenByCommand("python3 - <<'EOF'\nprint(1)\nEOF")).toEqual([]);
+});
+
+it("cuts written code past the limit and still names every file", () => {
+  const big = "x".repeat(writtenLimit + 10);
+  const [first, second] = capWritten([
+    { kind: "whole", path: "a", content: big },
+    { kind: "whole", path: "b", content: "y" },
+  ]);
+  expect(first).toMatchObject({ path: "a", cut: true });
+  expect(first?.kind === "whole" && first.content.length).toBe(writtenLimit);
+  expect(second).toEqual({ kind: "whole", path: "b", content: "", cut: true });
+});
+
+it("drops the edits the limit left nothing of", () => {
+  const big = "x".repeat(writtenLimit);
+  const [file] = capWritten([{ kind: "swap", path: "a", edits: [{ old: big, new: "y" }, { old: "z", new: "w" }] }]);
+  expect(file).toEqual({ kind: "swap", path: "a", edits: [{ old: big, new: "" }], cut: true });
+});
+
+it("takes Claude's Write over a file that was there for an edit", () => {
+  const write = (detail: string) => ({
+    id: "w",
+    kind: "file" as const,
+    status: "complete" as const,
+    label: "src/config.ts",
+    detail,
+    written: [{ kind: "whole" as const, path: "src/config.ts", content: "x" }],
+  });
+  expect(callActions(write("File created successfully at: src/config.ts"))).toEqual([{ kind: "create", file: "src/config.ts" }]);
+  expect(callActions(write("The file src/config.ts has been updated successfully."))).toEqual([
+    { kind: "edit", file: "src/config.ts" },
+  ]);
+});
+
+it("finds the hash in git commit's own line too", () => {
+  expect(commandActions(`git commit -m "x"`, "[relay/a 1a2b3c4d] x\n 1 file changed")).toEqual([
+    { kind: "commit", subject: "x", hash: "1a2b3c4d" },
+  ]);
+  expect(commandActions(`git commit -m "x"`, "[main (root-commit) 1a2b3c4d] x")).toEqual([
+    { kind: "commit", subject: "x", hash: "1a2b3c4d" },
+  ]);
+});
+
+it("gives each of several commits its own hash", () => {
+  expect(commandActions(`git commit -m "a" && git commit -m "b"`, "[main 1a2b3c4] a\n[main 5e6f7a8] b")).toEqual([
+    { kind: "commit", subject: "a", hash: "1a2b3c4" },
+    { kind: "commit", subject: "b", hash: "5e6f7a8" },
+  ]);
+});
+
+describe("what Codex ran", () => {
+  it("reads the command inside the shell Codex wraps it in, cut short or not", () => {
+    expect(commandActions(`/bin/zsh -lc 'sed -n 1,20p src/a.ts'`)).toEqual([
+      { kind: "read", file: "src/a.ts", lines: "1–20" },
+    ]);
+    expect(commandActions(`/bin/zsh -lc "rg -n 'foo' src`)).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(shownCommand(`/bin/zsh -lc 'cd app && git status'`)).toBe("git status");
+    expect(writtenByCommand(`bash -lc 'cat > /tmp/a.txt <<'\\''EOF'\\''\nhi\nEOF'`)).toEqual([
+      { kind: "whole", path: "/tmp/a.txt", content: "hi" },
+    ]);
+  });
+
+  it("names each file a patch made, edited or deleted", () => {
+    const call = {
+      id: "p",
+      kind: "file" as const,
+      status: "complete" as const,
+      label: "a.ts +2 more",
+      written: [
+        { kind: "whole" as const, path: "a.ts", content: "x" },
+        { kind: "patch" as const, path: "b.ts", diff: "@@ -1 +1 @@\n-a\n+b" },
+        { kind: "swap" as const, path: "c.ts", edits: [{ old: "c", new: "" }], deleted: true as const },
+      ],
+    };
+    expect(callActions(call)).toEqual([
+      { kind: "create", file: "a.ts" },
+      { kind: "edit", file: "b.ts" },
+      { kind: "delete", file: "c.ts" },
+    ]);
+    expect(callActions({ id: "q", kind: "file", status: "complete", label: "a.ts +1 more", detail: "boom" })).toEqual([
+      { kind: "edit", file: "a.ts +1 more" },
+    ]);
+  });
+});
+
+describe("whether a test or check failed", () => {
+  it("fails a test or check whose call failed when the output didn't say", () => {
+    const call = { id: "t", kind: "command" as const, status: "failed" as const, label: "npm run lint", detail: "exit 1" };
+    expect(callActions(call)).toEqual([{ kind: "check", name: "lint", failed: true }]);
+  });
+
+  it("leaves out what && put behind a check that failed, which never ran", () => {
+    const output = "src/a.ts(1,1): error TS2322: no";
+    expect(commandActions("npm run typecheck && npm test", output)).toEqual([
+      { kind: "check", name: "typecheck", failed: true },
+    ]);
+    expect(commandActions("npm run typecheck; npm test", output)).toEqual([
+      { kind: "check", name: "typecheck", failed: true },
+      { kind: "test", failed: false },
+    ]);
+  });
+
+  it("leaves out what || put behind a test that passed, and keeps it behind one that failed", () => {
+    expect(commandActions("npm test || npm run lint", "Tests  3 passed")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("npm test || npm run lint", " FAIL  a.test.ts")).toEqual([
+      { kind: "test", failed: true },
+      { kind: "check", name: "lint", failed: false },
+    ]);
+    // The test failed, so the && skipped the lint and the || ran the typecheck.
+    expect(commandActions("npm test && npm run lint || npm run typecheck", " FAIL  a.test.ts")).toEqual([
+      { kind: "test", failed: true },
+      { kind: "check", name: "typecheck", failed: false },
+    ]);
+  });
+
+  it("judges each of several checks by its own kind of failure", () => {
+    expect(commandActions("npm run typecheck && npm run lint", "✖ 3 problems (3 errors)")).toEqual([
+      { kind: "check", name: "typecheck", failed: false },
+      { kind: "check", name: "lint", failed: true },
+    ]);
+    expect(commandActions("npm run lint; npm run typecheck", "src/a.ts(1,1): error TS2322: no")).toEqual([
+      { kind: "check", name: "lint", failed: false },
+      { kind: "check", name: "typecheck", failed: true },
+    ]);
+  });
+
+  it("leaves a test to its output when something ran after it", () => {
+    const call = { id: "t", kind: "command" as const, status: "failed" as const, label: "npm test && git push", detail: "Tests 12 passed" };
+    expect(callActions(call)).toEqual([
+      { kind: "test", failed: false },
+      { kind: "run", what: "git push" },
+    ]);
+  });
+
+  it("tells each test run in one command by the failures naming its file", () => {
+    const output = " FAIL  b.test.ts > x\n ✓ a.test.ts";
+    expect(commandActions("npx vitest run a.test.ts && npx vitest run b.test.ts", output)).toEqual([
+      { kind: "test", target: "a.test.ts", failed: false },
+      { kind: "test", target: "b.test.ts", failed: true },
+    ]);
+    expect(commandActions("npx vitest run", "Tests  12 passed, 0 failed")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("npx vitest src/a.test.ts")).toEqual([{ kind: "test", target: "src/a.test.ts", failed: false }]);
+  });
+
+  it("reads lint and npm failures", () => {
+    expect(commandActions("npm run lint", "✖ 3 problems (3 errors)")).toEqual([{ kind: "check", name: "lint", failed: true }]);
+    expect(commandActions("npm run format:check", "Code style issues found")).toEqual([
+      { kind: "check", name: "format:check", failed: true },
+    ]);
+  });
+});
+
+describe("commands that look like something else", () => {
+  it("takes a commit's subject from the heredoc it reads the message from", () => {
+    const command = `git commit -m "$(cat <<'EOF'\nfix(x): keep the subject\n\nBody.\nEOF\n)"`;
+    expect(commandActions(command)).toEqual([{ kind: "commit", subject: "fix(x): keep the subject" }]);
+    expect(commandActions("git commit -F - <<'EOF'\nfeat: from stdin\nEOF")).toEqual([
+      { kind: "commit", subject: "feat: from stdin" },
+    ]);
+  });
+
+  it("reads rg -e patterns, quoted output files and git's own options", () => {
+    expect(commandActions(`rg -n -e "foo" src`)).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(writtenByCommand(`cat > "/tmp/my file.ts" <<'EOF'\nx\nEOF`)).toEqual([
+      { kind: "whole", path: "/tmp/my file.ts", content: "x" },
+    ]);
+    expect(commandActions("git -C app status")).toEqual([{ kind: "git", what: "git status" }]);
+  });
+
+  it("doesn't take a flag's value for the pattern", () => {
+    expect(commandActions("rg -t ts -j 4 handleSend src")).toEqual([{ kind: "search", pattern: "handleSend", where: "src" }]);
+    expect(commandActions(`grep -rE "a|b" src`)).toEqual([{ kind: "search", pattern: "a|b", where: "src" }]);
+  });
+
+  it("takes cat >> for adding to a file, and keeps what it added", () => {
+    const command = "cat >> notes.md <<'EOF'\nhi\nEOF";
+    expect(commandActions(command)).toEqual([{ kind: "edit", file: "notes.md" }]);
+    expect(writtenByCommand(command)).toEqual([{ kind: "swap", path: "notes.md", edits: [{ old: "", new: "hi" }] }]);
+  });
+
+  it("reads the lines a cat piped into sed or head kept", () => {
+    expect(commandActions("cat src/a.ts | sed -n 100,140p")).toEqual([{ kind: "read", file: "src/a.ts", lines: "100–140" }]);
+    expect(commandActions("cat src/a.ts | head -n 50")).toEqual([{ kind: "read", file: "src/a.ts", lines: "1–50" }]);
+  });
+
+  it("doesn't take a here-string or a shift for a heredoc", () => {
+    expect(commandActions("read x <<< word\nnpm test")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("echo $((1<<3))\nnpm test")).toEqual([{ kind: "test", failed: false }]);
+  });
+
+  it("doesn't take a quoted << for a heredoc, nor a heredoc piped on for a read", () => {
+    expect(commandActions(`grep -n "<<EOF" a.sh`)).toEqual([{ kind: "search", pattern: "<<EOF", where: "a.sh" }]);
+    expect(commandActions("cat <<'EOF' | node\nconsole.log(1)\nEOF")).toEqual([{ kind: "run", what: "node script" }]);
+  });
+
+  it("tells package scripts that test or check from ones that only run", () => {
+    expect(commandActions("npm install")).toEqual([{ kind: "run", what: "npm install" }]);
+    expect(commandActions("pnpm run dev")).toEqual([{ kind: "run", what: "pnpm dev" }]);
+    expect(commandActions("npm run test:unit")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("npm run format")).toEqual([{ kind: "run", what: "npm format" }]);
+    expect(commandActions("npm run lint:fix")).toEqual([{ kind: "run", what: "npm lint:fix" }]);
+    expect(commandActions("npm run lint -- --fix")).toEqual([{ kind: "run", what: "npm lint" }]);
+  });
+
+  it("names a script run from a file by it, and a script that only reads by its program", () => {
+    expect(commandActions("python3 /tmp/check.py")).toEqual([{ kind: "run", what: "check.py" }]);
+    expect(commandActions(`python3 - <<'EOF'\np="a.ts"\nprint(open(p).read())\nEOF`)).toEqual([
+      { kind: "run", what: "python3 script" },
+    ]);
+    expect(commandActions(`python3 - <<'EOF'\np="a.ts"\nprint(open(p).read().replace("\\t", "  "))\nEOF`)).toEqual([
+      { kind: "run", what: "python3 script" },
+    ]);
+    expect(commandActions("bash scripts/deploy.sh prod")).toEqual([{ kind: "run", what: "deploy.sh" }]);
+  });
+
+  it("reads past a redirect wherever it points, but not a > inside quotes", () => {
+    expect(commandActions("rg foo src > out.txt")).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(commandActions(`rg "a > b" src 2>&1`)).toEqual([{ kind: "search", pattern: "a > b", where: "src" }]);
+    expect(commandActions("cat src/a.ts > src/b.ts")).toEqual([
+      { kind: "read", file: "src/a.ts" },
+      { kind: "create", file: "src/b.ts" },
+    ]);
+    expect(commandActions("cat src/a.ts > /tmp/a.txt")).toEqual([{ kind: "read", file: "src/a.ts" }]);
+    expect(shownCommand("rg foo src &> /tmp/out.txt")).toBe("rg foo src");
+    expect(shownCommand("cat src/a.ts > src/b.ts 2>&1")).toBe("cat src/a.ts > src/b.ts");
+  });
+
+  it("reads each file cat printed, and nothing from sed reading what came in", () => {
+    expect(commandActions("cat a.ts b.ts")).toEqual([
+      { kind: "read", file: "a.ts" },
+      { kind: "read", file: "b.ts" },
+    ]);
+    expect(commandActions("sed -n '1,5p'")).toEqual([{ kind: "run", what: "sed" }]);
+    expect(commandActions("sed -i '' 's/a/b/' src/a.ts")).toEqual([{ kind: "edit", file: "src/a.ts" }]);
+    expect(commandActions("sed -n -e 1,5p src/a.ts")).toEqual([{ kind: "read", file: "src/a.ts", lines: "1–5" }]);
+  });
+
+  it("keeps an escaped quote inside a double-quoted message", () => {
+    expect(commandActions(`git commit -m "fix \\"a && b\\" thing"`)).toEqual([
+      { kind: "commit", subject: 'fix "a && b" thing' },
+    ]);
+  });
+});
+
+describe("git and shell words around a search", () => {
+  it("checks with git commands that only look, and runs the ones that change something", () => {
+    const actions = (command: string) => commandActions(command).map((a) => `${a.kind} ${"what" in a ? a.what : ""}`);
+    expect(actions("git status; git -C app diff --stat; git branch -a; git stash list; git remote -v; git config user.name")).toEqual([
+      "git git status",
+      "git git diff",
+      "git git branch",
+      "git git stash",
+      "git git remote",
+      "git git config",
+    ]);
+    expect(actions("git push origin main; git reset --hard HEAD~1; git branch -D old; git stash; git checkout main")).toEqual([
+      "run git push",
+      "run git reset",
+      "run git branch",
+      "run git stash",
+      "run git checkout",
+    ]);
+  });
+
+  it("reads git grep as a search of the paths after --", () => {
+    const command = `b=$(git merge-base HEAD main); git grep -n "FileEntryIcon" $b -- src/features/agent-turn | head; echo ---; git grep -n "Icon" HEAD -- src/features/agent-turn | head`;
+    expect(commandActions(command)).toEqual([
+      { kind: "search", pattern: "FileEntryIcon", where: "src/features/agent-turn" },
+      { kind: "search", pattern: "Icon", where: "src/features/agent-turn" },
+    ]);
+  });
+
+  it("takes a path but not a revision as where git grep looked, without --", () => {
+    expect(commandActions(`git grep -e "a b" -n main src/app.ts`)).toEqual([
+      { kind: "search", pattern: "a b", where: "src/app.ts" },
+    ]);
+  });
+
+  it("reads the command after a value worked out with $()", () => {
+    expect(commandActions("out=$(git rev-parse HEAD) npm test")).toEqual([{ kind: "test", failed: false }]);
+  });
+
+  it("doesn't split a $() at the separators or pipes inside it", () => {
+    expect(commandActions("root=$(cd app && pwd); rg foo $root")).toEqual([
+      { kind: "search", pattern: "foo", where: "$root" },
+    ]);
+    expect(commandActions("files=$(git ls-files | grep test); npx vitest run $files")).toEqual([
+      { kind: "test", target: "$files", failed: false },
+    ]);
+  });
+});
+
+describe("words before the program", () => {
+  it("reads past a subshell's ( and timeout's duration", () => {
+    expect(commandActions("(cd app && npm test)")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("timeout -s KILL 60 npx vitest run a.test.ts")).toEqual([
+      { kind: "test", target: "a.test.ts", failed: false },
+    ]);
+  });
+
+  it("reads past the shell's own setup and wrappers", () => {
+    expect(commandActions("set -euo pipefail\nnpm test")).toEqual([{ kind: "test", failed: false }]);
+    expect(commandActions("source .venv/bin/activate && pytest")).toEqual([{ kind: "run", what: "pytest" }]);
+    expect(commandActions("nohup node server.js")).toEqual([{ kind: "run", what: "server.js" }]);
+    expect(commandActions("[ -f a.ts ] && cat a.ts")).toEqual([{ kind: "read", file: "a.ts" }]);
+    expect(commandActions("while read f; do echo $f; done < list")).toEqual([{ kind: "run", what: "shell loop" }]);
+  });
+});

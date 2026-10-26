@@ -12,6 +12,7 @@ import { NameInput } from "../../ui/NameInput";
 import { ThreadMenu } from "./ThreadMenu";
 import { StatusMark } from "./ThreadStatus";
 import { ThreadRef } from "./ThreadRef";
+import { useTitleFade } from "./useTitleFade";
 
 const THREADS_PER_PROJECT = 5;
 
@@ -33,7 +34,7 @@ export interface SidebarRows {
   settleKeys: string;
 }
 
-/** A thread's name, dimmed while it's being generated again. */
+/** A thread's name: dimmed while it's generated again, faded where it's cut off. */
 export function ThreadTitle({
   className,
   title,
@@ -43,8 +44,10 @@ export function ThreadTitle({
   title: string;
   regenerating: boolean;
 }) {
+  const fade = useTitleFade(title);
   return (
     <span
+      ref={fade}
       className={`${className} ${regenerating ? "sb-title-regenerating" : ""}`}
       title={title}
       aria-busy={regenerating || undefined}

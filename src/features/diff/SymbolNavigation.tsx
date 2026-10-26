@@ -19,6 +19,7 @@ import { useTheme } from "../../lib/useTheme";
 import { useSyntaxThemes } from "../../lib/appearance";
 import { useTypography } from "../../lib/typography";
 import { DiffCodeView } from "./DiffCodeView";
+import { HIGHLIGHT_MAX_LINES, HIGHLIGHTER } from "./highlighting";
 import { ErrorBox, IconButton, Loading, Modal } from "../../ui/ui";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 
@@ -460,10 +461,10 @@ function SymbolPreview({
             theme: syntaxThemes,
             themeType: theme,
             disableFileHeader: true,
-            preferredHighlighter: "shiki-js",
+            preferredHighlighter: HIGHLIGHTER,
             useTokenTransformer: true,
             overflow: wrap ? "wrap" : "scroll",
-            tokenizeMaxLength: 5000,
+            tokenizeMaxLength: HIGHLIGHT_MAX_LINES,
             tokenizeMaxLineLength: 1000,
             onTokenClick: (token, event) => {
               const q = queryFor(source.path, source.hash, token, "definition");

@@ -83,13 +83,13 @@ export function controlApi({
       };
     },
     async pair(pipe = false) {
-      if (!remote.devices.settings.enabled || !(await remote.state()).listening)
-        await remote.setEnabled(true);
+      if (pipe) await remote.setPipes(true);
+      else if (!(await remote.state()).listening) await remote.setEnabled(true);
       const pairing = await remote.pairing({ pipe });
       return { ...pairing, remote: await remote.state() };
     },
     update: (check) => (check ? updater.check() : updater.install()),
-    remote: (enabled) => remote.setEnabled(enabled),
+    remote: (enabled) => remote.setEnabled(enabled, { keepPipes: true }),
     removeDevice: (id) => remote.revoke(id),
     projects: () => projects.list(login.client),
     addProject: (path) => projects.add(path, login.client),

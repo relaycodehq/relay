@@ -120,9 +120,7 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await expect(
       editor.getByRole("textbox", { name: path, exact: true }),
     ).toBeVisible();
-    await editor
-      .getByRole("button", { name: "Close file", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Close useReview.ts", exact: true }).click();
     await panelToggle(page).click();
     // Under 800px the review shows an inline diff instead of side by side.
     await page

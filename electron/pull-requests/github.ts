@@ -12,6 +12,7 @@ import type {
   Review,
   ReviewComment,
 } from "../../shared/types";
+import type { MergeMethod, MergeReadiness } from "../../shared/pull-readiness";
 import { GITHUB_SERVER } from "../../shared/source-control";
 import { parseGithubPullUrl } from "../../shared/validation";
 import type { GithubCredential } from "../github/credentials";
@@ -26,63 +27,12 @@ import {
 } from "./host";
 import { filePair } from "./file-pair";
 import { mergedPulls } from "./merged";
+import { githubMerge, githubMergeReadiness } from "./github-merge";
+import { asIssue, searchQuery, type GithubIssue } from "./github-search";
 import { HostRequests, responseMessage, type RequestOptions } from "./request";
 
 const API = "https://api.github.com";
 const MAX_FILE = 2 * 1024 * 1024;
-
-interface GithubIssue extends Omit<
-  Issue,
-  "body" | "repository" | "pull_request"
-> {
-  body: string | null;
-  draft?: boolean;
-  repository_url: string;
-  pull_request?: { merged_at: string | null };
-}
-
-const searchQualifiers: Record<SearchFilter, string> = {
-  review_requested: "review-requested:@me",
-  assigned: "assignee:@me",
-  created: "author:@me",
-  all: "involves:@me",
-};
-
-/**
- * GitHub's search for the Pull requests page. A bare search stays among PRs
- * you're part of, since all of GitHub is noise; one that names a repo, org or
- * user searches there instead.
- */
-export function searchQuery(filter: SearchFilter, q: string, state: PullState) {
-  const scoped = filter === "all" && /\b(repo|org|user|owner):\S/.test(q);
-  return [
-    "is:pr",
-    "archived:false",
-    scoped ? "" : searchQualifiers[filter],
-    state === "all" ? "" : `is:${state}`,
-    q.trim(),
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-const asIssue = (i: GithubIssue): Issue & { draft?: boolean } => {
-  const [owner = "", name = ""] = i.repository_url
-    .replace(/^.*\/repos\//, "")
-    .split("/");
-  const { repository_url: _, pull_request, ...rest } = i;
-  return {
-    ...rest,
-    body: i.body ?? "",
-    repository: {
-      owner,
-      name,
-      full_name: `${owner}/${name}`,
-      server: GITHUB_SERVER,
-    },
-    pull_request: { merged: !!pull_request?.merged_at },
-  };
-};
 
 interface GithubPull extends Omit<Pull, "merge_base" | "merged" | "body"> {
   body: string | null;
@@ -247,7 +197,7 @@ export class GitHub implements PullHost {
                   : `GitHub denied this${message ? `: ${message}` : "."}`
                 : response.status === 404
                   ? "Not found, or your gh login can't see this repository."
-                  : response.status === 422 && message
+                  : [405, 409, 422].includes(response.status) && message
                     ? `GitHub refused this: ${message}`
                     : `GitHub returned HTTP ${response.status}. Please retry.`,
           );
@@ -669,6 +619,14 @@ export class GitHub implements PullHost {
         })
       ).data,
     );
+  }
+
+  mergeReadiness(r: PullRef): Promise<MergeReadiness> {
+    return githubMergeReadiness(this, r);
+  }
+
+  merge(r: PullRef, head: string, method: MergeMethod) {
+    return githubMerge(this, r, head, method);
   }
 
   async repository(r: Repo) {

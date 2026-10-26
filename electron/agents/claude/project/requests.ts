@@ -1,6 +1,10 @@
 import type { Options } from "@anthropic-ai/claude-agent-sdk";
 import type { HostedHandlers } from "../../../agent-host/client";
-import type { AgentQuestion } from "../../../../shared/agent-modes";
+import {
+  SKIPPED_QUESTIONS,
+  type AgentQuestion,
+  type AskAgentRequest,
+} from "../../../../shared/agent-modes";
 import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
 import { ANSWER_LIMIT } from "../../turn-kit";
 
@@ -62,35 +66,8 @@ export function sessionCallbacks(holder: Asker) {
         behavior: "deny",
         message: "This caller cannot answer permission requests.",
       };
-    if (tool === "AskUserQuestion") {
-      const questions = ((input.questions as any[]) ?? []).map(
-        (q, i): AgentQuestion => ({
-          id: String(i),
-          header: q.header,
-          question: q.question,
-          multiple: !!q.multiSelect,
-          options: q.options,
-        }),
-      );
-      const response = await options.onRequest(
-        { kind: "question", title: "Claude needs your input", questions },
-        callback.signal,
-      );
-      if (response.kind !== "question")
-        return { behavior: "deny", message: "No answers provided." };
-      return {
-        behavior: "allow",
-        updatedInput: {
-          ...input,
-          answers: Object.fromEntries(
-            questions.map((q) => [
-              q.question,
-              response.answers[q.id]?.join(", ") ?? "",
-            ]),
-          ),
-        },
-      };
-    }
+    if (tool === "AskUserQuestion")
+      return askQuestions(input, options.onRequest, callback.signal);
     if (tool === "ExitPlanMode") {
       if (typeof input.plan === "string") {
         holder.plan = input.plan.slice(0, ANSWER_LIMIT);
@@ -183,5 +160,40 @@ export function hostedHandlers(holder: Asker): HostedHandlers {
     canUseTool,
     onElicitation,
     hooks: { UserPromptSubmit: promptSubmit },
+  };
+}
+
+/** AskUserQuestion on Relay's card; Claude gets the answers keyed by question. */
+async function askQuestions(
+  input: Record<string, unknown>,
+  ask: AskAgentRequest,
+  signal: AbortSignal,
+) {
+  const questions = ((input.questions as any[]) ?? []).map(
+    (q, i): AgentQuestion => ({
+      id: String(i),
+      header: q.header,
+      question: q.question,
+      multiple: !!q.multiSelect,
+      options: q.options,
+    }),
+  );
+  const response = await ask(
+    { kind: "question", title: "Claude needs your input", questions },
+    signal,
+  );
+  if (response.kind !== "question")
+    return { behavior: "deny" as const, message: "No answers provided." };
+  const answers = response.answers;
+  if (!answers)
+    return { behavior: "deny" as const, message: SKIPPED_QUESTIONS };
+  return {
+    behavior: "allow" as const,
+    updatedInput: {
+      ...input,
+      answers: Object.fromEntries(
+        questions.map((q) => [q.question, answers[q.id]?.join(", ") ?? ""]),
+      ),
+    },
   };
 }

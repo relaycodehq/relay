@@ -1,6 +1,7 @@
 package dev.relay.android.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -15,13 +16,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.lyxnx.compose.ui.tablericons.TablerIcons
 import io.github.lyxnx.compose.ui.tablericons.outline.AlertTriangle
@@ -59,6 +64,9 @@ class ToastState {
     val toasts = mutableStateListOf<Toast>()
     private var next = 0L
 
+    /** Room kept free under the stack for something floating at the bottom of the screen. */
+    var clearance by mutableStateOf(0.dp)
+
     fun show(
         message: String,
         description: String? = null,
@@ -87,10 +95,24 @@ val LocalToasts = staticCompositionLocalOf<ToastState> { error("No ToastHost abo
 
 private const val VISIBLE = 3
 
+/** Keeps toasts [height] higher while the caller is on screen, so they don't cover it. */
+@Composable
+fun KeepToastsAbove(height: Dp) {
+    val toasts = LocalToasts.current
+    DisposableEffect(toasts, height) {
+        toasts.clearance = height
+        onDispose { toasts.clearance = 0.dp }
+    }
+}
+
 /** Draws the stack at the bottom of its box; put it last in the root so it floats over everything. */
 @Composable
 fun ToastHost(state: ToastState, modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.BottomCenter) {
+    val clearance by animateDpAsState(state.clearance, tween(Motion.SLIDE, easing = Motion.EaseOutQuint), label = "toast-clearance")
+    Box(
+        modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp).padding(bottom = clearance),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
         val shown = state.toasts.takeLast(VISIBLE)
         shown.forEachIndexed { i, toast ->
             key(toast.id) {

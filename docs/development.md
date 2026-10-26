@@ -28,7 +28,7 @@ Switching and restoring ask Relay to quit over IPC on macOS, Linux and Windows. 
 
 `npm run test:setup` installs a pinned Angular/TypeScript toolchain solely for isolated language-service tests. It is not bundled with the app.
 
-`npm run test:e2e` runs the real Electron renderer against an isolated local Gitea fixture, with native windows hidden and activation suppressed. It does not steal desktop focus, open Keychain prompts, or call any real server. The test launcher uses synthetic credential storage; the shipped app always uses its real OS storage. Native window-focus tests require an explicit `RELAY_TEST_HEADED=1`, and OS credential integration requires `RELAY_TEST_NATIVE_STORAGE=1`; leave both unset for normal runs. Linux CI runs under Xvfb in `.github/workflows/checks.yml` for pull requests and branches.
+`npm run test:e2e` runs the real Electron renderer against an isolated local Gitea fixture, with native windows hidden and activation suppressed. It does not steal desktop focus, open Keychain prompts, or call any real server. The test launcher uses synthetic credential storage; the shipped app always uses its real OS storage. Native window-focus tests require an explicit `RELAY_TEST_HEADED=1`, and OS credential integration requires `RELAY_TEST_NATIVE_STORAGE=1`; leave both unset for normal runs.
 
 Source layout: `electron/` owns credentials, API calls, disk and process access; `shared/` defines IPC validation and types; `src/` owns the UI (`app/` the shell, `features/<name>/` one folder per feature, `ui/` shared building blocks, `lib/` helpers); unit tests sit next to the code they cover, and `tests/` holds the desktop flows, fixtures and a few cross-cutting unit tests. There is no demo mode in the shipped app.
 

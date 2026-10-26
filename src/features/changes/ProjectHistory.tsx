@@ -7,7 +7,7 @@ import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { layoutGraph, type GraphRow } from "./commit-graph";
-import { CommitChanges } from "./CommitChanges";
+import { CommitChanges, type CommitVersion } from "./CommitChanges";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { relativeDate } from "../../lib/relative-date";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
@@ -28,7 +28,8 @@ export function ProjectHistory({
 }: {
   projectId: string;
   slots: PaneSlots;
-  onOpenFile: (path: string) => void;
+  /** Opens a file as a commit left it. */
+  onOpenFile: (path: string, commit: CommitVersion) => void;
 }) {
   const [scope, setScope] = useStoredChoice<HistoryScope>(
     SCOPE_KEY,
@@ -70,21 +71,7 @@ export function ProjectHistory({
     <section className="project-history" aria-label="Commit history">
       {slots.actions &&
         createPortal(
-          <div className="history-scope" role="group" aria-label="Branches">
-            {(["head", "all"] as const).map((s) => (
-              <button
-                key={s}
-                type="button"
-                aria-pressed={scope === s}
-                onClick={() => changeScope(s)}
-              >
-                {s === "head" ? "Current" : "All"}
-                <span className="history-scope-word">
-                  {s === "head" ? "branch" : "branches"}
-                </span>
-              </button>
-            ))}
-          </div>,
+          <ScopeSwitch scope={scope} onChange={changeScope} />,
           slots.actions,
         )}
       <div
@@ -149,6 +136,32 @@ export function ProjectHistory({
         />
       )}
     </section>
+  );
+}
+
+function ScopeSwitch({
+  scope,
+  onChange,
+}: {
+  scope: HistoryScope;
+  onChange: (scope: HistoryScope) => void;
+}) {
+  return (
+    <div className="history-scope" role="group" aria-label="Branches">
+      {(["head", "all"] as const).map((s) => (
+        <button
+          key={s}
+          type="button"
+          aria-pressed={scope === s}
+          onClick={() => onChange(s)}
+        >
+          {s === "head" ? "Current" : "All"}
+          <span className="history-scope-word">
+            {s === "head" ? "branch" : "branches"}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

@@ -17,6 +17,16 @@ export default defineConfig({
       transformIndexHtml: (html) =>
         html.replace("ws://127.0.0.1:5177", `ws://127.0.0.1:${port}`),
     },
+    {
+      // A preview taller than its window can't scroll under the app's
+      // styles.css; the script says why and when #root takes over.
+      name: "preview-root-scrolls",
+      apply: "serve",
+      transformIndexHtml: (_html, { path }) =>
+        path.startsWith("/previews/")
+          ? [{ tag: "script", attrs: { type: "module", src: "/previews/_shared/root-scrolls.ts" }, injectTo: "head" }]
+          : [],
+    },
   ],
   server: {
     host: "127.0.0.1",

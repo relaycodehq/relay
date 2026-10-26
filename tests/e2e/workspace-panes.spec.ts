@@ -18,7 +18,7 @@ import { execFileSync } from "node:child_process";
 import { openInFileTree, openSurface } from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
-test("chat, changes and files are inline panes that can be reordered", async () => {
+test("chat and the panel are inline panes that can be reordered; Changes opens beside the editor", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-panes-"))),
     repo = join(root, "project");
   const git = (...args: string[]) =>
@@ -111,85 +111,44 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     ).toBeVisible();
     await toggle("Panel").click();
 
-    // Regression: the Changes pane never pops the remembered file in a modal.
+    // Changes isn't a pane of its own: it lists the folder's changes beside
+    // the editor, and never pops the remembered file in a modal.
     await toggle("Changes").click();
-    await expect(
-      page.getByRole("region", { name: "Local changes" }),
-    ).toBeVisible();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-
-    // A change opens in the Files pane, which takes the diff's place.
-    await page.locator('.change-select[aria-label$=" src/a.ts"]').click();
-    // Find opens from the diff's keyboard context and indexes both changed sides.
-    const localDiff = page.locator(".working-diff-frame");
-    await localDiff.locator("[data-line]").first().click();
-    await page.keyboard.press("ControlOrMeta+f");
-    const find = localDiff.getByRole("textbox", { name: "Find in diff" });
-    await expect(find).toBeFocused();
-    await find.fill("export");
-    await expect(localDiff.locator(".find-bar-count")).toHaveText("1 of 2");
-    await expect
-      .poll(() =>
-        page.evaluate(() =>
-          ["relay-diff-find", "relay-diff-find-current"].reduce(
-            (count, name) => count + (CSS.highlights.get(name)?.size ?? 0),
-            0,
-          ),
-        ),
-      )
-      .toBe(2);
-    await find.press("Enter");
-    await expect(localDiff.locator(".find-bar-count")).toHaveText("2 of 2");
-    await find.press("Shift+Enter");
-    await expect(localDiff.locator(".find-bar-count")).toHaveText("1 of 2");
-    await find.press("Escape");
-    await expect(find).toHaveCount(0);
-    expect(
-      await page.evaluate(
-        () =>
-          CSS.highlights.has("relay-diff-find") ||
-          CSS.highlights.has("relay-diff-find-current"),
-      ),
-    ).toBe(false);
-    await page
-      .getByRole("button", { name: "Open in editor", exact: true })
-      .click();
-    await expect(
-      page.locator(".project-inline-editor").getByRole("textbox", {
-        name: "src/a.ts",
-        exact: true,
-      }),
-    ).toBeVisible();
+    const local = page.locator(".project-file-list").getByRole("region", { name: "Local changes" });
+    await expect(local).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await order()).toEqual(["chat", "panel"]);
-    await toggle("Changes").click();
-    expect(await order()).toEqual(["chat", "changes", "panel"]);
+    await expect(toggle("Changes")).toHaveAttribute("aria-pressed", "false");
+
+    // A change opens in the editor with its changes in place.
+    await page.locator('.change-select[aria-label$=" src/a.ts"]').click();
+    const editor = page.locator(".project-inline-editor");
+    await expect(editor.getByRole("textbox", { name: "src/a.ts", exact: true })).toBeVisible();
+    await expect(editor.locator(".cm-changedLine")).toContainText("export const a = 2;");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await order()).toEqual(["chat", "panel"]);
 
     // Drag a header toggle to reorder the panes; the order and the open
     // panes survive a reload.
     await toggle("Panel").dragTo(toggle("Chat"), {
       targetPosition: { x: 2, y: 5 },
     });
-    expect(await order()).toEqual(["panel", "chat", "changes"]);
+    expect(await order()).toEqual(["panel", "chat"]);
     await page.reload();
     await expect(toggles).toBeVisible();
-    await expect.poll(order).toEqual(["panel", "chat", "changes"]);
+    await expect.poll(order).toEqual(["panel", "chat"]);
 
     // Only the toggles drag; a pane's header stays put.
     await expect(
-      page.locator('[data-pane="changes"] .pane-header'),
+      page.locator('[data-pane="panel"] .pane-header'),
     ).not.toHaveAttribute("draggable", "true");
-    await toggle("Changes").dragTo(toggle("Panel"), {
-      targetPosition: { x: 2, y: 5 },
-    });
-    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
 
     // Terminals stack as tabs; everything else opens once.
     await openSurface(page, "Terminal");
     await openSurface(page, "Terminal");
     await openSurface(page, "Files");
     const panel = page.locator('[data-pane="panel"]');
-    await expect(panel.getByRole("tab")).toHaveText([
+    await expect(panel.locator(".pane-tabs").getByRole("tab")).toHaveText([
       "a.ts",
       "Terminal",
       "Terminal 2",
@@ -216,7 +175,7 @@ test("chat, changes and files are inline panes that can be reordered", async () 
     await panel
       .getByRole("button", { name: "Close terminal 2", exact: true })
       .click();
-    await expect(panel.getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
+    await expect(panel.locator(".pane-tabs").getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
 
     // Zooming the panel hides the other panes and the sidebar without closing
     // them; asking for another pane brings everything back.
@@ -225,23 +184,22 @@ test("chat, changes and files are inline panes that can be reordered", async () 
       .click();
     expect(await order()).toEqual(["panel"]);
     await expect(collapsed).toHaveCount(1);
-    await expect(panel.getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
+    await expect(panel.locator(".pane-tabs").getByRole("tab")).toHaveText(["a.ts", "Terminal"]);
     await toggle("Chat").click();
-    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
+    await expect.poll(order).toEqual(["panel", "chat"]);
     await expect(collapsed).toHaveCount(0);
 
     // Closing its last tab closes the panel, instead of leaving the picker.
     await panel
       .getByRole("button", { name: "Close files", exact: true })
       .click();
-    await expect.poll(order).toEqual(["changes", "panel", "chat"]);
+    await expect.poll(order).toEqual(["panel", "chat"]);
     await panel
       .getByRole("button", { name: "Close terminal", exact: true })
       .click();
-    await expect.poll(order).toEqual(["changes", "chat"]);
+    await expect.poll(order).toEqual(["chat"]);
 
     // The last visible pane cannot be hidden.
-    await toggle("Changes").click();
     await expect(toggle("Chat")).toBeDisabled();
   } finally {
     await app.close();
@@ -328,7 +286,7 @@ test("each thread keeps the panes it had open", async () => {
       sidebar.getByRole("button", { name: new RegExp(title) }).first();
 
     const front = page
-      .locator('[data-pane="panel"]')
+      .locator('[data-pane="panel"] .pane-tabs')
       .locator('[role="tab"][aria-selected="true"]');
 
     // The first thread is left with History alone.
@@ -386,7 +344,7 @@ test("each thread keeps the panes it had open", async () => {
     await thread("Second thread").click();
     await openSurface(page, "Files");
     const panel = page.locator('[data-pane="panel"]');
-    await expect(panel.getByRole("tab")).toHaveText(["Files"]);
+    await expect(panel.locator(".pane-tabs").getByRole("tab")).toHaveText(["Files"]);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

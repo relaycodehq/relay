@@ -56,6 +56,23 @@ it("keeps a picked list and an answer with quotes whole", () => {
   ]);
 });
 
+it("keeps quoted words inside a question", () => {
+  // Saved from a real thread, where the row showed only "?".
+  expect(
+    askedQuestions(
+      call(
+        'Your questions have been answered: "What did you mean by "switch is Y"?"="Yes, test on Switch", "Pick "a" or "b"?"="a". You can now continue with these answers in mind.',
+      ),
+    ),
+  ).toEqual([
+    {
+      question: 'What did you mean by "switch is Y"?',
+      answer: "Yes, test on Switch",
+    },
+    { question: 'Pick "a" or "b"?', answer: "a" },
+  ]);
+});
+
 it("has nothing to read from a declined or unfinished card", () => {
   expect(
     askedQuestions(call("No answers provided.", "failed")),

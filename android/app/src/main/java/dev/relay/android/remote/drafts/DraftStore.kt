@@ -76,12 +76,16 @@ class DraftStore(
     private val scope: CoroutineScope,
     private val now: () -> Long = System::currentTimeMillis,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    /** The clock an overview's askedAt is on. */
+    private val ticks: () -> Long = System::nanoTime,
 ) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false; encodeDefaults = false }
     private val copies = HashMap<String, LinkedHashMap<String, DraftCopy>>()
     private val theirs = HashMap<String, LinkedHashMap<String, SharedDraft>>()
     private val slots = HashMap<String, Map<String, String>>()
     private val devices = HashMap<String, String>()
+    /** When this phone last heard how each draft stands on the computer, on [ticks]. */
+    private val heardAt = HashMap<String, HashMap<String, Long>>()
     private val loading = HashMap<String, CompletableDeferred<Unit>>()
     private var link: Pair<String, DraftLink>? = null
 
@@ -111,6 +115,13 @@ class DraftStore(
     private fun mine(computer: String) = copies.getOrPut(computer) { LinkedHashMap() }
     private fun known(computer: String) = theirs.getOrPut(computer) { LinkedHashMap() }
     private fun shareable(key: String) = draftKeyPattern.matches(key)
+    private fun heardNow(computer: String, key: String) {
+        heardAt.getOrPut(computer) { HashMap() }[key] = ticks()
+    }
+
+    private fun heardSince(computer: String, at: Long): Set<String> =
+        heardAt[computer]?.filterValues { it >= at }?.keys.orEmpty()
+
     private fun leaving(copy: DraftCopy) = copy.leaving != null && now() - copy.leaving < LEAVING_MS
     private fun file(computer: String) = dir?.let { File(it, "${computer.hashCode().toUInt().toString(16)}-${computer.length}.json") }
 
@@ -163,8 +174,11 @@ class DraftStore(
         scope.launch { load(computer) }
     }
 
-    /** Online with a fresh overview: lines the drafts here up with the computer's. */
-    suspend fun online(computer: String, to: DraftLink, overview: RemoteOverview) {
+    /**
+     * Online with a fresh overview, asked for at [askedAt] on [ticks]: lines
+     * the drafts here up with the computer's.
+     */
+    suspend fun online(computer: String, to: DraftLink, overview: RemoteOverview, askedAt: Long = ticks()) {
         load(computer)
         val drafts = overview.drafts
         if ((overview.bridge ?: 1) < Bridge.DRAFTS || drafts == null) {
@@ -173,12 +187,15 @@ class DraftStore(
             return
         }
         link = computer to to
+        // Heard of since the overview was asked for, so it may list them as they were before:
+        // a draft pushed on reconnect would read as deleted there.
+        val newer = heardSince(computer, askedAt)
         val map = mine(computer)
         val there = known(computer)
-        there.clear()
-        for (draft in drafts) there[draft.key] = draft
-        val local = map.filter { (key, copy) -> shareable(key) && !leaving(copy) }
-        val plan = reconcileDrafts(local, drafts)
+        there.keys.retainAll(newer)
+        for (draft in drafts) if (draft.key !in newer) there[draft.key] = draft
+        val local = map.filter { (key, copy) -> shareable(key) && !leaving(copy) && (key !in newer || copy.dirty != null) }
+        val plan = reconcileDrafts(local, drafts.filter { it.key !in newer })
         for (draft in plan.take) {
             val copy = map[draft.key]
             if (copy != null && leaving(copy)) continue
@@ -202,6 +219,7 @@ class DraftStore(
     /** A draft changed on the computer, or on another phone. */
     fun heard(computer: String, change: DraftChange) {
         val (key, draft) = change.key to change.draft
+        heardNow(computer, key)
         if (draft != null) known(computer)[key] = draft else known(computer).remove(key)
         val map = mine(computer)
         val copy = map[key]
@@ -264,6 +282,7 @@ class DraftStore(
 
     /** The computer took a write: `after` is how the draft stands now. */
     private fun settle(computer: String, key: String, after: SharedDraft?, editedAt: Long) {
+        heardNow(computer, key)
         if (after != null) known(computer)[key] = after else known(computer).remove(key)
         val map = mine(computer)
         val copy = map[key] ?: return changed(computer)
@@ -322,6 +341,7 @@ class DraftStore(
         timers.remove(at)?.cancel()
         push(computer, key)
         val after = to.second.other(key, drop)
+        heardNow(computer, key)
         if (after != null) {
             known(computer)[key] = after
             mine(computer)[key] = DraftCopy(after.body(), synced = after.rev)
@@ -404,6 +424,7 @@ class DraftStore(
         theirs.remove(computer)
         slots.remove(computer)
         devices.remove(computer)
+        heardAt.remove(computer)
         loading.remove(computer)
         if (link?.first == computer) link = null
         saveTimers.remove(computer)?.cancel()

@@ -22,6 +22,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import dev.relay.android.features.markdown.Markdown
 import dev.relay.android.features.thread.logic.Clock
+import dev.relay.android.features.thread.logic.offersSecondOpinion
 import dev.relay.android.features.thread.logic.preview
 import dev.relay.android.features.thread.logic.quoteExcerpt
 import dev.relay.android.features.thread.logic.quoteMarkdown
@@ -114,12 +115,16 @@ fun messageMenu(
     /** Once the composer is there. */
     onQuote: ((String) -> Unit)?,
     onShare: (String) -> Unit,
+    /** Where the computer takes it, on a finished answer of the main conversation. */
+    onSecondOpinion: (() -> Unit)? = null,
 ): List<MenuItem> = buildList {
     val text = readText(m)
     add(MenuItem("Copy") { onCopy(text) })
     onReply?.let { add(MenuItem("Reply", "A side conversation that leaves this one as it is.", onPress = it)) }
     if (onFork != null && m.role == "assistant" && m.status == "complete" && m.parentId == null && m.side != true)
         add(MenuItem("Fork from here", "A new thread with the conversation up to this answer.", onPress = onFork))
+    if (onSecondOpinion != null && offersSecondOpinion(m))
+        add(MenuItem("Second opinion…", "Another agent checks this answer.", onPress = onSecondOpinion))
     if (text.isBlank()) return@buildList
     onQuote?.let { quote ->
         add(MenuItem("Quote", "The start of this message, into your reply") { quote(quoteMarkdown(quoteExcerpt(text))) })

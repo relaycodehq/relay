@@ -84,9 +84,13 @@ export function reviewerPrompt(
   return { kind: "custom", text };
 }
 
-/** A review starts with a pair; Add reviewer goes on up to this many. */
+/** A review starts with a pair; Add reviewer goes on up to this many, its passes counted. */
 export const MAX_REVIEWERS = 30;
-export const deepReviewStartSchema = z
+const reviewPassSchema = z
+  .array(z.string().trim().min(1).max(500))
+  .min(1)
+  .max(200);
+const deepReviewConfigSchema = z
   .object({
     target: reviewTargetSchema,
     reviewers: z.array(reviewAgentSchema).min(1).max(MAX_REVIEWERS),
@@ -96,12 +100,26 @@ export const deepReviewStartSchema = z
     focus: z.string().trim().max(4000),
     /** How the lead works on fixes afterwards, as in the composer. */
     runtimeMode: runtimeModeSchema,
+    /** The parts every reviewer reviews one after another; a review in one pass has none. */
+    passes: z.array(reviewPassSchema).max(MAX_REVIEWERS).optional(),
+    /** After the passes, one more over the whole change for how the parts fit together. */
+    seams: z.boolean().optional(),
   })
   .strict();
+
+/** How many times each reviewer reviews: once a pass, the seams counted. */
+export const passCount = (c: { passes?: unknown[]; seams?: boolean }) =>
+  c.passes?.length ? c.passes.length + (c.seams ? 1 : 0) : 1;
+
+export const deepReviewStartSchema = deepReviewConfigSchema.refine(
+  (c) => c.reviewers.length * passCount(c) <= MAX_REVIEWERS,
+  `Each pass runs every reviewer, and ${MAX_REVIEWERS} reviewers are the most a review runs. Take out a pass or a reviewer.`,
+);
+
 export type DeepReviewStart = z.infer<typeof deepReviewStartSchema>;
 
 /** A review's setup before it starts: what kind of change it covers, and who reviews and leads. */
-export const reviewDraftSetupSchema = deepReviewStartSchema
+export const reviewDraftSetupSchema = deepReviewConfigSchema
   .pick({ reviewers: true, lead: true, runChecks: true })
   .extend({
     kind: z
@@ -122,7 +140,7 @@ export const savedReviewSetupSchema = z.object({
   at: z.number(),
   name: z.string().max(REVIEW_SETUP_NAME_MAX).optional(),
   pinned: z.boolean().optional(),
-  setup: deepReviewStartSchema.pick({
+  setup: deepReviewConfigSchema.pick({
     reviewers: true,
     lead: true,
     runChecks: true,
@@ -132,7 +150,7 @@ export const savedReviewSetupSchema = z.object({
 export type SavedReviewSetup = z.infer<typeof savedReviewSetupSchema>;
 
 /** What a helper agent names a setup from, to find it again later. */
-export const reviewSetupSchema = deepReviewStartSchema.pick({
+export const reviewSetupSchema = deepReviewConfigSchema.pick({
   reviewers: true,
   lead: true,
   focus: true,
@@ -197,8 +215,12 @@ export interface DeepReviewState {
   /** The user message that asked for the review, and the round's key. */
   request: string;
   scope: ReviewScope;
-  /** Each reviewer works in a thread of its own, listed under the review's. */
-  reviewers: (ReviewAgent & { chatId: string })[];
+  /** Each reviewer works in a thread of its own, listed under the review's; a split review has each reviewer once a pass. */
+  reviewers: (ReviewAgent & { chatId: string; pass?: number })[];
+  /** The parts reviewed one after another, when the review is split. */
+  passes?: ReviewPassState[];
+  /** The pass whose reviewers work, or worked last. */
+  pass?: number;
   lead: LeadAgent;
   runChecks: boolean;
   focus?: string;
@@ -215,6 +237,34 @@ export interface DeepReviewState {
    */
   leadAnswer?: string;
 }
+
+/** A pass as its review runs it. */
+export interface ReviewPassState {
+  /** As written in the setup. */
+  paths: string[];
+  /** What its reviewers are asked to diff: its paths, less what other passes and fixtures took. */
+  specs: string[];
+  /** Lines its reviewers read, lockfiles and fixtures left out. */
+  lines: number;
+  /** The last pass, over the whole change: how the other passes' parts fit together. */
+  seams?: boolean;
+}
+
+/** The reviewers' slots of pass `pass`, or of the whole review when it isn't split. */
+export const passSlots = (state: DeepReviewState, pass: number) =>
+  [...state.reviewers.keys()].filter(
+    (slot) => (state.reviewers[slot]!.pass ?? 0) === pass,
+  );
+
+/** A reviewer whose pass has started: those of later passes haven't been asked yet. */
+export const passStarted = (
+  state: DeepReviewState,
+  reviewer: { pass?: number },
+) => (reviewer.pass ?? 0) <= (state.pass ?? 0);
+
+/** A split review's reviewers have a pass after this one to start. */
+export const hasNextPass = (state: DeepReviewState) =>
+  (state.pass ?? 0) < (state.passes?.length ?? 1) - 1;
 
 /** The thread's latest round: the one Stop, Resume and following its branch act on. */
 export const latestReview = <R>(chat: { reviews?: R[] }) =>
@@ -270,10 +320,14 @@ export const reviewRunning = (state: DeepReviewState | undefined) =>
 export type ResumeReview = { slot: number } | { lead: true };
 
 /** A reviewer's thread name: its place in the review and what it runs on. */
-export function reviewerTitle(slot: number, reviewer: ReviewAgent) {
+export function reviewerTitle(
+  slot: number,
+  reviewer: ReviewAgent & { pass?: number },
+) {
   const { model, reasoningEffort, fast } = reviewer.choice;
   return [
     `Reviewer ${slot + 1}`,
+    reviewer.pass !== undefined && `pass ${reviewer.pass + 1}`,
     agentName(reviewer.provider),
     model,
     reasoningEffort,

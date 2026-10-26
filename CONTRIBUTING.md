@@ -96,8 +96,7 @@ Desktop tests use isolated local fixtures and synthetic credential storage. Leav
 visual changes in the actual UI and include a screenshot or short recording in
 your PR. Headless service changes also need `npm run build:headless`; installer
 changes have Python checks in `tests/packaging/`. See
-[development and releases](docs/development.md) and
-[the CI workflow](.github/workflows/checks.yml) for the full checks.
+[development and releases](docs/development.md) for the full checks.
 
 ## Send a pull request
 

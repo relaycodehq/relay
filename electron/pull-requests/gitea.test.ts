@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Gitea } from "./gitea";
+import { giteaMergeMethods } from "./gitea-merge";
 
 const account = {
   id: "https://git.example.com#7",
@@ -123,4 +124,82 @@ it("doesn't renew more than once or retry a write after an ambiguous failure", a
     expect(asked).toBe(failure === 401 ? 1 : 0);
     expect(sent).toBe(failure === 401 ? 2 : 1);
   }
+});
+
+it("offers Gitea's allowed merge methods with the repository's default first", () => {
+  expect(
+    giteaMergeMethods({
+      allow_merge_commits: true,
+      allow_squash_merge: true,
+      allow_rebase: false,
+      default_merge_style: "squash",
+    }),
+  ).toEqual(["squash", "merge"]);
+  // A rebase-merge or fast-forward default isn't one Relay offers; the order stays.
+  expect(giteaMergeMethods({ default_merge_style: "rebase-merge" })).toEqual([
+    "merge",
+    "squash",
+    "rebase",
+  ]);
+});
+
+/** A Gitea that answers from `routes`, keyed by method and API path without the query. */
+function routed(routes: Record<string, () => Response>) {
+  const fetch = async (url: string, options: RequestInit) => {
+    const path = new URL(url).pathname.replace("/api/v1", "");
+    const route = routes[`${options.method ?? "GET"} ${path}`];
+    return route ? route() : new Response("{}", { status: 404 });
+  };
+  const gitea = new Gitea(account, "token", fetch);
+  gitea.mergeableRechecks = [0, 0];
+  return gitea;
+}
+
+const ref = { owner: "o", name: "r", number: 7 };
+const pr = (mergeable: boolean) =>
+  Response.json({
+    mergeable,
+    draft: false,
+    base: { ref: "main" },
+    merge_base: "m",
+  });
+
+it("asks again while Gitea is still checking a PR, and believes a no that lasts", async () => {
+  const answers = [false, true];
+  const checking = routed({
+    "GET /repos/o/r/pulls/7": () => pr(answers.shift() ?? true),
+    "GET /repos/o/r": () => Response.json({}),
+  });
+  expect((await checking.mergeReadiness(ref)).status).toBe("clean");
+
+  let asked = 0;
+  const conflicted = routed({
+    "GET /repos/o/r/pulls/7": () => (asked++, pr(false)),
+    "GET /repos/o/r": () => Response.json({}),
+  });
+  expect((await conflicted.mergeReadiness(ref)).status).toBe("conflicts");
+  expect(asked).toBe(3);
+});
+
+it.each([
+  [
+    409,
+    { message: "head out of date" },
+    "A new commit arrived. Refresh before merging.",
+  ],
+  [
+    409,
+    { Style: "squash", StdErr: "CONFLICT (content)" },
+    "It conflicts with the base branch now.",
+  ],
+  [
+    405,
+    { message: "User not allowed to merge PR" },
+    "Gitea refused this: User not allowed to merge PR",
+  ],
+])("says why Gitea refused a merge (%i %j)", async (status, body, said) => {
+  const gitea = routed({
+    "POST /repos/o/r/pulls/7/merge": () => Response.json(body, { status }),
+  });
+  await expect(gitea.merge(ref, "h", "squash")).rejects.toThrow(said);
 });

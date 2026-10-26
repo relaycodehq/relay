@@ -120,7 +120,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The list with the selected file or folder beside it. */
+/* The list with the selected file or folder beside it. The list alone sets
+   the height (the menu keeps room for a peek), so hovering another row never
+   resizes the menu and moves the rows under the pointer. */
 .mention-split {
   flex: 1;
   min-height: 0;
@@ -131,6 +133,7 @@
   border-right: 1px solid var(--border);
 }
 .mention-peek-pane {
+  contain: size;
   min-width: 0;
   min-height: 0;
   display: flex;

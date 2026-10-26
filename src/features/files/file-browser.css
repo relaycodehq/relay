@@ -25,6 +25,51 @@
   width: 24px;
   height: 24px;
 }
+/* With folders linked to the thread, every tree folds away under its name. */
+.file-tree-head:has(.file-tree-fold) {
+  padding-left: 6px;
+}
+.file-tree-fold {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+}
+.file-tree-fold svg {
+  flex: none;
+  transition: transform 0.12s;
+}
+.file-tree-fold svg.open {
+  transform: rotate(90deg);
+}
+.file-tree-fold:hover {
+  background: none;
+}
+.file-tree-fold:hover strong {
+  color: var(--text);
+}
+/* The trees share one scroll rather than each scrolling its own. */
+.file-roots {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.file-roots .file-tree,
+.file-roots .file-tree-body {
+  flex: none;
+  overflow: visible;
+}
+.file-roots .file-tree-body {
+  padding-bottom: 4px;
+}
 .file-tree-body {
   flex: 1;
   min-height: 0;
@@ -43,7 +88,9 @@
 .file-tree-row.selected {
   background: var(--selected);
 }
-.file-tree-row button {
+/* The row shows hover and selection; a button painting its own hover would cover half of it. */
+.file-tree-row button,
+.file-tree-row button:hover {
   border: 0;
   background: transparent;
   border-radius: 0;
@@ -188,18 +235,6 @@
   flex: 1;
   min-height: 0;
 }
-.project-inline-editor .local-editor-path {
-  padding: 10px 14px;
-}
-.project-inline-editor .local-editor-footer {
-  padding: 8px;
-}
-.project-inline-editor .editor-shortcuts {
-  display: none;
-}
-.project-inline-editor .local-editor-note {
-  display: none;
-}
 .project-editor-empty {
   flex: 1;
 }
@@ -274,4 +309,219 @@
 .markdown-preview-missing {
   color: var(--muted);
   font-style: italic;
+}
+
+/* Open files across the top of the editor: names in muted text, the front one in the text's own. */
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  min-height: 34px;
+  border-bottom: 1px solid var(--border);
+  background: var(--sidebar);
+  flex-shrink: 0;
+}
+.editor-tabs > .file-list-toggle {
+  align-self: center;
+  margin: 0 0 0 6px;
+}
+.editor-tabs > .editor-window-button {
+  align-self: center;
+  margin: 0 6px 0 0;
+}
+.editor-tabs-strip {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+}
+.editor-tab:hover,
+.editor-tab.active {
+  color: var(--text);
+}
+/* A file only looked at, which the next one takes the place of. */
+.editor-tab.preview .editor-tab-name {
+  font-style: italic;
+}
+/* With splits, only the focused one's front tab is in the text's colour. */
+.editor-groups:has(> .editor-group.focused) > .editor-group:not(.focused) .editor-tab.active:not(:hover) {
+  color: var(--muted);
+}
+.editor-tab.dragging {
+  opacity: 0.5;
+}
+.editor-tab-hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+.editor-tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  visibility: hidden;
+}
+.editor-tab-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.editor-tab:hover .editor-tab-close,
+.editor-tab.active .editor-tab-close,
+.editor-tab.unsaved .editor-tab-close,
+.editor-tab-close.pinned {
+  visibility: visible;
+}
+/* An unsaved tab shows a dot in place of its × until the pointer is over it. */
+.editor-tab.unsaved:not(:hover) .editor-tab-close svg {
+  display: none;
+}
+.editor-tab.unsaved:not(:hover) .editor-tab-close::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Find in Files, docked under the editor. */
+.files-find {
+  display: flex;
+  flex-direction: column;
+  height: 42%;
+  min-height: 180px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* The editor's splits, side by side or stacked. */
+.editor-groups {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-groups.column {
+  flex-direction: column;
+}
+.editor-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-groups.row > .editor-group + .editor-group {
+  border-left: 1px solid var(--border);
+}
+.editor-groups.column > .editor-group + .editor-group {
+  border-top: 1px solid var(--border);
+}
+.editor-tabs > .editor-split-button {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+}
+
+/* The editor's own bars above the code (find, go to line) share the chrome's colour. */
+.files-workspace {
+  --editor-chrome: var(--sidebar);
+}
+
+/* Files, Changes and Against: words in a row as tall as the tabs beside it,
+   the shown one underlined like the pane's own tabs. */
+.sidebar-views {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 34px;
+  padding: 0 10px;
+  /* Drawn inside, so the underline can cover it as the pane tabs' does. */
+  box-shadow: inset 0 -1px 0 var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+/* A count sits close to its name, so it doesn't read as the next view's. */
+.sidebar-views > button {
+  gap: 4px;
+  min-height: 0;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+.sidebar-views > button:hover,
+.sidebar-views > button.active {
+  background: transparent;
+  color: var(--text);
+}
+.sidebar-views > button.active {
+  border-bottom-color: var(--accent);
+}
+.sidebar-views-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.project-file-list > .local-changes {
+  background: transparent;
+}
+
+/* Frosted glass: the list, the tabs and the status line let the vibrancy
+   through like the app's sidebar; the code stays solid to read. */
+:root[data-glass] .workspace-pane:has(> .panel-body:not([hidden]) > .files-workspace),
+:root[data-glass] .editor-window-body {
+  background: transparent;
+}
+:root[data-glass] .workspace-pane:has(> .panel-body:not([hidden]) > .files-workspace) > .panel-header {
+  background: color-mix(in srgb, var(--sidebar) var(--glass-header), transparent);
+  border-bottom-color: var(--sidebar-edge);
+}
+:root[data-glass] .files-workspace {
+  --hover: color-mix(in srgb, var(--text) 8%, transparent);
+  --selected: color-mix(in srgb, var(--text) 12%, transparent);
+  --border: var(--sidebar-edge);
+  --editor-chrome: color-mix(in srgb, var(--sidebar) var(--glass-sidebar), transparent);
+}
+:root[data-glass] .files-workspace .project-file-list,
+:root[data-glass] .files-workspace .editor-tabs,
+:root[data-glass] .files-workspace .editor-bar {
+  background: color-mix(in srgb, var(--sidebar) var(--glass-sidebar), transparent);
+}
+:root[data-glass] .files-workspace .files-main {
+  background: transparent;
+}
+:root[data-glass] .files-workspace .files-find,
+:root[data-glass] .files-workspace .markdown-preview {
+  background: var(--surface);
+}
+/* Frosted chat lets the frost through the code too, at the chat's own frost. */
+:root[data-glass-chat] .files-workspace {
+  --code-solid: var(--code-background);
+}
+:root[data-glass-chat] .files-workspace .code-editor {
+  --code-background: color-mix(in srgb, var(--code-solid) var(--glass-chat), transparent);
+  --code-mix-base: transparent;
+  --code-gutter-background: transparent;
+}
+:root[data-glass-chat] .files-workspace .markdown-preview {
+  background: color-mix(in srgb, var(--surface) var(--glass-chat), transparent);
 }

@@ -7,7 +7,7 @@ import type { AgentQuestion } from "../agent-modes";
 import type { AskedQuestion } from "../asked-questions";
 import type { HtmlRender } from "../html-render";
 import type { TurnPreview } from "../preview";
-import type { Streamed } from "../usage";
+import type { Streamed, UsageTokens } from "../usage";
 import type { ResumeSettings } from "./send";
 import type { ElsewhereEdits } from "../elsewhere";
 import type { ImportOffer } from "../import-offer";
@@ -118,6 +118,8 @@ export interface ChatMessage {
   cost?: number;
   /** Local: what the agent itself wrote and how long writing it took, for its speed; subagents aren't in it. */
   streamed?: Streamed;
+  /** Local: the tokens the agent's own requests read and wrote, for its cache hit; subagents aren't in it. */
+  tokens?: UsageTokens;
   /** Local: the model and settings this answer ran on. */
   model?: TurnModel;
   /** Local proposed-plan action. */
@@ -184,6 +186,8 @@ export interface ChatMessage {
   imported?: true;
   /** Local: Relay sent this message for one of the user's schedules. */
   scheduled?: import("../schedules").ScheduleMessage;
+  /** Local: it asks for a second opinion on this; the body is the prompt its agent got. */
+  secondOpinion?: import("../second-opinion").SecondOpinionAsked;
   seq?: number;
   parentId?: string | null;
   pending?: boolean;
@@ -239,7 +243,33 @@ export interface AgentActivity {
   mcp?: { server: string; tool: string };
   /** The picture the call made, by absolute path; the turn shows it as an image it read. */
   image?: string;
+  /** The code a call wrote, per file, for its row to show opened (shared/call-actions). */
+  written?: WrittenCode[];
+  /** Phones only: the call wrote code, left out here; `activityWritten` has it. */
+  wroteCode?: true;
+  /** Phones only: what the call did, read by the desktop from its command or tool. */
+  actions?: import("../call-actions").CallAction[];
 }
+
+/**
+ * What a call wrote into one file: all of it, the passages it swapped, or a
+ * patch. `cut` when it ran past `writtenLimit` and lost its end.
+ */
+export type WrittenCode = {
+  path: string;
+  cut?: true;
+  /** Nothing kept: the file looks like it holds keys or passwords. */
+  secret?: true;
+} & (
+  | { kind: "whole"; content: string }
+  | {
+      kind: "swap";
+      edits: { old: string; new: string }[];
+      /** The file was deleted; its one edit takes out all it held. */
+      deleted?: true;
+    }
+  | { kind: "patch"; diff: string }
+);
 
 export type TraceDropped = Partial<
   Record<AgentActivity["kind"] | "failed", number>

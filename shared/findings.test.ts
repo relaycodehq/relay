@@ -22,6 +22,18 @@ describe("findings block", () => {
     ]);
   });
 
+  it("reads the report of a big change reviewed in passes", () => {
+    const findings = Array.from({ length: 87 }, (_, i) => ({
+      id: `F${i + 1}`,
+      priority: "P2",
+      title: `Problem ${i + 1}`,
+    }));
+    const { report } = extractFindings(
+      `Kept 87.\n\n\`\`\`relay-findings\n${JSON.stringify({ findings })}\n\`\`\`\n`,
+    );
+    expect(report?.findings).toHaveLength(87);
+  });
+
   it("reads a block whose finding quotes a code fence", () => {
     const { body, report } = extractFindings(
       'See `F1`.\n\n```relay-findings\n{"findings":[{"id":"F1","priority":"P2","title":"Stops at the ``` in a string"}]}\n```',

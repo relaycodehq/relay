@@ -11,6 +11,7 @@ import {
   type PastedText,
 } from "../../../../shared/pasted-texts";
 import { fileMarkdown } from "../prompt-text";
+import { PILL_MARK } from "../../../lib/pill-marks";
 import "./pills.css";
 
 /**
@@ -29,14 +30,6 @@ export interface PillLook {
   /** Its mark in copied HTML, which a composer reads it back from on paste. */
   marks: Record<string, string>;
 }
-
-/** The attribute marking each kind of pill, with what it stands for as its value. */
-export const PILL_MARK = {
-  skill: "data-relay-skill",
-  quote: "data-relay-quote",
-  file: "data-relay-file",
-  paste: "data-relay-paste",
-} as const;
 
 export const skillPill = (token: string, label: string): PillLook => ({
   kind: "skill",

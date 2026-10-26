@@ -20,7 +20,7 @@ it("caps a failed command's output and keeps its arguments out", () => {
   expect(JSON.stringify(activity)).not.toContain("hidden");
 });
 
-it("names a file change by its path, never its patch, and skips reasoning", () => {
+it("names a file change by its path, keeps its patch to show, and skips reasoning", () => {
   expect(
     codexActivity("item/started", {
       id: "b",
@@ -33,6 +33,7 @@ it("names a file change by its path, never its patch, and skips reasoning", () =
     label: "src/cache.ts",
     status: "running",
     detail: "src/cache.ts",
+    written: [{ kind: "patch", path: "src/cache.ts", diff: "private patch" }],
   });
   expect(
     codexActivity("item/completed", {

@@ -1,10 +1,10 @@
-import { ArrowUpRight } from "lucide-react";
 import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { agentName } from "../../../shared/agents";
 import { clock } from "../../../shared/waiting";
 import { RichText } from "../../ui/RichText";
 import { Spinner } from "../../ui/ui";
+import { ThreadFrame } from "../../ui/ThreadFrame";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { useStartedThreads } from "../agent-turn/StartedThreads";
 import "./child-thread-message.css";
@@ -36,22 +36,14 @@ export function ChildThreadMessage({
       data-message-id={m.id}
       aria-label={`From ${from?.title ?? m.author}`}
     >
-      <div className="child-thread-frame">
-        <header>
-          {from?.provider && <ProviderIcon provider={from.provider} />}
-          <b>{from?.title ?? m.author}</b>
-          {state && <span data-state={m.fromChild}>{state}</span>}
-          {from && started && (
-            <button
-              type="button"
-              className="child-thread-open"
-              onClick={() => started.open(from)}
-            >
-              Open <ArrowUpRight size={12} />
-            </button>
-          )}
-        </header>
-        <div className="child-thread-body">
+      <ThreadFrame
+        icon={from?.provider && <ProviderIcon provider={from.provider} />}
+        title={from?.title ?? m.author ?? ""}
+        status={state}
+        failed={m.fromChild === "failed"}
+        onOpen={from && started ? () => started.open(from) : undefined}
+      >
+        <div className="thread-frame-body">
           <div className="child-thread-who">
             {from?.provider && (
               <>
@@ -79,7 +71,7 @@ export function ChildThreadMessage({
             />
           </div>
         </div>
-      </div>
+      </ThreadFrame>
     </article>
   );
 }

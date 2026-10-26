@@ -8,7 +8,12 @@ import type { CodeReference } from "../../../shared/code-references";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
 import { api } from "../../lib/api";
 import type { RequestChannel } from "../../lib/request-channel";
-import { changeSections, gitBlockedReason, folderKey } from "./working-changes";
+import {
+  changeSections,
+  gitBlockedReason,
+  folderKey,
+  type ListArea,
+} from "./working-changes";
 import { parentOf } from "../../lib/file-tree";
 import { useSavedChanges } from "./useSavedChanges";
 import { useWorkingDiff, useWorkingTree } from "./useWorkingTree";
@@ -27,7 +32,6 @@ import { useAISettings } from "../agents/useAISettings";
 import { helperOn } from "../../../shared/settings";
 import type { PaneSlots } from "../../ui/WorkspacePanes";
 import { ElsewhereGroups } from "./elsewhere/ElsewhereGroups";
-import { ElsewhereReview } from "./elsewhere/ElsewhereReview";
 import { useElsewhere, type ElsewherePick } from "./elsewhere/useElsewhere";
 import "./working-tree.css";
 
@@ -41,8 +45,9 @@ export function LocalChanges({
   reveals,
   chatId,
   onOpenThread,
-  onOpenOutside,
   agentRunning,
+  opens = { here: true },
+  onOpenElsewhere,
 }: {
   pull?: Pull;
   projectId?: string;
@@ -57,11 +62,17 @@ export function LocalChanges({
   /** The thread whose agents' changes in other repositories list under its own. */
   chatId?: string;
   onOpenThread?: (chatId: string) => void;
-  /** Opens a file outside the folder by its absolute path. */
-  onOpenOutside?: (path: string) => void;
   /** The thread's agent is at work in this folder. */
   agentRunning?: boolean;
+  /**
+   * Where a picked file opens: as a diff here, or beside the editor, which
+   * shows it with its changes inline while this is just the list.
+   */
+  opens?: { here: true } | { here: false; open: (change: { path: string; area: ListArea }) => void };
+  /** Opens a changed file of another repository the thread's agents worked in. */
+  onOpenElsewhere?: (pick: ElsewherePick) => void;
 }) {
+  const listOnly = !opens.here;
   const [split, setSplit] = useSplitDiff();
   const splits = helperOn(useAISettings().data, "split");
   const { selected, setSelected, message, setMessage, grouped, setGrouped } =
@@ -71,7 +82,8 @@ export function LocalChanges({
   }, [selected?.path]);
   const working = useWorkingTree(pull, projectId);
   const { state, tree, busy, error, notice, act } = working;
-  const diff = useWorkingDiff(working, pull, projectId, selected);
+  // Beside the editor there's no diff here to fetch.
+  const diff = useWorkingDiff(working, pull, projectId, listOnly ? null : selected);
   const [push, setPush] = useState(false),
     [splitting, setSplitting] = useState(false),
     [collapsed, setCollapsed] = useState<ChangeArea[]>([]),
@@ -90,33 +102,28 @@ export function LocalChanges({
     list: fileList,
   });
   const sections = tree ? changeSections(tree.changes) : [];
+  const pickAndOpen = (path: string, area: ListArea) => {
+    pick(path, area);
+    if (!opens.here) opens.open({ path, area });
+  };
   const elsewhere = useElsewhere(chatId).data;
-  const [away, setAway] = useState<ElsewherePick | null>(null);
-  // A file picked in this folder, by a click or from the chat, takes over the diff.
-  useEffect(() => {
-    if (selected) setAway(null);
-  }, [selected]);
-  const awayGroup =
-    away && elsewhere?.groups.find((g) => g.root === away.root);
-  // Committed or reverted there, it has no diff left to show.
-  const awayGone =
-    !!away &&
-    !!elsewhere &&
-    !awayGroup?.files.some((f) => f.path === away.path);
-  useEffect(() => {
-    if (awayGone) setAway(null);
-  }, [awayGone]);
   return (
-    <section className="local-changes" aria-label="Local changes">
-      <ChangesToolbar
-        projectId={projectId}
-        slots={slots}
-        tree={tree}
-        busy={busy}
-        onRefresh={() => void state.refetch()}
-        onPush={() => setPush(true)}
-        agentRunning={agentRunning}
-      />
+    <section
+      className={`local-changes${listOnly ? " list-only" : ""}`}
+      aria-label="Local changes"
+    >
+      {/* Beside the editor the thread's header has the branch and its Push. */}
+      {!listOnly && (
+        <ChangesToolbar
+          projectId={projectId}
+          slots={slots}
+          tree={tree}
+          busy={busy}
+          onRefresh={() => void state.refetch()}
+          onPush={() => setPush(true)}
+          agentRunning={agentRunning}
+        />
+      )}
       {state.error && (
         <>
           <ErrorBox error={state.error} />
@@ -152,13 +159,15 @@ export function LocalChanges({
         tree && (
           <div className="working-content">
             <aside className="working-sidebar">
-              <PaneResizer
-                pane="changes"
-                label="Resize changed files"
-                initial={250}
-                min={200}
-                max={600}
-              />
+              {!listOnly && (
+                <PaneResizer
+                  pane="changes"
+                  label="Resize changed files"
+                  initial={250}
+                  min={200}
+                  max={600}
+                />
+              )}
               <ChangeList
                 sections={sections}
                 ignored={tree.ignored ?? []}
@@ -185,7 +194,7 @@ export function LocalChanges({
                 projectId={projectId}
                 listRef={fileList}
                 onAct={(action) => void act(action)}
-                onPick={pick}
+                onPick={listOnly ? pickAndOpen : pick}
                 onDismiss={(paths) =>
                   projectId &&
                   void api
@@ -204,11 +213,8 @@ export function LocalChanges({
                     <ElsewhereGroups
                       chatId={chatId}
                       groups={elsewhere.groups}
-                      selected={away}
-                      onPick={(pick) => {
-                        setSelected(null);
-                        setAway(pick);
-                      }}
+                      selected={null}
+                      onPick={(picked) => onOpenElsewhere?.(picked)}
                       onOpenThread={onOpenThread}
                     />
                   )
@@ -234,35 +240,28 @@ export function LocalChanges({
                 }
               />
             </aside>
-            {chatId && away ? (
-              <ElsewhereReview
-                chatId={chatId}
-                pick={away}
-                revision={awayGroup?.revision}
-                onOpenOutside={onOpenOutside}
-              />
-            ) : (
-              <ChangeReview
-                tree={tree}
-                selected={selected}
-                diff={diff}
-                missing={missing}
-                split={split}
-                onSplit={setSplit}
-                line={line}
-                onLineShown={() => setLine(undefined)}
-                onOpenFile={onOpenFile}
-                onReveal={
-                  projectId
-                    ? (path) =>
-                        void api
-                          .revealProjectPath(projectId, path)
-                          .catch(working.setError)
-                    : undefined
-                }
-                onAsk={onAsk}
-              />
-            )}
+            {!listOnly && (
+                <ChangeReview
+                  tree={tree}
+                  selected={selected}
+                  diff={diff}
+                  missing={missing}
+                  split={split}
+                  onSplit={setSplit}
+                  line={line}
+                  onLineShown={() => setLine(undefined)}
+                  onOpenFile={onOpenFile}
+                  onReveal={
+                    projectId
+                      ? (path) =>
+                          void api
+                            .revealProjectPath(projectId, path)
+                            .catch(working.setError)
+                      : undefined
+                  }
+                  onAsk={onAsk}
+                />
+              )}
           </div>
         )
       )}

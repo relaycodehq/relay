@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { DeepReviewStart } from "../../../shared/deep-review";
+import {
+  MAX_REVIEWERS,
+  passCount,
+  type DeepReviewStart,
+} from "../../../shared/deep-review";
 import type { PullRef, Repo } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { threadStorage } from "../../lib/thread-storage";
@@ -31,6 +35,7 @@ import {
 import { useClaudeModels } from "../agents/useClaudeModels";
 import { usePoll } from "../../lib/poll";
 import { readText, writeJson, writeText } from "../../lib/persisted-store";
+import { useReviewPasses } from "./passes/useReviewPasses";
 
 /**
  * Keeps `change` with the unsent review, and the setup it was made with the
@@ -234,6 +239,8 @@ export function useDeepReviewSetup({
     branch,
     changes,
   );
+  const passes = useReviewPasses(projectId, pick.target, changes);
+  const runs = setup.reviewers.length * passCount(passes);
   const choice: ReviewSetupChoice = {
     reviewers: setup.reviewers,
     lead: setup.lead,
@@ -241,7 +248,7 @@ export function useDeepReviewSetup({
   };
   async function start() {
     const { target } = pick;
-    if (!target || busy) return;
+    if (!target || busy || runs > MAX_REVIEWERS) return;
     // The lead works on fixes the way the composer was last set for new threads.
     const { runtimeMode } = loadComposerSettings(draftId);
     const started = await onStart({
@@ -251,6 +258,10 @@ export function useDeepReviewSetup({
       runChecks: setup.runChecks,
       focus: focus.trim(),
       runtimeMode,
+      ...(passes.passes.length && {
+        passes: passes.passes,
+        seams: passes.seams,
+      }),
     });
     if (!started) return;
     recordReviewSetup(choice, focus.trim());
@@ -259,5 +270,16 @@ export function useDeepReviewSetup({
     clearDraftScope(draftId);
     if (!hasDraft(draftId)) forgetNewThread(draftId);
   }
-  return { setup, update, focus, setFocus, pick, choice, start };
+  return {
+    setup,
+    update,
+    focus,
+    setFocus,
+    pick,
+    passes,
+    /** Reviewer runs, once a pass each: past MAX_REVIEWERS it can't start. */
+    runs,
+    choice,
+    start,
+  };
 }

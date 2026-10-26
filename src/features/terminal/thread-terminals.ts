@@ -145,16 +145,23 @@ export class ThreadTerminal {
     this.error = undefined;
     this.emit();
     try {
+      const size = { cols: this.term.cols, rows: this.term.rows };
       const opened = await api.openTerminal(
         this.projectId,
         this.chatId,
-        { cols: this.term.cols, rows: this.term.rows },
+        size,
         fresh,
         this.slot || undefined,
       );
       this.cwd = opened.cwd;
       if (opened.backlog) this.term.write(opened.backlog);
       this.status = "running";
+      // A fit while the shell opened wasn't sent; programs drawing to the old
+      // size leave the cursor where xterm doesn't expect it.
+      if (this.term.cols !== size.cols || this.term.rows !== size.rows)
+        void api
+          .resizeTerminal(this.key, this.term.cols, this.term.rows)
+          .catch(() => {});
       for (const data of this.early.splice(0)) this.output(data);
       if (this.typed && opened.exitCode === undefined)
         void api.writeTerminal(this.key, this.typed).catch(() => {});

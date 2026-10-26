@@ -61,8 +61,21 @@ export async function openPull(page: Page, title: RegExp | string) {
   if (await board.isVisible())
     await page.getByRole("button", { name: title }).first().click();
 }
-/** Opens a file in the Files pane's tree, unfolding each folder on the way. */
-export async function openInFileTree(page: Page, path: string) {
+/**
+ * Opens a file in the Files pane's tree, unfolding each folder on the way.
+ * A click previews it, in a tab the next file replaces; `keep` double-clicks
+ * for a tab of its own.
+ */
+export async function openInFileTree(
+  page: Page,
+  path: string,
+  { keep = false } = {},
+) {
+  // The sidebar may be showing the changes instead of the files.
+  const filesView = page
+    .getByRole("tablist", { name: "Sidebar" })
+    .getByRole("tab", { name: "Files", exact: true });
+  if (await filesView.isVisible()) await filesView.click();
   const tree = page.locator(".file-tree");
   const names = path.split("/");
   for (const [i, name] of names.entries()) {
@@ -73,7 +86,9 @@ export async function openInFileTree(page: Page, path: string) {
       (await item.getAttribute("aria-expanded")) === "true"
     )
       continue;
-    await item.click();
+    const keepsTab = keep && i === names.length - 1;
+    if (keepsTab) await item.dblclick();
+    else await item.click();
   }
 }
 

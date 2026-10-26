@@ -11,7 +11,7 @@ import type { Project } from "../../../shared/projects";
 import type { FileInfo } from "../../../shared/project-files";
 import type { ChecksController } from "../checks/useProjectChecks";
 import { requestChannel } from "../../lib/request-channel";
-import type { FileTarget } from "./file-link-target";
+import type { FilesRequest } from "./file-link-target";
 import { ProjectFiles } from "./ProjectFiles";
 
 const mocks = vi.hoisted(() => ({
@@ -52,7 +52,7 @@ vi.mock("../../ui/ui", () => ({
   ),
 }));
 
-vi.mock("./editor/LocalFileEditor", () => ({
+vi.mock("../editor/TextFile", () => ({
   default: function Editor() {
     const [text, setText] = useState("original");
     useEffect(() => {
@@ -85,7 +85,7 @@ const onViewing = () => {};
 let root: Root;
 let host: HTMLDivElement;
 let client: QueryClient;
-let opens: ReturnType<typeof requestChannel<FileTarget>>;
+let opens: ReturnType<typeof requestChannel<FilesRequest>>;
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -93,7 +93,7 @@ beforeEach(() => {
   host = document.createElement("div");
   root = createRoot(host);
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  opens = requestChannel<FileTarget>();
+  opens = requestChannel<FilesRequest>();
   mocks.info.mockImplementation(
     async (_where: string, path: string): Promise<FileInfo> => ({
       path,

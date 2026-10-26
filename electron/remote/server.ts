@@ -26,6 +26,7 @@ import {
   type RemoteMethod,
   type ServerFrame,
 } from "../../shared/remote";
+import { inWsl } from "../platform/wsl";
 import { SignInUnavailable, type RemoteDevices } from "./devices";
 import { LinkSender } from "./link-sender";
 import { MessageBatches } from "./message-batches";
@@ -124,6 +125,16 @@ export const nodeCodec: Codec = {
   deflateUpTo: Infinity,
 };
 
+/** WSL's mirrored networking shares Windows' ports, so the other Relay may hold this one. */
+function portTaken(port: number) {
+  const taken = `Port ${port} is taken by another app.`;
+  if (process.platform === "win32")
+    return `${taken} If it's Relay in WSL, relay settings set phone-access off there frees it.`;
+  if (inWsl())
+    return `${taken} If it's Relay on Windows, relay restart --port ${port + 1} moves this one.`;
+  return taken;
+}
+
 /** The desktop end of the phone remote; see shared/remote-crypto for the channel. */
 export class RemoteServer {
   private server?: WebSocketServer;
@@ -157,12 +168,17 @@ export class RemoteServer {
     return this.server ? this.bound : undefined;
   }
 
-  /** With `lan`, devices on the local network may connect as well as the tailnet's. */
-  async listen(host: string, lan = false) {
+  /**
+   * With `lan`, devices on the local network may connect as well as the
+   * tailnet's. With `anyPort` it takes whichever port is free instead of its
+   * own, for a loopback only `relay pipe` reaches: WSL's mirrored networking
+   * shares the loopback with Windows, where the desktop Relay has that port.
+   */
+  async listen(host: string, { lan = false, anyPort = false } = {}) {
     if (this.server) return;
     const key = await this.options.devices.key();
     const server = new WebSocketServer({
-      port: this.options.port,
+      port: anyPort ? 0 : this.options.port,
       host,
       // Image batches share the phones' socket budget, independent of image count.
       maxPayload: maxFrameBytes,
@@ -175,7 +191,7 @@ export class RemoteServer {
       server.close();
       throw new Error(
         e.code === "EADDRINUSE"
-          ? `Port ${this.options.port} is taken by another app.`
+          ? portTaken(this.options.port)
           : `Phone access couldn't start: ${e.message}`,
       );
     });

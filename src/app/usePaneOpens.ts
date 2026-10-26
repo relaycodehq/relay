@@ -1,22 +1,19 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  matchLink,
-  splitOutsidePath,
-  type ProjectFileLink,
-} from "../../shared/project-file-links";
+import type { ProjectFileLink } from "../../shared/project-file-links";
 import type { QuestionTarget } from "../../shared/questions";
 import type { Pull } from "../../shared/types";
 import { api } from "../lib/api";
 import { threadDraftKey } from "../lib/thread-storage";
-import {
-  changedTarget,
-  fileTarget,
-  type FileTarget,
-} from "../features/files/file-link-target";
+import type { FilesRequest } from "../features/files/file-link-target";
+import { changeOpeners } from "./change-openers";
+import { chatFileOpener } from "./chat-file-opener";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { requestChannel } from "../lib/request-channel";
-import type { TurnDiffTarget } from "../features/changes/turn-diff";
+import {
+  isEditorElsewhere,
+  openInEditorWindow,
+} from "../features/editor-windows/editor-windows";
 import type { ShellNavigation } from "./useShellNavigation";
 import type { ThreadFolder } from "./useThreadFolder";
 import {
@@ -31,8 +28,9 @@ export type PaneOpens = ReturnType<typeof usePaneOpens>;
 
 /**
  * What the chat and the title bar ask the panes to show: a pane, a surface
- * in the panel, a file in Files, a change or a turn's diff in Changes; and
- * the code the panes ask the chat about.
+ * in the panel, a file in Files, with its changes since the last commit, a
+ * turn, the worktree's source branch or a commit's parent; in a PR thread,
+ * a file of the PR in Review; and the code the panes ask the chat about.
  */
 export function usePaneOpens(
   {
@@ -81,7 +79,7 @@ export function usePaneOpens(
   }, []);
   // Pending requests also belong to this location; a pane mounting after a
   // workspace switch mustn't consume the previous workspace's file.
-  const fileOpens = useMemo(() => requestChannel<FileTarget>(), [location]);
+  const fileOpens = useMemo(() => requestChannel<FilesRequest>(), [location]);
   const changeReveals = useMemo(
     () => requestChannel<ProjectFileLink>(),
     [location],
@@ -91,9 +89,13 @@ export function usePaneOpens(
     panel.show(surface);
     panes.show("panel");
   }
+  /** Files, with the folder's changes in its sidebar for "changes"; a PR thread's changes are its Review. */
   function openCode(next: "changes" | "files") {
-    if (next === "files" || project?.plain) openSurface("files");
-    else panes.show("changes");
+    if (next === "changes" && pull) return panes.show("changes");
+    if (editorElsewhere()) return raiseEditor();
+    openSurface("files");
+    if (next === "changes" && !project?.plain)
+      fileOpens.send({ view: "changes" });
   }
   function togglePane(id: PaneId) {
     // A pane hidden behind a zoom reads as closed, so a click brings it back.
@@ -103,85 +105,65 @@ export function usePaneOpens(
     panes.setOpen(id, !open);
     if (open && id !== "chat") view.setViewing(NO_VIEWING);
   }
-  function openTurnDiff(target: TurnDiffTarget) {
-    request.current++;
-    view.showTurn(target);
-    panes.show("changes");
+  /** A newer request, or leaving this workspace, makes an answer that arrives late go unused. */
+  function startRequest() {
+    const sequence = ++request.current;
+    return () =>
+      mounted.current &&
+      currentLocation.current === location &&
+      request.current === sequence;
   }
-  /** Shows `target` in Files; false when an unsaved edit holds the view. */
-  function openInEditor(target: FileTarget) {
+  /** The editor is in a window of its own, which comes forward in place of the Files pane. */
+  const editorElsewhere = () => isEditorElsewhere(folder.where);
+  function raiseEditor() {
+    if (project)
+      void api.openEditorWindow(project.id, folder.where).catch(onError);
+  }
+  /**
+   * Shows `target` in Files, or in the editor's own window, which takes a
+   * version as the file on disk; false when an unsaved edit holds the view.
+   */
+  function openInEditor(target: FilesRequest) {
     request.current++;
+    if (editorElsewhere()) {
+      if ("view" in target) raiseEditor();
+      else {
+        const file =
+          "snapshot" in target
+            ? { path: target.path, directory: false, snapshot: target.snapshot }
+            : target;
+        void openInEditorWindow(folder.where, file).catch(onError);
+      }
+      return true;
+    }
     if (lock.blocked()) return false;
     fileOpens.send(target);
     openSurface("files");
     return true;
   }
-  function revealChange(target: ProjectFileLink) {
+  /** A PR thread's file, in its Review. */
+  function revealInReview(target: ProjectFileLink) {
     request.current++;
     changeReveals.send(target);
-    view.closeTurn();
     panes.show("changes");
   }
-  // A file clicked in the chat shows its diff in Changes (Review in a PR
-  // thread), or opens in Files when it has none. A name that fits several
-  // files lists them in Files. A file outside the project opens in Files too,
-  // a folder outside it in the system's file manager.
-  async function openChatFile(target: ProjectFileLink) {
-    const sequence = ++request.current;
-    const isCurrent = () =>
-      mounted.current &&
-      currentLocation.current === location &&
-      request.current === sequence;
-    if (target.outside && target.directory) {
-      const { folder, name } = splitOutsidePath(target.path);
-      return void api.revealProjectPath(folder, name).catch(onError);
-    }
-    if (target.outside) return void openInEditor(target);
-    if (pull) return revealChange(target);
-    const id = folder.where;
-    try {
-      const changes = project!.plain
-        ? []
-        : (folder.tree ?? (await api.projectWorkingTree(id))).changes.map(
-            (c) => c.path,
-          );
-      if (!isCurrent()) return;
-      const changed = changedTarget(target, changes);
-      if (changed) return revealChange(changed);
-      if (target.directory) {
-        // An agent naming a folder elsewhere by its bare name gets a link here.
-        const exists = await api.projectDirectory(id, target.path).then(
-          () => true,
-          () => false,
-        );
-        if (!isCurrent()) return;
-        if (!exists)
-          return onError(
-            new Error(`There's no ${target.path}/ in this project.`),
-          );
-        return void openInEditor(target);
-      }
-      const found = matchLink(
-        target,
-        await qc.query({
-          queryKey: ["project-files", id],
-          queryFn: () => api.projectFiles(id),
-          staleTime: 5000,
-        }),
-      );
-      if (!isCurrent()) return;
-      // Ignored files (an agent's output folder) aren't in Git's list but are on disk.
-      const onDisk =
-        !found.length &&
-        (await api.projectFileInfo(id, target.path).then(
-          () => true,
-          () => false,
-        ));
-      if (isCurrent()) openInEditor(fileTarget(target, found, onDisk));
-    } catch (e) {
-      if (isCurrent()) onError(e);
-    }
-  }
+  const changes = changeOpeners({
+    where: folder.where,
+    openInEditor,
+    startRequest,
+    onError,
+  });
+  const openChatFile = chatFileOpener({
+    project,
+    where: folder.where,
+    tree: folder.tree,
+    inReview: !!pull,
+    qc,
+    openInEditor,
+    revealInReview,
+    startRequest,
+    onError,
+  });
   /** Hands `context` to the chat's composer, showing the chat. */
   function ask(context: Omit<ChatContext, "id">) {
     view.setContext({ id: crypto.randomUUID(), ...context });
@@ -194,7 +176,7 @@ export function usePaneOpens(
     openCode,
     openSurface,
     togglePane,
-    openTurnDiff,
+    ...changes,
     openInEditor,
     openChatFile,
     ask,

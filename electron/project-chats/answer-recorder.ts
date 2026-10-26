@@ -14,7 +14,13 @@ import type { AgentQuestion } from "../../shared/agent-modes";
 import type { HtmlRender } from "../../shared/html-render";
 import type { TurnPreview } from "../../shared/preview";
 import type { ImportOffer } from "../../shared/import-offer";
-import { addStreamed, type Streamed } from "../../shared/usage";
+import {
+  addStreamed,
+  addTokens,
+  type Streamed,
+  type UsageTokens,
+} from "../../shared/usage";
+import { writtenInAnswer } from "../../shared/written-code";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -179,6 +185,15 @@ export class AnswerRecorder {
     this.changed();
   }
 
+  /** Adds a request's tokens, so a steer's answer below carries on from zero. */
+  tokens(used: UsageTokens) {
+    if (this.stopped) return;
+    this.message.tokens = this.message.tokens
+      ? addTokens(this.message.tokens, used)
+      : { ...used };
+    this.changed();
+  }
+
   setModel(model: TurnModel) {
     this.model = model;
     this.message.model = model;
@@ -189,7 +204,8 @@ export class AnswerRecorder {
     if (this.stopped) return;
     const trace = (this.message.trace ??= []);
     const index = trace.findIndex((a) => a.id === activity.id);
-    const entry = { kind: "activity" as const, id: activity.id, activity };
+    const before = index >= 0 ? trace.slice(0, index) : trace;
+    const entry = { kind: "activity" as const, id: activity.id, activity: writtenInAnswer(activity, before) };
     if (index >= 0) trace[index] = entry;
     // A busy subagent mustn't crowd out the agent's own later calls.
     else if (

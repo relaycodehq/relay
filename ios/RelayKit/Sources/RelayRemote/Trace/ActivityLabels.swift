@@ -20,11 +20,12 @@ public func isQuestionCall(_ a: AgentActivity) -> Bool {
 
 /// A finished question call's questions and answers: Codex keeps pairs, Claude
 /// Code writes them in its result (`The user answered: "Q"="A", …`).
+/// A pair starts after `: ` or `, `, so a question may quote words itself.
 public func askedQuestions(_ a: AgentActivity) -> [AskedQuestion]? {
     guard isQuestionCall(a), a.status == "complete" else { return nil }
     if let pairs = a.questionAnswers, !pairs.isEmpty { return pairs }
     guard let detail = a.detail else { return nil }
-    let pairs = detail.matches(of: #/"([^"]+?)"="([\s\S]*?)"(?=, "[^"]+?"="|\.(?:\s|$)|$)/#).map {
+    let pairs = detail.matches(of: #/[:,] "([\s\S]+?)"="([\s\S]*?)"(?=, "[\s\S]+?"="|\.(?:\s|$)|$)/#).map {
         AskedQuestion(
             question: String($0.output.1).trimmingCharacters(in: .whitespacesAndNewlines),
             answer: String($0.output.2).trimmingCharacters(in: .whitespacesAndNewlines))
@@ -56,9 +57,14 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
     var groups: [(kind: String, seen: [String])] = []
     var failed = Set<String>(), stopped = Set<String>(), running = Set<String>()
     var questions = 0
+    var threads = 0
     for a in activity {
         if isQuestionCall(a) && a.status == "complete" {
             questions += askedQuestions(a)?.count ?? 1
+            continue
+        }
+        if isStartThreads(a) && a.status == "complete" {
+            threads += startedIds(a.detail)?.count ?? 1
             continue
         }
         if a.status != "complete" {
@@ -87,6 +93,7 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
         if let at = counts.firstIndex(where: { $0.kind == kind }) { counts[at].n += seen.count } else { counts.append((kind, seen.count)) }
     }
     var labels = counts.compactMap { summaries[$0.kind]?($0.n) }
+    if threads > 0 { labels.append("Started \(plural(threads, "thread"))") }
     if questions > 0 { labels.append("Asked you \(plural(questions, "question"))") }
     let failures = failed.count + (dropped["failed"] ?? 0)
     if failures > 0 { labels.append("\(plural(failures, "tool call")) failed") }
@@ -95,10 +102,6 @@ public func summarizeActivity(_ activity: [AgentActivity], dropped: [String: Int
     let parts = labels.enumerated().map { i, text in i == 0 ? text : text.prefix(1).lowercased() + text.dropFirst() }
     if parts.count < 3 { return parts.joined(separator: " and ") }
     return parts.dropLast().joined(separator: ", ") + ", and " + parts.last!
-}
-
-private func baseName(_ path: String) -> String {
-    path.split(separator: "/").last.map(String.init) ?? path
 }
 
 private let commandWrappers: Set<String> = ["sudo", "env", "time", "nice", "nohup", "exec", "command", "npx", "pnpx", "bunx"]
@@ -189,6 +192,8 @@ let relayToolLabels = [
     "settle_this_thread": "Settles this thread when done",
     "wake_this_thread": "Set a wake-up",
     "move_to_worktree": "Moved the thread to its own worktree",
+    "move_to_project": "Moved the thread to another project",
+    "message_lead": "Messaged its lead",
     "deep_review": "Started a deep review",
     "list_review_setups": "Listed review setups",
     "list_notes": "Read the notes",

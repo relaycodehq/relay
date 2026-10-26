@@ -35,24 +35,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.key
 import dev.relay.android.features.images.ImageSource
 import dev.relay.android.features.images.ReadPreview
-import dev.relay.android.features.images.ReadSwatch
 import dev.relay.android.features.images.imagePath
-import dev.relay.android.features.images.imageRead
 import dev.relay.android.features.images.looksAtImage
 import dev.relay.android.features.markdown.Markdown
-import dev.relay.android.features.thread.logic.RunShape
 import dev.relay.android.features.thread.logic.TracePart
 import dev.relay.android.features.thread.logic.TraceFold
 import dev.relay.android.features.thread.logic.TurnHeading
 import dev.relay.android.features.thread.logic.askedQuestions
-import dev.relay.android.features.thread.logic.batchHead
 import dev.relay.android.features.thread.logic.callLabel
 import dev.relay.android.features.thread.logic.doneLabel
 import dev.relay.android.features.thread.logic.duration
 import dev.relay.android.features.thread.logic.groupTrace
 import dev.relay.android.features.thread.logic.isQuestionCall
 import dev.relay.android.features.thread.logic.isStartThreads
-import dev.relay.android.features.thread.logic.runShape
+import dev.relay.android.features.thread.logic.onlyRun
+import dev.relay.android.features.thread.logic.runIsLive
 import dev.relay.android.features.thread.logic.liveLabel
 import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.readTurn
@@ -65,7 +62,6 @@ import dev.relay.android.remote.model.AgentActivity
 import dev.relay.android.remote.model.AskedQuestion
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.ui.Icon
-import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.theme.Radii
@@ -107,7 +103,7 @@ val LocalReadingBack = compositionLocalOf { false }
 val LocalSavedCopy = compositionLocalOf { false }
 
 /** Each agent call's own calls, how to show paths, and whose turn they're in (none for a subagent's own run). */
-private class TraceScope(
+internal class TraceScope(
     val calls: Map<String, List<AgentActivity>>,
     val display: (String) -> String,
     val chatId: String,
@@ -118,7 +114,7 @@ private class TraceScope(
     fun read(path: String) = ImageSource.Read(chatId, messageId, path)
 }
 
-private val LocalTrace = staticCompositionLocalOf { TraceScope(emptyMap(), { it }, "", "") }
+internal val LocalTrace = staticCompositionLocalOf { TraceScope(emptyMap(), { it }, "", "") }
 
 /** Leaves the thread's own folder out of tool labels. */
 fun displayIn(root: String?): (String) -> String {
@@ -192,14 +188,12 @@ fun AgentRun(
                 Column(Modifier.padding(top = 6.dp)) {
                     val parts = groupTrace(turn.shown)
                     parts.forEachIndexed { index, part ->
-                        when {
-                            part is TracePart.Commentary ->
-                                Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
-                            part !is TracePart.Run -> Unit
-                            else -> when (runShape(parts, index, live, settled = !live && (toggled != null || !fold.held))) {
-                                RunShape.Live -> OpenBatch(part.activity)
-                                RunShape.Rows -> part.activity.forEach { ToolRow(it) }
-                                RunShape.Group -> ActivityGroup(part.activity)
+                        key(part.id) {
+                            when (part) {
+                                is TracePart.Commentary ->
+                                    Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
+                                is TracePart.Run ->
+                                    RunOfCalls(part.activity, live = runIsLive(parts, index, live), only = onlyRun(parts, part))
                             }
                         }
                     }
@@ -217,7 +211,7 @@ fun AgentRun(
 }
 
 @Composable
-private fun Step(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+internal fun Step(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 26.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -243,7 +237,7 @@ private fun Fold(
 
 /** The picture a call looked at, under its row. */
 @Composable
-private fun Preview(a: AgentActivity, name: String) {
+internal fun Preview(a: AgentActivity, name: String) {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current ?: return
     val path = imagePath(a) ?: return
@@ -254,13 +248,7 @@ private fun Preview(a: AgentActivity, name: String) {
 }
 
 @Composable
-private fun CallIcon(a: AgentActivity) {
-    if (a.status == "running") Spinner(size = 14.dp, color = RelayTheme.colors.mutedForeground)
-    else Icon(iconOf(a), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
-}
-
-@Composable
-private fun ToolRow(a: AgentActivity) {
+internal fun ToolRow(a: AgentActivity) {
     val trace = LocalTrace.current
     askedQuestions(a)?.let { return AnsweredQuestions(it) }
     val label = when {
@@ -269,11 +257,14 @@ private fun ToolRow(a: AgentActivity) {
         else -> doneLabel(a)
     }
     val calls = trace.calls[a.id].orEmpty()
+    // A running call keeps its icon and its words shine; a question waiting on the reader holds still.
+    val shines = a.status == "running" && !isQuestionCall(a)
     // A failed call looks like any other: commands fail as part of the work.
     val heading: @Composable RowScope.() -> Unit = {
-        CallIcon(a)
+        Icon(iconOf(a), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
         Text(
-            label, Modifier.weight(1f), maxLines = 1, color = RelayTheme.colors.mutedForeground,
+            label, Modifier.weight(1f).then(if (shines) Modifier.shine() else Modifier),
+            maxLines = 1, color = RelayTheme.colors.mutedForeground,
             style = if (a.kind == "command") RelayTheme.type.monoSm else RelayTheme.type.sm,
         )
         Progress(a)
@@ -318,13 +309,26 @@ private fun AnsweredQuestions(questions: List<AskedQuestion>) {
 
 /** A call's output; the desktop sends a long one cut, and the whole of it once the fold opens. */
 @Composable
-private fun Detail(a: AgentActivity) {
+internal fun Detail(a: AgentActivity, detail: String = fetchedDetail(a) ?: a.detail.orEmpty()) {
+    SelectionContainer(
+        Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp).fillMaxWidth().heightIn(max = 220.dp)
+            .background(RelayTheme.colors.muted, Radii.smShape).verticalScroll(rememberScrollState()).padding(9.dp),
+    ) {
+        Text(detail, style = RelayTheme.type.monoSm, color = RelayTheme.colors.mutedForeground)
+    }
+}
+
+/** The whole of [a]'s cut output, once the desktop has given it; none while it hasn't, or wasn't cut. */
+@Composable
+internal fun fetchedDetail(a: AgentActivity): String? {
     val trace = LocalTrace.current
     val remote = LocalThreadRemote.current
-    var whole by remember(a.id) { mutableStateOf<String?>(null) }
+    // Output still coming in is cut again with every update; the rest is fetched once it's all there.
+    val settled = a.status != "running"
+    var whole by remember(a.id, a.detailCut, settled) { mutableStateOf<String?>(null) }
     val cut = (a.detailCut ?: 0) > 0 && (remote?.overview?.value?.bridge ?: 1) >= Bridge.ACTIVITY_DETAIL
-    LaunchedEffect(cut, trace.chatId, trace.messageId, a.id) {
-        if (!cut || trace.chatId.isEmpty() || remote == null) return@LaunchedEffect
+    LaunchedEffect(cut, settled, a.detailCut, trace.chatId, trace.messageId, a.id) {
+        if (!cut || !settled || trace.chatId.isEmpty() || remote == null) return@LaunchedEffect
         try {
             whole = remote.client.value?.activityDetail(trace.chatId, trace.messageId, a.id) ?: return@LaunchedEffect
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -332,12 +336,7 @@ private fun Detail(a: AgentActivity) {
         } catch (_: Exception) {
         }
     }
-    SelectionContainer(
-        Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp).fillMaxWidth().heightIn(max = 220.dp)
-            .background(RelayTheme.colors.muted, Radii.smShape).verticalScroll(rememberScrollState()).padding(9.dp),
-    ) {
-        Text(whole ?: a.detail.orEmpty(), style = RelayTheme.type.monoSm, color = RelayTheme.colors.mutedForeground)
-    }
+    return whole
 }
 
 @Composable
@@ -347,7 +346,7 @@ private fun SubagentRows(calls: List<AgentActivity>) {
 
 /** A run of tool calls between two commentary lines, folded into "Ran 6 commands". */
 @Composable
-private fun ActivityGroup(activity: List<AgentActivity>) {
+internal fun ActivityGroup(activity: List<AgentActivity>) {
     val display = LocalTrace.current.display
     val icon = if (activity.map { it.kind }.toSet().size == 1) kindIcon(activity.first().kind) else TablerIcons.Outline.Tool
     val trace = LocalTrace.current
@@ -365,47 +364,6 @@ private fun ActivityGroup(activity: List<AgentActivity>) {
         }
     }) {
         Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { activity.forEach { ToolRow(it) } }
-    }
-}
-
-/** The batch still being worked on: one row names the latest call, the ones before it fold behind that row. */
-@Composable
-private fun OpenBatch(activity: List<AgentActivity>) {
-    val trace = LocalTrace.current
-    var open by remember { mutableStateOf(false) }
-    val (head, earlier) = batchHead(activity)
-    val running = head.status == "running"
-    val calls = trace.calls[head.id].orEmpty()
-    val folded = earlier.isNotEmpty() || calls.isNotEmpty()
-    val text = trace.display(if (running) liveLabel(head) else doneLabel(head))
-    // This row changes with every call, so a picture it looked at stays icon-sized
-    // here; with nothing folded behind the row, tapping it opens the picture.
-    val looked = if (trace.chatId.isNotEmpty()) imageRead(head) else null
-    val openImage = trace.openImage
-    val view = if (!folded && looked != null && openImage != null) ({ openImage(looked) }) else null
-    val remote = LocalThreadRemote.current
-    Column {
-        Step(
-            when {
-                view != null -> Modifier.pressable(onClick = view, scale = false)
-                folded -> Modifier.pressable(onClick = { open = !open }, scale = false)
-                else -> Modifier
-            },
-        ) {
-            if (looked != null && remote != null) ReadSwatch(remote, trace.read(looked))
-            else Icon(kindIcon(head.kind), null, Modifier.alpha(0.75f), size = 14.dp, tint = RelayTheme.colors.mutedForeground)
-            Row(Modifier.weight(1f, fill = false)) {
-                if (running) ShineText(text) else Text(text, maxLines = 1, color = RelayTheme.colors.mutedForeground)
-            }
-            Progress(head)
-            if (folded) Icon(
-                TablerIcons.Outline.ChevronRight, null, size = 13.dp, tint = RelayTheme.colors.faint,
-                modifier = if (open) Modifier.rotate(90f) else Modifier,
-            )
-        }
-        if (open && calls.isNotEmpty()) SubagentRows(calls)
-        if (open && earlier.isNotEmpty())
-            Column(Modifier.padding(start = 21.dp, bottom = 4.dp)) { earlier.forEach { ToolRow(it) } }
     }
 }
 

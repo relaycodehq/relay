@@ -56,6 +56,36 @@ export function useExpanded(where: string) {
   };
 }
 
+/** The project's own tree, among the folders the sidebar shows. */
+export const PROJECT_ROOT = "";
+
+/**
+ * Which folders' trees are open in a workspace's sidebar, kept between
+ * sessions: the project's, open until folded, and linked folders', folded
+ * until opened, as a linked repository can be large.
+ */
+export function useOpenRoots(where: string) {
+  const key = "relay-project-roots:" + where;
+  const [open, setOpen] = useState<ReadonlySet<string>>(() => {
+    const value = readJson(key);
+    return new Set(
+      Array.isArray(value)
+        ? value.filter((v): v is string => typeof v === "string")
+        : [PROJECT_ROOT],
+    );
+  });
+  return {
+    isOpen: (root: string) => open.has(root),
+    toggle: (root: string) =>
+      setOpen((current) => {
+        const next = new Set(current);
+        if (!next.delete(root)) next.add(root);
+        writeJson(key, [...next]);
+        return next;
+      }),
+  };
+}
+
 /**
  * How often a shown folder is listed again. Watched, the shell refreshes it
  * when the folder changes, and the slow poll catches what the watch skips,

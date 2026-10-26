@@ -366,7 +366,7 @@ export async function fixtureServer(
       if (filename === "src/large.ts")
         code =
           Array.from(
-            { length: 15000 },
+            { length: 25000 },
             (_, i) => `export const value${i} = ${base ? i : i + 1};`,
           ).join("\n") + "\n";
       if (filename === "assets/logo.png") code = "\x00PNG";

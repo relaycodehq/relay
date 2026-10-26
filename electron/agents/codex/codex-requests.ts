@@ -2,10 +2,11 @@ import type { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type { AgentActivity } from "../../../shared/projects";
 import { questionAnswers } from "../../../shared/asked-questions";
-import type {
-  AskAgentRequest,
-  AgentDecision,
-  AgentQuestion,
+import {
+  SKIPPED_QUESTIONS,
+  type AskAgentRequest,
+  type AgentDecision,
+  type AgentQuestion,
 } from "../../../shared/agent-modes";
 import {
   approvalRequestSchemas,
@@ -30,53 +31,8 @@ export async function codexRequest(
   ask: AskAgentRequest,
   onActivity?: (activity: AgentActivity) => void,
 ) {
-  if (method === "item/tool/requestUserInput") {
-    const params = parseCodexRequest(method, userInputRequestSchema, raw);
-    const questions: AgentQuestion[] = params.questions.map((q) => ({
-      id: q.id,
-      header: q.header ?? undefined,
-      question: q.question,
-      isSecret: !!q.isSecret,
-      options: q.options?.map((o) => ({
-        label: o.label,
-        description: o.description ?? undefined,
-      })),
-    }));
-    if (!questions.length || questions.length > 10)
-      throw new Error("Invalid provider questions.");
-    const activity: AgentActivity = {
-      id: `question:${randomUUID()}`,
-      kind: "tool",
-      label: "request_user_input",
-      status: "running",
-    };
-    onActivity?.(activity);
-    try {
-      const response = await ask({
-        kind: "question",
-        title: "Codex needs your input",
-        questions,
-      });
-      if (response.kind !== "question")
-        throw new Error("Invalid question response.");
-      onActivity?.({
-        ...activity,
-        status: "complete",
-        questionAnswers: questionAnswers(questions, response.answers),
-      });
-      return {
-        answers: Object.fromEntries(
-          Object.entries(response.answers).map(([id, answers]) => [
-            id,
-            { answers },
-          ]),
-        ),
-      };
-    } catch (error) {
-      onActivity?.({ ...activity, status: "failed" });
-      throw error;
-    }
-  }
+  if (method === "item/tool/requestUserInput")
+    return askUserInput(raw, ask, onActivity);
   if (method in approvalRequestSchemas) {
     const params = parseCodexRequest(
       method,
@@ -127,4 +83,70 @@ export async function codexRequest(
     return { decision: response.decision };
   }
   throw new Error(`Unsupported Codex request: ${method}`);
+}
+
+/** Codex's questions on Relay's card, with the user's answers shown on its row. */
+async function askUserInput(
+  raw: unknown,
+  ask: AskAgentRequest,
+  onActivity?: (activity: AgentActivity) => void,
+) {
+  const params = parseCodexRequest(
+    "item/tool/requestUserInput",
+    userInputRequestSchema,
+    raw,
+  );
+  const questions: AgentQuestion[] = params.questions.map((q) => ({
+    id: q.id,
+    header: q.header ?? undefined,
+    question: q.question,
+    isSecret: !!q.isSecret,
+    options: q.options?.map((o) => ({
+      label: o.label,
+      description: o.description ?? undefined,
+    })),
+  }));
+  if (!questions.length || questions.length > 10)
+    throw new Error("Invalid provider questions.");
+  const activity: AgentActivity = {
+    id: `question:${randomUUID()}`,
+    kind: "tool",
+    label: "request_user_input",
+    status: "running",
+  };
+  onActivity?.(activity);
+  try {
+    const response = await ask({
+      kind: "question",
+      title: "Codex needs your input",
+      questions,
+    });
+    if (response.kind !== "question")
+      throw new Error("Invalid question response.");
+    if (!response.answers) {
+      onActivity?.({ ...activity, status: "stopped" });
+      // Codex has no way to turn a question down, so the note goes in as each answer.
+      return {
+        answers: Object.fromEntries(
+          questions.map((q) => [q.id, { answers: [SKIPPED_QUESTIONS] }]),
+        ),
+      };
+    }
+    onActivity?.({
+      ...activity,
+      status: "complete",
+      questionAnswers: questionAnswers(questions, response.answers),
+    });
+    return {
+      answers: Object.fromEntries(
+        Object.entries(response.answers).map(([id, answers]) => [
+          id,
+          { answers },
+        ]),
+      ),
+    };
+  } catch (error) {
+    onActivity?.({ ...activity, status: "failed" });
+    throw error;
+  }
 }

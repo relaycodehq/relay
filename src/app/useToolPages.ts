@@ -4,12 +4,12 @@ import { onOpenSchedule } from "../lib/open-schedule";
 import type { ShellNavigation, Surface } from "./useShellNavigation";
 
 /** The pages the sidebar's tools open in place of a project. */
-type ToolPage = "usage" | "processes" | "schedules";
+type ToolPage = "usage" | "schedules";
 const isToolPage = (surface: Surface): surface is ToolPage =>
-  surface === "usage" || surface === "processes" || surface === "schedules";
+  surface === "usage" || surface === "schedules";
 
 /**
- * Usage, Processes and Schedules: each opens in place of a project and
+ * Usage and Schedules: each opens in place of a project and
  * closes back to the page it was opened from.
  */
 export function useToolPages(nav: ShellNavigation, lock: NavigationLock) {
@@ -35,7 +35,6 @@ export function useToolPages(nav: ShellNavigation, lock: NavigationLock) {
   );
   return {
     toggleUsage: () => togglePage("usage"),
-    toggleProcesses: () => togglePage("processes"),
     toggleSchedules: () => togglePage("schedules"),
     scheduleShown,
   };

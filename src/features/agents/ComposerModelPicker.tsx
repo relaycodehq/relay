@@ -4,13 +4,12 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Combobox } from "@base-ui/react/combobox";
-import { Toolbar } from "@base-ui/react/toolbar";
 import {
-  ArrowDown,
   Check,
   ChevronDown,
   ChevronRight,
@@ -51,6 +50,7 @@ import {
   type PickerModel,
 } from "./model-picker-catalog";
 import { ModelReload, reloadsModels } from "./ModelReload";
+import { ModelPickerRail } from "./ModelPickerRail";
 import { useModelReorder } from "./useModelReorder";
 import { usePickerUsage } from "./usePickerUsage";
 import {
@@ -106,6 +106,7 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   account,
   computer,
   setup,
+  trigger,
 }: {
   provider: MessageProvider;
   /** False until the agent's settings have loaded. */
@@ -141,6 +142,8 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
   computer?: { id: string; name: string };
   /** Set while an agent can't run yet, with the way to set it up. */
   setup?: (provider: AgentProvider) => PickerSetup | undefined;
+  /** Opens the picker in place of the button naming the model, like an icon among an answer's actions. */
+  trigger?: ReactElement;
 }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<Category>(provider);
@@ -276,22 +279,26 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
         }
       }}
     >
-      <Popover.Trigger
-        type="button"
-        className="composer-control composer-model-trigger"
-        aria-label={label ? `${label} model` : "Choose model and provider"}
-        title={triggerName}
-        disabled={!ready}
-        data-setup={pending ? "" : undefined}
-      >
-        {pending?.busy ? (
-          <Spinner size={16} steady />
-        ) : (
-          <ProviderIcon provider={provider} />
-        )}
-        <span>{triggerName}</span>
-        <ChevronDown size={12} />
-      </Popover.Trigger>
+      {trigger ? (
+        <Popover.Trigger render={trigger} />
+      ) : (
+        <Popover.Trigger
+          type="button"
+          className="composer-control composer-model-trigger"
+          aria-label={label ? `${label} model` : "Choose model and provider"}
+          title={triggerName}
+          disabled={!ready}
+          data-setup={pending ? "" : undefined}
+        >
+          {pending?.busy ? (
+            <Spinner size={16} steady />
+          ) : (
+            <ProviderIcon provider={provider} />
+          )}
+          <span>{triggerName}</span>
+          <ChevronDown size={12} />
+        </Popover.Trigger>
+      )}
       <Popover.Portal container={container}>
         <Popover.Positioner
           className="composer-popup-positioner"
@@ -316,66 +323,16 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
             }}
           >
             {(providers ? offered.length : 2) > 1 && (
-              <Toolbar.Root
-                className="model-picker-rail"
-                orientation="vertical"
-                aria-label="Model providers"
-                inert={searching}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowRight") {
-                    e.preventDefault();
-                    search.current?.focus();
-                  }
-                }}
-              >
-                {(providers
-                  ? offered
-                  : (["favorites", ...offered, "message"] as const)
-                ).map((tab) => {
-                  const missing =
-                    tab !== "favorites" &&
-                    tab !== "message" &&
-                    !!setup?.(tab)?.missing;
-                  return (
-                    <Toolbar.Button
-                      type="button"
-                      key={tab}
-                      aria-label={
-                        tab === "favorites"
-                          ? "Favorites"
-                          : tab === "message"
-                            ? "Message only"
-                            : providerName(tab)
-                      }
-                      title={
-                        tab === "favorites"
-                          ? "Favorites"
-                          : tab === "message"
-                            ? "Message only · no agent"
-                            : `${providerName(tab)}${missing ? " · not installed" : ""}`
-                      }
-                      className="model-provider-tab"
-                      aria-pressed={category === tab}
-                      data-missing={missing ? "" : undefined}
-                      onClick={() => changeCategory(tab)}
-                    >
-                      {tab === "favorites" ? (
-                        <Star className="provider-glyph" fill="currentColor" />
-                      ) : (
-                        <ProviderIcon provider={tab} />
-                      )}
-                      {missing && (
-                        <ArrowDown
-                          className="model-provider-missing"
-                          size={9}
-                          strokeWidth={3}
-                          aria-hidden
-                        />
-                      )}
-                    </Toolbar.Button>
-                  );
-                })}
-              </Toolbar.Root>
+              <ModelPickerRail
+                tabs={
+                  providers ? offered : ["favorites", ...offered, "message"]
+                }
+                category={category}
+                missing={(agent) => !!setup?.(agent)?.missing}
+                searching={searching}
+                search={search}
+                onPick={changeCategory}
+              />
             )}
             <div className="model-picker-content">
               {blocked ? (
@@ -462,9 +419,6 @@ export const ComposerModelPicker = memo(function ComposerModelPicker({
                                       ? ""
                                       : undefined
                                   }
-                                  onClick={() => {
-                                    if (selectedKey === key) select(m);
-                                  }}
                                   data-model-key={key}
                                   value={key}
                                   className="model-picker-row"

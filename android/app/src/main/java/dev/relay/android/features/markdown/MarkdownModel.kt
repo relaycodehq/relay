@@ -1,6 +1,7 @@
 package dev.relay.android.features.markdown
 
 import androidx.compose.runtime.Immutable
+import dev.relay.android.features.images.bracketSpacedImagePaths
 import org.commonmark.ext.autolink.AutolinkExtension
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.strikethrough.StrikethroughExtension
@@ -96,7 +97,7 @@ internal fun parseBlocks(text: String, firstLine: Int = 0): List<Placed> {
 }
 
 /** The blocks of an answer, all at once. */
-fun parseMarkdown(markdown: String): List<MdBlock> = parseBlocks(normalizeMath(markdown)).map { it.block }
+fun parseMarkdown(markdown: String): List<MdBlock> = parseBlocks(normalizeMath(bracketSpacedImagePaths(markdown))).map { it.block }
 
 private fun Node.children(): Sequence<Node> = generateSequence(firstChild) { it.next }
 

@@ -82,6 +82,16 @@ it("sends a streaming answer at most every 150ms, and its end right away", () =>
   ]);
 });
 
+it("shapes a held streaming answer for phones when it goes out", () => {
+  vi.useFakeTimers();
+  const { b, events } = bridge();
+  const call = { id: "c", kind: "command" as const, status: "complete" as const, label: "rg foo src" };
+  b.chatEvent({ chatId, message: { ...streaming("H"), trace: [{ kind: "activity", id: "c", activity: call }] } });
+  vi.advanceTimersByTime(150);
+  const sent = events[0]?.kind === "message" ? events[0].message.trace?.[0] : undefined;
+  expect(sent).toMatchObject({ activity: { actions: [{ kind: "search", pattern: "foo", where: "src" }] } });
+});
+
 it("watches thread states only once the phone has the overview, and only reports changes", async () => {
   const { b, events } = bridge();
   b.refresh();
@@ -399,15 +409,51 @@ it("sends a phone a long tool output's ends, and the whole of it when asked", as
   expect(start!.detail).toBe(started);
   expect(long!.detail).toBe(`${"a".repeat(300)}\n…\n${"b".repeat(300)}`);
   expect(long!.detailCut).toBe(1400);
-  expect(short).toEqual(
-    message.trace![2]!.kind === "activity" && message.trace![2]!.activity,
-  );
+  expect(short).toEqual({
+    ...(message.trace![2]!.kind === "activity" && message.trace![2]!.activity),
+    actions: [{ kind: "run", what: "ls" }],
+  });
   expect(await b.handle("activityDetail", [chatId, messageId, "t1"])).toBe(
     output,
   );
   expect(
     await b.handle("activityDetail", [chatId, messageId, "gone"]),
   ).toBeNull();
+});
+
+it("sends a phone that a call wrote code, and the code when the row opens", async () => {
+  const messageId = randomUUID();
+  const written = [{ kind: "whole" as const, path: "/tmp/a.mjs", content: "export {};" }];
+  const message: ChatMessage = {
+    id: messageId,
+    role: "assistant",
+    body: "",
+    status: "complete",
+    created: 1,
+    provider: "claude",
+    version: 1,
+    trace: [
+      {
+        kind: "activity",
+        id: "w",
+        activity: { id: "w", kind: "file", label: "/tmp/a.mjs", status: "complete", written },
+      },
+    ],
+  };
+  const host = {
+    projects: async () => [],
+    projectPath: () => "/r",
+    chats: () => [],
+    chat: async () => ({ id: chatId, projectId, title: "W", scope: { kind: "project" }, created: 1, updated: 2, messages: [message] }),
+    dispatch: async () => null,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const b = new RemoteBridge(host, () => {});
+  const chat = (await b.handle("chat", [chatId])) as { messages: ChatMessage[] };
+  const [call] = chat.messages[0]!.trace!.flatMap((e) => (e.kind === "activity" ? [e.activity] : []));
+  expect(call).toMatchObject({ wroteCode: true, actions: [{ kind: "create", file: "/tmp/a.mjs" }] });
+  expect(call!.written).toBeUndefined();
+  expect(await b.handle("activityWritten", [chatId, messageId, "w"])).toEqual(written);
 });
 
 it("lets a phone read a subagent's run with its tool output cut, as a thread's", async () => {

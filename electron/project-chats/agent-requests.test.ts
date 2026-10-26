@@ -80,3 +80,14 @@ it("rejects unanswered and unknown questions without consuming the pending reque
     answers: { approach: ["Keep it small"] },
   });
 });
+
+it("lets the user skip questions without answering them", async () => {
+  const requests = new AgentRequests(new AbortController().signal);
+  const answer = requests.ask({
+    kind: "question",
+    title: "Question",
+    questions: [{ id: "approach", question: "Approach?" }],
+  });
+  requests.respond(requests.list()[0].id, { kind: "question", answers: null });
+  expect(await answer).toEqual({ kind: "question", answers: null });
+});

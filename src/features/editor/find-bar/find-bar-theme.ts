@@ -1,0 +1,86 @@
+import { EditorView } from "@codemirror/view";
+
+const button = {
+  height: "24px",
+  padding: "0",
+  border: "none",
+  borderRadius: "5px",
+  background: "transparent",
+  cursor: "pointer",
+};
+
+/** The find bar in the quiet chrome's colours: muted words and icons, the accent only on what's on. */
+export const findBarTheme = EditorView.theme({
+  // One grid for both rows, so the replace field lines up under the find field.
+  ".cm-find": {
+    display: "grid",
+    gridTemplateColumns: "24px minmax(150px, 360px) minmax(0, 1fr)",
+    alignItems: "center",
+    gap: "4px 2px",
+    padding: "5px 8px",
+    fontFamily: "var(--font-sans)",
+    fontSize: "12px",
+    color: "var(--text)",
+  },
+  ".cm-find-row": { display: "contents" },
+  ".cm-find-tools": { display: "flex", alignItems: "center", gap: "2px", minWidth: "0" },
+  ".cm-find-field": {
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    minWidth: "0",
+    height: "24px",
+    marginLeft: "2px",
+    padding: "0 3px 0 8px",
+    border: "1px solid var(--border)",
+    borderRadius: "5px",
+    backgroundColor: "var(--code-background)",
+  },
+  ".cm-find-field:focus-within": { borderColor: "var(--accent)" },
+  ".cm-find-field.missing": { borderColor: "color-mix(in srgb, var(--danger) 70%, transparent)" },
+  ".cm-find-field input": {
+    flex: "1",
+    minWidth: "0",
+    padding: "0",
+    border: "none",
+    outline: "none",
+    background: "transparent",
+    color: "var(--code-foreground)",
+    fontFamily: "var(--font-mono)",
+  },
+  ".cm-find-field input::placeholder": { color: "var(--muted)", fontFamily: "var(--font-sans)" },
+  ".cm-find-toggle": {
+    ...button,
+    height: "18px",
+    minWidth: "20px",
+    padding: "0 4px",
+    borderRadius: "4px",
+    color: "var(--muted)",
+    fontFamily: "var(--font-mono)",
+    fontSize: "11px",
+  },
+  ".cm-find-toggle:hover": { color: "var(--text)" },
+  ".cm-find-toggle[aria-pressed=true]": {
+    color: "var(--accent)",
+    backgroundColor: "color-mix(in srgb, var(--accent) 16%, transparent)",
+  },
+  ".cm-find-count": {
+    minWidth: "76px",
+    padding: "0 10px",
+    color: "var(--muted)",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  },
+  ".cm-find-count.missing": { color: "var(--danger)" },
+  ".cm-find-button": { ...button, display: "grid", placeItems: "center", width: "24px", color: "var(--muted)" },
+  ".cm-find-button:hover:not(:disabled), .cm-find-word:hover:not(:disabled)": {
+    color: "var(--text)",
+    backgroundColor: "var(--hover)",
+  },
+  ".cm-find-button:disabled, .cm-find-word:disabled": { opacity: "0.4", cursor: "default" },
+  ".cm-find-expand[aria-pressed=true] svg": { transform: "rotate(90deg)" },
+  ".cm-find-icon": { flex: "none", width: "24px", color: "var(--muted)" },
+  ".cm-find-indent": { flex: "none", width: "24px" },
+  ".cm-find-gap": { flex: "1" },
+  ".cm-find-word": { ...button, padding: "0 8px", color: "var(--text)" },
+});

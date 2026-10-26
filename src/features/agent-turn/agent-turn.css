@@ -51,8 +51,26 @@
 .agent-activity[open] .agent-run-chevron {
   transform: rotate(90deg);
 }
+/* Open, the run sits under the heading's words, past its icon and gap, with
+   a faint line down from the icon to say it all belongs to the heading. */
 .agent-trace {
+  position: relative;
   margin-top: 6px;
+  margin-left: 21px;
+}
+.agent-trace::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: -14.5px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  pointer-events: none;
+}
+/* While a call runs the thinking line only holds its room; the line stops at the last real row. */
+.agent-trace:has(> .agent-thinking.reserved)::before {
+  bottom: 26px;
 }
 .agent-commentary {
   margin: 6px 0 8px;

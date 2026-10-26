@@ -421,11 +421,11 @@ export function ProjectChat({
       aria-label="Project chat"
       style={{ "--composer-dock-height": `${dockHeight}px` } as CSSProperties}
     >
-      {root ? (
-        <ThreadHeader onBack={() => setRootId(null)} />
-      ) : (
-        <ThreadHeader onBack={onBackToReview} label="Back to review" />
-      )}
+      <ThreadHeader
+        chatId={chat?.id}
+        onLeaveReply={root ? () => setRootId(null) : undefined}
+        onBackToReview={onBackToReview}
+      />
       {!isEmpty && (
         <RunCommand.Provider value={runCommand}>
           <KeepBlock.Provider value={keeper}>
@@ -455,9 +455,8 @@ export function ProjectChat({
       {!isEmpty && (
         <ThreadTimeline
           listed={thread.listed}
-          scroll={scroll}
+          view={view}
           bottomInset={dockHeight}
-          onJump={view.jumpTo}
         />
       )}
       <SelectionQuote

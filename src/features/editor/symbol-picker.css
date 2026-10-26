@@ -1,0 +1,133 @@
+.symbol-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+.symbol-picker {
+  display: flex;
+  flex-direction: column;
+  width: min(640px, calc(100vw - 48px));
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 0.22);
+  overflow: hidden;
+}
+.symbol-picker-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px 6px;
+  font-size: 12px;
+}
+.symbol-picker-head > span {
+  color: var(--muted);
+}
+/* Always focused, so no ring; the global 100% width would overflow the margins. */
+.symbol-picker > input,
+.symbol-picker > input:focus-visible {
+  width: auto;
+  outline: none;
+  margin: 0 10px 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--inbox);
+  color: var(--text);
+  font-size: 12px;
+}
+/* Rows inset with a rounded highlight, as in the command palette. */
+.symbol-picker-list {
+  overflow-y: auto;
+  padding: 0 7px 7px;
+}
+.symbol-picker-empty {
+  margin: 10px 7px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.symbol-picker-file {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 10px 7px 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.symbol-picker-file > span {
+  color: var(--muted);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.symbol-picker-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 4px 8px 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+}
+.symbol-picker-row[aria-selected="true"] {
+  background: var(--hover);
+}
+.symbol-picker-line {
+  min-width: 3ch;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.symbol-picker-row > code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: calc(var(--code-font-size, 12px) - 1px);
+}
+.symbol-picker-name {
+  font-family: var(--font-mono);
+}
+.symbol-picker-kind {
+  color: var(--muted);
+  font-size: 11px;
+}
+.rename-field {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.18);
+}
+.rename-field > input {
+  min-width: 220px;
+  padding: 5px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--code-background);
+  color: var(--code-foreground);
+  font-family: var(--font-mono);
+  font-size: var(--code-font-size, 12px);
+}
+.rename-field > span {
+  color: var(--muted);
+  font-size: 11px;
+}

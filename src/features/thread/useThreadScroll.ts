@@ -1,9 +1,11 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
+  type RefObject,
 } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 
@@ -93,6 +95,25 @@ function pinToBottom(view: HTMLElement) {
   view.scrollTop = view.scrollHeight;
 }
 
+/**
+ * The folded composer shows the draft's first line, not wherever the caret
+ * last scrolled it to.
+ */
+function useDraftFromItsTop(composerDock: RefObject<HTMLDivElement | null>, folded: boolean) {
+  useEffect(() => {
+    const dock = composerDock.current;
+    if (!dock || !folded) return;
+    const toTop = (event?: FocusEvent) => {
+      const next = event ? event.relatedTarget : document.activeElement;
+      if (next instanceof Node && dock.contains(next)) return;
+      dock.querySelector(".composer-prompt-input")?.scrollTo({ top: 0 });
+    };
+    toTop();
+    dock.addEventListener("focusout", toTop);
+    return () => dock.removeEventListener("focusout", toTop);
+  }, [composerDock, folded]);
+}
+
 export type ThreadScroll = ReturnType<typeof useThreadScroll>;
 
 /** Keeps a thread pinned to its newest answer until the reader scrolls up,
@@ -130,6 +151,7 @@ export function useThreadScroll({
     lastTop = useRef(0),
     oldest = useRef<string | undefined>(undefined);
   const [scrolledUp, setScrolledUp] = useState(false);
+  const following = useCallback(() => follow.current, []);
   const [dockHeight, setDockHeight] = useState(() =>
     isEmpty ? 0 : lastDockHeight,
   );
@@ -229,20 +251,7 @@ export function useThreadScroll({
       dock.removeEventListener("transitionend", measure);
     };
   }, [isEmpty, scrolledUp]);
-  // The folded composer shows the draft's first line, not wherever the caret
-  // last scrolled it to.
-  useEffect(() => {
-    const dock = composerDock.current;
-    if (!dock || !scrolledUp) return;
-    const toTop = (event?: FocusEvent) => {
-      const next = event ? event.relatedTarget : document.activeElement;
-      if (next instanceof Node && dock.contains(next)) return;
-      dock.querySelector(".composer-prompt-input")?.scrollTo({ top: 0 });
-    };
-    toTop();
-    dock.addEventListener("focusout", toTop);
-    return () => dock.removeEventListener("focusout", toTop);
-  }, [scrolledUp]);
+  useDraftFromItsTop(composerDock, scrolledUp);
   // The padding lands a render after the measurement, and a thread opens with
   // none, so re-pin once it has. Pinning before it would leave the end of the
   // thread under the composer, and the next scroll event would stop following.
@@ -404,6 +413,8 @@ export function useThreadScroll({
     scrolledUp,
     /** The expanded composer's height, which the view pads its end by. */
     dockHeight,
+    /** Whether the view is pinned to the thread's end, as it is until the reader scrolls up. */
+    following,
     /** Something was sent: pin to the bottom for its answer. */
     followAnswer() {
       follow.current = true;

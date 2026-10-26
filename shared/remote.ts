@@ -1,588 +1,65 @@
-import type { ThreadGoal } from "./goal";
-import type { DictationModelState } from "./dictation";
-import type {
-  ComputerInfo,
-  HandBack,
-  HandoffChat,
-  HandoffMethod,
-  HandoffLive,
-  HandoffRemoteStatus,
-  HandoffSettings,
-  HandoffThread,
-  RemoteProjectMethod,
-} from "./handoff";
-import type { SubagentDetail, SubagentRun } from "./subagents";
-import type { UpdateState } from "./updates";
-import type { PhoneAppReport } from "./phone-app";
-import type { DraftChange, DraftWrite, SharedDraft } from "./drafts";
 /**
  * Relay's phone remote: a phone pairs with the desktop over Tailscale or, when
  * the desktop allows it, the local network, and drives its threads. The desktop hosts the
  * bridge; the phone only ever talks to it. Pure types and helpers, so the
  * phone app can import this file without the desktop's dependencies.
  */
-import type { AgentProvider } from "./agents";
-import type { ThreadCost } from "./thread-cost";
+
+import type { DraftChange, DraftWrite, SharedDraft } from "./drafts";
+import type {
+  ComputerInfo,
+  HandBack,
+  HandoffChat,
+  HandoffLive,
+  HandoffMethod,
+  HandoffRemoteStatus,
+  RemoteProjectMethod,
+} from "./handoff";
+import type { PhoneAppReport } from "./phone-app";
 import type {
   ChatMessage,
-  ChatPending,
-  ChatScope,
-  FolderEntry,
   KnownMessages,
-  LimitResume,
-  ProjectChatPatch,
   ProjectChatSend,
-  StartedBy,
+  WrittenCode,
 } from "./projects";
-import type { Api, ApiMethod } from "./types";
-import type { ChangeArea } from "./working-tree";
 import type { ChatsPatch, MessagePatch } from "./remote-delta";
-import type { RouteKind } from "./remote-routes";
+import type {
+  ComputerCallMethod,
+  PhoneDesktopMethod,
+  TerminalOp,
+} from "./remote-methods";
+import type {
+  CloneProgress,
+  ComputerFolders,
+  ComputerProject,
+  HandoffPart,
+  HomeThread,
+  PhoneAppearance,
+  PhoneDictation,
+  PhoneDictationHeard,
+  PhoneReadAloud,
+  PhoneReadAloudAudio,
+  RemoteChat,
+  RemoteChatSummary,
+  RemoteDiff,
+  RemoteDiffSource,
+  RemoteImageSource,
+  RemoteOverview,
+  RemoteProjectIcon,
+  SetupRequest,
+  UploadedFile,
+} from "./remote-models";
+import type { DeviceKind } from "./remote-pairing";
 import type { RemoteSite } from "./remote-tunnel";
-import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
+import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { TerminalEvent, TerminalOpened } from "./terminals";
+import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
+import type { UpdateState } from "./updates";
 
-export const remoteProtocol = 1;
-const remoteScheme = "relay-remote";
-export const defaultRemotePort = 47821;
-/** Where to get Tailscale: its download page for computers, Google Play for phones. */
-export const tailscaleDownload = "https://tailscale.com/download";
-export const tailscaleAndroid =
-  "https://play.google.com/store/apps/details?id=com.tailscale.ipn";
-
-/** What the desktop's QR code carries; the key pins the desktop the phone may talk to. */
-export interface PairingLink {
-  /** Addresses to try: on the local network, then on Tailscale. */
-  hosts: string[];
-  port: number;
-  /** The desktop's X25519 public key, base64url. */
-  key: string;
-  /** One-time secret, traded for a device token on first contact. */
-  code: string;
-  /** The computer's name, shown on the phone. */
-  name: string;
-}
-
-export function pairingUrl(link: PairingLink): string {
-  const q = new URLSearchParams({
-    h: link.hosts.join(","),
-    p: String(link.port),
-    k: link.key,
-    c: link.code,
-    n: link.name,
-  });
-  return `${remoteScheme}://pair?${q}`;
-}
-
-/** Accepts the link itself or a URL wrapping it, e.g. Expo Go's `exp://…/--/pair?…`. */
-export function parsePairingUrl(text: string): PairingLink | null {
-  const query = text.trim().match(/[/:]pair\?(.+)$/)?.[1];
-  if (!query) return null;
-  const q = new URLSearchParams(query);
-  const hosts = (q.get("h") ?? "").split(",").filter(validHost),
-    port = Number(q.get("p")),
-    key = q.get("k") ?? "",
-    code = q.get("c") ?? "",
-    name = (q.get("n") ?? "").slice(0, 80) || "Relay";
-  if (
-    !hosts.length ||
-    !Number.isInteger(port) ||
-    port < 1 ||
-    port > 65535 ||
-    !/^[A-Za-z0-9_-]{43}$/.test(key) ||
-    !/^[A-Za-z0-9_-]{16,64}$/.test(code)
-  )
-    return null;
-  return { hosts, port, key, code, name };
-}
-
-export const validHost = (host: string) =>
-  /^[A-Za-z0-9.-]{1,253}$/.test(host) || /^\[[0-9a-fA-F:]+\]$/.test(host);
-
-/** What a paired phone keeps to reconnect: the pinned desktop and its own token. */
-export interface RemoteCredentials {
-  hosts: string[];
-  port: number;
-  key: string;
-  name: string;
-  deviceId: string;
-  token: string;
-  /** Which way to try first; left out, the local network. */
-  routes?: RouteKind[];
-}
-
-/** A thread as the phone's lists show it. */
-export interface RemoteChatSummary {
-  id: string;
-  projectId: string;
-  title: string;
-  scope: ChatScope["kind"];
-  updated: number;
-  created: number;
-  provider?: AgentProvider;
-  running?: boolean;
-  runningSince?: number;
-  /** Needs the user; the agent may still be working on an async question. */
-  waiting?: boolean;
-  asking?: true;
-  blocked?: true;
-  settledAt?: number;
-  /** Settled while it runs; older desktops leave it out, so it shows active until done. */
-  settleWhenDone?: number;
-  /** A computed shelf position rather than a saved settle mark. */
-  autoSettled?: true;
-  /** Marked unread by hand, until someone opens it; older desktops leave it out. */
-  markedUnread?: true;
-  snoozedAt?: number;
-  snoozedUntil?: number;
-  /** Read up to this `updated`, on the desktop or any phone. */
-  seenAt?: number;
-  branch?: string;
-  worktree?: boolean;
-  pending?: ChatPending[];
-  /** When its next scheduled message goes out. */
-  nextSend?: number;
-  /** Changes with its queue and Send later list; older desktops leave it out. */
-  queueMark?: string;
-  empty?: boolean;
-  /** Its native `/goal`; older desktops leave it out. */
-  goal?: ThreadGoal;
-  /** The thread whose agent started it; missing before `awayBridge`. */
-  startedBy?: StartedBy;
-  /** The answer a usage limit stopped, resumed once the limit lifts; missing before `awayBridge`. */
-  limitResume?: LimitResume;
-  /** Changes with the thread's notes, so a phone knows to fetch them again; missing before `notesBridge`. */
-  notesMark?: string;
-}
-
-export interface RemoteProject {
-  id: string;
-  name: string;
-  /** Its virtual sidebar folder, e.g. `Work/Frontend`. */
-  folder?: string;
-  scratch?: boolean;
-  plain?: boolean;
-  /** Where its new threads start, when not the checkout. */
-  workspace?: import("./projects").ChatWorkspace;
-  /** Its folder is on another computer this one is paired with; from `remoteProjectsBridge`. */
-  computer?: RemoteProjectComputer;
-}
-
-/** The computer a project lives on, as the desktop's project picker names it. */
-export interface RemoteProjectComputer {
-  /** Its name now, a tailnet name shortened to its first part. */
-  name: string;
-  /** That computer isn't paired anymore, so the project can't be reached. */
-  gone?: true;
-}
-
-/**
- * A project's own icon (electron/projects/project-icon), by the hash of its data URL.
- * The data only comes along when the phone's copy is missing or stale; a
- * null hash means the project has none and keeps the folder.
- */
-export type RemoteProjectIcon =
-  { hash: string; dataUrl: string } | { hash: null };
-
-/** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 33;
-/** Phones may attach any file (`uploadFile`); the message names the copy saved here. */
-export const filesBridge = 33;
-/** Sends may ask for the `read-only` runtime mode, and new threads remember theirs. */
-export const readOnlyModeBridge = 32;
-/** A large phone send arrives in acknowledged batches before being submitted once. */
-export const messageBatchesBridge = 31;
-/** From here computers carry saved paste files along with sends and handoffs. */
-export const pastesBridge = 26;
-/**
- * A desktop that reports its bridge in `paired`/`ready` takes a send's `to`;
- * older ones report none and refuse fields they don't know.
- */
-export const recipientBridge = 11;
-/** From here a desktop reads answers aloud to phones (`readAloud`). */
-export const readAloudBridge = 12;
-/**
- * From here a desktop sends phones a tool call's output cut to
- * `phoneDetailPreview` characters, and the whole of it on `activityDetail`.
- */
-export const activityDetailBridge = 13;
-export const phoneDetailPreview = 600;
-/** From here a desktop sends a thread's images shrunk to the size a phone shows them (`image`). */
-export const imageBridge = 14;
-
-/**
- * From here phones may list a thread's subagents, read one's run (its tool
- * output cut as a thread's is) and stop one, with conditional reads.
- */
-export const subagentsBridge = 15;
-/** From here a desktop takes `regenerateProjectChatTitle` from phones. */
-export const titleBridge = 15;
-/** From here thread summaries carry manual unread marks. */
-export const markedUnreadBridge = 15;
-/** From here phones may call `selectAgentWorktree`, to take a thread off a worktree that is gone. */
-export const workspaceBridge = 16;
-/** From here phones may fetch the pages an answer showed with show_html (`renderPage`). */
-export const renderBridge = 17;
-/**
- * From here a desktop shares its drafts with phones (shared/drafts): in the
- * overview, as `draft` events, and through `saveDraft`, `draftOther` and
- * `sendDraft`. Older phones never hear the events, which they'd take for a
- * thread's message.
- */
-export const draftsBridge = 19;
-/** From here phones may fetch the preview frame a turn kept (`image` with `{kind: "preview"}`). */
-export const previewBridge = 22;
-/**
- * From here thread summaries carry `notesMark`, and phones may list, tick and
- * remove a thread's notes (`threadNotes`, `tickThreadNote`, `removeThreadNote`).
- */
-export const notesBridge = 22;
-/** From here a thread carries where it moved (`workspaceMoves`), for the line under its message. */
-export const workspaceMovesBridge = 22;
-/**
- * From here a desktop sends phones its news as it decides it (`news` events,
- * numbered), and phones catch up on what they missed with `news`. Older
- * phones still read news off the thread lists.
- */
-export const newsBridge = 24;
-/** From here a paired computer lists its agents' skills and MCP servers (`agentTools`). */
-export const agentToolsBridge = 24;
-
-/** A thread's image, as the phone asks for it with `image`. */
-export type RemoteImageSource =
-  | { kind: "attached"; chatId: string; imageId: string }
-  | { kind: "read"; chatId: string; messageId: string; path: string }
-  /** The preview's last frame turn `messageId` kept; from `previewBridge`. */
-  | { kind: "preview"; chatId: string; messageId: string };
-/**
- * From here a desktop tells phones which thread started which and when a
- * limited answer resumes, and takes `setLimitResume` and `closeWatchNote`.
- */
-export const awayBridge = 13;
-/**
- * From here both ends, once each has said it speaks this bridge, send frames
- * as deflated binary instead of base64 text, the desktop sends streaming
- * answers and thread lists as patches on the last ones (shared/remote-delta),
- * and the phone acknowledges streaming frames so the desktop never sends
- * them faster than the link carries them.
- */
-export const compactBridge = 14;
-/**
- * From here a computer that took a thread keeps the one it came from up to
- * date (`handoff` events, `handoffChat`) and runs its calls (`handoffCall`),
- * so the thread carries on from there as if it were still there.
- */
-export const liveHandoffBridge = 18;
-/**
- * From here a live handoff's changes, files, history and Git actions run on
- * the computer the thread is on (`handoffFolderMethods`), not on the copy
- * it left behind.
- */
-export const folderHandoffBridge = 20;
-/** From here a new thread can start on the computer it's handed to, its first message unanswered here (`HandoffThread.start`). */
-export const startHandoffBridge = 20;
-/** From here a send may carry the skills its pills picked (`skills`); older computers refuse the field. */
-export const skillsBridge = 21;
-/**
- * From here a phone may tunnel TCP to the desktop's own loopback
- * (shared/remote-tunnel) and list what listens there (`sites`).
- */
-export const tunnelBridge = 23;
-/** From here a paired computer clones a project it lacks (`cloneProject`). */
-export const cloneBridge = 25;
-/**
- * From here, when that clone fails, an agent on the paired computer sets the
- * project up (`setupProject`, `setupProgress`); before, it ran `runCommand`.
- */
-export const setupBridge = 27;
-/**
- * From here a paired computer hosts projects another computer shows as its
- * own (`Project.computer`): it lists its folders, adds one, starts threads in
- * it and runs its folder's calls (`computerFolders`, `computerAddProject`,
- * `startInProject`, `projectCall`, `computerCall`), and its shells
- * (`projectTerminal`, `terminalCall`, `terminal` events).
- */
-export const remoteProjectsBridge = 28;
-/**
- * From here a desktop takes `background` frames: while a phone says it's in
- * the background, its events come in a batch every `backgroundBatchMs`
- * (streaming answers only once it's back) and it's ticked a quarter as often,
- * so its radio sleeps between. Older desktops ignore the frame.
- */
-export const backgroundBridge = 29;
-/** Project setup on a paired computer, including a chosen clone destination. */
-export const remoteAddingBridge = 30;
-
-/** One colour mode of the desktop's theme, as its CSS tokens resolve it (src/lib/themes' tokens). */
-export interface PhonePalette {
-  kind: "light" | "dark";
-  sidebar: string;
-  surface: string;
-  toolbar: string;
-  inbox: string;
-  text: string;
-  muted: string;
-  border: string;
-  hover: string;
-  selected: string;
-  accent: string;
-  accentSoft: string;
-  onAccent: string;
-  /** The Send button's own colour; desktops before it was sent leave it out. */
-  send?: string;
-  onSend?: string;
-  diffAddition: string;
-  diffDeletion: string;
-}
-
-/** The desktop's appearance, so a phone can wear the same theme. */
-export interface PhoneAppearance {
-  mode: "system" | "light" | "dark";
-  light: PhonePalette;
-  dark: PhonePalette;
-}
-
-export interface RemoteOverview {
-  name: string;
-  /** Missing before version 2. */
-  bridge?: number;
-  /** The desktop's Relay version; missing before version 11. */
-  version?: string;
-  /** Unknown until the desktop's window has applied its theme once. */
-  appearance?: PhoneAppearance;
-  /** The desktop's speech model, which phones dictate with; missing before version 8. */
-  dictation?: DictationModelState["status"];
-  /** Whether the desktop has a voice ready to read answers to phones; missing before version 12. */
-  readAloud?: boolean;
-  /** Someone is at the computer working in Relay, so phones keep news to themselves; missing where nobody can be. */
-  present?: boolean;
-  /** Every unsent draft, the desktop's and the phones'; missing before `draftsBridge`. */
-  drafts?: SharedDraft[];
-  projects: RemoteProject[];
-  /** Unarchived threads with messages, newest first. */
-  chats: RemoteChatSummary[];
-}
-
-/** What the thread's next message goes out with, as the desktop's composer last sent it. */
-export type RemoteSettings = Pick<
-  ProjectChatSend,
-  "provider" | "choice" | "runtimeMode" | "interactionMode" | "contextWindow"
->;
-
-/**
- * A message waiting its turn. Everything past `images` is optional: older
- * desktops leave it out, and a phone that doesn't know it ignores it.
- */
-export interface RemoteQueued {
-  id: string;
-  body: string;
-  /** How many screenshots it holds; `projectChatQueuedImages` hands them over. */
-  images?: number;
-  /** Why a steer was refused; it holds the queue until dealt with. */
-  error?: string;
-  /** When it was sent; older desktops leave it out. */
-  created?: number;
-  /**
-   * A steer held a moment before its agent gets it, to be taken back with ×:
-   * shown as the message it becomes, not in the queue. Older desktops leave it out.
-   */
-  held?: true;
-  /** The side conversation it was sent in, by its root; left out for the main one. */
-  parentId?: string;
-  /** Who answers: an agent, or "message" for a note. */
-  to?: NonNullable<ProjectChatSend["to"]>;
-  /** What it goes out with, to put back in the composer when it's taken back. */
-  settings?: RemoteSettings;
-}
-
-/** A thread, with messages the phone already holds at the same version sent as ids. */
-export interface RemoteChat extends Pick<
-  ProjectChatPatch,
-  | "id"
-  | "projectId"
-  | "title"
-  | "messages"
-  | "requests"
-  | "queuePaused"
-  | "scope"
-  | "stopped"
-  | "pending"
-  | "worktree"
-  | "workspaceMoves"
-> {
-  running: boolean;
-  /** The folder the thread works in; tool labels drop it, as on the desktop. Older desktops leave it out. */
-  root?: string;
-  /** Older messages left on the desktop; a phone gets the latest `remoteHistory`. */
-  earlier: number;
-  /** What all its answers cost, the earlier ones too, where their agent priced them. Older desktops leave it out. */
-  cost?: ThreadCost;
-  queue: RemoteQueued[];
-  /** Sent with Send later, by when they go out. */
-  scheduled: (RemoteQueued & { at: number })[];
-  settings?: RemoteSettings;
-  /** The conversation the last message went to: the main one, or a reply's root. */
-  lastParentId?: string | null;
-  /** Receipt for the requested send, including one still being processed; older desktops omit it. */
-  hasSend?: boolean;
-  /** The requested send is still in dispatch, so its eventual failure must stay in the outbox. */
-  sendPending?: boolean;
-}
-
-export const remoteHistory = 100;
-/** The most a phone may ask for at once, a page of `remoteHistory` at a time. */
-export const maxRemoteHistory = 1000;
-
-export interface RemoteDiffLine {
-  kind: "add" | "del" | "same";
-  text: string;
-  old?: number;
-  new?: number;
-}
-
-export interface RemoteDiff {
-  path: string;
-  binary: boolean;
-  hunks: { header: string; lines: RemoteDiffLine[] }[];
-  /** Cut to keep the phone responsive; the desktop shows all of it. */
-  truncated: boolean;
-}
-
-/** Which diff a phone asks for; the desktop turns it into lines. */
-export type RemoteDiffSource =
-  | { kind: "turn"; chatId: string; messageId: string; path: string }
-  | { kind: "working"; where: string; path: string; area: ChangeArea }
-  | { kind: "commit"; where: string; sha: string; path: string }
-  | { kind: "worktree"; chatId: string; path: string };
-
-/**
- * Desktop calls a paired phone makes as they are, validated by the desktop's
- * own dispatch: threads and their notes, models, Git (stage, commit, push, pull, fetch,
- * branches), read-only files, history, background tasks, subagents and pull requests
- * (reading them, commenting and reviewing); only what the
- * phone app uses. Terminals, file saves, settings (bar the agent new threads
- * start on), sharing and anything that opens a desktop dialog are not on the
- * list and stay out of reach.
- */
-export const phoneDesktopMethods = [
-  "createProjectChat",
-  "createScratch",
-  "sendProjectChat",
-  "cancelProjectChat",
-  "respondProjectChat",
-  "answerProjectChatQuestion",
-  "setProjectChatQuestionDismissed",
-  "projectChatQueueAction",
-  "resumeProjectChat",
-  "compactProjectChat",
-  "reloadProjectChatSession",
-  "rerunWorktreeSetup",
-  "selectAgentWorktree",
-  "resolveStoppedWork",
-  "stopProjectChatPending",
-  "projectChatAgents",
-  "projectChatAgent",
-  "stopProjectChatAgent",
-  "triageProjectChat",
-  "renameProjectChat",
-  "regenerateProjectChatTitle",
-  "markProjectChatSeen",
-  "forkProjectChat",
-  "rewindProjectTurn",
-  "setLimitResume",
-  "closeWatchNote",
-  "projectChatImage",
-  "projectChatReadImage",
-  "projectChatQueuedImages",
-  "threadNotes",
-  "tickThreadNote",
-  "removeThreadNote",
-  "agentModels",
-  "agentDefaults",
-  "agentTools",
-  "aiSettings",
-  "newThreadAgent",
-  "saveNewThreadAgent",
-  "newThreadModels",
-  "saveNewThreadModel",
-  "newThreadRuntimeMode",
-  "saveNewThreadRuntimeMode",
-  "projectWorktree",
-  "projectCommands",
-  "providerUsage",
-  "projectWorkingTree",
-  "projectGitAction",
-  "projectCiStatus",
-  "projectMergePlan",
-  "projectMergeBranch",
-  "projectCommitMessage",
-  "projectBranches",
-  "projectChangeBranch",
-  "projectHistory",
-  "projectCommit",
-  "projectFiles",
-  "projectFile",
-  "projectTasks",
-  "stopProjectTask",
-  "restartProjectTask",
-  "pullServers",
-  "hostAccount",
-  "search",
-  "pull",
-  "pullCiStatus",
-  "files",
-  "reviews",
-  "discussion",
-  "comment",
-  "submitReview",
-] as const satisfies readonly ApiMethod[];
-
-export type PhoneDesktopMethod = (typeof phoneDesktopMethods)[number];
-
-/**
- * Dictation on a phone: the phone's microphone, the desktop's speech engine.
- * One session per phone; a new start ends the last one.
- */
-export type PhoneDictation =
-  | { type: "start"; id: number }
-  /** About 80 ms of 16 kHz mono 16-bit little-endian PCM, as base64. */
-  | { type: "audio"; id: number; pcm: string }
-  /** Settles the last words; the answer's `settled` is the whole text. */
-  | { type: "stop"; id: number }
-  | { type: "cancel"; id: number };
-/** Everything heard so far: `settled` won't change, `tentative` may. */
-export interface PhoneDictationHeard {
-  settled: string;
-  tentative: string;
-  /** The engine is still loading the model; the audio waits for it. */
-  loading: boolean;
-}
-
-/** The most base64 one audio call may carry: a second of speech. */
-export const maxDictationChunk = 44_000;
-
-/**
- * Read aloud on a phone: the desktop's voice, the phone's speaker. The phone
- * pulls the audio as it plays, so the desktop never has to find one phone to
- * push to. One reading per phone; a new start ends the last.
- */
-export type PhoneReadAloud =
-  | { type: "start"; id: number; markdown: string }
-  | { type: "pull"; id: number }
-  | { type: "stop"; id: number };
-export interface PhoneReadAloudAudio {
-  /** Mono 16-bit little-endian PCM as base64, at most `maxReadAloudPull` seconds; empty when none is ready. */
-  pcm: string;
-  sampleRate: number;
-  /** The desktop is still loading the voice. */
-  loading: boolean;
-  /** Nothing more is coming after this audio. */
-  done: boolean;
-}
-
-export const maxReadAloudPull = 3;
-/** The longest answer a phone may ask to hear, in characters. */
-export const maxReadAloudText = 1_000_000;
+export * from "./remote-bridges";
+export * from "./remote-methods";
+export * from "./remote-models";
+export * from "./remote-pairing";
 
 /** Everything a paired phone may ask of the desktop. Nothing else is reachable. */
 export interface RemoteApi {
@@ -622,6 +99,12 @@ export interface RemoteApi {
     messageId: string,
     activityId: string,
   ): Promise<string | null>;
+  /** The code a call wrote, which the thread left out; missing before `traceTreeBridge`. */
+  activityWritten(
+    chatId: string,
+    messageId: string,
+    activityId: string,
+  ): Promise<WrittenCode[] | null>;
   /** The image as a data URL at most `max` pixels on its longer side; missing before `imageBridge`. */
   image(source: RemoteImageSource, max: number): Promise<string>;
   /** The news after `cursor`, or where it is now without one; missing before `newsBridge`. */
@@ -769,248 +252,7 @@ export interface RemoteApi {
   terminalCall(op: TerminalOp, key: string, args: unknown[]): Promise<unknown>;
 }
 
-/** What a computer does with a shell it opened in a project there, as TerminalApi names it. */
-export const terminalOps = [
-  "write",
-  "resize",
-  "ack",
-  "close",
-  "prefill",
-  "prefillSignIn",
-  "adopt",
-] as const;
-
-export type TerminalOp = (typeof terminalOps)[number];
-export type HandoffPart = "thread" | "bundle";
-
-/** The `computerCall`s that set a project up there, from `remoteAddingBridge`. */
-export const computerAddingMethods = [
-  "folderPreview",
-  "addingStart",
-  "githubRepos",
-  "createProject",
-  "cancelProjectAdding",
-] as const satisfies readonly ApiMethod[];
-
-/**
- * Calls about a paired computer itself, not one of its projects, that a
- * project living there needs from it (`computerCall`): project setup, its
- * agents and their models.
- */
-export const computerCallMethods = [
-  ...computerAddingMethods,
-  "agentModels",
-  "agentVersions",
-  "checkAgentVersions",
-  "agentSignedIn",
-  "installAgent",
-  "reloadAgentModels",
-] as const satisfies readonly ApiMethod[];
-
-export type ComputerCallMethod = (typeof computerCallMethods)[number];
-
-/** A folder here as `computerFolders` lists it; `project` when it's one already. */
-export interface ComputerFolder extends FolderEntry {
-  project?: { id: string; name: string };
-}
-
-export interface ComputerFolders {
-  /** This computer's home folder, which `~` stands for. */
-  home: string;
-  /** `dir` as it resolved here. */
-  dir: string;
-  folders: ComputerFolder[];
-}
-
-/** What starts a thread in a project another computer shows as its own. */
-export type HomeThread = Pick<
-  HandoffThread,
-  "from" | "title" | "scope" | "settings" | "messages"
->;
-
-/** A project on a computer taking handoffs, by its Git remotes' `owner/name`. */
-export interface ComputerProject {
-  id: string;
-  name: string;
-  repositories: string[];
-  /** Its folder, from the home folder as `~`; with a project just made there. */
-  folder?: string;
-  /** Its folder has no Git repository; from `remoteProjectsBridge`. */
-  plain?: true;
-}
-
-/** A clone `cloneProject` started: still going, or the project it made. */
-export type CloneProgress =
-  | { done: false; step: string; progress: number | null }
-  | { done: true; project: ComputerProject };
-/** What a computer's setup agent is to clone, and why Relay's own clone didn't. */
-export interface SetupRequest {
-  url: string;
-  repositories: string[];
-  /** What git said when the clone failed. */
-  error: string;
-  /** The agent and how it runs, as the thread it's for runs. */
-  settings: HandoffSettings;
-}
-
-/** How far a phone's file got; `path`, where the message names it, once all of it is here. */
-export interface UploadedFile {
-  received: number;
-  path?: string;
-}
-
-/** What a phone uploads per `uploadFile` call, before base64. */
-export const fileUploadChunk = 1024 * 1024;
-/** The largest file a phone may attach. */
-export const maxUploadBytes = 200 * 1024 * 1024;
 export type RemoteMethod = keyof RemoteApi;
-
-/** What a paired computer may call; phones only `updateMethods`. */
-export const computerMethods = [
-  "uploadPaste",
-  "downloadPaste",
-  "computerProjects",
-  "cloneProject",
-  "setupProject",
-  "setupProgress",
-  "handoffUpload",
-  "receiveHandoff",
-  "handoffStatus",
-  "handBack",
-  "handoffDownload",
-  "handedBack",
-  "handoffAbandoned",
-  "computerInfo",
-  "updateNow",
-  "handoffChat",
-  "handoffCall",
-  "computerFolders",
-  "computerAddProject",
-  "startInProject",
-  "computerCall",
-  "projectCall",
-  "projectTerminal",
-  "terminalCall",
-] as const satisfies readonly RemoteMethod[];
-
-export type ComputerMethod = (typeof computerMethods)[number];
-
-export const remoteMethods = [
-  "overview",
-  "chat",
-  "diff",
-  "desktop",
-  "projectIcons",
-  "subagents",
-  "subagentRun",
-  "reportApp",
-  "dictate",
-  "readAloud",
-  "activityDetail",
-  "image",
-  "renderPage",
-  "news",
-  "sites",
-  "tunnelAllow",
-  "saveDraft",
-  "draftOther",
-  "sendDraft",
-  "uploadFile",
-  ...computerMethods,
-] as const satisfies readonly RemoteMethod[];
-
-/** The bridge from which phones may call `updateMethods` too. */
-export const phoneUpdatesBridge = 11;
-
-/** About this Relay itself, so a phone may ask too, from `phoneUpdatesBridge`. */
-export const updateMethods = [
-  "computerInfo",
-  "updateNow",
-] as const satisfies readonly ComputerMethod[];
-
-/**
- * Calls that stop an agent, wait for its note or move a repository's worth
- * of Git; a dead link still fails them within a minute, as its ticks stop.
- */
-export const slowRemoteMethods: readonly RemoteMethod[] = [
-  // Through the desktop's page, which may have to open first, then a send's own.
-  "sendDraft",
-  "receiveHandoff",
-  "handBack",
-  "handoffUpload",
-  "handoffDownload",
-];
-
-/**
- * Calls a computer forwards (`projectCall`, `handoffCall`, `computerCall`)
- * that wait on the network, git, a model or an install. Given up on early,
- * they'd still finish there, and trying again would push or open a pull
- * request twice; they get `slowRemoteMethods`' time.
- */
-const slowForwardedMethods = new Set<string>([
-  "addingStart",
-  "githubRepos",
-  "createProject",
-  "projectGitAction",
-  "projectCommitMessage",
-  "projectPlanCommitSplit",
-  "projectApplyCommitSplit",
-  "projectBranchPulls",
-  "projectMergePlan",
-  "projectMergeBranch",
-  "projectDeleteBranch",
-  "projectCatchUp",
-  "projectRebase",
-  "projectPreparePull",
-  "projectCreatePull",
-  "projectChangeBranch",
-  "sendProjectChat",
-  "compactProjectChat",
-  "rerunWorktreeSetup",
-  "checkAgentVersions",
-  "installAgent",
-] satisfies ApiMethod[]);
-
-/** Whether the call gets the slow timeout, by its method and, when it forwards one, that one's. */
-export function slowRemoteCall(method: RemoteMethod, args: unknown[]) {
-  if (slowRemoteMethods.includes(method)) return true;
-  const forwarded =
-    method === "computerCall"
-      ? args[0]
-      : method === "projectCall" || method === "handoffCall"
-        ? args[1]
-        : undefined;
-  return typeof forwarded === "string" && slowForwardedMethods.has(forwarded);
-}
-
-/**
- * Calls that wait on the network, git or a model: pushes, pulls and merges,
- * written commit messages, CI and plan usage, and sends, which may carry
- * screenshots over a slow link and make a worktree first. The phone gives
- * them the desktop's two minutes instead of its usual quarter.
- */
-export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
-  "agentTools",
-  "sendProjectChat",
-  "createProjectChat",
-  "projectGitAction",
-  "projectCommitMessage",
-  "projectMergePlan",
-  "projectMergeBranch",
-  "projectCiStatus",
-  "providerUsage",
-  "regenerateProjectChatTitle",
-  "search",
-  "pullCiStatus",
-  "submitReview",
-  "comment",
-];
-
-/** A desktop call's arguments and result, as the phone sees them. */
-export type DesktopCall<M extends PhoneDesktopMethod> = {
-  args: Parameters<Api[M]>;
-  result: Awaited<ReturnType<Api[M]>>;
-};
 
 export type RemoteEvent =
   | { kind: "message"; chatId: string; message: ChatMessage; title?: string }
@@ -1042,8 +284,6 @@ export type WireEvent =
     }
   | { kind: "chatsPatch"; patch: ChatsPatch };
 
-/** Phones leave the kind out; a computer pairs to hand threads over. */
-export type DeviceKind = "computer";
 /**
  * Frames inside the encrypted channel. `bridge` is the client's own
  * `remoteBridgeVersion`; clients before `compactBridge` send none.
@@ -1090,64 +330,4 @@ export interface HelloFrame {
   v: number;
   /** Ephemeral X25519 public key, base64url. */
   e: string;
-}
-
-/**
- * Tailscale on this computer. Phone access listens on its tailnet address,
- * and on the local network too when that's allowed.
- */
-export interface PhoneTailnet {
-  /** connected: on a tailnet; stopped: installed but off or signed out; missing: not found. */
-  status: "connected" | "stopped" | "missing";
-  /** Its Tailscale IPv4 addresses. */
-  addresses: string[];
-  /** This computer's name on the tailnet, when the tailscale CLI answers. */
-  name?: string;
-  /** Phones on the tailnet, when the tailscale CLI answers. */
-  phones?: { name: string; online: boolean }[];
-}
-
-/** The desktop's own view of phone access, for Settings. */
-export interface PhoneRemoteState {
-  enabled: boolean;
-  listening: boolean;
-  error?: string;
-  port: number;
-  tailnet: PhoneTailnet;
-  /** Phones on the same local network may connect too. */
-  lan: boolean;
-  /** Where phones reach this computer: local addresses first, then Tailscale's. */
-  hosts: string[];
-  /**
-   * The address its bridge listens on, which `relay pipe` connects to: with
-   * no Tailscale, its loopback, which only a pipe reaches (`listening` stays
-   * false then).
-   */
-  bound?: string;
-  devices: {
-    id: string;
-    name: string;
-    kind?: DeviceKind;
-    created: number;
-    lastSeen?: number;
-    online: boolean;
-    /** As the phone last reported it; phones from before the report leave it out. */
-    app?: PhoneAppReport;
-  }[];
-}
-
-export interface PhonePairing {
-  url: string;
-  expiresAt: number;
-}
-
-export interface PhoneRemoteApi {
-  /** The window's resolved theme, passed on to paired phones. */
-  phoneAppearance(appearance: PhoneAppearance): Promise<void>;
-  phoneRemoteState(): Promise<PhoneRemoteState>;
-  setPhoneRemote(enabled: boolean): Promise<PhoneRemoteState>;
-  setPhoneRemoteLan(lan: boolean): Promise<PhoneRemoteState>;
-  /** A fresh QR link; the previous one stops working. */
-  phonePairing(): Promise<PhonePairing>;
-  revokePhone(deviceId: string): Promise<PhoneRemoteState>;
 }

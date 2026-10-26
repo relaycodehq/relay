@@ -157,7 +157,10 @@ test("browses the folder from disk: ignored files, pictures, binaries, and basic
         ),
       )
       .toBe(false);
-    await expect(page.getByText("No file open")).toBeVisible();
+    // Its tab closes with it; the tab in front before it comes back.
+    await expect(
+      page.getByRole("tab", { name: /^done\.md/ }),
+    ).toHaveCount(0);
     await expect(page.getByRole("alert")).toHaveCount(0);
   } finally {
     await app.close();

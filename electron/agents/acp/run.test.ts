@@ -693,3 +693,138 @@ it("fails a turn whose only answer is the agent reporting an error", async () =>
   );
   expect(onText).toHaveBeenLastCalledWith("");
 });
+
+/** OpenCode's question tool as a form: a choice and a multiselect, each with a field for the user's own words. */
+const openCodeQuestions = {
+  mode: "form",
+  message: "Questions",
+  toolCallId: "call_ask",
+  requestedSchema: {
+    type: "object",
+    properties: {
+      q0: {
+        type: "string",
+        title: "Database",
+        description: "Which database?",
+        oneOf: [
+          { const: "Postgres", title: "Postgres" },
+          { const: "SQLite", title: "SQLite", description: "One file" },
+        ],
+      },
+      q0_custom: { type: "string", title: "Database (other)" },
+      q1: {
+        type: "array",
+        title: "Pages",
+        description: "Which pages?",
+        items: { anyOf: [{ const: "Home", title: "Home" }] },
+      },
+      q1_custom: { type: "string", title: "Pages (other)" },
+    },
+    required: [],
+  },
+};
+
+const askCall = (status: string) => ({
+  update: {
+    sessionUpdate: status === "pending" ? "tool_call" : "tool_call_update",
+    toolCallId: "call_ask",
+    title: "question",
+    kind: "other",
+    status,
+  },
+});
+
+it("asks OpenCode's questions on the question card and fills its form with the answers", async () => {
+  const { acp, root, sent } = await agent(
+    {
+      turn: [
+        askCall("pending"),
+        { elicit: openCodeQuestions },
+        askCall("completed"),
+        say("Thanks."),
+      ],
+    },
+    { provider: "opencode", name: "OpenCode" },
+  );
+  const onRequest = vi.fn(async () => ({
+    kind: "question" as const,
+    answers: { q0: ["SQLite"], q1: ["Home", "Blog"] },
+  }));
+  const onActivity = vi.fn();
+  await runAcp(acp, options(root, { onRequest, onActivity }));
+
+  const messages = await sent();
+  expect(
+    messages.find((m) => m.method === "initialize")?.params.clientCapabilities
+      .elicitation,
+  ).toEqual({ form: {} });
+  expect(onRequest).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: "question",
+      questions: [
+        {
+          id: "q0",
+          header: "Database",
+          question: "Which database?",
+          allowCustomAnswer: true,
+          options: [
+            { label: "Postgres", value: "Postgres" },
+            { label: "SQLite", value: "SQLite", description: "One file" },
+          ],
+        },
+        {
+          id: "q1",
+          header: "Pages",
+          question: "Which pages?",
+          multiple: true,
+          allowCustomAnswer: true,
+          options: [{ label: "Home", value: "Home" }],
+        },
+      ],
+    }),
+    expect.anything(),
+  );
+  expect(messages.find((m) => !m.method)?.result).toEqual({
+    action: "accept",
+    content: { q0: "SQLite", q1: ["Home"], q1_custom: "Blog" },
+  });
+  expect(onActivity).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      id: "call_ask",
+      status: "complete",
+      label: "request_user_input",
+      questionAnswers: [
+        { question: "Which database?", answer: "SQLite" },
+        { question: "Which pages?", answer: "Home, Blog" },
+      ],
+    }),
+  );
+});
+
+it("cancels a form the card can't show, or one asked with nobody to answer", async () => {
+  const unshowable = {
+    ...openCodeQuestions,
+    requestedSchema: {
+      properties: { files: { type: "array", items: { type: "string" } } },
+    },
+  };
+  for (const [elicit, more] of [
+    [unshowable, {}],
+    [openCodeQuestions, { job: { kind: "helper" } }],
+    [openCodeQuestions, { onRequest: undefined }],
+  ] as const) {
+    const { acp, root, sent } = await agent(
+      { turn: [{ elicit }, say("Guessing.")] },
+      { provider: "opencode", name: "OpenCode" },
+    );
+    const onRequest = vi.fn();
+    await runAcp(
+      acp,
+      options(root, { onRequest, ...(more as Partial<AgentOptions>) }),
+    );
+    expect(onRequest).not.toHaveBeenCalled();
+    expect((await sent()).find((m) => !m.method)?.result).toEqual({
+      action: "cancel",
+    });
+  }
+});

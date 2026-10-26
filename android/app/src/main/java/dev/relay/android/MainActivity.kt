@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         }
         val container = (application as RelayApp).container
         // With the lock on, the recent apps show a blank card rather than the thread that was open.
+        lifecycleScope.launch { container.relayStop.stops.collect { finishAndRemoveTask() } }
         lifecycleScope.launch {
             container.lock.settings.map { it.on }.distinctUntilChanged().collect { setRecentsScreenshotEnabled(!it) }
         }
@@ -56,6 +57,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // Opening the app is what undoes a stop.
+    override fun onStart() {
+        super.onStart()
+        (application as RelayApp).container.relayStop.resume()
     }
 
     // Pickers and the camera come back with a result: a trip Relay sent the reader on, not a leave.

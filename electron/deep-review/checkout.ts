@@ -8,6 +8,7 @@ import { basename, dirname, join } from "node:path";
 import { currentBranchOrNull, git, worktreeList } from "../git/git";
 import { sameFolder } from "../git/worktrees";
 import type { ReviewCheckout, ReviewScope } from "../../shared/deep-review";
+import type { ProjectChat } from "../../shared/projects";
 import { errorMessage } from "../../shared/error-message";
 
 /** The folder under Relay's worktrees that holds the ones made for reviews, named after their review thread. */
@@ -390,4 +391,45 @@ export async function discardReviewCheckout(checkout: ReviewCheckout) {
       );
     await rm(checkout.path, { recursive: true, force: true });
   });
+}
+
+/**
+ * Where a round's reviewers work. Reviewers read the code around the
+ * changes, so a review's own thread checks it out; without that they read
+ * it from Git. Another thread's agent stays in its own folder, so nothing is
+ * checked out. Returns what undoes that when the round doesn't start: an
+ * earlier round's folder stays, back where that round had it.
+ */
+export async function placeRound(
+  root: string,
+  scope: ReviewScope,
+  chat: ProjectChat,
+  {
+    worktrees,
+    prHead,
+    duringTurn,
+  }: { worktrees: string; prHead?: string; duringTurn: boolean },
+) {
+  let putBack: (() => Promise<unknown>) | undefined;
+  const checkout =
+    chat.scope.kind === "review"
+      ? await openReviewCheckout(root, scope, worktrees, chat.id, prHead, {
+          inUse: duringTurn,
+          moved: (back) => (putBack = back),
+        }).catch((e: unknown) => {
+          console.warn("Could not check out the reviewed code for review:", e);
+          return undefined;
+        })
+      : undefined;
+  if (checkout) scope.checkout = checkout;
+  else scope.folder = root;
+  const kept =
+    !!checkout &&
+    chat.reviews?.some((r) => r.scope.checkout?.path === checkout.path);
+  return () =>
+    !checkout
+      ? undefined
+      : kept
+        ? putBack?.()
+        : discardReviewCheckout(checkout);
 }

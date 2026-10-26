@@ -17,9 +17,15 @@ export interface RemoteDevice {
 }
 
 export interface RemoteSettings {
+  /** Phones and computers reach it by an address, on Tailscale or the local network. */
   enabled?: boolean;
   /** Defaults to true; false explicitly restricts access to the tailnet. */
   lan?: boolean;
+  /**
+   * A computer paired through `relay pipe` (over SSH or wsl.exe), which
+   * reaches it on its loopback even with `enabled` off.
+   */
+  pipes?: boolean;
   /** The bridge's X25519 secret: sealed by the OS credential store, or `plain:` where there is none. */
   key?: string;
   devices?: RemoteDevice[];

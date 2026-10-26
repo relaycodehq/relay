@@ -43,7 +43,7 @@ it("keeps a paragraph's inline markdown and a file chip's path", () => {
           h("strong", {}, "threads"),
           " from ",
           h(
-            "button",
+            "span",
             { class: "chat-file-link", title: "src/cache.ts:12" },
             h("svg", {}),
             h("span", {}, "cache.ts · L12"),

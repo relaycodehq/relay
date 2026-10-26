@@ -1,4 +1,5 @@
 import { readJson, readText, writeText } from "./persisted-store";
+import { builtInThemes } from "./builtin-themes";
 /**
  * Relay's design tokens. Every theme supplies the same small palette and the
  * rest (soft accent, accent text, code colours) is derived, so a new theme is
@@ -38,278 +39,6 @@ export interface Theme {
   swatches: string[];
 }
 
-const READABLE = "+aa";
-
-/**
- * A Shiki theme with its token colours darkened to AA on the palette's code
- * backgrounds; light themes' stock oranges and cyans sit near 2.5:1 there.
- * readable-syntax.ts registers them.
- */
-function readableSyntax(base: string): string {
-  return base + READABLE;
-}
-
-/** The stock Shiki theme a readable one is built from, or null. */
-export function readableSyntaxBase(syntax: string): string | null {
-  return syntax.endsWith(READABLE) ? syntax.slice(0, -READABLE.length) : null;
-}
-
-const relayLight: Palette = {
-  kind: "light",
-  syntax: readableSyntax("pierre-light"),
-  sidebar: "#ececee",
-  surface: "#ffffff",
-  toolbar: "#f9f9fa",
-  inbox: "#f7f7f8",
-  text: "#303237",
-  muted: "#676972",
-  border: "#e2e3e6",
-  hover: "#e5e5e9",
-  selected: "#dedee8",
-  accent: "#6565a9",
-  // Relay's lavender, as in the dark theme, rather than the deeper accent.
-  send: "#aaa8e5",
-  diffAddition: "#d6efdd",
-  diffDeletion: "#f9dcdf",
-};
-
-const relayDark: Palette = {
-  kind: "dark",
-  syntax: "pierre-dark",
-  sidebar: "#232326",
-  surface: "#1e1e21",
-  toolbar: "#242427",
-  inbox: "#28282c",
-  text: "#e1e1e5",
-  muted: "#94949f",
-  border: "#37373d",
-  hover: "#34343c",
-  selected: "#41414f",
-  accent: "#aaa8e5",
-  diffAddition: "#213f2d",
-  diffDeletion: "#45272c",
-};
-
-const themes: Theme[] = [
-  {
-    id: "relay",
-    name: "Relay",
-    description: "Quiet neutrals with a soft violet accent.",
-    light: relayLight,
-    dark: relayDark,
-    swatches: [
-      "#aaa8e5",
-      "#6565a9",
-      "#5b9bd5",
-      "#3fa37d",
-      "#d9894a",
-      "#d0678f",
-    ],
-  },
-  {
-    id: "dracula",
-    name: "Dracula",
-    description: "The classic dark theme with vivid purple and pink.",
-    dark: {
-      kind: "dark",
-      syntax: "dracula",
-      sidebar: "#21222c",
-      surface: "#282a36",
-      toolbar: "#2b2d3a",
-      inbox: "#2d2f3d",
-      text: "#f8f8f2",
-      muted: "#9aa3c9",
-      border: "#3b3d4f",
-      hover: "#363849",
-      selected: "#44475a",
-      accent: "#bd93f9",
-      diffAddition: "#244a36",
-      diffDeletion: "#57293a",
-    },
-    swatches: [
-      "#bd93f9",
-      "#ff79c6",
-      "#8be9fd",
-      "#50fa7b",
-      "#ffb86c",
-      "#f1fa8c",
-    ],
-  },
-  {
-    id: "tokyo-night",
-    name: "Tokyo Night",
-    description: "Deep indigo night with neon blue highlights.",
-    dark: {
-      kind: "dark",
-      syntax: "tokyo-night",
-      sidebar: "#16161e",
-      surface: "#1a1b26",
-      toolbar: "#1d1e2a",
-      inbox: "#1f2030",
-      text: "#c0caf5",
-      muted: "#7c83aa",
-      border: "#292e42",
-      hover: "#252838",
-      selected: "#2f3549",
-      accent: "#7aa2f7",
-      diffAddition: "#1f3a33",
-      diffDeletion: "#3f2331",
-    },
-    swatches: [
-      "#7aa2f7",
-      "#bb9af7",
-      "#7dcfff",
-      "#9ece6a",
-      "#ff9e64",
-      "#f7768e",
-    ],
-  },
-  {
-    id: "nord",
-    name: "Nord",
-    description: "Arctic blue-grey, calm and low contrast.",
-    dark: {
-      kind: "dark",
-      syntax: "nord",
-      sidebar: "#2a303b",
-      surface: "#2e3440",
-      toolbar: "#313745",
-      inbox: "#343b48",
-      text: "#eceff4",
-      muted: "#9aa5b9",
-      border: "#3b4252",
-      hover: "#3b4252",
-      selected: "#434c5e",
-      accent: "#88c0d0",
-      diffAddition: "#2f4a3e",
-      diffDeletion: "#4d3439",
-    },
-    swatches: [
-      "#88c0d0",
-      "#81a1c1",
-      "#b48ead",
-      "#a3be8c",
-      "#d08770",
-      "#ebcb8b",
-    ],
-  },
-  {
-    id: "rose-pine",
-    name: "Rosé Pine",
-    description: "Soho vibes: muted rose and pine on deep purple.",
-    dark: {
-      kind: "dark",
-      syntax: "rose-pine",
-      sidebar: "#161421",
-      surface: "#191724",
-      toolbar: "#1c1a28",
-      inbox: "#1f1d2e",
-      text: "#e0def4",
-      muted: "#8e8aa8",
-      border: "#2a273f",
-      hover: "#26233a",
-      selected: "#312e48",
-      accent: "#ebbcba",
-      diffAddition: "#233a3a",
-      diffDeletion: "#44283a",
-    },
-    swatches: [
-      "#ebbcba",
-      "#c4a7e7",
-      "#9ccfd8",
-      "#31748f",
-      "#f6c177",
-      "#eb6f92",
-    ],
-  },
-  {
-    id: "gruvbox",
-    name: "Gruvbox",
-    description: "Retro, warm and earthy.",
-    dark: {
-      kind: "dark",
-      syntax: "gruvbox-dark-medium",
-      sidebar: "#252423",
-      surface: "#282828",
-      toolbar: "#2c2b29",
-      inbox: "#302f2c",
-      text: "#ebdbb2",
-      muted: "#a89984",
-      border: "#3c3836",
-      hover: "#3a3633",
-      selected: "#504945",
-      accent: "#fabd2f",
-      diffAddition: "#34391f",
-      diffDeletion: "#4a2724",
-    },
-    swatches: [
-      "#fabd2f",
-      "#fe8019",
-      "#b8bb26",
-      "#8ec07c",
-      "#83a598",
-      "#d3869b",
-    ],
-  },
-  {
-    id: "catppuccin-latte",
-    name: "Catppuccin Latte",
-    description: "Soft pastel light theme.",
-    light: {
-      kind: "light",
-      syntax: readableSyntax("catppuccin-latte"),
-      sidebar: "#e6e9ef",
-      surface: "#eff1f5",
-      toolbar: "#eaedf2",
-      inbox: "#e9ecf1",
-      text: "#4c4f69",
-      muted: "#64677c",
-      border: "#ccd0da",
-      hover: "#dce0e8",
-      selected: "#d3d7e3",
-      accent: "#8839ef",
-      diffAddition: "#d5ecd4",
-      diffDeletion: "#f5d4da",
-    },
-    swatches: [
-      "#8839ef",
-      "#1e66f5",
-      "#179299",
-      "#40a02b",
-      "#fe640b",
-      "#ea76cb",
-    ],
-  },
-  {
-    id: "solarized-light",
-    name: "Solarized Light",
-    description: "Warm paper tones with precise contrast.",
-    light: {
-      kind: "light",
-      syntax: readableSyntax("solarized-light"),
-      sidebar: "#eee8d5",
-      surface: "#fdf6e3",
-      toolbar: "#f7f0dc",
-      inbox: "#f5eedb",
-      text: "#3c4c53",
-      muted: "#556a71",
-      border: "#e2dbc6",
-      hover: "#e8e1cc",
-      selected: "#e0d8c1",
-      accent: "#268bd2",
-      diffAddition: "#e2edc6",
-      diffDeletion: "#f6d9cf",
-    },
-    swatches: [
-      "#268bd2",
-      "#2aa198",
-      "#859900",
-      "#b58900",
-      "#cb4b16",
-      "#6c71c4",
-    ],
-  },
-];
 
 export type AppearanceMode = "system" | "light" | "dark";
 
@@ -378,10 +107,10 @@ export function setImportedThemes(list: Theme[]) {
   imported = list;
 }
 
-const allThemes = (): Theme[] => [...themes, ...imported];
+const allThemes = (): Theme[] => [...builtInThemes, ...imported];
 
 export function themeById(id: string): Theme {
-  return allThemes().find((t) => t.id === id) ?? themes[0];
+  return allThemes().find((t) => t.id === id) ?? builtInThemes[0];
 }
 
 /** Themes that have a palette for `kind`. */
@@ -421,7 +150,7 @@ export function loadAppearance(): Appearance {
       : "system";
   // Later ones kept one theme and accent for both modes.
   if (typeof saved.theme === "string") {
-    const theme = themes.find((t) => t.id === saved.theme);
+    const theme = builtInThemes.find((t) => t.id === saved.theme);
     const shared = { theme: saved.theme, accent: saved.accent };
     saved = { light: theme?.light && shared, dark: theme?.dark && shared };
     // A single-mode theme showed its own mode whatever was picked.
@@ -501,7 +230,7 @@ export function isCustomized(choice: ThemeChoice): boolean {
 
 /** The palette `choice` shows in `kind`, with its overrides applied. */
 export function resolvePalette(kind: ThemeKind, choice: ThemeChoice): Palette {
-  const base = themeById(choice.theme)[kind] ?? themes[0][kind]!;
+  const base = themeById(choice.theme)[kind] ?? builtInThemes[0][kind]!;
   return reshape(base, choice);
 }
 

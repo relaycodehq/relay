@@ -29,8 +29,9 @@ fun inputBlocksThread(c: RemoteChatSummary) =
 val byStanding: Comparator<RemoteChatSummary> =
     compareBy<RemoteChatSummary> { if (it.waiting == true) 0 else if (it.running == true) 1 else 2 }.thenBy { it.created }
 
+/** A second opinion isn't among them: it shows under the answer it checks. */
 fun startedOf(lead: String, chats: List<RemoteChatSummary>) =
-    chats.filter { it.startedBy?.chatId == lead }.sortedWith(byStanding)
+    chats.filter { it.startedBy?.chatId == lead && !isSecondOpinion(it) }.sortedWith(byStanding)
 
 fun familyLive(started: List<RemoteChatSummary>) = started.any { it.running == true || it.waiting == true }
 

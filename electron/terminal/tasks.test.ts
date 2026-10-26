@@ -368,23 +368,6 @@ it("counts a task's CPU as a share of the whole computer, not of one core", asyn
   expect(costed).toMatchObject({ cpu: 50, mb: 403 });
 });
 
-it("reads costs again when a plain scan was under way or came since", async () => {
-  fake.rows = [];
-  fake.usage = [];
-  // The Running card's plain look is on its way as the Processes page asks.
-  const plain = projectTasks.list("/costs", [], { fresh: true });
-  await projectTasks.costedTable();
-  await plain;
-  expect(fake.usage).toEqual([false, true]);
-  // Read with costs just now: asked again, it uses that.
-  await projectTasks.costedTable();
-  expect(fake.usage).toEqual([false, true]);
-  // A plain look since replaced them.
-  await projectTasks.list("/costs", [], { fresh: true });
-  await projectTasks.costedTable();
-  expect(fake.usage).toEqual([false, true, false, true]);
-});
-
 it.skipIf(process.platform === "win32")(
   "doesn't take the Claude and Codex desktop apps for the CLIs",
   () => {

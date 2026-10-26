@@ -1,0 +1,120 @@
+/* The change's folders, a column for each pass. */
+.pass-tree {
+  display: grid;
+  gap: 4px;
+}
+.pass-tree-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 24px;
+}
+.pass-tree-head .pass-tree-cells {
+  margin-left: auto;
+}
+/* A big change scrolls in its own box, so the fields below stay in view. */
+.pass-tree-rows {
+  display: grid;
+  gap: 1px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.pass-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding-right: 2px;
+  border-radius: 6px;
+}
+.pass-tree-row:hover {
+  background: var(--hover);
+}
+.pass-tree-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+}
+.pass-tree-chevron svg {
+  transition: transform 120ms;
+}
+.pass-tree-chevron[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.pass-tree-file {
+  color: var(--muted);
+}
+.pass-tree-lines {
+  flex: none;
+  margin-left: auto;
+  min-width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pass-tree-cells {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+}
+.pass-tree-size {
+  width: 24px;
+  color: var(--muted);
+  font-size: 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.pass-tree-cell {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: transparent;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* A pass the row isn't in is a faint dot until the row is hovered. */
+.pass-tree-cell[data-share="none"]::before {
+  content: "";
+  grid-area: 1 / 1;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.pass-tree-row:hover .pass-tree-cell[data-share="none"] {
+  color: var(--muted);
+}
+.pass-tree-row:hover .pass-tree-cell[data-share="none"]::before {
+  display: none;
+}
+.pass-tree-cell[data-share="all"] {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  color: var(--text);
+}
+.pass-tree-cell[data-share="some"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--muted);
+}
+.pass-tree-cell:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.pass-tree-row:hover .pass-tree-cell[data-share="none"]:hover {
+  color: var(--text);
+}
+.pass-tree-cell[data-share="all"]:hover {
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}

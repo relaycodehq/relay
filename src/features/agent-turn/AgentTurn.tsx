@@ -1,59 +1,36 @@
 import { useNow } from "../../lib/useNow";
-// One summary line per turn, and a flat list of tool rows named by what they
-// touched.
+// One summary line per turn; under it the commentary, and between lines of it
+// the tool calls: one by one while the agent works on them, then grouped by
+// what they did (Run).
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  createContext,
-  Fragment,
-  useContext,
-  useRef,
-  useState,
-  type ReactElement,
-  type ReactNode,
-} from "react";
-import {
-  Bot,
   Brain,
   ChevronRight,
   Clock3,
-  FilePen,
-  FileText,
-  Globe,
   MessageCircleQuestion,
-  Search,
-  Terminal,
-  Wrench,
 } from "lucide-react";
-import { PreviewCard } from "@base-ui/react/preview-card";
-import type { AgentActivity, ChatMessage } from "../../../shared/projects";
+import type { ChatMessage } from "../../../shared/projects";
 import type { ProjectFileLink } from "../../../shared/project-file-links";
+import { duration, liveLabel } from "../../../shared/activity-labels";
 import {
-  doneLabel,
-  duration,
-  liveLabel,
-  summarizeActivity,
-} from "../../../shared/activity-labels";
-import {
-  batchHead,
   groupTrace,
-  imageRead,
   readTurn,
   thinkingWord,
   turnHeading,
+  type TurnHeading,
 } from "../../../shared/agent-trace";
-import { Spinner } from "../../ui/ui";
 import { RichText } from "../../ui/RichText";
-import { ImagePeek, PEEK_DELAY } from "../images/ImagePeek";
-import { useImageSource, type PreviewImage } from "../images/ImagePreview";
 import { isStartThreads, startedIds } from "../../../shared/started-threads";
-import {
-  askedQuestions,
-  isQuestionCall,
-} from "../../../shared/asked-questions";
-import { AnsweredQuestions } from "./AnsweredQuestions";
+import { isQuestionCall } from "../../../shared/asked-questions";
 import { StartedHeading, StartedThreadMarks } from "./StartedThreads";
 import { WorkingAgentsHeading } from "./TurnAgents";
+import { iconOf, Subagents, TurnImages, type ReadImages } from "./ToolRow";
+import { Run } from "./trace-tree/Run";
+import { useFoldAway } from "./useFoldAway";
 import "./agent-trace.css";
 import "./agent-turn.css";
+
+export type { ReadImages } from "./ToolRow";
 
 function WorkingTimer({
   started,
@@ -74,261 +51,6 @@ export interface TurnPresentation {
   waiting: boolean;
   expanded: boolean;
   onToggle: (expanded: boolean) => void;
-}
-
-const icons = {
-  command: Terminal,
-  read: FileText,
-  file: FilePen,
-  search: Search,
-  web: Globe,
-  agent: Bot,
-  tool: Wrench,
-} satisfies Record<AgentActivity["kind"], unknown>;
-
-const iconOf = (a: AgentActivity) =>
-  isQuestionCall(a) ? MessageCircleQuestion : icons[a.kind];
-
-/** Each agent call's own tool calls, by the agent call's id, and how to show their paths. */
-const Subagents = createContext({
-  calls: new Map<string, AgentActivity[]>(),
-  display: (text: string) => text,
-});
-
-/** The images the turn read, by path, and how to open one in the viewer. */
-export interface ReadImages {
-  find: (path: string) => PreviewImage | undefined;
-  open: (image: PreviewImage) => void;
-}
-
-/** Absent where there's no viewer to open an image in. */
-const TurnImages = createContext<ReadImages | undefined>(undefined);
-
-/** A finished read of an image the viewer can open. */
-function useImageRead(a: AgentActivity) {
-  const images = useContext(TurnImages);
-  const path = imageRead(a);
-  const image = images && path ? images.find(path) : undefined;
-  return images && image
-    ? { image, open: () => images.open(image) }
-    : undefined;
-}
-
-/** A read image's row icon: the picture itself, swatch-sized, until it loads the file icon. */
-function ReadIcon({ image }: { image: PreviewImage }) {
-  const { data: source } = useImageSource(image);
-  return source ? (
-    <img className="agent-step-thumb" src={source} alt="" />
-  ) : (
-    <FileText size={14} />
-  );
-}
-
-/** A read image's picture grown above its row, once it has loaded. */
-function ReadPeek({
-  image,
-  onOpen,
-}: {
-  image: PreviewImage;
-  onOpen?: () => void;
-}) {
-  const { data: source } = useImageSource(image);
-  return source ? <ImagePeek src={source} onOpen={onOpen} /> : null;
-}
-
-/** A row that grows its read image above it on hover, as a sent image's pill does. */
-function ImageReadPeek({
-  image,
-  onOpen,
-  trigger,
-  children,
-}: {
-  image?: PreviewImage;
-  onOpen?: () => void;
-  trigger: ReactElement;
-  children: ReactNode;
-}) {
-  const peek = useRef<PreviewCard.Root.Actions>(null);
-  return (
-    <PreviewCard.Root actionsRef={peek}>
-      <PreviewCard.Trigger delay={PEEK_DELAY} closeDelay={0} render={trigger}>
-        {children}
-      </PreviewCard.Trigger>
-      {image && (
-        <ReadPeek
-          image={image}
-          onOpen={
-            onOpen &&
-            (() => {
-              peek.current?.close();
-              onOpen();
-            })
-          }
-        />
-      )}
-    </PreviewCard.Root>
-  );
-}
-
-/** A running agent's status after its name, dimmed so the name leads. */
-function Progress({ activity: a }: { activity: AgentActivity }) {
-  if (a.status !== "running" || !a.progress) return null;
-  return <span className="agent-step-progress">{a.progress}</span>;
-}
-
-/** A fold that builds its body the first time it opens; a long run keeps hundreds closed. */
-function Fold({
-  className,
-  summary,
-  children,
-}: {
-  className: string;
-  summary: ReactNode;
-  children: ReactNode;
-}) {
-  const [opened, setOpened] = useState(false);
-  return (
-    <details
-      className={className}
-      onToggle={(event) => {
-        if (event.currentTarget.open) setOpened(true);
-      }}
-    >
-      {summary}
-      {opened && children}
-    </details>
-  );
-}
-
-function ToolRow({
-  activity: a,
-  label,
-  onChanges,
-}: {
-  activity: AgentActivity;
-  label: string;
-  onChanges: () => void;
-}) {
-  const asked = askedQuestions(a);
-  // A failed call keeps its own icon, only its line turns red: commands fail as part of the work.
-  const Icon = iconOf(a);
-  const calls = useContext(Subagents).calls.get(a.id) ?? [];
-  const expandable = Boolean(a.detail) || a.kind === "file" || calls.length > 0;
-  const read = useImageRead(a);
-  if (asked) return <AnsweredQuestions questions={asked} />;
-  const heading = (
-    <>
-      {a.status === "running" ? (
-        <Spinner size={14} steady={isQuestionCall(a)} />
-      ) : read ? (
-        <ReadIcon image={read.image} />
-      ) : (
-        <Icon size={14} />
-      )}
-      <span className={a.kind === "command" ? "mono" : undefined}>
-        {isQuestionCall(a)
-          ? a.status === "running"
-            ? liveLabel(a)
-            : doneLabel(a)
-          : label}
-      </span>
-      <Progress activity={a} />
-      {isStartThreads(a) && <StartedThreadMarks ids={startedIds(a.detail)} />}
-    </>
-  );
-  if (!expandable)
-    return (
-      <div className={`agent-step ${a.status}`}>
-        {read ? (
-          <ImageReadPeek
-            image={read.image}
-            onOpen={read.open}
-            trigger={
-              <button
-                type="button"
-                className="agent-step-heading agent-step-open"
-                onClick={read.open}
-              />
-            }
-          >
-            {heading}
-          </ImageReadPeek>
-        ) : (
-          <div className="agent-step-heading">{heading}</div>
-        )}
-      </div>
-    );
-  return (
-    <Fold
-      className={`agent-step ${a.status}`}
-      summary={<summary className="agent-step-heading">{heading}</summary>}
-    >
-      {calls.length > 0 && <SubagentRows calls={calls} onChanges={onChanges} />}
-      {a.detail && <pre>{a.detail}</pre>}
-      {a.kind === "file" && (
-        <button onClick={onChanges}>Open working changes</button>
-      )}
-    </Fold>
-  );
-}
-
-/** What a subagent did, under its agent row. */
-function SubagentRows({
-  calls,
-  onChanges,
-}: {
-  calls: AgentActivity[];
-  onChanges: () => void;
-}) {
-  const { display } = useContext(Subagents);
-  return (
-    <div className="agent-group-rows">
-      {calls.map((c) => (
-        <ToolRow
-          key={c.id}
-          activity={c}
-          label={display(c.label)}
-          onChanges={onChanges}
-        />
-      ))}
-    </div>
-  );
-}
-
-/** A run of tool calls between two commentary lines, folded into "Ran 6 commands". */
-function ActivityGroup({
-  activity,
-  display,
-  onChanges,
-}: {
-  activity: AgentActivity[];
-  display: (text: string) => string;
-  onChanges: () => void;
-}) {
-  const kinds = new Set(activity.map((a) => a.kind));
-  const Icon = kinds.size === 1 ? icons[activity[0]!.kind] : Wrench;
-  return (
-    <Fold
-      className="agent-step agent-group"
-      summary={
-        <summary className="agent-step-heading">
-          <Icon size={14} />
-          <span>{summarizeActivity(activity)}</span>
-        </summary>
-      }
-    >
-      <div className="agent-group-rows">
-        {activity.map((a) => (
-          <ToolRow
-            key={a.id}
-            activity={a}
-            label={display(a.label)}
-            onChanges={onChanges}
-          />
-        ))}
-      </div>
-    </Fold>
-  );
 }
 
 export function AgentTurn({
@@ -360,6 +82,7 @@ export function AgentTurn({
     open || undefined,
   );
   const expanded = presentation?.expanded ?? toggled ?? live;
+  const fold = useFoldAway(expanded);
   const headingMessage = presentation?.summary ?? message;
   const headingTurn = presentation?.summary ? readTurn(headingMessage) : turn;
   if (!live && !entries.length && !presentation?.summary) return null;
@@ -380,32 +103,11 @@ export function AgentTurn({
   const startedIn = startedBy.every(Boolean)
     ? startedBy.flatMap((ids) => ids!)
     : undefined;
-  const label = presentation?.waiting ? (
-    "Waiting for your answer"
-  ) : heading.kind === "working" ? (
-    "Working for"
-  ) : heading.kind === "call" ? (
-    display(liveLabel(heading.activity))
-  ) : heading.kind === "writing" ? (
-    "Writing"
-  ) : heading.kind === "thinking" ? (
-    <ThinkingWord seed={headingMessage.id} />
-  ) : (
-    heading.text
-  );
+  const waiting = !!presentation?.waiting;
+  const label = headingText(heading, waiting, display, headingMessage.id);
   // Expanded, the header is the whole run and stays still; the one live row
   // below it is what moves. Folded, the header stands in for that row.
-  const HeaderIcon = presentation?.waiting
-    ? MessageCircleQuestion
-    : heading.kind === "working"
-      ? Clock3
-      : heading.kind === "call"
-        ? iconOf(heading.activity)
-        : heading.kind === "done"
-          ? heading.last
-            ? iconOf(heading.last)
-            : Brain
-          : null;
+  const HeaderIcon = headingIconOf(heading, waiting);
   const headingIcon = HeaderIcon ? (
     <HeaderIcon size={14} />
   ) : (
@@ -441,7 +143,7 @@ export function AgentTurn({
   return (
     <Container
       className={`agent-activity${live ? " live" : ""}${continuation ? " continuation" : ""}`}
-      open={continuation ? undefined : expanded}
+      open={continuation ? undefined : expanded || fold.folding}
       onToggle={
         continuation
           ? undefined
@@ -486,54 +188,25 @@ export function AgentTurn({
           <ChevronRight size={13} className="agent-run-chevron" />
         </summary>
       )}
-      {expanded && (entries.length > 0 || thinking) && (
+      {(expanded || fold.folding) && (entries.length > 0 || thinking) && (
         <Subagents.Provider value={{ calls, display }}>
           <TurnImages.Provider value={images}>
-            <div className="agent-trace" aria-label="Local agent activity">
-              {groupTrace(shown).map((part, index, parts) =>
-                part.kind === "commentary" ? (
-                  <div className="agent-commentary" key={part.id}>
-                    <RichText
-                      text={part.text}
-                      projectRoot={projectRoot}
-                      onOpenFile={onOpenFile}
-                    />
-                  </div>
-                ) : live &&
-                  index === parts.length - 1 &&
-                  !isQuestionCall(part.activity[0]!) ? (
-                  <OpenBatch
-                    key={part.id}
-                    activity={part.activity}
-                    display={display}
-                    onChanges={onChanges}
-                  />
-                ) : part.activity.length === 1 ||
-                  parts.every((p) => p === part || p.kind === "commentary") ? (
-                  // The only run's summary is already the turn's heading.
-                  <Fragment key={part.id}>
-                    {part.activity.map((a) => (
-                      <ToolRow
-                        key={a.id}
-                        activity={a}
-                        label={display(a.label)}
-                        onChanges={onChanges}
-                      />
-                    ))}
-                  </Fragment>
-                ) : (
-                  <ActivityGroup
-                    key={part.id}
-                    activity={part.activity}
-                    display={display}
-                    onChanges={onChanges}
-                  />
-                ),
-              )}
+            <div
+              className="agent-trace"
+              aria-label="Local agent activity"
+              ref={fold.ref}
+            >
+              <TraceParts
+                shown={shown}
+                live={live}
+                projectRoot={projectRoot}
+                onOpenFile={onOpenFile}
+                onChanges={onChanges}
+              />
               {/* The line keeps its height while a call runs, so each call
                 doesn't shrink the trace and jolt the thread pinned below. */}
               {live && !message.body && (
-                <div className="agent-step agent-thinking">
+                <div className={`agent-step agent-thinking${thinking ? "" : " reserved"}`}>
                   <div className="agent-step-heading">
                     {thinking && (
                       <>
@@ -551,6 +224,88 @@ export function AgentTurn({
       )}
     </Container>
   );
+}
+
+/** The trace between lines of commentary; while the turn runs, its last batch is open. */
+function TraceParts({
+  shown,
+  live,
+  projectRoot,
+  onOpenFile,
+  onChanges,
+}: {
+  shown: ReturnType<typeof readTurn>["shown"];
+  live: boolean;
+  projectRoot: string;
+  onOpenFile: (target: ProjectFileLink) => void;
+  onChanges: () => void;
+}) {
+  // Batches that come in after the trace first drew grow in.
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    if (live) setDrawn(true);
+  }, [live]);
+  return groupTrace(shown).map((part, index, parts) =>
+    part.kind === "commentary" ? (
+      <div className="agent-commentary" key={part.id}>
+        <RichText
+          text={part.text}
+          projectRoot={projectRoot}
+          onOpenFile={onOpenFile}
+        />
+      </div>
+    ) : (
+      <Run
+        key={part.id}
+        calls={part.activity}
+        live={
+          live &&
+          index === parts.length - 1 &&
+          !isQuestionCall(part.activity[0]!)
+        }
+        only={parts.every((p) => p === part || p.kind === "commentary")}
+        arrived={drawn}
+        onChanges={onChanges}
+      />
+    ),
+  );
+}
+
+/** What the heading says: a word for what the turn is doing, or the live call. */
+function headingText(
+  heading: TurnHeading,
+  waiting: boolean,
+  display: (text: string) => string,
+  seed: string,
+): ReactNode {
+  if (waiting) return "Waiting for your answer";
+  switch (heading.kind) {
+    case "working":
+      return "Working for";
+    case "call":
+      return display(liveLabel(heading.activity));
+    case "writing":
+      return "Writing";
+    case "thinking":
+      return <ThinkingWord seed={seed} />;
+    case "done":
+      return heading.text;
+  }
+}
+
+/** The heading's icon; none while thinking, where the agent's own glyph turns instead. */
+function headingIconOf(heading: TurnHeading, waiting: boolean) {
+  if (waiting) return MessageCircleQuestion;
+  switch (heading.kind) {
+    case "working":
+      return Clock3;
+    case "call":
+      return iconOf(heading.activity);
+    case "done":
+      return heading.last ? iconOf(heading.last) : Brain;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -576,70 +331,4 @@ function ThinkingWord({ seed }: { seed: string }) {
 /** Claude's turning asterisk, or a terminal braille spinner for the other agents. */
 function ThinkingGlyph({ provider }: { provider: ChatMessage["provider"] }) {
   return <span className={`thinking-glyph ${provider}`} aria-hidden />;
-}
-
-/**
- * The batch still being worked on: one row names the latest call, and the
- * ones before it fold behind that row. It gets its "Ran 6 commands" summary
- * only once commentary or the end of the turn closes it.
- */
-function OpenBatch({
-  activity,
-  display,
-  onChanges,
-}: {
-  activity: AgentActivity[];
-  display: (text: string) => string;
-  onChanges: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const { head, earlier } = batchHead(activity);
-  const running = head.status === "running";
-  const Icon = iconOf(head);
-  const calls = useContext(Subagents).calls.get(head.id) ?? [];
-  const folded = earlier.length > 0 || calls.length > 0;
-  // With nothing folded behind it, an image's row opens the image instead.
-  const read = useImageRead(head);
-  return (
-    <div className={`agent-batch ${head.status}`}>
-      <ImageReadPeek
-        image={read?.image}
-        onOpen={read?.open}
-        trigger={
-          <button
-            type="button"
-            className="agent-step-heading agent-batch-head"
-            aria-expanded={folded ? open : undefined}
-            disabled={!folded && !read}
-            onClick={folded ? () => setOpen(!open) : read?.open}
-          />
-        }
-      >
-        <span className="agent-batch-row" title={display(head.label)}>
-          {read ? <ReadIcon image={read.image} /> : <Icon size={14} />}
-          <span className={running ? "live-shine" : undefined}>
-            {display(running ? liveLabel(head) : doneLabel(head))}
-          </span>
-          <Progress activity={head} />
-        </span>
-        {folded && <ChevronRight size={13} className="agent-batch-chevron" />}
-      </ImageReadPeek>
-      {/* The live agent's own calls first; the batch's earlier calls fold behind it. */}
-      {open && calls.length > 0 && (
-        <SubagentRows calls={calls} onChanges={onChanges} />
-      )}
-      {open && earlier.length > 0 && (
-        <div className="agent-group-rows">
-          {earlier.map((a) => (
-            <ToolRow
-              key={a.id}
-              activity={a}
-              label={display(a.label)}
-              onChanges={onChanges}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }

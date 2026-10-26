@@ -91,6 +91,8 @@ button {
   white-space: nowrap;
   line-height: 1.25;
   transition: background-color 0.1s;
+  /* A label isn't content: a double-click mustn't select it and offer to quote it. */
+  user-select: none;
 }
 button:hover {
   background: var(--hover);
@@ -2162,22 +2164,6 @@ html {
 .local-editor-modal > .error-box {
   flex-shrink: 0;
   margin: 0 16px 10px;
-}
-.editor-versions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  border-block: 1px solid var(--border);
-  background: var(--toolbar);
-  font-size: 11px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-.editor-versions span {
-  padding: 9px 16px;
-}
-.editor-versions span + span {
-  border-left: 1px solid var(--border);
-  color: var(--text);
 }
 .local-editor-surface {
   display: flex;

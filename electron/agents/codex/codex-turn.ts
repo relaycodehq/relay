@@ -453,7 +453,8 @@ export class CodexTurn {
   }
 
   private interrupt() {
-    if (this.settled) return;
+    // Stop can arrive twice: from the signal, and again once the start resumes.
+    if (this.settled || this.interruptTimeout) return;
     const { wire, threadId } = this;
     const turnId = this.reviewTurnId || this.turnId;
     if (wire && threadId && turnId) {

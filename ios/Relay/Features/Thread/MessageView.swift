@@ -58,8 +58,10 @@ struct MessageView: View {
             if !images.strip.isEmpty {
                 MessageImageRow(images: images.strip, among: images.all)
             }
-            // A screenshot sent on its own leaves nothing for the bubble to hold.
-            if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if let asked = message.secondOpinion {
+                SecondOpinionAskedView(asked: asked)
+            } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                // A screenshot sent on its own leaves nothing for the bubble to hold.
                 HStack {
                     Spacer(minLength: 56)
                     SelectableText(text: sentText(text), look: TextLook(color: colors.foreground))
@@ -150,6 +152,7 @@ struct MessageView: View {
             }
             if !message.streaming {
                 MessageActions(chatId: chatId, message: message, replies: main)
+                SecondOpinionCards(chatId: chatId, answer: message)
             }
             repliesLink
         }

@@ -7,6 +7,7 @@ import { openCodeHandlers } from "./opencode";
 import { agentToolHandlers } from "./agent-tools";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
+import { deepReviewHandlers } from "./deep-reviews";
 import { bugReportHandlers } from "./bug-reports";
 import { checkHandlers } from "./checks";
 import { combine } from "./combine";
@@ -14,11 +15,18 @@ import { computerHandlers } from "./computers";
 import type { ApiContext, Handlers } from "./context";
 import { desktopHandlers } from "./desktop";
 import { draftHandlers } from "./drafts";
+import { commitMessageHandlers } from "./commit-messages";
 import { deviceHandlers } from "./devices";
 import { gitHandlers } from "./git";
 import { guestShareHandlers } from "./guest-share";
 import { elsewhereHandlers } from "./elsewhere";
+import { languageServerHandlers } from "./language-servers";
+import { lineHistoryHandlers } from "./line-history";
+import { localHistoryHandlers } from "./local-history";
+import { projectEntryHandlers } from "./project-entries";
+import { projectFileHandlers } from "./project-files";
 import { projectHandlers } from "./projects";
+import { projectSearchHandlers } from "./project-search";
 import { readAloudHandlers } from "./read-aloud";
 import { renderHandlers } from "./renders";
 import { reviewCheckoutHandlers } from "./review-checkout";
@@ -30,9 +38,11 @@ import { soundHandlers } from "./sounds";
 import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
+import { editorWindowHandlers } from "./editor-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
 import { scheduleHandlers } from "./schedules";
+import { secondOpinionHandlers } from "./second-opinions";
 import { usageHandlers } from "./usage";
 
 export type Dispatch = (method: ApiMethod, args: unknown[]) => Promise<unknown>;
@@ -49,13 +59,23 @@ export function createDispatch(
     reviewHandlers(ctx),
     reviewCheckoutHandlers(ctx),
     checkHandlers(ctx),
+    lineHistoryHandlers(ctx),
     projectHandlers(ctx),
+    projectFileHandlers(ctx),
+    projectEntryHandlers(ctx),
+    languageServerHandlers(ctx),
+    localHistoryHandlers(ctx),
+    projectSearchHandlers(ctx),
     gitHandlers(ctx),
+    commitMessageHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
     guestShareHandlers(ctx),
+    deepReviewHandlers(ctx),
+    secondOpinionHandlers(ctx),
     terminalHandlers(ctx),
     threadWindowHandlers(ctx),
+    editorWindowHandlers(ctx),
     previewHandlers(ctx),
     deviceHandlers(ctx),
     settingsHandlers(ctx),
@@ -69,7 +89,7 @@ export function createDispatch(
     draftHandlers(ctx),
     computerHandlers(ctx),
     usageHandlers(ctx),
-    processHandlers(ctx),
+    processHandlers(),
     scheduleHandlers(ctx),
     bugReportHandlers(ctx),
     // Fails to compile when the Api gains a method no domain handles.

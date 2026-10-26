@@ -1,6 +1,8 @@
 import type { QuestionTarget } from "../../../shared/questions";
 import { useSymbolNavigation } from "./SymbolNavigation";
 import { useLineBlame } from "./LineBlame";
+import { HIGHLIGHTER } from "./highlighting";
+import { useLargeFileNote } from "./useLargeFileNote";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { clickedLine } from "./diff-selection";
 import type { ProjectCheckState } from "../../../shared/checks";
@@ -141,10 +143,7 @@ export function DiffViewer({
   const revision = revisionOf(pull);
   const theme = useTheme();
   const syntaxThemes = useSyntaxThemes();
-  const [highlightLarge, setHighlightLarge] = useState(false);
-  const isLarge =
-    !!diff &&
-    Math.max(diff.additionLines.length, diff.deletionLines.length) > 5000;
+  const largeFile = useLargeFileNote(diff);
   const annotations = useMemo(
     () =>
       lineAnnotations({
@@ -222,14 +221,7 @@ export function DiffViewer({
       {blame.overlay}
       {symbols.overlay}
       {symbols.ready && symbols.controls}
-      {isLarge && !highlightLarge && (
-        <div className="large-file-note">
-          <span>Large file · fast text view keeps memory low</span>
-          <button onClick={() => setHighlightLarge(true)}>
-            Enable syntax highlighting
-          </button>
-        </div>
-      )}
+      {largeFile.note}
       {selection && (
         <SelectionToolbar
           range={selection.range}
@@ -271,9 +263,9 @@ export function DiffViewer({
           },
           theme: syntaxThemes,
           themeType: theme,
-          tokenizeMaxLength: highlightLarge ? 100000 : 5000,
+          tokenizeMaxLength: largeFile.tokenizeMaxLength,
           useTokenTransformer: true,
-          preferredHighlighter: "shiki-js",
+          preferredHighlighter: HIGHLIGHTER,
           diffStyle: layout,
           expandUnchanged: fullContext || problemLine !== undefined,
           diffIndicators: "bars",
@@ -291,9 +283,9 @@ export function DiffViewer({
             if (phase !== "unmount") labelDiffGapControls(node);
           },
         }}
-        renderAnnotation={(a) => (
+        renderAnnotation={(...[annotation]) => (
           <LineAnnotations
-            notes={a.metadata}
+            notes={annotation.metadata}
             path={file.filename}
             composer={composer}
             actions={noteActions}

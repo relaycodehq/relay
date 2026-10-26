@@ -4,6 +4,7 @@ import { mergeBranchSchema } from "../../shared/branch-merge";
 import { branchActionSchema } from "../../shared/branches";
 import {
   applyCommitSplitSchema,
+  commitFileChangeSchema,
   commitSplitNoteSchema,
 } from "../../shared/commit-split";
 import {
@@ -11,11 +12,7 @@ import {
   historyLimitSchema,
   historyScopeSchema,
 } from "../../shared/history";
-import {
-  helperOffMessage,
-  helperOn,
-  helperPickSchema,
-} from "../../shared/settings";
+import { helperOffMessage, helperOn } from "../../shared/settings";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
@@ -32,7 +29,7 @@ import {
   branches,
   changeBranch,
 } from "../git/branches";
-import { generateCommitMessage } from "../git/commit-messages";
+import { commitFileChange } from "../git/commit-change";
 import { applyCommitSplit, planCommitSplit } from "../git/commit-split";
 import { commitDetail, commitDiff, commitLog } from "../git/history";
 import { performGitAction } from "../git/git-actions";
@@ -140,36 +137,6 @@ export function gitHandlers(ctx: ApiContext) {
       [workspaceIdSchema, branchNameSchema],
       async (where, name) => deleteMergedBranch(await placeRoot(where), name),
     ),
-    projectCommitMessage: takes(
-      [
-        workspaceIdSchema,
-        z.array(workingPathSchema).min(1).max(1000),
-        // The sheet's own pick, which may not have finished saving yet.
-        helperPickSchema.nullable().optional(),
-      ],
-      async (where, paths, picked) => {
-        if (!helperOn(store.aiSettings(), "commitMessage"))
-          throw new Error(helperOffMessage("Commit messages"));
-        const root = await placeRoot(where);
-        const pick =
-          picked === undefined
-            ? projects.get(parseWorkspaceId(where).projectId).settings
-                ?.commitMessage
-            : picked;
-        return generateCommitMessage(
-          root,
-          paths,
-          pick
-            ? {
-                ...store.aiSettings(),
-                commitMessage: pick.choice,
-                commitMessageProvider: pick.provider,
-              }
-            : store.aiSettings(),
-          AbortSignal.timeout(120_000),
-        );
-      },
-    ),
     projectPlanCommitSplit: takes(
       [workspaceIdSchema, commitSplitNoteSchema.optional()],
       async (where, note) => {
@@ -188,6 +155,10 @@ export function gitHandlers(ctx: ApiContext) {
     projectApplyCommitSplit: takes(
       [workspaceIdSchema, applyCommitSplitSchema],
       async (where, split) => applyCommitSplit(await placeRoot(where), split),
+    ),
+    projectCommitFileChange: takes(
+      [workspaceIdSchema, commitFileChangeSchema],
+      async (where, change) => commitFileChange(await placeRoot(where), change),
     ),
     projectGitAction: takes(
       [workspaceIdSchema, gitActionSchema],

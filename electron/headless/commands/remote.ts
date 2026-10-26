@@ -174,7 +174,10 @@ export async function pair(
     const fresh = await running(home);
     if (fresh && !fresh.remote.listening) {
       ui.print(section("Pair"));
-      printTailscaleHelp(fresh, ui);
+      // Listening failed, on a taken port say, which Tailscale wouldn't fix.
+      if (fresh.remote.error)
+        ui.print(row("warn", "Not listening", fresh.remote.error));
+      else printTailscaleHelp(fresh, ui);
       throw new Quiet();
     }
     throw e;

@@ -111,8 +111,6 @@ class ProjectTasks {
     string,
     { chatId: string; key: string; at: number }[]
   >();
-  /** What a running agent CLI was seen working for, from the commands it ran; keyed `pid:started`. */
-  private agents = new Map<string, { chatId?: string; root?: string }>();
   /** What each agent session last heard about running processes. */
   private notes = new Map<string, ProjectTask[]>();
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
@@ -133,8 +131,6 @@ class ProjectTasks {
   /** Whether the last scan read what each process costs. */
   private costed = false;
   private rates = new CpuRates();
-  /** `workingFolders`' answers by `pid:started`; "" where there was none. */
-  private processCwds = new Map<string, string>();
   /** Shells Relay started to restart a task, adopted on the next scan. */
   private adopting = new Map<
     number,
@@ -407,85 +403,6 @@ class ProjectTasks {
     this.notes.delete(session);
   }
 
-  /**
-   * Every process with what it costs: the last scan's when it read costs,
-   * else a new one, as a plain scan since may have replaced them.
-   */
-  costedTable(): Promise<readonly Proc[]> {
-    if (!this.costed) this.scanned = 0;
-    return this.scan(true);
-  }
-
-  /** Relay's terminal shells' pids. */
-  terminalShells(): ReadonlySet<number> {
-    return new Set(this.terminals.keys());
-  }
-
-  /**
-   * The live processes of a listed task, the shell it started from first
-   * while it runs. One that exited is left out: its pid may be another's now.
-   */
-  members(id: string): number[] {
-    const task = this.tracked.get(id);
-    if (!task) return [];
-    const pids = [...task.pids.keys()];
-    return task.pids.has(task.root)
-      ? [task.root, ...pids.filter((p) => p !== task.root)]
-      : pids;
-  }
-
-  /** The thread and folder an agent CLI was seen running commands for. */
-  agentWork(pid: number, started: number) {
-    return this.agents.get(`${pid}:${started}`);
-  }
-
-  /**
-   * Where these processes run, where the OS tells (not Windows). Kept per
-   * process; one `lsof` call for those not looked up yet.
-   */
-  async workingFolders(procs: readonly Proc[]) {
-    const found = new Map<number, string>();
-    if (windows || !procs.length) return found;
-    const missing = procs.filter(
-      (p) => !this.processCwds.has(`${p.pid}:${p.started}`),
-    );
-    if (missing.length) {
-      const read =
-        process.platform === "linux"
-          ? new Map(
-              await Promise.all(
-                missing.map(
-                  async (p) =>
-                    [
-                      p.pid,
-                      await readlink(`/proc/${p.pid}/cwd`).then(liveCwd, () => ""),
-                    ] as const,
-                ),
-              ),
-            )
-          : lsofFolders(
-              await run("lsof", [
-                "-a",
-                "-d",
-                "cwd",
-                "-Fn",
-                "-p",
-                missing.map((p) => p.pid).join(","),
-              ]),
-            );
-      for (const p of missing)
-        this.processCwds.set(`${p.pid}:${p.started}`, read.get(p.pid) ?? "");
-    }
-    const live = new Set(this.last.map((p) => `${p.pid}:${p.started}`));
-    for (const key of this.processCwds.keys())
-      if (!live.has(key)) this.processCwds.delete(key);
-    for (const p of procs) {
-      const cwd = this.processCwds.get(`${p.pid}:${p.started}`);
-      if (cwd) found.set(p.pid, cwd);
-    }
-    return found;
-  }
-
   private watch(root: string) {
     if (this.roots.has(root)) return;
     this.roots.add(root);
@@ -560,7 +477,6 @@ class ProjectTasks {
         const relay = ours(agent);
         const key = commandKey(command);
         const match = relay ? this.findChat(key, child.started) : undefined;
-        if (match) this.agents.set(`${agent.pid}:${agent.started}`, match);
         this.tracked.set(id, {
           id,
           command,
@@ -669,9 +585,6 @@ class ProjectTasks {
       if (byPid.get(pid)?.started !== started) this.seen.delete(pid);
     for (const key of this.cwds.keys())
       if (!this.seen.has(+key.split(":")[0])) this.cwds.delete(key);
-    const live = new Set(procs.map((p) => `${p.pid}:${p.started}`));
-    for (const key of this.agents.keys())
-      if (!live.has(key)) this.agents.delete(key);
     return procs;
   }
 
