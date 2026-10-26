@@ -48,6 +48,11 @@ function restorePlace(view: EditorView, doc: FileDocument) {
  * from view to view. `slots` are this view's say in the document's state:
  * the theme, change bars, symbol actions and the like.
  */
+/** Remembers where the view was scrolled, for the document's next view. */
+function keepScroll(view: EditorView, doc: FileDocument) {
+  doc.scroll = { top: view.scrollDOM.scrollTop, left: view.scrollDOM.scrollLeft };
+}
+
 export function CodeEditor({
   doc,
   slots: values,
@@ -75,7 +80,11 @@ export function CodeEditor({
       },
     });
     setView(next);
-    return () => next.destroy();
+    return () => {
+      // This runs before the document's own cleanup, which would read a scroll already gone.
+      if (shown.current) keepScroll(next, shown.current);
+      next.destroy();
+    };
   }, []);
   // The document has no state until its file has been read.
   const [loaded, setLoaded] = useState<FileDocument>();
@@ -103,10 +112,7 @@ export function CodeEditor({
     });
     return () => {
       attached = false;
-      doc.scroll = {
-        top: view.scrollDOM.scrollTop,
-        left: view.scrollDOM.scrollLeft,
-      };
+      if (view.dom.isConnected) keepScroll(view, doc);
       doc.detach(view);
       doc.revealInView = undefined;
       shown.current = undefined;
