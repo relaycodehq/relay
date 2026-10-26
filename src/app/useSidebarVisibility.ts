@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { popupOpen, useShortcut } from "../lib/shortcuts";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
@@ -105,11 +111,41 @@ export function useSidebarVisibility(
     setChoice((choice) => ({ ...choice, besidePane: null }));
   }, [autoHide]);
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
-  // Resting the pointer along the window's left edge peeks it too. It's
-  // watched rather than covered, so the edge still takes clicks and
-  // selections; the short dwell keeps a pointer flung past it, or a drag,
-  // from opening it.
   const asideRef = useRef<HTMLElement>(null);
+  useEdgePeek({ hidden, peek, setPeek, peekClose, layout, asideRef });
+  return {
+    hidden,
+    peek,
+    toggle,
+    peekOpen,
+    peekClose,
+    layoutRef: setLayout,
+    asideRef,
+    toggled,
+  };
+}
+
+/**
+ * Resting the pointer along the window's left edge peeks the hidden sidebar
+ * too. It's watched rather than covered, so the edge still takes clicks and
+ * selections; the short dwell keeps a pointer flung past it, or a drag, from
+ * opening it.
+ */
+function useEdgePeek({
+  hidden,
+  peek,
+  setPeek,
+  peekClose,
+  layout,
+  asideRef,
+}: {
+  hidden: boolean;
+  peek: boolean;
+  setPeek: (peek: boolean) => void;
+  peekClose: () => void;
+  layout: HTMLElement | null;
+  asideRef: RefObject<HTMLElement | null>;
+}) {
   const edgePeekOn = hidden && !peek;
   useEffect(() => {
     if (!edgePeekOn) return;
@@ -152,16 +188,6 @@ export function useSidebarVisibility(
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
   }, [peek]);
-  return {
-    hidden,
-    peek,
-    toggle,
-    peekOpen,
-    peekClose,
-    layoutRef: setLayout,
-    asideRef,
-    toggled,
-  };
 }
 
 /**

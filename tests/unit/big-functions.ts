@@ -120,7 +120,7 @@ export const bigFunctions: Record<string, number> = {
   "src/app/usePaneOpens.ts › usePaneOpens": 162,
   "src/app/usePullThreads.ts › usePullThreads": 107,
   "src/app/useShellNavigation.ts › useShellNavigation": 176,
-  "src/app/useSidebarVisibility.ts › useSidebarVisibility": 136,
+  "src/app/useSidebarVisibility.ts › useSidebarVisibility": 91,
   "src/app/useThreadFolder.ts › useThreadFolder": 95,
   "src/features/accounts/AccountSwitch.tsx › AccountMenu": 82,
   "src/features/add-project/AddProjectPalette.tsx › AddProjectPalette": 519,
