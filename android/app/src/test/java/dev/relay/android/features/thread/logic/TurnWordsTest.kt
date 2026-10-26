@@ -81,6 +81,12 @@ class TurnWordsTest {
         assertEquals("Asked you 2 questions", doneLabel(asked))
     }
 
+    @Test fun keepsQuotedWordsInsideAQuestion() {
+        val asked = call("q", "tool", "complete", "AskUserQuestion")
+            .copy(detail = "Your questions have been answered: \"What did you mean by \"switch is Y\"?\"=\"Yes, test on Switch\", \"Pick \"a\"?\"=\"a\". You can now continue.")
+        assertEquals(listOf("What did you mean by \"switch is Y\"?" to "Yes, test on Switch", "Pick \"a\"?" to "a"), askedQuestions(asked)!!.map { it.question to it.answer })
+    }
+
     @Test fun wordsRelaysOwnToolsThatCameRaw() {
         fun mcp(label: String, server: String, tool: String) =
             call("t", "tool", "complete", label).copy(mcp = McpCall(server, tool))

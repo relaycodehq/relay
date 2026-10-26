@@ -20,11 +20,12 @@ public func isQuestionCall(_ a: AgentActivity) -> Bool {
 
 /// A finished question call's questions and answers: Codex keeps pairs, Claude
 /// Code writes them in its result (`The user answered: "Q"="A", …`).
+/// A pair starts after `: ` or `, `, so a question may quote words itself.
 public func askedQuestions(_ a: AgentActivity) -> [AskedQuestion]? {
     guard isQuestionCall(a), a.status == "complete" else { return nil }
     if let pairs = a.questionAnswers, !pairs.isEmpty { return pairs }
     guard let detail = a.detail else { return nil }
-    let pairs = detail.matches(of: #/"([^"]+?)"="([\s\S]*?)"(?=, "[^"]+?"="|\.(?:\s|$)|$)/#).map {
+    let pairs = detail.matches(of: #/[:,] "([\s\S]+?)"="([\s\S]*?)"(?=, "[\s\S]+?"="|\.(?:\s|$)|$)/#).map {
         AskedQuestion(
             question: String($0.output.1).trimmingCharacters(in: .whitespacesAndNewlines),
             answer: String($0.output.2).trimmingCharacters(in: .whitespacesAndNewlines))

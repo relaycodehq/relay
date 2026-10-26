@@ -81,7 +81,8 @@ fun isQuestionCall(a: AgentActivity) =
     a.kind == "tool" && (a.label == "AskUserQuestion" || a.label == "request_user_input")
 
 // `"Question"="Answer"`, up to the next pair, the closing sentence or the end.
-private val PAIR = Regex("\"([^\"]+?)\"=\"([\\s\\S]*?)\"(?=, \"[^\"]+?\"=\"|\\.(?:\\s|$)|$)")
+// A pair starts after `: ` or `, `, so a question may quote words itself.
+private val PAIR = Regex("[:,] \"([\\s\\S]+?)\"=\"([\\s\\S]*?)\"(?=, \"[\\s\\S]+?\"=\"|\\.(?:\\s|$)|$)")
 
 /** A finished native call's questions and answers; null when there's nothing to read. */
 fun askedQuestions(a: AgentActivity): List<AskedQuestion>? {

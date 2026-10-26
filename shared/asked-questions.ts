@@ -30,7 +30,8 @@ export function questionAnswers(
 }
 
 // `"Question"="Answer"`, up to the next pair, the closing sentence or the end.
-const PAIR = /"([^"]+?)"="([\s\S]*?)"(?=, "[^"]+?"="|\.(?:\s|$)|$)/g;
+// A pair starts after `: ` or `, `, so a question may quote words itself.
+const PAIR = /[:,] "([\s\S]+?)"="([\s\S]*?)"(?=, "[\s\S]+?"="|\.(?:\s|$)|$)/g;
 
 /**
  * A finished native call's questions and answers. Codex keeps structured

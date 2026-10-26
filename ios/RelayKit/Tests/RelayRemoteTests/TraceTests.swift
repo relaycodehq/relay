@@ -37,6 +37,14 @@ struct TraceTests {
         #expect(doneLabel(other) == "linear: add_note")
     }
 
+    @Test func questionsKeepTheirOwnQuotes() throws {
+        let call: AgentActivity = try JSON.parse(
+            #"{"id":"q","kind":"tool","label":"AskUserQuestion","status":"complete","detail":"Your questions have been answered: \"What did you mean by \"switch is Y\"?\"=\"Yes, test on Switch\", \"Pick \"a\"?\"=\"a\". You can now continue."}"#
+        ).decode()
+        let pairs = askedQuestions(call)!.map { [$0.question, $0.answer] }
+        #expect(pairs == [[#"What did you mean by "switch is Y"?"#, "Yes, test on Switch"], [#"Pick "a"?"#, "a"]])
+    }
+
     @Test func summariesMatch() {
         for row in ts["summaries"]!.array! {
             let list = row["ids"]!.array!.map { activities[$0.string!]! }
