@@ -73,7 +73,7 @@ private func commonRunDiff(_ before: [String], _ after: [String]) -> [DiffLine] 
 /// A unified diff's lines from its first hunk on, marked by their first character; the file
 /// headers before it go. Nil when it has no hunk, as an added file's whole content.
 public func patchLines(_ diff: String) -> [DiffLine]? {
-    let lines = diff.components(separatedBy: "\n")
+    let lines = withoutEndNewline(diff).components(separatedBy: "\n")
     guard let first = lines.firstIndex(where: { $0.hasPrefix("@@") }) else { return nil }
     return lines[first...].map { line in
         if line.hasPrefix("@@") { return DiffLine(.same, line) }
@@ -90,5 +90,10 @@ public func changeCounts(_ lines: [DiffLine]) -> (added: Int, removed: Int) {
 
 /// A passage's lines; an empty one, like what a deletion leaves, has none.
 private func linesOf(_ text: String) -> [String] {
-    text.isEmpty ? [] : text.components(separatedBy: "\n")
+    text.isEmpty ? [] : withoutEndNewline(text).components(separatedBy: "\n")
+}
+
+/// A newline that ends the last line starts no line of its own.
+private func withoutEndNewline(_ text: String) -> String {
+    text.hasSuffix("\n") ? String(text.dropLast()) : text
 }

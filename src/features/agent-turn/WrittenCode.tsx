@@ -5,8 +5,11 @@ import { diffArrays } from "diff";
 import type { WrittenCode as Written } from "../../../shared/projects";
 import { Line, useLines, type Mark } from "./CodeLines";
 
+/** A text without the newline that ends its last line, which starts no line of its own. */
+const withoutEndNewline = (text: string) => text.replace(/\n$/, "");
+
 function Whole({ path, content }: { path: string; content: string }) {
-  const lines = useLines(path, content);
+  const lines = useLines(path, withoutEndNewline(content));
   return (
     <>
       {lines.map((tokens, index) => (
@@ -19,7 +22,7 @@ function Whole({ path, content }: { path: string; content: string }) {
 const gutters: Record<Mark, string> = { removed: "−", added: "+", same: "" };
 
 /** A passage's lines; an empty one, like what a deletion leaves, has none. */
-const linesOf = (text: string) => (text ? text.split("\n") : []);
+const linesOf = (text: string) => (text ? withoutEndNewline(text).split("\n") : []);
 
 /** One swapped passage, line by line: only what changed is tinted, the rest is context. */
 function Swap({ path, edit }: { path: string; edit: { old: string; new: string } }) {
@@ -54,7 +57,7 @@ function markOf(line: string): Mark {
 
 /** A diff's lines from its first hunk on; none when it has no hunks, as an added file's whole content. */
 function hunkLines(diff: string) {
-  const lines = diff.split("\n");
+  const lines = withoutEndNewline(diff).split("\n");
   const first = lines.findIndex((line) => line.startsWith("@@"));
   return first === -1 ? undefined : lines.slice(first);
 }
@@ -90,8 +93,8 @@ function keptNothing(file: Written) {
 /** "+17 −2" for an edit, "24 lines" for a file written whole. */
 function size(file: Written) {
   if (keptNothing(file)) return file.secret ? "not kept, may hold secrets" : "too long to keep";
-  if (file.kind === "whole") return `${file.content.split("\n").length} lines`;
-  if (file.kind === "patch" && !hunkLines(file.diff)) return `${file.diff.split("\n").length} lines`;
+  if (file.kind === "whole") return `${linesOf(file.content).length} lines`;
+  if (file.kind === "patch" && !hunkLines(file.diff)) return `${linesOf(file.diff).length} lines`;
   const changed =
     file.kind === "swap"
       ? file.edits.flatMap((e) => diffArrays(linesOf(e.old), linesOf(e.new)))

@@ -36,7 +36,7 @@ private fun wholeView(content: String): WrittenView {
 private fun withoutLastNewline(lines: List<String>) = if (lines.size > 1 && lines.last().isEmpty()) lines.dropLast(1) else lines
 
 /** A passage's lines; an empty one, like what a deletion leaves, has none. */
-private fun linesOf(text: String) = if (text.isEmpty()) emptyList() else text.split("\n")
+private fun linesOf(text: String) = if (text.isEmpty()) emptyList() else withoutLastNewline(text.split("\n"))
 
 /** Every edit's passages, one after another, each diffed line by line. */
 private fun swapView(edits: List<kotlin.Pair<String, String>>): WrittenView {

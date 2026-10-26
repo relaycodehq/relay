@@ -51,6 +51,12 @@ class WrittenLinesTest {
     }
 
     @Test
+    fun aNewlineEndingAnEditStartsNoLine() {
+        val view = writtenView(WrittenCode("swap", "x.ts", edits = listOf(WrittenEdit("a\n", "b\n"))))
+        assertEquals(listOf("R a", "A b"), marks(view))
+    }
+
+    @Test
     fun aPatchWithoutHunksIsTheWholeFile() {
         val view = writtenView(WrittenCode("patch", "x.ts", diff = "-not a mark\nline\n"))
         assertEquals(listOf("S -not a mark", "S line"), marks(view))

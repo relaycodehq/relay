@@ -135,6 +135,11 @@ struct LineDiffTests {
         #expect(diff.map(\.mark) == [.same, .removed, .removed, .added, .same])
     }
 
+    @Test func aNewlineAtTheEndStartsNoLine() {
+        #expect(lineDiff("a\n", "b\n") == [DiffLine(.removed, "a"), DiffLine(.added, "b")])
+        #expect(patchLines("@@ -1 +1 @@\n-a\n+b\n")?.count == 3)
+    }
+
     @Test func emptySidesAreAllAddedOrAllRemoved() {
         #expect(lineDiff("", "a\nb") == [DiffLine(.added, "a"), DiffLine(.added, "b")])
         #expect(lineDiff("a\nb", "") == [DiffLine(.removed, "a"), DiffLine(.removed, "b")])

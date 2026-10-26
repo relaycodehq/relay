@@ -82,8 +82,10 @@ private func shownCode(_ file: WrittenCode) -> (hunks: [[CodeLine]], size: CodeS
 /// A file numbered line by line; past what the highlighter takes, the lines come plain.
 @MainActor
 private func wholeFile(_ content: String, language: String?) -> (hunks: [[CodeLine]], size: CodeSize) {
-    let texts = content.components(separatedBy: "\n")
-    let tokens = Highlighted.lines(content, language: language)
+    // A newline that ends the last line starts no line of its own.
+    let code = content.hasSuffix("\n") ? String(content.dropLast()) : content
+    let texts = code.components(separatedBy: "\n")
+    let tokens = Highlighted.lines(code, language: language)
     let lines = texts.enumerated().map { index, text in
         CodeLine(gutter: "\(index + 1)", tokens: tokens[safe: index], text: text, mark: .same)
     }
