@@ -173,7 +173,7 @@ export function CallsOpened({ calls, onChanges }: { calls: AgentActivity[]; onCh
               {call.detail ? `\n${call.detail}` : ""}
             </pre>
           )}
-          {call.kind !== "command" && !call.written?.length && call.detail && (
+          {call.kind !== "command" && showsDetail(call) && (
             <pre className="trace-output">{call.detail}</pre>
           )}
           {call.kind === "file" && !isScratch(call.label) && (
@@ -186,6 +186,10 @@ export function CallsOpened({ calls, onChanges }: { calls: AgentActivity[]; onCh
     </div>
   );
 }
+
+/** What a call printed, unless it only confirms the code shown above it; a failure always says why. */
+const showsDetail = (call: AgentActivity) =>
+  Boolean(call.detail) && (!call.written?.length || call.status === "failed");
 
 /** Something to show opened: code it wrote, output, or a command to read whole. */
 const opens = (calls: AgentActivity[]) =>

@@ -1,7 +1,7 @@
 // A finished run of tool calls, grouped by what the calls did
 // (shared/trace-tree): single rows, pairs said as one sentence, and branches
 // that fold open into a tree.
-import { useContext } from "react";
+import { useContext, useRef } from "react";
 import type { AgentActivity } from "../../../shared/projects";
 import { baseName } from "../../../shared/call-actions";
 import {
@@ -68,10 +68,19 @@ function Branch({ piece, onChanges }: { piece: Extract<TracePiece, { kind: "bran
   );
 }
 
+/** The run's tree, built again only when one of its calls changed: the turn hands over a new array every render. */
+function usePieces(calls: AgentActivity[]) {
+  const built = useRef<{ calls: AgentActivity[]; pieces: TracePiece[] }>(undefined);
+  const same = built.current?.calls.length === calls.length && calls.every((c, i) => c === built.current!.calls[i]);
+  if (!same) built.current = { calls, pieces: traceTree(calls) };
+  return built.current!.pieces;
+}
+
 export function TraceRun({ calls, onChanges }: { calls: AgentActivity[]; onChanges: () => void }) {
+  const pieces = usePieces(calls);
   return (
     <>
-      {traceTree(calls).map((piece) => {
+      {pieces.map((piece) => {
         switch (piece.kind) {
           case "row":
             return <Row key={piece.row.id} row={piece.row} onChanges={onChanges} />;
