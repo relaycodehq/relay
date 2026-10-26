@@ -16,7 +16,8 @@ import {
 } from "@codemirror/search";
 import { EditorSelection, StateEffect, StateField, type EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers, type Command, type Panel, type ViewUpdate } from "@codemirror/view";
-import { FindBar, type QueryFields } from "./FindBar";
+import { FindBar } from "./FindBar";
+import type { QueryFields } from "./useQueryFields";
 import { findMatches, matchCount, matchFrom, matchNumber, type Matches } from "./find-matches";
 import { findBarTheme } from "./find-bar-theme";
 
