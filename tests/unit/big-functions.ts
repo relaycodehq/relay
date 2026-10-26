@@ -62,7 +62,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/headless/commands/install.ts › setup": 174,
   "electron/headless/commands/remote.ts › status": 126,
   "electron/headless/control-api.ts › controlApi": 138,
-  "electron/headless/daemon.ts › runDaemon": 297,
+  "electron/headless/daemon.ts › runDaemon": 295,
   "electron/headless/jpeg.ts › encodeJpeg": 133,
   "electron/headless/png.ts › decodePng": 127,
   "electron/headless/settings.ts › change": 132,

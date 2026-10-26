@@ -25,7 +25,6 @@ import { DailyPing } from "../app/daily-ping";
 import { AppWindow } from "../app/window";
 import { ProjectChecks } from "../checks/service";
 import { Ci } from "../ci";
-import { Dictation } from "../dictation/service";
 import { BlameService } from "../git/blame";
 import { createLanguageServers } from "../language-servers";
 import { flushWorkingFiles } from "../git/working-files";
@@ -35,8 +34,6 @@ import { finishPath, pathReady } from "../platform/shell-path";
 import { ProjectAdding } from "../project-add";
 import { GithubLogin } from "../github";
 import { PullRequestCreation } from "../pull-requests/pull-request-create";
-import { ReadAloud } from "../read-aloud";
-import { setOnnxRuntimeDir } from "../util/onnxruntime";
 import { PhoneRemote } from "../remote/phone-remote";
 import { DraftStore, Drafts } from "../drafts";
 import { teaTokenFor } from "../source-control";
@@ -53,7 +50,7 @@ import {
 import { headlessPaths, prepareControlSocket } from "./paths";
 import { headlessPower } from "./power";
 import { compressImage } from "./image";
-import { HeadlessSpeech, SpeechRuntime } from "./speech";
+import { startSpeech } from "./start-speech";
 import { keepUpdated } from "./auto-update";
 import { HeadlessUpdater, installRoot } from "./updater";
 import { headlessVersion } from "./version";
@@ -100,6 +97,19 @@ async function preferOwnNode(env: NodeJS.ProcessEnv) {
   env.PATH = [dirname(process.execPath), env.PATH]
     .filter(Boolean)
     .join(delimiter);
+}
+
+/** Says where Relay is running and whether phones and computers can reach it yet. */
+async function reportRunning(remote: PhoneRemote, home: string) {
+  const state = await remote.state();
+  console.log(
+    `Relay ${headlessVersion} is running (pid ${process.pid}, data in ${home}).`,
+  );
+  console.log(
+    state.listening
+      ? `Phones and computers reach it at ${state.hosts.join(", ")}:${state.port}.`
+      : `Not reachable yet: ${state.error ?? "waiting for Tailscale."}`,
+  );
 }
 
 /** Starts everything and resolves once Relay is answering; exits the process when stopped. */
@@ -149,18 +159,25 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   const login = new GiteaLogin(teaTokenFor);
   const github = new GithubLogin(fetcher);
-  const { projects, pullHosts, devops, chats, pullMerges, clockify, schedules } =
-    threadServices({
-      dir: home,
-      store,
-      fetch: fetcher,
-      login,
-      github,
-      online: () => true,
-      chatEvent: (event) => phoneRemote?.chatEvent(event),
-      prefs: () => readPrefs(settingsFile.state().values),
-      schedulesChanged: () => {},
-    });
+  const {
+    projects,
+    pullHosts,
+    devops,
+    chats,
+    pullMerges,
+    clockify,
+    schedules,
+  } = threadServices({
+    dir: home,
+    store,
+    fetch: fetcher,
+    login,
+    github,
+    online: () => true,
+    chatEvent: (event) => phoneRemote?.chatEvent(event),
+    prefs: () => readPrefs(settingsFile.state().values),
+    schedulesChanged: () => {},
+  });
   chats.onNews((item) => phoneRemote?.news(item));
   const keepAwake = new KeepAwake(
     {
@@ -171,26 +188,15 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
   );
   // What its changes reach exists from here.
   settingsFile.follow();
+  // Speech for phones.
+  const { speech, dictation, readAloud } = await startSpeech(
+    home,
+    __dirname,
+    store,
+    fetcher,
+  );
   // The window's services, built so the dispatch has them; with no window
   // they never open one, and what they'd show goes nowhere.
-  // Speech for phones, its engines downloaded into the home folder when set up.
-  const runtime = new SpeechRuntime(home, __dirname, fetcher);
-  setOnnxRuntimeDir(runtime.ortDir);
-  await runtime.prepare();
-  const dictation = new Dictation(home, () => {});
-  const readAloud = new ReadAloud(
-    home,
-    {
-      get: () => store.get().readAloud,
-      save: (settings) =>
-        store.update((s) => {
-          s.readAloud = settings;
-        }),
-    },
-    () => {},
-  );
-  const speech = new HeadlessSpeech(runtime, dictation, readAloud);
-  void speech.catchUp();
   const window = new AppWindow({
     closed: () => {},
     quitCancelled: () => {},
@@ -400,13 +406,5 @@ export async function runDaemon({ home, port, name }: DaemonOptions) {
       stop: (detach) => void shutDown(detach),
     }),
   );
-  const state = await remote.state();
-  console.log(
-    `Relay ${headlessVersion} is running (pid ${process.pid}, data in ${home}).`,
-  );
-  console.log(
-    state.listening
-      ? `Phones and computers reach it at ${state.hosts.join(", ")}:${state.port}.`
-      : `Not reachable yet: ${state.error ?? "waiting for Tailscale."}`,
-  );
+  await reportRunning(remote, home);
 }
