@@ -1,3 +1,5 @@
+import { PILL_MARK } from "./pill-marks";
+
 /**
  * Chromium's own copy writes the dark theme into the HTML it puts on the
  * clipboard, so pasting into a document brings black boxes along. Relay
@@ -53,7 +55,7 @@ function copyClean(event: ClipboardEvent) {
   if (!selection?.rangeCount || selection.isCollapsed) return;
   const range = selection.getRangeAt(0);
   const html = cleanHtml(range);
-  event.clipboardData.setData("text/plain", selection.toString());
+  event.clipboardData.setData("text/plain", plainText(range, selection));
   event.clipboardData.setData("text/html", html);
   event.preventDefault();
 }
@@ -65,6 +67,31 @@ function editing(element: Element | null) {
     element instanceof HTMLInputElement ||
     element instanceof HTMLTextAreaElement
   );
+}
+
+/**
+ * The selection's text, with each file chip as the path it stands for, which
+ * a composer it's pasted into turns back into a file pill.
+ */
+function plainText(range: Range, selection: Selection) {
+  const skipped = markSkipped(range);
+  const copied = range.cloneContents();
+  for (const element of skipped) element.removeAttribute(SKIP);
+  const chips = copied.querySelectorAll<HTMLElement>(`[${PILL_MARK.file}]`);
+  if (!chips.length) return selection.toString();
+  for (const element of copied.querySelectorAll(`[${SKIP}]`)) element.remove();
+  for (const chip of chips) chip.replaceWith(chip.dataset.copy ?? "");
+  // Laid out off screen beside the selection, so innerText keeps its line breaks.
+  const start = range.commonAncestorContainer;
+  const parent = start instanceof Element ? start : start.parentElement;
+  const holder = document.createElement("div");
+  holder.style.cssText =
+    "position:fixed;left:-99999px;top:0;white-space:pre-wrap";
+  holder.append(copied);
+  (parent ?? document.body).append(holder);
+  const text = holder.innerText;
+  holder.remove();
+  return text;
 }
 
 /** The selection as HTML without styles, classes or anything a copy skips. */
@@ -116,6 +143,10 @@ function withFormattingAround(copied: DocumentFragment, range: Range) {
   return content;
 }
 
+/** Whether an attribute marks a pill, which a composer pasted into reads back. */
+const pillMark = (name: string) =>
+  (Object.values(PILL_MARK) as string[]).includes(name);
+
 function clean(holder: HTMLElement) {
   for (const formula of holder.querySelectorAll(".katex")) {
     const tex = formula.querySelector(
@@ -133,7 +164,8 @@ function clean(holder: HTMLElement) {
   for (const element of holder.querySelectorAll("*")) {
     const kept = KEPT_ATTRIBUTES[element.tagName] ?? [];
     for (const { name } of [...element.attributes])
-      if (!kept.includes(name)) element.removeAttribute(name);
+      if (!kept.includes(name) && !pillMark(name))
+        element.removeAttribute(name);
   }
   // A file link or button keeps its text; an icon-only one is gone with its svg.
   for (const element of holder.querySelectorAll("a, button"))

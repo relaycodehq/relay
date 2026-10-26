@@ -60,8 +60,11 @@ function language(pre: MdNode) {
 
 /** Text the page shows but the answer didn't write: buttons, resize handles. */
 function skipped(node: MdNode) {
-  if (name(node) === "button") return !classes(node).includes("chat-file-link");
-  return attr(node, "aria-hidden") === "true" || name(node) === "svg";
+  return (
+    name(node) === "button" ||
+    attr(node, "aria-hidden") === "true" ||
+    name(node) === "svg"
+  );
 }
 
 function inline(node: MdNode): string {

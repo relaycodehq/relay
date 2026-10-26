@@ -22,9 +22,17 @@ it("keeps web links and drops the theme", () => {
 it("flattens links to files on this computer into their text", () => {
   expect(
     selected(
-      '<p><a href="file:///Users/me/a.ts">a.ts</a> and <button class="chat-file-link" title="/Users/me/b.ts"><svg></svg><span>b.ts · L4</span></button></p>',
+      '<p><a href="file:///Users/me/a.ts">a.ts</a> and <span role="button" class="chat-file-link" title="/Users/me/b.ts"><svg></svg><span>b.ts · L4</span></span></p>',
     ),
-  ).toBe("<p>a.ts and <span>b.ts · L4</span></p>");
+  ).toBe("<p>a.ts and <span><span>b.ts · L4</span></span></p>");
+});
+
+it("keeps a file chip's pill mark, so a composer pastes it as a pill", () => {
+  expect(
+    selected(
+      '<p>See <span class="chat-file-link" data-copy="`src/b.ts:4`" data-relay-file="src/b.ts:4"><svg></svg><span>b.ts · L4</span></span></p>',
+    ),
+  ).toBe('<p>See <span data-relay-file="src/b.ts:4"><span>b.ts · L4</span></span></p>');
 });
 
 it("leaves out text markers and controls so the target numbers its own list", () => {

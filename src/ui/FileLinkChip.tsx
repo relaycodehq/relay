@@ -5,6 +5,7 @@ import {
   type ProjectFileLink,
 } from "../../shared/project-file-links";
 import { revealLabel } from "../lib/mod-key";
+import { PILL_MARK } from "../lib/pill-marks";
 import { FileEntryIcon } from "./FileEntryIcon";
 
 /** Parent folders for file names the message links under several paths. */
@@ -40,7 +41,17 @@ function pathOnDisk(target: ProjectFileLink, root: string) {
   return `${root.replace(/[/\\]+$/, "")}${separator}${relative}`;
 }
 
-/** File chip: type icon, file name, and its line or lines when there are some. */
+/** The path a chip stands for as a composer writes it, so a copy pastes as a file pill. */
+function pillPath(target: ProjectFileLink) {
+  const path = target.directory ? `${target.path}/` : target.path;
+  return target.line ? `${path}:${linesOf(target, "-")}` : path;
+}
+
+/**
+ * File chip: type icon, file name, and its line or lines when there are some.
+ * A span rather than a button, since Chromium paints no selection inside a
+ * button and a chip should select with the sentence around it.
+ */
 export function FileLinkChip({
   target,
   root,
@@ -56,15 +67,24 @@ export function FileLinkChip({
     ...(suffix ? [suffix] : []),
     ...(target.line ? [`L${linesOf(target, "–")}`] : []),
   ].join(" · ");
+  const pill = pillPath(target);
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       className="chat-file-link"
       title={`${pathOnDisk(target, root)}${target.line ? `:${linesOf(target, "-")}` : ""}${target.outside && target.directory ? `\n${revealLabel}` : ""}`}
+      data-copy={`\`${pill}\``}
+      {...{ [PILL_MARK.file]: pill }}
       onClick={() => onOpen(target)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onOpen(target);
+      }}
     >
       <FileEntryIcon path={target.path} directory={target.directory} />
       <span className="chat-file-link-label">{label}</span>
-    </button>
+    </span>
   );
 }
