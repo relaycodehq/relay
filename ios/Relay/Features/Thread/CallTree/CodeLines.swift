@@ -22,11 +22,12 @@ struct CodeLines: View {
 
     var body: some View {
         let shown = firstLines(of: hunks)
+        let widest = widestGutter(shown.hunks)
         ScrollView([.vertical, .horizontal]) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(shown.hunks.enumerated()), id: \.offset) { index, hunk in
                     if index > 0 { Divider().overlay(colors.border).padding(.vertical, 4) }
-                    ForEach(Array(hunk.enumerated()), id: \.offset) { _, line in row(line) }
+                    ForEach(Array(hunk.enumerated()), id: \.offset) { _, line in row(line, widest: widest) }
                 }
                 if shown.left > 0 {
                     Text(verbatim: "…\(plural(shown.left, "more line")) not shown")
@@ -64,11 +65,21 @@ struct CodeLines: View {
         return (kept, total - (shownLineLimit - room))
     }
 
-    private func row(_ line: CodeLine) -> some View {
+    /// Room for the widest gutter drawn, so lines past 999 don't push their code over.
+    private func widestGutter(_ hunks: [[CodeLine]]) -> String {
+        let longest = hunks.joined().map(\.gutter.count).max() ?? 0
+        return String(repeating: "0", count: longest)
+    }
+
+    private func row(_ line: CodeLine, widest: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(verbatim: line.gutter)
-                .foregroundStyle(line.mark == .same ? colors.faint : signColor(line.mark))
-                .frame(width: 28, alignment: .trailing)
+            // The hidden widest number sizes the slot and gives the row its baseline.
+            Text(verbatim: widest).hidden()
+                .overlay(alignment: .trailing) {
+                    Text(verbatim: line.gutter)
+                        .foregroundStyle(line.mark == .same ? colors.faint : signColor(line.mark))
+                }
+                .frame(minWidth: 28, alignment: .trailing)
             Text(line.tokens.map { styledLine($0, dark: colors.dark) } ?? AttributedString(line.text))
                 .fixedSize()
         }

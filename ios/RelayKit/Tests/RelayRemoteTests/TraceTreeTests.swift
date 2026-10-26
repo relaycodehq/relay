@@ -67,6 +67,22 @@ struct TraceTreeTests {
         }
     }
 
+    @Test func readCodesMatch() throws {
+        let entries = try #require(ts["readCodes"]?.array)
+        #expect(!entries.isEmpty)
+        for entry in entries {
+            let call: AgentActivity = try entry["call"]!.decode()
+            let want = entry["read"]!
+            guard let read = readCode(call) else {
+                #expect(want.isNull, "\(call.label)")
+                continue
+            }
+            var got: [String: JSON] = ["file": .string(read.file), "code": .string(read.code)]
+            if let first = read.first { got["first"] = .number(Double(first)) }
+            #expect(JSON.object(got) == want, "\(call.label)")
+        }
+    }
+
     @Test func aScriptWrittenAndRunInOneCommandIsOneCall() throws {
         let both: AgentActivity = try JSON.parse(
             #"{"id":"both","kind":"command","label":"cat > /tmp/check.py <<'EOF'","status":"complete","actions":[{"kind":"create","file":"/tmp/check.py"},{"kind":"run","what":"check.py"}]}"#

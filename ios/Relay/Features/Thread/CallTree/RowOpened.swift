@@ -52,6 +52,7 @@ func opensToSomething(_ calls: [AgentActivity]) -> Bool {
 }
 
 /// The command a call ran and its output, the rest fetched when the thread holds it cut.
+/// A read of one file shows the file's lines instead, once the phone has all of them.
 struct CallOutput: View {
     let call: AgentActivity
     let context: CallContext
@@ -62,10 +63,29 @@ struct CallOutput: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if call.kind == "command" { ToolOutput(text: shown(call.label)) }
-            if let output, !output.isEmpty { ToolOutput(text: output) }
+            if let read = wholeRead() {
+                ReadCodeView(read: read)
+            } else {
+                if call.kind == "command" { ToolOutput(text: shown(call.label)) }
+                if let output, !output.isEmpty { ToolOutput(text: output) }
+            }
         }
         .task { await fetchFull() }
+    }
+
+    /// Numbering a preview cut in the middle would drop its end, so it shows plain until the rest comes.
+    private func wholeRead() -> ReadCode? {
+        guard outputIsWhole else { return nil }
+        var whole = call
+        whole.detail = output
+        return readCode(whole)
+    }
+
+    private var outputIsWhole: Bool {
+        if full != nil { return true }
+        if (call.detailCut ?? 0) > 0 { return false }
+        // A subagent's calls come cut without saying how much is missing, only the mark in the middle.
+        return context.canFetch || !(call.detail ?? "").contains("\n…\n")
     }
 
     /// Paths inside the thread's folder read from there.

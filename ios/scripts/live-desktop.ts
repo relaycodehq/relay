@@ -542,7 +542,10 @@ if (seeded) {
     said("Pulling up the rg allowlist F4 wrote:"),
     did(step(`grep -n "rg\\b\\|rgFlags" ${bash} | head -20`)),
     did(step(`grep -rl "Activity" /tmp/audit/scripts/B /tmp/audit/scripts/B/cmd 2>/dev/null | head -3; grep -rh "Activity" /tmp/audit/scripts/B/cmd/*.mjs | head`)),
-    did(step(bash, "read", { detail: "export const rgFlags = [\n  \"help\",\n];" })),
+    // Past the phone's 600-character preview, so it opens once the whole output is fetched.
+    did(step(bash, "read", {
+      detail: ["export const rgFlags = [", ...Array.from({ length: 40 }, (_, i) => `  "flag-${i}",`), "];"].map((line, i) => `${998 + i}\t${line}`).join("\n"),
+    })),
     did(step(`grep -n "Activity" -B2 -A6 /tmp/audit/scripts/B/cmd/run15.mjs | head -30`)),
     said("The list is already fairly broad. Diffing it against every flag the installed ripgrep supports:"),
     did(step("/tmp/f9/c8-views.mjs", "file", {
@@ -554,7 +557,9 @@ if (seeded) {
     did(step("cd /tmp && for f in hidden follow; do rg --no-$f x rgneg; done")),
     did(step("npx tsx /tmp/rgcheck.mts 2>&1 | head", "command", { detail: "missing: --no-pcre2-unicode" })),
     did(step("npx tsx /tmp/rgneg.mts | head -2")),
-    did(step("sed -n 160,180p src/features/sidebar/ProjectSidebar.tsx")),
+    did(step("sed -n 160,164p src/features/sidebar/ProjectSidebar.tsx", "command", {
+      detail: "  const rows = useRows(project);\n  if (!rows.length) return null;\n  return (\n    <ul className=\"sb-rows\">{rows.map(row)}</ul>\n  );\n",
+    })),
     did(step(bash, "file", {
       written: [{ kind: "swap", path: bash, edits: [{
         old: `  "unrestricted", "glob-case-insensitive", "no-require-git", "pretty",\n  "max-columns-preview", "no-unicode", "debug", "trace", "version",\n  "help",`,
