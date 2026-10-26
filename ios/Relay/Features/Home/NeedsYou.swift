@@ -25,8 +25,8 @@ struct NeedsYou: View {
     }
 
     var body: some View {
-        let waiting = connection.chats.filter { $0.waiting == true }.map(\.id)
-        let chat = connection.chats.first { $0.id == shown && $0.waiting == true }
+        let waiting = connection.listed.filter { $0.waiting == true }.map(\.id)
+        let chat = connection.listed.first { $0.id == shown && $0.waiting == true }
         // Drawn always, so its watch runs while there's nothing to show.
         ZStack(alignment: .top) {
             Color.clear.frame(width: 0, height: 0)

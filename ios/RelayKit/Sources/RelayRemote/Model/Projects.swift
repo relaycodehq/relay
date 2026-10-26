@@ -6,7 +6,7 @@ import Foundation
 /// Every Scratchpad chat has a folder of its own; together they're one list, newest first.
 public func scratchChats(_ overview: RemoteOverview) -> [RemoteChatSummary] {
     let ids = Set(overview.projects.filter { $0.scratch == true }.map(\.id))
-    return overview.chats.filter { ids.contains($0.projectId) }.sorted { $0.updated > $1.updated }
+    return overview.listed.filter { ids.contains($0.projectId) }.sorted { $0.updated > $1.updated }
 }
 
 /// The desktop's sidebar: projects under their virtual folders, "Projects" first.

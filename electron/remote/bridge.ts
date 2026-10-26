@@ -23,7 +23,6 @@ import {
   type PhoneAppearance,
   type PhoneDesktopMethod,
   type RemoteApi,
-  type RemoteChatSummary,
   type RemoteDiff,
   type RemoteDiffLine,
   type RemoteEvent,
@@ -50,7 +49,14 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import { phoneIcon } from "./svg-icon";
-import { callIn, forPhone, forPhoneEvent, forPhoneRun, writtenForPhone } from "./for-phone";
+import {
+  callIn,
+  forPhone,
+  forPhoneEvent,
+  forPhoneRun,
+  summaryForPhone,
+  writtenForPhone,
+} from "./for-phone";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
 import type {
@@ -701,7 +707,7 @@ export class RemoteBridge {
         .filter((c) => !c.archivedAt && !chatIsEmpty(c))
         .sort((a, b) => b.updated - a.updated)
         .slice(0, 300)
-        .map(summary)
+        .map(summaryForPhone)
         // Ties included, the order a phone rebuilds a patched list in.
         .sort(chatOrder)
     );
@@ -710,40 +716,6 @@ export class RemoteBridge {
 
 function digest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-function summary(c: ChatSummary): RemoteChatSummary {
-  return {
-    id: c.id,
-    projectId: c.projectId,
-    title: c.title,
-    scope: c.scope.kind,
-    updated: c.updated,
-    created: c.created,
-    ...(c.provider ? { provider: c.provider } : {}),
-    ...(c.running ? { running: true, runningSince: c.runningSince } : {}),
-    ...(c.waiting ? { waiting: true } : {}),
-    ...(c.asking ? { asking: true } : {}),
-    ...(c.blocked ? { blocked: true } : {}),
-    ...(c.settledAt ? { settledAt: c.settledAt } : {}),
-    ...(c.settleWhenDone ? { settleWhenDone: c.settleWhenDone } : {}),
-    ...(c.autoSettled ? { autoSettled: true } : {}),
-    ...(c.markedUnread ? { markedUnread: true } : {}),
-    ...(c.seenAt ? { seenAt: c.seenAt } : {}),
-    ...(c.snoozedUntil
-      ? { snoozedUntil: c.snoozedUntil, snoozedAt: c.snoozedAt }
-      : {}),
-    ...(c.branch ? { branch: c.branch } : {}),
-    ...(c.worktree ? { worktree: true } : {}),
-    ...(c.pending?.length ? { pending: c.pending } : {}),
-    ...(c.nextSend ? { nextSend: c.nextSend } : {}),
-    ...(c.queueMark ? { queueMark: c.queueMark } : {}),
-    ...(c.empty ? { empty: true } : {}),
-    ...(c.goal ? { goal: c.goal } : {}),
-    ...(c.startedBy ? { startedBy: c.startedBy } : {}),
-    ...(c.limitResume ? { limitResume: c.limitResume } : {}),
-    ...(c.notesMark ? { notesMark: c.notesMark } : {}),
-  };
 }
 
 export function toRemoteDiff(path: string, pair: FilePair): RemoteDiff {

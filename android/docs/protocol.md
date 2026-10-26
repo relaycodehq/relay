@@ -279,7 +279,8 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
   - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?, computer?:{name, gone?}}`; `computer` (bridge 28) names the paired computer a project's folder is on.
   - `RemoteChatSummary` (`:108-147`):
     - required: `id, projectId, title, scope, updated, created`;
-    - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, limitResume, notesMark`.
+    - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, reviewer, limitResume, notesMark`.
+    - `reviewer: true` marks a deep review's reviewer. It opens from its review (the thread it was `startedBy`) and stays out of every list: Activity, Projects, search, Needs you. Older desktops leave it out.
     - `notesMark` (bridge ≥ 22) changes whenever the thread's notes do; fetch them again with `desktop("threadNotes", [id])`.
     - Up to 300, sorted by `updated` descending, then `id` ascending (`bridge.ts:571-588`, `chatOrder` `remote-delta.ts:102`).
   - `PhoneAppearance` / palette: `#rrggbb` colours, strict (`phone-remote.ts:77-103`).

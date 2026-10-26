@@ -14,7 +14,7 @@ struct ProjectView: View {
     private var online: Bool { connection.status.state == .online }
 
     var body: some View {
-        let chats = connection.chats.filter { $0.projectId == projectId }
+        let chats = connection.listed.filter { $0.projectId == projectId }
         let tree = glance?.tree
         List {
             Section {

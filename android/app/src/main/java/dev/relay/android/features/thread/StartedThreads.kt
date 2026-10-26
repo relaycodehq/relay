@@ -29,7 +29,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.relay.android.features.thread.logic.familyLive
+import dev.relay.android.features.thread.logic.familyInDock
 import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.startGroups
 import dev.relay.android.features.thread.logic.startedNow
@@ -141,7 +141,7 @@ class StartedSlot(val family: List<RemoteChatSummary>, val shown: Boolean)
 
 /**
  * The lead's started threads and whether the strip over the composer shows
- * them: while any works or asks. Read back in the thread, the strip stays as
+ * them: while any works or asks, and a review's reviewers always. Read back in the thread, the strip stays as
  * it was until the reader is at the bottom again, so the answers don't move
  * under them as it comes or goes.
  */
@@ -149,7 +149,7 @@ class StartedSlot(val family: List<RemoteChatSummary>, val shown: Boolean)
 fun rememberStartedSlot(remote: Remote, lead: String, pinned: Boolean): StartedSlot {
     val chats = remote.overview.collectAsState().value?.chats.orEmpty()
     val family = remember(lead, chats) { startedOf(lead, chats) }
-    val live = familyLive(family)
+    val live = familyInDock(family)
     var shown by remember { mutableStateOf(live) }
     if (pinned && shown != live) shown = live
     return StartedSlot(family, shown && family.isNotEmpty())

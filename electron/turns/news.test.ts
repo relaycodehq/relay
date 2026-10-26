@@ -18,12 +18,15 @@ const chat = (more: Partial<ChatSummary> = {}) =>
 
 let queued = false;
 let waiting = false;
+/** What else the thread's list entry says. */
+let listed: Partial<ChatSummary> = {};
 let news: TurnNews | undefined;
 
 afterEach(() => {
   news?.dispose();
   queued = false;
   waiting = false;
+  listed = {};
   vi.restoreAllMocks();
 });
 
@@ -33,7 +36,7 @@ const saved = { id: "t1" } as ProjectChat;
 function setup() {
   const ledger = new TurnLedger(new MemoryTurnStore());
   news = new TurnNews(ledger, {
-    summary: () => chat(),
+    summary: () => chat(listed),
     answer: (_, answerId) => ({
       id: answerId,
       role: "assistant",
@@ -44,7 +47,7 @@ function setup() {
       version: 1,
     }),
     queued: () => queued,
-    thread: () => chat(waiting ? { waiting } : {}),
+    thread: () => chat({ ...listed, ...(waiting ? { waiting } : {}) }),
     waiting: () => waiting,
   });
   const told: NewsItem[] = [];
@@ -86,6 +89,29 @@ it("tells of a held answer once its queue is cleared or paused with nothing run 
   news.saved(saved);
   news.saved(saved);
   expect(told.map((i) => i.body)).toEqual(["Answer a1"]);
+});
+
+it("keeps a reviewer's finished report quiet, but tells when it needs you or fails", () => {
+  const { told, answer, ledger } = setup();
+  listed = { reviewer: { parent: "review", slot: 0 } };
+  answer("a1")("completed");
+  expect(told).toEqual([]);
+
+  const failing = ledger.start({
+    threadId: "t1",
+    kind: "answer",
+    provider: "codex",
+  });
+  ledger.end(failing.id, "failed");
+  const asking = ledger.start({
+    threadId: "t1",
+    kind: "answer",
+    provider: "codex",
+  });
+  waiting = true;
+  ledger.blocked(asking.id, true);
+  news!.saved(saved);
+  expect(told.map((i) => i.kind)).toEqual(["failed", "waiting"]);
 });
 
 it("tells once that a thread needs you as its agent asks, and again only after it stopped waiting", () => {

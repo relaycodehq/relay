@@ -81,6 +81,8 @@ public func threadNews(
         if answer?.status == "cancelled" { continue }
         // Settled while it ran: it finishes out of sight. A failure comes back to Activity.
         if answer?.status != "failed" && (chatSettled(was) || chatSettled(c)) { continue }
+        // A reviewer reports to its review; the lead's answer there is the news.
+        if answer?.status != "failed" && c.reviewer == true { continue }
         if let answer, answer.status == "failed" {
             let error = answer.error?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             news.append(ThreadNews(c.id, .failed, c.title, error.isEmpty ? "\(agent)'s answer failed" : agentError(error).message))

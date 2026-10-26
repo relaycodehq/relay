@@ -35,6 +35,9 @@ fun startedOf(lead: String, chats: List<RemoteChatSummary>) =
 
 fun familyLive(started: List<RemoteChatSummary>) = started.any { it.running == true || it.waiting == true }
 
+/** The strip over the composer tells of them while any works or asks; a review's reviewers always, as no list shows them. */
+fun familyInDock(started: List<RemoteChatSummary>) = familyLive(started) || started.any { it.reviewer == true }
+
 private fun callsOf(message: ChatMessage): List<AgentActivity> =
     message.trace?.mapNotNull { it.activity } ?: message.activity ?: emptyList()
 

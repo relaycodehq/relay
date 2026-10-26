@@ -23,6 +23,11 @@ public func familyLive(_ started: [RemoteChatSummary]) -> Bool {
     started.contains { $0.running == true || $0.waiting == true }
 }
 
+/// The strip over the composer tells of them while any works or asks; a review's reviewers always, as no list shows them.
+public func familyInDock(_ started: [RemoteChatSummary]) -> Bool {
+    familyLive(started) || started.contains { $0.reviewer == true }
+}
+
 private func callsOf(_ message: ChatMessage) -> [AgentActivity] {
     message.trace.map { $0.compactMap(\.activity) } ?? message.activity ?? []
 }

@@ -125,6 +125,8 @@ export class ThreadReads {
         ({ summary: c }) =>
           !c.archivedAt &&
           !c.empty &&
+          // A reviewer is part of its review, found through the review.
+          !c.reviewer &&
           words.every((w) =>
             `${c.title} ${c.branch ?? ""}`.toLowerCase().includes(w),
           ),

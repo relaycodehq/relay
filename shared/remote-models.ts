@@ -57,6 +57,8 @@ export interface RemoteChatSummary {
   goal?: ThreadGoal;
   /** The thread whose agent started it; missing before `awayBridge`. */
   startedBy?: StartedBy;
+  /** A deep review's reviewer: it opens from its review and no list shows it; older desktops leave it out. */
+  reviewer?: true;
   /** The answer a usage limit stopped, resumed once the limit lifts; missing before `awayBridge`. */
   limitResume?: LimitResume;
   /** Changes with the thread's notes, so a phone knows to fetch them again; missing before `notesBridge`. */

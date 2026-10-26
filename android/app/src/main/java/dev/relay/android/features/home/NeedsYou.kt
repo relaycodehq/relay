@@ -79,7 +79,7 @@ fun NeedsYou(
     val active by remote.active.collectAsState()
     var before by remember { mutableStateOf<WaitingBaseline?>(null) }
     var shown by remember { mutableStateOf<String?>(null) }
-    val waiting = overview?.chats.orEmpty().filter { it.waiting == true }.map { it.id }
+    val waiting = overview?.listed.orEmpty().filter { it.waiting == true }.map { it.id }
 
     LaunchedEffect(waiting, active, overview != null) {
         if (overview == null) return@LaunchedEffect
@@ -93,7 +93,7 @@ fun NeedsYou(
         shown = null
     }
 
-    val chat = overview?.chats?.find { it.id == shown && it.waiting == true }
+    val chat = overview?.listed?.find { it.id == shown && it.waiting == true }
     if (chat == null || hidden || chat.id == openId) return
     val project = overview?.projects?.find { it.id == chat.projectId }
     val shape = RoundedCornerShape(12.dp)

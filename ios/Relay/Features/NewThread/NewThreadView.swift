@@ -35,7 +35,7 @@ struct NewThreadView: View {
 
     private var scratch: Bool { projectId == scratchWhere }
 
-    private var projects: [RemoteProject] { projectsByUse(connection.overview?.projects ?? [], connection.chats) }
+    private var projects: [RemoteProject] { projectsByUse(connection.overview?.projects ?? [], connection.listed) }
     private var project: RemoteProject? { projects.first { $0.id == projectId } }
     /// None for a folder that isn't a git checkout. A pick here, else the draft's own (picked
     /// here before, or on the computer), else where the project's settings say.
@@ -59,7 +59,7 @@ struct NewThreadView: View {
     /// Open threads in the project picked, to carry on one rather than start another.
     private var recent: [RemoteChatSummary] {
         guard let project else { return [] }
-        return Array(connection.chats.filter { $0.projectId == project.id && !chatSettled($0) }.prefix(5))
+        return Array(connection.listed.filter { $0.projectId == project.id && !chatSettled($0) }.prefix(5))
     }
 
     /// Picks here are what the next new thread opens on too, here or on the computer.
@@ -173,7 +173,7 @@ struct NewThreadView: View {
     /// thread, /new means another Scratchpad chat, not that folder.
     private func startingWhere() -> String? {
         if scratch { return scratchWhere }
-        let wanted = connection.project(projectId ?? "") ?? connection.chats.first.flatMap { connection.project($0.projectId) }
+        let wanted = connection.project(projectId ?? "") ?? connection.listed.first.flatMap { connection.project($0.projectId) }
         if let wanted { return wanted.scratch == true ? scratchWhere : wanted.id }
         return projects.first?.id ?? scratchWhere
     }

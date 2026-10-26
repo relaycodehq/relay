@@ -37,7 +37,7 @@ private struct ProjectsList: View {
 
     private func list(now: Int64) -> some View {
         let scratch = scratchChats(overview)
-        let byProject = Dictionary(grouping: overview.chats, by: \.projectId)
+        let byProject = Dictionary(grouping: overview.listed, by: \.projectId)
         return List {
             Section {
                 HStack {

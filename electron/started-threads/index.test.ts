@@ -292,6 +292,8 @@ test("any thread finds and reads every other without asking", async () => {
   });
   const archived = await api.create(site, { kind: "project" });
   chats.get(archived.id)!.archivedAt = 1;
+  const reviewer = await api.create(site, { kind: "project" });
+  chats.get(reviewer.id)!.reviewer = { parent: elsewhere.id, slot: 0 };
   const [mine] = parse(
     await call(threads, lead.id, "start_threads", {
       threads: [{ prompt: "Mine" }],

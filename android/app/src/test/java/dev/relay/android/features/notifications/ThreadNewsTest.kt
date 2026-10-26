@@ -53,6 +53,16 @@ class ThreadNewsTest {
         )
     }
 
+    @Test fun keepsAReviewersFinishedReportQuietButTellsOfItsFailure() {
+        val reviewer: RemoteChatSummary.() -> RemoteChatSummary = { copy(reviewer = true) }
+        val news = threadNews(
+            list(chat("a") { reviewer().copy(running = true) }, chat("b") { reviewer().copy(running = true) }),
+            listOf(chat("a", 20, reviewer), chat("b", 20, reviewer)),
+            mapOf("a" to answer(body = "Found two bugs"), "b" to answer("failed", error = "Claude's login expired.")),
+        )
+        assertEquals(listOf(ThreadNews("b", ThreadNews.Kind.Failed, "Thread b", "Claude's login expired.")), news)
+    }
+
     @Test fun tellsOfAQuestionAtOnceEvenWhileTheAgentStillRuns() {
         val news = threadNews(
             list(chat("a") { copy(running = true) }),

@@ -48,8 +48,8 @@ struct FilterMenu: View {
 
     var body: some View {
         let shown = connection.current(filter)
-        let agents = Set(connection.chats.compactMap(\.provider)).sorted { agentName($0) < agentName($1) }
-        let latest = Dictionary(connection.chats.map { ($0.projectId, $0.updated) }, uniquingKeysWith: max)
+        let agents = Set(connection.listed.compactMap(\.provider)).sorted { agentName($0) < agentName($1) }
+        let latest = Dictionary(connection.listed.map { ($0.projectId, $0.updated) }, uniquingKeysWith: max)
         let sorted = (connection.overview?.projects ?? []).sorted { (latest[$0.id] ?? 0) > (latest[$1.id] ?? 0) }
         // Every computer's Scratchpad reads the same, so they're one row that ticks them all.
         let scratch = sorted.filter { $0.scratch == true }.map(\.id)

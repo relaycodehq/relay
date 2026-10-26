@@ -204,7 +204,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
         Column(Modifier.fillMaxSize()) {
             val needle = query.trim().lowercase()
             if (needle.isNotEmpty()) {
-                val results = o.chats.filter { "${it.title} ${names[it.projectId] ?: ""}".lowercase().contains(needle) }
+                val results = o.listed.filter { "${it.title} ${names[it.projectId] ?: ""}".lowercase().contains(needle) }
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = listPadding(bottom = DOCK_ROOM)) {
                     item(key = "head") { SectionHeader("Results", count = results.size) }
                     items(results, key = { it.id }) { chat ->
@@ -223,7 +223,7 @@ private fun ColumnScope.Browser(remote: Remote, home: HomeServices, selected: St
                 RibbonRefreshBox(refreshing, refresh, Modifier.fillMaxSize()) {
                     when (tab) {
                         HomeTab.Activity -> ActivityList(
-                            chats = o.chats.filter(shown::keeps),
+                            chats = o.listed.filter(shown::keeps),
                             projects = o.projects,
                             drafts = drafts.filterKeys(shown::keepsDraft),
                             filtered = shown.count > 0,

@@ -19,7 +19,10 @@ data class RemoteOverview(
     val projects: List<RemoteProject> = emptyList(),
     /** Unarchived threads with messages, newest first. */
     val chats: List<RemoteChatSummary> = emptyList(),
-)
+) {
+    /** The threads the lists show: a deep review's reviewers open from their review instead. */
+    val listed: List<RemoteChatSummary> get() = chats.filter { it.reviewer != true }
+}
 
 @Serializable
 data class RemoteProject(
@@ -72,6 +75,8 @@ data class RemoteChatSummary(
     val empty: Boolean? = null,
     val goal: ThreadGoal? = null,
     val startedBy: StartedBy? = null,
+    /** A deep review's reviewer: it opens from its review and no list shows it; older desktops leave it out. */
+    val reviewer: Boolean? = null,
     val limitResume: LimitResume? = null,
     /** Moves whenever the thread's notes do; fetch them again then. From Bridge.NOTES. */
     val notesMark: String? = null,

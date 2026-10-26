@@ -91,7 +91,7 @@ fun PullScreen(remote: Remote, route: Route.Pull) {
         }
         p!!
         val project = projectFor(overview, ref.name)
-        val threads = overview?.chats.orEmpty().filter { it.branch == p.pull.head.ref && (project == null || it.projectId == project.id) }
+        val threads = overview?.listed.orEmpty().filter { it.branch == p.pull.head.ref && (project == null || it.projectId == project.id) }
         val start = { prompt: String ->
             model.agent {
                 val id = startPullThread(remote, filesDir, project!!.id, p.pull.head.ref, prompt)

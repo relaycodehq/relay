@@ -1,8 +1,12 @@
-// A thread as a phone gets it: tool output cut to its start and end, written
-// code left out, both fetched when a row opens, and what each call did read
-// here so phones never parse a command.
-import type { AgentActivity, ChatMessage } from "../../shared/projects";
-import { phoneDetailPreview } from "../../shared/remote";
+// A thread as a phone gets it: its list entry, tool output cut to its start
+// and end, written code left out, both fetched when a row opens, and what each
+// call did read here so phones never parse a command.
+import type {
+  AgentActivity,
+  ChatMessage,
+  ChatSummary,
+} from "../../shared/projects";
+import { phoneDetailPreview, type RemoteChatSummary } from "../../shared/remote";
 import { isStartThreads } from "../../shared/started-threads";
 import { callActions } from "../../shared/call-actions";
 import type { SubagentDetail } from "../../shared/subagents";
@@ -84,5 +88,41 @@ export function forPhoneRun(run: SubagentDetail): SubagentDetail {
       const { detailCut: _, wroteCode: __, ...activity } = forPhoneCall(e.activity);
       return { ...e, activity };
     }),
+  };
+}
+
+/** A thread's entry in the phone's lists. */
+export function summaryForPhone(c: ChatSummary): RemoteChatSummary {
+  return {
+    id: c.id,
+    projectId: c.projectId,
+    title: c.title,
+    scope: c.scope.kind,
+    updated: c.updated,
+    created: c.created,
+    ...(c.provider ? { provider: c.provider } : {}),
+    ...(c.running ? { running: true, runningSince: c.runningSince } : {}),
+    ...(c.waiting ? { waiting: true } : {}),
+    ...(c.asking ? { asking: true } : {}),
+    ...(c.blocked ? { blocked: true } : {}),
+    ...(c.settledAt ? { settledAt: c.settledAt } : {}),
+    ...(c.settleWhenDone ? { settleWhenDone: c.settleWhenDone } : {}),
+    ...(c.autoSettled ? { autoSettled: true } : {}),
+    ...(c.markedUnread ? { markedUnread: true } : {}),
+    ...(c.seenAt ? { seenAt: c.seenAt } : {}),
+    ...(c.snoozedUntil
+      ? { snoozedUntil: c.snoozedUntil, snoozedAt: c.snoozedAt }
+      : {}),
+    ...(c.branch ? { branch: c.branch } : {}),
+    ...(c.worktree ? { worktree: true } : {}),
+    ...(c.pending?.length ? { pending: c.pending } : {}),
+    ...(c.nextSend ? { nextSend: c.nextSend } : {}),
+    ...(c.queueMark ? { queueMark: c.queueMark } : {}),
+    ...(c.empty ? { empty: true } : {}),
+    ...(c.goal ? { goal: c.goal } : {}),
+    ...(c.startedBy ? { startedBy: c.startedBy } : {}),
+    ...(c.reviewer ? { reviewer: true } : {}),
+    ...(c.limitResume ? { limitResume: c.limitResume } : {}),
+    ...(c.notesMark ? { notesMark: c.notesMark } : {}),
   };
 }

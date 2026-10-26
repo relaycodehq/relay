@@ -28,7 +28,7 @@ data class ThreadFilter(val projects: Set<String> = emptySet(), val agents: Set<
      */
     fun current(overview: RemoteOverview): ThreadFilter = ThreadFilter(
         projects intersect overview.projects.mapTo(HashSet()) { it.id },
-        agents intersect overview.chats.mapNotNullTo(HashSet()) { it.provider },
+        agents intersect overview.listed.mapNotNullTo(HashSet()) { it.provider },
     )
 
     fun toggled(kind: Kind, ids: List<String>): ThreadFilter {
@@ -50,9 +50,9 @@ data class FilterChoices(val agents: List<String>, val projects: List<FilterProj
  * projects with the latest activity first.
  */
 fun filterChoices(overview: RemoteOverview): FilterChoices {
-    val agents = overview.chats.mapNotNull { it.provider }.distinct().sortedBy { agentName(it) }
+    val agents = overview.listed.mapNotNull { it.provider }.distinct().sortedBy { agentName(it) }
     val latest = HashMap<String, Long>()
-    for (chat in overview.chats) latest.merge(chat.projectId, chat.updated, ::maxOf)
+    for (chat in overview.listed) latest.merge(chat.projectId, chat.updated, ::maxOf)
     val sorted = overview.projects.sortedByDescending { latest[it.id] ?: 0L }
     val scratch = sorted.filter { it.scratch == true }.map { it.id }
     val projects = sorted.mapNotNull { p ->

@@ -51,6 +51,12 @@ class ThreadLogicTest {
         assertEquals(listOf("asks", "working-early", "working-late", "done"), listed.map { it.id })
     }
 
+    @Test fun docksAFinishedFamilyOnlyWhenItsAReviewsReviewers() {
+        assertEquals(false, familyInDock(listOf(child("done"))))
+        assertEquals(true, familyInDock(listOf(child("asks", waiting = true))))
+        assertEquals(true, familyInDock(listOf(child("reviewer").copy(reviewer = true))))
+    }
+
     @Test fun groupsThreadsUnderTheirCalls() {
         val threads = listOf(child("a", 2_000), child("b", 2_100, waiting = true), child("c", 9_000))
         val groups = startGroups(msg(calls = listOf(start("s1", result("a")), start("s2", result("b", "c")))), threads)
