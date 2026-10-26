@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { capWritten, commandActions, shownCommand, writtenByCommand, writtenLimit } from "./call-actions";
+import { callActions, commandActions, shownCommand, writtenByCommand } from "./call-actions";
+import { capWritten, writtenLimit } from "./written-code";
 
 describe("commandActions", () => {
   it("reads sed, cat and grep as the reads and searches they are", () => {
@@ -55,7 +56,7 @@ it("keeps what a heredoc writes to a file", () => {
   expect(writtenByCommand("python3 - <<'EOF'\nprint(1)\nEOF")).toEqual([]);
 });
 
-it("cuts written code past the limit and says so", () => {
+it("cuts written code past the limit and still names every file", () => {
   const big = "x".repeat(writtenLimit + 10);
   const [first, second] = capWritten([
     { kind: "whole", path: "a", content: big },
@@ -63,11 +64,103 @@ it("cuts written code past the limit and says so", () => {
   ]);
   expect(first).toMatchObject({ path: "a", cut: true });
   expect(first?.kind === "whole" && first.content.length).toBe(writtenLimit);
-  expect(second).toBeUndefined();
+  expect(second).toEqual({ kind: "whole", path: "b", content: "", cut: true });
 });
 
 it("finds the hash in git commit's own line too", () => {
   expect(commandActions(`git commit -m "x"`, "[relay/a 1a2b3c4d] x\n 1 file changed")).toEqual([
     { kind: "commit", subject: "x", hash: "1a2b3c4d" },
   ]);
+});
+
+describe("what Codex ran", () => {
+  it("reads the command inside the shell Codex wraps it in, cut short or not", () => {
+    expect(commandActions(`/bin/zsh -lc 'sed -n 1,20p src/a.ts'`)).toEqual([
+      { kind: "read", file: "src/a.ts", lines: "1–20" },
+    ]);
+    expect(commandActions(`/bin/zsh -lc "rg -n 'foo' src`)).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(shownCommand(`/bin/zsh -lc 'cd app && git status'`)).toBe("git status");
+    expect(writtenByCommand(`bash -lc 'cat > /tmp/a.txt <<'\\''EOF'\\''\nhi\nEOF'`)).toEqual([
+      { kind: "whole", path: "/tmp/a.txt", content: "hi" },
+    ]);
+  });
+
+  it("names each file a patch changed, made or edited", () => {
+    const call = {
+      id: "p",
+      kind: "file" as const,
+      status: "complete" as const,
+      label: "a.ts +1 more",
+      written: [
+        { kind: "whole" as const, path: "a.ts", content: "x" },
+        { kind: "patch" as const, path: "b.ts", diff: "@@ -1 +1 @@\n-a\n+b" },
+      ],
+    };
+    expect(callActions(call)).toEqual([
+      { kind: "create", file: "a.ts" },
+      { kind: "edit", file: "b.ts" },
+    ]);
+    expect(callActions({ id: "q", kind: "file", status: "complete", label: "a.ts +1 more", detail: "boom" })).toEqual([
+      { kind: "edit", file: "a.ts +1 more" },
+    ]);
+  });
+});
+
+describe("whether a test or check failed", () => {
+  it("fails a test or check whose call failed when the output didn't say", () => {
+    const call = { id: "t", kind: "command" as const, status: "failed" as const, label: "npm run lint", detail: "exit 1" };
+    expect(callActions(call)).toEqual([{ kind: "check", name: "lint", failed: true }]);
+  });
+
+  it("tells each test run in one command by the failures naming its file", () => {
+    const output = " FAIL  b.test.ts > x\n ✓ a.test.ts";
+    expect(commandActions("npx vitest run a.test.ts && npx vitest run b.test.ts", output)).toEqual([
+      { kind: "test", target: "a.test.ts", failed: false },
+      { kind: "test", target: "b.test.ts", failed: true },
+    ]);
+    expect(commandActions("npx vitest run", "Tests  12 passed, 0 failed")).toEqual([{ kind: "test", failed: false }]);
+  });
+
+  it("reads lint and npm failures", () => {
+    expect(commandActions("npm run lint", "✖ 3 problems (3 errors)")).toEqual([{ kind: "check", name: "lint", failed: true }]);
+    expect(commandActions("npm run format:check", "Code style issues found")).toEqual([
+      { kind: "check", name: "format:check", failed: true },
+    ]);
+  });
+});
+
+describe("commands that look like something else", () => {
+  it("takes a commit's subject from the heredoc it reads the message from", () => {
+    const command = `git commit -m "$(cat <<'EOF'\nfix(x): keep the subject\n\nBody.\nEOF\n)"`;
+    expect(commandActions(command)).toEqual([{ kind: "commit", subject: "fix(x): keep the subject" }]);
+    expect(commandActions("git commit -F - <<'EOF'\nfeat: from stdin\nEOF")).toEqual([
+      { kind: "commit", subject: "feat: from stdin" },
+    ]);
+  });
+
+  it("reads rg -e patterns, quoted output files and git's own options", () => {
+    expect(commandActions(`rg -n -e "foo" src`)).toEqual([{ kind: "search", pattern: "foo", where: "src" }]);
+    expect(writtenByCommand(`cat > "/tmp/my file.ts" <<'EOF'\nx\nEOF`)).toEqual([
+      { kind: "whole", path: "/tmp/my file.ts", content: "x" },
+    ]);
+    expect(commandActions("git -C app status")).toEqual([{ kind: "git", what: "git status" }]);
+  });
+
+  it("doesn't take a quoted << for a heredoc, nor a heredoc piped on for a read", () => {
+    expect(commandActions(`grep -n "<<EOF" a.sh`)).toEqual([{ kind: "search", pattern: "<<EOF", where: "a.sh" }]);
+    expect(commandActions("cat <<'EOF' | node\nconsole.log(1)\nEOF")).toEqual([{ kind: "run", what: "node script" }]);
+  });
+
+  it("tells package scripts that test or check from ones that only run", () => {
+    expect(commandActions("npm install")).toEqual([{ kind: "run", what: "npm install" }]);
+    expect(commandActions("pnpm run dev")).toEqual([{ kind: "run", what: "pnpm dev" }]);
+    expect(commandActions("npm run test:unit")).toEqual([{ kind: "test", failed: false }]);
+  });
+
+  it("names a script run from a file by it, and a script that only reads by its program", () => {
+    expect(commandActions("python3 /tmp/check.py")).toEqual([{ kind: "run", what: "check.py" }]);
+    expect(commandActions(`python3 - <<'EOF'\np="a.ts"\nprint(open(p).read())\nEOF`)).toEqual([
+      { kind: "run", what: "python3 script" },
+    ]);
+  });
 });
