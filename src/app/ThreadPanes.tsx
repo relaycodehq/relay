@@ -132,6 +132,126 @@ export function ThreadChanges({
   );
 }
 
+/** The file the Files tab shows, which its tab is named after. */
+function useFilesViewing(
+  setViewing: (viewing: Viewing) => void,
+  where: string,
+) {
+  const editorElsewhere = useEditorElsewhere(where);
+  const [filesPath, setFilesPath] = useState<string | null>(null);
+  const filesViewing = useCallback(
+    (v: Viewing) => {
+      setFilesPath(v.path);
+      setViewing(v);
+    },
+    [setViewing],
+  );
+  // Its file is open in the other window now, not in this one.
+  useEffect(() => {
+    if (editorElsewhere) filesViewing(NO_VIEWING);
+  }, [editorElsewhere, filesViewing]);
+  return { filesPath, filesViewing };
+}
+
+/** The panel's Files: the editor, or a note that it is in a window of its own. */
+function PanelFiles({
+  project,
+  chatId,
+  folder: { where, watched, detail, checks, gone, deleted },
+  active,
+  opens,
+  onViewing,
+  onError,
+  agentRunning,
+  inWorktree,
+  onOpenThread,
+  links,
+}: {
+  project: Project;
+  chatId: string | null;
+  folder: ThreadFolder;
+  active: boolean;
+  opens: PaneOpens;
+  onViewing: (viewing: Viewing) => void;
+  onError: (error: unknown) => void;
+  agentRunning?: boolean;
+  inWorktree?: boolean;
+  onOpenThread?: (chatId: string) => void;
+  links?: readonly LinkedFolder[];
+}) {
+  const { locked } = useNavigationLock();
+  const editorElsewhere = useEditorElsewhere(where);
+  // An unsaved edit stays on screen, to copy out before it goes.
+  if ((gone || deleted) && !locked)
+    return <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />;
+  if (editorElsewhere)
+    return (
+      <EditorElsewhere
+        project={project}
+        where={where}
+        detail={detail?.text}
+        onError={onError}
+      />
+    );
+  return (
+    <ProjectFiles
+      key={where}
+      active={active}
+      project={project}
+      where={where}
+      watched={watched}
+      checks={checks}
+      onViewing={onViewing}
+      opens={opens.fileOpens}
+      onAsk={(code) => opens.ask({ text: "", code })}
+      chatId={chatId ?? undefined}
+      agentRunning={agentRunning}
+      inWorktree={inWorktree}
+      onOpenThread={onOpenThread}
+      onPopOut={() => void popOutEditor(project.id, where).catch(onError)}
+      links={links}
+    />
+  );
+}
+
+/** The panel's tab strip: each surface's icon and name, a file's own name for Files. */
+function panelTabItems(
+  panel: PanelTabs,
+  preview: ReturnType<typeof usePreviewState>,
+  filesPath: string | null,
+  locked: boolean,
+) {
+  let terminals = 0;
+  return panel.tabs.map((tab) => ({
+    key: tab.key,
+    icon:
+      tab.surface === "browser" ? (
+        <BrowserTabIcon
+          key={preview?.favicon ?? "globe"}
+          favicon={preview?.favicon}
+        />
+      ) : (
+        SURFACE_ICONS[tab.surface]
+      ),
+    closeLabel:
+      tab.surface === "browser"
+        ? "Close browser"
+        : tab.surface === "files"
+          ? "Close files"
+          : undefined,
+    label:
+      tab.surface === "terminal"
+        ? terminalLabel(terminals++)
+        : tab.surface === "browser"
+          ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
+          : tab.surface === "files" && filesPath
+            ? filesPath.split("/").pop() || SURFACE_LABELS.files
+            : SURFACE_LABELS[tab.surface],
+    closeDisabled: tab.surface === "files" && locked,
+    unseen: tab.key === panel.unseen,
+  }));
+}
+
 /**
  * The third pane: the surfaces the thread opened as tabs, or the picker.
  * Files and History stay mounted behind other tabs, so an unsaved edit and
@@ -140,7 +260,7 @@ export function ThreadChanges({
 export function ThreadPanel({
   project,
   chatId,
-  folder: { where, watched, detail, checks, gone, deleted },
+  folder,
   view,
   opens,
   panel,
@@ -170,7 +290,7 @@ export function ThreadPanel({
   links?: readonly LinkedFolder[];
 }) {
   const { locked } = useNavigationLock();
-  const editorElsewhere = useEditorElsewhere(where);
+  const { where, detail, gone, deleted } = folder;
   const [historySlots, setHistorySlots] = useState<PaneSlots>(NO_SLOTS);
   const historyTitle = useCallback(
       (title: HTMLElement | null) => setHistorySlots((s) => ({ ...s, title })),
@@ -181,51 +301,10 @@ export function ThreadPanel({
         setHistorySlots((s) => ({ ...s, actions })),
       [],
     );
-  // The Files tab names the file it shows, as an editor tab would.
-  const [filesPath, setFilesPath] = useState<string | null>(null);
-  const { setViewing } = view;
-  const filesViewing = useCallback(
-    (v: Viewing) => {
-      setFilesPath(v.path);
-      setViewing(v);
-    },
-    [setViewing],
-  );
-  // Its file is open in the other window now, not in this one.
-  useEffect(() => {
-    if (editorElsewhere) filesViewing(NO_VIEWING);
-  }, [editorElsewhere, filesViewing]);
+  const { filesPath, filesViewing } = useFilesViewing(view.setViewing, where);
   const front = panel.front;
   const preview = usePreviewState(previewKey(project.id, chatId));
-  let terminals = 0;
-  const tabs = panel.tabs.map((tab) => ({
-    key: tab.key,
-    icon:
-      tab.surface === "browser" ? (
-        <BrowserTabIcon
-          key={preview?.favicon ?? "globe"}
-          favicon={preview?.favicon}
-        />
-      ) : (
-        SURFACE_ICONS[tab.surface]
-      ),
-    closeLabel:
-      tab.surface === "browser"
-        ? "Close browser"
-        : tab.surface === "files"
-          ? "Close files"
-          : undefined,
-    label:
-      tab.surface === "terminal"
-        ? terminalLabel(terminals++)
-        : tab.surface === "browser"
-          ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
-          : tab.surface === "files" && filesPath
-            ? filesPath.split("/").pop() || SURFACE_LABELS.files
-            : SURFACE_LABELS[tab.surface],
-    closeDisabled: tab.surface === "files" && locked,
-    unseen: tab.key === panel.unseen,
-  }));
+  const tabs = panelTabItems(panel, preview, filesPath, locked);
   const close = (key: string) => {
     const tab = panel.tabs.find((t) => t.key === key);
     if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
@@ -238,41 +317,6 @@ export function ThreadPanel({
   };
   const folderShown =
     front?.surface === "files" || front?.surface === "history";
-  function filesPane() {
-    // An unsaved edit stays on screen, to copy out before it goes.
-    if ((gone || deleted) && !locked)
-      return (
-        <FolderGoneEmpty reason={deleted ? WORKTREE_DELETED : undefined} />
-      );
-    if (editorElsewhere)
-      return (
-        <EditorElsewhere
-          project={project}
-          where={where}
-          detail={detail?.text}
-          onError={onError}
-        />
-      );
-    return (
-      <ProjectFiles
-        key={where}
-        active={front?.surface === "files"}
-        project={project}
-        where={where}
-        watched={watched}
-        checks={checks}
-        onViewing={filesViewing}
-        opens={opens.fileOpens}
-        onAsk={(code) => opens.ask({ text: "", code })}
-        chatId={chatId ?? undefined}
-        agentRunning={agentRunning}
-        inWorktree={inWorktree}
-        onOpenThread={onOpenThread}
-        onPopOut={() => void popOutEditor(project.id, where).catch(onError)}
-        links={links}
-      />
-    );
-  }
   return (
     <>
       <header className="pane-header panel-header">
@@ -334,7 +378,19 @@ export function ThreadPanel({
       )}
       {panel.has("files") && (
         <div className="panel-body" hidden={front?.surface !== "files"}>
-          {filesPane()}
+          <PanelFiles
+            project={project}
+            chatId={chatId}
+            folder={folder}
+            active={front?.surface === "files"}
+            opens={opens}
+            onViewing={filesViewing}
+            onError={onError}
+            agentRunning={agentRunning}
+            inWorktree={inWorktree}
+            onOpenThread={onOpenThread}
+            links={links}
+          />
         </div>
       )}
       {panel.has("history") && !project.plain && (
@@ -346,7 +402,9 @@ export function ThreadPanel({
               key={where}
               projectId={where}
               slots={historySlots}
-              onOpenFile={(path, commit) => void opens.openCommitFile(commit, path)}
+              onOpenFile={(path, commit) =>
+                void opens.openCommitFile(commit, path)
+              }
             />
           )}
         </div>
