@@ -4,7 +4,6 @@
   min-width: 0;
   overflow-y: auto;
   padding: 26px 36px 48px;
-  background: var(--surface);
   scrollbar-width: thin;
 }
 .pulls-page > * {
@@ -628,7 +627,7 @@
 }
 
 /* A PR with no project here reviews under the app's titlebar, like a PR thread's Review. */
-.project-legacy .titlebar {
+.shell-page .titlebar {
   height: 44px;
   min-height: 44px;
 }
@@ -667,7 +666,6 @@
   gap: 12px;
   height: 100%;
   text-align: center;
-  background: var(--surface);
 }
 .pulls-no-host > svg {
   color: var(--accent);

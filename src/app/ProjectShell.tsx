@@ -217,7 +217,7 @@ export default function ProjectShell() {
     switch (nav.surface) {
       case "inbox":
         return (
-          <div className="project-legacy" hidden={settings.open}>
+          <div className="shell-page" hidden={settings.open}>
             <PullRequestsArea
               hosts={pullsHosts}
               accountId={account?.id}
@@ -237,13 +237,13 @@ export default function ProjectShell() {
         );
       case "usage":
         return (
-          <div className="project-legacy" hidden={settings.open}>
+          <div className="shell-page" hidden={settings.open}>
             <UsagePage onOpenChat={openChatById} />
           </div>
         );
       case "schedules":
         return (
-          <div className="project-legacy" hidden={settings.open}>
+          <div className="shell-page" hidden={settings.open}>
             <SchedulesPage
               projects={projects.data ?? NO_PROJECTS}
               projectId={nav.selected ?? undefined}

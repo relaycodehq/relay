@@ -96,9 +96,8 @@
   color: var(--muted);
 }
 
-/* Frosted chat frosts this page too, and its greys become tints. */
+/* Under frosted chat, which frosts the page behind it, its greys become tints. */
 :root[data-glass-chat] .schedules-page {
-  background: color-mix(in srgb, var(--surface) var(--glass-chat), transparent);
   --hover: color-mix(in srgb, var(--text) 7%, transparent);
   --selected: color-mix(in srgb, var(--text) 11%, transparent);
 }
