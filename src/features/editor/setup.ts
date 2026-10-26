@@ -18,7 +18,7 @@ import {
   indentUnit,
 } from "@codemirror/language";
 import { lintKeymap } from "@codemirror/lint";
-import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   crosshairCursor,
@@ -32,7 +32,14 @@ import {
   rectangularSelection,
   scrollPastEnd,
 } from "@codemirror/view";
+import { clipUnderGutter } from "./clip-under-gutter";
+import { findBar } from "./find-bar/find-bar";
 import { editorChrome } from "./editor-theme";
+import { extraHighlights } from "./extra-highlights";
+import { foldImports } from "./view-aids/fold-imports";
+import { minimap } from "./minimap/minimap";
+import { guides } from "./view-aids/guides";
+import { stickyScopes } from "./view-aids/sticky-scopes";
 import { selectionSteps } from "./expand-selection";
 import { outsideTooltips } from "./outside-tooltips";
 import { phpstormKeymap, phpstormMouse } from "./keymap";
@@ -65,20 +72,21 @@ export const slots = {
   host: new Compartment(),
 };
 
-/** The search panel's labels, in sentence case like the rest of the app. */
+/** CodeMirror's own dialog labels, in sentence case like the rest of the app. */
 const phrases = EditorState.phrases.of({
-  next: "Next",
-  previous: "Previous",
-  all: "All",
-  "match case": "Match case",
-  regexp: "Regex",
-  "by word": "Words",
-  replace: "Replace",
-  "replace all": "Replace all",
   close: "Close",
   "Go to line": "Go to line",
   go: "Go",
 });
+
+/** The fold gutter's marker, told apart by class so a folded one can stay shown. */
+function foldMarker(open: boolean) {
+  const marker = document.createElement("span");
+  marker.className = open ? "cm-fold-open" : "cm-fold-closed";
+  marker.textContent = open ? "⌄" : "›";
+  marker.title = open ? "Fold line" : "Unfold line";
+  return marker;
+}
 
 /** Everything an editable code file gets, whatever its language. */
 export function baseExtensions(text: string): Extension[] {
@@ -86,7 +94,7 @@ export function baseExtensions(text: string): Extension[] {
   return [
     lineNumbers(),
     slots.changes.of([]),
-    foldGutter({ openText: "⌄", closedText: "›" }),
+    foldGutter({ markerDOM: foldMarker }),
     highlightActiveLineGutter(),
     highlightSpecialChars(),
     history({ minDepth: 500 }),
@@ -103,7 +111,7 @@ export function baseExtensions(text: string): Extension[] {
     crosshairCursor(),
     highlightActiveLine(),
     highlightSelectionMatches({ minSelectionLength: 2 }),
-    search({ top: true }),
+    findBar,
     scrollPastEnd(),
     selectionSteps,
     phpstormKeymap,
@@ -119,6 +127,12 @@ export function baseExtensions(text: string): Extension[] {
       indentWithTab,
     ]),
     editorChrome,
+    clipUnderGutter,
+    extraHighlights,
+    guides,
+    stickyScopes,
+    minimap,
+    foldImports,
     outsideTooltips(),
     phrases,
     slots.language.of([]),
