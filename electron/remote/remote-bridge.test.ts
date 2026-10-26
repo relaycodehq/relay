@@ -82,6 +82,16 @@ it("sends a streaming answer at most every 150ms, and its end right away", () =>
   ]);
 });
 
+it("shapes a held streaming answer for phones when it goes out", () => {
+  vi.useFakeTimers();
+  const { b, events } = bridge();
+  const call = { id: "c", kind: "command" as const, status: "complete" as const, label: "rg foo src" };
+  b.chatEvent({ chatId, message: { ...streaming("H"), trace: [{ kind: "activity", id: "c", activity: call }] } });
+  vi.advanceTimersByTime(150);
+  const sent = events[0]?.kind === "message" ? events[0].message.trace?.[0] : undefined;
+  expect(sent).toMatchObject({ activity: { actions: [{ kind: "search", pattern: "foo", where: "src" }] } });
+});
+
 it("watches thread states only once the phone has the overview, and only reports changes", async () => {
   const { b, events } = bridge();
   b.refresh();

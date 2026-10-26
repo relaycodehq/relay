@@ -68,6 +68,12 @@ export function forPhone(m: ChatMessage): ChatMessage {
   return m;
 }
 
+/** A message event as phones get it. */
+export const forPhoneEvent = <E extends { message: ChatMessage }>(event: E): E => ({
+  ...event,
+  message: forPhone(event.message),
+});
+
 /** An agent's run, its tool output cut as a thread's; the phone has no `activityDetail` for it. */
 export function forPhoneRun(run: SubagentDetail): SubagentDetail {
   return {

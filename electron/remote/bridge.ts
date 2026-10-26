@@ -50,7 +50,7 @@ import {
 import type { ProjectChatSend } from "../../shared/projects";
 import type { SpeechService } from "./phone-dictation";
 import { phoneIcon } from "./svg-icon";
-import { callIn, forPhone, forPhoneRun, writtenForPhone } from "./for-phone";
+import { callIn, forPhone, forPhoneEvent, forPhoneRun, writtenForPhone } from "./for-phone";
 import type { VoiceService } from "./phone-read-aloud";
 import type { ThreadCost } from "../../shared/thread-cost";
 import type {
@@ -577,13 +577,9 @@ export class RemoteBridge {
     }
   }
 
-  /** Relays a chat event, holding back streaming updates to one per message every `streamMs`. */
+  /** Relays a chat event, holding back streaming updates to one per message every `streamMs`; only one sent is shaped for phones. */
   chatEvent(event: { chatId: string; message: ChatMessage; title?: string }) {
-    const next = {
-      kind: "message" as const,
-      ...event,
-      message: forPhone(event.message),
-    };
+    const next = { kind: "message" as const, ...event };
     const held = this.streams.get(event.message.id);
     if (event.message.status === "streaming") {
       if (held) held.event = next;
@@ -593,7 +589,7 @@ export class RemoteBridge {
           timer: setTimeout(() => {
             const latest = this.streams.get(event.message.id);
             this.streams.delete(event.message.id);
-            if (latest) this.broadcast(latest.event);
+            if (latest) this.broadcast(forPhoneEvent(latest.event));
           }, streamMs),
         });
       return;
@@ -602,7 +598,7 @@ export class RemoteBridge {
       clearTimeout(held.timer);
       this.streams.delete(event.message.id);
     }
-    this.broadcast(next);
+    this.broadcast(forPhoneEvent(next));
   }
 
   /** Follows thread states while a phone is connected. */
