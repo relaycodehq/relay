@@ -54,15 +54,27 @@ fun rowFailed(row: TraceRow): Boolean {
     return if (ranChecks) row.action.failed else row.calls.any { it.status == "failed" }
 }
 
+/** A run's tree and, once it's longer than two lines, its folded line. */
+data class TraceRun(val pieces: List<TracePiece>, val summary: String? = null)
+
 /** A run of calls between two lines of commentary, as rows, pairs and branches. */
-fun traceTree(calls: List<AgentActivity>): List<TracePiece> =
-    branches(rowsOf(calls)).flatMap { (kind, rows) ->
+fun traceTree(calls: List<AgentActivity>): List<TracePiece> = traceRun(calls).pieces
+
+/** A run's tree and, once it's longer than two lines, its folded line, from one pass over the calls. */
+fun traceRun(calls: List<AgentActivity>): TraceRun {
+    val grouped = branches(rowDrafts(calls)).map { (kind, drafts) -> kind to drafts.map(RowDraft::row) }
+    val tree = grouped.flatMap { (kind, rows) ->
         val runs = if (kind == BranchKind.Run) commandRuns(rows) else listOf(rows)
-        runs.flatMap { run -> pieces(kind, run.map(RowDraft::row)) }
+        runs.flatMap { run -> pieces(kind, run) }
     }
+    return if (tree.size < 3) TraceRun(tree) else TraceRun(tree, summaryOf(grouped))
+}
+
+/** A row per thing done, in the order the calls came: how a run shows while the agent is still on it. */
+fun rowsOf(calls: List<AgentActivity>): List<TraceRow> = rowDrafts(calls).map(RowDraft::row)
 
 /** The row a single call leads with: what the live batch's head names. */
-fun leadRow(call: AgentActivity): TraceRow? = rowsOf(listOf(call)).firstOrNull()?.row()
+fun leadRow(call: AgentActivity): TraceRow? = rowsOf(listOf(call)).firstOrNull()
 
 private fun actionsOf(call: AgentActivity) = call.actions ?: listOf(CallAction("tool"))
 
@@ -101,7 +113,7 @@ private class RowDraft(val id: String, val action: CallAction, call: AgentActivi
  * run, share one. A row is named by its call and action, so it keeps its id
  * when a call before it finishes and grows rows.
  */
-private fun rowsOf(calls: List<AgentActivity>): List<RowDraft> {
+private fun rowDrafts(calls: List<AgentActivity>): List<RowDraft> {
     val rows = mutableListOf<RowDraft>()
     for (call in calls) for ((index, action) in shownActions(call)) {
         val last = rows.lastOrNull()
@@ -168,8 +180,8 @@ private fun sameFile(a: RowDraft, b: RowDraft): Boolean {
 }
 
 /** Commands split at each script written for them, so a write isn't buried in "Ran 7 commands". */
-private fun commandRuns(rows: List<RowDraft>): List<List<RowDraft>> {
-    val runs = mutableListOf<MutableList<RowDraft>>()
+private fun commandRuns(rows: List<TraceRow>): List<List<TraceRow>> {
+    val runs = mutableListOf<MutableList<TraceRow>>()
     for (row in rows) {
         val last = runs.lastOrNull()
         val joinsLast = last != null && !isWrite(row.action) && !isWrite(last.first().action)
@@ -233,6 +245,20 @@ private fun checksHeading(rows: List<TraceRow>): String {
 private fun toolsHeading(rows: List<TraceRow>): String {
     val allAgents = rows.all { row -> row.calls.all { it.kind == "agent" } }
     return if (allAgents) "Ran ${plural(rows.size, "agent")}" else "Used ${plural(rows.size, "tool")}"
+}
+
+/** How many kinds a folded run's line names before "and N more". */
+private const val SUMMARY_KINDS = 3
+
+/** A run the agent has moved on from, as one line: "Searched twice, read 4 files and ran 3 commands". */
+private fun summaryOf(grouped: List<kotlin.Pair<BranchKind, List<TraceRow>>>): String {
+    val parts = grouped.mapIndexed { index, (kind, rows) ->
+        val heading = branchHeading(kind, rows)
+        if (index == 0) heading else heading.replaceFirstChar { it.lowercaseChar() }
+    }
+    if (parts.size > SUMMARY_KINDS)
+        return "${parts.take(SUMMARY_KINDS - 1).joinToString(", ")} and ${parts.size - SUMMARY_KINDS + 1} more"
+    return if (parts.size == 1) parts[0] else "${parts.dropLast(1).joinToString(", ")} and ${parts.last()}"
 }
 
 /** The verb a row leads with, past or, while it runs, present. Tools draw their own row. */

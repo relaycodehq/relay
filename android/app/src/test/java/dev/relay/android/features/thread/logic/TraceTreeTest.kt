@@ -34,9 +34,11 @@ class TraceTreeTest {
             val name = case.string("name")
             val calls = case.getValue("calls").jsonArray.map { RemoteJson.decodeFromJsonElement<AgentActivity>(it) }
             val expected = case.getValue("pieces").jsonArray.map { it.jsonObject }
-            val actual = traceTree(calls)
-            assertEquals("$name: pieces", expected.map { it.string("kind") }, actual.map(::kindOf))
-            expected.zip(actual).forEachIndexed { index, (want, got) -> assertPiece("$name #$index", want, got) }
+            val actual = traceRun(calls)
+            assertEquals("$name: pieces", expected.map { it.string("kind") }, actual.pieces.map(::kindOf))
+            expected.zip(actual.pieces).forEachIndexed { index, (want, got) -> assertPiece("$name #$index", want, got) }
+            val summary = case.getValue("summary").takeUnless { it is JsonNull }?.jsonPrimitive?.content
+            assertEquals("$name: summary", summary, actual.summary)
         }
     }
 
