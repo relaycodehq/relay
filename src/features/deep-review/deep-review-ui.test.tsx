@@ -88,7 +88,6 @@ const setup = () =>
         changes={2}
         canChoosePR={false}
         busy={false}
-        checkoutDisabled={false}
         onStart={async () => true}
       />
     </QueryClientProvider>,

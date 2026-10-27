@@ -132,7 +132,7 @@ export class Councils {
     return ensureReviewCheckout(
       await this.core.projects.root(chat.projectId),
       checkout,
-      state.scope.head,
+      state.scope.head ?? checkout.branch,
     );
   }
 

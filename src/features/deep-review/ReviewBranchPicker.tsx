@@ -1,5 +1,6 @@
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { localTwin } from "../../../shared/branches";
+import { useNavigationLock } from "../../lib/navigation-lock";
 
 /**
  * Where a new review reads: the project folder, switched to the branch
@@ -11,7 +12,6 @@ export function ReviewBranchPicker({
   on,
   onRead,
   disabled,
-  locked,
 }: {
   projectId: string;
   /** The project folder's branch. */
@@ -20,16 +20,16 @@ export function ReviewBranchPicker({
   on?: string;
   onRead: (on: string | undefined) => void;
   disabled: boolean;
-  /** Switching the project folder is held off for now. */
-  locked: boolean;
 }) {
+  const lock = useNavigationLock();
   return (
     <ProjectBranchPicker
       projectId={projectId}
       branch={on ?? branch}
       disabled={disabled}
       intercept={{
-        locked,
+        // A branch read where it's checked out needs no switch, so nothing is held off.
+        locked: false,
         pick: ({ name, create }, list) => {
           const picked = list.branches.find((b) => b.name === name);
           // A remote one whose local branch exists means that branch, as `git switch` has it.
@@ -37,7 +37,8 @@ export function ReviewBranchPicker({
           const elsewhere = !create && !!own?.worktree && !own.current;
           onRead(elsewhere ? own!.name : undefined);
           // A branch no folder has checked out is read once the project folder switches to it.
-          return !elsewhere && !locked;
+          if (elsewhere) return false;
+          return !lock.blocked();
         },
       }}
     />

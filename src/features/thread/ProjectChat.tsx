@@ -542,7 +542,6 @@ export function ProjectChat({
             changes={checkout.data?.changes.length ?? 0}
             canChoosePR={scopes.canChoosePR}
             busy={busy}
-            checkoutDisabled={checkoutDisabled}
             onStart={councils.startReview}
           />
         ) : (

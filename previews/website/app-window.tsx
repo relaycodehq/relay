@@ -232,7 +232,6 @@ function ReviewThread() {
             changes={9}
             canChoosePR={false}
             busy={false}
-            checkoutDisabled
             onStart={async () => {
               playing.reviewStarted = Date.now();
               // The reviewers' threads from the last showing are stale.

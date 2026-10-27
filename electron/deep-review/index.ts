@@ -50,16 +50,6 @@ export class DeepReviews {
   constructor(private host: DeepReviewHost) {}
 
   /**
-   * Starts a round in `folder`, where the thread works now: the project's
-   * checkout, its own worktree, or the folder an earlier round of a deep
-   * review moved it to; asked for once the round may start, as finding it
-   * can make the folder again. A deep review's own thread checks out the
-   * reviewed code when that folder doesn't have it. `pull` asks the forge
-   * about a pull request. `duringTurn` is a round its agent asked for
-   * mid-answer: the lead's turn waits for that answer to end, and the
-   * folder it runs in isn't moved.
-   */
-  /**
    * The folder a round reads: the thread's, or for a review of its own
    * picked to read where a branch is checked out, that folder, `at`.
    */
@@ -76,6 +66,16 @@ export class DeepReviews {
     return { root: at?.path ?? own, at };
   }
 
+  /**
+   * Starts a round in `folder`, where the thread works now: the project's
+   * checkout, its own worktree, or the folder an earlier round of a deep
+   * review moved it to; asked for once the round may start, as finding it
+   * can make the folder again. A deep review's own thread checks out the
+   * reviewed code when that folder doesn't have it. `pull` asks the forge
+   * about a pull request. `duringTurn` is a round its agent asked for
+   * mid-answer: the lead's turn waits for that answer to end, and the
+   * folder it runs in isn't moved.
+   */
   async start(
     chatId: string,
     config: DeepReviewStart,

@@ -1093,6 +1093,25 @@ it("reads where the branch picked in its setup is checked out, not the project f
   expect(scope.checkout).toEqual({ path: there, made: false, branch: "panel" });
   for (const r of (await capture()).filter((r) => r.prompt || r.review))
     expect(r.cwd).toBe(there);
+
+  // The branch moves to another folder; the next message follows it there.
+  git(there, "switch", "-q", "--detach");
+  const other = join(root, "panel-moved");
+  git(repo, "worktree", "add", "-q", other, "panel");
+  await chats.send(chat.id, {
+    id: randomUUID(),
+    body: "@claude fixture echo: where now",
+    provider: "claude",
+    choice: { ...choice, model: "" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+  });
+  const followed = await chats.get(chat.id);
+  expect(followed.reviews!.at(-1)!.scope.checkout).toEqual({
+    path: other,
+    made: false,
+    branch: "panel",
+  });
 });
 
 it("reviews a branch in the folder it's checked out in, edits and all, and follows it to another folder rather than refusing a fix", async () => {

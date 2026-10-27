@@ -25,7 +25,6 @@ export function DeepReviewSetup({
   changes,
   canChoosePR,
   busy,
-  checkoutDisabled,
   onStart,
 }: {
   project: Project;
@@ -38,7 +37,6 @@ export function DeepReviewSetup({
   changes: number;
   canChoosePR: boolean;
   busy: boolean;
-  checkoutDisabled: boolean;
   /** Resolves true once the review has started. */
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
@@ -68,7 +66,6 @@ export function DeepReviewSetup({
           on={on}
           onRead={setOn}
           disabled={busy}
-          locked={checkoutDisabled}
         />
       </div>
       <form

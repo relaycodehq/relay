@@ -22,12 +22,15 @@ export async function followFixes(
   const fixing = !!input.fixes?.length;
   if (fixing) fixesHere(chat, input.fixes!, state);
   const checkout = state?.scope.checkout;
-  if (!state?.scope.head || !checkout) return;
+  // Uncommitted changes read where a branch is checked out have no head;
+  // the branch is what the review follows there.
+  const head = state?.scope.head ?? checkout?.branch;
+  if (!head || !checkout) return;
   const next = await followReviewedBranch(
     await host.root(chat.projectId),
     checkout,
     {
-      head: state.scope.head,
+      head,
       dir: host.worktrees,
       chatId: chat.id,
       fixing,
