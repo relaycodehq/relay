@@ -35,8 +35,6 @@ import { useShellCommands } from "./useShellCommands";
 import { useThreadOpening } from "./useThreadOpening";
 import { useToolPages } from "./useToolPages";
 import type { GitActionsHandle } from "../features/changes/GitActions";
-import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
-import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
@@ -51,6 +49,7 @@ import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import { ActivityBar } from "./ActivityBar";
 import { ShellSidebar } from "./ShellSidebar";
+import { StartDialogs } from "./StartDialogs";
 import {
   ThreadHeaderActions,
   ThreadWorkspace,
@@ -431,32 +430,11 @@ export default function ProjectShell() {
           onClose={() => setChoosePR(false)}
         />
       )}
-      {starts.picking && (
-        <NewThreadPicker
-          projects={projects.data && realProjects}
-          current={project?.id ?? null}
-          onSelect={(p) => {
-            starts.setPicking(false);
-            starts.open(p);
-          }}
-          onAdd={() => starts.addProject()}
-          onScratch={() => {
-            starts.setPicking(false);
-            void starts.scratch();
-          }}
-          onClose={() => starts.setPicking(false)}
-        />
-      )}
-      {starts.adding && (
-        <AddProjectPalette
-          projects={realProjects}
-          computerId={starts.addingOn}
-          initialPage={starts.adding}
-          onClose={() => starts.setAdding(false)}
-          onDone={(p) => void starts.added(p)}
-          onImportWithAgent={(app) => void starts.importThread(app)}
-        />
-      )}
+      <StartDialogs
+        starts={starts}
+        projects={projects.data && realProjects}
+        current={project?.id ?? null}
+      />
       {signIn.open && (
         <SignInDialog
           boot={boot.data}
