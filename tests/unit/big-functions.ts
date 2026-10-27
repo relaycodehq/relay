@@ -310,7 +310,6 @@ export const bigFunctions: Record<string, number> = {
   "src/features/sign-in/OpenCodeSignIn.tsx › OpenCodeSignIn": 269,
   "src/features/sign-in/useOpenCodeSignIn.ts › useOpenCodeSignIn": 224,
   "src/features/sounds/SoundSettings.tsx › CustomSoundsSetting": 84,
-  "src/features/terminal/RunningTasks.tsx › RunningTasks": 215,
   "src/features/terminal/TerminalDrawer.tsx › TerminalDrawer": 108,
   "src/features/thread-windows/ThreadElsewhere.tsx › ThreadElsewhere": 100,
   "src/features/thread/AgentQuestionForm.tsx › AgentQuestionForm": 186,
