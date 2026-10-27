@@ -2,7 +2,7 @@ import type { OpenTurn } from "../turns";
 import { z } from "zod";
 import type { AgentProvider } from "../agents";
 import type { AccountProvider } from "../agent-accounts";
-import type { ReviewerTask } from "../deep-review";
+import type { ReviewCard, ReviewerTask } from "../deep-review";
 import type { ThreadGoal } from "../goal";
 import type {
   ChatAbandonedHandoff,
@@ -106,6 +106,8 @@ export interface ChatSummary {
   reviewFolder?: ReviewFolder;
   /** A deep review whose reviewers are at work, the lead waiting for them. */
   reviewing?: true;
+  /** What a deep review covers and who reviews it, from its latest round. */
+  reviewCard?: ReviewCard;
   /** One-shot wake-ups Relay sends itself; Claude's own copies ended when Relay closed. */
   heldWakeups?: HeldWakeup[];
   /** Work that ended when Relay closed, until picked back up or dismissed. */

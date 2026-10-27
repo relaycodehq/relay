@@ -341,6 +341,14 @@ So every exponent is $\le 0$ and the biggest term is exactly $1$. A ragged one s
     const call = step("Started threads", "tool", { mcp: { server: "relay", tool: "start_threads" }, detail: JSON.stringify(started) });
     Object.assign(threads.get(lead)!.messages[0], { trace: [{ kind: "activity", id: call.id, activity: call }], created: now - 13 * min, ended: now - 12 * min });
   }
+  // A finished deep review: its reviewers open from its started-threads dock, and no list shows them.
+  const review = thread(relay, "Deep review · Uncommitted changes", 18, [message("assistant", "One finding: reordering the queue can drop a message.", 18)], { scope: { kind: "review" } });
+  for (const [slot, name] of ["Reviewer 1 · Codex", "Reviewer 2 · Claude"].entries())
+    thread(relay, name, 20, [message("assistant", "Reordering the queue can drop a message.", 20)], {
+      startedBy: { chatId: review, agent: "claude" },
+      reviewer: { parent: review, slot },
+      created: 4 + slot,
+    });
   seedThreadStates();
 }
 

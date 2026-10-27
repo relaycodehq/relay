@@ -54,6 +54,40 @@ async function forgeRemote(root: string, project: Project) {
   throw new Error("This checkout has no remote for the project's repository.");
 }
 
+/** A branch's name without its remote's, `share` for `origin/share`; a local branch keeps its whole name. */
+async function withoutRemote(root: string, name: string) {
+  const ref = await git(root, [
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    "--symbolic-full-name",
+    "--end-of-options",
+    name,
+  ]).catch(() => "");
+  if (!ref.trim().startsWith("refs/remotes/")) return name;
+  const remotes = (await git(root, ["remote"]).catch(() => "")).split("\n");
+  const remote = remotes.find((r) => r && name.startsWith(`${r}/`));
+  return remote ? name.slice(remote.length + 1) : name;
+}
+
+/** The changes' size; lockfiles and generated files stay out of the headline, as everywhere else. */
+async function diffStats(root: string, range: string[]) {
+  const files = numstatFiles(
+    await git(root, [
+      "diff",
+      "--numstat",
+      "-z",
+      "-M",
+      "--no-color",
+      "--no-ext-diff",
+      "--no-textconv",
+      ...range,
+    ]),
+  );
+  const byKind = statsByKind(files);
+  return { files: files.length, ...headlineStat(byKind), byKind };
+}
+
 export async function resolveScope(
   root: string,
   target: ReviewTarget,
@@ -61,23 +95,7 @@ export async function resolveScope(
   pull?: PullInfo,
 ): Promise<ReviewScope> {
   const branch = await currentBranchOrNull(root);
-  // Lockfiles and generated files stay out of the headline, as everywhere else.
-  const stats = async (...range: string[]) => {
-    const files = numstatFiles(
-      await git(root, [
-        "diff",
-        "--numstat",
-        "-z",
-        "-M",
-        "--no-color",
-        "--no-ext-diff",
-        "--no-textconv",
-        ...range,
-      ]),
-    );
-    const byKind = statsByKind(files);
-    return { files: files.length, ...headlineStat(byKind), byKind };
-  };
+  const stats = (...range: string[]) => diffStats(root, range);
   switch (target.kind) {
     case "uncommitted": {
       const changed = (
@@ -118,6 +136,10 @@ export async function resolveScope(
       return {
         target: { ...target, head: reviewed },
         label: `${reviewed} → ${target.base}`,
+        branches: {
+          head: await withoutRemote(root, reviewed),
+          base: await withoutRemote(root, target.base),
+        },
         branch,
         base: fork,
         head,

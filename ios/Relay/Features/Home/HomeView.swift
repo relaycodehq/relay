@@ -75,7 +75,7 @@ private struct SearchResults: View {
 
     var body: some View {
         let needle = query.trimmingCharacters(in: .whitespaces).lowercased()
-        let results = connection.chats.filter {
+        let results = connection.listed.filter {
             "\($0.title) \(connection.project($0.projectId)?.name ?? "")".lowercased().contains(needle)
         }
         List {

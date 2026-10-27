@@ -6,11 +6,11 @@ import { execFileSync } from "node:child_process";
 import { Store } from "../../electron/app/store";
 import { Projects } from "../../electron/projects/projects";
 import { ProjectChats } from "../../electron/project-chats";
-import { RemoteBridge, type RemoteHost } from "../../electron/remote/bridge";
+import { RemoteBridge } from "../../electron/remote/bridge";
+import type { RemoteHost } from "../../electron/remote/remote-host";
 import { chatHandlers } from "../../electron/api/chats";
 import { reviewHandlers } from "../../electron/api/reviews";
 import { apiContext } from "../../electron/api/context";
-import type { RemoteEvent } from "../../shared/remote";
 vi.mock("electron", () => ({ shell: {} }));
 let root: string, chats: ProjectChats;
 
@@ -58,17 +58,18 @@ it("lists a PR thread whose review is under way on the phone as on the desktop",
   const desktop = chatHandlers(api).projectChats([projectId]);
 
   // As main.ts wires the bridge.
-  const events: RemoteEvent[] = [];
   const bridge = new RemoteBridge(
-    { chats: api.listChats } as unknown as RemoteHost,
-    (e) => events.push(e),
+    {
+      chats: api.listChats,
+      projects: async () => [{ id: projectId, name: "Project" }],
+      name: () => "Computer",
+    } as unknown as RemoteHost,
+    () => {},
   );
-  (bridge as unknown as { projectIds: string[] }).projectIds = [projectId];
-  bridge.refresh();
-  const phone = events.find((e) => e.kind === "chats");
+  const phone = (await bridge.handle("overview", [])) as {
+    chats: { id: string }[];
+  };
 
   expect((desktop as { id: string }[]).map((c) => c.id)).toEqual([thread.id]);
-  expect(phone && "chats" in phone ? phone.chats.map((c) => c.id) : []).toEqual(
-    [thread.id],
-  );
+  expect(phone.chats.map((c) => c.id)).toEqual([thread.id]);
 });

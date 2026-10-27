@@ -52,12 +52,24 @@ public func verdictStopped(_ row: TraceRow) -> Bool {
     }
 }
 
-/// A test or check fails by its result; anything else only when its call failed.
+/// A test or check fails by its result; anything else only when its call failed there.
 public func rowFailed(_ row: TraceRow) -> Bool {
     switch row.action {
     case .test(_, let failed), .check(_, let failed): failed
-    default: row.calls.contains { $0.status == "failed" }
+    default: row.calls.contains { $0.status == "failed" && failedAt($0, row.action) }
     }
+}
+
+/// Every row failed: only then does the branch or run holding them say it failed.
+public func allFailed(_ rows: [TraceRow]) -> Bool {
+    !rows.isEmpty && rows.allSatisfy(rowFailed)
+}
+
+/// A shell exits with its last command's status, so a failed call failed at the last thing it
+/// did: in `git log; cat dir/*`, the cat, not the log.
+private func failedAt(_ call: AgentActivity, _ action: CallAction) -> Bool {
+    guard let last = shownActions(call).last else { return true }
+    return sameThing(last.action, action)
 }
 
 /// A run of calls between two lines of commentary, as rows, pairs and branches.

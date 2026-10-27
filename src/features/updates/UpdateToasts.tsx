@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef } from "react";
 import { Toast } from "@base-ui/react/toast";
 import { Check, TriangleAlert, X } from "lucide-react";
 import { api } from "../../lib/api";
-import { useStoredState } from "../../lib/persisted-store";
 import { releasesPage } from "../../../shared/updates";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { useCrashOffer } from "../bug-report/useCrashOffer";
 import { RelayMark } from "../../ui/RelayMark";
 import { Spinner } from "../../ui/ui";
 import { useUpdates } from "./updates";
+import { putOff, putOffToasts } from "./put-off";
 import {
   updateAgent,
   useAgentUpdateChecks,
@@ -38,11 +38,6 @@ export function UpdateToasts({ onAgentDetails }: { onAgentDetails: () => void })
   );
 }
 
-/** The keys of toasts put off, newest last; old ones fall away past this. */
-const keepPutOff = 50;
-const parsePutOff = (saved: unknown): string[] =>
-  Array.isArray(saved) ? saved.filter((k): k is string => typeof k === "string") : [];
-
 function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   const { state } = useUpdates();
   const crash = useCrashOffer();
@@ -61,10 +56,10 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
   }, [crash.offer, state, agents, notices, justUpdated]);
 
   const manager = Toast.useToastManager();
-  const [putOff, setPutOff] = useStoredState("relay.updateToasts.putOff", parsePutOff);
+  const putOffKeys = putOffToasts.use();
   /** Toasts this closes because their update went, not because you put them off. */
   const going = useRef(new Set<string>());
-  const shown = useMemo(() => items.filter((i) => !putOff.includes(i.key)), [items, putOff]);
+  const shown = useMemo(() => items.filter((i) => !putOffKeys.includes(i.key)), [items, putOffKeys]);
 
   /** Bumped to bring the crash offer back in front as a new toast. */
   const crashTurn = useRef(0);
@@ -99,7 +94,7 @@ function Stack({ onAgentDetails }: { onAgentDetails: () => void }) {
         onClose: () => {
           if (going.current.has(id)) return;
           if (item.subject === "crash") return crash.dismiss();
-          setPutOff((keys) => [...keys.filter((k) => k !== item.key), item.key].slice(-keepPutOff));
+          putOff(item.key);
         },
         onRemove: () => going.current.delete(id),
       });

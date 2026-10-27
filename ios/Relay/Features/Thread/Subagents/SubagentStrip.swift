@@ -36,7 +36,7 @@ func confirmStop(_ run: SubagentRun) -> StripConfirm {
 struct SubagentStrip: View {
     let agents: Subagents
     let batch: [SubagentRun]
-    /// The started threads to tell of, while any works or asks.
+    /// The started threads to tell of, while any works or asks, and a review's reviewers always.
     let started: [RemoteChatSummary]
     let root: String?
     let open: () -> Void

@@ -47,8 +47,9 @@
 .trace-good {
   color: #538665;
 }
+/* The failed row's own verb, not every verb under a failed branch. */
 .trace-bad,
-.agent-step.failed .trace-verb {
+.agent-step.failed > .agent-step-heading .trace-verb {
   color: var(--danger);
 }
 

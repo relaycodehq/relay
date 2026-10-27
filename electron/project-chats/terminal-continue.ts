@@ -15,7 +15,7 @@ import {
 import { accountHomes, accountLabel } from "../agents/accounts";
 import type { TerminalSessions } from "../terminal-sessions";
 import type { ChatCore } from "./core";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 import type { ThreadWorktrees } from "./worktrees";
 
 const TITLE_LIMIT = 120;

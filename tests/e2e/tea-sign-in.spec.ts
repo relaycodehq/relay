@@ -85,11 +85,12 @@ else if (cmd === "logins" && sub === "helper") {
       name: "Or connect a Gitea server",
     });
     const noHost = page.getByRole("heading", {
-      name: "No pull requests yet",
+      name: "Sign in to GitHub",
+      exact: true,
     });
 
     // Off, the Pull requests page and Integrations never mention Gitea, and
-    // the footer shows the version instead of an account.
+    // the titlebar shows the version instead of an account.
     await expect(page.locator(".sb-version")).toBeVisible();
     await pullsNav(page).click();
     await expect(noHost).toBeVisible();

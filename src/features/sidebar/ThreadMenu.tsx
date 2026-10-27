@@ -22,6 +22,7 @@ import {
   SquareArrowOutUpRight,
   SquarePen,
   Sunrise,
+  Trash2,
   Unlink,
   UserPlus,
 } from "lucide-react";
@@ -32,10 +33,7 @@ import {
   snoozePresets,
   wakeLabel,
 } from "../../../shared/chat-activity";
-import {
-  agentName,
-  agentInfo,
-} from "../../../shared/agents";
+import { agentName, agentInfo } from "../../../shared/agents";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import type { ThreadMenuAction } from "./useThreadActions";
@@ -314,34 +312,62 @@ function ThreadMenuItems({
         Share with guest…
       </MenuAction>
       <CopyMenu
-        title={chat.title}
+        chat={chat}
         path={chat.worktree?.path ?? projectPath}
         branch={chat.worktree?.branch ?? chat.branch}
-        threadId={chat.id}
       />
       <Menu.Separator className="sb-menu-separator" />
+      <RemoveItems chat={chat} onAction={onAction} />
+    </>
+  );
+}
+
+/** Archive and Delete, which take the thread off the lists. */
+function RemoveItems({
+  chat,
+  onAction,
+}: {
+  chat: ChatSummary;
+  onAction: (action: ThreadMenuAction) => void;
+}) {
+  // Both refuse what would still run with nothing left to stop it.
+  const going =
+    !!chat.running ||
+    !!chat.reviewing ||
+    !!chat.pending?.length ||
+    !!chat.nextSend;
+  return (
+    <>
       <MenuAction
         icon={<Archive size={13} />}
-        disabled={!!chat.running || !!chat.pending?.length || !!chat.nextSend}
-        onClick={() => triage({ kind: "archive" })}
+        disabled={going}
+        onClick={() =>
+          onAction({ kind: "triage", triage: { kind: "archive" } })
+        }
       >
         Archive thread
+      </MenuAction>
+      <MenuAction
+        icon={<Trash2 size={13} />}
+        // A thread away works on the other computer; it's deleted there.
+        disabled={going || !!chat.sentTo}
+        onClick={() => onAction({ kind: "delete" })}
+      >
+        Delete thread…
       </MenuAction>
     </>
   );
 }
 
-/** Copies what a thread is known by: its title, folder, branch and id. */
+/** Copies the thread's title, folder, branch or id. */
 function CopyMenu({
-  title,
+  chat,
   path,
   branch,
-  threadId,
 }: {
-  title: string;
+  chat: ChatSummary;
   path: string | undefined;
   branch: string | undefined;
-  threadId: string;
 }) {
   return (
     <Menu.SubmenuRoot>
@@ -355,7 +381,7 @@ function CopyMenu({
       <MenuPopup side="right" align="start">
         <Menu.Item
           className="sb-menu-item"
-          onClick={() => void api.writeClipboard(title)}
+          onClick={() => void api.writeClipboard(chat.title)}
         >
           Title
         </Menu.Item>
@@ -377,7 +403,7 @@ function CopyMenu({
         )}
         <Menu.Item
           className="sb-menu-item"
-          onClick={() => void api.writeClipboard(threadId)}
+          onClick={() => void api.writeClipboard(chat.id)}
         >
           Thread ID
         </Menu.Item>

@@ -33,10 +33,22 @@ export const verdictStopped = (row: TraceRow) =>
   !row.action.failed &&
   row.calls.some((c) => c.status === "stopped");
 
-/** A test or check fails by its result; anything else only when its call failed. */
+/** A test or check fails by its result; anything else only when its call failed there. */
 export function rowFailed(row: TraceRow) {
   if (row.action.kind === "test" || row.action.kind === "check") return row.action.failed;
-  return row.calls.some((c) => c.status === "failed");
+  return row.calls.some((c) => c.status === "failed" && failedAt(c, row.action));
+}
+
+/** Every row failed: only then does the branch or run holding them say it failed. */
+export const allFailed = (rows: TraceRow[]) => rows.length > 0 && rows.every(rowFailed);
+
+/**
+ * A shell exits with its last command's status, so a failed call failed at
+ * the last thing it did: in `git log; cat dir/*`, the cat, not the log.
+ */
+function failedAt(call: AgentActivity, action: CallAction) {
+  const last = shownActions(call).at(-1);
+  return !last || sameThing(last.action, action);
 }
 
 /** A run of calls between two lines of commentary, as rows, pairs and branches. */

@@ -126,7 +126,7 @@ export function usePaneOpens(
   function openInEditor(target: FilesRequest) {
     request.current++;
     if (editorElsewhere()) {
-      if ("view" in target) raiseEditor();
+      if ("view" in target || "hideSidebar" in target) raiseEditor();
       else {
         const file =
           "snapshot" in target

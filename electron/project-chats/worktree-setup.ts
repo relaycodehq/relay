@@ -269,6 +269,11 @@ export class WorktreeSetup {
     }
   }
 
+  /** Waits for a setup running in `path`, if one is, without starting one. */
+  async settled(path: string) {
+    await this.folders.get(path);
+  }
+
   private async setUp(
     chat: ProjectChat,
     worktree: ChatWorktree,

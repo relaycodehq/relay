@@ -262,12 +262,13 @@ const pair = (old: string | null, next: string | null): FilePair => ({
 
 const turn = { chatId: "t1", messageId: "m1", files: [], label: "Claude" };
 
-it("opens a turn's file in the editor against how it was before the turn", async () => {
+it("opens a turn's file in the editor against how it was before the turn, the sidebar hidden", async () => {
   vi.mocked(api.projectTurnDiff).mockResolvedValue(pair("old text", "new text"));
   const s = setup();
   await s.result().openTurnDiff({ ...turn, path: "src/a.ts" });
   expect(api.projectTurnDiff).toHaveBeenCalledWith("t1", "m1", "src/a.ts");
-  expect(s.opened).toHaveBeenCalledExactlyOnceWith({
+  expect(s.opened).toHaveBeenNthCalledWith(1, { hideSidebar: true });
+  expect(s.opened).toHaveBeenNthCalledWith(2, {
     path: "src/a.ts",
     directory: false,
     changes: true,
@@ -288,7 +289,7 @@ it("shows a file the turn deleted as it was", async () => {
   vi.mocked(api.projectTurnDiff).mockResolvedValue(pair("gone text", null));
   const s = setup();
   await s.result().openTurnDiff({ ...turn, path: "gone.ts" });
-  const request = s.opened.mock.calls[0][0] as { snapshot: string; path: string };
+  const request = s.opened.mock.calls[1][0] as { snapshot: string; path: string };
   expect(request.path).toBe("gone.ts");
   expect(snapshotOf(request.snapshot)).toMatchObject({ text: "gone text", label: "before turn, deleted since" });
 });
@@ -302,7 +303,7 @@ it("shows a picture the turn changed before and after", async () => {
   });
   const s = setup();
   await s.result().openTurnDiff({ ...turn, path: "logo.png" });
-  const request = s.opened.mock.calls[0][0] as { snapshot: string; path: string };
+  const request = s.opened.mock.calls[1][0] as { snapshot: string; path: string };
   expect(snapshotOf(request.snapshot)).toEqual({
     path: "logo.png",
     label: "before turn → now",

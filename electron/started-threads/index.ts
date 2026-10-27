@@ -70,7 +70,7 @@ type Chats = Pick<
   | "askWithPage"
   | "notes"
 > & {
-  worktrees: Pick<ProjectChats["worktrees"], "enter">;
+  worktrees: Pick<ProjectChats["worktrees"], "entry">;
   liveHandoff: Pick<ProjectChats["liveHandoff"], "outbox">;
   importOffers?: Pick<ProjectChats["importOffers"], "sources" | "offer">;
   projectMoves?: Pick<ProjectChats["projectMoves"], "blocked" | "move">;
@@ -260,7 +260,7 @@ export class StartedThreads {
       case "tick_note":
         return this.notes.tickNote(lead, input, signal);
       case "move_to_worktree":
-        return json(await this.chats.worktrees.enter(lead.id, input));
+        return json(await this.chats.worktrees.entry.enter(lead.id, input));
       case "deep_review":
         return this.deepReview(lead, input, signal);
       case "list_review_setups":

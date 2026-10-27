@@ -21,6 +21,13 @@ public struct RemoteOverview: Codable, Sendable, Equatable {
 
     /// Whether the computer tunnels ports to the phone's browser, so its localhost links open there.
     public var tunnels: Bool { (bridge ?? 0) >= Bridge.tunnel }
+    /// The threads the lists show.
+    public var listed: [RemoteChatSummary] { listedChats(chats) }
+}
+
+/// The threads the lists show: a deep review's reviewers open from their review instead.
+public func listedChats(_ chats: [RemoteChatSummary]) -> [RemoteChatSummary] {
+    chats.filter { $0.reviewer != true }
 }
 
 public struct RemoteProject: Codable, Sendable, Equatable, Identifiable {
@@ -81,6 +88,8 @@ public struct RemoteChatSummary: Codable, Sendable, Equatable, Identifiable {
     public var empty: Bool?
     public var goal: ThreadGoal?
     public var startedBy: StartedBy?
+    /// A deep review's reviewer: it opens from its review and no list shows it; older desktops leave it out.
+    public var reviewer: Bool?
     public var limitResume: LimitResume?
     /// Moves whenever the thread's notes do; fetch them again then. From `Bridge.notes`.
     public var notesMark: String?

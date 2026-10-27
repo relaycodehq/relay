@@ -1,15 +1,12 @@
 import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import { ShareGuestDialog } from "../guest-share/ShareGuestDialog";
 import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
+import { DeleteThreadDialog } from "./DeleteThreadDialog";
 import { SnoozePickDialog } from "./SnoozeMenu";
-import type { useThreadActions } from "./useThreadActions";
+import type { ThreadActions } from "./useThreadActions";
 
-/** The dialogs a thread's menu opens, each for the thread it was opened on. */
-export function ThreadActionDialogs({
-  actions,
-}: {
-  actions: ReturnType<typeof useThreadActions>;
-}) {
+/** What a thread's menu asks before it acts on the thread. */
+export function ThreadDialogs({ actions }: { actions: ThreadActions }) {
   return (
     <>
       {actions.pickingSnooze && (
@@ -29,6 +26,14 @@ export function ThreadActionDialogs({
           files={actions.archiving.files}
           onArchive={actions.archive}
           onCancel={actions.cancelArchive}
+        />
+      )}
+      {actions.deletion.asking && (
+        <DeleteThreadDialog
+          chat={actions.deletion.asking}
+          deleting={actions.deletion.deleting}
+          onDelete={actions.deletion.confirm}
+          onCancel={actions.deletion.cancel}
         />
       )}
       {actions.sharing && (

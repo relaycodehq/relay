@@ -12,9 +12,11 @@ import {
   type ProjectChat,
 } from "../../shared/projects";
 import { accountFor } from "../agents/accounts";
+import { threadTerminals } from "../terminal/thread-terminals";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
-import { chatSummary, nextSend } from "./storage";
+import { assertHere, awaitsReturn } from "./handoff";
+import { chatSummary, nextSend } from "./chat-summaries";
 import type { ThreadWorktrees } from "./worktrees";
 
 /** Where a thread sits in the sidebar and what it has been read up to; never what its agent does. */
@@ -61,17 +63,7 @@ export class ThreadTriage {
       return chatSummary(chat);
     }
     if (triage.kind === "archive") {
-      if (this.core.active.has(id) || this.councils.busy(chat))
-        throw new Error("Stop the running answer before archiving.");
-      // Nothing reopens an archived thread to cancel what would still run in it.
-      if (
-        nextSend(chat.scheduled) ||
-        chat.heldWakeups?.length ||
-        this.core.sessions.pending(id).length
-      )
-        throw new Error(
-          "Cancel the scheduled messages and Claude's background work before archiving.",
-        );
+      this.refuseWhileGoing(chat, "archiving");
       chat.archivedAt = now;
       await this.core.storage.save(chat);
       // A teardown can take minutes; the thread is archived meanwhile.
@@ -117,6 +109,62 @@ export class ThreadTriage {
     )
       await this.settleStarted(id, now);
     return chatSummary(chat);
+  }
+
+  /**
+   * Removes a thread for good: its messages, images, pages and kept
+   * subagents, its shells, and a deep review's reviewers with it. Its
+   * worktree's folder goes too, its branch and a snapshot of what wasn't
+   * committed kept. Threads its agent started stay, on their own. Resolves
+   * to the ids of the threads that went.
+   */
+  delete(id: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      const reviewers = await this.reviewers(id);
+      this.refuseDeleting(chat, reviewers);
+      await this.worktrees.dropArchived(chat);
+      await this.letGoOfStarted(id);
+      const threads = [...reviewers, chat];
+      for (const thread of threads) {
+        this.core.sessions.close(thread.id);
+        // After the subagents closing the sessions keeps, so none comes back.
+        await this.core.sessions.forgetSubagents(thread.id);
+        threadTerminals.closeFor(thread.id);
+        await this.core.storage.remove(thread);
+      }
+      return threads.map((thread) => thread.id);
+    });
+  }
+
+  /** Throws why the thread can't be deleted now, if it can't. */
+  private refuseDeleting(chat: ProjectChat, reviewers: ProjectChat[]) {
+    // A copy handed back is only history here; a thread away works there.
+    if (chat.sentTo) assertHere(chat);
+    // One started here for good never goes back, so there's nothing to wait for.
+    if (awaitsReturn(chat) && !chat.cameFrom!.home)
+      throw new Error(
+        `Hand this thread back to ${chat.cameFrom!.computer} before deleting it.`,
+      );
+    this.refuseWhileGoing(chat, "deleting");
+    // Once the review is done, a reviewer answers follow-ups on its own.
+    const working = reviewers.find((r) => this.stillGoing(r));
+    if (working)
+      throw new Error(
+        `${working.title} is still working. Stop it before deleting the review.`,
+      );
+  }
+
+  /** The threads a deleted thread's agent started carry on as threads of their own. */
+  private async letGoOfStarted(id: string) {
+    const ids = (this.core.store.get().chats ?? [])
+      .filter((c) => c.startedBy?.chatId === id && !c.reviewer)
+      .map((c) => c.id);
+    for (const childId of ids) {
+      const child = await this.core.storage.load(childId);
+      delete child.startedBy;
+      await this.core.storage.save(child);
+    }
   }
 
   /**
@@ -183,6 +231,38 @@ export class ThreadTriage {
       );
   }
 
+  /**
+   * Nothing reopens an archived or deleted thread to stop what runs in it,
+   * or to cancel what would still go out by itself.
+   */
+  private refuseWhileGoing(chat: ProjectChat, doing: string) {
+    const going = this.stillGoing(chat);
+    if (going === "answer")
+      throw new Error(`Stop the running answer before ${doing}.`);
+    if (going === "later")
+      throw new Error(
+        `Cancel the scheduled messages and Claude's background work before ${doing}.`,
+      );
+  }
+
+  /** What still runs in the thread, or would go out by itself later. */
+  private stillGoing(chat: ProjectChat) {
+    if (
+      this.core.active.has(chat.id) ||
+      this.core.active.rides(chat.id) ||
+      this.core.active.hasSide(chat.id) ||
+      this.councils.busy(chat)
+    )
+      return "answer";
+    if (
+      nextSend(chat.scheduled) ||
+      chat.heldWakeups?.length ||
+      this.core.sessions.pending(chat.id).length
+    )
+      return "later";
+    return undefined;
+  }
+
   /** Something runs in the thread now, or is about to go on by itself. */
   private going(chat: ProjectChat) {
     return (
@@ -219,6 +299,14 @@ export class ThreadTriage {
   private async started(id: string) {
     const ids = (this.core.store.get().chats ?? [])
       .filter((c) => c.startedBy?.chatId === id && !c.archivedAt)
+      .map((c) => c.id);
+    return Promise.all(ids.map((c) => this.core.storage.load(c)));
+  }
+
+  /** A deep review's reviewers, listed or not. */
+  private async reviewers(id: string) {
+    const ids = (this.core.store.get().chats ?? [])
+      .filter((c) => c.reviewer?.parent === id)
       .map((c) => c.id);
     return Promise.all(ids.map((c) => this.core.storage.load(c)));
   }

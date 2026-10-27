@@ -61,8 +61,9 @@
 :root[data-glass] {
   --sidebar-edge: color-mix(in srgb, var(--text) 12%, transparent);
 }
-/* Frosted chat, the second switch: the chat lets some of it through too. */
-:root[data-glass-chat] .project-chat-pane {
+/* Frosted chat, the second switch: the chat lets some of it through too,
+   and so do the pages that open in its place. */
+:root[data-glass-chat] :is(.project-chat-pane, .shell-page) {
   background: color-mix(in srgb, var(--surface) var(--glass-chat), transparent);
 }
 .projects-sidebar > .pane-resizer {
@@ -159,13 +160,17 @@
   color: #cb6868;
   margin-left: auto;
 }
-.project-legacy,
+.shell-page,
 .project-review {
   display: flex;
   flex: 1;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+/* Pull requests, Usage and Schedules, in the chat's place and its colour. */
+.shell-page {
+  background: var(--surface);
 }
 .project-review .files-pane {
   width: 230px;

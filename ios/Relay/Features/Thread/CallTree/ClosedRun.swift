@@ -14,7 +14,7 @@ struct ClosedRun: View {
         if let summary = run.summary, !only {
             TreeFold(
                 symbol: branchSymbol(firstKind(run.pieces[0])), heading: summary,
-                failed: run.pieces.contains { $0.rows.contains(where: rowFailed) }, items: run.pieces
+                failed: allFailed(run.pieces.flatMap(\.rows)), items: run.pieces
             ) { PieceView(piece: $0, context: context) }
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -40,7 +40,7 @@ private struct PieceView: View {
         case .row(let row): ActionRow(rows: [row], context: context)
         case .pair(let a, let b): ActionRow(rows: [a, b], context: context)
         case .branch(let kind, let heading, let rows):
-            TreeFold(symbol: branchSymbol(kind), heading: heading, failed: rows.contains(where: rowFailed), items: rows) {
+            TreeFold(symbol: branchSymbol(kind), heading: heading, failed: allFailed(rows), items: rows) {
                 ActionRow(rows: [$0], context: context)
             }
         }

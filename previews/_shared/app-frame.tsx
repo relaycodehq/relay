@@ -62,7 +62,6 @@ export function AppFrame({
               onSendDraft={() => {}}
               onAdd={onAdd}
               onSettings={() => {}}
-              onInbox={() => {}}
             />
           </aside>
         )}

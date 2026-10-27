@@ -110,7 +110,7 @@ fun ProjectScreen(id: String, remote: Remote, home: HomeServices) {
     val active by remote.active.collectAsState()
     val iconIndex by home.icons.index.collectAsState()
     val project = overview?.projects?.find { it.id == id }
-    val chats = overview?.chats.orEmpty().filter { it.projectId == id }
+    val chats = overview?.listed.orEmpty().filter { it.projectId == id }
     val drafts = remember(overview) { home.drafts.list(overview) }
     val git = project != null && project.plain != true
     val online = status.state == LinkState.Online

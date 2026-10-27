@@ -75,7 +75,7 @@ class ReadAhead(
             cache,
             combine(remote.active, remote.status, remote.overview) { computer, status, overview ->
                 if (computer == null || status.state != LinkState.Online || overview == null) emptyList()
-                else overview.chats.sortedByDescending { it.updated }.take(AHEAD)
+                else overview.listed.sortedByDescending { it.updated }.take(AHEAD)
                     // A running one changes by the second; it's saved once it stops.
                     .filter { it.running != true }
                     .map { Wanted(computer, it.id, it.updated) }

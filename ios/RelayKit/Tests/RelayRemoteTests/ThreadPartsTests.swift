@@ -65,6 +65,14 @@ private func result(_ ids: String...) -> String { "[" + ids.map { #"{"id":"\#($0
     #expect(listed.map(\.id) == ["asks", "working-early", "working-late", "done"])
 }
 
+@Test func docksAFinishedFamilyOnlyWhenItsAReviewsReviewers() {
+    var reviewer = child("reviewer")
+    reviewer.reviewer = true
+    #expect(!familyInDock([child("done")]))
+    #expect(familyInDock([child("asks", waiting: true)]))
+    #expect(familyInDock([reviewer]))
+}
+
 @Test func groupsThreadsUnderTheirCalls() {
     let threads = [child("a", created: 2_000), child("b", created: 2_100, waiting: true), child("c", created: 9_000)]
     let groups = startGroups(msg(calls: [call("s1", detail: result("a"), start: true), call("s2", detail: result("b", "c"), start: true)]), threads)

@@ -752,7 +752,7 @@ it("runs each reviewer in a thread listed under the review, then the lead, and l
     [chat.id, ...started.map((r) => r.chatId)].sort(),
   );
   const reviewThread = listed.find((c) => c.id === chat.id)!;
-  expect(reviewThread.title).toBe("Deep review · Uncommitted changes");
+  expect(reviewThread.title).toBe("Deep review");
   expect(reviewThread.running).toBe(true);
   // Each reviewer is a thread the review started, named for what it runs on.
   const members = started.map((r) => listed.find((c) => c.id === r.chatId)!);
@@ -868,7 +868,7 @@ it("runs another round in the same thread, its findings numbered on from the las
   );
   const done = await chats.get(chat.id);
   const [first, second] = done.reviews!;
-  expect(done.title).toBe("Deep review · Uncommitted changes");
+  expect(done.title).toBe("Deep review");
   expect(done.messages.map((m) => m.role)).toEqual([
     "user",
     "assistant",
@@ -1679,6 +1679,37 @@ describe("what a review covers", () => {
         project,
       ),
     ).rejects.toThrow("can't find the branch gone");
+  });
+
+  it("names a remote's branch without the remote, and a local one whole", async () => {
+    const { resolveScope } = await import("./scope");
+    const upstream = join(dir, "upstream");
+    git(dir, "clone", "--quiet", work, upstream);
+    git(upstream, "checkout", "--quiet", "-b", "team/share");
+    await writeFile(join(upstream, "b.ts"), "shared\n");
+    git(upstream, "add", ".");
+    git(upstream, "commit", "--quiet", "-m", "Share");
+    git(work, "remote", "add", "relay", upstream);
+    git(work, "fetch", "--quiet", "relay");
+    git(work, "checkout", "--quiet", "-b", "fix/login");
+    await commit("c.ts", "login\n", "Fix login");
+    git(work, "checkout", "--quiet", "main");
+    const branches = async (head: string) =>
+      (
+        await resolveScope(
+          work,
+          { kind: "branch", head, base: "main" },
+          project,
+        )
+      ).branches;
+    expect(await branches("relay/team/share")).toEqual({
+      head: "team/share",
+      base: "main",
+    });
+    expect(await branches("fix/login")).toEqual({
+      head: "fix/login",
+      base: "main",
+    });
   });
 
   it("covers one commit, by its full id", async () => {

@@ -360,6 +360,11 @@ export class ProviderSessions {
     }
   }
 
+  /** Drops what was kept of a deleted thread's subagents, after any keep still under way. */
+  forgetSubagents(chatId: string) {
+    return this.archive.forget(chatId);
+  }
+
   /** Before Relay quits or restarts, which ends what follows them. */
   async keepAllSubagents() {
     await Promise.all([...this.chats()].map((id) => this.keepSubagents(id)));

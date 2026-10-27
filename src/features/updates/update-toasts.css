@@ -1,5 +1,5 @@
-/* Just above the sidebar footer and no wider than the sidebar, so it never
-   covers the composer. */
+/* At the sidebar's bottom and no wider than it, so it never covers the
+   composer. */
 .update-toasts {
   position: absolute;
   left: 10px;

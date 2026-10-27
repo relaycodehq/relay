@@ -29,7 +29,7 @@ struct ThreadDock: View {
         let out = pending.count(where: { $0.kind == "task" && $0.agent == true })
         let batch = runningBatch(agents.runs, now: nowMs())
         let family = startedOf(chatId, connection.chats)
-        let started = familyLive(family) ? family : []
+        let started = familyInDock(family) ? family : []
         let waiting = outsideBatch(pending, batch)
         let stopped = thread?.stopped?.items ?? []
         let limit = running ? nil : summary?.limitResume

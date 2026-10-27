@@ -11,7 +11,7 @@ import {
 } from "../../../shared/types";
 import { api } from "../../lib/api";
 import { useReviewProgress } from "../review/useReviewProgress";
-import { PULL_BOARD, usePullBoard } from "./usePullBoard";
+import { PULL_BOARD, usePullBoard, type PullState } from "./usePullBoard";
 import type { Project } from "../../../shared/projects";
 
 vi.mock("../../lib/api", () => ({
@@ -60,22 +60,25 @@ async function observe(hosts: Account[], projects: Project[] = []) {
   });
   const root = createRoot(document.createElement("div"));
   let current!: ReturnType<typeof usePullBoard>;
-  function Probe() {
-    current = usePullBoard(hosts, projects, "open");
+  function Probe({ state }: { state: PullState }) {
+    current = usePullBoard(hosts, projects, state);
     return null;
   }
-  await act(async () =>
-    root.render(
-      <QueryClientProvider client={client}>
-        <Probe />
-      </QueryClientProvider>,
-    ),
-  );
+  const show = (state: PullState) =>
+    act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Probe state={state} />
+        </QueryClientProvider>,
+      ),
+    );
+  await show("open");
   return {
     client,
     get current() {
       return current;
     },
+    show,
     async close() {
       await act(async () => root.unmount());
       client.clear();
@@ -140,6 +143,49 @@ it("shows a healthy host while another is pending, then retries only the failed 
         .mocked(api.search)
         .mock.calls.filter((call) => call[4] === github.server),
     ).toHaveLength(3);
+  } finally {
+    await view.close();
+  }
+});
+
+it("keeps the last board up while another state loads, then swaps it whole", async () => {
+  const github: Account = {
+    ...account,
+    id: "github",
+    server: "https://github.com",
+  };
+  let answerGitea!: () => void;
+  const giteaAnswered = new Promise<void>((resolve) => {
+    answerGitea = resolve;
+  });
+  vi.mocked(api.search).mockImplementation(
+    async (filter, _q, state, _page, server) => {
+      if (state === "all" && server === account.server) await giteaAnswered;
+      const number =
+        (server === github.server ? 10 : 20) + (state === "all" ? 1 : 0);
+      return {
+        items: filter === "assigned" ? [{ ...issue("someone"), number }] : [],
+        nextPage: null,
+      };
+    },
+  );
+  const numbers = () =>
+    view.current.board.pulls.map((p) => p.ref.number).sort();
+  const view = await observe([account, github]);
+  try {
+    await vi.waitFor(async () => {
+      await tick();
+      expect(numbers()).toEqual([10, 20]);
+    });
+    await view.show("all");
+    await tick();
+    expect(view.current.pending).toEqual([]);
+    expect(numbers()).toEqual([10, 20]);
+    await act(async () => answerGitea());
+    await vi.waitFor(async () => {
+      await tick();
+      expect(numbers()).toEqual([11, 21]);
+    });
   } finally {
     await view.close();
   }

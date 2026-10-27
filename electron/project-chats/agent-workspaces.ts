@@ -17,7 +17,7 @@ import {
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { assertHere } from "./handoff";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 
 /**
  * The worktrees an agent made from a project-folder thread, and which of

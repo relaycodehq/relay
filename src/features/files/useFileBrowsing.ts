@@ -50,6 +50,7 @@ export function useFileBrowsing({
   };
   const show = (target: FilesRequest) => {
     if ("view" in target) return showSideView(target.view);
+    if ("hideSidebar" in target) return setListHidden(true);
     if ("snapshot" in target)
       return open({ path: target.path, snapshot: target.snapshot, outside: target.outside });
     const at = { line: target.line, changes: target.changes, baseline: target.baseline };

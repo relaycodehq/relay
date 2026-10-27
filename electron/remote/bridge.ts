@@ -1,228 +1,64 @@
+// The phone's side of this computer: the calls a phone may make, answered
+// from the desktop's services, and what it hears without asking (./phone-feed).
 import { createHash } from "node:crypto";
-import { structuredPatch } from "diff";
 import { z } from "zod";
-import { chatIsEmpty } from "../../shared/chat-activity";
 import {
   knownMessagesSchema,
   projectChatSendSchema,
   type ChatMessage,
-  type ChatSummary,
-  type KnownMessages,
-  type Project,
-  type ProjectChatPatch,
   type ProjectComputer,
 } from "../../shared/projects";
 import {
-  fileUploadChunk,
-  maxUploadBytes,
   phoneDesktopMethods,
   remoteBridgeVersion,
   maxRemoteHistory,
   remoteHistory,
   type ComputerMethod,
-  type PhoneAppearance,
   type PhoneDesktopMethod,
   type RemoteApi,
-  type RemoteChatSummary,
-  type RemoteDiff,
-  type RemoteDiffLine,
   type RemoteEvent,
   type RemoteMethod,
   type RemoteProjectComputer,
   type RemoteProjectIcon,
-  type UploadedFile,
 } from "../../shared/remote";
-import { shortHost, type PairedComputer } from "../../shared/handoff";
+import { shortHost } from "../../shared/handoff";
 import { RENDER_MAX_PAGES } from "../../shared/html-render";
 import { sentAgent } from "../../shared/recipient";
-import { chatOrder } from "../../shared/remote-delta";
 import { queuedForPhone } from "../../shared/remote-queued";
 import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
-import {
-  draftKeySchema,
-  draftWriteSchema,
-  type DraftDevice,
-  type DraftWrite,
-  type SharedDraft,
-} from "../../shared/drafts";
-import type { ProjectChatSend } from "../../shared/projects";
-import type { SpeechService } from "./phone-dictation";
+import { draftKeySchema, draftWriteSchema } from "../../shared/drafts";
 import { phoneIcon } from "./svg-icon";
-import { callIn, forPhone, forPhoneEvent, forPhoneRun, writtenForPhone } from "./for-phone";
-import type { VoiceService } from "./phone-read-aloud";
-import type { ThreadCost } from "../../shared/thread-cost";
-import type {
-  NewsCatchUp,
-  NewsCursor,
-  NewsItem,
-} from "../../shared/thread-news";
-
-/** What the bridge needs from the desktop; main.ts wires it to the real services. */
-export interface RemoteHost {
-  projects(): Promise<Project[]>;
-  /** The computers this one is paired with, which projects on another computer name. */
-  pairedComputers?(): readonly Pick<PairedComputer, "id" | "name">[];
-  projectPath(projectId: string): string;
-  chats(projectId: string): ChatSummary[];
-  chat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
-  /** What a thread's answers cost, where their agent priced them. */
-  cost?(id: string): Promise<ThreadCost | undefined>;
-  /** The desktop's own dispatch, which validates every call's arguments. */
-  dispatch(method: ApiMethod, args: unknown[]): Promise<unknown>;
-  name(): string;
-  /** This Relay's version, which the phone compares with its own. */
-  version?(): string;
-  appearance?(): PhoneAppearance | undefined;
-  /** Someone at this computer working in Relay; see ./presence. */
-  present?(): boolean;
-  /** `dataUrl` at most `max` pixels on its longer side; without it phones get images whole. */
-  shrinkImage?(dataUrl: string, max: number): string;
-  /** A page an answer showed with show_html. */
-  renderPage?(chatId: string, renderId: string, page: number): Promise<string>;
-  /** The news after `cursor`; see electron/turns/news. */
-  news?(cursor?: NewsCursor): NewsCatchUp;
-  /** The speech engine phones dictate with. */
-  dictation?: SpeechService;
-  /** The voice phones hear answers in. */
-  readAloud?: VoiceService;
-  /** Keeps a chunk of a file a phone attaches; see ../drafts/uploads. */
-  uploadFile?(
-    id: string,
-    name: string,
-    size: number,
-    offset: number,
-    bytes: Buffer,
-  ): Promise<UploadedFile>;
-  /** Drafts shared with phones; see ../drafts. */
-  drafts?: {
-    list(): SharedDraft[];
-    write(write: DraftWrite, by: DraftDevice): SharedDraft | null;
-    other(key: string, drop: boolean): SharedDraft | null;
-    holds(key: string): boolean;
-    sendHeld(
-      key: string,
-      chatId: string | undefined,
-      send: ProjectChatSend,
-    ): Promise<{ chatId: string }>;
-  };
-  /** Takes threads other computers hand over; see ../handoff/receiver. */
-  handoffs?: {
-    handle(
-      method: ComputerMethod,
-      args: unknown[],
-      device: { id: string; name: string },
-    ): Promise<unknown>;
-    /** Keeps the computers live handoffs came from up to date. */
-    connect?(link: { send(deviceId: string, event: RemoteEvent): void }): void;
-    chatEvent?(event: { chatId: string; message: ChatMessage }): void;
-    chatsChanged?(projectId: string): void;
-    news?(item: NewsItem): void;
-    /** Ends the shells paired computers opened here, or the device's alone. */
-    closeShells?(deviceId?: string): void;
-  };
-}
-
-const pathSchema = z.string().min(1).max(1000);
-const uploadSizeSchema = z.number().int().min(0).max(maxUploadBytes);
-// A chunk may be up to twice `fileUploadChunk`, for phones that send bigger ones.
-const uploadChunkSchema = z
-  .string()
-  .max(Math.ceil((2 * fileUploadChunk) / 3) * 4)
-  .regex(/^[A-Za-z0-9+/]*={0,2}$/);
-const newsCursorSchema = z
-  .object({ epoch: z.string().max(64), seq: z.number().int().min(0) })
-  .strict();
-const activityIdSchema = z.string().min(1).max(200);
-const knownIconsSchema = z
-  .record(idSchema, z.string().max(64).nullable())
-  .refine((known) => Object.keys(known).length <= 1000);
-const imageSourceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("attached"),
-      chatId: idSchema,
-      imageId: idSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("read"),
-      chatId: idSchema,
-      messageId: idSchema,
-      path: pathSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("preview"),
-      chatId: idSchema,
-      messageId: idSchema,
-    })
-    .strict(),
-]);
-
-const diffSourceSchema = z.discriminatedUnion("kind", [
-  z
-    .object({
-      kind: z.literal("turn"),
-      chatId: idSchema,
-      messageId: idSchema,
-      path: pathSchema,
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("working"),
-      where: z.string().max(80),
-      path: pathSchema,
-      area: z.enum(["staged", "unstaged"]),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal("commit"),
-      where: z.string().max(80),
-      sha: z.string().max(64),
-      path: pathSchema,
-    })
-    .strict(),
-  z
-    .object({ kind: z.literal("worktree"), chatId: idSchema, path: pathSchema })
-    .strict(),
-]);
-
-const signatureSchema = z.string().regex(/^[a-f0-9]{64}$/);
-const maxDiffLines = 3000;
-/** Streaming answers go out at most this often; the phone doesn't need every token. */
-const streamMs = 150;
-const sendKey = (chatId: string, id: string) => JSON.stringify([chatId, id]);
-
-/** The thread, message and call a phone opens a row of. */
-const callIds = (args: unknown[]) =>
-  [idSchema.parse(args[0]), idSchema.parse(args[1]), activityIdSchema.parse(args[2])] as const;
+import { callIn, forPhone, forPhoneRun, writtenForPhone } from "./for-phone";
+import {
+  activityIdSchema,
+  callIds,
+  diffSourceSchema,
+  imageSourceSchema,
+  knownIconsSchema,
+  newsCursorSchema,
+  signatureSchema,
+  uploadChunkSchema,
+  uploadSizeSchema,
+} from "./call-args";
+import { diffCall, toRemoteDiff } from "./remote-diff";
+import { PhoneFeed } from "./phone-feed";
+import { PhoneSends } from "./phone-sends";
+import type { RemoteHost } from "./remote-host";
 
 /** The phone's API: a few calls of its own, and an allowlist of the desktop's. */
 export class RemoteBridge {
-  private streams = new Map<
-    string,
-    { timer: NodeJS.Timeout; event: Extract<RemoteEvent, { kind: "message" }> }
-  >();
-  private lastChats = "";
-  private lastPresent?: boolean;
-  // Kept across phone reconnects, until dispatch finishes (which may be making a worktree).
-  private sends = new Map<string, Promise<unknown>>();
-  // A taken-back queue item no longer holds its id. Its lost answer still counts as a receipt.
-  private acceptedSends = new Map<string, unknown>();
-  private watching = false;
-  /** Unknown until a phone asks for the overview; nothing is watched before that. */
-  private projectIds?: string[];
+  private feed: PhoneFeed;
+  // Sends move thread states; phones hear before the call returns.
+  private sends = new PhoneSends(() => this.refresh());
 
   constructor(
     private host: RemoteHost,
-    private broadcast: (event: RemoteEvent) => void,
-  ) {}
+    broadcast: (event: RemoteEvent) => void,
+  ) {
+    this.feed = new PhoneFeed(host, broadcast);
+  }
 
   /** Calls about one phone, and a computer's, go through phone-remote, which knows who asks. */
   private api: Omit<
@@ -238,9 +74,7 @@ export class RemoteBridge {
   > = {
     overview: async () => {
       const projects = await this.host.projects();
-      this.projectIds = projects.map((p) => p.id);
-      // This phone hears it here; the next list tells the rest again.
-      this.lastPresent = undefined;
+      const chats = this.feed.overview(projects);
       return {
         name: this.host.name(),
         bridge: remoteBridgeVersion,
@@ -265,15 +99,12 @@ export class RemoteBridge {
           ...(p.settings?.workspace ? { workspace: p.settings.workspace } : {}),
           ...(p.computer ? { computer: this.computerOf(p.computer) } : {}),
         })),
-        chats: this.summaries(),
+        chats,
       };
     },
     chat: async (id, known, history = remoteHistory, sendId) => {
-      const key = sendId === undefined ? undefined : sendKey(id, sendId);
-      const dispatching = () => key !== undefined && this.sends.has(key);
-      // Asked before reading the chat too: a send that lands while it's read
-      // may be missing from what was read.
-      const dispatchingBefore = dispatching();
+      const dispatchedBefore =
+        sendId !== undefined && this.sends.dispatching(id, sendId);
       const patch = await this.host.chat(id, known);
       const cost = await this.host.cost?.(id);
       const summary = this.host.chats(patch.projectId).find((c) => c.id === id);
@@ -283,13 +114,8 @@ export class RemoteBridge {
         projectId: patch.projectId,
         title: patch.title,
         scope: patch.scope,
-        ...(sendId !== undefined && key !== undefined
-          ? this.sendReceipt(
-              patch,
-              sendId,
-              key,
-              dispatchingBefore || dispatching(),
-            )
+        ...(sendId !== undefined
+          ? this.sends.receipt(patch, sendId, dispatchedBefore)
           : {}),
         messages: patch.messages
           .slice(-history)
@@ -357,14 +183,7 @@ export class RemoteBridge {
       return this.host.renderPage(chatId, renderId, page);
     },
     diff: async (source) => {
-      const [method, args]: [ApiMethod, unknown[]] =
-        source.kind === "turn"
-          ? ["projectTurnDiff", [source.chatId, source.messageId, source.path]]
-          : source.kind === "working"
-            ? ["projectWorkingDiff", [source.where, source.path, source.area]]
-            : source.kind === "commit"
-              ? ["projectCommitDiff", [source.where, source.sha, source.path]]
-              : ["projectWorktreeDiff", [source.chatId, source.path]];
+      const [method, args] = diffCall(source);
       return toRemoteDiff(
         source.path,
         (await this.host.dispatch(method, args)) as FilePair,
@@ -390,7 +209,7 @@ export class RemoteBridge {
     },
     desktop: async (method, args) => {
       if (method === "sendProjectChat")
-        return this.tracked(
+        return this.sends.once(
           idSchema.parse(args[0]),
           projectChatSendSchema.parse(args[1]).id,
           () => this.host.dispatch(method, args),
@@ -416,7 +235,7 @@ export class RemoteBridge {
       // A new thread has no chat id yet. Keep its result under the draft key,
       // including after sending has removed the draft and its desktop extras.
       if (!chatId)
-        return this.tracked(`draft:${key}`, send.id, async () => {
+        return this.sends.once(`draft:${key}`, send.id, async () => {
           if (!drafts.holds(key))
             throw new Error(
               "This draft changed on the computer. Check it and send it again.",
@@ -428,9 +247,9 @@ export class RemoteBridge {
         await this.api.desktop("sendProjectChat", [chatId, send]);
         return { chatId };
       }
-      return this.tracked(chatId, send.id, () =>
-        drafts.sendHeld(key, chatId, send),
-      ).then(() => ({ chatId }));
+      return this.sends
+        .once(chatId, send.id, () => drafts.sendHeld(key, chatId, send))
+        .then(() => ({ chatId }));
     },
     projectIcons: async (known) => {
       const projects = await this.host.projects();
@@ -453,30 +272,6 @@ export class RemoteBridge {
       return changed;
     },
   };
-
-  /**
-   * A send, once per id: a reconnect may retry before worktree creation
-   * finishes, and both await the same one; once it's in, a retry is a no-op
-   * that still counts as a receipt.
-   */
-  private async tracked<T>(chatId: string, id: string, run: () => Promise<T>) {
-    const key = sendKey(chatId, id);
-    if (this.acceptedSends.has(key)) return this.acceptedSends.get(key) as T;
-    let job = this.sends.get(key);
-    if (!job) {
-      job = run();
-      this.sends.set(key, job);
-    }
-    try {
-      const value = await job;
-      this.acceptedSends.set(key, value);
-      // Sends move thread states; phones hear before the call returns.
-      this.refresh();
-      return value as T;
-    } finally {
-      if (this.sends.get(key) === job) this.sends.delete(key);
-    }
-  }
 
   private requireDrafts() {
     if (!this.host.drafts) throw new Error("This computer keeps no drafts.");
@@ -577,82 +372,33 @@ export class RemoteBridge {
     }
   }
 
-  /** Relays a chat event, holding back streaming updates to one per message every `streamMs`; only one sent is shaped for phones. */
+  /** Relays a chat event; see ./phone-feed. */
   chatEvent(event: { chatId: string; message: ChatMessage; title?: string }) {
-    const next = { kind: "message" as const, ...event };
-    const held = this.streams.get(event.message.id);
-    if (event.message.status === "streaming") {
-      if (held) held.event = next;
-      else
-        this.streams.set(event.message.id, {
-          event: next,
-          timer: setTimeout(() => {
-            const latest = this.streams.get(event.message.id);
-            this.streams.delete(event.message.id);
-            if (latest) this.broadcast(forPhoneEvent(latest.event));
-          }, streamMs),
-        });
-      return;
-    }
-    if (held) {
-      clearTimeout(held.timer);
-      this.streams.delete(event.message.id);
-    }
-    this.broadcast(forPhoneEvent(next));
+    this.feed.chatEvent(event);
   }
 
   /** Follows thread states while a phone is connected. */
   setWatching(watching: boolean) {
-    this.watching = watching;
-    if (watching) return;
-    this.lastChats = "";
-    this.lastPresent = undefined;
+    this.feed.setWatching(watching);
   }
 
-  /** A project's thread list changed; one new since the overview joins the watch. */
+  /** A project's thread list changed. */
   chatsChanged(projectId: string) {
-    if (!this.watching || !this.projectIds) return;
-    if (this.projectIds.includes(projectId)) return this.refresh();
-    void this.host
-      .projects()
-      .then((projects) => {
-        this.projectIds = projects.map((p) => p.id);
-        this.refresh();
-      })
-      .catch(() => {});
+    this.feed.chatsChanged(projectId);
   }
 
   /** Tells phones when a thread starts, finishes, or starts waiting on them. */
   refresh() {
-    if (!this.projectIds) return;
-    const chats = this.summaries();
-    const signature = JSON.stringify(chats);
-    if (signature === this.lastChats) return;
-    this.lastChats = signature;
-    // Read again as the list moves, which is when a phone decides whether it's
-    // news. Coming back goes before the list and leaving after it, so a list
-    // sent as presence changes is held, and leaving judges the newest one.
-    const present = this.host.present?.();
-    if (present) this.sendPresence(present);
-    this.broadcast({ kind: "chats", chats });
-    if (present === false) this.sendPresence(present);
+    this.feed.refresh();
   }
 
-  /** Someone came to the computer or left it: a phone holding news back hands it out. */
+  /** Someone came to the computer or left it. */
   presenceChanged() {
-    if (this.watching && this.projectIds) this.sendPresence(this.host.present?.());
-  }
-
-  private sendPresence(present: boolean | undefined) {
-    if (present === undefined || present === this.lastPresent) return;
-    this.lastPresent = present;
-    this.broadcast({ kind: "presence", present });
+    this.feed.presenceChanged();
   }
 
   dispose() {
-    this.setWatching(false);
-    for (const held of this.streams.values()) clearTimeout(held.timer);
-    this.streams.clear();
+    this.feed.dispose();
   }
 
   /** Where a project on another computer lives, by that computer's name now. */
@@ -664,125 +410,8 @@ export class RemoteBridge {
       ...(paired && !now ? { gone: true as const } : {}),
     };
   }
-
-  /**
-   * Whether the phone's send `sendId` reached the thread: still being
-   * dispatched, or in its messages, queue or schedule. A queued message the
-   * user took back no longer carries its id, so accepted sends count too.
-   */
-  private sendReceipt(
-    patch: ProjectChatPatch,
-    sendId: string,
-    key: string,
-    dispatching: boolean,
-  ) {
-    const accepted = this.acceptedSends.has(key);
-    const inMessages = patch.messages.some(
-      (m) => (typeof m === "string" ? m : m.id) === sendId,
-    );
-    const queued = !!patch.queue?.some((q) => q.input.id === sendId);
-    const scheduled = !!patch.scheduled?.some((s) => s.input.id === sendId);
-    return {
-      sendPending: dispatching,
-      hasSend: dispatching || accepted || inMessages || queued || scheduled,
-    };
-  }
-
-  private summaries() {
-    return (
-      (this.projectIds ?? [])
-        .flatMap((id) => {
-          try {
-            return this.host.chats(id);
-          } catch {
-            return [];
-          }
-        })
-        .filter((c) => !c.archivedAt && !chatIsEmpty(c))
-        .sort((a, b) => b.updated - a.updated)
-        .slice(0, 300)
-        .map(summary)
-        // Ties included, the order a phone rebuilds a patched list in.
-        .sort(chatOrder)
-    );
-  }
 }
 
 function digest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
-}
-
-function summary(c: ChatSummary): RemoteChatSummary {
-  return {
-    id: c.id,
-    projectId: c.projectId,
-    title: c.title,
-    scope: c.scope.kind,
-    updated: c.updated,
-    created: c.created,
-    ...(c.provider ? { provider: c.provider } : {}),
-    ...(c.running ? { running: true, runningSince: c.runningSince } : {}),
-    ...(c.waiting ? { waiting: true } : {}),
-    ...(c.asking ? { asking: true } : {}),
-    ...(c.blocked ? { blocked: true } : {}),
-    ...(c.settledAt ? { settledAt: c.settledAt } : {}),
-    ...(c.settleWhenDone ? { settleWhenDone: c.settleWhenDone } : {}),
-    ...(c.autoSettled ? { autoSettled: true } : {}),
-    ...(c.markedUnread ? { markedUnread: true } : {}),
-    ...(c.seenAt ? { seenAt: c.seenAt } : {}),
-    ...(c.snoozedUntil
-      ? { snoozedUntil: c.snoozedUntil, snoozedAt: c.snoozedAt }
-      : {}),
-    ...(c.branch ? { branch: c.branch } : {}),
-    ...(c.worktree ? { worktree: true } : {}),
-    ...(c.pending?.length ? { pending: c.pending } : {}),
-    ...(c.nextSend ? { nextSend: c.nextSend } : {}),
-    ...(c.queueMark ? { queueMark: c.queueMark } : {}),
-    ...(c.empty ? { empty: true } : {}),
-    ...(c.goal ? { goal: c.goal } : {}),
-    ...(c.startedBy ? { startedBy: c.startedBy } : {}),
-    ...(c.limitResume ? { limitResume: c.limitResume } : {}),
-    ...(c.notesMark ? { notesMark: c.notesMark } : {}),
-  };
-}
-
-export function toRemoteDiff(path: string, pair: FilePair): RemoteDiff {
-  if (pair.binary) return { path, binary: true, hunks: [], truncated: false };
-  const patch = structuredPatch(
-    pair.old?.name ?? path,
-    pair.next?.name ?? path,
-    pair.old?.contents ?? "",
-    pair.next?.contents ?? "",
-    undefined,
-    undefined,
-    { context: 3 },
-  );
-  let budget = maxDiffLines,
-    truncated = false;
-  const hunks: RemoteDiff["hunks"] = [];
-  for (const h of patch.hunks) {
-    if (budget <= 0) {
-      truncated = true;
-      break;
-    }
-    let old = h.oldStart,
-      next = h.newStart;
-    const lines: RemoteDiffLine[] = [];
-    for (const raw of h.lines) {
-      if (raw.startsWith("\\")) continue;
-      if (budget-- <= 0) {
-        truncated = true;
-        break;
-      }
-      const text = raw.slice(1);
-      if (raw[0] === "+") lines.push({ kind: "add", text, new: next++ });
-      else if (raw[0] === "-") lines.push({ kind: "del", text, old: old++ });
-      else lines.push({ kind: "same", text, old: old++, new: next++ });
-    }
-    hunks.push({
-      header: `@@ -${h.oldStart},${h.oldLines} +${h.newStart},${h.newLines} @@`,
-      lines,
-    });
-  }
-  return { path, binary: false, hunks, truncated };
 }

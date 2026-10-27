@@ -8,12 +8,14 @@ import {
   utimes,
   writeFile,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 import { Store } from "../app/store";
-import { chatSummary, ChatStorage, queueMark } from "./storage";
+import { ChatStorage } from "./storage";
+import { chatSummary, queueMark } from "./chat-summaries";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 let root: string, store: Store, storage: ChatStorage, changed: string[];
@@ -216,6 +218,20 @@ it("leaves a thread that isn't listed to add", async () => {
   expect(store.get().chats).toHaveLength(1);
 });
 
+it("removes a thread with its pages, and a late save from what still ran in it doesn't write it back", async () => {
+  const chat = thread();
+  await storage.add(chat);
+  await storage.renders.save(chat.id, crypto.randomUUID(), ["<p>Page</p>"]);
+
+  await storage.remove(chat);
+  chat.title = "Named too late";
+  await storage.save(chat);
+
+  expect(existsSync(join(root, "chats", `${chat.id}.json`))).toBe(false);
+  expect(existsSync(join(root, "chats", "renders", chat.id))).toBe(false);
+  expect(store.get().chats).toEqual([]);
+});
+
 it("flush reports a failed cached write and retries it after storage is repaired", async () => {
   const chat = thread();
   await storage.add(chat);
@@ -274,9 +290,16 @@ it("reads back a review it let go of mid-session as it left it, and stops it onl
       ...thread(),
       // Saved before a thread held rounds: it migrates on reading.
       deepReview: {
-        scope: { label: "PR #4" },
+        scope: {
+          label: "PR #4",
+          target: {
+            kind: "pr",
+            ref: { owner: "relay", name: "relay", number: 4 },
+          },
+        },
         status: "reviewing",
         reviewers: [],
+        lead: { provider: "codex" },
       } as unknown,
       queue: [{ input: { id: "q", runtimeMode: "full-access" }, created: 1 }],
     } as unknown as ProjectChat;

@@ -1,6 +1,6 @@
-/* ---- The day's timer: a footer icon, and its panel on hover ---- */
+/* ---- The day's timer: an activity bar icon, and its panel on hover ---- */
 
-.sb .clockify-trigger {
+.clockify-trigger {
   position: relative;
 }
 /* Bottom right, where a status sits, not top right where a count would. */

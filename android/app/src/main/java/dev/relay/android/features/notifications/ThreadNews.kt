@@ -68,6 +68,8 @@ fun threadNews(
         if (answer?.status == "cancelled") continue
         // Settled while it ran: it finishes out of sight. A failure comes back to Activity.
         if (answer?.status != "failed" && (chatSettled(was) || chatSettled(c))) continue
+        // A reviewer reports to its review; the lead's answer there is the news.
+        if (answer?.status != "failed" && c.reviewer == true) continue
         news += if (answer?.status == "failed") {
             ThreadNews(
                 c.id, ThreadNews.Kind.Failed, c.title,

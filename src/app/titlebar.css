@@ -54,6 +54,14 @@
   background: var(--sidebar);
   border-right: 1px solid var(--sidebar-edge);
 }
+/* The main window's brand spans the activity bar and the sidebar under it. */
+.shell-brand {
+  position: relative;
+  width: calc(
+    var(--activity-bar-width) +
+      min(var(--sidebar-width, 250px), var(--sidebar-room, 100vw))
+  );
+}
 .project-titlebar-brand .traffic-space {
   width: 76px;
   flex-shrink: 0;
@@ -257,14 +265,150 @@
   background: transparent;
   border-right: 0;
 }
-/* A window this narrow needs the room for its controls more than the mark. */
-@media (max-width: 760px) {
-  .project-titlebar.sidebar-collapsed .project-titlebar-brand .relay-mark {
-    display: none;
-  }
+/* Folded, the mark gives its room to the title. */
+.project-titlebar.sidebar-collapsed
+  .shell-brand
+  :is(.relay-mark-trigger, .relay-mark) {
+  display: none;
 }
 
 /* Only under `npm run dev`; a drag region would swallow the right-click. */
 .relay-mark-trigger {
   -webkit-app-region: no-drag;
+}
+
+/* The version Relay runs, at the brand's end. */
+.shell-brand .sb-version {
+  border: 0;
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--muted);
+  background: none;
+  font-variant-numeric: tabular-nums;
+  transition:
+    color 0.16s,
+    background-color 0.16s;
+}
+.shell-brand .sb-version:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.shell-brand .sb-version[aria-busy] {
+  cursor: default;
+}
+/* The check's icons share the cell after the number. The ↻ rolls out of the
+   number on hover and turns while checking; ✓ or ! takes over after. */
+.sb-version-icon {
+  display: grid;
+  width: 12px;
+  height: 12px;
+}
+.sb-version-icon > * {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transition:
+    opacity 0.16s ease-out,
+    transform 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+.sb-version-turn {
+  display: inline-flex;
+  transform: translateX(-6px) rotate(-180deg) scale(0.6);
+}
+.sb-version:is(:hover, :focus-visible):not([data-shows]) .sb-version-turn,
+.sb-version[data-shows="checking"] .sb-version-turn {
+  opacity: 1;
+  transform: none;
+}
+/* Gone at once when the answer comes, so the spin's end doesn't snap. */
+.sb-version[data-shows="done"] .sb-version-turn,
+.sb-version[data-shows="failed"] .sb-version-turn {
+  transition: none;
+}
+.sb-version-spin {
+  display: inline-flex;
+}
+.sb-version[data-shows="checking"] .sb-version-spin {
+  animation: spin 1.2s steps(24) infinite;
+}
+.sb-version-done,
+.sb-version-failed {
+  transform: scale(0.4);
+}
+.sb-version[data-shows="done"] .sb-version-done,
+.sb-version[data-shows="failed"] .sb-version-failed {
+  opacity: 1;
+  transform: none;
+}
+/* Under `npm run dev`: the worktree Relay runs from and its restart, laid
+   over the brand's bottom right so the mark's row stays as it ships, with
+   the version moved up above them. */
+.brand-dev {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  /* Clear of the mark. */
+  left: 178px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+}
+.brand-dev:empty {
+  display: none;
+}
+.brand-dev svg {
+  width: 11px;
+  height: 11px;
+}
+/* The branch's name gets the room; the restart's tooltip says what it does. */
+.project-titlebar:not(.sidebar-collapsed) .brand-dev .dev-restart-label {
+  display: none;
+}
+/* Folded, the brand is only the toggle, so they follow it in the row. */
+.project-titlebar.sidebar-collapsed .brand-dev {
+  position: static;
+}
+.project-titlebar:not(.sidebar-collapsed)
+  .shell-brand:has(.brand-dev:not(:empty))
+  .sb-version {
+  align-self: flex-start;
+  margin-top: 5px;
+}
+/* Plain text; the background only answers hover. */
+.shell-brand .sb-update {
+  border: 0;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--accent);
+  background: none;
+  font-variant-numeric: tabular-nums;
+}
+/* A worktree's name: the one that gives way. */
+.shell-brand .sb-update.sb-dev-switch {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.sb-dev-switch > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sb-dev-switch > svg {
+  flex: none;
+}
+.shell-brand .sb-update:hover:not(:disabled) {
+  background: var(--hover);
 }

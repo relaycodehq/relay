@@ -10,7 +10,8 @@ import {
 // mid-answer, its reviewers work where the thread does, and the reports come
 // back to it once that answer ended.
 import { it, expect, vi, beforeEach, afterEach } from "vitest";
-import { writeFile, readFile } from "node:fs/promises";
+import { writeFile, readFile, readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -90,7 +91,8 @@ const input = (body: string) => ({
 const relay = (tool: string, args: object) =>
   input(`@codex fixture relay ${tool} ${JSON.stringify(args)}`);
 
-it("reviews where the thread works, and hands the reports to its agent once its answer ended", async () => {
+/** A thread in a worktree of its own whose agent ran a deep review there. */
+async function reviewedThread() {
   await writeFile(join(repo, "queue.ts"), "export const queue = [1];\n");
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(
@@ -108,6 +110,11 @@ it("reviews where the thread works, and hands the reports to its agent once its 
       expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
     { timeout: 20_000 },
   );
+  return { chat, folder };
+}
+
+it("reviews where the thread works, and hands the reports to its agent once its answer ended", async () => {
+  const { chat, folder } = await reviewedThread();
   const done = await chats.get(chat.id);
   const round = done.reviews![0]!;
   // Reviewed where the thread works, and never moved it anywhere else.
@@ -206,4 +213,42 @@ it("names the setups to pick from when the one asked for isn't saved", async () 
   expect(done.messages.at(-1)?.body).toContain(
     'There\'s no review setup named "Thorough". These are: "Quick".',
   );
+});
+
+it("deletes a reviewed thread with its reviewers and worktree folder, keeping the branch", async () => {
+  const { chat, folder } = await reviewedThread();
+  const reviewerId = (await chats.get(chat.id)).reviews![0]!.reviewers[0]!
+    .chatId;
+
+  await chats.triaging.delete(chat.id);
+
+  await expect(chats.get(chat.id)).rejects.toThrow("not found");
+  await expect(chats.get(reviewerId)).rejects.toThrow("not found");
+  expect(chats.list(projectId)).toEqual([]);
+  const saved = await readdir(join(root, "chats"), { recursive: true });
+  expect(
+    saved.filter((f) => f.includes(chat.id) || f.includes(reviewerId)),
+  ).toEqual([]);
+  expect(existsSync(folder)).toBe(false);
+  expect(git("branch", "--list", "relay/queue")).toContain("relay/queue");
+});
+
+it("won't delete a review while one of its reviewers answers a follow-up", async () => {
+  const { chat, folder } = await reviewedThread();
+  const reviewerId = (await chats.get(chat.id)).reviews![0]!.reviewers[0]!
+    .chatId;
+  await chats.send(reviewerId, input("@codex fixture wait for cancellation"));
+  await vi.waitFor(() =>
+    expect(
+      chats.list(projectId).find((c) => c.id === reviewerId),
+    ).toMatchObject({ running: true }),
+  );
+
+  await expect(chats.triaging.delete(chat.id)).rejects.toThrow(
+    "is still working",
+  );
+
+  await chats.cancel(reviewerId);
+  expect(existsSync(folder)).toBe(true);
+  await expect(chats.get(reviewerId)).resolves.toBeTruthy();
 });

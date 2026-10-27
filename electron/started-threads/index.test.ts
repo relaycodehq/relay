@@ -20,7 +20,7 @@ import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
 import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
 import { chatStatus } from "../project-chats";
-import { chatSummary } from "../project-chats/storage";
+import { chatSummary } from "../project-chats/chat-summaries";
 import { sentBy } from "../../shared/projects/send";
 import type { Turn } from "../../shared/turns";
 
@@ -292,6 +292,8 @@ test("any thread finds and reads every other without asking", async () => {
   });
   const archived = await api.create(site, { kind: "project" });
   chats.get(archived.id)!.archivedAt = 1;
+  const reviewer = await api.create(site, { kind: "project" });
+  chats.get(reviewer.id)!.reviewer = { parent: elsewhere.id, slot: 0 };
   const [mine] = parse(
     await call(threads, lead.id, "start_threads", {
       threads: [{ prompt: "Mine" }],

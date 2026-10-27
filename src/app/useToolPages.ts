@@ -3,7 +3,7 @@ import type { NavigationLock } from "../lib/navigation-lock";
 import { onOpenSchedule } from "../lib/open-schedule";
 import type { ShellNavigation, Surface } from "./useShellNavigation";
 
-/** The pages the sidebar's tools open in place of a project. */
+/** The pages the activity bar opens in place of a project. */
 type ToolPage = "usage" | "schedules";
 const isToolPage = (surface: Surface): surface is ToolPage =>
   surface === "usage" || surface === "schedules";

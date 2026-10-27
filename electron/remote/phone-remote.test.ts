@@ -9,7 +9,7 @@ import { Store } from "../app/store";
 import { PhoneRemote } from "./phone-remote";
 import { lanAddresses } from "./lan";
 import type { RemoteSettings } from "../app/store-types";
-import type { RemoteHost } from "./bridge";
+import type { RemoteHost } from "./remote-host";
 import {
   RemoteClient,
   Unanswered,

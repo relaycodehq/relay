@@ -110,10 +110,10 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
     var picked by remember { mutableStateOf(startingWhere(overview, asked)) }
     val available = availableWhere(picked, overview, asked)
     if (picked != available) picked = available
-    val projects = projectsByUse(overview?.projects.orEmpty(), overview?.chats.orEmpty())
+    val projects = projectsByUse(overview?.projects.orEmpty(), overview?.listed.orEmpty())
     val chosen = projects.find { it.id == picked }
     val recent = if (chosen == null) emptyList()
-    else overview?.chats.orEmpty().filter { it.projectId == chosen.id && !chatSettled(it) }.take(5)
+    else overview?.listed.orEmpty().filter { it.projectId == chosen.id && !chatSettled(it) }.take(5)
 
     // The desktop's New chat: an unused Scratchpad folder, or a fresh one. One
     // ask per screen, shared with a send that comes before its answer; after a

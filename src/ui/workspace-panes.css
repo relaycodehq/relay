@@ -434,7 +434,8 @@
   font-weight: 400;
   opacity: 0.6;
 }
-/* What the changes show against, when not the last commit; muted, beside the path. */
+/* What the changes show against, when not the last commit. Outlined in the
+   accent: it changes what every tinted line means, so it can't be easy to miss. */
 .editor-bar-baseline {
   display: flex;
   align-items: center;
@@ -442,14 +443,23 @@
   gap: 2px;
   min-width: 0;
   overflow: hidden;
-  color: var(--muted);
+  padding: 1px 1px 1px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
   font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
 }
 .editor-bar-baseline .icon-button {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  color: inherit;
+}
+.editor-bar-baseline:not(:has(.icon-button)) {
+  padding-right: 8px;
 }
 .editor-bar .symbol-actions {
   display: flex;

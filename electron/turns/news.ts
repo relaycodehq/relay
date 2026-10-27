@@ -181,6 +181,8 @@ export class TurnNews {
       this.threads.thread(turn.threadId) ?? this.threads.summary(turn.threadId);
     const news = chat && answerNews(turn, chat, answer);
     if (!news) return false;
+    // A reviewer reports to its review; the lead's answer there is the news.
+    if (news.kind === "finished" && chat.reviewer) return false;
     this.tell(news, chat.projectId, {
       turnId: turn.id,
       ...(news.kind === "finished" && chat.startedBy

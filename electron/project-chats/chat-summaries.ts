@@ -1,5 +1,100 @@
+import { createHash } from "node:crypto";
 import type { ProjectChatsEvent } from "../../shared/events";
-import type { ChatSummary } from "../../shared/projects";
+import type {
+  ChatSummary,
+  ProjectChat,
+  ScheduledChatMessage,
+} from "../../shared/projects";
+import { answeredHere } from "../../shared/projects";
+import { contextAgent } from "../../shared/recipient";
+import { notesMark } from "../../shared/thread-notes";
+import { reviewSummary } from "./review-summary";
+
+/** The earliest scheduled message still waiting to go out on its own. */
+export function nextSend(scheduled: ScheduledChatMessage[] = []) {
+  const times = scheduled.filter((s) => !s.error).map((s) => s.at);
+  return times.length ? Math.min(...times) : undefined;
+}
+
+/** A short mark of what waits in the thread's queue and Send later list; none when nothing does. */
+export function queueMark({
+  queue,
+  queuePaused,
+  scheduled,
+}: Pick<ProjectChat, "queue" | "queuePaused" | "scheduled">) {
+  if (!queue?.length && !scheduled?.length) return undefined;
+  const waiting = JSON.stringify([
+    (queue ?? []).map((q) => [q.input.id, q.error ?? ""]),
+    !!queuePaused,
+    (scheduled ?? []).map((s) => [s.input.id, s.at, s.error ?? ""]),
+  ]);
+  return createHash("sha1").update(waiting).digest("base64url").slice(0, 10);
+}
+
+/** A question the agent asked in the thread is still open. */
+export const asksYou = (messages: ProjectChat["messages"]) =>
+  messages.some((m) =>
+    m.questions?.some((group) => !group.answers && !group.dismissed),
+  );
+
+/** What the sidebar lists of a thread: everything but its conversation and the state behind it. */
+export function chatSummary({
+  messages,
+  requests,
+  queue,
+  queuePaused,
+  scheduled,
+  lastInput,
+  sessions,
+  forkedAt,
+  replySessions,
+  checkoutNotes,
+  scopeHeard,
+  movedIn,
+  setupNote,
+  sharedNote,
+  reviews,
+  findings: _findings,
+  handover,
+  outbox,
+  carriedIds,
+  notes,
+  setup,
+  // Worked out below; a stale copy on the thread itself doesn't count.
+  queueMark: _staleMark,
+  notesMark: _staleNotesMark,
+  setupMark: _staleSetupMark,
+  model: _staleModel,
+  asking,
+  ...summary
+}: ProjectChat): ChatSummary {
+  const answers = [...messages].reverse().filter(answeredHere);
+  const latest = answers[0];
+  const provider = latest?.provider;
+  const model = latest?.model?.name;
+  const holder = contextAgent(messages.filter((m) => !m.parentId));
+  const providers = [
+    ...new Set(answers.flatMap((m) => (m.provider ? [m.provider] : []))),
+  ];
+  const next = nextSend(scheduled);
+  const mark = queueMark({ queue, queuePaused, scheduled });
+  const notesAt = notesMark(notes);
+  const open = asksYou(messages);
+  return {
+    ...summary,
+    providers,
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    ...(holder ? { contextAgent: holder } : {}),
+    ...(next ? { nextSend: next } : {}),
+    ...(mark ? { queueMark: mark } : {}),
+    ...(notesAt ? { notesMark: notesAt } : {}),
+    ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
+    ...(open ? { asking: true as const } : {}),
+    ...reviewSummary(reviews),
+    empty: !messages.length && !scheduled?.length,
+  };
+}
 
 /**
  * Pushes a project's thread list when it reads differently, so the sidebar

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   lastComposerSettings,
   threadsSharing,
@@ -16,6 +16,7 @@ import { undos } from "../../lib/undo";
 import { errorMessage } from "../../../shared/error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { fetchChat } from "../../lib/chat-events";
+import { useThreadDelete } from "./DeleteThreadDialog";
 
 export type ThreadMenuAction =
   | { kind: "new" }
@@ -31,6 +32,7 @@ export type ThreadMenuAction =
   | { kind: "share-guest" }
   | { kind: "project-settings" }
   | { kind: "own-window"; open: boolean }
+  | { kind: "delete" }
   | { kind: "triage"; triage: ChatTriage };
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
@@ -42,6 +44,30 @@ const UNDOABLE = new Set<ChatTriage["kind"]>([
   "archive",
   "snooze",
 ]);
+
+/**
+ * How many files the thread's worktree has that the checkout lacks: what
+ * archiving would leave behind. None when others work in it, as it stays
+ * theirs, or when it's all landed, as it goes by itself then.
+ */
+async function worktreeWork(qc: QueryClient, c: ChatSummary) {
+  const w = c.worktree;
+  // A folder Relay didn't make is never deleted, so there's nothing to ask.
+  if (!w?.path || w.removedAt || w.cleanedUp || w.adopted) return 0;
+  const listed = qc
+    .getQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] })
+    .flatMap(([, list]) => list ?? []);
+  if (threadsSharing(listed, c).length) return 0;
+  // Git is asked only when the thread's Changes hasn't, and not for long:
+  // without an answer the thread archives and its worktree stays.
+  const status =
+    qc.getQueryData<WorktreeStatus>(["worktree", c.id]) ??
+    (await Promise.race([
+      api.projectWorktree(c.id).catch(() => null),
+      new Promise<null>((resolve) => setTimeout(resolve, 1000, null)),
+    ]));
+  return status && !status.removed ? status.files.length : 0;
+}
 
 /**
  * What the sidebar does to a thread: opening, triage, naming, forking it and
@@ -146,32 +172,9 @@ export function useThreadActions({
       refresh(c);
     }
   };
-  /**
-   * How many files the thread's worktree has that the checkout lacks: what
-   * archiving would leave behind. None when others work in it, as it stays
-   * theirs, or when it's all landed, as it goes by itself then.
-   */
-  const worktreeWork = async (c: ChatSummary) => {
-    const w = c.worktree;
-    // A folder Relay didn't make is never deleted, so there's nothing to ask.
-    if (!w?.path || w.removedAt || w.cleanedUp || w.adopted) return 0;
-    const listed = qc
-      .getQueriesData<ChatSummary[]>({ queryKey: ["project-chats"] })
-      .flatMap(([, list]) => list ?? []);
-    if (threadsSharing(listed, c).length) return 0;
-    // Git is asked only when the thread's Changes hasn't, and not for long:
-    // without an answer the thread archives and its worktree stays.
-    const status =
-      qc.getQueryData<WorktreeStatus>(["worktree", c.id]) ??
-      (await Promise.race([
-        api.projectWorktree(c.id).catch(() => null),
-        new Promise<null>((resolve) => setTimeout(resolve, 1000, null)),
-      ]));
-    return status && !status.removed ? status.files.length : 0;
-  };
   const triage = async (c: ChatSummary, action: ChatTriage) => {
     if (action.kind === "archive" && !action.dropWorktree) {
-      const files = await worktreeWork(c);
+      const files = await worktreeWork(qc, c);
       if (files) return setArchiving({ chat: c, files });
     }
     return apply(c, action);
@@ -182,19 +185,29 @@ export function useThreadActions({
    * running thread settles when done: it stays settled once its answer ends.
    */
   const settle = (c: ChatSummary) => {
-    let back: (() => void) | undefined;
-    if (c.id === chatId) {
-      const next = nextAfterSettle(active, c.id);
-      const p = projects.get(c.projectId);
-      if (next) open(next);
-      else if (p) onNew(p);
-      if (next || p)
-        back = () => {
-          if (latest.current.chatId === next?.id) latest.current.open(c);
-        };
-    }
+    const back = c.id === chatId ? moveOn(c) : undefined;
     void apply(c, { kind: c.running ? "settle-when-done" : "settle" }, back);
   };
+  /**
+   * Opens the thread after `c` in activity, or a new thread; what it returns
+   * comes back to `c` unless you went elsewhere meanwhile.
+   */
+  const moveOn = (c: ChatSummary) => {
+    const next = nextAfterSettle(active, c.id);
+    const p = projects.get(c.projectId);
+    if (next) open(next);
+    else if (p) onNew(p);
+    if (!next && !p) return undefined;
+    return () => {
+      if (latest.current.chatId === next?.id) latest.current.open(c);
+    };
+  };
+  const deletion = useThreadDelete({
+    openId: () => latest.current.chatId,
+    moveOn,
+    setError,
+    refresh,
+  });
   const rename = async (c: ChatSummary, title: string) => {
     patch(c, (entry) => ({ ...entry, title, renamed: true }));
     try {
@@ -305,6 +318,7 @@ export function useThreadActions({
       });
     },
     cancelArchive: () => setArchiving(undefined),
+    deletion,
     regenerating,
     reloading,
     /** Does what the thread's right-click menu picked. */
@@ -342,6 +356,8 @@ export function useThreadActions({
               ? api.openThreadWindow(c.projectId, c.id)
               : api.returnThreadWindow(c.id)
           ).catch(failed);
+        case "delete":
+          return deletion.ask(c);
         case "triage":
           return void triage(c, action.triage);
       }

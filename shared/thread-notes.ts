@@ -317,3 +317,27 @@ export function noteForAgent(note: ThreadNote) {
       : { text: note.text }),
   };
 }
+
+/** What a thread keeps in its notes, as the page and the phone ask for it. */
+export interface ThreadNotesApi {
+  /** What the user keeps at hand in the thread, oldest first. */
+  threadNotes(id: string): Promise<ThreadNote[]>;
+  /** Keeps markdown from the thread, kept from message `from`; the note already holding it, if one does. */
+  keepThreadNote(id: string, text: string, from?: string): Promise<ThreadNote>;
+  /** Pins a whole message as a note that points at it; the pin it already has, if any. */
+  pinThreadMessage(id: string, messageId: string): Promise<ThreadNote>;
+  /** Ticks item `item` (from 1) of a list note, or unticks it. */
+  tickThreadNote(
+    id: string,
+    note: string,
+    item: number,
+    done: boolean,
+  ): Promise<ThreadNote[]>;
+  /** A list note's items in a new order, numbered from 1; items left out are dropped. */
+  arrangeThreadNote(
+    id: string,
+    note: string,
+    order: number[],
+  ): Promise<ThreadNote[]>;
+  removeThreadNote(id: string, note: string): Promise<ThreadNote[]>;
+}

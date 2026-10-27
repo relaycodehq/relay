@@ -32,7 +32,7 @@ struct TraceTreeTests {
         case .branch(let kind, let heading, let rows):
             return [
                 "kind": "branch", "branch": .string(kind.rawValue), "heading": .string(heading),
-                "rows": .array(try rows.map(row)),
+                "rows": .array(try rows.map(row)), "failed": .bool(allFailed(rows)),
             ]
         }
     }

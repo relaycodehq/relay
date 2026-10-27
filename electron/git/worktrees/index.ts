@@ -8,6 +8,7 @@ export {
 export { retitleWorktree, newBranchProblem } from "./naming";
 export {
   createWorktree,
+  existingBranch,
   fetchStart,
   localBranchName,
   worktreeStartProblem,

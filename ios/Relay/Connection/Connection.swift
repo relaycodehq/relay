@@ -18,6 +18,8 @@ final class Connection {
     private(set) var failing = false
     private(set) var overview: RemoteOverview?
     private(set) var chats: [RemoteChatSummary] = []
+    /// The threads the lists show: a deep review's reviewers open from their review instead.
+    var listed: [RemoteChatSummary] { listedChats(chats) }
     /// Someone at the computer working in Relay.
     private(set) var present: Bool?
     /// Threads opened on this phone, kept current by message events.

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useQueries,
@@ -21,6 +21,7 @@ import {
   onServer,
   pullKey,
   verdictOf,
+  type Board,
   type BoardHost,
   type BoardInput,
   type BoardPull,
@@ -66,7 +67,7 @@ export function usePullBoard(
   const searchesKey = searches
     .map((q, i) => `${accounts[Math.floor(i / 3)].server}:${q.dataUpdatedAt}`)
     .join();
-  const board = useMemo(() => {
+  const fresh = useMemo(() => {
     const input: BoardInput["lists"] = {};
     linked.forEach((p, i) => {
       const { data, error } = lists[i];
@@ -91,6 +92,8 @@ export function usePullBoard(
     });
     return buildBoard({ hosts, projects, lists: input });
   }, [accounts, projects, searchesKey, listsKey]);
+  const pending = pendingHosts(accounts, searches, lists, linked);
+  const { board, holding } = useSettledBoard(fresh, !pending.length);
   const verdicts = useVerdicts(
     board.pulls.filter(
       (p) => p.relation === "mine" && p.state === "open" && !p.draft,
@@ -99,16 +102,6 @@ export function usePullBoard(
   const started = useStarted(
     board.pulls.filter((p) => p.relation === "review" && p.state === "open"),
   );
-  const pending = accounts
-    .filter(
-      (account, i) =>
-        searches.slice(i * 3, i * 3 + 3).some((q) => q.isPending) ||
-        lists.some(
-          (q, j) =>
-            q.isPending && linked[j].repository?.server === account.server,
-        ),
-    )
-    .map((account) => account.server);
   const failures = accounts.flatMap((account, i) => {
     const error =
       searches.slice(i * 3, i * 3 + 3).find((q) => q.error)?.error ??
@@ -123,7 +116,8 @@ export function usePullBoard(
     started,
     // A slow host mustn't hide the PRs another search or project already found.
     loading: !!pending.length && !board.pulls.length && !board.groups.length,
-    pending,
+    // A held board was complete, so nothing is pending on what shows.
+    pending: holding ? [] : pending,
     failures,
     fetching:
       searches.some((s) => s.isFetching) || lists.some((l) => l.isFetching),
@@ -143,6 +137,45 @@ export function usePullBoard(
       });
     },
   };
+}
+
+function pendingHosts(
+  accounts: Account[],
+  searches: { isPending: boolean }[],
+  lists: { isPending: boolean }[],
+  linked: Project[],
+) {
+  return accounts
+    .filter(
+      (account, i) =>
+        searches.slice(i * 3, i * 3 + 3).some((q) => q.isPending) ||
+        lists.some(
+          (q, j) =>
+            q.isPending && linked[j].repository?.server === account.server,
+        ),
+    )
+    .map((account) => account.server);
+}
+
+const HOLD_MS = 1500;
+
+/**
+ * Switching Open, Closed and All asks every host again. Until they have all
+ * answered, the last full board stays up, so cards don't pop in and reshuffle
+ * one host at a time. A slow host gets 1.5s before the partial board shows.
+ */
+function useSettledBoard(fresh: Board, settled: boolean) {
+  const last = useRef<Board | null>(null);
+  const [waitedOut, setWaitedOut] = useState(false);
+  useEffect(() => {
+    setWaitedOut(false);
+    if (settled) return;
+    const timer = setTimeout(() => setWaitedOut(true), HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [settled]);
+  if (settled) last.current = fresh;
+  const holding = !settled && !waitedOut && !!last.current;
+  return { board: holding ? last.current! : fresh, holding };
 }
 
 function useVerdicts(pulls: BoardPull[]) {

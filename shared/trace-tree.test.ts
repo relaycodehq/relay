@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { AgentActivity } from "./projects";
-import { actionVerb, rowsOf, runSummary, showsOutput, traceTree, type TracePiece } from "./trace-tree";
+import { actionVerb, allFailed, rowFailed, rowsOf, runSummary, showsOutput, traceTree, type TracePiece } from "./trace-tree";
 
 let n = 0;
 
@@ -145,3 +145,18 @@ it("names three kinds at most in a folded run's line", () => {
   expect(runSummary(calls)).toBe("Searched once, read 1 file and 3 more");
 });
 
+it("blames a failed command's last step, not every step it took", () => {
+  const rows = rowsOf([call("command", "git log -3; cat src/app/*", { status: "failed" })]);
+  expect(rows.map((row) => [row.action.kind, rowFailed(row)])).toEqual([
+    ["git", false],
+    ["read", true],
+  ]);
+});
+
+it("says a branch failed only when every row in it did", () => {
+  const failed = { status: "failed" } as const;
+  const some = rowsOf([call("command", "rg a", failed), call("command", "rg b"), call("command", "rg c")]);
+  const every = rowsOf([call("command", "rg a", failed), call("command", "rg b", failed)]);
+  expect(allFailed(some)).toBe(false);
+  expect(allFailed(every)).toBe(true);
+});

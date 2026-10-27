@@ -4,7 +4,7 @@ import { checkForUpdates, useUpdates } from "./updates";
 import { useRecent } from "./useRecent";
 
 /**
- * The version this Relay runs, at the footer's start. While no update is under
+ * The version this Relay runs, beside the mark. While no update is under
  * way a click looks for a newer release, which a ↻ rolling out of the number
  * on hover says; otherwise, and in a development build, it opens About.
  */

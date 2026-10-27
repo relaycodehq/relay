@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, Plus, Search } from "lucide-react";
+import { Bell, Plus } from "lucide-react";
 import type { SidebarView } from "../../../shared/types";
 import type {
   AgentProvider,
@@ -33,6 +33,7 @@ import {
   SCRATCHPAD,
   takesProject,
   useThreadFilter,
+  withoutRemoved,
 } from "./useThreadFilter";
 import { useThreadActions } from "./useThreadActions";
 import { useActivityKeys } from "./useActivityKeys";
@@ -42,10 +43,11 @@ import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
 import type { SettingsCategory } from "../settings/Settings";
-import { SidebarFooter } from "./SidebarFooter";
-import { ThreadActionDialogs } from "./ThreadActionDialogs";
+import { UpdateToasts } from "../updates/UpdateToasts";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchPalette } from "./SearchPalette";
+import { ThreadDialogs } from "./ThreadDialogs";
+import { onOpenThreadSearch } from "./thread-search";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
 import { ProjectsSection, Scratchpad } from "./SidebarProjects";
@@ -59,24 +61,17 @@ interface SidebarShowing {
   chatId?: string;
   /** The unsent thread that's open, when no thread is. */
   draftId?: string;
-  /** The Pull requests page. */
-  inbox?: boolean;
-  usage?: boolean;
-  schedules?: boolean;
 }
 
 export function ProjectSidebar({
   initialView,
   projects,
-  showing: { projectId, chatId, draftId, inbox, usage, schedules },
+  showing: { projectId, chatId, draftId },
   onOpen,
   onPickNew,
   onNewScratch,
   onSendDraft,
   onAdd,
-  onInbox,
-  onUsage,
-  onSchedules,
   onSettings,
   onAttention,
 }: {
@@ -95,9 +90,6 @@ export function ProjectSidebar({
   onSendDraft: () => void;
   /** Add a project, the menu having named how. */
   onAdd: (page: AddProjectPage) => void;
-  onInbox: () => void;
-  onUsage?: () => void;
-  onSchedules?: () => void;
   /** Opens Settings, at `category` when given, scoped to `projectId` for project settings. */
   onSettings: (category?: SettingsCategory, projectId?: string) => void;
   /** Strongest status mark among active threads, for the collapsed titlebar. */
@@ -119,7 +111,9 @@ export function ProjectSidebar({
   const [error, setError] = useState<string>();
   // The open thread's import offer stands its new projects in the tree.
   const plan = useShownPlan();
-  const treeProjects = plan ? plannedProjects(realProjects, plan) : realProjects;
+  const treeProjects = plan
+    ? plannedProjects(realProjects, plan)
+    : realProjects;
   const groups = useProjectGroups(
     treeProjects,
     folds.setOpen,
@@ -146,19 +140,13 @@ export function ProjectSidebar({
   // A deep review shows as one thread: its reviewers open from the review,
   // which stays picked while one of them is open.
   const everything = listed.filter((c) => !c.reviewer);
-  const shown =
-    listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
+  const shown = listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
   const [searching, setSearching] = useState(false);
   useShortcut("search-threads", true, () => setSearching(true));
+  useEffect(() => onOpenThreadSearch(() => setSearching(true)), []);
   const projectKey = (id: string) => (scratchIds.has(id) ? SCRATCHPAD : id);
   const filtering = useThreadFilter();
-  // A removed project's id would hide everything, with nothing to untick.
-  const filter = {
-    ...filtering.filter,
-    projects: filtering.filter.projects.filter(
-      (id) => id === SCRATCHPAD || byId.has(id),
-    ),
-  };
+  const filter = withoutRemoved(filtering.filter, byId);
   const filtered = !!(filter.projects.length || filter.agents.length);
   const all = filtered
     ? everything.filter((c) => passes(filter, projectKey(c.projectId), c))
@@ -241,7 +229,6 @@ export function ProjectSidebar({
   };
   const newThreadKeys = useShortcutLabel("new-thread");
   const activityKeys = useShortcutLabel("activity");
-  const searchKeys = useShortcutLabel("search-threads");
   // The filter offers the projects with threads, the one whose threads
   // changed last first, and the agents threads ran.
   const latest = new Map<string, { project: Project; at: number }>();
@@ -275,14 +262,6 @@ export function ProjectSidebar({
             "Threads"
           )}
         </h2>
-        <button
-          className="sb-top-button"
-          aria-label="Search threads"
-          title={`Search threads  ${searchKeys}`.trim()}
-          onClick={() => setSearching(true)}
-        >
-          <Search size={15} />
-        </button>
         <FilterMenu
           state={filtering}
           filter={filter}
@@ -315,18 +294,22 @@ export function ProjectSidebar({
       {/* One scroller for every view, so it keeps its place across them. */}
       <div className={activity ? "sb-scroll sb-activity" : "sb-scroll"}>
         {activity ? (
-          <ActivityView
-            rows={rows}
-            sections={sections}
-            families={families}
-            drafts={drafts}
-            away={away}
-            hints={cmdHeld}
-            shelves={shelves}
-            draftId={draftId}
-            onDraft={(p, id) => onOpen(p, undefined, id)}
-            onSendDraft={onSendDraft}
-          />
+          <>
+            {/* The Threads view shows it under its projects instead. */}
+            {error && <p className="sb-note error">{error}</p>}
+            <ActivityView
+              rows={rows}
+              sections={sections}
+              families={families}
+              drafts={drafts}
+              away={away}
+              hints={cmdHeld}
+              shelves={shelves}
+              draftId={draftId}
+              onDraft={(p, id) => onOpen(p, undefined, id)}
+              onSendDraft={onSendDraft}
+            />
+          </>
         ) : (
           <>
             {takesProject(filter, SCRATCHPAD) && (
@@ -370,19 +353,11 @@ export function ProjectSidebar({
           onClose={() => setSearching(false)}
         />
       )}
-      <ThreadActionDialogs actions={actions} />
-      <SidebarFooter
-        projectId={projectId}
-        projectName={projects.find((p) => p.id === projectId)?.name}
-        chatId={chatId}
-        inbox={inbox}
-        onInbox={onInbox}
-        usage={usage}
-        onUsage={onUsage}
-        schedules={schedules}
-        onSchedules={onSchedules}
-        onSettings={onSettings}
-      />
+      <ThreadDialogs actions={actions} />
+      {/* Relay's and the agents' updates rise from the sidebar's bottom edge. */}
+      <div className="sb-footer-area">
+        <UpdateToasts onAgentDetails={() => onSettings("agents")} />
+      </div>
     </div>
   );
 }

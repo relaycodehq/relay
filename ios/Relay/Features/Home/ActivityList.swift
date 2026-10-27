@@ -45,7 +45,7 @@ struct ActivityList: View {
             return (draft, project)
         }
         .sorted { $0.0.at > $1.0.at }
-        let chats = connection.chats.filter(filter.keeps)
+        let chats = connection.listed.filter(filter.keeps)
         let sections = draftsFirst(chatActivitySections(chats, now: now), all: chats, drafted: drafted)
         let families = startedFamilies(sections.active, settled: sections.settled)
         let folds = folds

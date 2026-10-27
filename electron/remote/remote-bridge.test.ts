@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { RemoteBridge, toRemoteDiff, type RemoteHost } from "./bridge";
+import { RemoteBridge } from "./bridge";
+import { toRemoteDiff } from "./remote-diff";
+import type { RemoteHost } from "./remote-host";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { SubagentDetail } from "../../shared/subagents";
 import type {

@@ -34,7 +34,7 @@ function planner(autoCompact = { idle: true, cold: true }) {
   const compact = vi.fn(async () => {});
   const core = {
     store: { get: () => ({ chats: [chat], autoCompact }) },
-    storage: { load: async () => chat },
+    storage: { has: () => true, load: async () => chat },
     active: { has: () => false },
     control: threadControl(),
     closing: () => false,

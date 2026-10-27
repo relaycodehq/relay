@@ -1,4 +1,7 @@
 import { defineConfig } from "vitest/config";
+import { dropInheritedEnv } from "./tests/fixtures/inherited-env";
+
+dropInheritedEnv();
 
 export default defineConfig({
   test: {

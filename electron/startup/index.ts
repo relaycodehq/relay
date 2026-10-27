@@ -36,7 +36,7 @@ import type { ProjectAdding } from "../project-add";
 import type { AppPrefs } from "../settings";
 import { Projects } from "../projects/projects";
 import { pullRequestHosts } from "../pull-requests/setup";
-import type { RemoteHost } from "../remote/bridge";
+import type { RemoteHost } from "../remote/remote-host";
 import { PhoneRemote } from "../remote/phone-remote";
 import { applyLinkedTools } from "../source-control";
 import {

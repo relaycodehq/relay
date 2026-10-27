@@ -36,7 +36,7 @@ private const val SCRATCH_PAGE = 5
 /** Every Scratchpad chat has a folder of its own; together they're one list, newest first. */
 fun scratchChats(overview: RemoteOverview): List<RemoteChatSummary> {
     val ids = overview.projects.filter { it.scratch == true }.map { it.id }.toSet()
-    return overview.chats.filter { it.projectId in ids }.sortedByDescending { it.updated }
+    return overview.listed.filter { it.projectId in ids }.sortedByDescending { it.updated }
 }
 
 /** The desktop's sidebar: projects under their virtual folders, "Projects" first. */
@@ -94,7 +94,7 @@ fun ProjectsList(
     var allScratch by remember { mutableStateOf(false) }
     val scratch = remember(overview) { scratchChats(overview) }
     val folders = remember(overview.projects) { projectFolders(overview.projects) }
-    val byProject = remember(overview.chats) { overview.chats.groupBy { it.projectId } }
+    val byProject = remember(overview.chats) { overview.listed.groupBy { it.projectId } }
 
     LazyColumn(modifier.fillMaxSize(), contentPadding = listPadding(bottom = bottom)) {
         item(key = "scratch-head") {

@@ -20,6 +20,14 @@ it("caps a failed command's output and keeps its arguments out", () => {
   expect(JSON.stringify(activity)).not.toContain("hidden");
 });
 
+it("takes a search that found nothing as an answer, and one that broke as a failure", () => {
+  const search = (command: string, exitCode: number) =>
+    codexActivity("item/completed", { id: "s", type: "commandExecution", command, status: "failed", exitCode })!.status;
+  expect(search("/bin/zsh -lc 'rg -n Missing memories/MEMORY.md'", 1)).toBe("complete");
+  expect(search("rg -n Missing memories/MEMORY.md", 2)).toBe("failed");
+  expect(search("rg -n Missing src && cat src/a.ts", 1)).toBe("failed");
+});
+
 it("names a file change by its path, keeps its patch to show, and skips reasoning", () => {
   expect(
     codexActivity("item/started", {

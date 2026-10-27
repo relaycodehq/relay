@@ -222,7 +222,13 @@ it("finishes a deep review whose lead carried on through a restart", async () =>
   saved.messages = [lead];
   saved.reviews = [
     {
-      scope: { label: "PR #4" },
+      scope: {
+        label: "PR #4",
+        target: {
+          kind: "pr",
+          ref: { owner: "relay", name: "relay", number: 4 },
+        },
+      },
       request: "request",
       reviewers: [],
       lead: { provider: "codex", choice: input("").choice },

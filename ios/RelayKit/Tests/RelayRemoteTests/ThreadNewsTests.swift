@@ -32,6 +32,15 @@ struct ThreadNewsTests {
         #expect(threadNews(before: started, now: [chat("a")], answers: answers, at: 0).isEmpty)
     }
 
+    @Test func keepsAReviewersFinishedReportQuietButTellsOfItsFailure() {
+        let reviewer: [String: JSON] = ["reviewer": true]
+        let ran: [String: JSON] = ["reviewer": true, "running": true]
+        let news = threadNews(
+            before: list(chat("a", ran), chat("b", ran)), now: [chat("a", updated: 20, reviewer), chat("b", updated: 20, reviewer)],
+            answers: ["a": answer(body: "Found two bugs"), "b": answer("failed", error: "Claude's login expired.")], at: 0)
+        #expect(news == [ThreadNews("b", .failed, "Thread b", "Claude's login expired.")])
+    }
+
     @Test func tellsOfAnAnswerWhoseEndWasListedWhileTheThreadStillRan() {
         let news = threadNews(
             before: list(chat("a", updated: 20, ["running": true, "runningSince": 15])), now: [chat("a", updated: 20)],

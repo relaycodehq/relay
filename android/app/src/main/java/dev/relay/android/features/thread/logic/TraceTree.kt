@@ -48,10 +48,22 @@ fun verdictStopped(row: TraceRow): Boolean {
     return ranChecks && !row.action.failed && row.calls.any { it.status == "stopped" }
 }
 
-/** A test or check fails by its result; anything else only when its call failed. */
+/** A test or check fails by its result; anything else only when its call failed there. */
 fun rowFailed(row: TraceRow): Boolean {
     val ranChecks = row.action.kind == "test" || row.action.kind == "check"
-    return if (ranChecks) row.action.failed else row.calls.any { it.status == "failed" }
+    return if (ranChecks) row.action.failed else row.calls.any { it.status == "failed" && failedAt(it, row.action) }
+}
+
+/** Every row failed: only then does the branch or run holding them say it failed. */
+fun allFailed(rows: List<TraceRow>) = rows.isNotEmpty() && rows.all(::rowFailed)
+
+/**
+ * A shell exits with its last command's status, so a failed call failed at
+ * the last thing it did: in `git log; cat a.ts`, the cat, not the log.
+ */
+private fun failedAt(call: AgentActivity, action: CallAction): Boolean {
+    val last = shownActions(call).lastOrNull() ?: return true
+    return sameThing(last.value, action)
 }
 
 /** A run's tree and, once it's longer than two lines, its folded line. */

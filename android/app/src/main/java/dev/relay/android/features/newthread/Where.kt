@@ -32,7 +32,7 @@ fun startingWhere(overview: RemoteOverview?, asked: Asked): Where? {
     if (overview == null) return null
     fun of(id: String?) = overview.projects.find { it.id == id }
     // From a Scratchpad thread, /new means another Scratchpad chat, not that folder.
-    val wanted = of(asked.project) ?: of(overview.chats.firstOrNull()?.projectId)
+    val wanted = of(asked.project) ?: of(overview.listed.firstOrNull()?.projectId)
     if (wanted != null) return if (wanted.scratch == true) SCRATCH else wanted.id
     return overview.projects.find { it.scratch != true }?.id ?: SCRATCH
 }

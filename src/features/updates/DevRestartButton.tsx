@@ -3,7 +3,7 @@ import { RotateCw } from "lucide-react";
 import { api } from "../../lib/api";
 
 /**
- * Sidebar footer control under `npm run dev`: shows once the main process's
+ * Titlebar control under `npm run dev`, by the mark: shows once the main process's
  * sources changed since Relay started, which a window reload doesn't pick up.
  */
 export function DevRestartButton() {
@@ -26,6 +26,7 @@ export function DevRestartButton() {
     <button
       type="button"
       className="sb-update"
+      aria-label="Restart Relay"
       disabled={restarting}
       title={`Changed since Relay started: ${stale.join(", ")}. Restart to load it; agents keep running.`}
       onClick={() => {
@@ -34,7 +35,7 @@ export function DevRestartButton() {
       }}
     >
       <RotateCw size={13} />
-      Restart
+      <span className="dev-restart-label">Restart</span>
     </button>
   );
 }

@@ -10,6 +10,7 @@ import {
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 import { highlightTree } from "@lezer/highlight";
 import { addedLines, changedWhole } from "./added-lines";
+import { inlineDiffTheme } from "./inline-diff-theme";
 import { lineFirstDiff } from "./line-first-diff";
 
 /** Longer deletions show without syntax colours, as the merge view does. */
@@ -162,5 +163,6 @@ export function inlineDiff(original: string): Extension {
     mergeView.filter((part) => !(part instanceof StateField)),
     deletedLines,
     addedLines,
+    inlineDiffTheme,
   ];
 }

@@ -24,7 +24,13 @@ import {
 } from "../lib/workspace-panes";
 import { CiStatusIcon } from "./CiStatus";
 import { ProjectBadge } from "../features/projects/ProjectBadge";
-import { DevSwitchMark } from "../features/sidebar/DevSwitchMenu";
+import {
+  DevCheckoutLabel,
+  DevSwitchMark,
+} from "../features/sidebar/DevSwitchMenu";
+import { DevRestartButton } from "../features/updates/DevRestartButton";
+import { RunningVersion } from "../features/updates/RunningVersion";
+import { openSettings } from "../lib/settings-page";
 import { RelayMark } from "../ui/RelayMark";
 import { PaneToggles } from "../ui/WorkspacePanes";
 import "./titlebar.css";
@@ -34,7 +40,10 @@ import {
   useWakeComputer,
 } from "../features/handoff/usePairedComputers";
 
-/** The sidebar's toggle and the mark; the toggle echoes the sidebar's dot while it's hidden. */
+/**
+ * The sidebar's toggle, the mark and the version Relay runs, over the activity
+ * bar and the sidebar; the toggle echoes the sidebar's dot while it's hidden.
+ */
 export function TitlebarBrand({
   sidebar: { hidden, toggle, peekOpen, peekClose },
   attention,
@@ -53,7 +62,7 @@ export function TitlebarBrand({
         : "New activity"
       : undefined;
   return (
-    <div className="project-titlebar-brand">
+    <div className="project-titlebar-brand shell-brand">
       <span className="traffic-space" />
       <button
         type="button"
@@ -81,6 +90,12 @@ export function TitlebarBrand({
       <DevSwitchMark>
         <RelayMark size={38} />
       </DevSwitchMark>
+      <RunningVersion onAbout={() => openSettings("about")} />
+      {/* Under `npm run dev` only; empty, it takes no room. */}
+      <div className="brand-dev">
+        <DevCheckoutLabel />
+        <DevRestartButton />
+      </div>
     </div>
   );
 }

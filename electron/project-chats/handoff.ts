@@ -24,7 +24,7 @@ import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import type { ChatSchedule } from "./schedule";
 import { agentSession, sessionInput } from "./sessions";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 
 /** Where a thread stands between computers, or nothing when it's simply here. */
 function elsewhere(chat: ChatSummary) {
