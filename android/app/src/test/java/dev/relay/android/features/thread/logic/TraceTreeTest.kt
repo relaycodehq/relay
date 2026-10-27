@@ -95,6 +95,7 @@ class TraceTreeTest {
             is TracePiece.Branch -> {
                 assertEquals("$at branch", want.string("branch"), got.kind.name.lowercase())
                 assertEquals("$at heading", want.string("heading"), got.heading)
+                assertEquals("$at failed", want.getValue("failed").jsonPrimitive.boolean, allFailed(got.rows))
                 got.rows
             }
         }

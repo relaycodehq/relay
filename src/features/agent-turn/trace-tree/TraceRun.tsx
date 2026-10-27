@@ -6,8 +6,8 @@ import type { AgentActivity } from "../../../../shared/projects";
 import { baseName } from "../../../../shared/shell-words";
 import {
   actionVerb,
+  allFailed,
   branchOf,
-  rowFailed,
   traceRun,
   type BranchKind,
   type TracePiece,
@@ -48,7 +48,7 @@ const branchIcons: Record<BranchKind, keyof typeof actionIcons> = {
 
 function Branch({ piece, onChanges }: { piece: Extract<TracePiece, { kind: "branch" }>; onChanges: () => void }) {
   const Icon = actionIcons[branchIcons[piece.branch]];
-  const failed = piece.rows.some(rowFailed);
+  const failed = allFailed(piece.rows);
   return (
     <Fold
       className={`agent-step trace-branch${failed ? " failed" : ""}`}
@@ -107,7 +107,7 @@ function Pieces({ pieces, onChanges }: { pieces: TracePiece[]; onChanges: () => 
 }
 
 const piecesFailed = (pieces: TracePiece[]) =>
-  pieces.some((piece) => (piece.kind === "row" ? rowFailed(piece.row) : piece.rows.some(rowFailed)));
+  allFailed(pieces.flatMap((piece) => (piece.kind === "row" ? [piece.row] : piece.rows)));
 
 /** What kind the run started with, for its folded line's icon. */
 function firstKind(piece: TracePiece): BranchKind {

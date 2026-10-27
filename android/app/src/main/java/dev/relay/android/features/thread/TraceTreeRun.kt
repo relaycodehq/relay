@@ -42,6 +42,7 @@ import dev.relay.android.features.thread.logic.actionVerb
 import dev.relay.android.features.thread.logic.branchOf
 import dev.relay.android.features.thread.logic.readCode
 import dev.relay.android.features.thread.logic.readCodeWhenWhole
+import dev.relay.android.features.thread.logic.allFailed
 import dev.relay.android.features.thread.logic.rowFailed
 import dev.relay.android.features.thread.logic.showsOutput
 import dev.relay.android.features.thread.logic.rowRunning
@@ -78,7 +79,7 @@ internal fun ClosedRun(calls: List<AgentActivity>, only: Boolean) {
     if (summary == null || only) return Column { for (piece in run.pieces) key(piece.id) { Piece(piece) } }
     var open by rememberSaveable { mutableStateOf(false) }
     val first = run.pieces.first()
-    val failed = run.pieces.any { piece -> rowsIn(piece).any(::rowFailed) }
+    val failed = allFailed(run.pieces.flatMap(::rowsIn))
     Column {
         FoldHeading(branchIcon(firstKind(first), rowsIn(first)), summary, failed, open, onToggle = { open = !open })
         if (open) run.pieces.forEachIndexed { index, piece ->
@@ -223,7 +224,7 @@ private fun CommandLine(command: String) {
 @Composable
 private fun Branch(branch: TracePiece.Branch, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
-    val failed = branch.rows.any(::rowFailed)
+    val failed = allFailed(branch.rows)
     Column(modifier) {
         FoldHeading(branchIcon(branch.kind, branch.rows), branch.heading, failed, open, onToggle = { open = !open })
         if (open) branch.rows.forEachIndexed { index, row ->
@@ -233,7 +234,7 @@ private fun Branch(branch: TracePiece.Branch, modifier: Modifier = Modifier) {
     }
 }
 
-/** A branch's or a folded run's line; any failed row under it turns its words red. */
+/** A branch's or a folded run's line; red only when every row under it failed. */
 @Composable
 private fun FoldHeading(icon: ImageVector, text: String, failed: Boolean, open: Boolean, onToggle: () -> Unit) {
     val c = RelayTheme.colors

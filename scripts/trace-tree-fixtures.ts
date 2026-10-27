@@ -9,6 +9,7 @@ import { callActions } from "../shared/call-actions";
 import { readCode } from "../shared/read-code";
 import {
   actionVerb,
+  allFailed,
   rowFailed,
   rowRunning,
   runSummary,
@@ -108,6 +109,15 @@ const cases: { name: string; calls: AgentActivity[] }[] = [
     ],
   },
   {
+    name: "a failed command's last step and a branch where every search failed",
+    calls: [
+      call("command", "git log -3; cat src/app/*", { status: "failed" }),
+      call("command", "rg -n Missing a", { status: "failed" }),
+      call("command", "rg -n Missing b", { status: "failed" }),
+      call("command", "rg -n Missing c", { status: "failed" }),
+    ],
+  },
+  {
     name: "a stopped test, a file read in part then whole, a row behind a running call",
     calls: [
       call("command", "npm test", { status: "stopped" }),
@@ -171,7 +181,7 @@ const piece = (p: TracePiece) => {
     case "pair":
       return { kind: "pair", rows: p.rows.map(row) };
     case "branch":
-      return { kind: "branch", branch: p.branch, heading: p.heading, rows: p.rows.map(row) };
+      return { kind: "branch", branch: p.branch, heading: p.heading, rows: p.rows.map(row), failed: allFailed(p.rows) };
   }
 };
 
