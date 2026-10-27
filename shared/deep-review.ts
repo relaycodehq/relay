@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { runtimeModeSchema, type RuntimeMode } from "./agent-modes";
 import {
+  type AgentProvider,
   agentName,
   agentProviderSchema,
   agents,
@@ -170,6 +171,8 @@ export interface ReviewScope {
   /** The reviewed changes run from `base` to `head` (commits, branches, PRs). */
   base?: string;
   head?: string;
+  /** A branch review's two branches, named without the remote they come from. */
+  branches?: { head: string; base: string };
   stats?: {
     files: number;
     additions: number;
@@ -198,13 +201,42 @@ export interface ReviewCheckout {
   pr?: { number: number; head?: string };
 }
 
-/** The review's topic, kept within the editable thread name's limit. */
+/** A thread name made of `text`, on one line and within the editable name's limit. */
+function threadName(text: string) {
+  const name = text.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ");
+  return name.length > 120 ? `${name.slice(0, 119).trimEnd()}…` : name;
+}
+
+/**
+ * What the review is about, in words: the branch, or the commit's or pull
+ * request's subject. Its card shows the refs (`share → dev`, `PR #42`)
+ * beside it, so the name doesn't repeat them; uncommitted changes have no
+ * name of their own.
+ */
+function reviewTopic({ target, branches, branch, title, label }: ReviewScope) {
+  switch (target.kind) {
+    case "uncommitted":
+      return undefined;
+    case "branch":
+      return branches?.head ?? target.head ?? branch ?? undefined;
+    case "commit":
+    case "pr":
+      return title?.trim() || label;
+  }
+}
+
 export function reviewThreadTitle(scope: ReviewScope): string {
-  const title =
-    `Deep review · ${scope.label}${scope.title?.trim() ? ` · ${scope.title.trim()}` : ""}`
-      .replace(/[\x00-\x1f\x7f]/g, " ")
-      .replace(/\s+/g, " ");
-  return title.length > 120 ? `${title.slice(0, 119).trimEnd()}…` : title;
+  const topic = reviewTopic(scope);
+  return threadName(topic ? `Deep review · ${topic}` : "Deep review");
+}
+
+/** What reviews were named before: their label, later followed by the subject. */
+export function earlierReviewTitles(scope: ReviewScope) {
+  const subject = scope.title?.trim();
+  return [
+    threadName(`Deep review · ${scope.label}`),
+    threadName(`Deep review · ${scope.label}${subject ? ` · ${subject}` : ""}`),
+  ];
 }
 
 /**
@@ -269,6 +301,37 @@ export const hasNextPass = (state: DeepReviewState) =>
 /** The thread's latest round: the one Stop, Resume and following its branch act on. */
 export const latestReview = <R>(chat: { reviews?: R[] }) =>
   chat.reviews?.at(-1);
+
+/** A deep review as its sidebar card shows it. */
+export interface ReviewCard {
+  /** "Uncommitted changes", "Commit 1a2b3c4", "PR #42"; a branch review shows `branches`. */
+  label: string;
+  branches?: { head: string; base: string };
+  lead: AgentProvider;
+  reviewers: number;
+}
+
+export function reviewCard({
+  scope,
+  lead,
+  reviewers,
+}: DeepReviewState): ReviewCard {
+  const { target } = scope;
+  // Reviews from before `branches` was kept show their branches as named.
+  const head = target.kind === "branch" ? (target.head ?? scope.branch) : null;
+  const branches =
+    scope.branches ??
+    (target.kind === "branch" && head
+      ? { head, base: target.base }
+      : undefined);
+  return {
+    label: scope.label,
+    ...(branches ? { branches } : {}),
+    lead: lead.provider,
+    // A split review lists each reviewer once a pass.
+    reviewers: reviewers.filter((r) => !r.pass).length,
+  };
+}
 
 /**
  * The round a deep review's own thread works in: the latest that checked the

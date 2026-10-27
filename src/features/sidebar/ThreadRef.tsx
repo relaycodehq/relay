@@ -6,8 +6,9 @@ import {
 } from "lucide-react";
 import { threadWorktree, type ChatSummary } from "../../../shared/projects";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
+import { ReviewedChanges } from "./ReviewedChanges";
 
-/** The thread's branch or detached commit, with only confirmed merges marked. */
+/** The thread's branch or detached commit, with only confirmed merges marked; a deep review's, what it covers. */
 export function ThreadRef({
   chat,
   branchIcon = false,
@@ -16,6 +17,7 @@ export function ThreadRef({
   /** Projects' branch lines have an icon even in the project checkout. */
   branchIcon?: boolean;
 }) {
+  if (chat.reviewCard) return <ReviewedChanges card={chat.reviewCard} />;
   if (!chat.branch)
     return (
       <span

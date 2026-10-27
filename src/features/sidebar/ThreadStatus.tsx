@@ -9,6 +9,7 @@ import {
   wokeUnread,
 } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
+import type { ReviewCard } from "../../../shared/deep-review";
 import { agentsSince } from "../../../shared/waiting";
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { useNow } from "../../lib/useNow";
@@ -17,6 +18,7 @@ import { Spinner } from "../../ui/ui";
 
 /** Every agent used in the thread, most recently used first. */
 export function CardAgents({ chat }: { chat: ChatSummary }) {
+  if (chat.reviewCard) return <ReviewAgents card={chat.reviewCard} />;
   const agents = [
     ...new Set([
       ...(chat.providers ?? (chat.provider ? [chat.provider] : [])),
@@ -29,6 +31,22 @@ export function CardAgents({ chat }: { chat: ChatSummary }) {
       {agents.map((p) => (
         <ProviderIcon key={p} provider={p} />
       ))}
+    </span>
+  );
+}
+
+/** A deep review's lead, and how many reviewers it has besides. */
+function ReviewAgents({ card }: { card: ReviewCard }) {
+  const reviewers = `${card.reviewers} ${card.reviewers === 1 ? "reviewer" : "reviewers"}`;
+  return (
+    <span
+      className="sb-card-provider"
+      title={`${agentName(card.lead)} leads · ${reviewers}`}
+    >
+      <ProviderIcon provider={card.lead} />
+      {card.reviewers > 0 && (
+        <span className="sb-review-count">+{card.reviewers}</span>
+      )}
     </span>
   );
 }

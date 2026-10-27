@@ -17,7 +17,6 @@ import type {
   ProjectChatSend,
   ScheduledChatMessage,
 } from "../../shared/projects";
-import { reviewFolder } from "../../shared/projects";
 import { reviewerTitle } from "../../shared/deep-review";
 import { contextAgent } from "../../shared/recipient";
 import { notesMark } from "../../shared/thread-notes";
@@ -33,8 +32,8 @@ import {
   type SavedBase,
 } from "./live-turn";
 import { reviveChat } from "./revive";
+import { reviewSummary } from "./review-summary";
 import { migrateReviewRounds } from "../deep-review";
-import { latestReview } from "../../shared/deep-review";
 import { ShownImages } from "./shown-images";
 import { writeFileAtomic } from "../util/atomic-write";
 
@@ -112,7 +111,6 @@ export function chatSummary({
   const mark = queueMark({ queue, queuePaused, scheduled });
   const notesAt = notesMark(notes);
   const open = asksYou(messages);
-  const review = reviewFolder({ reviews });
   return {
     ...summary,
     providers,
@@ -124,10 +122,7 @@ export function chatSummary({
     ...(notesAt ? { notesMark: notesAt } : {}),
     ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
     ...(open ? { asking: true as const } : {}),
-    ...(review ? { reviewFolder: review } : {}),
-    ...(latestReview({ reviews })?.status === "reviewing"
-      ? { reviewing: true as const }
-      : {}),
+    ...reviewSummary(reviews),
     empty: !messages.length && !scheduled?.length,
   };
 }

@@ -45,19 +45,33 @@ const review = (): NonNullable<ProjectChat["reviews"]>[number] => ({
   status: "done",
 });
 
-it("names reviews after their PR or commit, keeping valid bounded thread names", () => {
+it("names reviews after what they're about, leaving the refs to the card", () => {
   expect(reviewThreadTitle(prScope)).toBe(
-    "Deep review · PR #4 · Linked folders and an add-project palette",
+    "Deep review · Linked folders and an add-project palette",
   );
   expect(reviewThreadTitle({ ...prScope, title: undefined })).toBe(
     "Deep review · PR #4",
   );
   expect(
     reviewThreadTitle({ ...prScope, title: "Fix\n\tlinked folders" }),
-  ).toBe("Deep review · PR #4 · Fix linked folders");
+  ).toBe("Deep review · Fix linked folders");
   const long = reviewThreadTitle({ ...prScope, title: "A".repeat(200) });
   expect(long).toHaveLength(120);
   expect(long.endsWith("…")).toBe(true);
+  const branch: ReviewScope = {
+    target: { kind: "branch", head: "relay/share", base: "dev" },
+    label: "relay/share → dev",
+    branch: "dev",
+    branches: { head: "share", base: "dev" },
+  };
+  expect(reviewThreadTitle(branch)).toBe("Deep review · share");
+  expect(
+    reviewThreadTitle({
+      target: { kind: "uncommitted" },
+      label: "Uncommitted changes",
+      branch: "dev",
+    }),
+  ).toBe("Deep review");
 });
 
 it("adds the saved PR title to an old review without changing its activity date", () => {
@@ -70,6 +84,18 @@ it("adds the saved PR title to an old review without changing its activity date"
   expect(chat.title).toBe(reviewThreadTitle(prScope));
   expect(chat.updated).toBe(1);
   expect(reviveChat(chat, () => false)).toBe(false);
+});
+
+it("renames a review still named the way reviews were before", () => {
+  const chat = thread({
+    title: "Deep review · PR #4 · Linked folders and an add-project palette",
+    scope: { kind: "review" },
+    reviews: [review()],
+  });
+  expect(reviveChat(chat, () => false)).toBe(true);
+  expect(chat.title).toBe(
+    "Deep review · Linked folders and an add-project palette",
+  );
 });
 
 it("keeps manually renamed and generated review names", () => {

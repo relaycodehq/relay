@@ -2,6 +2,7 @@ import { savedRuntimeMode } from "../../shared/agent-modes";
 import {
   latestReview,
   reviewRunning,
+  earlierReviewTitles,
   reviewThreadTitle,
 } from "../../shared/deep-review";
 import { migrateAgentSessions } from "../../shared/projects";
@@ -55,12 +56,12 @@ export function reviveChat(
       interrupted = true;
     }
   }
-  // The thread is named after its first round.
+  // The thread is named after its first round, as reviews are named now.
   const first = chat.reviews?.[0];
   if (
     first &&
     !chat.renamed &&
-    chat.title === `Deep review · ${first.scope.label}`
+    earlierReviewTitles(first.scope).includes(chat.title)
   ) {
     const title = reviewThreadTitle(first.scope);
     if (title !== chat.title) {

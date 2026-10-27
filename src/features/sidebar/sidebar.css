@@ -1126,6 +1126,14 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A deep review's branches: the reviewed one gives way, the base stays whole. */
+.sb-reviewed-head {
+  flex: 0 1 auto;
+}
+.sb-reviewed-base {
+  flex: none;
+  white-space: nowrap;
+}
 .sb-card-state {
   flex: none;
   display: inline-flex;
@@ -1256,6 +1264,10 @@
 .sb-card-provider svg {
   width: 13px;
   height: 13px;
+}
+.sb-review-count {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Threads a thread's agent started hang off a guide line under its card. */
