@@ -49,6 +49,8 @@ test("the activity bar folds away with the sidebar and peeks back with it", asyn
     await page.mouse.move(4, middle);
     await expect(bar).toBeVisible();
     await expect(sidebar).toBeVisible();
+    // Slid all the way in, so the pointer lands on the sidebar, not the page.
+    await expect(bar).toHaveCSS("transform", "none");
     await page.mouse.move(26, middle, { steps: 4 });
     const barBox = (await bar.boundingBox())!;
     await page.mouse.move(barBox.x + barBox.width + 60, middle, { steps: 6 });

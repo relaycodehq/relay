@@ -55,7 +55,7 @@ export function useSidebarPeek(
   useEdgePeek({
     hidden,
     peek,
-    setPeek,
+    peekOpen,
     peekClose,
     layout,
     peeking,
@@ -74,7 +74,7 @@ export function useSidebarPeek(
 function useEdgePeek({
   hidden,
   peek,
-  setPeek,
+  peekOpen,
   peekClose,
   layout,
   peeking,
@@ -82,7 +82,8 @@ function useEdgePeek({
 }: {
   hidden: boolean;
   peek: boolean;
-  setPeek: (peek: boolean) => void;
+  /** Opens it, calling off a close that leaving the toggle or the sidebar set. */
+  peekOpen: () => void;
   peekClose: () => void;
   layout: HTMLElement | null;
   /** Whether the pointer is over what peeks out: the sidebar, and a folded bar. */
@@ -106,7 +107,7 @@ function useEdgePeek({
       timer ??= window.setTimeout(() => {
         if (popupOpen()) return;
         peekFromEdge.current = true;
-        setPeek(true);
+        peekOpen();
       }, 150);
     };
     window.addEventListener("mousemove", onMove);
