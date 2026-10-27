@@ -1,4 +1,7 @@
 import { defineConfig } from "@playwright/test";
+import { dropInheritedEnv } from "./tests/fixtures/inherited-env";
+
+dropInheritedEnv();
 // CI's runners draw Electron in software on a virtual screen, 5-10x slower
 // than a desktop, so the same steps get more time there and one retry for a
 // timing blip; a retried test still shows as flaky in the report.
