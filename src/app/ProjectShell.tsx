@@ -92,10 +92,7 @@ export default function ProjectShell() {
       ? { title: review.title, open: () => void navigate(project, review) }
       : undefined;
   };
-  const { toggleUsage, toggleSchedules, scheduleShown } = useToolPages(
-    nav,
-    lock,
-  );
+  const { toggleUsage, toggleSchedules } = useToolPages(nav, lock);
   // Pull requests, Usage or Schedules instead of a project.
   const elsewhere = nav.surface !== "project";
   const poppedOut = useHasOwnWindow(chat?.id);
@@ -246,7 +243,6 @@ export default function ProjectShell() {
             <SchedulesPage
               projects={projects.data ?? NO_PROJECTS}
               projectId={nav.selected ?? undefined}
-              initial={scheduleShown}
               onOpenChat={openChatById}
             />
           </div>
@@ -371,7 +367,7 @@ export default function ProjectShell() {
         />
         <ShellSidebar
           sidebar={sidebar}
-          hidden={settings.open}
+          page={settings.open ? "settings" : nav.surface}
           error={projects.error}
         >
           <ProjectSidebar

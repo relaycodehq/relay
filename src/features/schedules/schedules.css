@@ -2,21 +2,15 @@
 .schedules-page {
   container-type: inline-size;
 }
-.schedules-body {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 28px;
-  margin-top: 22px;
+/* One schedule at a time now, so its prompt keeps a readable line. */
+.schedules-page > * {
+  max-width: 880px;
 }
-
 /* New schedule: a blank one or an example, two to a row. Cards are a tint
    of the text, not a solid grey, so frosted glass shows through them. */
 .schedule-gallery {
   margin-top: 22px;
   min-width: 0;
-}
-.schedules-body .schedule-gallery {
-  margin-top: 0;
 }
 .schedule-cards {
   display: grid;
@@ -102,91 +96,21 @@
   --selected: color-mix(in srgb, var(--text) 11%, transparent);
 }
 
-/* A schedule's row: its project's badge, when it runs next, what it did last. */
+/* A schedule's card in the sidebar is an Activity card, as a button. */
 .schedule-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.schedule-list button {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  justify-items: start;
-  column-gap: 10px;
-  row-gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 1px;
+}
+.sb button.sb-card {
   width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
+  padding: 6px 10px;
+  border-radius: 10px;
   text-align: left;
-  font-size: 12.5px;
 }
-.schedule-list button:hover {
-  background: var(--hover);
-}
-.schedule-list button[aria-current] {
-  background: var(--selected);
-}
-.schedule-list .sb-project-badge {
-  grid-row: 1;
-  align-self: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  font-size: 9.5px;
-}
-.schedule-list button > :not(.sb-project-badge) {
-  grid-column: 2;
-  min-width: 0;
-}
-.schedule-row-top {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 100%;
-}
-.schedule-row-top strong {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 550;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.schedule-row-top em {
-  flex: none;
-  font-style: normal;
-  font-size: 11px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.schedule-row-when {
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.schedule-row-last {
-  width: 100%;
-  margin-top: 3px;
-  overflow: hidden;
-  font-size: 11.5px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: color-mix(in srgb, var(--text) 72%, var(--muted));
-}
-.schedule-row-last[data-outcome="skipped"],
-.schedule-row-last[data-outcome="stopped"],
-.schedule-row-last:not([data-outcome]) {
-  color: var(--muted);
-}
-.schedule-row-last[data-outcome="failed"] {
+.schedule-failed {
   color: var(--danger);
-}
-.schedule-list [data-off] .schedule-row-top strong {
-  color: var(--muted);
-}
-.schedule-list [data-off] .sb-project-badge {
-  opacity: 0.5;
 }
 
 /* The picked schedule */
@@ -313,7 +237,9 @@
 .schedule-run-test {
   color: var(--muted);
 }
-.schedule-runs :is([data-outcome="skipped"], [data-outcome="stopped"]) .schedule-run-summary {
+.schedule-runs
+  :is([data-outcome="skipped"], [data-outcome="stopped"])
+  .schedule-run-summary {
   color: var(--muted);
 }
 .schedule-runs [data-outcome="failed"] .schedule-run-summary {

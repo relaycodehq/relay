@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { pickSchedule } from "../features/schedules/useSchedulePick";
 import type { NavigationLock } from "../lib/navigation-lock";
 import { onOpenSchedule } from "../lib/open-schedule";
 import type { ShellNavigation, Surface } from "./useShellNavigation";
@@ -26,16 +27,14 @@ export function useToolPages(nav: ShellNavigation, lock: NavigationLock) {
     nav.setSurface(page);
   }
   // A scheduled run's message leads to its schedule.
-  const [scheduleShown, setScheduleShown] = useState<string>();
   useEffect(() =>
     onOpenSchedule((id) => {
-      setScheduleShown(id);
+      pickSchedule(id);
       togglePage("schedules", true);
     }),
   );
   return {
     toggleUsage: () => togglePage("usage"),
     toggleSchedules: () => togglePage("schedules"),
-    scheduleShown,
   };
 }

@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { ScheduleList } from "../features/schedules/ScheduleList";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { PaneResizer } from "../ui/PaneResizer";
 import { ErrorBox } from "../ui/ui";
+import type { Surface } from "./useShellNavigation";
 import type { SidebarVisibility } from "./useSidebarVisibility";
 
 /**
@@ -10,17 +12,20 @@ import type { SidebarVisibility } from "./useSidebarVisibility";
  */
 export function ShellSidebar({
   sidebar,
-  hidden,
+  page,
   error,
   children,
 }: {
   sidebar: SidebarVisibility;
-  /** Covered by Settings, whose nav stands here instead. */
-  hidden: boolean;
+  /** What the main pane shows. Settings' own nav stands in this column's place. */
+  page: Surface | "settings";
   error: unknown;
+  /** The threads. */
   children: ReactNode;
 }) {
   const away = sidebar.hidden && !sidebar.peek;
+  // Schedules lists them here, beside the one it shows.
+  const pageList = page === "schedules" && <ScheduleList />;
   return (
     <aside
       ref={sidebar.asideRef}
@@ -28,12 +33,16 @@ export function ShellSidebar({
       aria-label="Projects"
       aria-hidden={away || undefined}
       inert={away || undefined}
-      hidden={hidden}
+      hidden={page === "settings"}
       onMouseEnter={sidebar.hidden ? sidebar.peekOpen : undefined}
       onMouseLeave={sidebar.hidden ? sidebar.peekClose : undefined}
     >
       <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
-      {children}
+      {pageList}
+      {/* Kept mounted under a page's list, so the threads keep their place. */}
+      <div className="shell-sidebar-threads" hidden={!!pageList}>
+        {children}
+      </div>
       {!!error && <ErrorBox error={error} />}
     </aside>
   );
