@@ -203,6 +203,7 @@ export function ThreadComposer({
   },
   attachments,
   worktree,
+  approval,
   checkout,
   scopeButtons,
   notesChip,
@@ -225,6 +226,8 @@ export function ThreadComposer({
   session: SessionCommands;
   attachments: ComposerAttachments;
   worktree: ThreadWorktree;
+  /** A permission the agent waits on, sitting on the composer's edge. */
+  approval: ReactNode;
   checkout: ProjectCheckout;
   scopeButtons: ReactNode;
   /** The notes kept in the thread, first of the controls on the right. */
@@ -394,13 +397,16 @@ export function ThreadComposer({
       }
       notice={({ sendGoal }) =>
         chat ? (
-          <ThreadNotice
-            chat={chat}
-            stopped={stopped}
-            leftBehind={leftBehind}
-            onError={setError}
-            onGoal={sendGoal}
-          />
+          <>
+            <ThreadNotice
+              chat={chat}
+              stopped={stopped}
+              leftBehind={leftBehind}
+              onError={setError}
+              onGoal={sendGoal}
+            />
+            {approval}
+          </>
         ) : (
           <>
             <StartOnNote project={project} worktree={worktree} />

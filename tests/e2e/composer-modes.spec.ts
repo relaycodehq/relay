@@ -158,13 +158,8 @@ test("restores per-project composer settings, answers native approvals, and impl
     await expect(
       approval.getByRole("button", { name: "Always", exact: true }),
     ).toBeVisible();
-    await approval
-      .getByRole("button", { name: "More approval options" })
-      .click();
-    await expect(page.getByRole("menuitem", { name: "Cancel" })).toBeVisible();
     await screenshot(page, { path: "test-results/composer-approval.png" });
-    await page.keyboard.press("Escape");
-    await approval.getByRole("button", { name: "Once", exact: true }).click();
+    await approval.getByRole("button", { name: "Allow", exact: true }).click();
     await expect(approval).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Stop answer", exact: true }),

@@ -50,9 +50,10 @@ export async function codexRequest(
       : offered;
     const command = method === "item/commandExecution/requestApproval";
     const permissions = method === "item/permissions/requestApproval";
+    // The command leads: it's what gets approved, and the one line it gets.
     const detail = [
-      params.reason,
       command ? params.command : null,
+      params.reason,
       params.cwd ? `Directory: ${params.cwd}` : null,
       permissions ? JSON.stringify(params.permissions, null, 2) : null,
       !command && !permissions

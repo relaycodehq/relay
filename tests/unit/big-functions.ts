@@ -311,7 +311,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/terminal/TerminalDrawer.tsx › TerminalDrawer": 108,
   "src/features/thread-windows/ThreadElsewhere.tsx › ThreadElsewhere": 100,
   "src/features/thread/AgentQuestionForm.tsx › AgentQuestionForm": 186,
-  "src/features/thread/AgentRequestCard.tsx › AgentRequestCard": 149,
+  "src/features/thread/AgentRequestCard.tsx › AgentRequestCard": 95,
   "src/features/thread/AssistantMessage.tsx › AssistantMessage": 253,
   "src/features/thread/CompactionRow.tsx › CompactionRow": 99,
   "src/features/thread/HeldSends.tsx › HeldSends": 103,

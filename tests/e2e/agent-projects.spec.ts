@@ -152,6 +152,7 @@ test("an agent adds a project only through the user, then starts and messages th
     });
     await expect(card).toBeVisible();
     await expect(card).toContainText(site);
+    await card.getByRole("button", { name: /^Add “relay-site”/ }).click();
     await expect(card).toContainText(
       "Agents in its threads can read and change everything in this folder.",
     );
@@ -162,7 +163,7 @@ test("an agent adds a project only through the user, then starts and messages th
       card.getByRole("button", { name: "Decline", exact: true }),
     ).toBeVisible();
     await screenshot(page, { path: "test-results/agent-add-project.png" });
-    await card.getByRole("button", { name: "Approve", exact: true }).click();
+    await card.getByRole("button", { name: "Allow", exact: true }).click();
     const project = JSON.parse(await added());
     expect(project).toMatchObject({ folder: site, git: true });
     await expect(
@@ -181,6 +182,7 @@ test("an agent adds a project only through the user, then starts and messages th
       name: `Start 1 thread in “${project.name}”?`,
     });
     await expect(start).toBeVisible();
+    await start.getByRole("button", { name: /^Start 1 thread/ }).click();
     await expect(start).toContainText(`In ${site}, with full access`);
     // The prompt is part of what is approved, so it shows without scrolling.
     expect(
@@ -192,7 +194,7 @@ test("an agent adds a project only through the user, then starts and messages th
     await expect(
       start.getByRole("button", { name: "Always", exact: true }),
     ).toBeVisible();
-    await start.getByRole("button", { name: "Once", exact: true }).click();
+    await start.getByRole("button", { name: "Allow", exact: true }).click();
     expect(await started()).toMatch(/^Started 1 threads/);
     const [child] = JSON.parse(
       await (
@@ -210,6 +212,7 @@ test("an agent adds a project only through the user, then starts and messages th
       name: new RegExp(`in “${project.name}”\\?$`),
     });
     await expect(send).toBeVisible({ timeout: 15000 });
+    await send.getByRole("button", { name: /^Send to/ }).click();
     await expect(send).toContainText(
       "Always lets this thread start, message, stop and settle any thread",
     );

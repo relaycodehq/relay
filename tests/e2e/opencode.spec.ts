@@ -195,7 +195,7 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
     await screenshot(page, {
       path: join(tmpdir(), "relay-opencode2-approval.png"),
     });
-    await approval.getByRole("button", { name: "Once", exact: true }).click();
+    await approval.getByRole("button", { name: "Allow", exact: true }).click();
     await expect(page.getByText("Wrote notes.md.")).toBeVisible();
     const answer = page.getByRole("article", { name: "opencode answer" });
     await expect(answer.locator("header strong")).toHaveText("OpenCode");
@@ -234,7 +234,7 @@ test("talks to OpenCode 2 over ACP: picks its model and effort, resets to Defaul
     await page
       .getByRole("button", { name: "Send message", exact: true })
       .click();
-    await approval.getByRole("button", { name: "Once", exact: true }).click();
+    await approval.getByRole("button", { name: "Allow", exact: true }).click();
     await expect(
       page.getByText("Wrote notes.md.", { exact: true }),
     ).toHaveCount(2);

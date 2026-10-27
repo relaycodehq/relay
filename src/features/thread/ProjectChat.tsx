@@ -48,6 +48,7 @@ import { useThreadHandle } from "./useThreadHandle";
 import { useThreadWorktree } from "./useThreadWorktree";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { AgentRequestCard } from "./AgentRequestCard";
+import { ApprovalTab } from "./ApprovalTab";
 import { AgentSwitchDialog } from "./AgentSwitchDialog";
 import { DeepReviewSetup } from "../deep-review/DeepReview";
 import type {
@@ -499,7 +500,7 @@ export function ProjectChat({
             e.preventDefault();
         }}
       >
-        {pending.request && (
+        {pending.request && pending.request.kind !== "approval" && (
           <AgentRequestCard
             key={pending.request.id}
             request={pending.request}
@@ -544,6 +545,16 @@ export function ProjectChat({
             session={session}
             attachments={attachments}
             worktree={worktree}
+            approval={
+              pending.request?.kind === "approval" && (
+                <ApprovalTab
+                  key={pending.request.id}
+                  request={pending.request}
+                  pendingCount={pending.count}
+                  onRespond={pending.respond}
+                />
+              )
+            }
             checkout={{
               branch: checkout.data?.branch,
               locked: checkoutDisabled,

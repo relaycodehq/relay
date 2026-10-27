@@ -25,7 +25,7 @@ export function usePendingRequest(
         if (
           !active ||
           active === document.body ||
-          active.closest(".agent-request")
+          active.closest(".agent-request, .approval-tab")
         )
           composer.current?.focus();
       });

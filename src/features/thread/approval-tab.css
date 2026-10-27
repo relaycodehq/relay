@@ -1,0 +1,130 @@
+/* A permission the agent waits on, sitting on the composer's top edge. It
+   clips its face, so the face rises out from behind the composer. */
+.approval-tab {
+  margin: 0 14px;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+}
+.approval-tab-face {
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: inherit;
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--muted);
+  animation: approval-tab-rise 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.approval-tab-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 4px 4px 4px 12px;
+}
+.approval-tab-line > svg {
+  flex: none;
+  color: var(--accent);
+  /* The lock snaps shut as the tab lands. */
+  animation: approval-tab-lock 260ms 380ms ease-out both;
+}
+.approval-tab-line > small {
+  flex: none;
+  font-size: 11px;
+}
+.approval-tab-ask {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+button.approval-tab-ask:hover {
+  background: none;
+}
+button.approval-tab-ask:hover strong {
+  text-decoration: underline;
+  text-decoration-color: var(--muted);
+}
+.approval-tab-ask strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: none;
+  max-width: 100%;
+  font-weight: 500;
+  color: var(--text);
+}
+.approval-tab-ask code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  background: none;
+  font: 11.5px var(--font-mono);
+  color: var(--text);
+}
+.approval-tab-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  margin-left: auto;
+}
+.approval-tab-actions button {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.approval-tab-actions button:hover {
+  color: var(--text);
+}
+.approval-tab-actions button.primary {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.approval-tab-actions button.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+}
+.approval-tab-detail {
+  padding: 2px 12px 10px 31px;
+}
+.approval-tab-detail p {
+  margin: 0 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.approval-tab-detail pre {
+  max-height: 200px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: var(--code-font-size, 12px) / 1.6 var(--font-mono);
+  color: var(--text);
+}
+.approval-tab-face > [role="alert"] {
+  margin: 0;
+  padding: 0 12px 8px 31px;
+  color: var(--danger);
+}
+
+@keyframes approval-tab-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes approval-tab-lock {
+  50% {
+    transform: scale(1.3);
+  }
+}
