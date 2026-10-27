@@ -364,6 +364,7 @@ export default function ProjectShell() {
           goToPulls={pullsPage.go}
           onUsage={toggleUsage}
           onSchedules={toggleSchedules}
+          attention={attention}
         />
         <ShellSidebar
           sidebar={sidebar}

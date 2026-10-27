@@ -17,6 +17,15 @@ import type { ShellNavigation, Surface } from "./useShellNavigation";
 import type { SidebarVisibility } from "./useSidebarVisibility";
 import "./activity-bar.css";
 
+/** The sidebar's unread / needs-input dot. */
+export type SidebarAttention = "waiting" | "unread";
+
+/** What the sidebar's dot says, for a tooltip. */
+export function sidebarDotSays(attention: SidebarAttention | undefined) {
+  if (attention === "waiting") return "Needs your input";
+  if (attention === "unread") return "New activity";
+}
+
 /** What the main pane shows, so the bar marks its button. */
 type BarPage = "threads" | "inbox" | "usage" | "schedules" | "settings";
 
@@ -29,6 +38,7 @@ interface BarProps {
   goToPulls: (target: PullsTarget) => void;
   onUsage: () => void;
   onSchedules: () => void;
+  attention?: SidebarAttention;
 }
 
 function barPageFor(surface: Surface, settingsOpen: boolean): BarPage {
@@ -100,13 +110,12 @@ export function ActivityBar(props: BarProps) {
       onMouseEnter={sidebar.barFolded ? sidebar.peekOpen : undefined}
       onMouseLeave={sidebar.barFolded ? sidebar.peekClose : undefined}
     >
-      <BarButton
-        label="Threads"
-        current={page === "threads"}
+      <ThreadsButton
+        onThreads={page === "threads"}
+        sidebarHidden={sidebar.hidden}
+        attention={props.attention}
         onClick={bar.showThreads}
-      >
-        <MessagesSquare size={19} />
-      </BarButton>
+      />
       <BarButton
         label="Search threads"
         keys={searchKeys}
@@ -156,10 +165,36 @@ export function ActivityBar(props: BarProps) {
   );
 }
 
+/** Threads carries the sidebar's dot while the sidebar is hidden. */
+function ThreadsButton({
+  onThreads,
+  sidebarHidden,
+  attention,
+  onClick,
+}: {
+  onThreads: boolean;
+  sidebarHidden: boolean;
+  attention?: SidebarAttention;
+  onClick: () => void;
+}) {
+  return (
+    <BarButton
+      label="Threads"
+      dot={sidebarHidden ? sidebarDotSays(attention) : undefined}
+      status={attention}
+      current={onThreads}
+      onClick={onClick}
+    >
+      <MessagesSquare size={19} />
+    </BarButton>
+  );
+}
+
 function BarButton({
   label,
   keys = "",
   dot,
+  status,
   current = false,
   onClick,
   children,
@@ -168,6 +203,8 @@ function BarButton({
   keys?: string;
   /** Something waiting there, which the dot marks and the tooltip names. */
   dot?: string;
+  /** The dot in the sidebar's own look, for the sidebar's news. */
+  status?: SidebarAttention;
   current?: boolean;
   onClick: () => void;
   children: ReactNode;
@@ -176,13 +213,23 @@ function BarButton({
     <button
       type="button"
       className={`activity-bar-button ${current ? "active" : ""}`}
-      aria-label={label}
+      aria-label={dot ? `${label} · ${dot}` : label}
       aria-current={current ? "page" : undefined}
       title={[`${label}  ${keys}`.trim(), dot].filter(Boolean).join(" · ")}
       onClick={onClick}
     >
       {children}
-      {dot && <span className="activity-bar-dot" aria-hidden="true" />}
+      {dot &&
+        (status ? (
+          <span
+            className={`sb-status ${status} activity-bar-status`}
+            aria-hidden="true"
+          >
+            <i />
+          </span>
+        ) : (
+          <span className="activity-bar-dot" aria-hidden="true" />
+        ))}
     </button>
   );
 }

@@ -15,6 +15,7 @@ import { api } from "../lib/api";
 import { useNavigationLock } from "../lib/navigation-lock";
 import { useShortcutLabel } from "../lib/shortcuts";
 import type { SidebarVisibility } from "./useSidebarVisibility";
+import { sidebarDotSays, type SidebarAttention } from "./ActivityBar";
 import type { ThreadTerminalDrawer } from "./useThreadTerminal";
 import {
   panesOf,
@@ -41,25 +42,20 @@ import {
 
 /**
  * The sidebar's toggle, the mark and the version Relay runs, over the activity
- * bar and the sidebar; the toggle echoes the sidebar's dot while it's hidden.
+ * bar and the sidebar. The sidebar's dot shows on the bar's Threads while
+ * it's hidden, and on the toggle once the bar folds away with it.
  */
 export function TitlebarBrand({
-  sidebar: { hidden, toggle, peekOpen, peekClose },
+  sidebar: { hidden, barFolded, toggle, peekOpen, peekClose },
   attention,
   disabled,
 }: {
   sidebar: SidebarVisibility;
-  /** The sidebar's unread / needs-input dot. */
-  attention?: "waiting" | "unread";
+  attention?: SidebarAttention;
   disabled: boolean;
 }) {
   const keys = useShortcutLabel("sidebar");
-  const dot =
-    hidden && attention
-      ? attention === "waiting"
-        ? "Needs your input"
-        : "New activity"
-      : undefined;
+  const dot = barFolded ? sidebarDotSays(attention) : undefined;
   return (
     <div className="project-titlebar-brand shell-brand">
       <span className="traffic-space" />

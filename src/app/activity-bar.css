@@ -69,6 +69,16 @@
   border-radius: 50%;
   background: var(--accent);
 }
+/* The sidebar's own dot (amber and pulsing when a thread needs you), on
+   Threads while the sidebar is folded. */
+.activity-bar-status {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  animation: sb-pop 0.25s ease-out;
+}
 /* The timer's icon at the bar's size; its status glyph tucks into the corner. */
 .activity-bar .clockify-trigger svg:not(.clockify-badge svg) {
   width: 19px;

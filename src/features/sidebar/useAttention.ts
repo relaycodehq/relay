@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 
 /**
  * How many active threads want you; the count goes on the app's badge and
- * the strongest mark to `onAttention`, for the collapsed titlebar.
+ * the strongest mark to `onAttention`, for the bar and the titlebar.
  */
 export function useAttention(
   active: ChatSummary[],
