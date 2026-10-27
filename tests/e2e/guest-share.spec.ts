@@ -4,20 +4,33 @@ import {
   expect,
   _electron as electron,
 } from "../fixtures/electron";
-import { mkdtemp, mkdir, writeFile, realpath } from "node:fs/promises";
-import { join } from "node:path";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+  realpath,
+} from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 // Share with guest: the thread's menu makes a link, a guest's suggestions
-// show above the composer to edit or dismiss, a guest with Relay can carry the
-// conversation on, and Stop sharing ends the link.
+// show above the composer to edit, dismiss or send in their name, a guest
+// with Relay can carry the conversation on, and Stop sharing ends the link.
 test("shares a thread with a guest who suggests a message", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-guest-")));
   const repo = join(root, "project"),
-    data = join(root, "data");
+    data = join(root, "data"),
+    bin = join(root, "bin");
   await mkdir(repo);
+  await mkdir(bin);
+  await fakeCli(
+    join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
   await mkdir(join(data, "project-chats"), { recursive: true });
   execFileSync("git", ["init", "-q", "-b", "main", repo]);
   const projectId = randomUUID();
@@ -43,6 +56,16 @@ test("shares a thread with a guest who suggests a message", async () => {
       message(1, "user", "The empty state copy feels off"),
       message(2, "assistant", "Updated it to: No threads yet."),
     ],
+    // A guest's message runs on what the thread last ran.
+    lastInput: {
+      id: "m1",
+      body: "The empty state copy feels off",
+      provider: "codex",
+      to: "codex",
+      choice: { model: "", fast: false, reasoningEffort: "" },
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+    },
   };
   await writeFile(
     join(data, "project-chats", chat.id + ".json"),
@@ -66,8 +89,14 @@ test("shares a thread with a guest who suggests a message", async () => {
       chats: [{ ...chat, messages: undefined }],
     }),
   );
+  const env = relayEnv();
   const app = await electron.launch({
-    env: { ...relayEnv(), RELAY_TEST_DATA: data, RELAY_PORT_OFFSET: "0" },
+    env: {
+      ...env,
+      ...pathWith(env, bin),
+      RELAY_TEST_DATA: data,
+      RELAY_PORT_OFFSET: "0",
+    },
   });
   try {
     const page = await app.firstWindow();
@@ -119,6 +148,8 @@ test("shares a thread with a guest who suggests a message", async () => {
     await expect(
       page.locator(".thread-bottom-composer .ProseMirror"),
     ).toContainText("Say 'Start one from the sidebar'");
+    // The edited card leaves once its answer is saved.
+    await expect(suggestions).toHaveCount(1);
     await suggestions.first().getByRole("button", { name: "Dismiss" }).click();
     await expect(suggestions).toHaveCount(0);
     const alex = await (await fetch(`${link}/view?guest=guest-alex-1`)).json();
@@ -145,12 +176,41 @@ test("shares a thread with a guest who suggests a message", async () => {
       ["assistant", "Updated it to: No threads yet.", true],
     ]);
 
+    // Send runs it as a turn, under the guest's name.
+    expect(
+      (await suggest("fixture echo: Sounds good fixture echo end")).status,
+    ).toBe(200);
+    await expect(suggestions).toHaveCount(1);
+    await suggestions.getByRole("button", { name: "Send" }).click();
+    await expect(suggestions).toHaveCount(0);
+    const sent = page.locator(".project-message", {
+      hasText: "fixture echo: Sounds good",
+    });
+    await expect(sent.locator("header strong")).toHaveText("Alex");
+    await expect(sent.locator(".message-guest")).toHaveText("guest");
+    await expect(page.locator(".project-message.assistant").last()).toHaveText(
+      /Sounds good/,
+    );
+    const after = await (await fetch(`${link}/view?guest=guest-alex-1`)).json();
+    expect(after.suggestions.at(-1)).toEqual({
+      text: "fixture echo: Sounds good fixture echo end",
+      status: "sent",
+    });
+
     await page
       .locator(".guest-share-live")
       .getByRole("button", { name: "Stop sharing" })
       .click();
     await expect(page.locator(".guest-share-live")).toHaveCount(0);
-    await expect(fetch(link)).rejects.toThrow();
+    // The last link gone, the server closes after the page hears of it.
+    await expect
+      .poll(() =>
+        fetch(link).then(
+          (r) => r.status,
+          () => "closed",
+        ),
+      )
+      .toBe("closed");
   } finally {
     await app.close();
   }
