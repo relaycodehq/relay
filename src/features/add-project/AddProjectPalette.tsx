@@ -2,13 +2,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  Check,
   ChevronRight,
   FolderOpen,
   FolderPlus,
   Import as ImportIcon,
-  Laptop,
-  Monitor,
   Search,
 } from "lucide-react";
 import {
@@ -26,7 +23,6 @@ import { ErrorBox } from "../../ui/ui";
 import { GitHubMark } from "../../ui/BrandIcons";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { usePairedComputers } from "../handoff/usePairedComputers";
-import { DeviceIcon } from "../handoff/DeviceIcon";
 import { computerLine, reachable } from "../handoff/computer-status";
 import {
   JobProgress,
@@ -43,6 +39,7 @@ import { AddProjectHeading } from "./AddProjectHeading";
 import { ComputerPicker } from "../handoff/ComputerPicker";
 import { ProjectFolders } from "./ProjectFolders";
 import { folderLabel } from "./folder-path";
+import { LocationCards, LocationTrigger } from "./LocationChoice";
 import "../../ui/palette.css";
 import "./add-project.css";
 
@@ -224,20 +221,11 @@ export function AddProjectPalette({
       }
     >
       {page !== "root" && page !== "computers" && (
-        <button
-          type="button"
-          className="add-location-trigger"
+        <LocationTrigger
+          computer={computer}
           disabled={locked}
           onClick={computers}
-        >
-          {computer ? (
-            <DeviceIcon name={computer.name} size={14} />
-          ) : (
-            <Laptop size={14} />
-          )}
-          <span>{computer?.name ?? "This computer"}</span>
-          <ChevronRight size={12} />
-        </button>
+        />
       )}
     </AddProjectHeading>
   );
@@ -305,40 +293,17 @@ export function AddProjectPalette({
               )}
               {page === "root" ? (
                 <div className="palette-body add-project-home">
-                  <div className="add-location-cards">
-                    <button
-                      type="button"
-                      ref={!selectedComputer ? locationChoice : undefined}
-                      aria-pressed={!selectedComputer}
-                      onClick={() => {
-                        setSelectedComputer(undefined);
-                        setJustConnected(undefined);
-                        adding.clear();
-                      }}
-                    >
-                      <Laptop size={22} />
-                      <span>This computer</span>
-                      {!selectedComputer && <Check size={14} />}
-                    </button>
-                    <button
-                      type="button"
-                      ref={selectedComputer ? locationChoice : undefined}
-                      aria-pressed={!!selectedComputer}
-                      onClick={computers}
-                    >
-                      {computer ? (
-                        <DeviceIcon name={computer.name} size={22} />
-                      ) : (
-                        <Monitor size={22} />
-                      )}
-                      <span>{computer?.name ?? "Another computer"}</span>
-                      {selectedComputer ? (
-                        <Check size={14} />
-                      ) : (
-                        <ChevronRight size={14} />
-                      )}
-                    </button>
-                  </div>
+                  <LocationCards
+                    computer={computer}
+                    elsewhere={!!selectedComputer}
+                    focus={locationChoice}
+                    onHere={() => {
+                      setSelectedComputer(undefined);
+                      setJustConnected(undefined);
+                      adding.clear();
+                    }}
+                    onChoose={computers}
+                  />
                   <div className="add-project-ways">
                     <button
                       type="button"
