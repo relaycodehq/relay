@@ -28,11 +28,9 @@
   border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 /* Over frosted glass it lets the frost through like the sidebar, a shade
-   darker so it still reads as the edge, with the sidebar's see-through hover
-   and selection. */
+   darker so it still reads as the edge, with the sidebar's see-through hover. */
 :root[data-glass] .activity-bar {
   --hover: color-mix(in srgb, var(--text) 8%, transparent);
-  --selected: color-mix(in srgb, var(--text) 12%, transparent);
   background:
     linear-gradient(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.08)),
     color-mix(in srgb, var(--sidebar) var(--glass-sidebar), transparent);
@@ -57,8 +55,8 @@
   color: var(--text);
 }
 .activity-bar-button.active {
-  background: var(--selected);
-  color: var(--text);
+  background: var(--accent-soft);
+  color: var(--primary);
 }
 /* The timer's icon at the bar's size; its status glyph tucks into the corner. */
 .activity-bar .clockify-trigger svg:not(.clockify-badge svg) {
