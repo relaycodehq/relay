@@ -1,83 +1,78 @@
-# Relay phone ↔ desktop bridge protocol spec (for a native Kotlin client)
+# Relay phone ↔ desktop bridge protocol
 
-ROOT = `/Users/lubomirmolin/Library/Application Support/Relay Experimental/worktrees/relay/kotlin-phone`. This is the worktree I was moved to; it has the same tree as `/Users/lubomirmolin/PhpstormProjects/relay`. All paths below are relative to ROOT.
+How the phone apps (`android/`, Kotlin, and `ios/`, Swift) talk to a desktop Relay. The TypeScript in `shared/` and `electron/remote/` is the reference; both apps are ports of it, pinned to it by byte vectors (§6). Paths are relative to the repository root.
 
-**Corrections to the brief, checked against the code:**
-- **No relay server, rendezvous service or HTTP transport exists.** The only transport is a direct `ws://` WebSocket to the desktop over a local-network or Tailscale address.
-- **`relay-watch` is not a network component.** `mobile/modules/relay-watch` is only an Android foreground service plus notifications. It keeps the JS client alive in the background.
-- **"bridge 19" is `draftsBridge`.** The current bridge version is **22**. The "bridge 14 patches" are `compactBridge`.
+- **There is no relay server, rendezvous service or HTTP transport.** The phone opens a direct `ws://` WebSocket to the desktop over a local-network or Tailscale address.
+- **The bridge version is `remoteBridgeVersion` in `shared/remote-bridges.ts`**, 36 at the time of writing. Each feature's threshold sits beside it (§4).
 
-Core files: `shared/remote.ts` (types and constants), `shared/remote-crypto.ts`, `shared/remote-wire.ts`, `shared/remote-delta.ts`, `shared/remote-routes.ts`, `shared/remote-client.ts` (the phone client, with no React Native in it). Desktop side: `electron/remote/server.ts`, `bridge.ts`, `link-sender.ts`, `devices.ts`, `phone-remote.ts`, `lan.ts`, `tailscale.ts`.
+Core files:
+- Shared: `shared/remote.ts` (frames, `RemoteApi`, events), `remote-pairing.ts` (pairing link, port, protocol), `remote-bridges.ts` (bridge versions), `remote-methods.ts` (allowed and slow methods), `remote-models.ts` (overview, threads, queue), `remote-crypto.ts`, `remote-wire.ts`, `remote-batches.ts`, `remote-delta.ts`, `remote-routes.ts`, `remote-tunnel.ts`, `remote-client.ts` (the reference client; the desktop uses it to reach another computer, and the tests drive it).
+- Desktop: `electron/remote/server.ts`, `bridge.ts`, `for-phone.ts`, `link-sender.ts`, `devices.ts`, `phone-remote.ts`, `lan.ts`, `tailscale.ts`.
+- Android: `android/app/src/main/java/dev/relay/android/remote/` (`crypto/`, `wire/`, `client/`, `credentials/`, `Bridge.kt`, `Remote.kt`).
+- iPhone: `ios/RelayKit/Sources/RelayRemote/` (`Crypto/`, `Wire/`, `Client/`, `Bridge.swift`) and `ios/Relay/Connection/`.
 
 ---
 
 ## 1. Pairing
 
-### QR payload (`shared/remote.ts:47-93`)
+### QR payload (`shared/remote-pairing.ts`)
 - Format: `relay-remote://pair?h=<hosts comma-joined>&p=<port>&k=<key>&c=<code>&n=<name>`, built with `URLSearchParams` (form encoding).
 - The parser finds the query with `/[/:]pair\?(.+)$/`, so wrapped URLs such as `exp://…/--/pair?…` also work.
 - Validation:
   - `h`: split on `,` and filtered by `validHost`, which is `/^[A-Za-z0-9.-]{1,253}$/` or `/^\[[0-9a-fA-F:]+\]$/`. At least one host must remain.
-  - `p`: an integer from 1 to 65535. The default port is `defaultRemotePort = 47821` (`:40`).
+  - `p`: an integer from 1 to 65535. The default port is `defaultRemotePort = 47821`.
   - `k`: `/^[A-Za-z0-9_-]{43}$/`. This is the desktop's **static X25519 public key**, 32 bytes as unpadded base64url.
-  - `c`: `/^[A-Za-z0-9_-]{16,64}$/`. The desktop generates `randomToken(24)`, which is 32 chars (`electron/remote/devices.ts:91`).
+  - `c`: `/^[A-Za-z0-9_-]{16,64}$/`. The desktop generates `randomToken(24)`, which is 32 chars (`electron/remote/devices.ts`).
   - `n`: cut to 80 chars; defaults to `"Relay"`.
 
 ### Desktop side (`electron/remote/devices.ts`)
-- The static key pair is created once and persisted, sealed by the OS (`:71-87`).
-- A code expires after 10 min (`pairingMs`, `:17`).
-- Codes are compared in constant time. After 5 wrong guesses the code is killed (`:19`, `:101-103`).
-- At most 10 devices can be paired (`:18`).
+- The static key pair is created once and persisted, sealed by the OS.
+- A code expires after 10 min (`pairingMs`).
+- Codes are compared in constant time. After 5 wrong guesses the code is killed.
+- At most 10 devices can be paired.
 - On a successful `pair`:
   - `deviceId = randomUUID()`.
   - `token = randomToken(32)`, 43 base64url chars.
-  - The desktop stores only `sha256(token)` as base64url (`:21-22`, `:108-127`).
+  - The desktop stores only `sha256(token)` as base64url.
   - The device name has control chars stripped and is cut to 60 chars.
-- The QR URL is built in `electron/remote/phone-remote.ts:276-292`.
+- The QR URL is built in `electron/remote/phone-remote.ts`.
 
 ### Key exchange
 There is no separate pairing crypto. Pairing runs the normal Noise-NK-like handshake (§3) pinned to `k`, then sends a `pair` frame carrying the code. The desktop answers `paired` with `deviceId`, `token`, `name`, `bridge` and `hosts`.
 
-### What the phone stores (`mobile/src/remote/credentials.ts`)
-Everything is in `expo-secure-store` (Android Keystore-backed):
+### What the phone stores
+One record per paired computer, keyed by the desktop's public key `k`, plus an index `{ids /* pairing order, oldest first */, active?}`:
+- Android (`remote/credentials/CredentialStore.kt`): files `computers.bin` and `computer-<id>.bin`, each sealed with a Keystore key. A file that won't open counts as missing for that run but stays listed.
+- iPhone (`ios/Relay/Connection/CredentialStore.swift`): Keychain items under the service `dev.relay.computers`, accounts `index` and `computer-<id>`.
 
-| Key | Contents |
-|---|---|
-| `relay-remote-computers` | `{ ids: string[] /* pairing order, oldest first */, active?: string }` |
-| `relay-remote-computer-<id>` | `RemoteCredentials` JSON, one per computer |
-| `relay-remote-credentials` | Legacy single record; it mirrors the active one (`:35-41`) and is migrated in `loadPaired` (`:46-55`) |
+`RemoteCredentials`: `{hosts: string[], port: number, key: string, name: string, deviceId: string, token: string, routes?: ("local"|"tailscale")[]}`.
 
-- Each id is the desktop's public key `k`.
-- `RemoteCredentials` (`shared/remote.ts:96-105`): `{hosts: string[], port: number, key: string, name: string, deviceId: string, token: string, routes?: ("local"|"tailscale")[]}`.
-
-### Multi-computer behaviour (`mobile/src/remote/RemoteProvider.tsx`)
-- One live client at a time (`:119`, `:144-216`).
-- `pair()` waits up to 15 s (`pairingTimeout`, `:120`) for that client to come online. Otherwise it reverts to the previous computer (`:411-438`).
-- `PendingPairing` (`mobile/src/remote/pairing.ts`) settles only on the client that started the pairing.
-- The device name sent is `Platform.constants.Model`, or "Android phone" if unknown (`:107-112`).
-- Launch reads the keystore with a 5 s cap (`mobile/src/remote/launch-pairings.ts:2`).
+### Several computers
+- One live client at a time.
+- Pairing waits up to 15 s for that client to come online. Otherwise the phone goes back to the computer it was on. A pairing settles only on the client that started it (`PendingPairing`).
+- The device name sent is `Build.MODEL` (or "Android phone") on Android and `UIDevice.current.name` on the iPhone.
 
 ---
 
 ## 2. Transport
 
 ### URL and socket settings
-- URL: `ws://<host>:<port>/`. A bare IPv6 host gets brackets (`shared/remote-client.ts:434`).
+- URL: `ws://<host>:<port>/`. A bare IPv6 host gets brackets (`shared/remote-client.ts`).
 - `binaryType = "arraybuffer"`.
 - Desktop server (`electron/remote/server.ts`):
-  - `perMessageDeflate: false` and `maxPayload: 16 MiB` (`:133-134`).
-  - Binds to `0.0.0.0` when local network is allowed, otherwise to the first Tailscale IPv4 (`phone-remote.ts:322-344`). It re-syncs every 10 s.
+  - `perMessageDeflate: false` and `maxPayload: 16 MiB`.
+  - Binds to `0.0.0.0` when local network is allowed, otherwise to the first Tailscale IPv4 (`phone-remote.ts`). It re-syncs every 10 s.
 
-### Peer filter (`server.ts:153-155`)
+### Peer filter (`server.ts`)
 The desktop accepts:
-- Tailscale peers: `100.64.0.0/10`, `fd7a:115c:a1e0:` prefix, or `127.0.0.1` / `::1` (`tailscale.ts:16-28`).
-- With local network on, also LAN peers: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, `fc`/`fd`/`fe8-b` prefixes, `::1` (`lan.ts:21-28`).
+- Tailscale peers: `100.64.0.0/10`, `fd7a:115c:a1e0:` prefix, or `127.0.0.1` / `::1` (`tailscale.ts`).
+- With local network on, also LAN peers: 10/8, 172.16/12, 192.168/16, 169.254/16, 127/8, `fc`/`fd`/`fe8-b` prefixes, `::1` (`lan.ts`).
 
 ### Desktop limits
 - Requests are checked before sealing against the 16 MiB wire budget, including the encryption tag and legacy base64 expansion. From bridge 31, oversized `desktop/sendProjectChat` and `sendDraft` calls upload in acknowledged batches; other oversized calls fail locally without dropping their attachments.
-- 24 connections in total (`server.ts:55`).
-- 4 unauthenticated sockets per address; the oldest idle one is evicted (`makeRoom`, `:72-88`).
-- 10 s to finish the handshake (`:54`).
+- 24 connections in total (`server.ts`).
+- 4 unauthenticated sockets per address; the oldest idle one is evicted (`makeRoom`).
+- 10 s to finish the handshake.
 
 ### Route classification and ordering (`shared/remote-routes.ts`)
 - `routeKind`:
@@ -88,26 +83,26 @@ The desktop accepts:
 - `learnHosts(fresh, via)` = de-duplicated `[...fresh.slice(0,7), via]`.
 
 ### Dialing (`shared/remote-client.ts`)
-- Hosts are raced in order with a **1500 ms stagger** (`:262`). A failed dial launches the next one immediately.
-- When pairing, the first socket whose channel opens claims the sign-in, and the other dials are cancelled. This ensures the one-time code is sent once (`:280-293`).
-- Per-dial timeout is 15 s (`:454-457`).
-- A `denied` reply stops every route and sets status `denied` permanently (`:309`, `:506`).
+- Hosts are raced in order with a **1500 ms stagger**. A failed dial launches the next one immediately.
+- When pairing, the first socket whose channel opens claims the sign-in, and the other dials are cancelled. This ensures the one-time code is sent once.
+- Per-dial timeout is 15 s.
+- A `denied` reply stops every route and sets status `denied` permanently.
 
 ### Reconnect and backoff
-- Delay is `min(15000, 1000·2^retry)` ms (`:325-329`). The counter resets when a connection comes online (`:360`).
-- `wake()` (app returns to foreground) reconnects at once if offline, or if online but nothing was heard for more than `staleMs/2` = 20 s (`:142-157`).
+- Delay is `min(15000, 1000·2^retry)` ms. The counter resets when a connection comes online.
+- `wake()` (app returns to foreground) reconnects at once if offline, or if online but nothing was heard for more than `staleMs/2` = 20 s.
 
 ### Better-route probing
-- While on a later route, every 60 s (`:370-373`) the client dials the earlier hosts beside the live link.
-- It swaps only when no calls are in flight (`:389-416`).
-- Hosts that lost are cooled for 5 min (`:376-383`).
+- While on a later route, every 60 s the client dials the earlier hosts beside the live link.
+- It swaps only when no calls are in flight.
+- Hosts that lost are cooled for 5 min.
 
 ### Heartbeats
-- The desktop runs a 15 s interval (`server.ts:161`, `tick()` `:326-337`):
+- The desktop runs a 15 s interval (`server.ts`, `tick()`):
   - a WebSocket-level `ping`; a socket that hasn't ponged since the last tick is terminated;
   - plus a sealed `{t:"tick", hosts}` to signed-in devices.
-- The phone's watchdog is **40 s** from the last frame received (`staleMs`, `remote-client.ts:604-612`). Any opened frame resets it.
-- When `tick.hosts` differs from the saved hosts, the phone updates its credentials and re-probes routes (`:541-555`).
+- The phone's watchdog is **40 s** from the last frame received (`staleMs`, `remote-client.ts`). Any opened frame resets it.
+- When `tick.hosts` differs from the saved hosts, the phone updates its credentials and re-probes routes.
 
 ### In the background (bridge 29)
 - The phone sends `{t:"background", on}` when the app goes to the background or comes back, and on connecting while in the background. The notification worker keeps the link up with nothing on screen.
@@ -122,19 +117,19 @@ The desktop accepts:
 The code uses noble with no fixed test vectors.
 
 ### Hello (plaintext, one each way, as a WebSocket **text** frame)
-- Format: `{"t":"hello","v":1,"e":"<base64url(32-byte X25519 ephemeral pub)>"}`. `v` = `remoteProtocol = 1` (`shared/remote.ts:38`).
+- Format: `{"t":"hello","v":1,"e":"<base64url(32-byte X25519 ephemeral pub)>"}`. `v` = `remoteProtocol = 1` (`shared/remote-pairing.ts`).
 - The phone sends its hello on `onopen`. The desktop replies with its own hello.
-- Validation (`:123-129`): `t=="hello"`, `v==1`, and the decoded key is exactly 32 bytes.
+- Validation: `t=="hello"`, `v==1`, and the decoded key is exactly 32 bytes.
 
 ### Diffie-Hellman
 - Curve: X25519, with RFC 7748 clamping from noble.
-- An all-zero shared secret is rejected (`:110-115`).
+- An all-zero shared secret is rejected.
 - Phone (client):
   - `es = X25519(clientEph.secret, serverStatic)`
   - `ee = X25519(clientEph.secret, serverEph)`
 - Desktop computes the mirrors: `X25519(static.secret, clientEph)` and `X25519(eph.secret, clientEph)`.
 
-### Key derivation (`:93-108`)
+### Key derivation
 ```
 okm = HKDF-SHA256(
   IKM  = es || ee                                       (64 bytes)
@@ -149,7 +144,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 - **ChaCha20-Poly1305 IETF (RFC 8439)**, 32-byte key, **no AAD**.
 - Output is ciphertext followed by a 16-byte tag (noble layout; equivalent to JCA/BouncyCastle `ChaCha20-Poly1305` output).
 
-### Nonce (`:132-138`)
+### Nonce
 - 12 bytes: `00 00 00 00` followed by a **64-bit big-endian counter**.
 - There is a separate counter per direction. Both start at 0 after the hello; the first sealed frame (`pair`/`auth`) uses 0.
 - Strictly sequential, so a dropped, reordered or replayed frame fails authentication. That is the only replay protection; fresh ephemerals stop cross-session replay.
@@ -157,7 +152,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 
 ### Base64url
 - RFC 4648 URL alphabet, **no padding**.
-- Decoding rejects any other character and lengths with `len % 4 == 1` (`:169-209`).
+- Decoding rejects any other character and lengths with `len % 4 == 1`.
 - `randomToken(n)` = base64url of n random bytes.
 
 ### Envelope (`shared/remote-wire.ts`)
@@ -168,23 +163,23 @@ toServer = okm[0..32), toClient = okm[32..64)
 **Binary mode** (both ends at bridge ≥ 14):
 - WebSocket binary frame = `seal( flag(1 byte) || body )`.
   - `flag 0x00`: body is UTF-8 JSON.
-  - `flag 0x01`: body is **raw DEFLATE** (no zlib header) of the UTF-8 JSON. The phone uses fflate level 6; the desktop uses `deflateRawSync` level 6.
+  - `flag 0x01`: body is **raw DEFLATE** (no zlib header) of the UTF-8 JSON. Level 6 everywhere: `deflateRawSync` on the desktop, fflate in the TS client, `Deflater(6, nowrap = true)` on Android, Apple's `COMPRESSION_ZLIB` (which is raw DEFLATE) on the iPhone.
   - `flag 0x02` (bridge ≥ 23): a port tunnel frame, bytes rather than JSON; see "Port tunnel" in section 5.
-- Deflate is used only when `256 ≤ jsonBytes ≤ deflateUpTo` and the result is smaller. `deflateUpTo` is 1 MiB on the phone (`:25-35`) and unlimited on the desktop (`server.ts:90-96`).
+- Deflate is used only when `256 ≤ jsonBytes ≤ deflateUpTo` and the result is smaller. `deflateUpTo` is 1 MiB on the phone and unlimited on the desktop (`server.ts`).
 - The desktop caps inflate output at 32 MiB.
 - Any other flag throws "Unknown frame".
 - Receivers accept text frames even on a compact link (`openFrame` branches on frame type).
 
 ### Compact switch-over (who sends what)
-- The phone sends `pair`/`auth` as **text**, always (`remote-client.ts:481-498`, `compact=false`).
-- The desktop answers `paired`/`ready` as **text**. Its `LinkSender` is created only after that send (`server.ts:284-287`).
+- The phone sends `pair`/`auth` as **text**, always (`remote-client.ts`, `compact=false`).
+- The desktop answers `paired`/`ready` as **text**. Its `LinkSender` is created only after that send (`server.ts`).
 - After that:
   - The **desktop** sends binary when the *phone's* declared `bridge ≥ 14`.
-  - The **phone** sends binary when the *desktop's* `bridge` in `paired`/`ready` is ≥ 14 (`remote-client.ts:613-618`).
-- **Pitfall:** the desktop **terminates** a client that sends a binary frame before its link is set up (`server.ts:219`).
+  - The **phone** sends binary when the *desktop's* `bridge` in `paired`/`ready` is ≥ 14 (`remote-client.ts`).
+- **Pitfall:** the desktop **terminates** a client that sends a binary frame before its link is set up (`server.ts`).
 - An undecryptable frame:
-  - while dialing → "Couldn't verify … Pair again." (`remote-client.ts:521-523`);
-  - after sign-in → the phone closes the socket; the desktop terminates on any open failure (`server.ts:240-243`).
+  - while dialing → "Couldn't verify … Pair again." (`remote-client.ts`);
+  - after sign-in → the phone closes the socket; the desktop terminates on any open failure (`server.ts`).
 
 ### Large phone messages (bridge 31)
 - Photos already resize and JPEG-compress on the phone to fit the 1.1M-character per-image limit. Batching preserves that image quality and the original message id.
@@ -210,10 +205,10 @@ toServer = okm[0..32), toClient = okm[32..64)
 
 ---
 
-## 4. Version negotiation and handshake messages (`shared/remote.ts:168-241`, `:723-761`)
+## 4. Version negotiation and handshake messages (`shared/remote.ts`, `shared/remote-bridges.ts`)
 
 ### Current bridge version and feature thresholds
-`remoteBridgeVersion = 22`. Features switch on at these bridge versions:
+`remoteBridgeVersion = 36`. Features switch on at these bridge versions:
 
 | Bridge | Constant(s) | What it enables |
 |---|---|---|
@@ -229,9 +224,20 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 20 | `folderHandoffBridge`, `startHandoffBridge` | Handoff folder methods and start |
 | 21 | `skillsBridge` | `skills` field in a send |
 | 22 | `previewBridge`, `notesBridge`, `workspaceMovesBridge` | `image` with `{kind:"preview"}`; `notesMark` on summaries and `threadNotes` / `tickThreadNote` / `removeThreadNote`; `workspaceMoves` on a thread |
+| 23 | `tunnelBridge` | Port tunnel frames (`0x02`) and `sites` |
+| 24 | `newsBridge`, `agentToolsBridge` | `news` events and `news` catch-up; `agentTools` |
+| 25 | `cloneBridge` | `cloneProject` on a paired computer |
+| 26 | `pastesBridge` | Saved paste files travel with sends and handoffs |
+| 27 | `setupBridge` | `setupProject`, `setupProgress` after a failed clone |
+| 28 | `remoteProjectsBridge` | Projects hosted on a paired computer (`Project.computer`), its folders, threads and shells |
 | 29 | `backgroundBridge` | `{t:"background", on}`: batched events and slower heartbeats while the app is in the background |
+| 30 | `remoteAddingBridge` | Project setup on a paired computer with a chosen clone destination |
+| 31 | `messageBatchesBridge` | Oversized sends upload in acknowledged batches |
+| 32 | `readOnlyModeBridge` | `runtimeMode: "read-only"` |
 | 33 | `filesBridge` | `uploadFile`: phones attach any file |
 | 34 | `mergeBridge` | `pullMergeReadiness`, `mergePull` |
+| 35 | `traceTreeBridge` | A call's `actions` and `wroteCode`; `activityWritten` |
+| 36 | `secondOpinionBridge` | `askSecondOpinion`, `sendSecondOpinion` |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.
@@ -249,15 +255,15 @@ toServer = okm[0..32), toClient = okm[32..64)
 - `{t:"tick", hosts?}`.
 
 ### Rules
-- The desktop's sign-in handling is in `server.ts:247-305`:
+- The desktop's sign-in handling is in `server.ts`:
   - Exactly one sign-in per socket.
   - A bad token gets `denied` with "This phone isn't paired with Relay anymore.", then the socket closes.
   - A storage failure closes the socket without `denied`, so the phone retries.
   - A non-pair/auth first frame is refused with "Pair this phone first."
 - `bridge` is read as `Number(frame.bridge) || 0`.
-- Calls outside `remoteMethods`, or with `args.length > 4`, return `ok:false` (`:311-314`).
-- After `paired`/`ready`, the phone always calls `overview` (`RemoteProvider.tsx:163`).
-- The UI flags the desktop as outdated when `overview.bridge < 22` (`:397`).
+- Calls outside `remoteMethods`, or with `args.length > 4`, return `ok:false`.
+- After `paired`/`ready`, the phone always calls `overview`.
+- Android flags the desktop as outdated below its own `Bridge.VERSION`; the iPhone below `Bridge.oldestCurrent` (22). Features each check their own threshold.
 
 ---
 
@@ -267,36 +273,36 @@ toServer = okm[0..32), toClient = okm[32..64)
 - Phone timeout per call: **15 s**, or **120 s** for slow methods:
   - `slowRemoteMethods`: `sendDraft`, `receiveHandoff`, `handBack`, `handoffUpload`, `handoffDownload`.
   - `slowPhoneMethods`: `sendProjectChat`, `createProjectChat`, `projectGitAction`, `projectCommitMessage`, `projectMergePlan`, `projectMergeBranch`, `projectCiStatus`, `providerUsage`, `regenerateProjectChatTitle`.
-  - Lists are at `shared/remote.ts:663-688`.
-- A timeout or drop raises `Unanswered`, which is distinct from a rejection (`remote-client.ts:654`).
-- JSON has no `undefined`: trailing undefined args are dropped (`:194-195`); missing optional args are sent as `null`, which the desktop treats as absent.
+  - The lists are `slowRemoteMethods` and `slowPhoneMethods` in `shared/remote-methods.ts`; the ones above are only a sample, read them there.
+- A timeout or drop raises `Unanswered`, which is distinct from a rejection (`remote-client.ts`).
+- JSON has no `undefined`: trailing undefined args are dropped; missing optional args are sent as `null`, which the desktop treats as absent.
 
-### RemoteApi (`shared/remote.ts:498-596`)
-Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:106-157`. Arguments are positional in `args[]`.
+### RemoteApi (`shared/remote.ts`; models in `shared/remote-models.ts`)
+Validated in `electron/remote/bridge.ts`; the schemas are at `bridge.ts`. Arguments are positional in `args[]`.
 
-- **`overview()`** → `RemoteOverview` (`:284-303`):
+- **`overview()`** → `RemoteOverview`:
   - `{name, bridge?, version?, appearance?:PhoneAppearance, dictation?: "…status", readAloud?:boolean, present?:boolean, drafts?:SharedDraft[], projects:RemoteProject[], chats:RemoteChatSummary[]}`.
-  - `RemoteProject` (`:149-158`): `{id, name, folder?, scratch?, plain?, workspace?, computer?:{name, gone?}}`; `computer` (bridge 28) names the paired computer a project's folder is on.
-  - `RemoteChatSummary` (`:108-147`):
+  - `RemoteProject`: `{id, name, folder?, scratch?, plain?, workspace?, computer?:{name, gone?}}`; `computer` (bridge 28) names the paired computer a project's folder is on.
+  - `RemoteChatSummary`:
     - required: `id, projectId, title, scope, updated, created`;
     - optional: `provider, running, runningSince, waiting, asking, blocked, settledAt, settleWhenDone, autoSettled, markedUnread, snoozedAt, snoozedUntil, seenAt, branch, worktree, pending, nextSend, queueMark, empty, goal, startedBy, reviewer, limitResume, notesMark`.
     - `reviewer: true` marks a deep review's reviewer. It opens from its review (the thread it was `startedBy`) and stays out of every list: Activity, Projects, search, Needs you. Older desktops leave it out.
     - `notesMark` (bridge ≥ 22) changes whenever the thread's notes do; fetch them again with `desktop("threadNotes", [id])`.
-    - Up to 300, sorted by `updated` descending, then `id` ascending (`bridge.ts:571-588`, `chatOrder` `remote-delta.ts:102`).
-  - `PhoneAppearance` / palette: `#rrggbb` colours, strict (`phone-remote.ts:77-103`).
-- **`chat(id:uuid, known?:Record<msgId,version> /* ≤20000 */, history?:1..1000 /* default 100 */, sendId?:uuid)`** → `RemoteChat` (`:331-361`; built at `bridge.ts:218-280`):
+    - Up to 300, sorted by `updated` descending, then `id` ascending (`bridge.ts`, `chatOrder` `remote-delta.ts`).
+  - `PhoneAppearance` / palette: `#rrggbb` colours, strict (`phone-remote.ts`).
+- **`chat(id:uuid, known?:Record<msgId,version> /* ≤20000 */, history?:1..1000 /* default 100 */, sendId?:uuid)`** → `RemoteChat` (built in `bridge.ts`):
   - `{id, projectId, title, scope, messages:(ChatMessage|string)[], requests, queuePaused, stopped?, pending?, worktree?, workspaceMoves? /* bridge ≥ 22, shared/workspace-moves.ts */, running, root?, earlier, cost?, queue:RemoteQueued[], scheduled:(RemoteQueued&{at})[], settings?, lastParentId?, hasSend?, sendPending?}`.
-  - A string entry in `messages` is the id of a message the phone already holds at that version. Rebuild with `applyChatPatch` (`shared/projects/sync.ts:26-40`); a missing id throws `MissingMessage`.
+  - A string entry in `messages` is the id of a message the phone already holds at that version. Rebuild with `applyChatPatch` (`shared/projects/sync.ts`); a missing id throws `MissingMessage`.
   - `knownOf` = `{[m.id]: m.version}`.
-  - `RemoteQueued` (`shared/remote.ts`): `{id, body, images?, error?, parentId?, to?, settings?, created?, held?}`. `held:true` is a steer the desktop holds ~3s before its agent gets it: show it as your sent message with a spinner and ×, not in the queue list.
-  - `sendId` asks for a receipt: `hasSend` / `sendPending` (used by the outbox, `mobile/src/remote/outbox.ts:180`).
-- **`ChatMessage`** (`shared/projects/messages.ts:82-165`):
+  - `RemoteQueued` (`shared/remote-models.ts`): `{id, body, images?, error?, parentId?, to?, settings?, created?, held?}`. `held:true` is a steer the desktop holds ~3s before its agent gets it: show it as your sent message with a spinner and ×, not in the queue list.
+  - `sendId` asks for a receipt: `hasSend` / `sendPending` (used by the outbox, `remote/outbox/Outbox.kt`).
+- **`ChatMessage`** (`shared/projects/messages.ts`):
   - required: `id, role:"user"|"assistant", body, status:"complete"|"streaming"|"failed"|"cancelled", created, provider, version`;
   - plus about 40 optional fields: `trace`, `activity`, `renders`, `images`, `questions`, `changes`, `parentId`, `seq`, `context`, `cost`, …
   - `AgentTrace` = `{kind:"commentary", id, text} | {kind:"activity", id, activity:AgentActivity}`.
-  - `AgentActivity` (`:185-204`): `{id, kind:"command"|"file"|"read"|"search"|"web"|"agent"|"tool", label, status:"running"|"complete"|"failed"|"stopped", detail?, questionAnswers?, detailCut?, parentId?, progress?, mcp?, image?}`.
-  - On phones, `detail` longer than 600 chars becomes `first300 + "\n…\n" + last300`, with `detailCut = len − 600` (`bridge.ts:601-612`).
-  - Turn rendering logic: `shared/agent-trace.ts` (`groupTrace :60`, `readTurn :80`, `turnHeading :114`, `batchHead :136`).
+  - `AgentActivity`: `{id, kind:"command"|"file"|"read"|"search"|"web"|"agent"|"tool", label, status:"running"|"complete"|"failed"|"stopped", detail?, questionAnswers?, detailCut?, parentId?, progress?, mcp?, image?}`.
+  - On phones, `detail` longer than 600 chars becomes `first300 + "\n…\n" + last300`, with `detailCut = len − 600` (`bridge.ts`).
+  - Turn rendering logic: `shared/agent-trace.ts` (`groupTrace`, `readTurn`, `turnHeading`).
 - **`activityDetail(chatId, messageId, activityId /* 1..200 chars */)`** → `string|null`. The full tool output.
 - **`diff(source)`** → `RemoteDiff`:
   - `source` is one of:
@@ -304,26 +310,26 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
     - `{kind:"working", where /* ≤80 */, path, area:"staged"|"unstaged"}`
     - `{kind:"commit", where, sha /* ≤64 */, path}`
     - `{kind:"worktree", chatId, path}`
-  - `path` is 1–1000 chars. All variants are strict (`bridge.ts:128-156`).
-  - Result: `{path, binary, hunks:[{header:"@@ -a,b +c,d @@", lines:[{kind:"add"|"del"|"same", text, old?, new?}]}], truncated}`. Capped at 3000 lines; 3 lines of context (`bridge.ts:675-714`).
+  - `path` is 1–1000 chars. All variants are strict (`bridge.ts`).
+  - Result: `{path, binary, hunks:[{header:"@@ -a,b +c,d @@", lines:[{kind:"add"|"del"|"same", text, old?, new?}]}], truncated}`. Capped at 3000 lines; 3 lines of context (`bridge.ts`).
 - **`subagents(chatId, known? /* 64-hex sha256 */)`** → `null` if unchanged, else `{signature, runs:SubagentRun[]}`, with briefs stripped. `signature` = sha256 hex of `JSON.stringify(runs)`.
 - **`subagentRun(chatId, agentId, known?)`** → `null` if unchanged, else `{signature, run:SubagentDetail|null}`.
-  - Types are in `shared/subagents.ts:16-51`.
-  - The phone polls every 5 s, backing off to 20 s without changes and 60 s on errors (`mobile/src/remote/subagent-poll.ts`).
+  - Types are in `shared/subagents.ts`.
+  - The phone polls every 5 s, backing off to 20 s without changes and 60 s on errors (Android `features/thread/SubagentPoll.kt`).
 - **`image(source, max:int 16..4096)`** → data URL, shrunk so its longer side is at most `max`. Bridge ≥ 14.
   - `source` = `{kind:"attached", chatId, imageId}`, `{kind:"read", chatId, messageId, path}`, or from bridge 22 `{kind:"preview", chatId, messageId}` (the frame `ChatMessage.preview` kept when `shot`).
   - Older bridges: use `desktop("projectChatImage" | "projectChatReadImage")` instead.
 - **`renderPage(chatId, renderId, page:0..11)`** → HTML string (`RENDER_MAX_PAGES = 12`). Bridge ≥ 17.
-  - `ChatMessage.renders: HtmlRender{id, title, pages:[{label?, heights?:number[] /* per RENDER_WIDTHS [320,480,640,800,960,1120] */}], created}` (`shared/html-render.ts:7-42`).
-- **`projectIcons(known:Record<projectId, hash|null> /* ≤1000 */)`** → `Record<id, {hash, dataUrl}|{hash:null}>`. `hash` = the first 16 hex chars of sha256(dataUrl) (`bridge.ts:379-397`).
+  - `ChatMessage.renders: HtmlRender{id, title, pages:[{label?, heights?:number[] /* per RENDER_WIDTHS [320,480,640,800,960,1120] */}], created}` (`shared/html-render.ts`).
+- **`projectIcons(known:Record<projectId, hash|null> /* ≤1000 */)`** → `Record<id, {hash, dataUrl}|{hash:null}>`. `hash` = the first 16 hex chars of sha256(dataUrl) (`bridge.ts`).
 - **Drafts** (bridge ≥ 19, `shared/drafts.ts`):
   - `saveDraft(DraftWrite)` → `SharedDraft|null`.
   - `draftOther(key, drop:boolean)` → `SharedDraft|null`.
   - `sendDraft(key, chatId|null, ProjectChatSend)` → `{chatId}`.
   - Key regex: `^(?:ID(?::ID)?|new:ID(?::[a-z0-9]{1,16})?)$` with `ID = [A-Za-z0-9_-]{1,80}`.
-  - `DraftWrite` (strict, `:113-121`): `{key, text /* ≤200000 */, skills?, quotes?, files?, workspace?, base:int≥0, at:int≥0, extras?, sent?}`.
+  - `DraftWrite` (strict): `{key, text /* ≤200000 */, skills?, quotes?, files?, workspace?, base:int≥0, at:int≥0, extras?, sent?}`.
   - `SharedDraft`: `{key, text, …body, rev≥1, at, by:"desktop"|"phone:<id>", origin, extras?, other?}`.
-- **Dictation** (`shared/remote.ts:458-473`; strict zod in `phone-remote.ts:47-62`):
+- **Dictation** (`shared/remote-models.ts`; strict zod in `phone-remote.ts`):
   - `dictate({type:"start"|"stop"|"cancel", id:int≥0})`, or `{type:"audio", id, pcm}`.
   - `pcm` is **standard base64 with padding** (`/^[A-Za-z0-9+/]*={0,2}$/`), at most 44,000 chars, of 16 kHz mono s16le, about 80 ms per chunk.
   - Returns `{settled, tentative, loading}`.
@@ -331,82 +337,83 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
 - **Read aloud** (bridge ≥ 12):
   - `readAloud({type:"start", id, markdown /* ≤1,000,000 */} | {type:"pull", id} | {type:"stop", id})`.
   - Returns `{pcm /* std base64 s16le mono */, sampleRate /* default 24000 */, loading, done}`, at most 3 s per pull.
-  - The phone pulls in a loop (`mobile/src/remote/read-aloud.ts:87-133`).
-- **`reportApp(PhoneAppReport)`** (strict, `phone-remote.ts:29-45`): `{version, updated, apk, updates, update?:{kind:"downloading"|"ready"|"apk", version}, failed?}`. Versions match `^\d+\.\d+\.\d+(\.\d+)?$`.
+  - The phone pulls in a loop (Android `features/readaloud/ReadAloud.kt`).
+- **`reportApp(PhoneAppReport)`** (strict, `phone-remote.ts`): `{version, updated, apk, updates, update?:{kind:"downloading"|"ready"|"apk", version}, failed?}`. Versions match `^\d+\.\d+\.\d+(\.\d+)?$`.
 - **APK feed** (direct HTTPS, not over the bridge):
-  - Feed: `https://github.com/relaycodehq/relay/releases/latest/download/latest.json`, plus a `.sig` file verified with pinned Ed25519 keys (`shared/updates.ts:4-14`, `shared/phone-release.ts:60-80`, `shared/update-signature.ts`).
-  - Checked every 6 h, with a 10 min retry after failure (`mobile/src/remote/latest-app.ts:38-40`).
+  - Feed: `https://github.com/relaycodehq/relay/releases/latest/download/latest.json`, plus a `.sig` file verified with pinned Ed25519 keys (`shared/updates.ts`, `shared/phone-release.ts`, `shared/update-signature.ts`).
+  - Checked every 6 h, with a 10 min retry after failure (Android `features/updates/LatestApp.kt`).
   - The APK is checked against SHA-512.
-- **`computerInfo()`** → `{version, bridge, update}`. **`updateNow()`** → `UpdateState` (`shared/handoff.ts:383`). These are the only "computer" methods phones may call (`phone-remote.ts:148-158`).
-- **`desktop(method, args /* ≤10 */)`**: the method must be in `phoneDesktopMethods` (`shared/remote.ts:396-451`). Args are validated by each desktop handler's `takes([...schemas])`:
+- **`computerInfo()`** → `{version, bridge, update}`. **`updateNow()`** → `UpdateState` (`shared/handoff.ts`). These are the only "computer" methods phones may call (`phone-remote.ts`).
+- **`desktop(method, args /* ≤10 */)`**: the method must be in `phoneDesktopMethods` (`shared/remote-methods.ts`). Args are validated by each desktop handler's `takes([...schemas])`:
   - **Threads** (`electron/api/chats.ts`):
-    - `createProjectChat` (`:42`): `[id, chatScope, workspace?]`
-    - `sendProjectChat` (`:164`): `[id, ProjectChatSend]`
-    - `cancelProjectChat` (`:212`): `[id, {steers?}?]`
-    - `respondProjectChat` (`:197`)
-    - `answerProjectChatQuestion` / `setProjectChatQuestionDismissed` (`:202-207`)
-    - `projectChatQueueAction` (`:187`): `[id, "remove"|"steer"|"move", id, …]`
-    - `resumeProjectChat` (`:172`)
-    - `compactProjectChat` (`:176`)
-    - `triageProjectChat` (`:99`)
-    - `forkProjectChat` (`:102`)
-    - `renameProjectChat` (`:134`)
-    - `markProjectChatSeen` (`:160`): `[id, int≥0]`
-    - `rewindProjectTurn` (`:274`)
-    - `setLimitResume` (`:223`)
-    - `stopProjectChatPending` (`:226`)
-    - `projectChatAgents` / `projectChatAgent` / `stopProjectChatAgent` (`:229-236`)
-    - `projectChatImage` / `projectChatQueuedImages` / `projectChatReadImage` (`:239-245`)
-    - `threadNotes` (`:141`): `[id]` → `ThreadNote[]`; `tickThreadNote` (`:149`): `[id, noteId, item /* from 1 */, done]` and `removeThreadNote` (`:157`): `[id, noteId]` → the notes after. Bridge ≥ 22; `ThreadNote` is in `shared/thread-notes.ts`.
-    - `selectAgentWorktree` (`:314`)
-    - `closeWatchNote` (`:354`)
-    - `projectWorktree` (`:285`)
+    - `createProjectChat`: `[id, chatScope, workspace?]`
+    - `sendProjectChat`: `[id, ProjectChatSend]`
+    - `cancelProjectChat`: `[id, {steers?}?]`
+    - `respondProjectChat`
+    - `answerProjectChatQuestion` / `setProjectChatQuestionDismissed`
+    - `projectChatQueueAction`: `[id, "remove"|"steer"|"move", id, …]`
+    - `resumeProjectChat`
+    - `compactProjectChat`
+    - `triageProjectChat`
+    - `forkProjectChat`
+    - `renameProjectChat`
+    - `markProjectChatSeen`: `[id, int≥0]`
+    - `rewindProjectTurn`
+    - `setLimitResume`
+    - `stopProjectChatPending`
+    - `projectChatAgents` / `projectChatAgent` / `stopProjectChatAgent`
+    - `projectChatImage` / `projectChatQueuedImages` / `projectChatReadImage`
+    - `threadNotes`: `[id]` → `ThreadNote[]`; `tickThreadNote`: `[id, noteId, item /* from 1 */, done]` and `removeThreadNote`: `[id, noteId]` → the notes after. Bridge ≥ 22; `ThreadNote` is in `shared/thread-notes.ts`.
+    - `selectAgentWorktree`
+    - `closeWatchNote`
+    - `projectWorktree`
   - **Git and history** (`electron/api/git.ts`):
-    - `projectWorkingTree` (`:42`)
-    - `projectHistory` (`:62`): `[workspaceId, historyScope, limit]`
-    - `projectCommit` (`:67`)
-    - `projectBranches` (`:75`)
-    - `projectChangeBranch` (`:78`)
-    - `projectMergePlan` / `projectMergeBranch` (`:97-101`)
-    - `projectCommitMessage` (`:124`)
-    - `projectGitAction` (`:149`)
+    - `projectWorkingTree`
+    - `projectHistory`: `[workspaceId, historyScope, limit]`
+    - `projectCommit`
+    - `projectBranches`
+    - `projectChangeBranch`
+    - `projectMergePlan` / `projectMergeBranch`
+    - `projectCommitMessage`
+    - `projectGitAction`
   - **Files, models and CI** (`electron/api/projects.ts`):
-    - `projectFiles` (`:256`)
-    - `projectFile` (`:322`)
-    - `agentModels` (`:232`)
-    - `agentDefaults` (`:251`)
-    - `projectCommands` (`:227`)
-    - `projectCiStatus` (`:338`)
+    - `projectFiles`
+    - `projectFile`
+    - `agentModels`
+    - `agentDefaults`
+    - `projectCommands`
+    - `projectCiStatus`
   - **Settings and usage** (`electron/api/settings.ts`):
-    - `providerUsage` (`:174`)
-    - `aiSettings`, `newThreadAgent`, `saveNewThreadAgent`, `newThreadModels`, `saveNewThreadModel` (`:152-170`)
-  - **Tasks** (`electron/api/terminals.ts:40-47`): `projectTasks`, `stopProjectTask`, `restartProjectTask`.
+    - `providerUsage`
+    - `aiSettings`, `newThreadAgent`, `saveNewThreadAgent`, `newThreadModels`, `saveNewThreadModel`
+  - **Tasks** (`electron/api/terminals.ts`): `projectTasks`, `stopProjectTask`, `restartProjectTask`.
   - Return types are in `shared/projects/api.ts` and `shared/types.ts`.
-  - `workspaceId` = `<projectUuid>[/<chatUuid>[?worktree=<urlenc>]]` (`shared/workspaces.ts:8-37`).
-- **`ProjectChatSend`** (strict, `shared/projects/send.ts:21-86`):
+  - `workspaceId` = `<projectUuid>[/<chatUuid>[?worktree=<urlenc>]]` (`shared/workspaces.ts`).
+- **`ProjectChatSend`** (strict, `shared/projects/send.ts`):
   - required: `id`, `body` (trimmed, 1–32000), `choice`, `provider`, `runtimeMode`, `interactionMode`;
   - optional: `delivery:"queue"|"steer"`, `sendAt`, `contextWindow:"200k"`, `account`, `to`, `parentId`, `side:true`, `viewing`, `selection`, `images` (array of `{name ≤120, mimeType png|jpeg|webp, dataUrl ≤1.1M chars of data:image/…;base64,…}`; no fixed count limit), `fromThread`, `pageAnswer`, `skills` (≤20, only send to bridge ≥ 21), `fixes`.
-  - The client removes `to` for desktops below bridge 11 (`remote-client.ts:198-201`).
+  - The client removes `to` for desktops below bridge 11 (`remote-client.ts`).
 
-### Push events (`shared/remote.ts:696-715`)
+### Push events (`shared/remote.ts`)
 `event.kind` is one of:
-- `message`: `{chatId, message, title?}`. Streaming messages are throttled to one per message every 150 ms on the desktop (`bridge.ts:160`, `:514-539`).
+- `message`: `{chatId, message, title?}`. Streaming messages are throttled to one per message every 150 ms on the desktop (`bridge.ts`).
 - `chats`: `{chats}`, the whole list.
+- `news`: `{item}`, a thread finished, failed or needs you, as the computer decided. Only sent to bridge ≥ 24.
 - `appearance`.
 - `presence`: `{present}`, whether someone sits at the computer working in Relay (`electron/remote/presence.ts`), so the phone holds back news meanwhile. Sent when it changes: just before the `chats` it applies to when someone comes back, just after when they leave, and by itself when someone leaves without the list moving (checked every 15 s). A fresh overview's `present` starts it over. Only sent to bridge ≥ 19.
 - `draft`: `{change:{key, draft|null, sent?}}`. Only sent to bridge ≥ 19.
-- `handoff`: computers only.
+- `handoff`, `terminal`: computers only.
 
 ### Bridge 14 patches
-- **`messagePatch`** `{chatId, patch, title?}`. `MessagePatch` (`shared/remote-delta.ts:18-27`):
+- **`messagePatch`** `{chatId, patch, title?}`. `MessagePatch` (`shared/remote-delta.ts`):
   - `{id, set?:Partial<ChatMessage>, unset?:key[], body?:{from, text}, trace?:ListPatch, activity?:ListPatch}`.
   - `body`: keep `prev.body[0..from)` and append `text`. `from` counts **UTF-16 code units**, the same as a Kotlin `String` index.
-  - `ListPatch {length, items:[index, value][]}`: truncate to `length`, then set each item (`:45-49`).
-  - Apply only against the last *streaming* snapshot of that message id from this connection. With no base, ignore the patch (`remote-client.ts:573-597`).
-- **`chatsPatch`** `{set:RemoteChatSummary[], remove:id[]}`. Apply to the last `chats`, then re-sort with `chatOrder` (`remote-delta.ts:117-125`).
+  - `ListPatch {length, items:[index, value][]}`: truncate to `length`, then set each item.
+  - Apply only against the last *streaming* snapshot of that message id from this connection. With no base, ignore the patch (`remote-client.ts`).
+- **`chatsPatch`** `{set:RemoteChatSummary[], remove:id[]}`. Apply to the last `chats`, then re-sort with `chatOrder` (`remote-delta.ts`).
 - **Flow control** (`electron/remote/link-sender.ts`):
-  - Streaming frames carry `s`. The phone **must send `{t:"got", s}` immediately for every event that has `s`** (`remote-client.ts:564`).
-  - The desktop allows a 16 KiB window of unacknowledged bytes and gives up on an ack after 20 s (`:15-17`).
+  - Streaming frames carry `s`. The phone **must send `{t:"got", s}` immediately for every event that has `s`** (`remote-client.ts`).
+  - The desktop allows a 16 KiB window of unacknowledged bytes and gives up on an ack after 20 s.
   - Only the newest snapshot per message is held back.
   - Non-streaming messages are always sent whole.
 - **Both ends reset all patch state on every connection.**
@@ -425,13 +432,17 @@ Validated in `electron/remote/bridge.ts:427-512`; the schemas are at `bridge.ts:
 
 ## 6. Tests that pin this behaviour
 
-None of these are fixed byte vectors. All of them use random keys, so for Kotlin you would need to generate vectors yourself, for example by running `shared/remote-crypto.ts` with fixed secrets.
+**Byte vectors.** The TypeScript's output for fixed keys (server static secret bytes 1…32, client ephemeral 33…64, server ephemeral 65…96) is checked into both apps: `ios/RelayKit/Tests/RelayRemoteTests/Fixtures/ts-*.json` and `android/app/src/test/java/dev/relay/android/remote/TsVectors.kt` hold the same values. They cover public keys, hellos, session keys, seals at counters 0 and 1, desktop frames to open, wire codec, routes, pairing links and patches.
+- Android: `remote/CrossImplementationTest.kt` and `SealedForTsTest.kt` (`./gradlew :app:testDebugUnitTest --tests 'dev.relay.android.remote.*'`).
+- iPhone: `CrossImplementationTests.swift` and `PairingRoutesDeltaTests.swift` (`swift test` in `ios/RelayKit`).
+- No script regenerates the vectors. If you change the crypto or the wire on purpose, produce new ones from `shared/remote-crypto.ts` and `remote-wire.ts` with the same fixed secrets and update both files together.
 
-- `shared/remote-crypto.test.ts`: round trip; a key mismatch fails; tamper, replay and cross-session replay rejected; base64url matches Node's; pairing URL parse, including the Expo-wrapped form.
+**TypeScript:**
+- `shared/remote-crypto.test.ts`: round trip; a key mismatch fails; tamper, replay and cross-session replay rejected; base64url matches Node's.
 - `electron/remote/wire.test.ts`: fflate ↔ node:zlib interop; text frames still read on a compact link; the 32 MiB inflate cap.
 - `shared/remote-routes.test.ts`: route classification, ordering, `learnHosts`.
 - `electron/remote/server.test.ts`: `makeRoom` eviction rules.
 - `electron/remote/link-sender.test.ts`: ack window, ack timeout, patch base.
 - `electron/remote/remote-bridge.test.ts`: 150 ms streaming throttle, diffs, icons, history paging, detail cutting, subagent signatures, images, renders.
-- `electron/remote/phone-remote.test.ts`: about 30 end-to-end tests driving the real `RemoteClient` against the real server. They cover pairing, routes, better-route swaps, a wrong key, revocation, watchdog, allowlist, timeouts, send receipts, `to` gating, patches matching whole events (`:1157`) and drafts gating (`:1265`).
-- Also: `electron/remote/remote-devices.test.ts`, `lan.test.ts`, `tailscale.test.ts`, `phone-read-aloud.test.ts`, `phone-app.test.ts`; `tests/unit/phone-*.test.ts` (18 files, e.g. `phone-pairing`, `phone-outbox-delivery`, `phone-subagent-poll`); the e2e specs `phone-remote`, `phone-drafts`, `phone-dictation` and `phone-read-aloud` `.spec.ts`; and `mobile/src/remote/*.test.ts` (`launch-pairings`, `self-update`, `latest-app`, `apk-install`, `drafts`, `outbox`, `started-peeks`).
+- `electron/remote/phone-remote.test.ts`: about 30 end-to-end tests driving the real `RemoteClient` against the real server. They cover pairing, routes, better-route swaps, a wrong key, revocation, watchdog, allowlist, timeouts, send receipts, `to` gating, patches matching whole events and drafts gating.
+- Also: `electron/remote/remote-devices.test.ts`, `lan.test.ts`, `tailscale.test.ts`, `phone-read-aloud.test.ts`, `presence.test.ts`, `message-batches.test.ts`, `phone-tunnel.test.ts`; `shared/remote-client.test.ts`, `remote-tunnel.test.ts`; `tests/unit/phone-bridge.test.ts`, `phone-fixture.test.ts`; the e2e specs `phone-remote`, `phone-drafts`, `phone-draft-echo`, `phone-dictation` and `phone-read-aloud` `.spec.ts`.
