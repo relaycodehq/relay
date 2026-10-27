@@ -8,7 +8,7 @@ import {
   useNavigationLockRoot,
 } from "../lib/navigation-lock";
 import { useReportRequests } from "../features/bug-report/useReportRequests";
-import { onOpenSettings, SIDEBAR_WIDTH } from "../lib/settings-page";
+import { onOpenSettings } from "../lib/settings-page";
 import { useStableCallback } from "../lib/useStableCallback";
 import { onAddProjectRequest } from "../lib/add-project-request";
 import { useShortcut } from "../lib/shortcuts";
@@ -38,7 +38,6 @@ import type { GitActionsHandle } from "../features/changes/GitActions";
 import { AddProjectPalette } from "../features/add-project/AddProjectPalette";
 import { NewThreadPicker } from "../features/projects/NewThreadPicker";
 import { NoProject } from "../features/projects/NoProject";
-import { PaneResizer } from "../ui/PaneResizer";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
@@ -51,6 +50,7 @@ import {
 import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import { ActivityBar } from "./ActivityBar";
+import { ShellSidebar } from "./ShellSidebar";
 import {
   ThreadHeaderActions,
   ThreadWorkspace,
@@ -318,6 +318,15 @@ export default function ProjectShell() {
     }
   }
 
+  // A page open in place of a project shows no thread as open.
+  const sidebarShowing = elsewhere
+    ? {}
+    : {
+        projectId: project?.id,
+        chatId: chat?.id,
+        draftId: chat ? undefined : draftId,
+      };
+
   const page = (
     <div className={`app project-app platform-${boot.data.platform}`}>
       <header
@@ -361,29 +370,15 @@ export default function ProjectShell() {
           onUsage={toggleUsage}
           onSchedules={toggleSchedules}
         />
-        <aside
-          ref={sidebar.asideRef}
-          className={`projects-sidebar ${sidebar.hidden ? "overlay" : ""} ${sidebar.peek ? "peek" : ""}`}
-          aria-label="Projects"
-          aria-hidden={sidebar.hidden && !sidebar.peek ? true : undefined}
-          inert={sidebar.hidden && !sidebar.peek ? true : undefined}
+        <ShellSidebar
+          sidebar={sidebar}
           hidden={settings.open}
-          onMouseEnter={sidebar.hidden ? sidebar.peekOpen : undefined}
-          onMouseLeave={sidebar.hidden ? sidebar.peekClose : undefined}
+          error={projects.error}
         >
-          <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />
           <ProjectSidebar
             initialView={boot.data.sidebarView}
             projects={projects.data ?? []}
-            showing={
-              elsewhere
-                ? {}
-                : {
-                    projectId: project?.id,
-                    chatId: chat?.id,
-                    draftId: chat ? undefined : draftId,
-                  }
-            }
+            showing={sidebarShowing}
             onOpen={open}
             onPickNew={starts.pick}
             onNewScratch={() => void starts.scratch()}
@@ -392,8 +387,7 @@ export default function ProjectShell() {
             onAttention={setAttention}
             onSettings={settings.show}
           />
-          {projects.error && <ErrorBox error={projects.error} />}
-        </aside>
+        </ShellSidebar>
         {surfaceBody()}
         {settings.open && (
           <Settings
