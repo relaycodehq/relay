@@ -172,7 +172,7 @@ function useCardChanges(
   };
 }
 
-/** The Running card, with Hand off and the changes of the open thread. */
+/** The Running card, with Hand off and the changes of the open thread; none on a new thread. */
 function RunningCard({
   tools,
   project,
@@ -186,6 +186,8 @@ function RunningCard({
   const { chat, chats, navigate } = nav;
   const changes = useCardChanges(tools, project);
   const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
+  // A new thread has nothing of its own for the card to show yet.
+  if (!chat) return null;
   return (
     <RunningTasks
       key={project.id}
