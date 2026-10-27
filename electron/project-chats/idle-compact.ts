@@ -96,6 +96,8 @@ export class IdleCompactions {
     // Turned off in Settings since it was planned.
     if (this.core.closing() || !this.on()) return;
     await this.core.control(id, async () => {
+      // Deleted since it was planned.
+      if (!this.core.storage.has(id)) return;
       const chat = await this.core.storage.load(id);
       // A sleep that outlasted the cache, or a turn since, changed what's due.
       const at = idleCompactAt(main(chat), Date.now());

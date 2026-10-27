@@ -22,6 +22,7 @@ import {
   SquareArrowOutUpRight,
   SquarePen,
   Sunrise,
+  Trash2,
   Unlink,
 } from "lucide-react";
 import { liveAway } from "../../../shared/handoff";
@@ -315,7 +316,7 @@ function ThreadMenuItems({
   );
 }
 
-/** Archive, which takes the thread off the lists. */
+/** Archive and Delete, which take the thread off the lists. */
 function RemoveItems({
   chat,
   onAction,
@@ -323,8 +324,12 @@ function RemoveItems({
   chat: ChatSummary;
   onAction: (action: ThreadMenuAction) => void;
 }) {
-  // It refuses what would still run with nothing left to stop it.
-  const going = !!chat.running || !!chat.pending?.length || !!chat.nextSend;
+  // Both refuse what would still run with nothing left to stop it.
+  const going =
+    !!chat.running ||
+    !!chat.reviewing ||
+    !!chat.pending?.length ||
+    !!chat.nextSend;
   return (
     <>
       <MenuAction
@@ -335,6 +340,14 @@ function RemoveItems({
         }
       >
         Archive thread
+      </MenuAction>
+      <MenuAction
+        icon={<Trash2 size={13} />}
+        // A thread away works on the other computer; it's deleted there.
+        disabled={going || !!chat.sentTo}
+        onClick={() => onAction({ kind: "delete" })}
+      >
+        Delete thread…
       </MenuAction>
     </>
   );

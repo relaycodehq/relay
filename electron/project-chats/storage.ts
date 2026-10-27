@@ -68,6 +68,8 @@ export class ChatStorage {
   /** Saves still writing, and threads whose last save failed: kept until on disk. */
   private saving = new Map<string, number>();
   private unsaved = new Set<string>();
+  /** Threads removed this session: what still runs in one mustn't write it back. */
+  private removed = new Set<string>();
   private loading = new Map<string, Promise<ProjectChat>>();
   private writes = keyedQueue();
   /** Loads wait for the agent host's sessions, so none of their answers is failed first. */
@@ -217,8 +219,12 @@ export class ChatStorage {
     this.use(chat);
   }
 
-  /** Takes back a thread that was added but never shown, like a reviewer whose review didn't start. */
+  /**
+   * Removes a thread and its files for good: one deleted, or one added but
+   * never shown, like a reviewer whose review didn't start.
+   */
   async remove(chat: ProjectChat) {
+    this.removed.add(chat.id);
     this.forget(chat.id);
     await this.writes(chat.id, async () => {
       await rm(this.file(chat.id), { force: true });
@@ -230,6 +236,11 @@ export class ChatStorage {
     }).catch((e) =>
       console.warn("Could not remove a dropped thread's images:", e),
     );
+    await this.renders
+      .removeAll(chat.id)
+      .catch((e) =>
+        console.warn("Could not remove a dropped thread's pages:", e),
+      );
     // Its kept subagents; see ./subagent-archive.
     await rm(join(this.dir, "subagents", chat.id + ".json"), {
       force: true,
@@ -294,6 +305,7 @@ export class ChatStorage {
     write: () => Promise<void>,
   ) {
     const id = chat.id;
+    if (this.removed.has(id)) return;
     this.saving.set(id, (this.saving.get(id) ?? 0) + 1);
     try {
       await this.writes(id, write);

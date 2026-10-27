@@ -51,6 +51,11 @@ export class ThreadWindows extends PoppedWindows<ThreadWindow> {
       this.reload(thread.chatId, thread);
   }
 
+  /** The thread was deleted: its window closes, with nothing to give back. */
+  closeDeleted(chatId: string) {
+    this.window(chatId)?.close();
+  }
+
   /** Closes the thread's window and shows the thread in the main window. */
   giveBack(chatId: string) {
     const win = this.window(chatId);

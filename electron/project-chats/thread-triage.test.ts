@@ -13,6 +13,8 @@ import { triageState } from "../../shared/chat-activity";
 import type { ChatCore } from "./core";
 import type { ThreadWorktrees } from "./worktrees";
 import type { Councils } from "./councils";
+import { threadControl } from "./control";
+import type { ProjectChat } from "../../shared/projects";
 import { ThreadTriage } from "./thread-triage";
 import { StartedThreads } from "../started-threads";
 import { resultText } from "../relay-mcp";
@@ -605,4 +607,91 @@ it("rejects settle against live state without changing saved marks, but snoozes 
   const until = Date.now() + 3_600_000;
   await triage.triage(chat.id, { kind: "snooze", until });
   expect(chat.snoozedUntil).toBe(until);
+});
+
+const deletable = (id: string, more: Partial<ProjectChat> = {}) =>
+  ({
+    id,
+    projectId: "p",
+    title: id,
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+    messages: [],
+    ...more,
+  }) as ProjectChat;
+
+const trip = {
+  id: "h",
+  computer: "laptop",
+  deviceId: "d",
+  at: 1,
+  carried: 0,
+  tip: "abc",
+};
+
+const away = {
+  id: "h",
+  computerId: "c",
+  computer: "laptop",
+  at: 1,
+  state: "away",
+} as const;
+
+/** A ThreadTriage over `threads`, and what deleting left of them. */
+function deleting(threads: ProjectChat[], { rides = false } = {}) {
+  const kept = new Map(threads.map((t) => [t.id, t]));
+  const core = {
+    store: { get: () => ({ chats: [...kept.values()] }) },
+    storage: {
+      load: async (id: string) => kept.get(id)!,
+      save: vi.fn(async () => {}),
+      remove: vi.fn(async (t: ProjectChat) => void kept.delete(t.id)),
+    },
+    active: { has: () => false, rides: () => rides, hasSide: () => false },
+    sessions: {
+      pending: () => [],
+      close: vi.fn(),
+      forgetSubagents: vi.fn(async () => {}),
+    },
+    control: threadControl(),
+  } as unknown as ChatCore;
+  const worktrees = {
+    dropArchived: vi.fn(async () => {}),
+  } as unknown as ThreadWorktrees;
+  const councils = { busy: () => false } as unknown as Councils;
+  return { triaging: new ThreadTriage(core, worktrees, councils), kept };
+}
+
+it("deletes a copy handed back and a thread here for good, but not one away or awaited", async () => {
+  const { triaging, kept } = deleting([
+    deletable("returned", { cameFrom: { ...trip, returnedAt: 2 } }),
+    deletable("home", { cameFrom: { ...trip, home: true } }),
+    deletable("away", { sentTo: away }),
+    deletable("awaited", { cameFrom: { ...trip } }),
+  ]);
+
+  await triaging.delete("returned");
+  await triaging.delete("home");
+  await expect(triaging.delete("away")).rejects.toThrow("laptop");
+  await expect(triaging.delete("awaited")).rejects.toThrow(
+    "Hand this thread back",
+  );
+
+  expect([...kept.keys()]).toEqual(["away", "awaited"]);
+});
+
+it("lets the threads it started go on their own, and waits for a turn its agent started", async () => {
+  const startedBy = { chatId: "lead", agent: "claude" } as const;
+  const child = deletable("child", { startedBy });
+  const { triaging, kept } = deleting([deletable("lead"), child]);
+
+  await expect(triaging.delete("lead")).resolves.toEqual(["lead"]);
+  expect(child.startedBy).toBeUndefined();
+  expect([...kept.keys()]).toEqual(["child"]);
+
+  const riding = deleting([deletable("lead")], { rides: true });
+  await expect(riding.triaging.delete("lead")).rejects.toThrow(
+    "Stop the running answer",
+  );
 });

@@ -1,6 +1,6 @@
 // The pages an answer showed, one folder per render beside the thread's
 // screenshots: <chats>/renders/<chatId>/<renderId>/<page>.html.
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { RENDER_MAX_PAGES } from "../../shared/html-render";
 
@@ -44,5 +44,11 @@ export class RenderFiles {
       }).catch((error: NodeJS.ErrnoException) => {
         if (error.code !== "ENOENT") throw error;
       });
+  }
+
+  /** Every page a removed thread's answers showed. */
+  async removeAll(chatId: string) {
+    if (!CHAT_ID.test(chatId)) throw new Error("Invalid render identity.");
+    await rm(join(this.dir, chatId), { recursive: true, force: true });
   }
 }

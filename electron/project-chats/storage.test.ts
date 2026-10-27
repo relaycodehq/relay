@@ -8,6 +8,7 @@ import {
   utimes,
   writeFile,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setFlagsFromString } from "node:v8";
@@ -211,6 +212,20 @@ it("leaves a thread that isn't listed to add", async () => {
   expect(store.get().chats ?? []).toEqual([]);
   await storage.addSummary(chat);
   expect(store.get().chats).toHaveLength(1);
+});
+
+it("removes a thread with its pages, and a late save from what still ran in it doesn't write it back", async () => {
+  const chat = thread();
+  await storage.add(chat);
+  await storage.renders.save(chat.id, crypto.randomUUID(), ["<p>Page</p>"]);
+
+  await storage.remove(chat);
+  chat.title = "Named too late";
+  await storage.save(chat);
+
+  expect(existsSync(join(root, "chats", `${chat.id}.json`))).toBe(false);
+  expect(existsSync(join(root, "chats", "renders", chat.id))).toBe(false);
+  expect(store.get().chats).toEqual([]);
 });
 
 it("flush reports a failed cached write and retries it after storage is repaired", async () => {

@@ -225,6 +225,12 @@ export class ThreadTerminals {
     if (session) this.kill(session);
   }
 
+  /** Ends the shells of a thread that's gone. */
+  closeFor(chatId: string) {
+    for (const session of this.sessions.values())
+      if (terminalBaseKey(session.key) === chatId) this.kill(session, true);
+  }
+
   /** Ends the shells working in a folder about to go away. */
   closeWithin(path: string) {
     for (const session of this.sessions.values())

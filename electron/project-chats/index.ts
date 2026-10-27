@@ -127,7 +127,7 @@ export class ProjectChats {
   private watchNotes: WatchReviews;
   private core: ChatCore;
   private threads: ThreadList;
-  private triaging: ThreadTriage;
+  readonly triaging: ThreadTriage;
   /** What the user keeps at hand in each thread. */
   readonly notes: ThreadNotes;
   private creating: ThreadCreate;

@@ -121,6 +121,8 @@ export class LimitResumes {
     if (this.core.closing()) return;
     // Decided inside the thread's job: a send queued ahead of it has landed.
     await this.core.control(chatId, async () => {
+      // Deleted since it was planned.
+      if (!this.core.storage.has(chatId)) return;
       const chat = await this.core.storage.load(chatId);
       const plan = chat.limitResume;
       if (!plan || plan.off) return;

@@ -25,6 +25,7 @@ function planner(resume = vi.fn(async () => {})) {
   const core = {
     store: { get: () => ({ chats: [chat] }) },
     storage: {
+      has: () => true,
       load: async () => chat,
       save: vi.fn(async () => {}),
     },

@@ -100,6 +100,11 @@ export function chatHandlers(ctx: ApiContext) {
     triageProjectChat: takes([idSchema, chatTriageSchema], (id, triage) =>
       projectChats.triage(id, triage),
     ),
+    deleteProjectChat: takes([idSchema], async (id) => {
+      const gone = await projectChats.triaging.delete(id);
+      for (const chatId of gone) ctx.window.threads.closeDeleted(chatId);
+      return gone;
+    }),
     forkProjectChat: takes([idSchema, optional(idSchema)], (id, messageId) =>
       projectChats.fork(id, messageId),
     ),
@@ -286,6 +291,9 @@ export function chatHandlers(ctx: ApiContext) {
         return projectChats.worktreeStatus(chatId);
       return status;
     }),
+    worktreeGoesOnDelete: takes([idSchema], (chatId) =>
+      projectChats.worktrees.goesOnDelete(chatId),
+    ),
     projectWorktreeDiff: takes([idSchema, workingPathSchema], (chatId, path) =>
       projectChats.worktrees.diff(chatId, path),
     ),

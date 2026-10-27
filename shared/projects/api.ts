@@ -228,6 +228,8 @@ export interface ProjectChatApi {
   /** Runs the project's setup command again in the thread's worktree, in the row of setup run `messageId`. */
   rerunWorktreeSetup(id: string, messageId: string): Promise<void>;
   triageProjectChat(id: string, triage: ChatTriage): Promise<ChatSummary>;
+  /** Removes the thread for good, a review's reviewers with it; the ids of the threads that went. See ThreadTriage.delete. */
+  deleteProjectChat(id: string): Promise<string[]>;
   renameProjectChat(id: string, title: string): Promise<ChatSummary>;
   /** Replaces the folders linked to this thread alone; the agent hears of them on its next turn. */
   setProjectChatLinks(id: string, links: LinkedFolder[]): Promise<ChatSummary>;
@@ -335,6 +337,8 @@ export interface ProjectChatApi {
 /** A thread's own worktree, and the ones its agent made. */
 export interface ProjectWorktreeApi {
   projectWorktree(chatId: string): Promise<WorktreeStatus>;
+  /** Whether deleting the thread would take its worktree's folder with it. */
+  worktreeGoesOnDelete(chatId: string): Promise<boolean>;
   /** Whether `branch` can be made for a new thread's worktree. */
   worktreeBranch(projectId: string, branch: string): Promise<WorktreeBranch>;
   /** One file as the worktree has it, against where its branch forks. */

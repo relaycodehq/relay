@@ -419,15 +419,25 @@ export class ThreadWorktrees {
   }
 
   /**
-   * An archived thread's worktree its user chose to delete, work in it or
-   * not: the folder goes, a snapshot kept, and its branch stays, so undoing
-   * the archive or a next message checks it out again.
+   * An archived or deleted thread's worktree its user chose to delete, work
+   * in it or not: the folder goes, a snapshot kept, and its branch stays, so
+   * undoing the archive or a next message checks it out again.
    */
   async dropArchived(chat: ProjectChat) {
-    if (!chat.worktree || !(await worktreeExists(chat.worktree))) return;
-    if (awaitsReturn(chat) || (await this.stays(chat))) return;
+    if (!chat.worktree || !(await this.folderGoes(chat))) return;
     this.core.sessions.close(chat.id);
     await this.drop(chat, chat.worktree, { keepBranch: true });
+  }
+
+  /** Whether deleting thread `id` would take its worktree's folder with it. */
+  async goesOnDelete(id: string) {
+    return this.folderGoes(await this.core.storage.load(id));
+  }
+
+  /** The thread's worktree folder is there, Relay made it, and no one else works in it. */
+  private async folderGoes(chat: ProjectChat) {
+    if (!chat.worktree || !(await worktreeExists(chat.worktree))) return false;
+    return !awaitsReturn(chat) && !(await this.stays(chat));
   }
 
   async diff(id: string, path: string) {

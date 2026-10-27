@@ -294,18 +294,22 @@ export function ProjectSidebar({
       {/* One scroller for every view, so it keeps its place across them. */}
       <div className={activity ? "sb-scroll sb-activity" : "sb-scroll"}>
         {activity ? (
-          <ActivityView
-            rows={rows}
-            sections={sections}
-            families={families}
-            drafts={drafts}
-            away={away}
-            hints={cmdHeld}
-            shelves={shelves}
-            draftId={draftId}
-            onDraft={(p, id) => onOpen(p, undefined, id)}
-            onSendDraft={onSendDraft}
-          />
+          <>
+            {/* The Threads view shows it under its projects instead. */}
+            {error && <p className="sb-note error">{error}</p>}
+            <ActivityView
+              rows={rows}
+              sections={sections}
+              families={families}
+              drafts={drafts}
+              away={away}
+              hints={cmdHeld}
+              shelves={shelves}
+              draftId={draftId}
+              onDraft={(p, id) => onOpen(p, undefined, id)}
+              onSendDraft={onSendDraft}
+            />
+          </>
         ) : (
           <>
             {takesProject(filter, SCRATCHPAD) && (

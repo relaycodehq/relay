@@ -16,6 +16,7 @@ import { undos } from "../../lib/undo";
 import { errorMessage } from "../../../shared/error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { fetchChat } from "../../lib/chat-events";
+import { useThreadDelete } from "./DeleteThreadDialog";
 
 export type ThreadMenuAction =
   | { kind: "new" }
@@ -30,6 +31,7 @@ export type ThreadMenuAction =
   | { kind: "snooze-pick" }
   | { kind: "project-settings" }
   | { kind: "own-window"; open: boolean }
+  | { kind: "delete" }
   | { kind: "triage"; triage: ChatTriage };
 
 export type ThreadActions = ReturnType<typeof useThreadActions>;
@@ -202,6 +204,12 @@ export function useThreadActions({
       if (latest.current.chatId === next?.id) latest.current.open(c);
     };
   };
+  const deletion = useThreadDelete({
+    openId: () => latest.current.chatId,
+    moveOn,
+    setError,
+    refresh,
+  });
   const rename = async (c: ChatSummary, title: string) => {
     patch(c, (entry) => ({ ...entry, title, renamed: true }));
     try {
@@ -315,6 +323,7 @@ export function useThreadActions({
       });
     },
     cancelArchive: () => setArchiving(undefined),
+    deletion,
     regenerating,
     reloading,
     /** Does what the thread's right-click menu picked. */
@@ -350,6 +359,8 @@ export function useThreadActions({
               ? api.openThreadWindow(c.projectId, c.id)
               : api.returnThreadWindow(c.id)
           ).catch(failed);
+        case "delete":
+          return deletion.ask(c);
         case "triage":
           return void triage(c, action.triage);
       }
