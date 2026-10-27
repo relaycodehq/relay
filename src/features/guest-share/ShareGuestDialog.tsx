@@ -22,6 +22,62 @@ export function ShareGuestDialog({
   threadId: string;
   onClose: () => void;
 }) {
+  const { share, error, starting, start, stop } = useShareLink(
+    threadId,
+    onClose,
+  );
+  return (
+    <Modal
+      title="Share with guest"
+      className="guest-share-dialog"
+      onClose={onClose}
+    >
+      {starting && !share && (
+        <p className="guest-share-starting">
+          <Spinner /> Opening a link…
+        </p>
+      )}
+      {share && (
+        <ShareDetails
+          share={share}
+          retrying={starting}
+          onRetry={() => void start()}
+        />
+      )}
+      {!starting && !share && !error && <p>This link has ended.</p>}
+      {!!error && <ErrorBox error={error} />}
+      <div className="modal-actions">
+        {!starting && !share && (
+          <button type="button" onClick={() => void start()}>
+            {error ? "Try again" : "Share again"}
+          </button>
+        )}
+        {share && (
+          <>
+            <button
+              type="button"
+              onClick={() => void api.openExternal(share.localUrl)}
+            >
+              Open as guest here
+            </button>
+            <button type="button" onClick={() => void stop()}>
+              Stop sharing
+            </button>
+          </>
+        )}
+        <button type="button" className="primary" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * The thread's link as the dialog drives it: started once as it opens, and
+ * stopped on request, closing it unless stopping failed.
+ */
+function useShareLink(threadId: string, onStopped: () => void) {
   const qc = useQueryClient();
   // What the main process says, so a link that ends while this is open shows it.
   const share = useGuestShare(threadId).data ?? undefined;
@@ -44,52 +100,13 @@ export function ShareGuestDialog({
   const stop = async () => {
     try {
       await api.stopGuestShare(threadId);
-      onClose();
+      onStopped();
     } catch (e) {
       // The link may still come back after a restart: stay open to say so.
       setError(e);
     }
   };
-  return (
-    <Modal
-      title="Share with guest"
-      className="guest-share-dialog"
-      onClose={onClose}
-    >
-      {starting && !share ? (
-        <p className="guest-share-starting">
-          <Spinner /> Opening a link…
-        </p>
-      ) : (
-        share && (
-          <ShareDetails
-            share={share}
-            retrying={starting}
-            onRetry={() => void start()}
-          />
-        )
-      )}
-      {!!error && <ErrorBox error={error} />}
-      <div className="modal-actions">
-        {share && (
-          <>
-            <button
-              type="button"
-              onClick={() => void api.openExternal(share.localUrl)}
-            >
-              Open as guest here
-            </button>
-            <button type="button" onClick={() => void stop()}>
-              Stop sharing
-            </button>
-          </>
-        )}
-        <button type="button" className="primary" onClick={onClose}>
-          Done
-        </button>
-      </div>
-    </Modal>
-  );
+  return { share, error, starting, start, stop };
 }
 
 function ShareDetails({

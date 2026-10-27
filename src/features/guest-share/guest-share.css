@@ -60,6 +60,13 @@
   display: grid;
   gap: 8px;
 }
+/* Cards past what the window has room for scroll, so the thread and composer stay in view. */
+.guest-suggestion-stack {
+  display: grid;
+  gap: 8px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 .guest-suggestion {
   padding: 12px 14px 10px;
   border: 1px solid var(--border);

@@ -24,30 +24,46 @@ export function GuestSuggestions({
 }) {
   const share = useGuestShare(threadId).data;
   const suggestions = useGuestSuggestions(threadId).data ?? [];
+  const [stopError, setStopError] = useState<unknown>();
   if (!share && !suggestions.length) return null;
   const more = suggestions.length - SHOWN;
+  const stop = async () => {
+    setStopError(undefined);
+    try {
+      await api.stopGuestShare(threadId);
+    } catch (e) {
+      // The link may still come back after a restart: say so, and keep the button.
+      setStopError(e);
+    }
+  };
   return (
     <div className="guest-suggestions">
-      {suggestions.slice(0, SHOWN).map((s) => (
-        <SuggestionCard key={s.id} suggestion={s} onAdd={onAdd} />
-      ))}
+      {!!suggestions.length && (
+        <div className="guest-suggestion-stack">
+          {suggestions.slice(0, SHOWN).map((s) => (
+            <SuggestionCard key={s.id} suggestion={s} onAdd={onAdd} />
+          ))}
+        </div>
+      )}
       {more > 0 && (
         <p className="guest-suggestions-more">{more} more waiting</p>
       )}
       {share && (
         <p className="guest-share-live">
           Guests can read this thread.
-          <button
-            type="button"
-            onClick={() => void api.stopGuestShare(threadId)}
-          >
+          <button type="button" onClick={() => void stop()}>
             Stop sharing
           </button>
         </p>
       )}
+      {!!stopError && (
+        <p className="guest-suggestion-error">{errorMessage(stopError)}</p>
+      )}
     </div>
   );
 }
+
+type Answer = "send" | "drafted" | "dismissed";
 
 function SuggestionCard({
   suggestion,
@@ -56,15 +72,20 @@ function SuggestionCard({
   suggestion: GuestSuggestion;
   onAdd: (text: string) => void;
 }) {
-  const [sending, setSending] = useState(false);
+  // One answer at a time: Edit while Send is on its way would draft words already sent.
+  const [answering, setAnswering] = useState<Answer>();
   const [error, setError] = useState<unknown>();
-  const send = async () => {
-    setSending(true);
+  // On success the card goes away with the suggestions event.
+  const answer = async (how: Answer) => {
+    setAnswering(how);
+    setError(undefined);
     try {
-      await api.sendGuestSuggestion(suggestion.id);
+      if (how === "send") await api.sendGuestSuggestion(suggestion.id);
+      else await api.resolveGuestSuggestion(suggestion.id, how);
+      if (how === "drafted") onAdd(suggestion.text);
     } catch (e) {
       setError(e);
-      setSending(false);
+      setAnswering(undefined);
     }
   };
   return (
@@ -83,30 +104,27 @@ function SuggestionCard({
       <footer>
         <button
           type="button"
-          onClick={() =>
-            void api.resolveGuestSuggestion(suggestion.id, "dismissed")
-          }
+          disabled={!!answering}
+          onClick={() => void answer("dismissed")}
         >
           Dismiss
         </button>
         <button
           type="button"
+          disabled={!!answering}
           title="Put it in your message to change it first"
-          onClick={() => {
-            onAdd(suggestion.text);
-            void api.resolveGuestSuggestion(suggestion.id, "drafted");
-          }}
+          onClick={() => void answer("drafted")}
         >
           Edit
         </button>
         <button
           type="button"
           className="primary"
-          disabled={sending}
+          disabled={!!answering}
           title={`Runs it as a turn in ${suggestion.name}'s name`}
-          onClick={() => void send()}
+          onClick={() => void answer("send")}
         >
-          {sending ? "Sending…" : "Send"}
+          {answering === "send" ? "Sending…" : "Send"}
         </button>
       </footer>
     </section>

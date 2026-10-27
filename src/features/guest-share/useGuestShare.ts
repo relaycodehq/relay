@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import type { GuestShareEvent } from "../../../shared/guest-share";
 import { api } from "../../lib/api";
 
@@ -9,16 +9,18 @@ const suggestionsKey = (threadId: string) => ["guest-suggestions", threadId];
 /** Keeps one kind of a thread's guest state current as the main process changes it. */
 function useGuestShareEvents(threadId: string, kind: GuestShareEvent["kind"]) {
   const qc = useQueryClient();
-  useEffect(
-    () =>
-      api.onGuestShare((event) => {
-        if (event.threadId !== threadId || event.kind !== kind) return;
-        if (event.kind === "share")
-          qc.setQueryData(guestShareKey(threadId), event.share);
-        else qc.setQueryData(suggestionsKey(threadId), event.suggestions);
-      }),
-    [qc, threadId, kind],
-  );
+  useEffect(() => {
+    // A read still on its way is older than the event: it mustn't land after it.
+    const set = (key: QueryKey, value: unknown) =>
+      void qc
+        .cancelQueries({ queryKey: key })
+        .then(() => qc.setQueryData(key, value));
+    return api.onGuestShare((event) => {
+      if (event.threadId !== threadId || event.kind !== kind) return;
+      if (event.kind === "share") set(guestShareKey(threadId), event.share);
+      else set(suggestionsKey(threadId), event.suggestions);
+    });
+  }, [qc, threadId, kind]);
 }
 
 /**
