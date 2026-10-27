@@ -81,7 +81,7 @@ function barNavigation(props: BarProps) {
  * in place of a project, with Settings alone at the bottom under a line.
  */
 export function ActivityBar(props: BarProps) {
-  const { nav, settings } = props;
+  const { nav, settings, sidebar } = props;
   const bar = barNavigation(props);
   const { page } = bar;
   // Time spent on Pull requests, Usage or Schedules isn't the project's.
@@ -89,8 +89,17 @@ export function ActivityBar(props: BarProps) {
   const searchKeys = useShortcutLabel("search-threads");
   const settingsKeys = useShortcutLabel("settings");
   const putOffUpdate = usePutOffRelayUpdate();
+  const away = sidebar.barFolded && !sidebar.peek;
   return (
-    <nav className="activity-bar" aria-label="Activity bar">
+    <nav
+      ref={sidebar.barRef}
+      className={`activity-bar ${sidebar.barFolded ? "folded" : ""} ${sidebar.peek ? "peek" : ""}`}
+      aria-label="Activity bar"
+      aria-hidden={away || undefined}
+      inert={away || undefined}
+      onMouseEnter={sidebar.barFolded ? sidebar.peekOpen : undefined}
+      onMouseLeave={sidebar.barFolded ? sidebar.peekClose : undefined}
+    >
       <BarButton
         label="Threads"
         current={page === "threads"}

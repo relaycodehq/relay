@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { SIDEBAR_WIDTH } from "../lib/settings-page";
 import { useShortcut } from "../lib/shortcuts";
 import { useSidebarAutoHide } from "../lib/sidebar-auto-hide";
+import { useBarFoldsWithSidebar } from "../lib/activity-bar-folds";
 import { readText, writeText } from "../lib/persisted-store";
 import {
   chosenHidden,
@@ -25,11 +26,14 @@ export type SidebarVisibility = ReturnType<typeof useSidebarVisibility>;
  * when even its narrowest won't fit it steps aside until the window grows
  * or a pane closes. Toggled back meanwhile, it stays and the least recently
  * opened pane steps aside instead.
+ *
+ * The activity bar can fold away with it, and then peeks out with it too.
  */
 export function useSidebarVisibility(
   besidePane: boolean,
   zoom: { on: boolean; exit: () => void },
   need: number,
+  settingsOpen: boolean,
 ) {
   const autoHide = useSidebarAutoHide();
   // The sidebar's and the panes' row, measured as one.
@@ -64,7 +68,9 @@ export function useSidebarVisibility(
   }, [crowded]);
   const hidden =
     zoom.on || (crowded && !kept) || chosenHidden(choice, besidePane, autoHide);
-  const peek = useSidebarPeek(hidden, layout);
+  // Settings keeps the bar: its button is the way back.
+  const barFolded = useBarFoldsWithSidebar() && hidden && !settingsOpen;
+  const peek = useSidebarPeek(hidden, barFolded, layout);
   // Set by the toggle until the next commit, which reads it.
   const toggled = useRef(false);
   const toggle = () => {
@@ -95,6 +101,7 @@ export function useSidebarVisibility(
   return {
     ...peek,
     hidden,
+    barFolded,
     toggle,
     layoutRef: setLayout,
     toggled,

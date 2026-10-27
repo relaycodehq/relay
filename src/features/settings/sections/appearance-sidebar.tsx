@@ -6,6 +6,10 @@ import {
   setSidebarAutoHide,
   useSidebarAutoHide,
 } from "../../../lib/sidebar-auto-hide";
+import {
+  setBarFoldsWithSidebar,
+  useBarFoldsWithSidebar,
+} from "../../../lib/activity-bar-folds";
 import { api } from "../../../lib/api";
 import { ErrorBox } from "../../../ui/ui";
 import { Switch } from "../../../ui/SettingsCard";
@@ -17,6 +21,7 @@ export function useSidebarEntries(): SettingEntry[] {
   const smartNames = useSmartNamesEntry();
   const sidebarAutoHide = useSidebarAutoHide();
   const activityBranches = useActivityBranches();
+  const barFolds = useBarFoldsWithSidebar();
   return [
     smartNames,
     {
@@ -32,6 +37,23 @@ export function useSidebarEntries(): SettingEntry[] {
           label="Hide the sidebar while side panes are open"
           checked={sidebarAutoHide}
           onChange={setSidebarAutoHide}
+        />
+      ),
+    },
+    {
+      id: "activity-bar-folds",
+      category: "appearance",
+      section: "Sidebar",
+      title: "Fold the activity bar with the sidebar",
+      description:
+        "Hiding the sidebar hides the icon bar beside it too, so the page gets the whole width. Both peek back from the window's edge.",
+      keywords:
+        "activity bar icons rail hide collapse fold compact width narrow sidebar",
+      render: () => (
+        <Switch
+          label="Hide the activity bar with the sidebar"
+          checked={barFolds}
+          onChange={setBarFoldsWithSidebar}
         />
       ),
     },

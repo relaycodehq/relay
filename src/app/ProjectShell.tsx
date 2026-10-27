@@ -106,6 +106,7 @@ export default function ProjectShell() {
       exit: () => panes.zoom(undefined),
     },
     noPanes ? 0 : roomFor(panes.shown),
+    settings.open,
   );
   // Settings' own nav stands where the sidebar does.
   const sidebarShown = !sidebar.hidden || settings.open;
