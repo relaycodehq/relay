@@ -11,7 +11,8 @@ import type {
 import { branchNameProblem } from "../../shared/branch-names";
 import { joinedWorktree } from "../../shared/projects";
 import { worktreeStartProblem } from "../git/worktrees";
-import { joinableOn, type ThreadWorktrees } from "./worktrees";
+import type { ThreadWorktrees } from "./worktrees";
+import { joinableOn } from "./carry-on";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./storage";

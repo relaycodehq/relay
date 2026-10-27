@@ -9,11 +9,9 @@ import { threadTerminals } from "../terminal/thread-terminals";
 import { promptTitle } from "../agents/thread-titles";
 import {
   cantCarryOn,
-  checkedOutAt,
   copyIntoWorktree,
   createWorktree,
   fetchStart,
-  localBranchName,
   moveIntoWorktree,
   newBranchProblem,
   reattachWorktree,
@@ -30,10 +28,11 @@ import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
 import { WorktreeSetup } from "./worktree-setup";
+import { carriedOn } from "./carry-on";
+import { WorktreeEntry, type WorktreeRequest } from "./enter-worktree";
 import { AgentWorkspaces } from "./agent-workspaces";
 import {
   agentWorktreeUnavailableError,
-  joinableWorktrees,
   joinedWorktree,
   reviewFolder,
   selectedAgentWorktree,
@@ -42,15 +41,8 @@ import {
   threadWorktree,
 } from "../../shared/projects";
 import { forgetAgentWorktrees } from "./agent-worktrees";
-import { sentAgent } from "../../shared/recipient";
 import { keyedQueue } from "../util/keyed-queue";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
-
-/** What an agent asks for when it moves its thread into a worktree. */
-export interface WorktreeRequest {
-  branch?: string;
-  uncommitted?: boolean;
-}
 
 /** Where a thread works: the project's checkout, or a worktree of its own. */
 /**
@@ -72,30 +64,11 @@ function regrown(worktree: ChatWorktree): ChatWorktree {
   return worktree;
 }
 
-/**
- * The open thread on `name` whose worktree another thread can join: the
- * folder Git has the branch checked out in now, not only its record, which
- * a folder removed by hand, or switched to another branch by its agent,
- * outlives. A remote `origin/…` means its local twin when there is one.
- */
-export async function joinableOn<
-  T extends Pick<ProjectChat, "id" | "worktree" | "archivedAt" | "sentTo">,
->(root: string, chats: readonly T[], name: string) {
-  const branch = await localBranchName(root, name);
-  const at = await checkedOutAt(root, branch);
-  if (!at) return;
-  for (const c of joinableWorktrees(chats))
-    if (
-      c.worktree!.branch === branch &&
-      (await sameFolder(c.worktree!.path!, at))
-    )
-      return c;
-}
-
 export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
   /** The worktrees a project-folder thread's agent made, and the one it works in. */
   readonly agents: AgentWorkspaces;
+  private entry: WorktreeEntry;
   /** Worktree changes per repository root; see `inRepo`. */
   private making = keyedQueue();
   /** Worktree folders between their teardown and their removal, per repository root; see `drop`. */
@@ -110,6 +83,7 @@ export class ThreadWorktrees {
     private councils: Pick<Councils, "busy" | "root">,
   ) {
     this.setup = new WorktreeSetup(core);
+    this.entry = new WorktreeEntry(core, folder, this.setup, this);
     this.agents = new AgentWorkspaces(core, councils, (root, job) =>
       this.inRepo(root, job),
     );
@@ -167,7 +141,7 @@ export class ThreadWorktrees {
     chat.worktree =
       reattached ??
       (carry
-        ? await this.carriedOn(chat, root, carry, name)
+        ? await carriedOn(this.core, this.folder, chat, root, carry, name)
         : await createWorktree(
             root,
             this.folder,
@@ -274,105 +248,6 @@ export class ThreadWorktrees {
     if (chat.worktree?.adopted) return { adopted: true, users: [] };
     const users = await this.users(chat);
     return users.length ? { users } : undefined;
-  }
-
-  /**
-   * The worktree a thread carrying on `branch` works in: the folder of an
-   * open thread on it, shared; the folder it's checked out in already, unless
-   * that's an away thread's; a worktree of its own, which threads keeping the branch for their next
-   * message work in too; or, when only checking it out is in the way, a new
-   * branch off it. Never a refusal: a branch gone meanwhile goes off the
-   * checkout's commit, and the thread says so.
-   */
-  private async carriedOn(
-    chat: ProjectChat,
-    root: string,
-    branch: string,
-    name: string,
-  ): Promise<ChatWorktree> {
-    const others = (this.core.store.get().chats ?? []).filter(
-      (c) => c.id !== chat.id && c.projectId === chat.projectId,
-    );
-    const open = await joinableOn(root, others, branch);
-    if (open)
-      return joinedWorktree((await this.core.storage.load(open.id)).worktree!);
-    // Threads' records have local names; `origin/feature` is their `feature`.
-    const local = await localBranchName(root, branch);
-    // A thread away on another computer holds its folder for the work
-    // landing there once it's back; nothing else works in it meanwhile.
-    const away = others.find(
-      (c) =>
-        !c.archivedAt &&
-        c.sentTo &&
-        c.worktree?.branch === local &&
-        !!c.worktree.path &&
-        !c.worktree.removedAt &&
-        !c.worktree.cleanedUp,
-    );
-    if (away) {
-      const off = await createWorktree(
-        root,
-        this.folder,
-        name,
-        { startFrom: { off: branch } },
-        false,
-      );
-      return off.wanted
-        ? off
-        : {
-            ...off,
-            wanted: {
-              branch,
-              problem: `“${away.title}” is away on ${away.sentTo!.computer} with it, so the thread is on a new branch off it.`,
-            },
-          };
-    }
-    const made = await createWorktree(
-      root,
-      this.folder,
-      name,
-      { startFrom: { on: branch } },
-      false,
-    );
-    if (made.branch !== local || made.adopted) return made;
-    // Whoever kept the branch for its next message finds it here, the
-    // same folder for both, rather than wanting it back on its own. Not a
-    // thread away on another computer, whose work lands here once it's
-    // back, nor a copy left from an earlier trip, which passed its folder on.
-    const keeping = others.filter(
-      (c) =>
-        !c.archivedAt &&
-        !c.sentTo &&
-        !c.cameFrom?.returnedAt &&
-        !!c.worktree?.path &&
-        c.worktree.branch === local,
-    );
-    // In the repository's queue, which `root` runs this in, rather than
-    // under their controls; see `remake`.
-    for (const other of keeping) {
-      const them = await this.core.storage.load(other.id);
-      const theirs = them.worktree;
-      if (theirs?.branch !== local || (await worktreeExists(theirs))) continue;
-      const {
-        removedAt: _removed,
-        cleanedUp: _cleaned,
-        included: _included,
-        adopted: _adopted,
-        portOffset: _offset,
-        ...kept
-      } = theirs;
-      // This thread runs the folder's setup; one run serves both, and
-      // whichever sends first waits for it.
-      them.worktree = { ...kept, path: made.path, setup: "done" };
-      noteWorkspaceMove(them, {
-        how: "recreated",
-        to: made.path,
-        branch: local,
-        unasked: true,
-      });
-      await this.core.storage.save(them);
-    }
-    return made;
   }
 
   /**
@@ -771,92 +646,9 @@ export class ThreadWorktrees {
     });
   }
 
-  /**
-   * Moves a project-folder thread into a worktree of its own while its agent
-   * answers, at the agent's asking: from the checkout's commit, with a copy
-   * of its uncommitted edits when `uncommitted`. Unlike `move`, the project
-   * folder keeps its edits, since other threads may be at work there. The
-   * agent runs the project's setup itself, as nothing else may run in the
-   * middle of its answer.
-   */
-  enter(id: string, { branch, uncommitted: copy }: WorktreeRequest) {
-    return this.core.control(id, async () => {
-      const chat = await this.core.storage.load(id);
-      if (chat.worktree)
-        throw new Error(
-          chat.worktree.path && !chat.worktree.removedAt
-            ? `This thread already works in its own worktree, ${chat.worktree.path}${chat.worktree.branch ? ` on ${chat.worktree.branch}` : ""}.`
-            : "This thread already has its own worktree.",
-        );
-      if (chat.scope.kind !== "project" || chat.reviewer)
-        throw new Error("Only repository threads can work in a worktree.");
-      if ((await this.core.projects.inspect(chat.projectId)).plain)
-        throw new Error("Worktrees need a Git repository.");
-      if (chat.activeAgentWorktree)
-        throw new Error(
-          `This thread works in ${chat.activeAgentWorktree.path}, a worktree it made earlier. The user can switch it back to the project folder first.`,
-        );
-      const root = await this.core.projects.root(chat.projectId);
-      const problem = branch && (await newBranchProblem(root, branch));
-      if (problem) throw new Error(problem);
-      const { worktree, copied } = await this.inRepo(root, async () =>
-        copy
-          ? await copyIntoWorktree(
-              root,
-              this.folder,
-              chat.title,
-              root,
-              id,
-              branch,
-            )
-          : {
-              worktree: await createWorktree(
-                root,
-                this.folder,
-                chat.title,
-                branch ? { named: branch } : undefined,
-              ),
-              copied: 0,
-            },
-      );
-      const { included: _, ...made } = worktree;
-      chat.worktree = { ...made, setup: "done" };
-      chat.branch = made.branch;
-      delete chat.commit;
-      // The agent that asked knows; the thread's other agents hear it next time.
-      const active = this.core.active.get(id);
-      const caller = active?.input ?? chat.lastInput;
-      const asker = caller ? `${sentAgent(caller)}:main` : undefined;
-      const owed = Object.keys(chat.scopeHeard ?? {}).filter(
-        (key) => key !== asker,
-      );
-      noteWorkspaceMove(chat, {
-        how: "moved",
-        to: made.path,
-        ...(made.branch ? { branch: made.branch } : {}),
-        unasked: true,
-        ...(caller ? { by: sentAgent(caller) } : {}),
-      });
-      if (owed.length)
-        chat.movedIn = {
-          from: root,
-          to: made.path,
-          owed,
-          ...(copy ? { copied: true as const } : { fresh: true as const }),
-        };
-      await this.core.storage.save(chat);
-      await active?.moved?.(made.path);
-      const setup = this.setup.command(chat);
-      const env = await this.setup.env(chat);
-      return {
-        folder: made.path,
-        branch: made.branch,
-        ...(made.from ? { from: made.from } : {}),
-        ...(copy ? { uncommittedFilesCopied: copied } : {}),
-        ...(setup ? { setupCommand: setup } : {}),
-        ...(Object.keys(env).length ? { environment: env } : {}),
-      };
-    });
+  /** Moves a project-folder thread into a worktree at its agent's asking; see `WorktreeEntry`. */
+  enter(id: string, request: WorktreeRequest) {
+    return this.entry.enter(id, request);
   }
 
   /** Where the thread's terminal opens: its worktree, or the project's checkout. */

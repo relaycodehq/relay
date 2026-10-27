@@ -6,7 +6,8 @@ import { basename, join } from "node:path";
 import { existsSync } from "node:fs";
 import { joinedWorktree, type ProjectChat } from "../../shared/projects";
 import type { ChatCore } from "./core";
-import { ThreadWorktrees, joinableOn } from "./worktrees";
+import { ThreadWorktrees } from "./worktrees";
+import { joinableOn } from "./carry-on";
 
 // A Git run from inside another repository's hook or bisect would act on that one.
 for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"])
