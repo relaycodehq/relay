@@ -37,6 +37,8 @@ ol.messages { list-style: none; margin: 0; padding: 0; }
 .markdown { font-size: 14px; line-height: 1.75; }
 .message.user .body { padding: 12px 16px; border: 1px solid var(--border); border-radius: 13px; background: var(--toolbar); font-size: 13px; line-height: 1.65; }
 .message.user .markdown { font-size: inherit; line-height: inherit; }
+/* A message of only pictures, or only a mention, has no box. */
+.message.user .body:has(> .markdown:empty) { display: none; }
 .markdown > :first-child { margin-top: 0; } .markdown > :last-child { margin-bottom: 0; }
 .markdown p { margin: 8px 0; }
 .markdown h1, .markdown h2, .markdown h3 { font-size: 15px; margin: 14px 0 8px; }

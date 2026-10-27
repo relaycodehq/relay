@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { isAbsolute, join, normalize, parse, sep } from "node:path";
 import { readTurn } from "../../shared/agent-trace";
-import { agentName } from "../../shared/agents";
+import { agentMentionPattern, agentName } from "../../shared/agents";
 import {
   answerImagePaths,
   answerVideoPaths,
@@ -318,13 +318,17 @@ function renderedBody(
   if (cached?.key === key) return cached.html;
   // Paths go after links are read, which name files by their full path.
   // A picture's path with spaces is read as the app reads it.
-  const markdown = bracketSpacedImagePaths(guestBody(m.body));
+  const markdown = bracketSpacedImagePaths(guestBody(shownBody(m)));
   const html = withoutHostPaths(guestHtml(markdown, links), root);
   if (rendered.size > 5000) rendered.delete(rendered.keys().next().value!);
   rendered.delete(m.id);
   rendered.set(m.id, { key, html });
   return html;
 }
+
+/** What the app shows of a message: a leading `@claude` only picks who answers. */
+const shownBody = (m: ChatMessage) =>
+  m.role === "user" ? m.body.replace(agentMentionPattern, "") : m.body;
 
 export function guestBody(body: string) {
   const clean = redacted(body);

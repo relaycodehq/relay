@@ -48,4 +48,28 @@ describe("guestSnapshot", () => {
     expect(snapshot.view.messages[0]!.html).toContain("data-media=");
     expect(snapshot.contents.images).toBe(1);
   });
+
+  it("leaves the agent a message mentions out, as the app does", async () => {
+    const sent = {
+      id: "m1",
+      seq: 1,
+      role: "user",
+      body: "@claude What does that mean",
+      status: "complete",
+      created: 1,
+      provider: "claude",
+      version: 1,
+    } as ChatMessage;
+    const fail = async () => {
+      throw new Error("Not read here.");
+    };
+    const snapshot = await guestSnapshot(
+      { id: "t2", title: "Mention", messages: [sent] } as ProjectChat,
+      null,
+      { image: fail, readImage: fail, previewShot: fail, turnVideoPath: fail },
+      Date.now() + 1000,
+      (id) => id,
+    );
+    expect(snapshot.view.messages[0]!.html).toBe("<p>What does that mean</p>");
+  });
 });
