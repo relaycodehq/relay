@@ -17,13 +17,15 @@ const seamsKey = "deep-review-seams";
 export function useReviewPasses(
   projectId: string,
   target: ReviewTarget | undefined,
-  /** Uncommitted files in the checkout, so their list follows edits. */
+  /** Uncommitted files where it reads, so their list follows edits. */
   changes: number,
+  /** A branch checked out in another folder, read there instead of the project folder. */
+  on?: string,
 ) {
   const key = JSON.stringify(target ?? null);
   const files = useQuery({
-    queryKey: ["deep-review-files", projectId, key, changes],
-    queryFn: () => api.deepReviewFiles(projectId, target!),
+    queryKey: ["deep-review-files", projectId, key, changes, on],
+    queryFn: () => api.deepReviewFiles(projectId, target!, on),
     enabled: !!target,
     staleTime: 30_000,
   });

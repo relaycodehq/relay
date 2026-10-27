@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MAX_REVIEWERS,
   passCount,
@@ -8,7 +8,7 @@ import type { Project } from "../../../shared/projects";
 import { sendsMessage, useSendKey } from "../../lib/send-key";
 import { useAgentName } from "./useAgentName";
 import { useDeepReviewSetup } from "./useDeepReviewSetup";
-import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
+import { ReviewBranchPicker } from "./ReviewBranchPicker";
 import { ReviewSetups } from "./ReviewSetups";
 import { LeadField } from "./LeadField";
 import { PassesField } from "./passes/PassesField";
@@ -43,25 +43,32 @@ export function DeepReviewSetup({
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const name = useAgentName();
+  // The branch checked out elsewhere the review reads in, instead of the project folder.
+  const [on, setOn] = useState<string>();
+  const review = useDeepReviewSetup({
+    projectId: project.id,
+    draftId,
+    repository: project.repository,
+    branch,
+    changes,
+    on,
+    busy,
+    onStart,
+  });
   const { setup, update, focus, setFocus, pick, passes, runs, choice, start } =
-    useDeepReviewSetup({
-      projectId: project.id,
-      draftId,
-      repository: project.repository,
-      branch,
-      changes,
-      busy,
-      onStart,
-    });
+    review;
   const count = setup.reviewers.length;
   return (
     <div className="thread-compose-wrap">
       <div className="thread-context-controls">
         {context}
-        <ProjectBranchPicker
+        <ReviewBranchPicker
           projectId={project.id}
           branch={branch}
-          disabled={checkoutDisabled || busy}
+          on={on}
+          onRead={setOn}
+          disabled={busy}
+          locked={checkoutDisabled}
         />
       </div>
       <form
@@ -76,8 +83,8 @@ export function DeepReviewSetup({
             project={project}
             kind={setup.kind}
             pick={pick}
-            branch={branch}
-            changes={changes}
+            branch={review.here.branch}
+            changes={review.here.changes}
             canChoosePR={canChoosePR}
             onKind={(kind) => update({ kind })}
           />

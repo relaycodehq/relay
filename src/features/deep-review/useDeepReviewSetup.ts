@@ -6,6 +6,7 @@ import {
   type DeepReviewStart,
 } from "../../../shared/deep-review";
 import type { PullRef, Repo } from "../../../shared/types";
+import type { CommitSummary } from "../../../shared/history";
 import { api } from "../../lib/api";
 import { threadStorage } from "../../lib/thread-storage";
 import { loadComposerSettings } from "../agents/composer-settings";
@@ -124,6 +125,8 @@ function useTargetPick(
   repository: Repo | null | undefined,
   branch: string | undefined,
   changes: number,
+  /** The latest commits where the review was picked to read, when that's another folder. */
+  elsewhere?: { commits?: CommitSummary[] },
 ) {
   const poll = usePoll();
   const [saved] = useState(() => threadStorage(draftId).review.load());
@@ -148,7 +151,7 @@ function useTargetPick(
   );
   const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
     keepReview(projectId, draftId, setup, change);
-  const commit = useCommitPick(projectId, setup, saved.commit, keep);
+  const commit = useCommitPick(projectId, setup, saved.commit, keep, elsewhere);
   const { heads, head, bases, base } = reviewBranches(
     { head: chosenHead, base: chosenBase },
     branches.data?.branches ?? [],
@@ -202,20 +205,22 @@ function useCommitPick(
   setup: Setup,
   saved: string | undefined,
   keep: (change: Parameters<typeof updateReviewDraft>[1]) => void,
+  elsewhere?: { commits?: CommitSummary[] },
 ) {
   const [picked, setPicked] = useState(saved ?? "");
   const commits = useQuery({
     queryKey: ["recent-commits", projectId],
     queryFn: async () =>
       (await api.projectHistory(projectId, "head", 40)).commits,
-    enabled: setup.kind === "commit",
+    enabled: setup.kind === "commit" && !elsewhere,
   });
-  const commit = commits.data?.some((c) => c.sha === picked)
+  const recent = elsewhere ? elsewhere.commits : commits.data;
+  const commit = recent?.some((c) => c.sha === picked)
     ? picked
-    : commits.data?.[0]?.sha;
+    : recent?.[0]?.sha;
   return {
-    commits: commits.data ?? [],
-    commitsPending: commits.isPending,
+    commits: recent ?? [],
+    commitsPending: !recent,
     commit,
     setCommit: (sha: string) => {
       setPicked(sha);
@@ -231,6 +236,7 @@ export function useDeepReviewSetup({
   repository,
   branch,
   changes,
+  on,
   busy,
   onStart,
 }: {
@@ -239,19 +245,23 @@ export function useDeepReviewSetup({
   repository?: Repo | null;
   branch?: string;
   changes: number;
+  /** A branch checked out in another folder, which the review reads in instead. */
+  on?: string;
   busy: boolean;
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const { setup, update, focus, setFocus } = useSetupDraft(projectId, draftId);
+  const here = useReviewFolder(projectId, on, { branch, changes });
   const pick = useTargetPick(
     projectId,
     draftId,
     setup,
     repository,
-    branch,
-    changes,
+    here.branch,
+    here.changes,
+    here.elsewhere,
   );
-  const passes = useReviewPasses(projectId, pick.target, changes);
+  const passes = useReviewPasses(projectId, pick.target, here.changes, on);
   const runs = setup.reviewers.length * passCount(passes);
   const choice: ReviewSetupChoice = {
     reviewers: setup.reviewers,
@@ -270,6 +280,7 @@ export function useDeepReviewSetup({
       runChecks: setup.runChecks,
       focus: focus.trim(),
       runtimeMode,
+      ...(on ? { on } : {}),
       ...(passes.passes.length && {
         passes: passes.passes,
         seams: passes.seams,
@@ -287,11 +298,38 @@ export function useDeepReviewSetup({
     update,
     focus,
     setFocus,
+    /** The branch and uncommitted files the review would read. */
+    here,
     pick,
     passes,
     /** Reviewer runs, once a pass each: past MAX_REVIEWERS it can't start. */
     runs,
     choice,
     start,
+  };
+}
+
+/**
+ * What a new review reads: the project folder's branch and uncommitted
+ * files, or with `on`, those of the folder that branch is checked out in,
+ * and its latest commits.
+ */
+function useReviewFolder(
+  projectId: string,
+  on: string | undefined,
+  projectFolder: { branch?: string; changes: number },
+) {
+  const poll = usePoll();
+  const folder = useQuery({
+    queryKey: ["deep-review-folder", projectId, on],
+    queryFn: () => api.deepReviewFolder(projectId, on!),
+    enabled: !!on,
+    refetchInterval: poll(3000),
+  });
+  if (!on) return { ...projectFolder, elsewhere: undefined };
+  return {
+    branch: on,
+    changes: folder.data?.changes ?? 0,
+    elsewhere: { commits: folder.data?.commits },
   };
 }

@@ -29,10 +29,10 @@ export interface BranchChoice {
 export interface BranchPickInterceptor {
   /** Switching the checkout is held off for now; picking still works. */
   locked: boolean;
-  /** Whether to switch the checkout as usual; false when the pick was taken care of. */
+  /** Whether to switch the checkout as usual; false when the pick was taken care of. Asked even for the checkout's own branch. */
   pick: (choice: BranchChoice, list: BranchList) => boolean;
-  /** The checkout refused to switch, `reason` saying why. */
-  refused: (choice: BranchChoice, reason: string, list: BranchList) => void;
+  /** The checkout refused to switch, `reason` saying why; without it, the picker says why. */
+  refused?: (choice: BranchChoice, reason: string, list: BranchList) => void;
 }
 
 export const ProjectBranchPicker = memo(function ProjectBranchPicker({
@@ -88,12 +88,12 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
   const [creating, setCreating] = useState(false);
   async function choose(choice: BranchChoice, list: BranchList) {
     if (switching.current || disabled) return;
-    const picked = list.branches.find((b) => b.name === choice.name);
-    if (!choice.create && (!picked || picked.current)) {
+    if (intercept && !intercept.pick(choice, list)) {
       setOpen(false);
       return;
     }
-    if (intercept && !intercept.pick(choice, list)) {
+    const picked = list.branches.find((b) => b.name === choice.name);
+    if (!choice.create && (!picked || picked.current)) {
       setOpen(false);
       return;
     }
@@ -115,7 +115,7 @@ export const ProjectBranchPicker = memo(function ProjectBranchPicker({
       void qc.invalidateQueries(everythingButFetch);
     } catch (e) {
       const reason = errorMessage(e);
-      if (intercept) {
+      if (intercept?.refused) {
         setOpen(false);
         intercept.refused(choice, reason, list);
         return;

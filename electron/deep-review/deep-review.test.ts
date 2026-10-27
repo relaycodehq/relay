@@ -1070,6 +1070,31 @@ it("runs the next round where the review works, and won't fix an earlier round's
   );
 });
 
+it("reads where the branch picked in its setup is checked out, not the project folder", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" }).trim();
+  const there = join(root, "panel-picked");
+  git(repo, "worktree", "add", "-q", "-b", "panel", there);
+  // Only the worktree has edits; the project folder has none to review.
+  await writeFile(join(there, "src", "panel.ts"), "export const panel = 1;\n");
+
+  const chat = await chats.create(projectId, { kind: "review" });
+  await chats.startDeepReview(
+    chat.id,
+    config({ target: { kind: "uncommitted" }, on: "panel" }),
+  );
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
+  );
+  const { scope } = (await chats.get(chat.id)).reviews!.at(-1)!;
+  expect(scope.branch).toBe("panel");
+  expect(scope.stats?.files).toBe(1);
+  // Fixes go there too: it's the review's folder, which it never removes.
+  expect(scope.checkout).toEqual({ path: there, made: false, branch: "panel" });
+  for (const r of (await capture()).filter((r) => r.prompt || r.review))
+    expect(r.cwd).toBe(there);
+});
+
 it("reviews a branch in the folder it's checked out in, edits and all, and follows it to another folder rather than refusing a fix", async () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync(

@@ -9,13 +9,24 @@ import type {
 } from "../deep-review";
 import type { FindingStatus } from "../findings";
 import type { ChangedFile } from "../review-passes";
+import type { CommitSummary } from "../history";
 import type { SecondOpinionAgent } from "../second-opinion";
 
 /** Deep reviews, run inside a thread, and second opinions on one answer. */
 export interface ProjectCouncilApi {
   startDeepReview(id: string, config: DeepReviewStart): Promise<void>;
   /** The files a deep review of `target` would cover in project `id`, for its setup to split. */
-  deepReviewFiles(id: string, target: ReviewTarget): Promise<ChangedFile[]>;
+  /** `on`: read where that branch is checked out instead of the project folder. */
+  deepReviewFiles(
+    id: string,
+    target: ReviewTarget,
+    on?: string,
+  ): Promise<ChangedFile[]>;
+  /** What the folder `branch` is checked out in holds for a review to read: its uncommitted files and latest commits. */
+  deepReviewFolder(
+    id: string,
+    branch: string,
+  ): Promise<{ changes: number; commits: CommitSummary[] }>;
   /** Asks `agent` for a second opinion on answer `answerId`, in a read-only thread of its own. */
   askSecondOpinion(
     id: string,

@@ -105,6 +105,8 @@ const deepReviewConfigSchema = z
     passes: z.array(reviewPassSchema).max(MAX_REVIEWERS).optional(),
     /** After the passes, one more over the whole change for how the parts fit together. */
     seams: z.boolean().optional(),
+    /** A branch checked out in another folder, which a review of its own reads and fixes in instead of the thread's. */
+    on: z.string().min(1).max(250).optional(),
   })
   .strict();
 

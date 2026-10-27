@@ -124,7 +124,7 @@ export class Councils {
     if (chat.reviewer && state?.scope.folder && !state.scope.checkout)
       return state.scope.folder;
     const checkout = state?.scope.checkout;
-    if (!checkout || !state.scope.head) return;
+    if (!checkout) return;
     if (!make)
       return (await stat(checkout.path).catch(() => null))
         ? checkout.path

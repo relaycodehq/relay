@@ -27,7 +27,7 @@ import { haltedReview, reviewReports, startLead } from "./lead";
 import { requestText } from "./prompts";
 import { resolveScope, reviewPasses, type PullInfo } from "./scope";
 import type { PullRef } from "../../shared/types";
-import { placeRound } from "./checkout";
+import { branchFolder, placeRound } from "./checkout";
 import { createReviewers, sendReviewers } from "./reviewers";
 import { followFixes } from "./fixes";
 import type { DeepReviewHost } from "./host";
@@ -59,6 +59,23 @@ export class DeepReviews {
    * mid-answer: the lead's turn waits for that answer to end, and the
    * folder it runs in isn't moved.
    */
+  /**
+   * The folder a round reads: the thread's, or for a review of its own
+   * picked to read where a branch is checked out, that folder, `at`.
+   */
+  private async readsIn(
+    chat: ProjectChat,
+    config: DeepReviewStart,
+    folder?: (chat: ProjectChat) => Promise<string>,
+  ) {
+    const own = await (folder?.(chat) ?? this.host.root(chat.projectId));
+    const at =
+      chat.scope.kind === "review" && config.on
+        ? await branchFolder(own, config.on)
+        : undefined;
+    return { root: at?.path ?? own, at };
+  }
+
   async start(
     chatId: string,
     config: DeepReviewStart,
@@ -94,12 +111,13 @@ export class DeepReviews {
       config.target.kind === "pr"
         ? await pullInfo?.(config.target.ref)
         : undefined;
-    const root = await (folder?.(chat) ?? this.host.root(chat.projectId));
+    const { root, at } = await this.readsIn(chat, config, folder);
     const scope = await resolveScope(root, config.target, project, pull);
     const discardCheckout = await placeRound(root, scope, chat, {
       worktrees: this.host.worktrees,
       prHead: pull?.headBranch,
       duringTurn,
+      at,
     });
     const passes = await reviewPasses(root, scope, config);
     const request: ChatMessage = {

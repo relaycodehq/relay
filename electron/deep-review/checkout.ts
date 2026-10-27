@@ -52,6 +52,17 @@ async function folderOf(root: string, branch: string) {
   )?.path;
 }
 
+/** The folder `branch` is checked out in, for a review to read and fix it there as it is. */
+export async function branchFolder(
+  root: string,
+  branch: string,
+): Promise<ReviewCheckout> {
+  const path = await folderOf(root, branch);
+  if (!path)
+    throw new Error(`${branch} isn't checked out in a folder anymore.`);
+  return { path, made: false, branch };
+}
+
 /**
  * The local branch a pull request's fixes go on: its head branch, then
  * `pr/<number>`, the first that already holds the reviewed `head` or, when
@@ -241,10 +252,11 @@ async function freeFolder(
 export async function ensureReviewCheckout(
   root: string,
   checkout: ReviewCheckout,
-  head: string,
+  /** What it's made again at; uncommitted changes read in a branch's folder have none. */
+  head: string | undefined,
 ) {
   if (await exists(checkout.path)) return checkout.path;
-  if (!checkout.made)
+  if (!checkout.made || !head)
     throw new Error(
       `The worktree this review reads from, ${checkout.path}, is gone.`,
     );
@@ -408,10 +420,17 @@ export async function placeRound(
     worktrees,
     prHead,
     duringTurn,
-  }: { worktrees: string; prHead?: string; duringTurn: boolean },
+    at,
+  }: {
+    worktrees: string;
+    prHead?: string;
+    duringTurn: boolean;
+    /** The folder the review was picked to read in, `root` being it. */
+    at?: ReviewCheckout;
+  },
 ) {
   let putBack: (() => Promise<unknown>) | undefined;
-  const checkout =
+  const opened =
     chat.scope.kind === "review"
       ? await openReviewCheckout(root, scope, worktrees, chat.id, prHead, {
           inUse: duringTurn,
@@ -421,6 +440,7 @@ export async function placeRound(
           return undefined;
         })
       : undefined;
+  const checkout = opened ?? at;
   if (checkout) scope.checkout = checkout;
   else scope.folder = root;
   const kept =
