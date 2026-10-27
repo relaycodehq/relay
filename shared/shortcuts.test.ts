@@ -5,11 +5,11 @@ import {
   menuAcceleratorsSchema,
   menuShortcutIds,
   overlaps,
-  recordCombo,
   reservedCombos,
   shortcutIds,
   type KeyCombo,
 } from "./shortcuts";
+import { recordCombo } from "./shortcut-record";
 
 const key = (
   code: string,

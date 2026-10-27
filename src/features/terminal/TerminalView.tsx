@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { useAppearance } from "../../lib/appearance";
+import { useShortcut } from "../../lib/shortcuts";
 import { terminalFont, useTypography } from "../../lib/typography";
 import { terminalTheme } from "./terminal-theme";
 import {
@@ -10,8 +11,24 @@ import {
 import "./terminal-drawer.css";
 
 /** One shell's screen, wherever its tab is: the drawer or the panel. */
-export function TerminalView({ terminal }: { terminal: ThreadTerminal }) {
+export function TerminalView({
+  terminal,
+  onNewShell,
+}: {
+  terminal: ThreadTerminal;
+  /** Opens another shell beside this one, which takes focus once it shows. */
+  onNewShell: () => ThreadTerminal;
+}) {
   useSyncExternalStore(terminal.subscribe, terminal.snapshot);
+  // Only while typing in this shell, so the key opens one where you are.
+  useShortcut(
+    "new-terminal",
+    true,
+    () => {
+      onNewShell().focusOnShow = true;
+    },
+    { meant: (e) => terminal.element.contains(e.target as Node) },
+  );
   const { palette, accent } = useAppearance();
   const body = useRef<HTMLDivElement>(null);
   // Before the terminal draws, so it never shows xterm's own colors first.

@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { api } from "../../lib/api";
 import { legacyTabs } from "../../lib/workspace-panes";
 import { newThreadProject } from "../composer/drafts";
@@ -31,9 +38,12 @@ const REMEMBERED = 200;
 writeText("relay-thread-panel", null);
 
 function tabFor(surface: Surface): PanelTab {
-  if (surface !== "terminal") return { key: surface, surface };
+  return surface === "terminal" ? terminalTab() : { key: surface, surface };
+}
+
+function terminalTab() {
   const slot = newTerminalSlot();
-  return { key: `terminal:${slot}`, surface, slot };
+  return { key: `terminal:${slot}`, surface: "terminal" as const, slot };
 }
 
 const isTab = (tab: unknown): tab is PanelTab =>
@@ -139,6 +149,21 @@ function followReveals() {
   });
 }
 
+/** While the thread's panel is mounted, an agent's preview opens its Browser tab there. */
+function useBrowserOnReveal(
+  thread: string,
+  setState: Dispatch<SetStateAction<PanelState>>,
+) {
+  useEffect(() => {
+    followReveals();
+    const reveal = () => setState((s) => ({ ...s, ...withBrowser(s) }));
+    mounted.set(thread, reveal);
+    return () => {
+      if (mounted.get(thread) === reveal) mounted.delete(thread);
+    };
+  }, [thread, setState]);
+}
+
 export type PanelTabs = ReturnType<typeof usePanelTabs>;
 
 /**
@@ -171,14 +196,7 @@ export function usePanelTabs(thread: string, shown: boolean) {
   useEffect(() => {
     if (seen) setState((s) => ({ ...s, unseen: null }));
   }, [seen]);
-  useEffect(() => {
-    followReveals();
-    const reveal = () => setState((s) => ({ ...s, ...withBrowser(s) }));
-    mounted.set(thread, reveal);
-    return () => {
-      if (mounted.get(thread) === reveal) mounted.delete(thread);
-    };
-  }, [thread]);
+  useBrowserOnReveal(thread, setState);
   /** Brings the surface's tab to the front, opening it; a terminal always opens a new one. */
   const show = useCallback(
     (surface: Surface) =>
@@ -190,6 +208,12 @@ export function usePanelTabs(thread: string, shown: boolean) {
       }),
     [],
   );
+  /** Opens one more shell as the tab in front, and says which. */
+  const addTerminal = useCallback(() => {
+    const tab = terminalTab();
+    setState((s) => ({ ...s, tabs: [...s.tabs, tab], front: tab.key }));
+    return tab.slot;
+  }, []);
   const bring = useCallback(
     (key: string) => setState((s) => ({ ...s, front: key })),
     [],
@@ -220,6 +244,7 @@ export function usePanelTabs(thread: string, shown: boolean) {
     unseen: seen ? null : (state.unseen ?? null),
     has: (surface: Surface) => state.tabs.some((t) => t.surface === surface),
     show,
+    addTerminal,
     bring,
     pick,
     close,

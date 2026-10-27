@@ -11,7 +11,13 @@ import {
 import type { AgentProvider } from "../../../shared/agents";
 import { api } from "../../lib/api";
 import { matches } from "../../lib/shortcuts";
-import { frontInDock, moveDock, setTerminalOpen } from "./terminal-dock";
+import {
+  dockTabs,
+  frontInDock,
+  moveDock,
+  newTerminalSlot,
+  setTerminalOpen,
+} from "./terminal-dock";
 import { errorMessage } from "../../../shared/error-message";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
@@ -86,13 +92,18 @@ export class ThreadTerminal {
       }
       this.term.focus();
     });
+    this.element.addEventListener("focusin", () => (lastFocused = this));
     this.term.loadAddon(this.fit);
     this.term.loadAddon(
       new WebLinksAddon((_event, uri) => void api.openExternal(uri)),
     );
-    // The drawer's own shortcut toggles it rather than reaching the shell.
+    // The drawer's own shortcuts reach the app rather than the shell.
     this.term.attachCustomKeyEventHandler(
-      (e) => !(e.type === "keydown" && matches("terminal", e)),
+      (e) =>
+        !(
+          e.type === "keydown" &&
+          (matches("terminal", e) || matches("new-terminal", e))
+        ),
     );
     this.term.onData((data) => {
       if (this.status === "running")
@@ -273,6 +284,8 @@ export class ThreadTerminal {
 }
 
 const terminals = new Map<string, ThreadTerminal>();
+/** The shell focused last, where commands from answers go. */
+let lastFocused: ThreadTerminal | undefined;
 let currentTheme: ITheme | undefined;
 /** Set from the typography settings; an empty family reads --font-mono. */
 let currentFont = { family: "", size: 12 };
@@ -299,6 +312,17 @@ export function terminalFor(
     terminal = new ThreadTerminal(key, projectId, chatId, slot);
     terminals.set(key, terminal);
   }
+  return terminal;
+}
+
+/** Opens a new shell as the dock's front tab, focused once it shows. */
+export function addDockTerminal(projectId: string, chatId: string | null) {
+  const key = terminalKey(projectId, chatId);
+  const slot = newTerminalSlot();
+  const terminal = terminalFor(projectId, chatId, slot);
+  terminal.focusOnShow = true;
+  frontInDock(key, slot);
+  setTerminalOpen(key, true);
   return terminal;
 }
 
@@ -349,14 +373,29 @@ async function typeAtPrompt(
   chatId: string | null,
   type: (key: string) => Promise<boolean>,
 ) {
-  const terminal = terminalFor(projectId, chatId);
-  terminal.focusOnShow = true;
-  frontInDock(terminal.key, "");
-  setTerminalOpen(terminal.key, true);
+  const terminal = promptTerminal(projectId, chatId);
   if (!(await terminal.running())) return false;
   const typed = await type(terminal.key).catch(() => false);
   terminal.term.focus();
   return typed;
+}
+
+/**
+ * The thread's shell focused last, while it's on screen in the dock
+ * or the panel; otherwise the dock's front tab, with the dock opened.
+ */
+function promptTerminal(projectId: string, chatId: string | null) {
+  const key = terminalKey(projectId, chatId);
+  const used = lastFocused;
+  const usedHere =
+    !!used &&
+    terminals.get(used.key) === used &&
+    terminalBaseKey(used.key) === key;
+  if (usedHere && used.element.isConnected) return used;
+  const front = terminalFor(projectId, chatId, dockTabs(key).front);
+  front.focusOnShow = true;
+  setTerminalOpen(key, true);
+  return front;
 }
 
 /** The draft's terminals become the new thread's, open or not. */

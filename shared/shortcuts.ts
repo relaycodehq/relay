@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { isFunctionKey } from "./shortcut-accelerator";
 import { combo, one } from "./shortcut-combo";
 
 export { accelerator } from "./shortcut-accelerator";
@@ -117,6 +116,15 @@ const shortcutCommands = {
       mac
         ? [combo(mac, "meta+KeyJ"), combo(mac, "ctrl+Backquote")]
         : [combo(mac, "ctrl+Backquote")],
+  },
+  "new-terminal": {
+    title: "New terminal",
+    group: "General",
+    description:
+      "While you type in a terminal, opens another shell beside it, in the drawer or the panel.",
+    keywords: "shell console tab another",
+    // Ctrl+T is a shell's own key off macOS, so Ctrl+Shift+` as in VS Code.
+    defaults: (mac) => [combo(mac, mac ? "meta+KeyT" : "ctrl+shift+Backquote")],
   },
   "thread-window": {
     title: "Open the thread in its own window, or put it back",
@@ -424,7 +432,7 @@ const modifiersEqual = (a: KeyCombo, b: KeyCombo) =>
   a.meta === b.meta &&
   a.shift === b.shift;
 
-const isDigit = (code: string) => /^Digit[1-9]$/.test(code);
+export const isDigit = (code: string) => /^Digit[1-9]$/.test(code);
 
 export const sameCombo = (a: KeyCombo, b: KeyCombo) =>
   a.code === b.code && !!a.twice === !!b.twice && modifiersEqual(a, b);
@@ -445,70 +453,3 @@ export function overlaps(
 
 export const modifierCode =
   /^(Alt|Control|Meta|Shift|OS|CapsLock|Fn)(Left|Right)?$/;
-/** Keys that type something, so they can't be a shortcut alone in a field. */
-const printable =
-  /^(Key[A-Z]|Digit\d|Minus|Equal|BracketLeft|BracketRight|Backslash|Semicolon|Quote|Comma|Period|Slash|Backquote|IntlBackslash)$/;
-
-export type Recorded =
-  | { kind: "wait" }
-  | { kind: "combo"; combo: KeyCombo }
-  | { kind: "invalid"; reason: string };
-
-/**
- * What a keypress in the shortcut recorder makes of `id`'s binding. Esc and
- * Backspace are the recorder's own keys and never get here.
- */
-export function recordCombo(
-  e: {
-    code: string;
-    altKey: boolean;
-    ctrlKey: boolean;
-    metaKey: boolean;
-    shiftKey: boolean;
-  },
-  id: ShortcutId,
-  mac: boolean,
-): Recorded {
-  if (!e.code || modifierCode.test(e.code)) return { kind: "wait" };
-  const next: KeyCombo = {
-    code: e.code,
-    alt: e.altKey,
-    ctrl: e.ctrlKey,
-    meta: e.metaKey,
-    shift: e.shiftKey,
-  };
-  const held = next.alt || next.ctrl || next.meta;
-  const mods = mac ? "⌘, ⌃ or ⌥" : "Ctrl or Alt";
-  const cmd = command(id);
-  if (
-    /^(Enter|NumpadEnter|Tab|Escape)$/.test(next.code) &&
-    !(cmd.sends && held && /Enter$/.test(next.code))
-  )
-    return {
-      kind: "invalid",
-      reason: cmd.sends
-        ? `Tab and Esc keep their usual jobs, and Enter needs ${mods}. Try another key.`
-        : "Enter, Tab and Esc keep their usual jobs. Try another key.",
-    };
-  if (cmd.digits) {
-    if (!isDigit(next.code) || !held)
-      return {
-        kind: "invalid",
-        reason: `Hold ${mods} and press any digit from 1 to 9.`,
-      };
-    return { kind: "combo", combo: { ...next, code: "Digit1" } };
-  }
-  if (!held && !isFunctionKey(next.code)) {
-    if (!cmd.bare)
-      return {
-        kind: "invalid",
-        reason: `Add ${mods}. A plain key would type instead.`,
-      };
-    if (!printable.test(next.code))
-      return {
-        kind: "invalid",
-        reason: `That key moves around the page. Try a letter, or add ${mods}.`,
-      };
-  }
-  return { kind: "combo", combo: next };
-}

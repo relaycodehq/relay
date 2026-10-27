@@ -287,3 +287,118 @@ test("selecting in the terminal copies, and right-click pastes", async () => {
     await app.close();
   }
 });
+
+test("the new-terminal key adds a shell where you type, and ▶ types into the shell last used", async () => {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "relay-terminal-play-")),
+  );
+  const repo = join(root, "project"),
+    bin = join(root, "bin");
+  await mkdir(repo);
+  await mkdir(bin);
+  await fakeCli(
+    join(bin, "codex"),
+    await readFile(resolve("tests/fixtures/room-agent.cjs"), "utf8"),
+  );
+  const env = relayEnv();
+  const app = await electron.launch({
+    env: {
+      ...env,
+      ...pathWith(env, bin),
+      RELAY_TEST_DATA: join(root, "data"),
+    },
+  });
+  const newShell =
+    process.platform === "darwin" ? "Meta+T" : "Control+Shift+Backquote";
+  try {
+    const page = await app.firstWindow();
+    await app.evaluate(({ dialog }, repo) => {
+      dialog.showOpenDialog = async () => ({
+        canceled: false,
+        filePaths: [repo],
+      });
+    }, repo);
+    await page.evaluate(() => window.relay.addProject());
+    await page.reload();
+
+    // ▶ only shows in a sent thread.
+    await page
+      .getByLabel("Message project")
+      .fill("fixture echo: ```sh\necho played-$((3*3))\n```\nfixture echo end");
+    await page
+      .getByRole("button", { name: "Send message", exact: true })
+      .click();
+    const play = page
+      .getByRole("article", { name: "codex answer" })
+      .getByRole("button", { name: "Type in terminal", exact: true });
+    await expect(play).toHaveCount(1, { timeout: 15000 });
+
+    const drawer = page.getByRole("region", { name: "Terminal" });
+    const screen = drawer.locator(".xterm-rows");
+    // Outside a terminal the key opens nothing.
+    await page.getByLabel("Message project").click();
+    await page.keyboard.press(newShell);
+    await expect(drawer).toBeHidden();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await expect(drawer.locator(".terminal-drawer-cwd")).toHaveText("project");
+    await page.keyboard.type("echo first-$((0+1))");
+    await page.keyboard.press("Enter");
+    await expect(screen).toContainText("first-1");
+
+    // The key opens a second shell in front, ready to type in.
+    await page.keyboard.press(newShell);
+    await expect(drawer.getByRole("tab")).toHaveText([
+      "Terminal",
+      "Terminal 2",
+    ]);
+    await page.keyboard.type("echo second-$((1+1))");
+    await page.keyboard.press("Enter");
+    await expect(screen).toContainText("second-2");
+    await expect(screen).not.toContainText("first-1");
+
+    // ▶ types into the shell in front, not the first one.
+    await play.click();
+    await expect(drawer.getByRole("tab", { selected: true })).toHaveText(
+      "Terminal 2",
+    );
+    await expect(screen).toContainText("echo played-$((3*3))");
+    await page.keyboard.press("Enter");
+    await expect(screen).toContainText("played-9");
+    await expect(screen).not.toContainText("first-1");
+
+    // In the panel the key opens one there; the shell last typed in gets ▶.
+    await page
+      .getByRole("group", { name: "Workspace panes" })
+      .getByRole("button", { name: "Panel", exact: true })
+      .click();
+    await page
+      .locator(".surface-picker")
+      .getByRole("button", { name: "Terminal", exact: true })
+      .click();
+    const panelTabs = page.locator(".panel-header").getByRole("tab");
+    const panelScreen = page.locator(
+      ".panel-header ~ .terminal-view .xterm-rows",
+    );
+    await page.locator(".panel-header ~ .terminal-view .xterm-screen").click();
+    await page.keyboard.type("echo panel-$((2+2))");
+    await page.keyboard.press("Enter");
+    await expect(panelScreen).toContainText("panel-4");
+    await page.keyboard.press(newShell);
+    await expect(panelTabs).toHaveText(["Terminal", "Terminal 2"]);
+    await expect(drawer.getByRole("tab")).toHaveCount(2);
+    await page.keyboard.type("echo panel-two-$((1+1))");
+    await page.keyboard.press("Enter");
+    await expect(panelScreen).toContainText("panel-two-2");
+    await expect(panelScreen).not.toContainText("panel-4");
+    await play.click();
+    await expect(panelScreen).toContainText("echo played-$((3*3))");
+    await page.keyboard.press("Enter");
+    await expect(panelScreen).toContainText("played-9");
+    await expect(
+      screen.locator("> div", { hasText: /^played-9\s*$/ }),
+    ).toHaveCount(1);
+    await screenshot(page, { path: "test-results/terminal-play.png" });
+  } finally {
+    await app.close();
+  }
+});

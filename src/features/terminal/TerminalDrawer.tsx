@@ -3,13 +3,13 @@ import { RotateCw, SquareTerminal, X } from "lucide-react";
 import { IconButton } from "../../ui/ui";
 import { PaneTabs } from "../../ui/PaneTabs";
 import { Splitter } from "../../ui/Splitter";
+import { setDockTabs, setTerminalOpen, useDockTabs } from "./terminal-dock";
 import {
-  newTerminalSlot,
-  setDockTabs,
-  setTerminalOpen,
-  useDockTabs,
-} from "./terminal-dock";
-import { closeTerminal, terminalFor, terminalKey } from "./thread-terminals";
+  addDockTerminal,
+  closeTerminal,
+  terminalFor,
+  terminalKey,
+} from "./thread-terminals";
 import { TerminalView, terminalFolder } from "./TerminalView";
 import { readText, writeText } from "../../lib/persisted-store";
 
@@ -52,11 +52,7 @@ export function TerminalDrawer({
     setHeight(next);
     writeText(heightKey, String(next));
   };
-  const add = () => {
-    const slot = newTerminalSlot();
-    terminalFor(projectId, chatId, slot).focusOnShow = true;
-    setDockTabs(key, { slots: [...tabs.slots, slot], front: slot });
-  };
+  const add = () => addDockTerminal(projectId, chatId);
   const close = (slot: string) => {
     closeTerminal(projectId, chatId, slot);
     const slots = tabs.slots.filter((s) => s !== slot);
@@ -126,7 +122,7 @@ export function TerminalDrawer({
           <X size={14} />
         </IconButton>
       </header>
-      <TerminalView key={terminal.key} terminal={terminal} />
+      <TerminalView key={terminal.key} terminal={terminal} onNewShell={add} />
     </section>
   );
 }

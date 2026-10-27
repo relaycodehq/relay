@@ -255,6 +255,30 @@ function panelTabItems(
   }));
 }
 
+/** Closes a panel tab and ends what it held: a shell, the preview, the device view. */
+function closePanelTab(
+  key: string,
+  {
+    panel,
+    projectId,
+    chatId,
+    opens,
+  }: {
+    panel: PanelTabs;
+    projectId: string;
+    chatId: string | null;
+    opens: PaneOpens;
+  },
+) {
+  const tab = panel.tabs.find((t) => t.key === key);
+  if (tab?.slot) closeTerminal(projectId, chatId, tab.slot);
+  if (tab?.surface === "browser") closePreview(previewKey(projectId, chatId));
+  if (tab?.surface === "device") closeDeviceView();
+  panel.close(key);
+  // The last tab gone leaves only the picker, so the panel goes with it.
+  if (panel.tabs.length === 1 && tab) opens.togglePane("panel");
+}
+
 /**
  * The third pane: the surfaces the thread opened as tabs, or the picker.
  * Files and History stay mounted behind other tabs, so an unsaved edit and
@@ -308,16 +332,8 @@ export function ThreadPanel({
   const front = panel.front;
   const preview = usePreviewState(previewKey(project.id, chatId));
   const tabs = panelTabItems(panel, preview, filesPath, locked);
-  const close = (key: string) => {
-    const tab = panel.tabs.find((t) => t.key === key);
-    if (tab?.slot) closeTerminal(project.id, chatId, tab.slot);
-    if (tab?.surface === "browser")
-      closePreview(previewKey(project.id, chatId));
-    if (tab?.surface === "device") closeDeviceView();
-    panel.close(key);
-    // The last tab gone leaves only the picker, so the panel goes with it.
-    if (panel.tabs.length === 1 && tab) opens.togglePane("panel");
-  };
+  const close = (key: string) =>
+    closePanelTab(key, { panel, projectId: project.id, chatId, opens });
   const folderShown =
     front?.surface === "files" || front?.surface === "history";
   return (
@@ -431,6 +447,9 @@ export function ThreadPanel({
         <TerminalView
           key={front.key}
           terminal={terminalFor(project.id, chatId, front.slot)}
+          onNewShell={() =>
+            terminalFor(project.id, chatId, panel.addTerminal())
+          }
         />
       )}
     </>

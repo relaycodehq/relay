@@ -10,11 +10,11 @@ import {
   command,
   doubleEscapeCombo,
   MAX_BINDINGS,
-  recordCombo,
   sameCombo,
   type KeyCombo,
   type ShortcutId,
 } from "../../../shared/shortcuts";
+import { recordCombo } from "../../../shared/shortcut-record";
 import { mac } from "../../lib/mod-key";
 import {
   comboLabel,
