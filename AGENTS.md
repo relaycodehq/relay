@@ -237,6 +237,20 @@ not a call for interfaces and factories.
   `settings.json` flag, off by default. Remove the flag when the feature is
   done.
 
+## Running tests
+
+- **The whole unit suite runs through `npm run test:all`.** A plain
+  `npx vitest run` of everything gets the calling shell killed partway
+  through; single files run fine with `npx vitest run <file>`.
+- **e2e runs name their specs.** Every spec launches an Electron app into the
+  Dock, so a bare `playwright test` refuses to start (`RELAY_E2E_ALL=1` to
+  really run all of it). Filters are path regexes: `e2e/projects.spec`, not
+  `projects.spec`, which also matches `shared-projects.spec`.
+- **Build e2e runs with `npm run test:e2e:isolated -- <specs>`.** The
+  checkout's `dist/` is shared with the user's app and other sessions' runs;
+  this builds the working tree (or `--ref <rev>`, for a clean baseline) into
+  its own copy in /private/tmp.
+
 ## Commit messages
 
 - **Use Conventional Commits**: `type(scope): subject`, the scope optional.
