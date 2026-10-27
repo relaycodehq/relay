@@ -6,6 +6,7 @@ import { agentName } from "../../shared/agents";
 import {
   answerImagePaths,
   answerVideoPaths,
+  bracketSpacedImagePaths,
   localImagePath,
   localVideoPath,
 } from "../../shared/answer-images";
@@ -314,7 +315,9 @@ function renderedBody(
   const cached = rendered.get(m.id);
   if (cached?.key === key) return cached.html;
   // Paths go after links are read, which name files by their full path.
-  const html = withoutHostPaths(guestHtml(guestBody(m.body), links), root);
+  // A picture's path with spaces is read as the app reads it.
+  const markdown = bracketSpacedImagePaths(guestBody(m.body));
+  const html = withoutHostPaths(guestHtml(markdown, links), root);
   if (rendered.size > 5000) rendered.delete(rendered.keys().next().value!);
   rendered.delete(m.id);
   rendered.set(m.id, { key, html });
