@@ -97,24 +97,8 @@ function morph(
   }, settle);
 }
 
-/** Shell processes Claude and Codex left running in this project, from any conversation. */
-export function RunningTasks({
-  project,
-  chats,
-  onOpenChat,
-}: {
-  project: Project;
-  chats: ChatSummary[];
-  onOpenChat: (chat: ChatSummary) => void;
-}) {
-  const [folded, setFolded] = useStoredFlag("relay-tasks-collapsed");
-  const [card, setCard] = useState<HTMLElement | null>(null);
-  const roomy = useRoomBeside(card);
-  // Without room it stays folded, and opens only until it's closed or the
-  // room comes back; the choice saved for a roomy pane stays as it was.
-  const [peeking, setPeeking] = useState(false);
-  if (roomy && peeking) setPeeking(false);
-  const collapsed = roomy ? folded : !peeking;
+/** The project's running tasks, polled; only an open card in front asks what each costs. */
+function useProjectTasks(project: Project, collapsed: boolean) {
   // Each look reads the system's whole process list: on Windows, through WMI,
   // a look every 3 s costs ~4% of a core. Behind other windows a task can
   // show up to 30 s later; back in front, within 3 s. Only the open card in
@@ -133,6 +117,28 @@ export function RunningTasks({
   }, [costed, refetch]);
   const list = tasks.data ?? [];
   const history = useCostHistory(list, tasks.dataUpdatedAt);
+  return { list, history, costed };
+}
+
+/** Shell processes Claude and Codex left running in this project, from any conversation. */
+export function RunningTasks({
+  project,
+  chats,
+  onOpenChat,
+}: {
+  project: Project;
+  chats: ChatSummary[];
+  onOpenChat: (chat: ChatSummary) => void;
+}) {
+  const [folded, setFolded] = useStoredFlag("relay-tasks-collapsed");
+  const [card, setCard] = useState<HTMLElement | null>(null);
+  const roomy = useRoomBeside(card);
+  // Without room it stays folded, and opens only until it's closed or the
+  // room comes back; the choice saved for a roomy pane stays as it was.
+  const [peeking, setPeeking] = useState(false);
+  if (roomy && peeking) setPeeking(false);
+  const collapsed = roomy ? folded : !peeking;
+  const { list, history, costed } = useProjectTasks(project, collapsed);
   if (!list.length) return null;
   const toggle = () =>
     morph(card, collapsed ? "open" : "close", () =>
