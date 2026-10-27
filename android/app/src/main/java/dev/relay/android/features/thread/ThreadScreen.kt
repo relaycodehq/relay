@@ -484,6 +484,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                         onCompact = actions::compact,
                         onArchive = { sheet = Sheet.Archive },
                         onSites = if (bridge >= Bridge.TUNNEL) ({ nav.push(Route.Browser()) }) else null,
+                        onSwitchBranch = branchSwitch(bridge, summary, t)?.let { r -> { nav.push(r) } },
                         onKeepScroll = {
                             trace.event("manual_incident_requested")
                             scope.launch {

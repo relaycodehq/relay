@@ -9,8 +9,9 @@ enum GitRoute: Hashable {
     case diff(DiffSource)
     /// The working tree: stage, commit, push and pull.
     case changes(where: String)
-    /// Switch to or create a branch; the branch calls take a project id.
-    case branches(projectId: String)
+    /// Switch to or create a branch; the branch calls take a project id. With a
+    /// `thread`, picking a branch moves that started thread there.
+    case branches(projectId: String, thread: BranchThread? = nil)
     case history(where: String)
     case commit(where: String, sha: String)
 }
@@ -24,7 +25,7 @@ struct GitScreen: View {
         case .turn(let chatId, let messageId): TurnView(chatId: chatId, messageId: messageId)
         case .diff(let source): DiffView(source: source)
         case .changes(let w): ChangesView(where: w)
-        case .branches(let projectId): BranchesView(projectId: projectId)
+        case .branches(let projectId, let thread): BranchesView(projectId: projectId, thread: thread)
         case .history(let w): HistoryView(where: w)
         case .commit(let w, let sha): CommitView(where: w, sha: sha)
         }

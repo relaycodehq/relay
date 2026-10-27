@@ -70,6 +70,11 @@ public extension RemoteClient {
         return try await desktop("projectChangeBranch", [.string(projectId), action]).decode()
     }
 
+    /// Moves a started thread to `branch`, wherever it's worked on; from `Bridge.branchMoves`.
+    func workOn(_ chatId: String, branch: String) async throws {
+        _ = try await desktop("projectChatWorkOn", [.string(chatId), .string(branch)])
+    }
+
     /// scope: "head" | "all".
     func history(_ where: String, scope: String = "head", limit: Int) async throws -> CommitLog {
         try await desktop("projectHistory", [.string(`where`), .string(scope), .number(Double(limit))]).decode()

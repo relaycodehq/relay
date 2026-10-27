@@ -103,6 +103,8 @@ public struct BranchRef: Codable, Sendable, Equatable, Hashable {
     public var remote: Bool
     public var worktree: Bool
     public var unrelated: Bool?
+    /// For a remote branch: the local one checking it out would make; older desktops leave it out.
+    public var local: String?
 }
 
 public struct BranchList: Codable, Sendable, Equatable {

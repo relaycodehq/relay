@@ -35,7 +35,13 @@ sealed interface Route : NavKey {
     @Serializable data class Diff(val source: String) : Route
 
     @Serializable data class Changes(val where: String) : Route
-    @Serializable data class Branches(val where: String) : Route
+    /** With [chatId], picking a branch moves that started thread there; [branch] is its branch now. */
+    @Serializable data class Branches(
+        val where: String,
+        val chatId: String? = null,
+        val branch: String? = null,
+        val inWorktree: Boolean = false,
+    ) : Route
     @Serializable data class Commit(val where: String, val sha: String) : Route
     @Serializable data class Files(val where: String, val dir: String? = null) : Route
     @Serializable data class File(val where: String, val path: String) : Route

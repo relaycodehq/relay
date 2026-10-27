@@ -23,6 +23,7 @@ import dev.relay.android.lib.navigation.backAction
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.projectBranches
 import dev.relay.android.remote.client.projectChangeBranch
+import dev.relay.android.remote.client.projectChatWorkOn
 import dev.relay.android.remote.model.BranchAction
 import dev.relay.android.remote.model.BranchList
 import dev.relay.android.remote.model.BranchRef
@@ -61,8 +62,11 @@ class BranchesModel(private val remote: Remote, private val projectId: String) :
         }
     }
 
-    /** Switches to or creates [name]; [done] runs once it worked. */
-    fun change(kind: String, name: String, done: () -> Unit = {}) {
+    /**
+     * Switches to or creates [name]; [done] runs once it worked. A refused
+     * switch goes to [refused] when there is one, else says why.
+     */
+    fun change(kind: String, name: String, refused: (() -> Unit)? = null, done: () -> Unit = {}) {
         val now = list.value ?: return
         busy.value = true
         viewModelScope.launch {
@@ -71,7 +75,25 @@ class BranchesModel(private val remote: Remote, private val projectId: String) :
                 done()
             } catch (e: Throwable) {
                 if (e is CancellationException) throw e
-                asks.alert(if (kind == "switch") "Couldn't switch" else "Couldn't create it", errorText(e))
+                if (refused != null) refused()
+                else asks.alert(if (kind == "switch") "Couldn't switch" else "Couldn't create it", errorText(e))
+                load()
+            } finally {
+                busy.value = false
+            }
+        }
+    }
+
+    /** Moves thread [chatId] to [name], wherever it's worked on; [done] runs once it's there. */
+    fun moveThread(chatId: String, name: String, done: () -> Unit) {
+        busy.value = true
+        viewModelScope.launch {
+            try {
+                remote.call { projectChatWorkOn(chatId, name) }
+                done()
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                asks.alert("Couldn't move it", errorText(e))
                 load()
             } finally {
                 busy.value = false
@@ -80,8 +102,18 @@ class BranchesModel(private val remote: Remote, private val projectId: String) :
     }
 }
 
+/** The started thread a branch list moves: its id, its branch now, and whether it's in its own worktree. */
+data class BranchThread(val chatId: String, val branch: String?, val inWorktree: Boolean)
+
+/** The open thread's branch: its worktree's, or the project folder's when it works there. */
+private fun threadBranch(thread: BranchThread?, list: BranchList): String? = when {
+    thread == null -> null
+    thread.inWorktree -> thread.branch
+    else -> list.current
+}
+
 @Composable
-fun BranchesScreen(remote: Remote, projectId: String) {
+fun BranchesScreen(remote: Remote, projectId: String, thread: BranchThread? = null) {
     val nav = LocalNavigator.current
     val model = viewModel(key = "branches:$projectId") { BranchesModel(remote, projectId) }
     val list by model.list.collectAsStateWithLifecycle()
@@ -92,8 +124,10 @@ fun BranchesScreen(remote: Remote, projectId: String) {
     var creating by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
 
+    // A new branch is made in the project folder, which a thread in its own worktree isn't in.
+    val canCreate = thread?.inWorktree != true
     Screen("Branches", onBack = nav.backAction, actions = {
-        if (list != null) IconButton(TablerIcons.Outline.Plus, "New branch from here", { creating = true }, enabled = !busy)
+        if (list != null && canCreate) IconButton(TablerIcons.Outline.Plus, "New branch from here", { creating = true }, enabled = !busy)
     }) {
         val now = list
         when {
@@ -105,13 +139,7 @@ fun BranchesScreen(remote: Remote, projectId: String) {
                     item(key = title) {
                         SectionHeader(title, count = rows.size)
                         ListGroup {
-                            for (b in rows) BranchRow(b, busy) {
-                                model.asks.confirm(
-                                    "Switch to ${b.name}?",
-                                    "Uncommitted changes that would be overwritten stop the switch.",
-                                    "Switch",
-                                ) { model.change("switch", b.name) }
-                            }
+                            for (b in rows) BranchRow(b, threadBranch(thread, now), busy, pick(model, now, b, thread) { nav.pop() })
                         }
                     }
                 }
@@ -146,16 +174,43 @@ fun BranchesScreen(remote: Remote, projectId: String) {
     AskHost(model.asks)
 }
 
+/**
+ * What tapping [b] does, null when nothing: switch the project folder to it,
+ * or with a [thread], go wherever it's worked on; [moved] runs once it did.
+ */
+private fun pick(model: BranchesModel, list: BranchList, b: BranchRef, thread: BranchThread?, moved: () -> Unit): (() -> Unit)? {
+    if (thread == null) {
+        // The checked-out one, here or in a worktree, has nowhere to switch to.
+        if (b.current || b.worktree) return null
+        return {
+            model.asks.confirm("Switch to ${b.name}?", "Uncommitted changes that would be overwritten stop the switch.", "Switch") {
+                model.change("switch", b.name)
+            }
+        }
+    }
+    val move = branchMove(list, b, threadBranch(thread, list), thread.inWorktree)
+    if (move == BranchMove.Stay) return null
+    val ask = branchMoveAsk(move, b.name)
+    val there = { model.moveThread(thread.chatId, b.name, moved) }
+    return {
+        model.asks.confirm(ask.title, ask.message, ask.action) {
+            if (move == BranchMove.SwitchProjectFolder) model.change("switch", b.name, refused = there, done = moved)
+            else there()
+        }
+    }
+}
+
 @Composable
-private fun BranchRow(b: BranchRef, busy: Boolean, onSwitch: () -> Unit) {
+private fun BranchRow(b: BranchRef, threadBranch: String?, busy: Boolean, onPick: (() -> Unit)?) {
     val c = RelayTheme.colors
+    val checked = if (threadBranch != null) b.name == threadBranch else b.current
     ListRow(
         b.name,
-        subtitle = if (b.current) "Checked out" else if (b.worktree) "Checked out in a worktree" else null,
+        subtitle = branchRowNote(b, threadBranch),
         leading = {
-            if (b.current) Icon(TablerIcons.Outline.Check, null, tint = c.foreground, size = 16.dp)
+            if (checked) Icon(TablerIcons.Outline.Check, null, tint = c.foreground, size = 16.dp)
             else Icon(TablerIcons.Outline.GitBranch, null, tint = c.mutedForeground, size = 16.dp)
         },
-        onClick = if (b.current || b.worktree || busy) null else onSwitch,
+        onClick = if (busy) null else onPick,
     )
 }

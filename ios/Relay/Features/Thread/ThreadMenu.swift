@@ -27,6 +27,15 @@ private struct ThreadMenu: ViewModifier {
 
     private var thread: RemoteChat? { connection.threads[chatId] }
     private var summary: RemoteChatSummary? { connection.chats.first { $0.id == chatId } }
+    /// The branch list moving this thread, for a repository thread on a computer that can move it.
+    private var branchSwitch: GitRoute? {
+        guard (connection.overview?.bridge ?? 0) >= Bridge.branchMoves, let thread else { return nil }
+        guard summary?.scope == "project", summary?.reviewer != true else { return nil }
+        let inWorktree = thread.worktree?.path != nil
+        let branch = inWorktree ? thread.worktree?.branch : summary?.branch
+        return .branches(
+            projectId: thread.projectId, thread: BranchThread(chatId: chatId, branch: branch, inWorktree: inWorktree))
+    }
 
     func body(content: Content) -> some View {
         content
@@ -124,6 +133,12 @@ private struct ThreadMenu: ViewModifier {
                 Button { notes.open = true } label: {
                     Label("Notes", systemImage: "pin")
                     Text("\(notes.count) kept from this thread")
+                }
+            }
+            if let branchSwitch {
+                Button { navigate(.git(branchSwitch)) } label: {
+                    Label("Switch Branch…", systemImage: "arrow.triangle.branch")
+                    Text("Goes wherever the branch is worked on")
                 }
             }
             if let branch = thread?.worktree?.branch ?? summary?.branch {

@@ -63,6 +63,8 @@ data class BranchRef(
     val ref: String,
     val current: Boolean = false,
     val remote: Boolean = false,
+    /** For a remote branch: the local one checking it out would make; older desktops leave it out. */
+    val local: String? = null,
     val worktree: Boolean = false,
     val unrelated: Boolean = false,
 )

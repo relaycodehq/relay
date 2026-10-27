@@ -712,6 +712,7 @@ const host = {
     if (method === "triageProjectChat") return triaged(args[0], args[1]);
     if (method === "markProjectChatSeen") seenUpTo(args[0], args[1]);
     if (method === "renameProjectChat") renamed(args[0], args[1]);
+    if (method === "projectChatWorkOn") return workedOn(args[0], args[1]);
     if (method === "regenerateProjectChatTitle") renamed(args[0], "A fresh name from the stand-in");
     if (method === "compactProjectChat") compacted(args[0]);
     if (method === "respondProjectChat") responded(args[0], args[1], args[2]);
@@ -954,6 +955,14 @@ function triaged(chatId: string, action: any) {
   }
   changed(c.projectId);
   return { ...c };
+}
+
+/** A thread moved to `branch`, a remote one under its local name, as the desktop's workOn leaves it. */
+function workedOn(chatId: string, branch: string) {
+  const c = threads.get(chatId)!.summary;
+  c.branch = branch.replace(/^origin\//, "");
+  changed(c.projectId);
+  return c;
 }
 
 function renamed(chatId: string, title: string) {

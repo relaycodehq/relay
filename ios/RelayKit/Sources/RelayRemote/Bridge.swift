@@ -36,6 +36,8 @@ public enum Bridge {
     public static let traceTree = 35
     /// Phones may ask another agent for a second opinion on an answer and send it back.
     public static let secondOpinion = 36
+    /// Phones may move a started thread to any branch, wherever it's worked on (`projectChatWorkOn`).
+    public static let branchMoves = 37
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22

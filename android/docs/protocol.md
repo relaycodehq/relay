@@ -365,6 +365,7 @@ Validated in `electron/remote/bridge.ts`; the schemas are at `bridge.ts`. Argume
     - `projectChatImage` / `projectChatQueuedImages` / `projectChatReadImage`
     - `threadNotes`: `[id]` → `ThreadNote[]`; `tickThreadNote`: `[id, noteId, item /* from 1 */, done]` and `removeThreadNote`: `[id, noteId]` → the notes after. Bridge ≥ 22; `ThreadNote` is in `shared/thread-notes.ts`.
     - `selectAgentWorktree`
+    - `projectChatWorkOn`: `[id, branch]` → `ChatSummary`. Bridge ≥ 37: moves a started thread to `branch` wherever it's worked on (the folder it's checked out in, the project folder, or a worktree on it); the project folder itself is switched with `projectChangeBranch` first.
     - `closeWatchNote`
     - `projectWorktree`
   - **Git and history** (`electron/api/git.ts`):

@@ -13,6 +13,7 @@ import dev.relay.android.app.screens.PlaceholderScreen
 import dev.relay.android.features.composer.sendToThread
 import dev.relay.android.features.files.FileScreen
 import dev.relay.android.features.files.FilesScreen
+import dev.relay.android.features.git.BranchThread
 import dev.relay.android.features.git.BranchesScreen
 import dev.relay.android.features.git.ChangesScreen
 import dev.relay.android.features.git.CommitScreen
@@ -79,7 +80,9 @@ fun EntryProviderScope<NavKey>.appEntries(container: AppContainer, wide: () -> B
     }
     entry<Route.Diff> { DiffScreen(container.remote, it.source) }
     entry<Route.Changes> { ChangesScreen(container.remote, it.where) }
-    entry<Route.Branches> { BranchesScreen(container.remote, it.where) }
+    entry<Route.Branches> {
+        BranchesScreen(container.remote, it.where, it.chatId?.let { chat -> BranchThread(chat, it.branch, it.inWorktree) })
+    }
     entry<Route.Commit> { CommitScreen(container.remote, it.where, it.sha) }
     entry<Route.Files> { FilesScreen(container.remote, it.where, it.dir) }
     entry<Route.File> { FileScreen(container.remote, it.where, it.path) }

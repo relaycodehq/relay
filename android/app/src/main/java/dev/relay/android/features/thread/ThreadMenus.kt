@@ -29,6 +29,10 @@ import dev.relay.android.features.thread.logic.quoteMarkdown
 import dev.relay.android.features.thread.logic.withoutMention
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.model.ChatWorktree
+import dev.relay.android.remote.model.RemoteChat
+import dev.relay.android.remote.model.RemoteChatSummary
+import dev.relay.android.remote.Bridge
+import dev.relay.android.lib.navigation.Route
 import dev.relay.android.ui.Button
 import dev.relay.android.ui.ButtonVariant
 import dev.relay.android.ui.Sheet
@@ -65,6 +69,8 @@ class ThreadMenuActions(
     /** Where the computer can tunnel its localhost to the phone. */
     val onSites: (() -> Unit)? = null,
     val onKeepScroll: (() -> Unit)? = null,
+    /** A repository thread, on a computer that can move it. */
+    val onSwitchBranch: (() -> Unit)? = null,
 )
 
 fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
@@ -83,6 +89,7 @@ fun threadMenu(a: ThreadMenuActions): List<MenuItem> = buildList {
     )
     a.onUnread?.let { add(MenuItem("Mark as unread", "Back to the list, marked for later", onPress = it)) }
     a.onRegenerate?.let { add(MenuItem("Regenerate title", "A fresh name from the conversation so far", onPress = it)) }
+    a.onSwitchBranch?.let { add(MenuItem("Switch branch…", "Goes wherever the branch is worked on", onPress = it)) }
     a.branch?.let { add(MenuItem("Copy branch name", it) { a.onCopy(it) }) }
     a.worktree?.path?.let { add(MenuItem("Copy worktree path", it) { a.onCopy(it) }) }
     if (a.sides > 0) add(MenuItem("Side conversations", "${a.sides} beside this one", onPress = a.onSides))
@@ -203,3 +210,16 @@ fun RenameSheet(title: String, onSave: suspend (String) -> Unit, onClose: () -> 
     }
 }
 
+
+/**
+ * Where "Switch branch…" goes: the branch list moving this thread, for a
+ * repository thread on a computer that can move it; null leaves it out.
+ */
+fun branchSwitch(bridge: Int, summary: RemoteChatSummary?, thread: RemoteChat?): Route.Branches? {
+    if (bridge < Bridge.BRANCH_MOVES || thread == null) return null
+    val repositoryThread = summary?.scope == "project" && summary.reviewer != true
+    if (!repositoryThread) return null
+    val inWorktree = thread.worktree?.path != null
+    val branch = if (inWorktree) thread.worktree?.branch else summary?.branch
+    return Route.Branches(thread.projectId, thread.id, branch, inWorktree)
+}

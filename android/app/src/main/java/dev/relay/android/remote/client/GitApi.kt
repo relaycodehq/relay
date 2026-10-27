@@ -44,6 +44,11 @@ suspend fun RemoteClient.projectBranches(projectId: String): BranchList =
 suspend fun RemoteClient.projectChangeBranch(projectId: String, action: BranchAction): BranchList =
     desktop("projectChangeBranch", listOf(s(projectId), j(action))).to()
 
+/** Moves a started thread to [branch], wherever it's worked on; from Bridge.BRANCH_MOVES. */
+suspend fun RemoteClient.projectChatWorkOn(chatId: String, branch: String) {
+    desktop("projectChatWorkOn", listOf(s(chatId), s(branch)))
+}
+
 /** scope: "head" | "all". */
 suspend fun RemoteClient.projectHistory(where: String, scope: String, limit: Int): CommitLog =
     desktop("projectHistory", listOf(s(where), s(scope), JsonPrimitive(limit))).to()

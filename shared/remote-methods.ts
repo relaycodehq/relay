@@ -68,6 +68,7 @@ export const phoneDesktopMethods = [
   "projectCommitMessage",
   "projectBranches",
   "projectChangeBranch",
+  "projectChatWorkOn",
   "projectHistory",
   "projectCommit",
   "projectFiles",

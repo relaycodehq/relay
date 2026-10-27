@@ -15,6 +15,8 @@ object Bridge {
     const val TRACE_TREE = 35
     /** Phones may ask another agent for a second opinion on an answer and send it back. */
     const val SECOND_OPINION = 36
+    /** Phones may move a started thread to any branch, wherever it's worked on (`projectChatWorkOn`). */
+    const val BRANCH_MOVES = 37
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11
@@ -74,7 +76,7 @@ object Bridge {
         "saveNewThreadRuntimeMode", "projectWorktree",
         "projectCommands", "providerUsage", "projectWorkingTree", "projectGitAction", "projectCiStatus",
         "projectMergePlan", "projectMergeBranch", "projectCommitMessage", "projectBranches",
-        "projectChangeBranch", "projectHistory", "projectCommit", "projectFiles", "projectFile",
+        "projectChangeBranch", "projectChatWorkOn", "projectHistory", "projectCommit", "projectFiles", "projectFile",
         "projectTasks", "stopProjectTask", "restartProjectTask",
         "pullServers", "hostAccount", "search", "pull", "pullCiStatus", "pullMergeReadiness", "mergePull",
         "files", "reviews", "discussion",
