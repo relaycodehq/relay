@@ -7,7 +7,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import type {
   ChatImage,
@@ -15,15 +15,13 @@ import type {
   ChatSummary,
   ProjectChat,
   ProjectChatSend,
-  ScheduledChatMessage,
 } from "../../shared/projects";
 import { reviewerTitle } from "../../shared/deep-review";
-import { contextAgent } from "../../shared/recipient";
-import { notesMark } from "../../shared/thread-notes";
 import { keyedQueue } from "../util/keyed-queue";
 import type { Store } from "../app/store";
 import { RenderFiles } from "../html-renders";
 import { imageMimeType } from "./images";
+import { chatSummary } from "./chat-summaries";
 import {
   liveTurn,
   savedBase,
@@ -32,100 +30,9 @@ import {
   type SavedBase,
 } from "./live-turn";
 import { reviveChat } from "./revive";
-import { reviewSummary } from "./review-summary";
 import { migrateReviewRounds } from "../deep-review";
 import { ShownImages } from "./shown-images";
 import { writeFileAtomic } from "../util/atomic-write";
-
-/** The earliest scheduled message still waiting to go out on its own. */
-export function nextSend(scheduled: ScheduledChatMessage[] = []) {
-  const times = scheduled.filter((s) => !s.error).map((s) => s.at);
-  return times.length ? Math.min(...times) : undefined;
-}
-
-/** A short mark of what waits in the thread's queue and Send later list; none when nothing does. */
-export function queueMark({
-  queue,
-  queuePaused,
-  scheduled,
-}: Pick<ProjectChat, "queue" | "queuePaused" | "scheduled">) {
-  if (!queue?.length && !scheduled?.length) return undefined;
-  const waiting = JSON.stringify([
-    (queue ?? []).map((q) => [q.input.id, q.error ?? ""]),
-    !!queuePaused,
-    (scheduled ?? []).map((s) => [s.input.id, s.at, s.error ?? ""]),
-  ]);
-  return createHash("sha1").update(waiting).digest("base64url").slice(0, 10);
-}
-
-/** A question the agent asked in the thread is still open. */
-export const asksYou = (messages: ProjectChat["messages"]) =>
-  messages.some((m) =>
-    m.questions?.some((group) => !group.answers && !group.dismissed),
-  );
-
-/** What the sidebar lists of a thread: everything but its conversation and the state behind it. */
-export function chatSummary({
-  messages,
-  requests,
-  queue,
-  queuePaused,
-  scheduled,
-  lastInput,
-  sessions,
-  forkedAt,
-  replySessions,
-  checkoutNotes,
-  scopeHeard,
-  movedIn,
-  setupNote,
-  reviews,
-  findings: _findings,
-  handover,
-  outbox,
-  carriedIds,
-  notes,
-  setup,
-  // Worked out below; a stale copy on the thread itself doesn't count.
-  queueMark: _staleMark,
-  notesMark: _staleNotesMark,
-  setupMark: _staleSetupMark,
-  model: _staleModel,
-  asking,
-  ...summary
-}: ProjectChat): ChatSummary {
-  const latest = [...messages].reverse().find((m) => m.role === "assistant");
-  const provider = latest?.provider;
-  const model = latest?.model?.name;
-  const holder = contextAgent(messages.filter((m) => !m.parentId));
-  const providers = [
-    ...new Set(
-      [...messages]
-        .reverse()
-        .flatMap((m) =>
-          m.role === "assistant" && m.provider ? [m.provider] : [],
-        ),
-    ),
-  ];
-  const next = nextSend(scheduled);
-  const mark = queueMark({ queue, queuePaused, scheduled });
-  const notesAt = notesMark(notes);
-  const open = asksYou(messages);
-  return {
-    ...summary,
-    providers,
-    ...(provider ? { provider } : {}),
-    ...(model ? { model } : {}),
-    ...(holder ? { contextAgent: holder } : {}),
-    ...(next ? { nextSend: next } : {}),
-    ...(mark ? { queueMark: mark } : {}),
-    ...(notesAt ? { notesMark: notesAt } : {}),
-    ...(setup ? { setupMark: `${setup.state}:${setup.at}` } : {}),
-    ...(open ? { asking: true as const } : {}),
-    ...reviewSummary(reviews),
-    empty: !messages.length && !scheduled?.length,
-  };
-}
 
 /** Whether two summaries read alike once saved, whatever order or undefined keys they hold. */
 function same(a: ChatSummary, b: ChatSummary) {

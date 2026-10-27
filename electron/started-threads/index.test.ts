@@ -20,7 +20,7 @@ import { addNote, tickNote, type NewNote } from "../../shared/thread-notes";
 import { localTime, StartedThreads, type AgentProjects } from ".";
 import { MESSAGE_CHARS, resultText, type ToolResult } from "../relay-mcp";
 import { chatStatus } from "../project-chats";
-import { chatSummary } from "../project-chats/storage";
+import { chatSummary } from "../project-chats/chat-summaries";
 import { sentBy } from "../../shared/projects/send";
 import type { Turn } from "../../shared/turns";
 

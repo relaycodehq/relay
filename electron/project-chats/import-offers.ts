@@ -21,7 +21,7 @@ import type { RelayToolArgs } from "../relay-mcp";
 import type { ChatCore } from "./core";
 import type { ProjectImports } from "./project-import";
 import { assertHere } from "./handoff";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 
 /** Projects listed at once; each reads its sessions from the whole history. */
 const LIST_BATCH = 4;
@@ -202,7 +202,7 @@ export class ImportOffers {
     // Above a stand-in that didn't come in: above whatever it would have sat above.
     const anchor = (before: string | null) => {
       const passed = new Set<string>();
-      for (let key = before && ghostKey(before); key; ) {
+      for (let key = before && ghostKey(before); key;) {
         if (made.has(key)) return made.get(key)!;
         if (passed.has(key)) return null;
         passed.add(key);

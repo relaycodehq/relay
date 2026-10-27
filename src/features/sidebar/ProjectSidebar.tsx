@@ -33,6 +33,7 @@ import {
   SCRATCHPAD,
   takesProject,
   useThreadFilter,
+  withoutRemoved,
 } from "./useThreadFilter";
 import { useThreadActions } from "./useThreadActions";
 import { useActivityKeys } from "./useActivityKeys";
@@ -145,13 +146,7 @@ export function ProjectSidebar({
   useEffect(() => onOpenThreadSearch(() => setSearching(true)), []);
   const projectKey = (id: string) => (scratchIds.has(id) ? SCRATCHPAD : id);
   const filtering = useThreadFilter();
-  // A removed project's id would hide everything, with nothing to untick.
-  const filter = {
-    ...filtering.filter,
-    projects: filtering.filter.projects.filter(
-      (id) => id === SCRATCHPAD || byId.has(id),
-    ),
-  };
+  const filter = withoutRemoved(filtering.filter, byId);
   const filtered = !!(filter.projects.length || filter.agents.length);
   const all = filtered
     ? everything.filter((c) => passes(filter, projectKey(c.projectId), c))

@@ -9,7 +9,7 @@ import { replyRoot } from "../../shared/projects";
 import { stopClaudeTask } from "../agents/claude/project";
 import type { ChatCore } from "./core";
 import { sessionInput } from "./sessions";
-import { nextSend } from "./storage";
+import { nextSend } from "./chat-summaries";
 import { errorMessage } from "../../shared/error-message";
 
 export interface ScheduleHost {

@@ -15,7 +15,7 @@ import type { ThreadWorktrees } from "./worktrees";
 import { joinableOn } from "./carry-on";
 import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 
 /** New threads: empty ones, and forks of an existing one up to an answer. */
 export class ThreadCreate {

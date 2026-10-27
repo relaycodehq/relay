@@ -14,7 +14,7 @@ import {
 import { accountFor } from "../agents/accounts";
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
-import { chatSummary, nextSend } from "./storage";
+import { chatSummary, nextSend } from "./chat-summaries";
 import type { ThreadWorktrees } from "./worktrees";
 
 /** Where a thread sits in the sidebar and what it has been read up to; never what its agent does. */

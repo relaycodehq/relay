@@ -17,7 +17,6 @@ import {
   reattachWorktree,
   removeWorktree,
   retitleWorktree,
-  sameFolder,
   uncommitted,
   worktreeChanges,
   worktreeDiff,
@@ -26,11 +25,12 @@ import {
 import type { ChatCore } from "./core";
 import type { Councils } from "./councils";
 import { awaitsReturn } from "./handoff";
-import { chatSummary } from "./storage";
+import { chatSummary } from "./chat-summaries";
 import { WorktreeSetup } from "./worktree-setup";
 import { carriedOn } from "./carry-on";
 import { WorktreeEntry } from "./enter-worktree";
 import { AgentWorkspaces } from "./agent-workspaces";
+import { whyFolderStays, worktreeUsers } from "./worktree-users";
 import {
   agentWorktreeUnavailableError,
   joinedWorktree,
@@ -220,35 +220,14 @@ export class ThreadWorktrees {
     return threadsSharing(this.core.store.get().chats ?? [], chat);
   }
 
-  /**
-   * Everyone else working in the thread's worktree folder: the open threads
-   * sharing it, and the open reviews that followed their branch into it,
-   * fixes and all. While there are any, the folder stays.
-   */
-  private async users(chat: Pick<ProjectChat, "id" | "worktree">) {
-    const chats = this.core.store.get().chats ?? [];
-    const sharing = threadsSharing(chats, chat);
-    const path = chat.worktree?.path;
-    if (!path || chat.worktree!.removedAt) return sharing;
-    const reviews: typeof chats = [];
-    for (const c of chats) {
-      const folder = reviewFolder(c);
-      if (!folder || c.id === chat.id || c.archivedAt || sharing.includes(c))
-        continue;
-      if (await sameFolder(folder.path, path)) reviews.push(c);
-    }
-    return [...sharing, ...reviews];
+  /** Everyone else working in the thread's worktree folder; see ./worktree-users. */
+  private users(chat: Pick<ProjectChat, "id" | "worktree">) {
+    return worktreeUsers(this.core.store.get().chats ?? [], chat);
   }
 
   /** Why the thread's worktree folder stays when the thread lets go of it, if it does. */
-  private async stays(
-    chat: ProjectChat,
-  ): Promise<
-    { adopted?: true; users: readonly { title: string }[] } | undefined
-  > {
-    if (chat.worktree?.adopted) return { adopted: true, users: [] };
-    const users = await this.users(chat);
-    return users.length ? { users } : undefined;
+  private stays(chat: ProjectChat) {
+    return whyFolderStays(this.core.store.get().chats ?? [], chat);
   }
 
   /**

@@ -4,24 +4,22 @@ import type { AgentProvider } from "../../shared/agents";
 import type { AgentRequest, AgentResponse } from "../../shared/agent-modes";
 import type { DeepReviewStart, ResumeReview } from "../../shared/deep-review";
 import type { FindingStatus } from "../../shared/findings";
-import type {
-  ChatMessage,
-  ChatScope,
-  ChatTriage,
-  ChatWorkspace,
-  StartedBy,
-  KnownMessages,
-  LinkedFolder,
-  ProjectChat,
-  ProjectChatPatch,
-  ProjectChatSend,
-  ResumeSettings,
-  WorktreeStart,
-} from "../../shared/projects";
 import {
-  replyRoots,
   mainConversation,
+  replyRoots,
   threadOrder,
+  type ChatMessage,
+  type ChatScope,
+  type ChatTriage,
+  type ChatWorkspace,
+  type StartedBy,
+  type KnownMessages,
+  type LinkedFolder,
+  type ProjectChat,
+  type ProjectChatPatch,
+  type ProjectChatSend,
+  type ResumeSettings,
+  type WorktreeStart,
 } from "../../shared/projects";
 import { latestContext } from "../../shared/context-usage";
 import type { HtmlRender } from "../../shared/html-render";
@@ -56,7 +54,8 @@ import { IdleCompactions } from "./idle-compact";
 import { ChatSchedule } from "./schedule";
 import { reloadSessions } from "./session-reload";
 import { ProviderSessions } from "./sessions";
-import { asksYou, ChatStorage, chatSummary } from "./storage";
+import { ChatStorage } from "./storage";
+import { asksYou, chatSummary } from "./chat-summaries";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
 import { TerminalContinue } from "./terminal-continue";

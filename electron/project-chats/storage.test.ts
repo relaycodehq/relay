@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 import { Store } from "../app/store";
-import { chatSummary, ChatStorage, queueMark } from "./storage";
+import { ChatStorage } from "./storage";
+import { chatSummary, queueMark } from "./chat-summaries";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
 let root: string, store: Store, storage: ChatStorage, changed: string[];
