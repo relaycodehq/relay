@@ -45,9 +45,9 @@ import {
   SchedulesPage,
   SchedulesTitle,
 } from "../features/schedules/SchedulesPage";
-import { Settings } from "../features/settings/Settings";
 import { ProjectTitle, TitlebarBrand } from "./ShellTitlebar";
 import { ActivityBar } from "./ActivityBar";
+import { ShellSettings } from "./ShellSettings";
 import { ShellSidebar } from "./ShellSidebar";
 import { StartDialogs } from "./StartDialogs";
 import {
@@ -385,28 +385,12 @@ export default function ProjectShell() {
         </ShellSidebar>
         {surfaceBody()}
         {settings.open && (
-          <Settings
-            account={account ?? null}
-            initialCategory={settings.category}
-            initialEntry={settings.entry}
-            key={`${settings.project ?? "app"}:${settings.asked}`}
-            projectId={settings.project}
-            initialQuery={settings.query}
-            onQueryChange={settings.setQuery}
-            onWhere={settings.setWhere}
-            onClose={settings.close}
-            onConnect={() => {
-              settings.close();
-              void signIn.withAccount();
-            }}
-            onOpenChat={(projectId, chatId) =>
-              openChatById(projectId, chatId, settings.close)
-            }
-            onDisconnect={async () => {
-              await signIn.signOut();
-              settings.close();
-              nav.setInbox(false);
-            }}
+          <ShellSettings
+            settings={settings}
+            account={account}
+            signIn={signIn}
+            openChatById={openChatById}
+            onSignedOut={() => nav.setInbox(false)}
           />
         )}
       </div>
