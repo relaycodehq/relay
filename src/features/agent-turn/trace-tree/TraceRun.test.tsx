@@ -46,7 +46,7 @@ it("opens a file's row to that file's code, not every file its call wrote", () =
   }
 });
 
-it("folds a run behind its line, marked when a command in it failed, unless it's the turn's only run", () => {
+it("folds a run behind its line, marked only when everything in it failed, unless it's the turn's only run", () => {
   const call = (id: string, kind: AgentActivity["kind"], label: string, status: AgentActivity["status"] = "complete") =>
     ({ id, kind, label, status }) satisfies AgentActivity;
   const calls = [
@@ -59,7 +59,11 @@ it("folds a run behind its line, marked when a command in it failed, unless it's
   document.body.append(host);
   const root = createRoot(host);
   try {
+    // One failed command among others doesn't make the whole run a failure.
     act(() => root.render(<ClosedRun calls={calls} only={false} onChanges={() => {}} />));
+    expect(host.querySelector(".trace-closed")?.classList.contains("failed")).toBe(false);
+    const allFailed = calls.map((c) => ({ ...c, status: "failed" as const }));
+    act(() => root.render(<ClosedRun calls={allFailed} only={false} onChanges={() => {}} />));
     expect(host.querySelector(".trace-closed")?.classList.contains("failed")).toBe(true);
     act(() => root.render(<ClosedRun calls={calls} only onChanges={() => {}} />));
     expect(host.querySelector(".trace-closed")).toBeNull();
