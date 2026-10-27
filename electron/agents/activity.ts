@@ -1,8 +1,27 @@
 import type { AgentActivity } from "../../shared/projects";
 import { isImagePath } from "../../shared/answer-images";
 import { relayToolLabel } from "../relay-mcp";
-import { writtenByCommand } from "../../shared/call-actions";
+import { foundNothing, writtenByCommand } from "../../shared/call-actions";
 import { claudeWritten, codexWritten } from "./written-code";
+
+function codexStatus(method: string, item: Record<string, unknown>) {
+  if (codexItemFailed(item)) return "failed";
+  return method === "item/started" ? "running" : "complete";
+}
+
+function codexItemFailed(item: Record<string, unknown>) {
+  const exitCode = typeof item.exitCode === "number" ? item.exitCode : undefined;
+  const searchedEmpty =
+    typeof item.command === "string" && exitCode !== undefined && foundNothing(item.command, exitCode);
+  if (searchedEmpty) return false;
+  return (
+    item.status === "failed" ||
+    item.status === "declined" ||
+    item.success === false ||
+    item.failure != null ||
+    (exitCode !== undefined && exitCode !== 0)
+  );
+}
 
 /**
  * Keep a small, local-only activity trace: no raw tool arguments, but what a
@@ -16,16 +35,7 @@ export function codexActivity(
   if (!value || typeof value !== "object") return;
   const item = value as Record<string, unknown>;
   if (typeof item.id !== "string") return;
-  const status =
-    item.status === "failed" ||
-    item.status === "declined" ||
-    item.success === false ||
-    item.failure != null ||
-    (typeof item.exitCode === "number" && item.exitCode !== 0)
-      ? "failed"
-      : method === "item/started"
-        ? "running"
-        : "complete";
+  const status = codexStatus(method, item);
   const base = { id: item.id.slice(0, 180), status } as const;
   if (item.type === "commandExecution" && typeof item.command === "string") {
     const written = writtenByCommand(item.command);

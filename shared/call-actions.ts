@@ -124,6 +124,11 @@ export function commandActions(command: string, output = ""): CallAction[] {
   return actionsThatRan(steps.map((step) => ({ ...step, actions: step.actions.map(judge) })));
 }
 
+/** rg, grep and git grep exit 1 when they find nothing: an answer, not a failure. A shell exits with its last command's status. */
+export function foundNothing(command: string, exitCode: number) {
+  return exitCode === 1 && commandActions(command).at(-1)?.kind === "search";
+}
+
 const loops = new Set(["for", "while", "until"]);
 
 /** A command that only set up, like `echo hi`, or a loop that ran nothing it could name. */

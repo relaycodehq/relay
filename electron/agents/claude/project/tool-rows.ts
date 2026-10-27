@@ -3,12 +3,21 @@ import type {
   SDKTaskProgressMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { foundNothing } from "../../../../shared/call-actions";
 import type { AgentActivity } from "../../../../shared/projects";
 import { claudeActivity, claudeEditedPaths } from "../../activity";
 import type { ClaudeRunOptions } from "./config";
 import { ForkParents, type ForkStart } from "../forks";
 
 type Results = Exclude<SDKUserMessage["message"]["content"], string>;
+
+/** Bash answers a non-zero exit as an error saying "Exit code N"; a search that found nothing isn't one. */
+function claudeCallFailed(call: AgentActivity | undefined, isError: boolean | undefined, output: string) {
+  if (!isError) return false;
+  const exitCode = /^(?:Error: )?Exit code (\d+)$/m.exec(output)?.[1];
+  const searchedEmpty = call?.kind === "command" && exitCode !== undefined && foundNothing(call.label, Number(exitCode));
+  return !searchedEmpty;
+}
 
 /** The rows a turn's tool calls show as, from the call to its result. */
 export class ToolRows {
@@ -86,7 +95,7 @@ export class ToolRows {
           ...(call ?? claudeActivity(result.tool_use_id, "Tool", {})),
           progress: undefined,
           ...(!call && parent ? { parentId: parent.slice(0, 180) } : {}),
-          status: result.is_error ? "failed" : "complete",
+          status: claudeCallFailed(call, result.is_error, output) ? "failed" : "complete",
           ...(output ? { detail: output.slice(-8000) } : {}),
         };
         this.calls.set(result.tool_use_id, finished);

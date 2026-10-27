@@ -1,4 +1,5 @@
 import type { AgentActivity } from "../../../shared/projects";
+import { foundNothing } from "../../../shared/call-actions";
 import { patchPaths } from "../activity";
 import { acpWritten } from "../written-code";
 import type { AcpToolCall } from "./protocol";
@@ -96,11 +97,14 @@ export function acpActivity(call: Partial<AcpToolCall> & { toolCallId: string })
   const printed = output(call);
   const detail = kind === "read" ? "" : printed.text;
   const status = statuses[call.status ?? ""] ?? "running";
+  const exitCode = printed.exitCode ?? 0;
+  const searchedEmpty = foundNothing(command, exitCode);
+  const failedByExit = status === "complete" && exitCode !== 0 && !searchedEmpty;
   const written = acpWritten(call.content ?? []);
   return {
     id: call.toolCallId.slice(0, 180),
     kind,
-    status: status === "complete" && printed.exitCode ? "failed" : status,
+    status: failedByExit ? "failed" : status,
     label: label.slice(0, 500),
     ...(detail ? { detail: detail.slice(-8000) } : {}),
     ...(written.length ? { written } : {}),
