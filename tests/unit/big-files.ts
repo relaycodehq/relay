@@ -47,7 +47,6 @@ export const bigFiles: Record<string, number> = {
   "src/features/sidebar/SidebarActivity.tsx": 630,
   "src/features/thread/ProjectChat.tsx": 626,
   "src/features/thread/QueuedMessages.tsx": 585,
-  "src/features/thread/ThreadComposer.tsx": 539,
   "src/features/thread/WorktreeControls.tsx": 613,
   "src/lib/shortcuts.ts": 502,
 };

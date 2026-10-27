@@ -4,7 +4,7 @@ import {
   ProjectBranchPicker,
   type BranchPickInterceptor,
 } from "../changes/ProjectBranchPicker";
-import type { ProjectCheckout } from "./ThreadComposer";
+import type { ProjectCheckout } from "./ThreadWhere";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import { pickBranch } from "./worktree-start";
 import { useNavigationLock } from "../../lib/navigation-lock";

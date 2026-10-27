@@ -8,7 +8,7 @@ import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { BranchSelect } from "../changes/BranchSelect";
 import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import type { ThreadWorktree } from "./useThreadWorktree";
-import type { ProjectCheckout } from "./ThreadComposer";
+import type { ProjectCheckout } from "./ThreadWhere";
 import { WorktreeBranchField } from "./WorktreeBranchField";
 import {
   branchOffNames,
