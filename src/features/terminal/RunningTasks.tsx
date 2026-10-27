@@ -7,7 +7,8 @@ import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useChatWidth } from "../../lib/chat-width";
 import { useWindowFocused } from "../../lib/window-focus";
-import { MachineLine, useCostHistory } from "./TaskLoad";
+import { ComputerSection } from "./ComputerSection";
+import { useCostHistory } from "./TaskLoad";
 import { TaskList } from "./TaskList";
 import "./running-tasks.css";
 
@@ -120,7 +121,10 @@ function useProjectTasks(project: Project, collapsed: boolean) {
   return { list, history, costed };
 }
 
-/** Shell processes Claude and Codex left running in this project, from any conversation. */
+/**
+ * The computer the project's threads run on, with its load, and the shell
+ * processes Claude and Codex left running in the project, from any conversation.
+ */
 export function RunningTasks({
   project,
   chats,
@@ -139,7 +143,10 @@ export function RunningTasks({
   if (roomy && peeking) setPeeking(false);
   const collapsed = roomy ? folded : !peeking;
   const { list, history, costed } = useProjectTasks(project, collapsed);
-  if (!list.length) return null;
+  // Folded with nothing running there's no pill to show; the card stays in
+  // the pane, empty, so its room can still be measured.
+  if (collapsed && !list.length)
+    return <aside ref={setCard} className="running-tasks" hidden />;
   const toggle = () =>
     morph(card, collapsed ? "open" : "close", () =>
       roomy ? setFolded(!folded) : setPeeking(!peeking),
@@ -150,28 +157,41 @@ export function RunningTasks({
       className={`running-tasks${collapsed ? " collapsed" : ""}`}
       aria-label="Running processes"
     >
-      <button
-        type="button"
-        className="running-tasks-header"
-        aria-expanded={!collapsed}
-        onClick={toggle}
-      >
-        <span className="running-tasks-heading">Running</span>
-        <span className="running-tasks-count">{list.length}</span>
-        <span className="spacer" />
-        <ChevronDown size={14} className="running-tasks-chevron" />
-      </button>
-      {!collapsed && (
-        <TaskList
-          project={project}
-          tasks={list}
-          chats={chats}
-          costed={costed}
-          history={history}
-          onOpenChat={onOpenChat}
-        />
+      {collapsed ? (
+        <button
+          type="button"
+          className="running-tasks-header"
+          aria-expanded={false}
+          onClick={toggle}
+        >
+          <span className="running-tasks-heading">Running</span>
+          <span className="running-tasks-count">{list.length}</span>
+          <span className="spacer" />
+          <ChevronDown size={14} className="running-tasks-chevron" />
+        </button>
+      ) : (
+        <>
+          <ComputerSection
+            project={project}
+            onFold={list.length ? toggle : undefined}
+          />
+          {!!list.length && (
+            <section className="running-tasks-section">
+              <div className="running-tasks-label">
+                Running <span>{list.length}</span>
+              </div>
+              <TaskList
+                project={project}
+                tasks={list}
+                chats={chats}
+                costed={costed}
+                history={history}
+                onOpenChat={onOpenChat}
+              />
+            </section>
+          )}
+        </>
       )}
-      {costed && <MachineLine />}
     </aside>
   );
 }

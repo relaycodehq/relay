@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BatteryLow, BatteryMedium, BatteryFull, Laptop } from "lucide-react";
+import { BatteryLow, BatteryMedium, BatteryFull } from "lucide-react";
 import type { ProjectTask } from "../../../shared/tasks";
 import { api } from "../../lib/api";
 import { usePoll } from "../../lib/poll";
@@ -30,15 +30,17 @@ export function useCostHistory(tasks: ProjectTask[], at: number) {
   return history;
 }
 
-/** A line of the last looks, drawn against `max`. */
+/** A line of the last looks, drawn against `max`; with `area`, filled underneath. */
 export function Sparkline({
   values,
   max,
   className,
+  area = false,
 }: {
   values: readonly number[];
   max: number;
   className?: string;
+  area?: boolean;
 }) {
   const h = 12;
   const points =
@@ -57,6 +59,12 @@ export function Sparkline({
       preserveAspectRatio="none"
       aria-hidden
     >
+      {area && points && (
+        <path
+          className="area"
+          d={`M0,${h} L${points.replaceAll(" ", " L")} L100,${h} Z`}
+        />
+      )}
       <polyline points={points} />
     </svg>
   );
@@ -104,8 +112,14 @@ const gb = (mb: number) => {
   return g < 10 ? g.toFixed(1) : String(Math.round(g));
 };
 
-/** The open card's last line: the whole computer, and the battery while it's on one. */
-export function MachineLine() {
+function batteryIcon(level: number | undefined) {
+  if (level === undefined || level > 0.6) return BatteryFull;
+  if (level > 0.2) return BatteryMedium;
+  return BatteryLow;
+}
+
+/** The whole computer's CPU over the last looks, its memory, and the battery while it runs on one. */
+export function ComputerLoad() {
   const poll = usePoll();
   const load = useQuery({
     queryKey: ["machine-load"],
@@ -119,24 +133,17 @@ export function MachineLine() {
   }, [cpu, load.dataUpdatedAt]);
   const battery = useBattery();
   const m = load.data;
-  if (!m) return null;
-  const Battery =
-    battery === undefined || battery > 0.6
-      ? BatteryFull
-      : battery > 0.2
-        ? BatteryMedium
-        : BatteryLow;
+  // The row keeps its height before the first look, so the card doesn't grow under the reader.
+  if (!m) return <div className="running-computer-load" />;
+  const Battery = batteryIcon(battery);
   return (
-    <div className="running-machine">
-      {/* On battery the numbers need the room, so the name shrinks to an icon. */}
-      {battery === undefined ? (
-        <span className="running-machine-name">This computer</span>
-      ) : (
-        <span className="running-machine-name" title="This PC">
-          <Laptop size={13} aria-label="This PC" />
-        </span>
-      )}
-      <Sparkline values={cpus} max={100} className="running-machine-spark" />
+    <div className="running-computer-load">
+      <Sparkline
+        values={cpus}
+        max={100}
+        area
+        className="running-computer-spark"
+      />
       {cpu !== undefined && (
         <span title="CPU, every core counted">
           <b>{formatShare(cpu)}</b> CPU
@@ -148,7 +155,7 @@ export function MachineLine() {
       </span>
       {battery !== undefined && (
         <span
-          className={`running-machine-battery${battery <= 0.2 ? " low" : ""}`}
+          className={`running-computer-battery${battery <= 0.2 ? " low" : ""}`}
           title="On battery"
         >
           <Battery size={13} aria-hidden />

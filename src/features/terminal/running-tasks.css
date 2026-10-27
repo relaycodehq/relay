@@ -209,7 +209,7 @@ button.running-task-title:hover > svg {
   height: 12px;
 }
 .running-task-load polyline,
-.running-machine-spark polyline {
+.running-computer-spark polyline {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.2;
@@ -224,42 +224,95 @@ button.running-task-title:hover > svg {
   stroke: #d9534f;
   opacity: 1;
 }
-.running-machine {
+/* The card's head: the computer, and under its name what it's carrying. */
+.running-computer-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 2px 0;
-  padding: 8px 6px 2px;
-  border-top: 1px solid var(--border);
+  gap: 10px;
+  height: 30px;
+  padding: 0 2px 0 8px;
+  font-size: 13px;
+}
+.running-computer-head > svg {
+  flex: none;
+  color: var(--muted);
+}
+.running-computer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.running-card-button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.running-card-button:hover {
+  background: color-mix(in srgb, var(--text) 9%, transparent);
+  color: var(--text);
+}
+.running-computer-load {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 22px;
+  padding: 0 8px 4px 33px;
   color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.running-machine > span {
+.running-computer-load > span {
   flex: none;
 }
-.running-machine-name {
-  display: flex;
-  align-items: center;
+.running-computer-load b {
+  color: var(--text);
+  font-weight: 500;
 }
-.running-machine-battery {
+.running-computer-battery {
   display: flex;
   align-items: center;
   gap: 3px;
 }
-.running-machine b {
-  color: var(--text);
-  font-weight: 500;
-}
-.running-machine .low b,
-.running-machine .low svg {
+.running-computer-battery.low b,
+.running-computer-battery.low svg {
   color: #d9534f;
 }
-.running-machine-spark {
+.running-computer-spark {
   flex: 1 1 0;
-  min-width: 16px;
-  height: 12px;
+  min-width: 30px;
+  height: 18px;
+}
+.running-computer-spark .area {
+  fill: currentColor;
+  opacity: 0.12;
+}
+/* What runs, under the computer; its list scrolls when the card runs out of room. */
+.running-tasks-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.running-tasks-label {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 2px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 .running-tasks-list li:hover .running-task-time,
 .running-tasks-list li:focus-within .running-task-time,
