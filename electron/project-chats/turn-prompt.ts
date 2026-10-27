@@ -54,15 +54,7 @@ export function turnPrompt({
   evidence,
   historyPath,
 }: TurnPromptInput) {
-  const latest = latestReview(chat);
-  const scope =
-    chat.scope.kind === "pr"
-      ? `This discussion concerns PR #${chat.scope.ref.number} in ${chat.scope.ref.owner}/${chat.scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`
-      : chat.scope.kind === "review"
-        ? chat.reviewer
-          ? "You are one of several reviewers in a deep review. Don't change any files."
-          : `This conversation is a deep review${latest ? ` of ${latest.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`
-        : "This is a general discussion of the linked project and its local working changes.";
+  const scope = scopeLine(chat);
   // A forked session already holds everything up to its message.
   const known =
     session.thread && session.through
@@ -232,6 +224,19 @@ export function turnPrompt({
     caughtUp: !command || !updates.length,
     briefed,
   };
+}
+
+/** What the conversation is about, told once per session. */
+function scopeLine(chat: ProjectChat) {
+  const { scope } = chat;
+  if (scope.kind === "pr")
+    return `This discussion concerns PR #${scope.ref.number} in ${scope.ref.owner}/${scope.ref.name}. The local checkout can differ from the published PR; inspect Git before asserting what is in the PR.`;
+  if (scope.kind !== "review")
+    return "This is a general discussion of the linked project and its local working changes.";
+  if (chat.reviewer)
+    return "You are one of several reviewers in a deep review. Don't change any files.";
+  const latest = latestReview(chat);
+  return `This conversation is a deep review${latest ? ` of ${latest.scope.label}` : ""}, which you lead. Findings are numbered like \`F1\`.`;
 }
 
 /** Who the request is from: a guest's words are still sent by the user. */
