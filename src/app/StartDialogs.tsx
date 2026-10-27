@@ -27,6 +27,8 @@ export function StartDialogs({
     <>
       {guestLink && (
         <GuestImport
+          // Each link starts over: another's error doesn't carry to it.
+          key={guestLink}
           link={guestLink}
           projects={projects}
           current={current}

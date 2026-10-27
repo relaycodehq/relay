@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { projectChatsQuery } from "../../lib/workspace-queries";
 import { ErrorBox, Modal, Spinner } from "../../ui/ui";
 import { AddProjectPalette } from "../add-project/AddProjectPalette";
+import { HereOnly } from "../add-project/LocationChoice";
 import { NewThreadPicker } from "../projects/NewThreadPicker";
 import "./guest-share.css";
 
@@ -27,15 +28,25 @@ export function GuestImport({
   onClose: () => void;
 }) {
   const [adding, setAdding] = useState(false);
-  const { copying, error, copyInto } = useGuestCopy(link, (project, thread) => {
-    onClose();
-    onOpen(project, thread);
-  });
+  const { copying, error, copyInto, pickAgain } = useGuestCopy(
+    link,
+    (project, thread) => {
+      onClose();
+      onOpen(project, thread);
+    },
+  );
   if (copying || error)
     return (
       <Modal title="Continue shared thread" onClose={onClose}>
         {error ? (
-          <ErrorBox error={error} />
+          <>
+            <ErrorBox error={error} />
+            <div className="modal-actions">
+              <button type="button" className="primary" onClick={pickAgain}>
+                Choose again
+              </button>
+            </div>
+          </>
         ) : (
           <p className="guest-share-starting">
             <Spinner /> Copying the conversation…
@@ -46,14 +57,17 @@ export function GuestImport({
   const own = projects?.filter((p) => !p.scratch && !p.computer);
   if (adding)
     return (
-      <AddProjectPalette
-        projects={own ?? []}
-        onClose={() => setAdding(false)}
-        onDone={(p) => {
-          setAdding(false);
-          void copyInto(async () => p);
-        }}
-      />
+      // A project on another computer would need the thread started there.
+      <HereOnly.Provider value>
+        <AddProjectPalette
+          projects={own ?? []}
+          onClose={() => setAdding(false)}
+          onDone={(p) => {
+            setAdding(false);
+            void copyInto(async () => p);
+          }}
+        />
+      </HereOnly.Provider>
     );
   return (
     <NewThreadPicker
@@ -83,6 +97,13 @@ function useGuestCopy(
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState<unknown>();
   const qc = useQueryClient();
+  const open = useRef(true);
+  useEffect(() => {
+    open.current = true;
+    return () => {
+      open.current = false;
+    };
+  }, []);
   const copyInto = async (destination: () => Promise<Project>) => {
     if (copying) return;
     setCopying(true);
@@ -96,11 +117,14 @@ function useGuestCopy(
           queryKey: projectChatsQuery(project.id).queryKey,
         }),
       ]);
-      onCopied(project, thread);
+      // Closed, or another link opened, while it copied: the thread is there,
+      // and nothing moves under the user.
+      if (open.current) onCopied(project, thread);
     } catch (e) {
       setError(e);
       setCopying(false);
     }
   };
-  return { copying, error, copyInto };
+  const pickAgain = () => setError(undefined);
+  return { copying, error, copyInto, pickAgain };
 }

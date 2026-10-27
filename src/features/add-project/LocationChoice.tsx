@@ -1,7 +1,10 @@
-import type { RefObject } from "react";
+import { createContext, useContext, type RefObject } from "react";
 import { Check, ChevronRight, Laptop, Monitor } from "lucide-react";
 import type { PairedComputer } from "../../../shared/handoff";
 import { DeviceIcon } from "../handoff/DeviceIcon";
+
+/** True where a project can only be added on this computer, so no other is offered. */
+export const HereOnly = createContext(false);
 
 /** Where a project is added: this computer, or a paired one. */
 export function LocationCards({
@@ -19,6 +22,7 @@ export function LocationCards({
   onHere: () => void;
   onChoose: () => void;
 }) {
+  if (useContext(HereOnly)) return null;
   return (
     <div className="add-location-cards">
       <button
@@ -59,6 +63,7 @@ export function LocationTrigger({
   disabled: boolean;
   onClick: () => void;
 }) {
+  if (useContext(HereOnly)) return null;
   return (
     <button
       type="button"
