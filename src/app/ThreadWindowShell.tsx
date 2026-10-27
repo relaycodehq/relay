@@ -106,7 +106,6 @@ export default function ThreadWindowShell({
             gitActions={gitActions}
             move={<BackButton chatId={chat.id} />}
             onConnectHost={toMain}
-            onSettings={toMain}
           />
         </div>
       </header>

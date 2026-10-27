@@ -85,17 +85,14 @@ export function ThreadHeaderActions({
   gitActions,
   move,
   onConnectHost,
-  onSettings,
 }: {
   tools: ThreadTools;
   project: Project;
   gitActions: Ref<GitActionsHandle>;
   move?: ReactNode;
   onConnectHost: () => void;
-  onSettings: (at: SettingsCategory, projectId?: string) => void;
 }) {
   const { chat, panes, pull } = nav;
-  const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
   // A folder without Git has no Changes of its own, but what its agents
   // changed in other repositories still shows there.
   const elsewhere = useElsewhereListed(project.plain ? chat?.id : undefined);
@@ -124,16 +121,9 @@ export function ThreadHeaderActions({
         />
       )}
       <div className="header-strip">
-        {(move || handoff) && (
+        {move && (
           <>
             {move}
-            {handoff && (
-              <HandoffButton
-                chat={handoff}
-                onError={setError}
-                onSettings={() => onSettings("computers")}
-              />
-            )}
             <span className="header-strip-sep" aria-hidden="true" />
           </>
         )}
@@ -151,6 +141,39 @@ export function ThreadHeaderActions({
         <TerminalToggle terminal={terminal} />
       </div>
     </div>
+  );
+}
+
+/** The Running card, with Hand off for the open thread. */
+function RunningCard({
+  tools: { nav, setError },
+  project,
+  onSettings,
+}: {
+  tools: ThreadTools;
+  project: Project;
+  onSettings: (at: SettingsCategory) => void;
+}) {
+  const { chat, chats, navigate } = nav;
+  const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
+  return (
+    <RunningTasks
+      key={project.id}
+      project={project}
+      chats={chats.data ?? []}
+      handoff={
+        handoff &&
+        ((className) => (
+          <HandoffButton
+            chat={handoff}
+            className={className}
+            onError={setError}
+            onSettings={() => onSettings("computers")}
+          />
+        ))
+      }
+      onOpenChat={(c) => navigate(project, c)}
+    />
   );
 }
 
@@ -346,11 +369,10 @@ export function ThreadWorkspace({
               />
             </ThreadPreviewContext.Provider>
           </StartedThreadsContext.Provider>
-          <RunningTasks
-            key={project.id}
+          <RunningCard
+            tools={tools}
             project={project}
-            chats={chats.data ?? []}
-            onOpenChat={(c) => navigate(project, c)}
+            onSettings={onSettings}
           />
         </Pane>
         <Pane id="changes" label="Changes" {...frame("changes")}>

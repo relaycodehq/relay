@@ -19,16 +19,19 @@ import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
 import "./handoff.css";
 
 /**
- * The thread header's hand-off button. With no computer paired it opens
- * the computer picker; otherwise it lists the paired ones, each with the
+ * The thread's hand-off button. With no computer paired it opens the
+ * computer picker; otherwise it lists the paired ones, each with the
  * project it has for this repository, or why it can't take the thread.
  */
 export function HandoffButton({
   chat,
+  className,
   onSettings,
   onError,
 }: {
   chat: ChatSummary;
+  /** The look of the place it sits in. */
+  className: string;
   onSettings: () => void;
   onError: (error: unknown) => void;
 }) {
@@ -67,7 +70,7 @@ export function HandoffButton({
       {!paired.length ? (
         <button
           type="button"
-          className="pane-toggle"
+          className={className}
           aria-label={label}
           title={label}
           disabled={!computers.data}
@@ -77,11 +80,7 @@ export function HandoffButton({
         </button>
       ) : (
         <Menu.Root open={open} onOpenChange={setOpen}>
-          <Menu.Trigger
-            className="pane-toggle"
-            aria-label={label}
-            title={label}
-          >
+          <Menu.Trigger className={className} aria-label={label} title={label}>
             <MonitorUp size={14} />
           </Menu.Trigger>
           <Menu.Portal>

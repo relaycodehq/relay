@@ -350,7 +350,6 @@ export default function ProjectShell() {
               gitActions={gitActions}
               move={chat && <PopOutButton chat={chat} onError={setError} />}
               onConnectHost={() => setChoosePR(true)}
-              onSettings={settings.show}
             />
           )}
         </div>

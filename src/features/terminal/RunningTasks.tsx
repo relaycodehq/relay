@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { useQuery } from "@tanstack/react-query";
@@ -129,10 +129,13 @@ function useProjectTasks(project: Project, collapsed: boolean) {
 export function RunningTasks({
   project,
   chats,
+  handoff,
   onOpenChat,
 }: {
   project: Project;
   chats: ChatSummary[];
+  /** The open thread's Hand off button, given the card's button look. */
+  handoff?: (className: string) => ReactNode;
   onOpenChat: (chat: ChatSummary) => void;
 }) {
   const [folded, setFolded] = useStoredFlag("relay-tasks-collapsed");
@@ -164,7 +167,11 @@ export function RunningTasks({
         />
       ) : (
         <>
-          <ComputerSection project={project} onFold={toggle} />
+          <ComputerSection
+            project={project}
+            actions={handoff?.("running-card-button")}
+            onFold={toggle}
+          />
           {!!list.length && (
             <section className="running-tasks-section">
               <div className="running-tasks-label">

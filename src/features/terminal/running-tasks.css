@@ -238,6 +238,13 @@ button.running-task-title:hover > svg {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.running-card-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
 .running-card-button {
   display: grid;
   flex: none;
@@ -245,7 +252,6 @@ button.running-task-title:hover > svg {
   width: 26px;
   height: 24px;
   min-height: 0;
-  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: 6px;
