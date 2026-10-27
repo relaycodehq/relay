@@ -262,12 +262,13 @@ button.running-task-title:hover > svg {
   background: color-mix(in srgb, var(--text) 9%, transparent);
   color: var(--text);
 }
+/* The chart starts under the icon, so it has the card's whole width to draw in. */
 .running-computer-load {
   display: flex;
   align-items: center;
   gap: 10px;
   height: 22px;
-  padding: 0 8px 4px 33px;
+  padding: 0 8px 4px;
   color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
