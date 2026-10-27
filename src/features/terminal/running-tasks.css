@@ -352,13 +352,33 @@ button.running-changes-row:hover {
   padding-top: 6px;
   border-top: 1px solid var(--border);
 }
+/* The section's header, which folds the list away. */
 .running-tasks-label {
   display: flex;
+  flex: none;
+  align-items: center;
   gap: 6px;
-  padding: 4px 8px 2px;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 4px 8px 2px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
   color: var(--muted);
+  font: inherit;
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+  text-align: left;
+  cursor: pointer;
+}
+.running-tasks-label:hover {
+  color: var(--text);
+}
+.running-tasks-label > svg {
+  transition: transform 0.15s;
+}
+.running-tasks-label[aria-expanded="true"] > svg {
+  transform: rotate(90deg);
 }
 .running-tasks-list li:hover .running-task-time,
 .running-tasks-list li:focus-within .running-task-time,
@@ -378,4 +398,37 @@ button.running-changes-row:hover {
   padding: 6px 8px 2px;
   color: #c78073;
   font-size: 11px;
+}
+/* How the thread is doing on another computer, in place of this one's load. */
+.running-computer-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 22px;
+  padding: 0 8px 4px 33px;
+  color: var(--muted);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.running-computer-status:empty {
+  display: none;
+}
+.running-computer-status > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.running-computer-status > button {
+  flex: none;
+  min-height: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.running-computer-status > button:hover:not(:disabled) {
+  text-decoration: underline;
 }

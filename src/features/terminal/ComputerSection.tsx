@@ -1,33 +1,41 @@
 import type { ReactNode } from "react";
-import { Laptop, PanelRightClose, Server } from "lucide-react";
-import type { Project } from "../../../shared/projects";
+import { Laptop, PanelRightClose, Server, ServerOff } from "lucide-react";
 import { ComputerLoad } from "./TaskLoad";
 
-/** A server for a project on another computer, a laptop for this one. */
-export function ComputerIcon({ project }: { project: Project }) {
-  if (project.computer) return <Server size={15} aria-hidden />;
-  return <Laptop size={15} aria-hidden />;
+/** Another computer the thread runs on, as the card shows it. */
+export interface CardComputer {
+  name: string;
+  online: boolean;
+  /** How the thread is doing there, under the name. */
+  status?: ReactNode;
 }
 
-/** The card's head: the computer the project's threads run on, and its load. */
+/** A server for another computer, crossed out while it's offline; a laptop for this one. */
+export function ComputerIcon({ computer }: { computer?: CardComputer }) {
+  if (!computer) return <Laptop size={15} aria-hidden />;
+  if (!computer.online) return <ServerOff size={15} aria-hidden />;
+  return <Server size={15} aria-hidden />;
+}
+
+/** The card's head: the computer the thread runs on, and its load. */
 export function ComputerSection({
-  project,
+  computer,
   actions,
   onFold,
 }: {
-  project: Project;
+  /** None for this computer. */
+  computer?: CardComputer;
   /** The open thread's own buttons, e.g. Hand off. */
   actions?: ReactNode;
   /** Folds the card into the stripe. */
   onFold: () => void;
 }) {
-  const elsewhere = project.computer;
   return (
     <section className="running-computer">
       <div className="running-computer-head">
-        <ComputerIcon project={project} />
+        <ComputerIcon computer={computer} />
         <span className="running-computer-name">
-          {elsewhere ? elsewhere.name : "This computer"}
+          {computer ? computer.name : "This computer"}
         </span>
         <span className="running-card-actions">
           {actions}
@@ -42,8 +50,12 @@ export function ComputerSection({
           </button>
         </span>
       </div>
-      {/* The load read here is this computer's, not the one the project is on. */}
-      {!elsewhere && <ComputerLoad />}
+      {/* The load read here is this computer's, so another one shows how the thread is doing there instead. */}
+      {computer ? (
+        <div className="running-computer-status">{computer.status}</div>
+      ) : (
+        <ComputerLoad />
+      )}
     </section>
   );
 }

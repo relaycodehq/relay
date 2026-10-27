@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { flushSync } from "react-dom";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { useQuery } from "@tanstack/react-query";
@@ -6,7 +7,7 @@ import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
 import { ChangesSection, type CardChanges } from "./ChangesSection";
-import { ComputerSection } from "./ComputerSection";
+import { ComputerSection, type CardComputer } from "./ComputerSection";
 import { RunningStripe } from "./RunningStripe";
 import { useCostHistory } from "./TaskLoad";
 import { TaskList } from "./TaskList";
@@ -123,12 +124,49 @@ function useProjectTasks(project: Project, collapsed: boolean) {
   return { list, history, costed };
 }
 
+/** The processes left running, which fold to their header; the fold is the same for every thread. */
+function RunningSection({
+  project,
+  tasks,
+  ...list
+}: {
+  project: Project;
+  tasks: ReturnType<typeof useProjectTasks>;
+  chats: ChatSummary[];
+  onOpenChat: (chat: ChatSummary) => void;
+}) {
+  const [folded, setFolded] = useStoredFlag("relay-running-folded");
+  return (
+    <section className="running-tasks-section">
+      <button
+        type="button"
+        className="running-tasks-label"
+        aria-expanded={!folded}
+        onClick={() => setFolded(!folded)}
+      >
+        <ChevronRight size={12} aria-hidden />
+        Running <span>{tasks.list.length}</span>
+      </button>
+      {!folded && (
+        <TaskList
+          project={project}
+          tasks={tasks.list}
+          costed={tasks.costed}
+          history={tasks.history}
+          {...list}
+        />
+      )}
+    </section>
+  );
+}
+
 /**
  * The computer the project's threads run on, with its load, and the shell
  * processes Claude and Codex left running in the project, from any conversation.
  */
 export function RunningTasks({
   project,
+  computer,
   chats,
   handoff,
   changes,
@@ -136,6 +174,8 @@ export function RunningTasks({
   onOpenChat,
 }: {
   project: Project;
+  /** The other computer the thread runs on; none for this one. */
+  computer?: CardComputer;
   chats: ChatSummary[];
   /** The open thread's Hand off button, given the card's button look. */
   handoff?: (className: string) => ReactNode;
@@ -152,7 +192,7 @@ export function RunningTasks({
   const [peeking, setPeeking] = useState(false);
   if (roomy && peeking) setPeeking(false);
   const collapsed = roomy ? folded : !peeking;
-  const { list, history, costed } = useProjectTasks(project, collapsed);
+  const tasks = useProjectTasks(project, collapsed);
   // Open beside the thread, not over it: the thread makes room.
   const docked = roomy && !collapsed;
   const toggle = () =>
@@ -167,34 +207,27 @@ export function RunningTasks({
     >
       {collapsed ? (
         <RunningStripe
-          project={project}
-          running={list.length}
+          computer={computer}
+          running={tasks.list.length}
           onOpen={toggle}
         />
       ) : (
         <>
           <ComputerSection
-            project={project}
+            computer={computer}
             actions={handoff?.("running-card-button")}
             onFold={toggle}
           />
           {changes && (
             <ChangesSection changes={changes} onOpen={onOpenChanges} />
           )}
-          {!!list.length && (
-            <section className="running-tasks-section">
-              <div className="running-tasks-label">
-                Running <span>{list.length}</span>
-              </div>
-              <TaskList
-                project={project}
-                tasks={list}
-                chats={chats}
-                costed={costed}
-                history={history}
-                onOpenChat={onOpenChat}
-              />
-            </section>
+          {!!tasks.list.length && (
+            <RunningSection
+              project={project}
+              tasks={tasks}
+              chats={chats}
+              onOpenChat={onOpenChat}
+            />
           )}
         </>
       )}

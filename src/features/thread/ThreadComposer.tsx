@@ -6,11 +6,7 @@ import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import { latestContextReport } from "../../../shared/context-report";
 import { openPlan } from "../../../shared/open-plan";
-import type {
-  ChatMessage,
-  ChatScope,
-  Project,
-} from "../../../shared/projects";
+import type { ChatMessage, ChatScope, Project } from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
@@ -42,7 +38,7 @@ import { StartedThreadBranch } from "./StartedThreadBranch";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
-import { HomeComputerLine, LiveAwayLine } from "../handoff/LiveAwayLine";
+import { HomeComputerLine } from "../handoff/HomeComputerLine";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
 import { DetourNote, NewThreadBranch } from "./NewThreadBranch";
@@ -471,9 +467,7 @@ export function ThreadComposer({
         </>
       }
       below={
-        chat && liveAway(chat) ? (
-          <LiveAwayLine chat={chat} onError={setError} />
-        ) : chat && inSetup(chat) ? (
+        chat && inSetup(chat) ? (
           <SetupLine chat={chat} onError={setError} />
         ) : !chat && project.computer ? (
           <HomeComputerLine project={project} />

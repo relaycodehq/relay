@@ -133,14 +133,23 @@ export async function openSurface(
 }
 
 /**
- * Opens the thread's changes in the editor from the Running card, first
- * calling the card out of its stripe where the pane is too narrow for it.
+ * The head of the thread's Running card, which says where the thread runs;
+ * first calls the card out of its stripe where the pane is too narrow for it.
  */
-export async function openThreadChanges(page: Page) {
+export async function openThreadCard(page: Page) {
   const card = page.getByRole("complementary", { name: "Running processes" });
-  const row = card.getByRole("button", { name: /files? changed/ });
+  const head = card.locator(".running-computer");
   const stripe = card.locator(".running-stripe");
-  await expect(row.or(stripe)).toBeVisible();
+  await expect(head.or(stripe)).toBeVisible();
   if (await stripe.isVisible()) await stripe.click();
-  await row.click();
+  return head;
+}
+
+/** Opens the thread's changes in the editor from the Running card. */
+export async function openThreadChanges(page: Page) {
+  await openThreadCard(page);
+  await page
+    .getByRole("complementary", { name: "Running processes" })
+    .getByRole("button", { name: /files? changed/ })
+    .click();
 }

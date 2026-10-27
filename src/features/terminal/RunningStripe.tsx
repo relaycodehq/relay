@@ -1,22 +1,28 @@
 import { Activity } from "lucide-react";
-import type { Project } from "../../../shared/projects";
-import { ComputerIcon } from "./ComputerSection";
+import { ComputerIcon, type CardComputer } from "./ComputerSection";
+
+/** What the stripe says about the computer, for its label. */
+function computerLabel(computer: CardComputer | undefined) {
+  if (!computer) return "This computer";
+  if (!computer.online) return `${computer.name} · offline`;
+  return computer.name;
+}
 
 /**
  * The card folded into the thread's right gutter, where there's never text:
  * the computer, and how many processes run there. One button, which opens it.
  */
 export function RunningStripe({
-  project,
+  computer,
   running,
   onOpen,
 }: {
-  project: Project;
+  computer?: CardComputer;
   running: number;
   onOpen: () => void;
 }) {
-  const computer = project.computer?.name ?? "This computer";
-  const label = running ? `${computer} · ${running} running` : computer;
+  const name = computerLabel(computer);
+  const label = running ? `${name} · ${running} running` : name;
   return (
     <button
       type="button"
@@ -27,7 +33,7 @@ export function RunningStripe({
       onClick={onOpen}
     >
       <span className="running-stripe-mark">
-        <ComputerIcon project={project} />
+        <ComputerIcon computer={computer} />
       </span>
       {!!running && (
         <span className="running-stripe-mark">

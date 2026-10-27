@@ -18,7 +18,6 @@ import { execFileSync } from "node:child_process";
 import {
   openInFileTree,
   openSurface,
-  openThreadChanges,
 } from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
@@ -115,8 +114,13 @@ test("chat and the panel are inline panes that can be reordered; Changes opens b
     await toggle("Panel").click();
 
     // Changes isn't a pane of its own: it lists the folder's changes beside
-    // the editor, and never pops the remembered file in a modal.
-    await openThreadChanges(page);
+    // the editor, and never pops the remembered file in a modal. A new thread
+    // has no Running card to open it from, so it's the editor's own view.
+    await openSurface(page, "Files");
+    await page
+      .getByRole("tablist", { name: "Sidebar" })
+      .getByRole("tab", { name: /^Changes/ })
+      .click();
     const local = page.locator(".project-file-list").getByRole("region", { name: "Local changes" });
     await expect(local).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);

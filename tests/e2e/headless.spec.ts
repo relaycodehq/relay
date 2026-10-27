@@ -16,6 +16,7 @@ import { parsePairingUrl, type RemoteEvent } from "../../shared/remote";
 import { RemoteClient } from "../../shared/remote-client";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { freePort } from "../fixtures/free-port";
+import { openThreadCard } from "../fixtures/navigation";
 
 test("a headless Relay pairs from the terminal, works for a phone and takes a thread from the desktop and back", async () => {
   test.setTimeout(240_000);
@@ -186,12 +187,13 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     expect(relay("devices")).toMatch(/Test phone[\s\S]*computer/);
 
     // Handed to the headless Relay: its agent carries on in a worktree there.
+    const live = await openThreadCard(page);
     await page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
     await page.getByRole("menuitem", { name: /Continues in Mini/ }).click();
-    const live = page.locator(".handoff-live");
-    await expect(live).toContainText("Running on Mini", { timeout: 60_000 });
+    await expect(live).toContainText("Mini", { timeout: 60_000 });
+    await expect(live).toContainText("Handed off from here");
     await screenshot(page, { path: "test-results/headless-handoff-away.png" });
     type Row = { id: string; title: string; computer?: string };
     let arrived: Row | undefined;
@@ -213,8 +215,9 @@ test("a headless Relay pairs from the terminal, works for a phone and takes a th
     ).toBe("export const guard = true;\n");
 
     // And back again, with the headless Relay's handoff note.
+    await openThreadCard(page);
     await live.getByRole("button", { name: "Bring back" }).click();
-    await expect(live).toBeHidden({ timeout: 60_000 });
+    await expect(live).toContainText("This computer", { timeout: 60_000 });
     await expect(page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(page, { path: "test-results/headless-handoff-back.png" });
 

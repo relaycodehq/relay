@@ -1,7 +1,16 @@
-import type { Project } from "../../shared/projects";
+import type { ChatSummary, Project } from "../../shared/projects";
 import type { SettingsCategory } from "../lib/settings-page";
 import { useElsewhereListed } from "../features/changes/elsewhere/useElsewhere";
 import { HandoffButton } from "../features/handoff/HandoffButton";
+import {
+  LiveAwayStatus,
+  useLiveAway,
+} from "../features/handoff/LiveAwayStatus";
+import {
+  projectComputer,
+  usePairedComputers,
+} from "../features/handoff/usePairedComputers";
+import type { CardComputer } from "../features/terminal/ComputerSection";
 import type { CardChanges } from "../features/terminal/ChangesSection";
 import { RunningTasks } from "../features/terminal/RunningTasks";
 import type { ThreadTools } from "./ThreadWorkspace";
@@ -39,6 +48,24 @@ function useCardChanges(
   };
 }
 
+/** The other computer the open thread runs on: where it was handed off to, or where its project lives. */
+function useCardComputer(
+  chat: ChatSummary | undefined,
+  project: Project,
+  onError: (error: unknown) => void,
+): CardComputer | undefined {
+  const away = useLiveAway(chat, onError);
+  const computers = usePairedComputers(!!project.computer);
+  const home = projectComputer(project, computers.data);
+  if (away)
+    return {
+      name: away.computer,
+      online: away.online,
+      status: <LiveAwayStatus away={away} />,
+    };
+  return home && { name: home.name, online: home.online };
+}
+
 /** The Running card, with Hand off and the changes of the open thread; none on a new thread. */
 export function RunningCard({
   tools,
@@ -52,6 +79,7 @@ export function RunningCard({
   const { nav, opens, setError } = tools;
   const { chat, chats, navigate } = nav;
   const changes = useCardChanges(tools, project);
+  const computer = useCardComputer(chat, project, setError);
   const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
   // A new thread has nothing of its own for the card to show yet.
   if (!chat) return null;
@@ -59,6 +87,7 @@ export function RunningCard({
     <RunningTasks
       key={project.id}
       project={project}
+      computer={computer}
       chats={chats.data ?? []}
       handoff={
         handoff &&

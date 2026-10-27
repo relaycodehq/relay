@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { freePort } from "../fixtures/free-port";
+import { openThreadCard } from "../fixtures/navigation";
 
 test("a worktree thread goes to another computer from its header, comes back, and carries on here once that computer is gone", async () => {
   test.setTimeout(180_000);
@@ -128,6 +129,7 @@ test("a worktree thread goes to another computer from its header, comes back, an
     await laptop.page.keyboard.press("Escape");
 
     // Now it lists the mini, which has the same repository.
+    await openThreadCard(laptop.page);
     await laptop.page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
@@ -138,9 +140,11 @@ test("a worktree thread goes to another computer from its header, comes back, an
     await screenshot(laptop.page, { path: "test-results/handoff-menu.png" });
     await target.click();
 
-    // Away, the thread follows along live under its composer.
-    const live = laptop.page.locator(".handoff-live");
-    await expect(live).toContainText("Running on ", { timeout: 60_000 });
+    // Away, the thread follows along live, and its card says where it runs.
+    const live = await openThreadCard(laptop.page);
+    await expect(live).toContainText("Handed off from here", {
+      timeout: 60_000,
+    });
     // Settings lists it under the computer it went to.
     await laptop.page
       .getByRole("button", { name: "Open settings" })
@@ -178,27 +182,31 @@ test("a worktree thread goes to another computer from its header, comes back, an
       await readFile(join(miniThread!.worktree!.path!, "src/guard.ts"), "utf8"),
     ).toBe("export const guard = true;\n");
 
-    // Back again: the line goes and the thread says where it was.
+    // Back again: the card is on this computer and the thread says where it was.
+    await openThreadCard(laptop.page);
     await live.getByRole("button", { name: "Bring back" }).click();
-    await expect(live).toBeHidden({ timeout: 60_000 });
+    await expect(live).toContainText("This computer", { timeout: 60_000 });
     await expect(laptop.page.getByText(/Continued on /).first()).toBeVisible();
     await screenshot(laptop.page, { path: "test-results/handoff-back.png" });
 
     // Away again, and then the mini is gone: the thread carries on here.
+    await openThreadCard(laptop.page);
     await laptop.page
       .getByRole("button", { name: "Hand off to another computer" })
       .click();
     await laptop.page
       .getByRole("menuitem", { name: /Continues in Mini/ })
       .click();
-    await expect(live).toContainText("Running on ", { timeout: 60_000 });
+    await expect(live).toContainText("Handed off from here", {
+      timeout: 60_000,
+    });
     await mini.app.close();
-    await expect(live).toContainText(" is offline", { timeout: 60_000 });
+    await expect(live).toContainText("Offline", { timeout: 60_000 });
     await screenshot(laptop.page, {
       path: "test-results/handoff-offline.png",
     });
     await live.getByRole("button", { name: "Run here instead" }).click();
-    await expect(live).toBeHidden({ timeout: 30_000 });
+    await expect(live).toContainText("This computer", { timeout: 30_000 });
     await screenshot(laptop.page, {
       path: "test-results/handoff-run-here.png",
     });
