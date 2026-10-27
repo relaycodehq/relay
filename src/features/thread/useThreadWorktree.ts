@@ -124,29 +124,17 @@ export function useThreadWorktree({
     queryFn: () => api.agentWorktreeRecreatable(chat!.id),
     enabled: !!chat && unavailable,
   });
-  const [busy, setBusy] = useState(false);
-  const [dialog, setDialog] = useState<"remove">();
+  const removal = useWorktreeRemoval({
+    chatId: chat?.id,
+    projectId: project.id,
+    setError,
+    listChanged,
+    refetch: () => void query.refetch(),
+  });
   useEffect(() => {
     // A finished turn leaves new changes to count.
     if (!running && chat?.worktree) void query.refetch();
   }, [running]);
-  async function remove() {
-    if (!chat || busy) return;
-    setBusy(true);
-    setError(undefined);
-    try {
-      await api.removeProjectWorktree(chat.id);
-      // What ran in it stopped with it.
-      void qc.invalidateQueries({ queryKey: ["project-tasks", project.id] });
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-      void query.refetch();
-      void qc.invalidateQueries({ queryKey: workingTreeKey() });
-      void listChanged();
-    }
-  }
   async function select(path: string | null) {
     await changeWorkspace(() => api.selectAgentWorktree(chat!.id, path));
   }
@@ -206,6 +194,45 @@ export function useThreadWorktree({
     select,
     recreate,
     selectionDisabled: running || lock.locked,
+    ...removal,
+  };
+}
+
+/** Removing the thread's worktree, from its dialog. */
+function useWorktreeRemoval({
+  chatId,
+  projectId,
+  setError,
+  listChanged,
+  refetch,
+}: {
+  chatId: string | undefined;
+  projectId: string;
+  setError: ThreadHandle["setError"];
+  listChanged: ThreadHandle["listChanged"];
+  refetch: () => void;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<"remove">();
+  async function remove() {
+    if (!chatId || busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api.removeProjectWorktree(chatId);
+      // What ran in it stopped with it.
+      void qc.invalidateQueries({ queryKey: ["project-tasks", projectId] });
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+      refetch();
+      void qc.invalidateQueries({ queryKey: workingTreeKey() });
+      void listChanged();
+    }
+  }
+  return {
     busy,
     /** The Remove dialog, while it is open. */
     dialog,

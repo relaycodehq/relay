@@ -131,7 +131,6 @@ function useTargetPick(
   const [pull, setPull] = useState<PullRef | null>(() =>
     saved.pull && sameRepo(saved.pull, repository) ? saved.pull : null,
   );
-  const [commit, setCommit] = useState(saved.commit ?? "");
   const branches = useQuery({
     queryKey: ["project-branches", projectId],
     queryFn: () => api.projectBranches(projectId),
@@ -142,12 +141,6 @@ function useTargetPick(
     queryFn: () => api.projectBranchCounts(projectId),
     enabled: setup.kind === "branch",
   });
-  const commits = useQuery({
-    queryKey: ["recent-commits", projectId],
-    queryFn: async () =>
-      (await api.projectHistory(projectId, "head", 40)).commits,
-    enabled: setup.kind === "commit",
-  });
   // Once it starts, the branch isn't kept, but the base is: the project's next review goes into the same one.
   const [chosenHead, setHead] = useState(saved.head ?? "");
   const [chosenBase, setBase] = useState(
@@ -155,6 +148,7 @@ function useTargetPick(
   );
   const keep = (change: Parameters<typeof updateReviewDraft>[1]) =>
     keepReview(projectId, draftId, setup, change);
+  const commit = useCommitPick(projectId, setup, saved.commit, keep);
   const { heads, head, bases, base } = reviewBranches(
     { head: chosenHead, base: chosenBase },
     branches.data?.branches ?? [],
@@ -167,16 +161,12 @@ function useTargetPick(
     enabled: setup.kind === "branch" && !!base,
     refetchInterval: poll(3000),
   });
-  // A kept commit that is no longer among the recent ones gives way to the newest.
-  const chosenCommit = commits.data?.some((c) => c.sha === commit)
-    ? commit
-    : commits.data?.[0]?.sha;
   const target = reviewTarget(setup.kind, {
     changes,
     head,
     base,
     pull,
-    commit: chosenCommit,
+    commit: commit.commit,
   });
   return {
     target,
@@ -202,11 +192,33 @@ function useTargetPick(
       setPull(ref);
       keep({ pull: ref ?? undefined });
     },
+    ...commit,
+  };
+}
+
+/** The commit a commit review points at: the one picked, while it's among the latest, else the newest. */
+function useCommitPick(
+  projectId: string,
+  setup: Setup,
+  saved: string | undefined,
+  keep: (change: Parameters<typeof updateReviewDraft>[1]) => void,
+) {
+  const [picked, setPicked] = useState(saved ?? "");
+  const commits = useQuery({
+    queryKey: ["recent-commits", projectId],
+    queryFn: async () =>
+      (await api.projectHistory(projectId, "head", 40)).commits,
+    enabled: setup.kind === "commit",
+  });
+  const commit = commits.data?.some((c) => c.sha === picked)
+    ? picked
+    : commits.data?.[0]?.sha;
+  return {
     commits: commits.data ?? [],
     commitsPending: commits.isPending,
-    commit: chosenCommit,
+    commit,
     setCommit: (sha: string) => {
-      setCommit(sha);
+      setPicked(sha);
       keep({ commit: sha || undefined });
     },
   };

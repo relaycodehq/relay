@@ -43,7 +43,6 @@ export function DeepReviewSetup({
   onStart: (config: DeepReviewStart) => Promise<boolean>;
 }) {
   const name = useAgentName();
-  const sendKey = useSendKey();
   const { setup, update, focus, setFocus, pick, passes, runs, choice, start } =
     useDeepReviewSetup({
       projectId: project.id,
@@ -94,20 +93,7 @@ export function DeepReviewSetup({
             onChange={update}
           />
         </div>
-        <textarea
-          className="composer-prompt-input deep-review-focus"
-          aria-label="What to focus on"
-          placeholder="Anything to focus on? Optional, e.g. the queue changes, security…"
-          value={focus}
-          maxLength={4000}
-          onChange={(e) => setFocus(e.target.value)}
-          onKeyDown={(e) => {
-            if (sendsMessage(e, sendKey)) {
-              e.preventDefault();
-              void start();
-            }
-          }}
-        />
+        <FocusNote focus={focus} onChange={setFocus} onSend={start} />
         <div className="composer-tools">
           <ReviewSetups
             setup={choice}
@@ -126,6 +112,35 @@ export function DeepReviewSetup({
         </div>
       </form>
     </div>
+  );
+}
+
+/** What the reviewers should look at most; the send key starts the review. */
+function FocusNote({
+  focus,
+  onChange,
+  onSend,
+}: {
+  focus: string;
+  onChange: (text: string) => void;
+  onSend: () => Promise<void>;
+}) {
+  const sendKey = useSendKey();
+  return (
+    <textarea
+      className="composer-prompt-input deep-review-focus"
+      aria-label="What to focus on"
+      placeholder="Anything to focus on? Optional, e.g. the queue changes, security…"
+      value={focus}
+      maxLength={4000}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (sendsMessage(e, sendKey)) {
+          e.preventDefault();
+          void onSend();
+        }
+      }}
+    />
   );
 }
 
