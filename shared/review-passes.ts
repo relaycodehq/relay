@@ -112,12 +112,16 @@ export function parsePasses(text: string): ReviewPass[] {
     .filter((pass) => pass.length > 0);
 }
 
-/** What each pass reads, and what changed that no pass does. */
+/**
+ * What each pass reads, and what changed that no pass does. No passes is one
+ * pass over the whole change, which misses nothing.
+ */
 export function passCoverage(
   passes: ReviewPass[],
   files: readonly ChangedFile[],
 ) {
   const read = files.filter((f) => readLines(f) > 0);
+  const unsplit = passes.length === 0;
   return {
     passes: passes.map((_, i) => {
       const covered = read.filter((f) => covers(passes, i, f.path));
@@ -126,9 +130,9 @@ export function passCoverage(
         lines: covered.reduce((n, f) => n + readLines(f), 0),
       };
     }),
-    missed: read.filter(
-      (f) => !passes.some((_, i) => covers(passes, i, f.path)),
-    ),
+    missed: unsplit
+      ? []
+      : read.filter((f) => !passes.some((_, i) => covers(passes, i, f.path))),
   };
 }
 

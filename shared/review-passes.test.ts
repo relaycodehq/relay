@@ -58,6 +58,10 @@ it("counts each pass's lines and what no pass covers", () => {
   expect(missed.map((f) => f.path)).toEqual(["docs/notes.md"]);
 });
 
+it("misses nothing when the change isn't split", () => {
+  expect(passCoverage([], [file("src/app.ts", 30)]).missed).toEqual([]);
+});
+
 it("reads passes written one a line, quoting paths with spaces", () => {
   const passes = [["android/"], ["src/", "My Docs/", "!src/old.ts"]];
   const text = passesText(passes);
