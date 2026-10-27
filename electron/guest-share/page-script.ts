@@ -47,6 +47,8 @@ export const GUEST_SCRIPT = String.raw`(() => {
   const messages = new Map(view.messages.map((m) => [m.id, m]));
   const nodes = new Map();
   let ended = false;
+  /** Counts files opened, so a slow earlier one can't fill the viewer under a later one's name. */
+  let fileOpened = 0;
 
   $("name").value = stored("relay-guest-name") || "";
   $("continue").href = "relay://guest?link=" + encodeURIComponent(location.origin + base);
@@ -207,9 +209,12 @@ export const GUEST_SCRIPT = String.raw`(() => {
     const list = el("ol");
     $("viewer-body").replaceChildren(el("p", "", "Loading…"));
     dialog.showModal();
+    const opened = ++fileOpened;
     const res = await fetch(base + "/file/" + id);
-    if (!res.ok) return $("viewer-body").replaceChildren(el("p", "", "This file isn't available any more."));
-    for (const line of (await res.text()).split("\n")) list.append(el("li", "", line || " "));
+    const text = res.ok ? await res.text() : undefined;
+    if (opened !== fileOpened) return;
+    if (text === undefined) return $("viewer-body").replaceChildren(el("p", "", "This file isn't available any more."));
+    for (const line of text.split("\n")) list.append(el("li", "", line || " "));
     $("viewer-body").replaceChildren(list);
   }
 
