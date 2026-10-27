@@ -290,7 +290,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/settings/TypographySettings.tsx › TypographySettings": 141,
   "src/features/settings/WatchReview.tsx › WatchReviewDetail": 96,
   "src/features/settings/sections/SettingsNav.tsx › SettingsNav": 109,
-  "src/features/settings/sections/appearance.tsx › useAppearanceEntries": 239,
+  "src/features/settings/sections/appearance.tsx › useAppearanceEntries": 176,
   "src/features/settings/sections/composer.tsx › useComposerEntries": 134,
   "src/features/settings/sections/projects.tsx › projectEntries": 168,
   "src/features/settings/sections/threads.tsx › useThreadEntries": 85,
