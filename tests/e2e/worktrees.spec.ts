@@ -18,6 +18,7 @@ import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import {
   openInFileTree,
   openSurface,
+  openThreadCard,
   openThreadChanges,
   panelToggle,
 } from "../fixtures/navigation";
@@ -112,7 +113,13 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     expect(existsSync(join(worktree, "notes.txt"))).toBe(false);
     expect(await readFile(join(repo, "README.md"), "utf8")).toBe("# Cache\n");
     expect(existsSync(join(repo, "src/guard.ts"))).toBe(false);
-    await expect(page.getByText("relay/cache-guard-behavior")).toBeVisible();
+    // The card names the thread's branch.
+    await openThreadCard(page);
+    await expect(
+      page
+        .getByRole("complementary", { name: "Running processes" })
+        .getByTitle("relay/cache-guard-behavior", { exact: true }),
+    ).toBeVisible();
 
     // The card follows the thread: its changes and Files show the worktree.
     await openThreadChanges(page);
@@ -379,7 +386,13 @@ test("a project-folder thread moves into its own worktree mid-conversation and i
     await screenshot(page, { path: "test-results/worktree-move-dialog.png" });
     await dialog.getByRole("button", { name: "Move to worktree" }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.getByRole("button", { name: /^Worktree/ })).toBeVisible();
+    // The card names the worktree by its folder.
+    await openThreadCard(page);
+    await expect(
+      page
+        .getByRole("complementary", { name: "Running processes" })
+        .locator(".workspace-trigger"),
+    ).toBeVisible();
 
     const folder = join(data, "worktrees", "project");
     const [leaf] = await readdir(folder);

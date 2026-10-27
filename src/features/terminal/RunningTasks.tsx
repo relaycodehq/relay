@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { ChevronRight } from "lucide-react";
 import { flushSync } from "react-dom";
 import { useStoredFlag } from "../../lib/useStoredFlag";
@@ -167,6 +173,8 @@ function RunningSection({
 export function RunningTasks({
   project,
   computer,
+  inWorktree = false,
+  whereSlot,
   chats,
   handoff,
   changes,
@@ -176,6 +184,10 @@ export function RunningTasks({
   project: Project;
   /** The other computer the thread runs on; none for this one. */
   computer?: CardComputer;
+  /** The open thread works in a worktree, not the project's checkout. */
+  inWorktree?: boolean;
+  /** Where the open thread puts its folder and branch, while the card is open. */
+  whereSlot?: Ref<HTMLElement>;
   chats: ChatSummary[];
   /** The open thread's Hand off button, given the card's button look. */
   handoff?: (className: string) => ReactNode;
@@ -208,6 +220,7 @@ export function RunningTasks({
       {collapsed ? (
         <RunningStripe
           computer={computer}
+          inWorktree={inWorktree}
           running={tasks.list.length}
           onOpen={toggle}
         />
@@ -218,6 +231,7 @@ export function RunningTasks({
             actions={handoff?.("running-card-button")}
             onFold={toggle}
           />
+          <section className="running-where" ref={whereSlot} />
           {changes && (
             <ChangesSection changes={changes} onOpen={onOpenChanges} />
           )}

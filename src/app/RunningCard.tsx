@@ -88,6 +88,8 @@ export function RunningCard({
       key={project.id}
       project={project}
       computer={computer}
+      inWorktree={!!chat?.worktree}
+      whereSlot={tools.setCardSlot}
       chats={chats.data ?? []}
       handoff={
         handoff &&

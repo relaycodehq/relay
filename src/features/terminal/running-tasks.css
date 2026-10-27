@@ -299,6 +299,90 @@ button.running-task-title:hover > svg {
   fill: currentColor;
   opacity: 0.12;
 }
+/* Where the thread works, under the computer: its folder with the folders
+   linked to it, then its branch, which the composer puts here once the
+   thread has started. The changes read on from it as one section. */
+.running-where {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.running-where:empty,
+.running-where-folder:empty {
+  display: none;
+}
+.running-where:not(:empty) + .running-changes {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+.running-where-folder,
+.running-where-branch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+.running-where-folder:not(:empty) + .running-where-branch {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+/* The composer's small triggers, made the card's rows. */
+.running-where-rows .composer-branch-trigger {
+  flex: 1;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  max-width: none;
+  height: 30px;
+  min-height: 0;
+  margin-left: 0;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+.running-where-rows .composer-branch-trigger:hover:not(:disabled, .static) {
+  background: var(--hover);
+}
+.running-where-rows .composer-branch-trigger > svg:first-child {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--muted);
+}
+.running-where-rows .composer-branch-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Its menu's chevron keeps to the row's end, past a rule. */
+.running-where-rows
+  .composer-branch-trigger
+  > svg:last-child:not(:first-child) {
+  flex: none;
+  box-sizing: content-box;
+  height: 16px;
+  margin-left: auto;
+  padding-left: 9px;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+}
+.running-where-folder .linked-trigger {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.running-where-branch .composer-branch-trigger > span {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+/* What to push is the header's to say, not the card's. */
+.running-where-rows .composer-branch-sync {
+  display: none;
+}
 /* What the thread changed, under the computer. */
 .running-changes {
   margin-top: 6px;

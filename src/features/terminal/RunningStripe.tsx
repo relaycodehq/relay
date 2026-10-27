@@ -1,4 +1,4 @@
-import { Activity } from "lucide-react";
+import { Activity, Folder, FolderGit2 } from "lucide-react";
 import { ComputerIcon, type CardComputer } from "./ComputerSection";
 
 /** What the stripe says about the computer, for its label. */
@@ -10,14 +10,18 @@ function computerLabel(computer: CardComputer | undefined) {
 
 /**
  * The card folded into the thread's right gutter, where there's never text:
- * the computer, and how many processes run there. One button, which opens it.
+ * the computer, the folder the thread works in, and how many processes run
+ * there. One button, which opens it.
  */
 export function RunningStripe({
   computer,
+  inWorktree,
   running,
   onOpen,
 }: {
   computer?: CardComputer;
+  /** The thread works in a worktree, not the project's checkout. */
+  inWorktree: boolean;
   running: number;
   onOpen: () => void;
 }) {
@@ -34,6 +38,13 @@ export function RunningStripe({
     >
       <span className="running-stripe-mark">
         <ComputerIcon computer={computer} />
+      </span>
+      <span className="running-stripe-mark">
+        {inWorktree ? (
+          <FolderGit2 size={15} aria-hidden />
+        ) : (
+          <Folder size={15} aria-hidden />
+        )}
       </span>
       {!!running && (
         <span className="running-stripe-mark">

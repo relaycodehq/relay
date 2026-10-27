@@ -1,7 +1,9 @@
+import { createPortal } from "react-dom";
 import type { ChatScope, ChatSummary, Project } from "../../../shared/projects";
 import type { TurnDiffTarget } from "../changes/turn-diff";
 import { LinksControl } from "../linked-folders/LinksControl";
 import type { ThreadLinks } from "../linked-folders/useThreadLinks";
+import { useCardSlot } from "../terminal/card-slot";
 import { NewThreadBranch } from "./NewThreadBranch";
 import { NewWorkspacePicker } from "./NewWorkspacePicker";
 import { StartedThreadBranch } from "./StartedThreadBranch";
@@ -70,6 +72,7 @@ function ThreadFolder({
   checkout,
   running,
   busy,
+  named,
   onOpenTurnDiff,
   onError,
 }: {
@@ -80,6 +83,7 @@ function ThreadFolder({
   checkout: ProjectCheckout;
   running: boolean;
   busy: boolean;
+  named?: boolean;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   onError: (error: unknown) => void;
 }) {
@@ -102,28 +106,15 @@ function ThreadFolder({
       worktree={worktree}
       running={running}
       busy={busy}
+      named={named}
       onOpenTurnDiff={onOpenTurnDiff}
       onError={onError}
     />
   );
 }
 
-/** Where the thread works: its folder, its branch and the folders linked to it. */
-export function ThreadWhere({
-  chat,
-  project,
-  scope,
-  worktree,
-  checkout,
-  links,
-  running,
-  busy,
-  disabled,
-  onOpenTurnDiff,
-  onStartThread,
-  onProjectSettings,
-  onError,
-}: {
+/** What the thread's folder, branch and linked folders are built from. */
+interface WhereProps {
   chat?: ChatSummary;
   project: Project;
   scope: ChatScope;
@@ -139,36 +130,88 @@ export function ThreadWhere({
   onStartThread?: (text: string, send: boolean) => Promise<void>;
   onProjectSettings: () => void;
   onError: (error: unknown) => void;
-}) {
+  /** In the Running card, which has room for a row each. */
+  inCard?: boolean;
+}
+
+/** Where the thread works: its folder, its branch and the folders linked to it. */
+function WhereControls({
+  chat,
+  project,
+  scope,
+  worktree,
+  checkout,
+  links,
+  running,
+  busy,
+  disabled,
+  onOpenTurnDiff,
+  onStartThread,
+  onProjectSettings,
+  onError,
+  inCard = false,
+}: WhereProps) {
+  const folder = (
+    <ThreadFolder
+      chat={chat}
+      project={project}
+      scope={scope}
+      worktree={worktree}
+      checkout={checkout}
+      running={running}
+      busy={busy}
+      named={inCard}
+      onOpenTurnDiff={onOpenTurnDiff}
+      onError={onError}
+    />
+  );
+  const branch = (
+    <ThreadBranch
+      project={project}
+      worktree={worktree}
+      checkout={checkout}
+      unsent={!chat && scope.kind === "project" && !project.computer}
+      disabled={disabled}
+      onStartThread={onStartThread}
+    />
+  );
+  const linked = !project.computer && (
+    <LinksControl
+      links={links}
+      empty={!chat}
+      onProjectSettings={onProjectSettings}
+      onError={onError}
+    />
+  );
+  if (!inCard)
+    return (
+      <>
+        {folder}
+        {branch}
+        {linked}
+      </>
+    );
+  // In the card the folder and its linked folders make one row, the branch the next.
   return (
-    <>
-      <ThreadFolder
-        chat={chat}
-        project={project}
-        scope={scope}
-        worktree={worktree}
-        checkout={checkout}
-        running={running}
-        busy={busy}
-        onOpenTurnDiff={onOpenTurnDiff}
-        onError={onError}
-      />
-      <ThreadBranch
-        project={project}
-        worktree={worktree}
-        checkout={checkout}
-        unsent={!chat && scope.kind === "project" && !project.computer}
-        disabled={disabled}
-        onStartThread={onStartThread}
-      />
-      {!project.computer && (
-        <LinksControl
-          links={links}
-          empty={!chat}
-          onProjectSettings={onProjectSettings}
-          onError={onError}
-        />
-      )}
-    </>
+    <div className="running-where-rows">
+      <div className="running-where-folder">
+        {folder}
+        {linked}
+      </div>
+      <div className="running-where-branch">{branch}</div>
+    </div>
+  );
+}
+
+/**
+ * The thread's folder, branch and linked folders: in the composer's row
+ * until the thread starts, then in its Running card, folding away with it.
+ */
+export function ThreadWhere(props: Omit<WhereProps, "inCard">) {
+  const cardSlot = useCardSlot();
+  if (!props.chat || cardSlot === undefined)
+    return <WhereControls {...props} />;
+  return (
+    cardSlot && createPortal(<WhereControls {...props} inCard />, cardSlot)
   );
 }

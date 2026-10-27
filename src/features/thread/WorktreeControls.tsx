@@ -22,7 +22,7 @@ import "../changes/worktrees.css";
 import "../changes/branch-picker.css";
 import { fileManager } from "../../lib/mod-key";
 import { useCopy } from "../../lib/useCopy";
-import { CheckoutControl } from "./CheckoutControl";
+import { CheckoutControl, folderName } from "./CheckoutControl";
 import { MovedDot, MovedNote } from "./WorkspaceMoved";
 
 /** The composer's workspace slot: where an unsent thread will work, then where it does. */
@@ -31,6 +31,7 @@ export function WorkspaceControl({
   worktree,
   running,
   busy,
+  named = false,
   onOpenTurnDiff,
   onError,
 }: {
@@ -39,6 +40,8 @@ export function WorkspaceControl({
   running: boolean;
   /** Sending; the picker waits for it. */
   busy: boolean;
+  /** Names the worktree by its folder, where there's room to, instead of "Worktree". */
+  named?: boolean;
   onOpenTurnDiff: (target: TurnDiffTarget) => void;
   onError: (error: unknown) => void;
 }) {
@@ -73,6 +76,7 @@ export function WorkspaceControl({
   return (
     <WorktreeMenu
       status={status}
+      named={named}
       moved={moved}
       onSeen={onSeen}
       running={running}
@@ -176,12 +180,25 @@ function WorkspacePicker({
   );
 }
 
+/** Why a worktree thread has no worktree on disk right now, and what the next message does. */
+function worktreeGoneTitle(status: WorktreeStatus | undefined) {
+  const branch = status?.branch ?? "Its branch";
+  if (status?.cleanedUp)
+    return `Removed a while after the thread settled. ${branch} stays; the next message checks it out in a worktree again`;
+  if (status?.removed && status.existing)
+    return `${branch} stays; the next message checks it out in a worktree again`;
+  if (status?.removed)
+    return "The next message makes a new worktree from the project folder";
+  return "Made with the first message";
+}
+
 /**
  * After the first message a thread's place is fixed. Its worktree is an
  * ordinary branch: the header's Git button commits, pushes and lands it.
  */
 export function WorktreeMenu({
   status,
+  named = false,
   moved,
   onSeen,
   running,
@@ -191,6 +208,7 @@ export function WorktreeMenu({
   onRemove,
 }: {
   status?: WorktreeStatus;
+  named?: boolean;
   /** It moved or was made again without the user, and they haven't opened this since. */
   moved?: WorkspaceMove;
   onSeen?: () => void;
@@ -216,15 +234,7 @@ export function WorktreeMenu({
     return (
       <span
         className="composer-branch-trigger workspace-trigger static"
-        title={
-          status?.cleanedUp
-            ? `Removed a while after the thread settled. ${status.branch ?? "Its branch"} stays; the next message checks it out in a worktree again`
-            : status?.removed && status.existing
-              ? `${status.branch ?? "Its branch"} stays; the next message checks it out in a worktree again`
-              : status?.removed
-                ? "The next message makes a new worktree from the project folder"
-                : "Made with the first message"
-        }
+        title={worktreeGoneTitle(status)}
       >
         <FolderGit2 size={13} />
         <span>
@@ -245,7 +255,7 @@ export function WorktreeMenu({
         title={status.path}
       >
         <FolderGit2 size={13} />
-        <span>Worktree</span>
+        <span>{named ? folderName(status.path) : "Worktree"}</span>
         {moved ? (
           <MovedDot />
         ) : (

@@ -1,4 +1,10 @@
-import type { ComponentProps, ReactNode, Ref, RefObject } from "react";
+import {
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type Ref,
+  type RefObject,
+} from "react";
 import type { RelayCommand } from "../../shared/commands";
 import type { ChatSummary, Project } from "../../shared/projects";
 import { threadWorktree } from "../../shared/projects";
@@ -33,6 +39,7 @@ import { folderComputer } from "./thread-folder";
 import { useThreadTerminal } from "./useThreadTerminal";
 import { useThreadPreviewPanel } from "./useThreadPreviewPanel";
 import { RunningCard } from "./RunningCard";
+import { CardSlot } from "../features/terminal/card-slot";
 
 type ChatProps = ComponentProps<typeof ProjectChat>;
 
@@ -57,6 +64,7 @@ export function useThreadTools(
   const opens = usePaneOpens(nav, panel, view, folder, lock, setError);
   const prs = usePullThreads(nav, lock, setError);
   const host = useHostAccount(nav.project?.repository, account);
+  const [cardSlot, setCardSlot] = useState<HTMLElement | null>(null);
   return {
     nav,
     view,
@@ -67,6 +75,8 @@ export function useThreadTools(
     opens,
     prs,
     host,
+    cardSlot,
+    setCardSlot,
     setError,
   };
 }
@@ -285,56 +295,58 @@ export function ThreadWorkspace({
           {...frame("chat")}
           className="project-chat-pane"
         >
-          <StartedThreadsContext.Provider
-            value={startedThreads(nav, project, allProjects, everyThread)}
-          >
-            <ThreadPreviewContext.Provider value={previewPanel}>
-              <ProjectChat
-                key={chat?.id ?? draftId}
-                ref={composer}
-                project={project}
-                projects={projects}
-                chat={chat}
-                draftId={draftId}
-                draftScope={nav.draftScope}
-                viewing={codeOpen ? view.viewing : NO_VIEWING}
-                contextText={view.context}
-                onContextUsed={() => view.setContext(undefined)}
-                scopes={{
-                  canChoosePR: !!host.account || host.pending,
-                  onClearScope: () => nav.newThreadIn({ kind: "project" }),
-                  onChoosePR,
-                  onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
-                  onDeepReview: () => nav.newThreadIn({ kind: "review" }),
-                }}
-                opens={{
-                  onOpenCode: opens.openCode,
-                  onOpenFile: opens.openChatFile,
-                  onOpenTurnDiff: opens.openTurnDiff,
-                  // Where the header has no Git actions, there's nothing to commit with.
-                  onCommitFiles:
-                    project.plain || folder.gone || folder.deleted
-                      ? undefined
-                      : (paths) =>
-                          void gitActions.current?.commit(paths, chat?.id),
-                  commitPaths: folder.tree?.changes.map((c) => c.path),
-                }}
-                onCommand={onCommand}
-                onDraftWorkspace={nav.setDraftWorkspace}
-                onStartThread={onStartThread}
-                onBackToReview={
-                  review ? () => void navigate(project, review) : undefined
-                }
-                onCreated={onCreated}
-                onForked={onOpened}
-                onOpenThread={onOpened}
-                onSwitchProject={(next) => navigate(next, undefined, true)}
-                onAddProject={onAddProject}
-                onScratch={onScratch}
-                onProjectSettings={() => onSettings("project", project.id)}
-              />
-            </ThreadPreviewContext.Provider>
-          </StartedThreadsContext.Provider>
+          <CardSlot.Provider value={tools.cardSlot}>
+            <StartedThreadsContext.Provider
+              value={startedThreads(nav, project, allProjects, everyThread)}
+            >
+              <ThreadPreviewContext.Provider value={previewPanel}>
+                <ProjectChat
+                  key={chat?.id ?? draftId}
+                  ref={composer}
+                  project={project}
+                  projects={projects}
+                  chat={chat}
+                  draftId={draftId}
+                  draftScope={nav.draftScope}
+                  viewing={codeOpen ? view.viewing : NO_VIEWING}
+                  contextText={view.context}
+                  onContextUsed={() => view.setContext(undefined)}
+                  scopes={{
+                    canChoosePR: !!host.account || host.pending,
+                    onClearScope: () => nav.newThreadIn({ kind: "project" }),
+                    onChoosePR,
+                    onSelectPR: (ref) => nav.newThreadIn({ kind: "pr", ref }),
+                    onDeepReview: () => nav.newThreadIn({ kind: "review" }),
+                  }}
+                  opens={{
+                    onOpenCode: opens.openCode,
+                    onOpenFile: opens.openChatFile,
+                    onOpenTurnDiff: opens.openTurnDiff,
+                    // Where the header has no Git actions, there's nothing to commit with.
+                    onCommitFiles:
+                      project.plain || folder.gone || folder.deleted
+                        ? undefined
+                        : (paths) =>
+                            void gitActions.current?.commit(paths, chat?.id),
+                    commitPaths: folder.tree?.changes.map((c) => c.path),
+                  }}
+                  onCommand={onCommand}
+                  onDraftWorkspace={nav.setDraftWorkspace}
+                  onStartThread={onStartThread}
+                  onBackToReview={
+                    review ? () => void navigate(project, review) : undefined
+                  }
+                  onCreated={onCreated}
+                  onForked={onOpened}
+                  onOpenThread={onOpened}
+                  onSwitchProject={(next) => navigate(next, undefined, true)}
+                  onAddProject={onAddProject}
+                  onScratch={onScratch}
+                  onProjectSettings={() => onSettings("project", project.id)}
+                />
+              </ThreadPreviewContext.Provider>
+            </StartedThreadsContext.Provider>
+          </CardSlot.Provider>
           <RunningCard
             tools={tools}
             project={project}
