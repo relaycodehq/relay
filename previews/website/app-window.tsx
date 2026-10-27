@@ -1,13 +1,31 @@
-// The hero's Relay window: the app's own sidebar, turn, approval card, deep
-// review and running-processes panel on sample data, inside a frame drawn to
-// match the shell. It is a film, not a sandbox: an on-screen pointer clicks
+// The hero's Relay window: the app's own activity bar buttons, sidebar, turn,
+// approval tab, deep review and Running card on sample data, inside a frame
+// drawn to match the shell. It is a film, not a sandbox: an on-screen pointer clicks
 // through it, and the visitor's pointer and wheel pass straight through.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Code, GitCompareArrows, MessageSquare, SquareTerminal } from "lucide-react";
+import {
+  ChartColumn,
+  ChevronDown,
+  GitCommitHorizontal,
+  GitPullRequest,
+  MessageSquare,
+  MessagesSquare,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  Search,
+  Settings2,
+  SquareArrowOutUpRight,
+} from "lucide-react";
+import {
+  BarButton,
+  ScheduledThreadIcon,
+} from "../../src/app/ActivityBarButton";
+import { PaneToggles } from "../../src/ui/WorkspacePanes";
 import { ProjectSidebar } from "../../src/features/sidebar/ProjectSidebar";
 import { Message } from "../../src/features/thread/ProjectMessage";
-import { AgentRequestCard } from "../../src/features/thread/AgentRequestCard";
+import { ApprovalTab } from "../../src/features/thread/ApprovalTab";
 import {
   DeepReviewCouncil,
   DeepReviewRequest,
@@ -50,10 +68,22 @@ const approval = {
   title: "Claude wants to run a command",
   detail:
     "git mv electron/project-chats/project-chats.ts electron/project-chats/store.ts",
-  decisions: ["decline" as const, "accept" as const],
+  decisions: [
+    "decline" as const,
+    "acceptForSession" as const,
+    "accept" as const,
+  ],
 };
 
-function Composer({ id, running }: { id: string; running?: boolean }) {
+function Composer({
+  id,
+  running,
+  approval,
+}: {
+  id: string;
+  running?: boolean;
+  approval?: ReactNode;
+}) {
   const turn = turns[id] ?? turns.shortcuts;
   const effort = turn.model.effort || "";
   const controls = useSampleControls({
@@ -64,6 +94,7 @@ function Composer({ id, running }: { id: string; running?: boolean }) {
   });
   return (
     <div className="thread-compose-wrap">
+      {approval}
       <form
         className="project-composer"
         onSubmit={(event) => event.preventDefault()}
@@ -277,26 +308,64 @@ function Thread({
       onOpenFile={onOpenChanges}
     />
   );
-  let body: ReactNode;
-  if (id === "split") {
-    body = (
-      <>
-        {turnMessages("split", 3).map(message)}
-        <AgentRequestCard request={approval} onRespond={async () => {}} />
-      </>
-    );
-  } else {
-    body = turnMessages(id, running ? shown : 99).map(message);
-  }
+  const asking = id === "split";
+  const body = asking
+    ? turnMessages("split", 3).map(message)
+    : turnMessages(id, running ? shown : 99).map(message);
   return (
     <section className="project-chat rw-thread" aria-label="Thread">
       <div className="project-messages">
         <div className="thread-message-column">{body}</div>
       </div>
       <div className="thread-bottom-composer">
-        <Composer id={id} running={running} />
+        <Composer
+          id={id}
+          running={running || asking}
+          approval={
+            asking && (
+              <ApprovalTab
+                request={approval}
+                pendingCount={1}
+                onRespond={async () => {}}
+              />
+            )
+          }
+        />
       </div>
     </section>
+  );
+}
+
+const threadChanges = {
+  files: 9,
+  lines: { additions: 103, deletions: 3 },
+};
+
+/** The window's left edge, as the app draws it on the threads. */
+function ActivityBar() {
+  return (
+    <nav className="activity-bar rw-activity-bar" aria-label="Activity bar">
+      <BarButton label="Threads" current onClick={() => {}}>
+        <MessagesSquare size={19} />
+      </BarButton>
+      <BarButton label="Search threads" onClick={() => {}}>
+        <Search size={19} />
+      </BarButton>
+      <BarButton label="Pull requests" onClick={() => {}}>
+        <GitPullRequest size={19} />
+      </BarButton>
+      <BarButton label="Schedules" onClick={() => {}}>
+        <ScheduledThreadIcon size={19} />
+      </BarButton>
+      <span className="activity-bar-fill" />
+      <BarButton label="Usage" onClick={() => {}}>
+        <ChartColumn size={19} />
+      </BarButton>
+      <span className="activity-bar-line" aria-hidden="true" />
+      <BarButton label="Open settings" onClick={() => {}}>
+        <Settings2 size={19} />
+      </BarButton>
+    </nav>
   );
 }
 
@@ -351,52 +420,76 @@ export function AppWindow({
   return (
     <div className="rw" ref={frame} inert aria-label="Relay, playing a demo">
       <div className="rw-titlebar">
-        <span className="rw-lights" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
         <span className="rw-brand">
-          <Mark size={15} />
-          Relay
+          <span className="rw-lights" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span className="rw-sidebar-toggle" aria-hidden="true">
+            <PanelLeft size={16} />
+          </span>
+          <Mark size={22} />
         </span>
         <span className="rw-crumb">
+          <span className="rw-badge" data-project={chat.projectId}>
+            {chat.projectId[0].toUpperCase()}
+          </span>
           {chat.projectId} <i>/</i> <strong>{chat.title}</strong>
         </span>
-        <span className="rw-panes" role="group" aria-label="Panes">
-          <button type="button" aria-pressed={!changes && !files}>
-            <MessageSquare size={13} /> Chat
-          </button>
-          <button
-            type="button"
-            data-rw="changes"
-            aria-pressed={changes}
-            onClick={() => setChanges(!changes)}
-          >
-            <GitCompareArrows size={13} /> Changes
-            <span className="rw-delta">
-              <b>+103</b> <i>−3</i>
-            </span>
-          </button>
-          <button
-            type="button"
-            data-rw="files"
-            aria-pressed={files}
-            onClick={() => setFiles(!files)}
-          >
-            <Code size={13} /> Files
-          </button>
-          <button
-            type="button"
-            data-rw="terminal"
-            aria-pressed={terminal}
-            onClick={() => setTerminal(!terminal)}
-          >
-            <SquareTerminal size={13} /> Terminal
-          </button>
+        <span className="rw-actions">
+          <span className="git-actions">
+            <button type="button" className="git-actions-main">
+              <GitCommitHorizontal size={14} />
+              <span className="git-actions-label">Commit</span>
+            </button>
+            <button type="button" className="git-actions-more">
+              <ChevronDown size={13} />
+            </button>
+          </span>
+          <span className="header-strip" data-rw-panel>
+            <button
+              type="button"
+              className="pane-toggle"
+              aria-label="Open in a window"
+            >
+              <SquareArrowOutUpRight size={14} />
+            </button>
+            <span className="header-strip-sep" aria-hidden="true" />
+            <PaneToggles
+              panes={[
+                {
+                  id: "chat",
+                  label: "Chat",
+                  icon: <MessageSquare size={14} />,
+                  open: !files,
+                },
+                {
+                  id: "panel",
+                  label: "Panel",
+                  icon: <PanelRight size={14} />,
+                  open: changes || files,
+                },
+              ]}
+              onToggle={(id) => id === "panel" && setFiles(!files)}
+              onMove={() => {}}
+            />
+            <span className="header-strip-sep" aria-hidden="true" />
+            <button
+              type="button"
+              className={`pane-toggle ${terminal ? "active" : ""}`}
+              aria-label="Terminal"
+              aria-pressed={terminal}
+              data-rw="terminal"
+              onClick={() => setTerminal(!terminal)}
+            >
+              <PanelBottom size={14} />
+            </button>
+          </span>
         </span>
       </div>
       <div className="rw-body">
+        <ActivityBar />
         <aside className="projects-sidebar rw-sidebar">
           <ProjectSidebar
             initialView="activity"
@@ -433,6 +526,7 @@ export function AppWindow({
                 <RunningTasks
                   project={projects[0]}
                   chats={chats}
+                  changes={threadChanges}
                   onOpenChanges={() => setChanges(true)}
                   onOpenChat={() => {}}
                 />

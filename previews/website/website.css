@@ -437,10 +437,21 @@ body {
   align-items: center;
   gap: 14px;
   height: 44px;
-  padding: 0 10px 0 14px;
+  padding: 0 10px 0 0;
   border-bottom: 1px solid var(--border);
   background: var(--sidebar);
   white-space: nowrap;
+}
+/* Over the activity bar and the sidebar, as the app's brand column is. */
+.rw-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+  width: calc(var(--activity-bar-width) + 264px);
+  height: 100%;
+  padding-left: 14px;
+  border-right: 1px solid var(--border);
 }
 .rw-lights {
   display: inline-flex;
@@ -452,49 +463,53 @@ body {
   border-radius: 50%;
   background: color-mix(in srgb, var(--border), var(--text) 12%);
 }
-.rw-brand {
+.rw-sidebar-toggle {
   display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  width: 178px;
-  font-weight: 600;
+  margin-left: 6px;
+  color: var(--muted);
 }
 .rw-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--muted);
 }
 .rw-crumb i {
   font-style: normal;
-  margin: 0 4px;
+  margin: 0 2px;
 }
 .rw-crumb strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 500;
   color: var(--text);
 }
-.rw-panes {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+.rw-badge {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: #3b82c4;
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
 }
-.rw-panes button {
-  padding: 4px 9px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  font-size: 12px;
-  color: var(--muted);
+.rw-badge[data-project="website"] {
+  background: #c0504d;
 }
-.rw-panes button:hover {
-  color: var(--text);
+.rw-badge[data-project="api"] {
+  background: #8b5cc4;
 }
-.rw-panes button[aria-pressed="true"] {
-  background: var(--selected);
-  color: var(--text);
+.rw-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }
 .rw-delta {
   display: inline-flex;
@@ -512,8 +527,12 @@ body {
 }
 .rw-body {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: var(--activity-bar-width) 264px minmax(0, 1fr);
   height: 640px;
+}
+/* In the frame's grid, not over the app's layout padding. */
+.rw .rw-activity-bar {
+  position: static;
 }
 .rw-sidebar {
   width: auto;
@@ -2309,20 +2328,18 @@ body {
   .rw-body {
     grid-template-columns: minmax(0, 1fr);
   }
+  .rw-activity-bar,
   .rw-sidebar,
   .rw-brand,
   .rw-crumb,
   .rw-columns[data-split] > .rw-thread {
     display: none;
   }
-  .rw-panes {
+  .rw-actions {
     margin-left: auto;
   }
   .row-demo {
     padding: 20px 14px;
-  }
-  .rw-panes .rw-delta {
-    display: none;
   }
   .rw-columns[data-split] {
     grid-template-columns: minmax(0, 1fr);
@@ -2370,12 +2387,12 @@ body {
   }
 }
 
-/* Four pane buttons need the room the window's lights take. */
+/* The header's buttons need the room Commit's label takes. */
 @media (max-width: 520px) {
-  .rw-lights {
+  .rw .git-actions {
     display: none;
   }
-  .rw-panes {
+  .rw-actions {
     margin-inline: auto;
   }
 }

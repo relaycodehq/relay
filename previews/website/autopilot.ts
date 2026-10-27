@@ -14,11 +14,27 @@ interface Act {
   optional?: boolean;
 }
 
-/** Folds the Running panel back to its count when an interrupted shell stop left it open. */
+/** Folds the Running card back to its stripe when an interrupted stop left it open. */
 const tidy: Act = {
-  to: ".running-tasks:not(.collapsed) .running-tasks-header",
+  to: ".running-tasks:not(.collapsed) .running-card-button",
   click: true,
   rest: 500,
+  optional: true,
+};
+
+/** Unfolds the Running card from its stripe. */
+const openCard: Act = {
+  to: ".running-tasks.collapsed .running-stripe",
+  click: true,
+  rest: 900,
+  optional: true,
+};
+
+/** Folds it again, out of the way of the thread. */
+const foldCard: Act = {
+  to: ".running-tasks:not(.collapsed) .running-card-button",
+  click: true,
+  rest: 600,
   optional: true,
 };
 
@@ -32,7 +48,9 @@ export const scripts: Record<Stop, Act[]> = {
   ],
   review: [
     tidy,
-    { to: "[data-rw='changes']", click: true, rest: 2200 },
+    openCard,
+    { to: ".running-changes-row", click: true, rest: 500 },
+    { ...foldCard, rest: 1700 },
     { to: "[data-rw-file='1']", click: true, rest: 2000 },
     { to: "[data-rw-stage='1']", click: true, rest: 1400 },
     { to: "[data-rw-file='2']", click: true, rest: 2400 },
@@ -45,22 +63,22 @@ export const scripts: Record<Stop, Act[]> = {
     { to: ".deep-review-tasks > :nth-child(3) input", click: true, rest: 1500 },
     { to: ".deep-review-tasks > :nth-child(2)", rest: 2600 },
   ],
-  // Start a dev server in the thread's shell, then open Running to find it listed.
+  // Start a dev server in the thread's shell, then open the Running card to find it listed.
   terminal: [
+    tidy,
     { to: "[data-rw='terminal']", click: true, rest: 3600 },
-    {
-      to: ".running-tasks.collapsed .running-tasks-header",
-      click: true,
-      rest: 900,
-      optional: true,
-    },
+    openCard,
     { to: ".running-tasks-list li:first-child", rest: 3400 },
-    { to: ".running-tasks-header", click: true, rest: 900 },
+    foldCard,
   ],
   // Open Files, ask the call what it is, list its usages, then show the error.
   editor: [
     tidy,
-    { to: "[data-rw='files']", click: true, rest: 1800 },
+    {
+      to: "[data-rw-panel] .pane-toggle:nth-child(2)",
+      click: true,
+      rest: 1800,
+    },
     { to: "[data-rw-symbol]", click: true, rest: 3600 },
     { to: "[data-rw-usages]", click: true, rest: 3800 },
     { to: "[data-rw-error]", click: true, rest: 3200 },
