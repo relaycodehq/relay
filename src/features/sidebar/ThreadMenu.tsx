@@ -261,39 +261,12 @@ function ThreadMenuItems({
           Mark unread
         </MenuAction>
       )}
-      <Menu.SubmenuRoot>
-        <Menu.SubmenuTrigger className="sb-menu-item">
-          <span className="sb-menu-label">
-            <Hourglass size={13} />
-            Auto-settle
-          </span>
-          <ChevronRight size={12} />
-        </Menu.SubmenuTrigger>
-        <MenuPopup side="right" align="start">
-          {chat.pinnedAt ? (
-            <div className="sb-menu-heading">Off while pinned</div>
-          ) : autoSettleDays === null && !settleOnCommit ? (
-            <div className="sb-menu-heading">Off in Settings</div>
-          ) : (
-            <>
-              <Menu.Item
-                className="sb-menu-item"
-                onClick={() => triage({ kind: "auto-settle", enabled: true })}
-              >
-                <span>{autoSettleLabel(autoSettleDays, settleOnCommit)}</span>
-                {!chat.autoSettleOff && <Check size={13} />}
-              </Menu.Item>
-              <Menu.Item
-                className="sb-menu-item"
-                onClick={() => triage({ kind: "auto-settle", enabled: false })}
-              >
-                <span>Never for this thread</span>
-                {chat.autoSettleOff && <Check size={13} />}
-              </Menu.Item>
-            </>
-          )}
-        </MenuPopup>
-      </Menu.SubmenuRoot>
+      <AutoSettleMenu
+        chat={chat}
+        autoSettleDays={autoSettleDays}
+        settleOnCommit={settleOnCommit}
+        onTriage={triage}
+      />
       {projectName && (
         <MenuAction
           icon={<Settings2 size={13} />}
@@ -319,6 +292,53 @@ function ThreadMenuItems({
       <Menu.Separator className="sb-menu-separator" />
       <RemoveItems chat={chat} onAction={onAction} />
     </>
+  );
+}
+
+/** Whether the thread settles itself after a while, as Settings says, or never. */
+function AutoSettleMenu({
+  chat,
+  autoSettleDays,
+  settleOnCommit,
+  onTriage: triage,
+}: Pick<ThreadMenuProps, "autoSettleDays" | "settleOnCommit"> & {
+  chat: ChatSummary;
+  onTriage: (triage: ChatTriage) => void;
+}) {
+  return (
+    <Menu.SubmenuRoot>
+      <Menu.SubmenuTrigger className="sb-menu-item">
+        <span className="sb-menu-label">
+          <Hourglass size={13} />
+          Auto-settle
+        </span>
+        <ChevronRight size={12} />
+      </Menu.SubmenuTrigger>
+      <MenuPopup side="right" align="start">
+        {chat.pinnedAt ? (
+          <div className="sb-menu-heading">Off while pinned</div>
+        ) : autoSettleDays === null && !settleOnCommit ? (
+          <div className="sb-menu-heading">Off in Settings</div>
+        ) : (
+          <>
+            <Menu.Item
+              className="sb-menu-item"
+              onClick={() => triage({ kind: "auto-settle", enabled: true })}
+            >
+              <span>{autoSettleLabel(autoSettleDays, settleOnCommit)}</span>
+              {!chat.autoSettleOff && <Check size={13} />}
+            </Menu.Item>
+            <Menu.Item
+              className="sb-menu-item"
+              onClick={() => triage({ kind: "auto-settle", enabled: false })}
+            >
+              <span>Never for this thread</span>
+              {chat.autoSettleOff && <Check size={13} />}
+            </Menu.Item>
+          </>
+        )}
+      </MenuPopup>
+    </Menu.SubmenuRoot>
   );
 }
 
