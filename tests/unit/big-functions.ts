@@ -114,7 +114,7 @@ export const bigFunctions: Record<string, number> = {
   "src/app/PullsSurface.tsx › PullsSurface": 193,
   "src/app/ThreadPanes.tsx › ThreadPanel": 176,
   "src/app/ThreadWindowShell.tsx › ThreadWindowShell": 105,
-  "src/app/ThreadWorkspace.tsx › ThreadWorkspace": 187,
+  "src/app/ThreadWorkspace.tsx › ThreadWorkspace": 179,
   "src/app/useNewThreads.ts › useNewThreads": 167,
   "src/app/usePaneOpens.ts › usePaneOpens": 162,
   "src/app/usePullThreads.ts › usePullThreads": 107,

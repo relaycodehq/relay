@@ -184,6 +184,22 @@ function editorCanPopOut(
   return !folder.gone && !folder.deleted && !folderComputer(project, chat);
 }
 
+/** The threads the open one started, for the chat to list and open. */
+function startedThreads(
+  { chat, navigate }: ShellNavigation,
+  project: Project,
+  allProjects: Project[],
+  everyThread: ChatSummary[],
+) {
+  return {
+    lead: chat?.id,
+    // A lead and the threads it started may be in different projects.
+    threads: everyThread,
+    open: (c: ChatSummary) =>
+      navigate(allProjects.find((p) => p.id === c.projectId) ?? project, c),
+  };
+}
+
 /**
  * The thread's panes, chat, Changes and the panel, over its terminal. What
  * would leave the thread goes through `nav`, which a thread's own window
@@ -270,16 +286,7 @@ export function ThreadWorkspace({
           className="project-chat-pane"
         >
           <StartedThreadsContext.Provider
-            value={{
-              lead: chat?.id,
-              // A lead and the threads it started may be in different projects.
-              threads: everyThread,
-              open: (c) =>
-                navigate(
-                  allProjects.find((p) => p.id === c.projectId) ?? project,
-                  c,
-                ),
-            }}
+            value={startedThreads(nav, project, allProjects, everyThread)}
           >
             <ThreadPreviewContext.Provider value={previewPanel}>
               <ProjectChat
