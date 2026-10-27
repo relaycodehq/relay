@@ -181,6 +181,7 @@ export function ThreadTimeline({
         <div
           ref={rail}
           className="thread-timeline-rail"
+          data-claims-edge
           tabIndex={0}
           role="listbox"
           aria-activedescendant={

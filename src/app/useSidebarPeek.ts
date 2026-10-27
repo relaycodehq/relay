@@ -17,6 +17,10 @@ function edgeStart(layout: HTMLElement | null) {
 const onEdge = (x: number, start: number) =>
   x >= start && x <= start + EDGE_PEEK_WIDTH;
 
+/** Something on the edge that takes the pointer itself, like a thread's prompt rail. */
+const edgeClaimed = (target: EventTarget | null) =>
+  target instanceof Element && !!target.closest("[data-claims-edge]");
+
 /**
  * The hidden sidebar's peek: hovering its toggle or the window's left edge
  * slides it out as an overlay, and leaving it slides it back. An activity
@@ -48,15 +52,24 @@ export function useSidebarPeek(
   const peeking = (target: Node) =>
     !!asideRef.current?.contains(target) ||
     (barFolded && !!barRef.current?.contains(target));
-  useEdgePeek({ hidden, peek, setPeek, peekClose, layout, peeking, barFolded });
+  useEdgePeek({
+    hidden,
+    peek,
+    setPeek,
+    peekClose,
+    layout,
+    peeking,
+    barFolded,
+  });
   return { peek, peekOpen, peekClose, endPeek, asideRef, barRef };
 }
 
 /**
  * Resting the pointer along the activity bar's right edge, or the window's
- * when the bar folds, peeks the hidden sidebar too. It's watched rather than covered, so the edge still takes
- * clicks and selections; the short dwell keeps a pointer flung past it, or a
- * drag, from opening it.
+ * when the bar folds, peeks the hidden sidebar too. It's watched rather than
+ * covered, so the edge still takes clicks and selections; the short dwell
+ * keeps a pointer flung past it, or a drag, from opening it. What claims the
+ * edge for itself keeps the pointer there.
  */
 function useEdgePeek({
   hidden,
@@ -88,8 +101,8 @@ function useEdgePeek({
     };
     const onMove = (e: MouseEvent) => {
       const top = layout?.getBoundingClientRect().top ?? 0;
-      if (e.buttons || !onEdge(e.clientX, start) || e.clientY < top)
-        return cancel();
+      const offEdge = !onEdge(e.clientX, start) || e.clientY < top;
+      if (e.buttons || offEdge || edgeClaimed(e.target)) return cancel();
       timer ??= window.setTimeout(() => {
         if (popupOpen()) return;
         peekFromEdge.current = true;
