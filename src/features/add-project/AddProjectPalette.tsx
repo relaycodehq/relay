@@ -139,6 +139,14 @@ export function AddProjectPalette({
     returnTo.current = { page, query };
     go("computers");
   }
+  /** One step back: out of the computer list, to the first page, or closed. */
+  function back() {
+    if (page === "import") return void importStep.current?.back();
+    if (page === "root") return onClose();
+    if (page !== "computers") return go("root");
+    setPage(returnTo.current.page);
+    setQuery(returnTo.current.query);
+  }
   function chooseComputer(next?: PairedComputer) {
     if (locked) return;
     setSelectedComputer(next?.id);
@@ -210,15 +218,7 @@ export function AddProjectPalette({
       title={titles[page]}
       disabled={locked}
       onClose={close}
-      onBack={
-        page === "root"
-          ? undefined
-          : () =>
-              page === "computers"
-                ? (setPage(returnTo.current.page),
-                  setQuery(returnTo.current.query))
-                : go("root")
-      }
+      onBack={page === "root" ? undefined : back}
     >
       {page !== "root" && page !== "computers" && (
         <LocationTrigger
@@ -236,15 +236,7 @@ export function AddProjectPalette({
       aria-label="Add a project"
       onCancel={(e) => {
         e.preventDefault();
-        if (!locked)
-          page === "import"
-            ? importStep.current?.back()
-            : page === "root"
-              ? onClose()
-              : page === "computers"
-                ? (setPage(returnTo.current.page),
-                  setQuery(returnTo.current.query))
-                : go("root");
+        if (!locked) back();
       }}
       {...backdropClose}
     >
