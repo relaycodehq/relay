@@ -394,6 +394,73 @@ describe("GuestShares", () => {
     expect(alex.suggestions).toEqual([{ text: "Ship it", status: "sent" }]);
   });
 
+  it("answers after a restart without waiting on Tailscale", async () => {
+    const { shares, make, link } = await started();
+    await suggest(link, "guest-alex-1", "still here?");
+    await shares.close();
+    const funnel = {
+      open: () => new Promise(() => {}),
+      close: async () => false,
+    } as unknown as Funnel;
+    const again = make({ funnel });
+    open.push(again);
+    expect((await again.waiting(threadId)).map((s) => s.text)).toEqual([
+      "still here?",
+    ]);
+  });
+
+  it("saves a stop again when saving it failed, so a restart can't bring the link back", async () => {
+    const w = await world();
+    let full = false;
+    const shares = w.make({
+      saved: {
+        load: () => w.store.shares,
+        save: async (saved) => {
+          if (full) throw new Error("The disk is full.");
+          w.store.shares = saved;
+        },
+      },
+    });
+    open.push(shares);
+    const { localUrl } = await shares.start(threadId);
+    full = true;
+    await expect(shares.stop(threadId)).rejects.toThrow(/disk is full/);
+    // Guests lose it at once, but it's still saved.
+    expect((await fetch(localUrl)).status).toBe(404);
+    expect(w.store.shares).toHaveLength(1);
+    full = false;
+    await shares.stop(threadId);
+    expect(w.store.shares).toEqual([]);
+  });
+
+  it("drops a link no server could be opened for", async () => {
+    const w = await world();
+    const shares = w.make({ port: -1 });
+    open.push(shares);
+    await expect(shares.start(threadId)).rejects.toThrow();
+    expect(await shares.share(threadId)).toBeNull();
+    expect(w.store.shares).toEqual([]);
+  });
+
+  it("keeps the port while Funnel couldn't take the link's route off", async () => {
+    const w = await world();
+    let published = true;
+    const funnel = {
+      open: async () => ({ public: true, url: "https://laptop.ts.net/g" }),
+      // Fails once, then turns off.
+      close: async () => {
+        const was = published;
+        published = false;
+        return was;
+      },
+    } as unknown as Funnel;
+    const shares = w.make({ funnel });
+    open.push(shares);
+    const { localUrl } = await shares.start(threadId);
+    await shares.stop(threadId);
+    expect((await fetch(localUrl)).status).toBe(404);
+  });
+
   it("doesn't bring back the link of a thread archived while Relay was closed", async () => {
     const { shares, store, make, summary } = await started();
     await shares.close();

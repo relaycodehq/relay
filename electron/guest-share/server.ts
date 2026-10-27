@@ -126,13 +126,16 @@ export class GuestServer<L extends ServedLink> {
     });
   }
 
-  /** `ended` tells the pages still following a link that it's over before they're cut off. */
-  async close({ ended = false } = {}) {
+  /** Tells the pages still following a link that it's over. */
+  async endStreams() {
+    await Promise.all([...this.streams].map(endStream));
+  }
+
+  async close() {
     const server = this.server;
     this.server = undefined;
     this.listening = undefined;
     if (!server) return;
-    if (ended) await Promise.all([...this.streams].map(endStream));
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
   }
@@ -248,7 +251,8 @@ export class GuestServer<L extends ServedLink> {
           baseline,
           await this.host.page(link, guestId),
         );
-        if (!change) return;
+        // The stream may have ended while the page was read.
+        if (!change || res.writableEnded) return;
         baseline = change.after;
         const id = this.remember(baseline);
         res.write(`id: ${id}\ndata: ${JSON.stringify(change.delta)}\n\n`);
@@ -260,7 +264,9 @@ export class GuestServer<L extends ServedLink> {
     };
     void tick();
     const timer = setInterval(() => void tick(), DELTA_MS);
-    const ping = setInterval(() => res.write(": ping\n\n"), PING_MS);
+    const ping = setInterval(() => {
+      if (!res.writableEnded) res.write(": ping\n\n");
+    }, PING_MS);
     this.streams.add(res);
     res.on("close", () => {
       this.streams.delete(res);
@@ -275,6 +281,8 @@ export class GuestServer<L extends ServedLink> {
     const raw = await readBody(req, MAX_BODY_BYTES);
     if (raw === undefined)
       return sendJson(res, 413, { error: "That's too long." });
+    // The link may have been stopped while the body came in.
+    if (!this.host.live(link.token)) return notFound(res);
     const input = guestSuggestionInput.safeParse(parseJson(raw));
     if (!input.success) {
       // A rule of ours says what's wrong in words; zod's own don't.

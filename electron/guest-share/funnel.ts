@@ -150,20 +150,23 @@ export class Funnel {
     return { public: true, url: `${origin}${FUNNEL_PATH}` };
   }
 
-  /** Takes our path off; whatever else the port serves stays. */
+  /**
+   * Takes our path off; whatever else the port serves stays. True when our
+   * route is still up, as turning it off failed: it's tried again at exit.
+   */
   async close() {
     const port = this.port;
-    if (!port) return;
+    if (!port) return this.left.size > 0;
     this.port = undefined;
     const off = await this.run(offArgs(port), 10_000);
     if (!off.ok) {
-      // Left up, the route would publish whatever takes the local port next: tried again at exit.
       console.warn("Could not turn Tailscale Funnel off:", off.output);
       if (this.port !== port) this.left.add(port);
-      return;
+      return true;
     }
     const nothingPublished = !this.port && !this.left.size;
     if (nothingPublished) process.off("exit", this.closeAtExit);
+    return !nothingPublished;
   }
 
   /** Quitting Relay ends every link, so nothing should stay published after it. */

@@ -24,7 +24,8 @@ import {
 } from "./suggestions";
 
 export interface GuestSharesHost {
-  thread(id: string): Promise<ProjectChat>;
+  /** The thread as it is now; messages unchanged since `previous` may be its own objects. */
+  thread(id: string, previous?: ProjectChat): Promise<ProjectChat>;
   summary(id: string): ChatSummary | undefined;
   /** The folder the thread's agents work in; null when it's gone. */
   root(thread: ProjectChat): Promise<string | null>;
@@ -61,6 +62,7 @@ const UNCHANGED_MS = 15_000;
 /** A snapshot with what it was built from, to tell whether the thread changed since. */
 interface Built {
   snapshot: GuestSnapshot;
+  thread: ProjectChat;
   stamp: string;
   at: number;
 }
@@ -78,6 +80,8 @@ export class GuestShares {
   private making = new Map<string, Promise<Link>>();
   /** Suggestions on their way to the agent, which nothing else may answer meanwhile. */
   private sending = new Set<string>();
+  /** Threads whose stopped link is still saved, as saving the stop failed; a retry saves it. */
+  private stopsToSave = new Set<string>();
   private snapshots = new Map<string, { at: number; built: Promise<Built> }>();
   /** Each render's own address, so its page never sees the link's token. */
   private renderKeys = new Map<string, { token: string; renderId: string }>();
@@ -113,7 +117,11 @@ export class GuestShares {
   async share(threadId: string): Promise<GuestShare | null> {
     await this.restored;
     const link = this.threadLinks.get(threadId);
-    return link && this.liveLink(link.token) ? this.describe(link) : null;
+    // Without a server, nothing answers the link; the next start opens one.
+    const served = !!this.server.port;
+    return link && served && this.liveLink(link.token)
+      ? this.describe(link)
+      : null;
   }
 
   async start(threadId: string): Promise<GuestShare> {
@@ -126,7 +134,11 @@ export class GuestShares {
     if (!this.host.summary(threadId)) throw new Error("That thread is gone.");
     // Made before the server opens, so a stop of another link can't close it under this one.
     const link = await this.linkOf(threadId);
-    await this.listen();
+    await this.listen().catch(async (e) => {
+      // A link nothing serves would show as shared.
+      await this.stop(threadId).catch(() => {});
+      throw e;
+    });
     const share = await this.describe(link);
     this.host.send({ kind: "share", threadId, share });
     return share;
@@ -163,17 +175,24 @@ export class GuestShares {
   async stop(threadId: string) {
     await this.restored;
     const link = this.threadLinks.get(threadId);
-    if (!link) return;
-    clearTimeout(link.timer);
-    this.links.delete(link.token);
-    this.threadLinks.delete(threadId);
-    this.snapshots.delete(threadId);
-    for (const [key, render] of this.renderKeys)
-      if (render.token === link.token) this.renderKeys.delete(key);
+    if (!link && !this.stopsToSave.has(threadId)) return;
+    if (link) this.revoke(link);
+    // Guests lose the link at once; until the stop is saved, a restart would bring it back.
+    this.stopsToSave.add(threadId);
     await this.persist();
+    this.stopsToSave.delete(threadId);
     this.host.send({ kind: "share", threadId, share: null });
     this.host.send({ kind: "suggestions", threadId, suggestions: [] });
     if (!this.links.size) await this.inTurn(() => this.closeWhenUnused());
+  }
+
+  private revoke(link: Link) {
+    clearTimeout(link.timer);
+    this.links.delete(link.token);
+    this.threadLinks.delete(link.threadId);
+    this.snapshots.delete(link.threadId);
+    for (const [key, render] of this.renderKeys)
+      if (render.token === link.token) this.renderKeys.delete(key);
   }
 
   /**
@@ -197,7 +216,12 @@ export class GuestShares {
     this.stopListening = undefined;
     this.reach = undefined;
     for (const link of this.links.values()) clearTimeout(link.timer);
-    await Promise.all([this.funnel.close(), this.server.close({ ended })]);
+    const [published] = await Promise.all([
+      this.funnel.close(),
+      ended && this.server.endStreams(),
+    ]);
+    // A route left up would publish whatever took the port next: the server keeps it, answering 404s.
+    if (!published) await this.server.close();
   }
 
   /** Runs `job` once the server's earlier opening or closing is done. */
@@ -276,9 +300,11 @@ export class GuestShares {
     this.unrestored = [];
     if (live.length < saved.length) await this.persist();
     if (!live.length) return;
-    await this.listen();
     for (const link of this.threadLinks.values())
       if (waitingOf(link.suggestions).length) this.suggestionsChanged(link);
+    await this.inTurn(() => this.serve());
+    // Tailscale can take half a minute to answer; nothing waits for it.
+    void this.inTurn(() => this.openFunnel());
   }
 
   private async add(saved: SavedGuestShare) {
@@ -311,17 +337,22 @@ export class GuestShares {
 
   private listen() {
     return this.inTurn(async () => {
-      await this.server.listen(this.host.port);
-      this.watchThreads();
+      await this.serve();
       await this.openFunnel();
     });
+  }
+
+  private async serve() {
+    await this.server.listen(this.host.port);
+    this.watchThreads();
   }
 
   /** Opens Funnel once; a refusal is asked again, as the user may have just turned it on. */
   private async openFunnel() {
     const reach = await this.reach;
-    if (reach?.public) return;
-    this.reach = this.funnel.open(this.server.port!).catch((e): GuestReach => {
+    const port = this.server.port;
+    if (reach?.public || !port) return;
+    this.reach = this.funnel.open(port).catch((e): GuestReach => {
       console.warn("Could not open Tailscale Funnel:", e);
       return { public: false, reason: "Tailscale Funnel didn't answer." };
     });
@@ -375,9 +406,9 @@ export class GuestShares {
 
   /** The thread as guests see it, built again only once it changed or has aged. */
   private async build(link: Link, previous?: Promise<Built>): Promise<Built> {
-    const thread = await this.host.thread(link.threadId);
-    const stamp = threadStamp(thread);
     const last = await previous?.catch(() => undefined);
+    const thread = await this.host.thread(link.threadId, last?.thread);
+    const stamp = threadStamp(thread);
     if (last?.stamp === stamp && this.now() - last.at < UNCHANGED_MS)
       return last;
     const snapshot = await guestSnapshot(
@@ -387,7 +418,7 @@ export class GuestShares {
       link.endsAt,
       (renderId) => this.renderKey(link, renderId),
     );
-    return { snapshot, stamp, at: this.now() };
+    return { snapshot, thread, stamp, at: this.now() };
   }
 
   private renderKey(link: Link, renderId: string) {

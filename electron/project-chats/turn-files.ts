@@ -47,15 +47,24 @@ export class TurnFiles {
     return this.core.storage.image(chatId, image);
   }
 
-  /** Only a path the turn itself read or its answer shows, so the renderer can't reach any other file on disk. */
-  async turnImagePath(chatId: string, messageId: string, path: string) {
+  /**
+   * Only a path the turn itself read or its answer shows, so the renderer
+   * can't reach any other file on disk. `make` false leaves a cleaned-up
+   * review folder unmade, as for a guest.
+   */
+  async turnImagePath(
+    chatId: string,
+    messageId: string,
+    path: string,
+    make = true,
+  ) {
     const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     if (!message || !isAbsolute(path))
       throw new Error("This turn didn't read that image.");
     if (turnImages(message).includes(path)) return path;
     const root = await this.worktrees
-      .terminalFolder(chat.projectId, chatId)
+      .terminalFolder(chat.projectId, chatId, make)
       .catch(() => null);
     if (
       message.role !== "assistant" ||
@@ -70,11 +79,16 @@ export class TurnFiles {
   }
 
   /** A video the answer `messageId` plays; never kept, since videos run large. */
-  async turnVideoPath(chatId: string, messageId: string, path: string) {
+  async turnVideoPath(
+    chatId: string,
+    messageId: string,
+    path: string,
+    make = true,
+  ) {
     const chat = await this.core.storage.load(chatId);
     const message = chat.messages.find((m) => m.id === messageId);
     const root = await this.worktrees
-      .terminalFolder(chat.projectId, chatId)
+      .terminalFolder(chat.projectId, chatId, make)
       .catch(() => null);
     if (
       message?.role !== "assistant" ||
@@ -87,8 +101,13 @@ export class TurnFiles {
     return path;
   }
 
-  async readImage(chatId: string, messageId: string, path: string) {
-    await this.turnImagePath(chatId, messageId, path);
+  async readImage(
+    chatId: string,
+    messageId: string,
+    path: string,
+    make = true,
+  ) {
+    await this.turnImagePath(chatId, messageId, path, make);
     const kept = this.core.storage.shown.path(chatId, messageId, path);
     return imageFileData((await exists(kept)) ? kept : path);
   }

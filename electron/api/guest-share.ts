@@ -2,11 +2,12 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { net } from "electron";
 import { z } from "zod";
+import { applyChatPatch, knownOf } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import { idSchema } from "../../shared/validation";
 import { seal, unseal } from "../app/login";
 import type { Store } from "../app/store";
-import { GuestShares } from "../guest-share";
+import { GuestShares, type GuestSharesHost } from "../guest-share";
 import { Funnel } from "../guest-share/funnel";
 import { importGuestThread } from "../guest-share/import";
 import { lastSend } from "../started-threads/lead-side";
@@ -26,15 +27,60 @@ const testFunnel = () =>
 /** Share with guest: a thread a browser outside Relay can follow and suggest messages to. */
 export function guestShareHandlers(ctx: ApiContext) {
   const chats = ctx.projectChats;
-  const shares = new GuestShares({
-    thread: (id) => chats.get(id),
+  const shares = new GuestShares(sharesHost(ctx));
+  return {
+    guestShare: takes([idSchema], (id) => shares.share(id)),
+    startGuestShare: takes([idSchema], (id) => shares.start(id)),
+    stopGuestShare: takes([idSchema], (id) => shares.stop(id)),
+    guestSuggestions: takes([idSchema], (id) => shares.waiting(id)),
+    sendGuestSuggestion: takes([idSchema], (id) => shares.send(id)),
+    resolveGuestSuggestion: takes(
+      [idSchema, z.enum(["drafted", "dismissed"])],
+      (id, status) => shares.resolve(id, status),
+    ),
+    importGuestThread: takes(
+      [idSchema, z.string().max(4096)],
+      (projectId, link) =>
+        importGuestThread(
+          {
+            fetch: (url, init) => net.fetch(String(url), init),
+            create: (project, shared) =>
+              chats.creating.importShared(project, shared),
+            filesDir: (threadId) =>
+              join(ctx.store.dir, "shared-threads", threadId),
+          },
+          projectId,
+          link,
+        ),
+    ),
+  } satisfies Handlers;
+}
+
+/** What the shares read and do in the rest of Relay. */
+function sharesHost(ctx: ApiContext): GuestSharesHost {
+  const chats = ctx.projectChats;
+  return {
+    // Only the messages that changed since the last read are copied again.
+    thread: async (id, previous) =>
+      applyChatPatch(
+        await chats.changes(id, knownOf(previous) ?? {}),
+        previous,
+      ),
     summary: (id) => ctx.store.get().chats?.find((c) => c.id === id),
     // Read with every update a guest gets, so a cleaned-up review folder isn't made again.
     root: (thread) =>
       chats.worktrees
         .terminalFolder(thread.projectId, thread.id, false)
         .catch(() => null),
-    media: chats.files,
+    media: {
+      image: (chatId, imageId) => chats.files.image(chatId, imageId),
+      readImage: (chatId, messageId, path) =>
+        chats.files.readImage(chatId, messageId, path, false),
+      previewShot: (chatId, messageId) =>
+        chats.files.previewShot(chatId, messageId),
+      turnVideoPath: (chatId, messageId, path) =>
+        chats.files.turnVideoPath(chatId, messageId, path, false),
+    },
     renderPage: (threadId, renderId, page) =>
       chats.renderPage(threadId, renderId, page),
     onSummaries: (listener) => chats.onSummaries(listener),
@@ -68,33 +114,7 @@ export function guestShareHandlers(ctx: ApiContext) {
     key: signingKey(ctx.store),
     port: GUEST_PORT,
     ...(process.env.RELAY_TEST_DATA ? { funnel: testFunnel() } : {}),
-  });
-  return {
-    guestShare: takes([idSchema], (id) => shares.share(id)),
-    startGuestShare: takes([idSchema], (id) => shares.start(id)),
-    stopGuestShare: takes([idSchema], (id) => shares.stop(id)),
-    guestSuggestions: takes([idSchema], (id) => shares.waiting(id)),
-    sendGuestSuggestion: takes([idSchema], (id) => shares.send(id)),
-    resolveGuestSuggestion: takes(
-      [idSchema, z.enum(["drafted", "dismissed"])],
-      (id, status) => shares.resolve(id, status),
-    ),
-    importGuestThread: takes(
-      [idSchema, z.string().max(4096)],
-      (projectId, link) =>
-        importGuestThread(
-          {
-            fetch: (url, init) => net.fetch(String(url), init),
-            create: (project, shared) =>
-              chats.creating.importShared(project, shared),
-            filesDir: (threadId) =>
-              join(ctx.store.dir, "shared-threads", threadId),
-          },
-          projectId,
-          link,
-        ),
-    ),
-  } satisfies Handlers;
+  };
 }
 
 /**
