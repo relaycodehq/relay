@@ -286,9 +286,16 @@ it("reads back a review it let go of mid-session as it left it, and stops it onl
       ...thread(),
       // Saved before a thread held rounds: it migrates on reading.
       deepReview: {
-        scope: { label: "PR #4" },
+        scope: {
+          label: "PR #4",
+          target: {
+            kind: "pr",
+            ref: { owner: "relay", name: "relay", number: 4 },
+          },
+        },
         status: "reviewing",
         reviewers: [],
+        lead: { provider: "codex" },
       } as unknown,
       queue: [{ input: { id: "q", runtimeMode: "full-access" }, created: 1 }],
     } as unknown as ProjectChat;
