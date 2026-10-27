@@ -136,7 +136,12 @@ export function takes<const S extends readonly z.ZodType[], R>(
     );
 }
 
+/** A missing optional argument reaches the handler as undefined from the page and as null over the phone's JSON. */
+export const optional = <T extends z.ZodType>(schema: T) =>
+  schema.nullish().transform((value) => value ?? undefined);
+
 export const pageSchema = z.number().int().min(1).max(100000);
+export const messageIdSchema = z.string().min(1).max(200);
 /** The paired computer an agent call asks about, for a project living there; unset for this one. */
 export const computerIdSchema = idSchema
   .nullish()

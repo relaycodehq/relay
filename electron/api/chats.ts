@@ -15,22 +15,23 @@ import {
   worktreeStartSchema,
 } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
-import { noteIdSchema, noteTextSchema } from "../../shared/thread-notes";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
 import { rememberSent } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { mediaUrl } from "../media";
-import { takes, type ApiContext, type Handlers } from "./context";
+import {
+  messageIdSchema,
+  optional,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
-/** A missing optional argument reaches the handler as undefined from the page and as null over the phone's JSON. */
-const optional = <T extends z.ZodType>(schema: T) =>
-  schema.nullish().transform((value) => value ?? undefined);
 const agentIdSchema = z.string().min(1).max(200);
 const imagePathSchema = z.string().min(1).max(500);
 const branchSchema = z.string().trim().min(1).max(250);
-const messageIdSchema = z.string().min(1).max(200);
 
 /** Project threads: their turns, agents, worktrees and sharing. */
 export function chatHandlers(ctx: ApiContext) {
@@ -137,25 +138,6 @@ export function chatHandlers(ctx: ApiContext) {
     detachProjectChat: takes([idSchema], (id) => projectChats.detach(id)),
     stopProjectChatDriving: takes([idSchema], (id) =>
       projectChats.allowDriving(id, false),
-    ),
-    threadNotes: takes([idSchema], (id) => projectChats.notes.list(id)),
-    keepThreadNote: takes(
-      [idSchema, noteTextSchema, optional(messageIdSchema)],
-      (id, text, from) => projectChats.notes.add(id, { text, from }),
-    ),
-    pinThreadMessage: takes([idSchema, messageIdSchema], (id, messageId) =>
-      projectChats.notes.pin(id, messageId),
-    ),
-    tickThreadNote: takes(
-      [idSchema, noteIdSchema, z.number().int().min(1), z.boolean()],
-      (id, note, item, done) => projectChats.notes.tick(id, note, item, done),
-    ),
-    arrangeThreadNote: takes(
-      [idSchema, noteIdSchema, z.array(z.number().int().min(1)).max(500)],
-      (id, note, order) => projectChats.notes.arrange(id, note, order),
-    ),
-    removeThreadNote: takes([idSchema, noteIdSchema], (id, note) =>
-      projectChats.notes.remove(id, note),
     ),
     markProjectChatSeen: takes(
       [idSchema, z.number().int().min(0)],

@@ -41,13 +41,11 @@ import { useDraftRaise } from "./useDraftRaise";
 import { activityDrafts, useDraftKeys } from "../composer/drafts";
 import { useAttention } from "./useAttention";
 import { ErrorBox } from "../../ui/ui";
-import { MoveToWorktreeDialog } from "../changes/MoveToWorktreeDialog";
-import { ArchiveWorktreeDialog } from "./ArchiveWorktreeDialog";
 import type { SettingsCategory } from "../settings/Settings";
 import { UpdateToasts } from "../updates/UpdateToasts";
-import { SnoozePickDialog } from "./SnoozeMenu";
 import type { SidebarRows } from "./SidebarThread";
 import { SearchPalette } from "./SearchPalette";
+import { ThreadDialogs } from "./ThreadDialogs";
 import { onOpenThreadSearch } from "./thread-search";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
@@ -356,31 +354,7 @@ export function ProjectSidebar({
           onClose={() => setSearching(false)}
         />
       )}
-      {actions.pickingSnooze && (
-        <SnoozePickDialog
-          onSnooze={(until) =>
-            void actions.triage(actions.pickingSnooze!, {
-              kind: "snooze",
-              until,
-            })
-          }
-          onClose={() => actions.setPickingSnooze(undefined)}
-        />
-      )}
-      {actions.archiving && (
-        <ArchiveWorktreeDialog
-          chat={actions.archiving.chat}
-          files={actions.archiving.files}
-          onArchive={actions.archive}
-          onCancel={actions.cancelArchive}
-        />
-      )}
-      {actions.moving && (
-        <MoveToWorktreeDialog
-          chatId={actions.moving}
-          onClose={() => actions.setMoving(undefined)}
-        />
-      )}
+      <ThreadDialogs actions={actions} />
       {/* Relay's and the agents' updates rise from the sidebar's bottom edge. */}
       <div className="sb-footer-area">
         <UpdateToasts onAgentDetails={() => onSettings("agents")} />

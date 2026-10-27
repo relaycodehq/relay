@@ -22,7 +22,7 @@ import type { BlameApi } from "../file-authors";
 import type { OpenWithApi } from "../open-with";
 import type { HelperPick } from "../settings";
 import type { ElsewhereChanges } from "../elsewhere";
-import type { ThreadNote } from "../thread-notes";
+import type { ThreadNotesApi } from "../thread-notes";
 import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
 import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
@@ -81,6 +81,7 @@ export interface ProjectApi
     ProjectListApi,
     ProjectFoldersApi,
     ProjectChatApi,
+    ThreadNotesApi,
     ProjectCouncilApi,
     ProjectWorktreeApi,
     ProjectFilesApi,
@@ -242,26 +243,6 @@ export interface ProjectChatApi {
   markProjectChatSeen(id: string, seenAt: number): Promise<void>;
   /** A new thread holding the conversation up to this answer, or up to the latest finished one. */
   forkProjectChat(id: string, messageId?: string): Promise<ChatSummary>;
-  /** What the user keeps at hand in the thread, oldest first. */
-  threadNotes(id: string): Promise<ThreadNote[]>;
-  /** Keeps markdown from the thread, kept from message `from`; the note already holding it, if one does. */
-  keepThreadNote(id: string, text: string, from?: string): Promise<ThreadNote>;
-  /** Pins a whole message as a note that points at it; the pin it already has, if any. */
-  pinThreadMessage(id: string, messageId: string): Promise<ThreadNote>;
-  /** Ticks item `item` (from 1) of a list note, or unticks it. */
-  tickThreadNote(
-    id: string,
-    note: string,
-    item: number,
-    done: boolean,
-  ): Promise<ThreadNote[]>;
-  /** A list note's items in a new order, numbered from 1; items left out are dropped. */
-  arrangeThreadNote(
-    id: string,
-    note: string,
-    order: number[],
-  ): Promise<ThreadNote[]>;
-  removeThreadNote(id: string, note: string): Promise<ThreadNote[]>;
   /** Claude Code and Codex sessions run in a terminal in the project's folder, newest first. */
   terminalSessions(projectId: string): Promise<TerminalSession[]>;
   /** A thread carrying on a terminal session; the one that already does, if any. */

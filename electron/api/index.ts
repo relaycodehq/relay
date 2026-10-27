@@ -37,6 +37,7 @@ import { soundHandlers } from "./sounds";
 import { memeHandlers } from "./memes";
 import { terminalHandlers } from "./terminals";
 import { threadWindowHandlers } from "./thread-windows";
+import { threadNoteHandlers } from "./thread-notes";
 import { editorWindowHandlers } from "./editor-windows";
 import { previewHandlers } from "./previews";
 import { processHandlers } from "./processes";
@@ -69,6 +70,7 @@ export function createDispatch(
     commitMessageHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
+    threadNoteHandlers(ctx),
     deepReviewHandlers(ctx),
     secondOpinionHandlers(ctx),
     terminalHandlers(ctx),

@@ -61,17 +61,7 @@ export class ThreadTriage {
       return chatSummary(chat);
     }
     if (triage.kind === "archive") {
-      if (this.core.active.has(id) || this.councils.busy(chat))
-        throw new Error("Stop the running answer before archiving.");
-      // Nothing reopens an archived thread to cancel what would still run in it.
-      if (
-        nextSend(chat.scheduled) ||
-        chat.heldWakeups?.length ||
-        this.core.sessions.pending(id).length
-      )
-        throw new Error(
-          "Cancel the scheduled messages and Claude's background work before archiving.",
-        );
+      this.refuseWhileGoing(chat, "archiving");
       chat.archivedAt = now;
       await this.core.storage.save(chat);
       // A teardown can take minutes; the thread is archived meanwhile.
@@ -180,6 +170,23 @@ export class ThreadTriage {
     for (const id of ids)
       await this.ended(id).catch((e) =>
         console.warn("Could not settle a thread settled while running:", e),
+      );
+  }
+
+  /**
+   * Nothing reopens an archived or deleted thread to stop what runs in it,
+   * or to cancel what would still go out by itself.
+   */
+  private refuseWhileGoing(chat: ProjectChat, doing: string) {
+    if (this.core.active.has(chat.id) || this.councils.busy(chat))
+      throw new Error(`Stop the running answer before ${doing}.`);
+    if (
+      nextSend(chat.scheduled) ||
+      chat.heldWakeups?.length ||
+      this.core.sessions.pending(chat.id).length
+    )
+      throw new Error(
+        `Cancel the scheduled messages and Claude's background work before ${doing}.`,
       );
   }
 
