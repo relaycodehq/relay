@@ -23,11 +23,12 @@ export function changeOpeners({
   return {
     /**
      * One file of a turn's changes, or of what the worktree has that its
-     * branch doesn't, against how it was before; the worktree's list shows
-     * in the sidebar.
+     * branch doesn't, against how it was before. The worktree's list shows
+     * in the sidebar; a turn's file gets the room, as the sidebar doesn't
+     * list the turn's changes.
      */
     async openTurnDiff(target: TurnDiffTarget) {
-      if (target.worktree) openInEditor({ view: "branch" });
+      openInEditor(target.worktree ? { view: "branch" } : { hideSidebar: true });
       const path = target.path ?? target.files[0]?.path;
       if (!path) return;
       const isCurrent = startRequest();
