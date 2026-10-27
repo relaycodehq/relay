@@ -254,6 +254,8 @@ function movedNote(
     return `This thread moved to the project ${JSON.stringify(movedIn.project)} and now works in its folder ${to}, previously ${from}. No files were copied or moved: what earlier turns made in the old folder is still there. Work in the new folder from now on; earlier absolute paths point at the old one. Re-read files before relying on them.`;
   if (movedIn.selected)
     return `This thread now works in ${to}, previously ${from}. No files were copied or merged. Work in the selected folder from now on; earlier absolute paths can point at another copy. Re-read files before relying on them.`;
+  if (movedIn.switched)
+    return `The user switched this thread's Git worktree ${to} to branch ${chat.worktree?.branch ?? "another branch"}. Its files are that branch's now; what earlier turns read there may have changed. Re-read files before relying on them.`;
   if (movedIn.joined)
     return `This conversation now continues in the Git worktree ${to}${onBranch}, an existing branch's, which other threads or the user may be working in too. No uncommitted edits came along: the project folder ${from} keeps its own and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy. Re-read files before relying on them.`;
   if (movedIn.copied)

@@ -347,6 +347,8 @@ export interface ProjectWorktreeApi {
   /** What moving a checkout thread into its own worktree would take, or why it can't. */
   projectWorktreeMove(chatId: string): Promise<WorktreeMove>;
   moveProjectChatToWorktree(chatId: string): Promise<ChatSummary>;
+  /** Moves a started thread to `branch`, wherever it's worked on: the project folder, the folder it's checked out in, or a worktree. */
+  projectChatWorkOn(chatId: string, branch: string): Promise<ChatSummary>;
   revealProjectWorktree(chatId: string): Promise<void>;
   /** Opens a worktree the thread's agent made, by its path in `agentWorktrees`. */
   revealAgentWorktree(chatId: string, path: string): Promise<void>;

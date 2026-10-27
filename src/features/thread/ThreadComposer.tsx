@@ -37,9 +37,8 @@ import { sentHistory } from "../composer/prompt-history";
 import { SubagentsIndicator } from "../agent-turn/Subagents";
 import { StartedChip } from "../agent-turn/StartedChip";
 import { ThreadNotice } from "./ThreadNotice";
-import { ProjectBranchPicker } from "../changes/ProjectBranchPicker";
 import { IconButton } from "../../ui/ui";
-import { WorktreeBranch } from "../changes/WorktreeBranch";
+import { StartedThreadBranch } from "./StartedThreadBranch";
 import { WorkItemChip } from "../plugins/WorkItemCards";
 import { WorkspaceControl } from "./WorktreeControls";
 import { NewWorkspacePicker, StartOnNote } from "./NewWorkspacePicker";
@@ -106,8 +105,8 @@ export interface ProjectCheckout {
 }
 
 /**
- * The branch the thread works on: the checkout's, to switch, or its own
- * worktree's. Before the first message, picking one also says where.
+ * The branch the thread works on. Picking one says where it works: before
+ * the first message for the thread to start there, after it to move there.
  */
 function ThreadBranch({
   project,
@@ -137,28 +136,19 @@ function ThreadBranch({
         onStartThread={onStartThread}
       />
     );
-  const picker = (
-    <ProjectBranchPicker
-      projectId={project.id}
-      branch={checkout.branch}
-      disabled={checkout.locked || disabled}
-      onStartThread={onStartThread}
-    />
-  );
   // The deleted worktree's row asks where to carry on; its branch name would be stale.
   if (worktree.unavailable) return null;
   // Its name comes with the thread's title, a moment after sending.
   if (worktree.naming) return null;
-  if (worktree.inWorktree)
-    return (
-      <WorktreeBranch
-        key={worktree.where}
-        where={worktree.where}
-        branch={worktree.branch}
-        held={disabled || worktree.selectionDisabled}
-      />
-    );
-  return picker;
+  return (
+    <StartedThreadBranch
+      project={project}
+      worktree={worktree}
+      checkout={checkout}
+      disabled={disabled}
+      onStartThread={onStartThread}
+    />
+  );
 }
 
 /**

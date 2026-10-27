@@ -54,8 +54,9 @@ export interface ProjectChat extends ChatSummary {
    * sessions not yet told. `copied` when the worktree got a copy of the
    * folder's edits and the folder kept its own; `fresh` when it started
    * from the folder's commit alone; `joined` when it went to an existing
-   * branch's worktree, maybe shared. `project` names the project it moved
-   * to, its folders being the two projects'.
+   * branch's worktree, maybe shared; `switched` when its worktree's folder
+   * went to another branch, `from` and `to` being that folder. `project`
+   * names the project it moved to, its folders being the two projects'.
    */
   movedIn?: {
     from: string;
@@ -64,6 +65,7 @@ export interface ProjectChat extends ChatSummary {
     copied?: true;
     fresh?: true;
     joined?: true;
+    switched?: true;
     selected?: true;
     project?: string;
   };

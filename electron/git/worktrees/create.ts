@@ -328,7 +328,7 @@ async function branchOff(
 }
 
 /** Branch `branch`'s commit, and where it forks off the checkout's branch, which its changes count from. */
-async function forkOff(root: string, branch: string) {
+export async function forkOff(root: string, branch: string) {
   const tip = (await commitOf(root, `refs/heads/${branch}`))!;
   const from = await currentBranch(root);
   const fork =

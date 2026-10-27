@@ -34,6 +34,13 @@ import { usePoll } from "../../lib/poll";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
+/** Where a summary says the thread works, set even when it's the project folder, so the cached thread lets go of where it was. */
+const workspaceOf = (summary: ChatSummary) => ({
+  worktree: summary.worktree,
+  activeAgentWorktree: summary.activeAgentWorktree,
+  agentWorktrees: summary.agentWorktrees,
+});
+
 /** Where a thread works: its managed worktree, or an explicitly selected agent worktree. */
 export function useThreadWorktree({
   handle: { chat, id, setError, listChanged, run },
@@ -102,7 +109,9 @@ export function useThreadWorktree({
   }, [joining, threads.data]);
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree, poll));
   const status = query.data;
-  const live = status?.path && !status.removed ? status : undefined;
+  // A thread that left its worktree keeps the last status it had there.
+  const live =
+    chat?.worktree && status?.path && !status.removed ? status : undefined;
   const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;
   const unavailable = agentWorktreeUnavailable(chat);
   const where = workspaceId(
@@ -138,6 +147,12 @@ export function useThreadWorktree({
   async function select(path: string | null) {
     await changeWorkspace(() => api.selectAgentWorktree(chat!.id, path));
   }
+  /** Moves the thread to `branch` wherever it's worked on; see `projectChatWorkOn`. */
+  async function workOn(branch: string) {
+    await changeWorkspace(() => api.projectChatWorkOn(chat!.id, branch));
+    void query.refetch();
+    void qc.invalidateQueries({ queryKey: ["project-branches", project.id] });
+  }
   async function recreate() {
     await changeWorkspace(() => api.recreateAgentWorktree(chat!.id));
     // Its answer was about the folder now back; a later deletion asks again.
@@ -154,12 +169,7 @@ export function useThreadWorktree({
       qc.setQueryData<ProjectChat>(
         chatKey(chat.id),
         (previous) =>
-          previous && {
-            ...previous,
-            ...summary,
-            activeAgentWorktree: summary.activeAgentWorktree,
-            agentWorktrees: summary.agentWorktrees,
-          },
+          previous && { ...previous, ...summary, ...workspaceOf(summary) },
       );
       void qc.invalidateQueries({ queryKey: workingTreeKey() });
       void listChanged();
@@ -187,11 +197,16 @@ export function useThreadWorktree({
         ? (agentTree.data.branch ?? reviewFolderLabel(reviewFolder(chat)))
         : (agentWorktree?.branch ?? reviewFolderLabel(reviewFolder(chat)))),
     inWorktree: !!live || !!agentWorktree,
+    /** A repository thread goes to any branch picked; a review keeps the code it reviews. */
+    branchSwitchable: !chat || (chat.scope.kind === "project" && !chat.reviewer),
     /** Its worktree waits on the thread's title for a name. */
     naming: !!live?.naming,
     unavailable,
     recreatable: !!recreatable.data,
     select,
+    workOn,
+    /** Shows why a branch control couldn't do what was picked. */
+    showError: (reason: string) => setError(new Error(reason)),
     recreate,
     selectionDisabled: running || lock.locked,
     ...removal,

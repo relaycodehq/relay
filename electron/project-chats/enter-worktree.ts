@@ -12,6 +12,7 @@ import {
   newBranchProblem,
 } from "../git/worktrees";
 import { carriedOn } from "./carry-on";
+import { chatSummary } from "./chat-summaries";
 import type { ChatCore } from "./core";
 import type { WorktreeSetup } from "./worktree-setup";
 import type { ThreadWorktrees } from "./worktrees";
@@ -49,25 +50,13 @@ export class WorktreeEntry {
   enter(id: string, request: WorktreeRequest) {
     return this.core.control(id, async () => {
       const chat = await this.core.storage.load(id);
-      if (chat.worktree)
-        throw new Error(
-          chat.worktree.path && !chat.worktree.removedAt
-            ? `This thread already works in its own worktree, ${chat.worktree.path}${chat.worktree.branch ? ` on ${chat.worktree.branch}` : ""}.`
-            : "This thread already has its own worktree.",
-        );
-      if (chat.scope.kind !== "project" || chat.reviewer)
-        throw new Error("Only repository threads can work in a worktree.");
-      if ((await this.core.projects.inspect(chat.projectId)).plain)
-        throw new Error("Worktrees need a Git repository.");
-      if (chat.activeAgentWorktree)
-        throw new Error(
-          `This thread works in ${chat.activeAgentWorktree.path}, a worktree it made earlier. The user can switch it back to the project folder first.`,
-        );
+      await this.assertInProjectFolder(chat);
       const root = await this.core.projects.root(chat.projectId);
       const { copied, existing, freshFolder } = await this.enteredWorktree(
         chat,
         root,
         request,
+        "agent",
       );
       const made = { ...chat.worktree!, path: chat.worktree!.path! };
       // The agent that asked knows; the thread's other agents hear it next time.
@@ -114,6 +103,55 @@ export class WorktreeEntry {
   }
 
   /**
+   * Moves a project-folder thread to existing `branch` at the user's
+   * picking: the folder it's checked out in, shared with whoever works
+   * there, or a worktree of its own on it. A folder Relay made just now is
+   * set up with the thread's next message, as with a first one.
+   */
+  join(id: string, branch: string) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      await this.assertInProjectFolder(chat);
+      await this.core.active.assertIdle(id);
+      const root = await this.core.projects.root(chat.projectId);
+      if (!(await existingBranch(root, branch)))
+        throw new Error(`There's no branch ${branch}.`);
+      await this.enteredWorktree(chat, root, { branch }, "relay");
+      const joined = chat.worktree!;
+      noteWorkspaceMove(chat, {
+        how: "switched",
+        to: joined.path!,
+        ...(joined.branch ? { branch: joined.branch } : {}),
+      });
+      const owed = Object.keys(chat.scopeHeard ?? {});
+      if (owed.length)
+        chat.movedIn = { from: root, to: joined.path!, owed, joined: true };
+      // Live sessions started in the project folder; resumed, they start in the worktree.
+      this.core.sessions.close(id);
+      await this.core.storage.save(chat);
+      return chatSummary(chat);
+    });
+  }
+
+  /** Refuses a thread that isn't a repository thread working in the project folder. */
+  private async assertInProjectFolder(chat: ProjectChat) {
+    if (chat.worktree)
+      throw new Error(
+        chat.worktree.path && !chat.worktree.removedAt
+          ? `This thread already works in its own worktree, ${chat.worktree.path}${chat.worktree.branch ? ` on ${chat.worktree.branch}` : ""}.`
+          : "This thread already has its own worktree.",
+      );
+    if (chat.scope.kind !== "project" || chat.reviewer)
+      throw new Error("Only repository threads can work in a worktree.");
+    if ((await this.core.projects.inspect(chat.projectId)).plain)
+      throw new Error("Worktrees need a Git repository.");
+    if (chat.activeAgentWorktree)
+      throw new Error(
+        `This thread works in ${chat.activeAgentWorktree.path}, a worktree it made earlier. The user can switch it back to the project folder first.`,
+      );
+  }
+
+  /**
    * Puts the thread in the worktree `enter` found or made for it, saved
    * before the repository's queue lets go, so a thread dropping that folder
    * sees this one in it. An existing branch goes wherever carrying it on
@@ -124,6 +162,8 @@ export class WorktreeEntry {
     chat: ProjectChat,
     root: string,
     { branch, uncommitted: copy }: WorktreeRequest,
+    /** Who runs the setup of a folder Relay makes: the agent now, or Relay with the next turn. */
+    setsUp: "agent" | "relay",
   ) {
     const found = branch ? await existingBranch(root, branch) : undefined;
     if (branch && found) {
@@ -146,7 +186,7 @@ export class WorktreeEntry {
           branch,
           chat.title,
         );
-        await this.claim(chat, worktree);
+        await this.claim(chat, worktree, setsUp);
         const freshFolder = worktree.setup === "pending";
         return { copied: 0, existing: true, freshFolder };
       });
@@ -172,16 +212,20 @@ export class WorktreeEntry {
             ),
             copied: 0,
           };
-      await this.claim(chat, worktree);
+      await this.claim(chat, worktree, setsUp);
       return { copied, existing: false, freshFolder: true };
     });
   }
 
-  /** Saves the thread as working in `worktree`; its agent runs a new folder's setup itself. */
-  private async claim(chat: ProjectChat, worktree: ChatWorktree) {
+  /** Saves the thread as working in `worktree`; when its agent runs a new folder's setup itself, Relay won't. */
+  private async claim(
+    chat: ProjectChat,
+    worktree: ChatWorktree,
+    setsUp: "agent" | "relay",
+  ) {
     const { included: _, ...kept } = worktree;
-    chat.worktree = { ...kept, setup: "done" };
-    chat.branch = kept.branch;
+    chat.worktree = setsUp === "relay" ? worktree : { ...kept, setup: "done" };
+    chat.branch = worktree.branch;
     delete chat.commit;
     await this.core.storage.save(chat);
   }

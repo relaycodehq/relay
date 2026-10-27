@@ -29,6 +29,7 @@ import { chatSummary } from "./chat-summaries";
 import { WorktreeSetup } from "./worktree-setup";
 import { carriedOn } from "./carry-on";
 import { WorktreeEntry } from "./enter-worktree";
+import { BranchSwitch } from "./branch-switch";
 import { AgentWorkspaces } from "./agent-workspaces";
 import { whyFolderStays, worktreeUsers } from "./worktree-users";
 import {
@@ -70,6 +71,8 @@ export class ThreadWorktrees {
   readonly agents: AgentWorkspaces;
   /** Moves a project-folder thread into a worktree at its agent's asking. */
   readonly entry: WorktreeEntry;
+  /** Moves a started thread to the branch the user picks, wherever it's worked on. */
+  readonly branches: BranchSwitch;
   /** Worktree changes per repository root; see `inRepo`. */
   private making = keyedQueue();
   /** Worktree folders between their teardown and their removal, per repository root; see `drop`. */
@@ -85,6 +88,7 @@ export class ThreadWorktrees {
   ) {
     this.setup = new WorktreeSetup(core);
     this.entry = new WorktreeEntry(core, folder, this.setup, this);
+    this.branches = new BranchSwitch(core, this);
     this.agents = new AgentWorkspaces(core, councils, (root, job) =>
       this.inRepo(root, job),
     );

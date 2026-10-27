@@ -21,6 +21,7 @@ export {
   worktreeHoldsWork,
 } from "./changes";
 export { moveIntoWorktree, copyIntoWorktree } from "./carry";
+export { switchWorktree, dropUnusedBranch } from "./switch";
 export { cantCarryOn, adoptWorktree } from "./adopt";
 export {
   reattachWorktree,

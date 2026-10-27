@@ -306,6 +306,9 @@ export function chatHandlers(ctx: ApiContext) {
     moveProjectChatToWorktree: takes([idSchema], (chatId) =>
       projectChats.worktrees.move(chatId),
     ),
+    projectChatWorkOn: takes([idSchema, z.string().min(1).max(250)], (chatId, branch) =>
+      projectChats.worktrees.branches.workOn(chatId, branch),
+    ),
     revealProjectWorktree: takes([idSchema], (chatId) =>
       openPath(projectChats.worktrees.path(chatId)),
     ),
