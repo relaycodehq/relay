@@ -35,6 +35,7 @@ import { useComposerAttachments } from "./useComposerAttachments";
 import { useCouncils } from "./useCouncils";
 import { useMessageActions } from "./useMessageActions";
 import { useNewThread } from "./useNewThread";
+import { usePendingRequest } from "./usePendingRequest";
 import { useQueuedMessages } from "./useQueuedMessages";
 import { useSessionCommands } from "./useSessionCommands";
 import { useThreadScroll } from "./useThreadScroll";
@@ -172,6 +173,7 @@ export function ProjectChat({
   const placeOf = (root: string | null) => `${id}:${root ?? ""}`;
   const place = placeOf(rootId);
   const composer = useRef<ComposerHandle>(null);
+  const pending = usePendingRequest(chat, history, composer);
   const pane = useRef<HTMLElement>(null);
   useRecordChatPane(pane);
   useImperativeHandle(
@@ -497,29 +499,14 @@ export function ProjectChat({
             e.preventDefault();
         }}
       >
-        {history.data?.requests?.slice(0, 1).map((request) => (
+        {pending.request && (
           <AgentRequestCard
-            key={request.id}
-            request={request}
-            pendingCount={history.data?.requests?.length}
-            onRespond={async (response) => {
-              if (!chat) return;
-              await api.respondProjectChat(chat.id, request.id, response);
-              const { data } = await history.refetch();
-              // The answered card takes the clicked button, and the focus, with it.
-              if (!data?.requests?.length)
-                requestAnimationFrame(() => {
-                  const active = document.activeElement;
-                  if (
-                    !active ||
-                    active === document.body ||
-                    active.closest(".agent-request")
-                  )
-                    composer.current?.focus();
-                });
-            }}
+            key={pending.request.id}
+            request={pending.request}
+            pendingCount={pending.count}
+            onRespond={pending.respond}
           />
-        ))}
+        )}
 
         {isEmpty && (
           <ThreadIntroduction

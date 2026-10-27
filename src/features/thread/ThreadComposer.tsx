@@ -21,6 +21,7 @@ import type { ThreadWorktree } from "./useThreadWorktree";
 import { CodeReferenceList } from "./CodeReferenceChip";
 import { ContextWindowMeter } from "../agents/ContextWindowMeter";
 import { useCacheExpired } from "../agents/auto-compact";
+import { useThreadCounter } from "../agents/useContextReport";
 import { worthCompactingCold } from "../../../shared/context-usage";
 import { awayPlaceholder } from "../handoff/HandoffStrip";
 import { SetupLine } from "../handoff/SetupLine";
@@ -267,16 +268,10 @@ export function ThreadComposer({
         compacting,
       })
     : undefined;
-  const chatId = chat?.id;
-  const counter = useMemo(
-    () =>
-      chatId
-        ? {
-            key: `${chatId}:${root?.id ?? ""}:${context?.provider ?? ""}`,
-            count: () => api.projectChatContext(chatId, root?.id ?? null),
-          }
-        : undefined,
-    [chatId, root?.id, context?.provider],
+  const counter = useThreadCounter(
+    chat?.id,
+    root?.id ?? null,
+    context?.provider,
   );
   const draftKey = threadDraftKey(id, root?.id);
   const { selection, workItem, codeRefs } = attachments;

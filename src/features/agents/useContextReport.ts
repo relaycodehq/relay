@@ -1,5 +1,7 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ContextReport } from "../../../shared/context-report";
+import { api } from "../../lib/api";
 
 export type DatedReport = { report: ContextReport; at: number };
 
@@ -9,6 +11,24 @@ export type ContextCounter = {
   key: string;
   count: () => Promise<ContextReport | null>;
 };
+
+/** Counts a thread's session, or its side conversation's from `rootId`. */
+export function useThreadCounter(
+  chatId: string | undefined,
+  rootId: string | null,
+  provider: string | undefined,
+): ContextCounter | undefined {
+  return useMemo(
+    () =>
+      chatId
+        ? {
+            key: `${chatId}:${rootId ?? ""}:${provider ?? ""}`,
+            count: () => api.projectChatContext(chatId, rootId),
+          }
+        : undefined,
+    [chatId, rootId, provider],
+  );
+}
 
 /**
  * What fills the agent's window, counted while the meter's details are open.
