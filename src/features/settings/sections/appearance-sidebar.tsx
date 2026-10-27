@@ -14,39 +14,11 @@ import type { SettingEntry } from "../settings-search";
 
 /** Appearance's Sidebar section: how the projects sidebar names and shows things. */
 export function useSidebarEntries(): SettingEntry[] {
-  const smartNames = useSavedSetting(
-    {
-      queryKey: ["smart-project-names"],
-      queryFn: () => api.smartProjectNames(),
-      staleTime: Infinity,
-    },
-    (enabled) => api.saveSmartProjectNames(enabled),
-    ["projects"],
-  );
+  const smartNames = useSmartNamesEntry();
   const sidebarAutoHide = useSidebarAutoHide();
   const activityBranches = useActivityBranches();
   return [
-    {
-      id: "smart-project-names",
-      category: "appearance",
-      section: "Sidebar",
-      title: "Smart project names",
-      description:
-        "Turn relay-releases into Relay Releases. Off keeps the original folder or repository name. Names you type yourself stay as typed.",
-      keywords:
-        "projects naming folder repository capitalize separators hyphen underscore original smart",
-      render: () => (
-        <>
-          <Switch
-            label="Smart project names"
-            checked={smartNames.value ?? true}
-            disabled={!smartNames.loaded || smartNames.saving}
-            onChange={(enabled) => smartNames.set(enabled)}
-          />
-          {smartNames.error && <ErrorBox error={smartNames.error} />}
-        </>
-      ),
-    },
+    smartNames,
     {
       id: "sidebar-auto-hide",
       category: "appearance",
@@ -81,4 +53,38 @@ export function useSidebarEntries(): SettingEntry[] {
       ),
     },
   ];
+}
+
+/** Smart project names, which the main process keeps rather than settings.json. */
+function useSmartNamesEntry(): SettingEntry {
+  const smartNames = useSavedSetting(
+    {
+      queryKey: ["smart-project-names"],
+      queryFn: () => api.smartProjectNames(),
+      staleTime: Infinity,
+    },
+    (enabled) => api.saveSmartProjectNames(enabled),
+    ["projects"],
+  );
+  return {
+    id: "smart-project-names",
+    category: "appearance",
+    section: "Sidebar",
+    title: "Smart project names",
+    description:
+      "Turn relay-releases into Relay Releases. Off keeps the original folder or repository name. Names you type yourself stay as typed.",
+    keywords:
+      "projects naming folder repository capitalize separators hyphen underscore original smart",
+    render: () => (
+      <>
+        <Switch
+          label="Smart project names"
+          checked={smartNames.value ?? true}
+          disabled={!smartNames.loaded || smartNames.saving}
+          onChange={(enabled) => smartNames.set(enabled)}
+        />
+        {smartNames.error && <ErrorBox error={smartNames.error} />}
+      </>
+    ),
+  };
 }

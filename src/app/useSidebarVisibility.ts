@@ -69,7 +69,7 @@ export function useSidebarVisibility(
   const toggled = useRef(false);
   const toggle = () => {
     toggled.current = true;
-    peek.end();
+    peek.endPeek();
     if (zoom.on) return zoom.exit();
     const choose = (hide: boolean) =>
       setChoice(sidebarChoiceAfter(hide, besidePane));
@@ -93,13 +93,10 @@ export function useSidebarVisibility(
     setChoice((choice) => ({ ...choice, besidePane: null }));
   }, [autoHide]);
   return {
+    ...peek,
     hidden,
-    peek: peek.shown,
     toggle,
-    peekOpen: peek.open,
-    peekClose: peek.close,
     layoutRef: setLayout,
-    asideRef: peek.asideRef,
     toggled,
   };
 }

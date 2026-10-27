@@ -30,14 +30,14 @@ export function useSidebarPeek(hidden: boolean, layout: HTMLElement | null) {
     peekTimer.current = window.setTimeout(() => setPeek(false), 250);
   };
   /** Ends it at once, as the sidebar is toggled. */
-  const end = () => {
+  const endPeek = () => {
     window.clearTimeout(peekTimer.current);
     setPeek(false);
   };
   useEffect(() => () => window.clearTimeout(peekTimer.current), []);
   const asideRef = useRef<HTMLElement>(null);
   useEdgePeek({ hidden, peek, setPeek, peekClose, layout, asideRef });
-  return { shown: peek, open: peekOpen, close: peekClose, end, asideRef };
+  return { peek, peekOpen, peekClose, endPeek, asideRef };
 }
 
 /**
