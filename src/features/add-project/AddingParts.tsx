@@ -1,5 +1,7 @@
-// The palette's smaller pieces: progress, what a picked folder turned out to
-// be, and a new project's fields.
+// The palette's smaller pieces: a way to add a project, progress, what a
+// picked folder turned out to be, and a new project's fields.
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import type { AddingJob, NewProject } from "../../../shared/projects";
 import { linkName, tildePath } from "../../../shared/projects";
 import {
@@ -9,6 +11,32 @@ import {
   Switch,
 } from "../../ui/SettingsCard";
 import type { Picked } from "./useAdding";
+
+/** One way to add a project, on the palette's first page. */
+export function WayRow({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="headline-project-row palette-row"
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {icon}
+      <span>{label}</span>
+      <ChevronRight size={14} />
+    </button>
+  );
+}
 
 export function JobProgress({
   job,

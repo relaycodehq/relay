@@ -123,7 +123,7 @@ export const bigFunctions: Record<string, number> = {
   "src/app/useSidebarVisibility.ts › useSidebarVisibility": 136,
   "src/app/useThreadFolder.ts › useThreadFolder": 95,
   "src/features/accounts/AccountSwitch.tsx › AccountMenu": 82,
-  "src/features/add-project/AddProjectPalette.tsx › AddProjectPalette": 487,
+  "src/features/add-project/AddProjectPalette.tsx › AddProjectPalette": 463,
   "src/features/add-project/ImportProjectRow.tsx › ImportProjectRow": 167,
   "src/features/add-project/ImportProjects.tsx › ImportProjects": 279,
   "src/features/add-project/LinkStep.tsx › LinkStep": 95,

@@ -28,6 +28,7 @@ import {
   JobProgress,
   NewProjectFields,
   PickedNote,
+  WayRow,
   type Spec,
 } from "./AddingParts";
 import { LinkStep } from "./LinkStep";
@@ -297,46 +298,30 @@ export function AddProjectPalette({
                     onChoose={computers}
                   />
                   <div className="add-project-ways">
-                    <button
-                      type="button"
-                      className="headline-project-row palette-row"
+                    <WayRow
+                      icon={<FolderOpen size={17} />}
+                      label="Open a folder"
                       disabled={!available}
                       onClick={() => go("folder")}
-                    >
-                      <FolderOpen size={17} />
-                      <span>Open a folder</span>
-                      <ChevronRight size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="headline-project-row palette-row"
+                    />
+                    <WayRow
+                      icon={<GitHubMark size={17} />}
+                      label="Clone a repository"
                       disabled={!available}
                       onClick={() => go("github")}
-                    >
-                      <GitHubMark size={17} />
-                      <span>Clone a repository</span>
-                      <ChevronRight size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      className="headline-project-row palette-row"
+                    />
+                    <WayRow
+                      icon={<FolderPlus size={17} />}
+                      label="New project"
                       disabled={!available}
                       onClick={() => go("new")}
-                    >
-                      <FolderPlus size={17} />
-                      <span>New project</span>
-                      <ChevronRight size={14} />
-                    </button>
+                    />
                     {!selectedComputer && (
-                      <button
-                        type="button"
-                        className="headline-project-row palette-row"
+                      <WayRow
+                        icon={<ImportIcon size={17} />}
+                        label="Import from another app…"
                         onClick={() => go("import")}
-                      >
-                        <ImportIcon size={17} />
-                        <span>Import from another app…</span>
-                        <ChevronRight size={14} />
-                      </button>
+                      />
                     )}
                   </div>
                 </div>
