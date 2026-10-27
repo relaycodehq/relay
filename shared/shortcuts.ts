@@ -106,7 +106,7 @@ const shortcutCommands = {
     title: "Search threads",
     group: "General",
     keywords: "find open thread palette quick open",
-    defaults: one("mod+KeyP"),
+    defaults: (mac) => [combo(mac, "mod+KeyK"), combo(mac, "mod+KeyP")],
   },
   terminal: {
     title: "Show or hide the terminal",
@@ -270,7 +270,7 @@ const shortcutCommands = {
     title: "Open a pull request by URL",
     group: "Reviews",
     keywords: "link",
-    defaults: one("mod+KeyK"),
+    defaults: one("mod+alt+KeyK"),
   },
   "editor-window": {
     title: "Open the editor in its own window, or put it back",
