@@ -298,6 +298,51 @@ button.running-task-title:hover > svg {
   fill: currentColor;
   opacity: 0.12;
 }
+/* What the thread changed, under the computer. */
+.running-changes {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.running-changes-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 30px;
+  min-height: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+}
+.running-changes-row > svg {
+  flex: none;
+  color: var(--muted);
+}
+.running-changes-row.quiet {
+  color: var(--muted);
+}
+button.running-changes-row {
+  cursor: pointer;
+}
+button.running-changes-row:hover {
+  background: var(--hover);
+}
+.running-changes-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.running-changes-row .diff-stat {
+  margin-left: auto;
+  font-size: 11.5px;
+}
 /* What runs, under the computer; its list scrolls when the card runs out of room. */
 .running-tasks-section {
   display: flex;

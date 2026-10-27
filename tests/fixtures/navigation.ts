@@ -131,3 +131,16 @@ export async function openSurface(
       .click();
   await item.click();
 }
+
+/**
+ * Opens the thread's changes in the editor from the Running card, first
+ * calling the card out of its stripe where the pane is too narrow for it.
+ */
+export async function openThreadChanges(page: Page) {
+  const card = page.getByRole("complementary", { name: "Running processes" });
+  const row = card.getByRole("button", { name: /files? changed/ });
+  const stripe = card.locator(".running-stripe");
+  await expect(row.or(stripe)).toBeVisible();
+  if (await stripe.isVisible()) await stripe.click();
+  await row.click();
+}

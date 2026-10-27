@@ -190,26 +190,6 @@
   min-height: 0;
   cursor: pointer;
 }
-.pane-toggle-stat {
-  display: inline-flex;
-  gap: 4px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-}
-/* Room for three digits each, so counts growing as an agent edits don't
-   slide the buttons beside the toggle. */
-.pane-toggle-add,
-.pane-toggle-del {
-  min-width: 4ch;
-}
-.pane-toggle-add {
-  color: light-dark(#1a7f45, #4cc38a);
-  text-align: right;
-}
-.pane-toggle-del {
-  color: light-dark(#c4323f, #f0707a);
-}
 .pane-toggle:hover:not(:disabled) {
   color: var(--text);
   background: var(--hover);

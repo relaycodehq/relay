@@ -18,6 +18,7 @@ import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import {
   openInFileTree,
   openSurface,
+  openThreadChanges,
   panelToggle,
 } from "../fixtures/navigation";
 
@@ -113,8 +114,8 @@ test("a worktree thread is its own branch: the header follows it, commits there 
     expect(existsSync(join(repo, "src/guard.ts"))).toBe(false);
     await expect(page.getByText("relay/cache-guard-behavior")).toBeVisible();
 
-    // The header follows the thread: Changes and Files show the worktree.
-    await page.getByRole("button", { name: /^Changes\b/ }).click();
+    // The card follows the thread: its changes and Files show the worktree.
+    await openThreadChanges(page);
     const local = page.getByRole("region", { name: "Local changes" });
     await expect(
       local.getByRole("button", { name: "Added src/guard.ts", exact: true }),

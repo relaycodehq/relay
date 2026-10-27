@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   FolderGit2,
-  GitCompareArrows,
   GitPullRequest,
   MessageSquare,
   PanelBottom,
@@ -261,61 +260,48 @@ function ThreadTitle({
   );
 }
 
+/** How a pane's toggle looks; Changes is listed only for a PR thread, as its Review. */
+function paneLook(id: PaneId, pull: PullRef | null, unseen?: boolean) {
+  if (id === "chat")
+    return { label: "Chat", icon: <MessageSquare size={14} /> };
+  if (id === "panel")
+    return { label: "Panel", icon: <PanelRight size={14} />, unseen };
+  return { label: `PR #${pull?.number}`, icon: <GitPullRequest size={14} /> };
+}
+
 /**
- * Shows, hides and reorders the thread's panes. A PR thread's Changes is
- * its Review; any other thread's opens the editor on the folder's changes.
+ * Shows, hides and reorders the thread's panes. Its own changes aren't one:
+ * they open in the editor from the Running card.
  */
 export function ThreadPaneToggles({
   panes: { layout, visible, move },
-  plain,
   pull,
-  lines,
   filesOpen,
   unseen,
   onToggle,
-  onChanges,
 }: {
   panes: WorkspacePanes;
   /** The panel has Files open, which may hold an unsaved edit. */
   filesOpen: boolean;
   /** The closed panel holds something the agent opened. */
   unseen?: boolean;
-  plain?: boolean;
   pull: PullRef | null;
-  /** Lines the working tree changed, beside Changes. */
-  lines?: { additions: number; deletions: number };
   onToggle: (id: PaneId) => void;
-  /** Shows the folder's changes beside the editor. */
-  onChanges: () => void;
 }) {
   const { locked } = useNavigationLock();
-  const opensEditor = (id: PaneId) => id === "changes" && !pull;
   return (
     <PaneToggles
-      onToggle={(id) => (opensEditor(id) ? onChanges() : onToggle(id))}
+      onToggle={onToggle}
       onMove={move}
-      panes={panesOf(layout.order, plain).map((id) => ({
+      panes={panesOf(layout.order, !!pull).map((id) => ({
         id,
-        open: !opensEditor(id) && visible.includes(id),
+        open: visible.includes(id),
         // The panel stays open over an unsaved edit in Files, and so does
         // the last open pane. One off screen for lack of room still comes back.
         disabled:
           (id === "panel" && locked && visible.includes(id) && filesOpen) ||
           (visible.includes(id) && visible.length === 1),
-        ...(id === "chat"
-          ? { label: "Chat", icon: <MessageSquare size={14} /> }
-          : id === "panel"
-            ? { label: "Panel", icon: <PanelRight size={14} />, unseen }
-            : pull
-              ? {
-                  label: `PR #${pull.number}`,
-                  icon: <GitPullRequest size={14} />,
-                }
-              : {
-                  label: "Changes",
-                  icon: <GitCompareArrows size={14} />,
-                  stat: lines,
-                }),
+        ...paneLook(id, pull, unseen),
       }))}
     />
   );

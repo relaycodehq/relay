@@ -22,6 +22,7 @@ import { ProjectChecksButton } from "../features/checks/ProjectChecks";
 import { FolderGone } from "../features/projects/FolderGone";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { RunningTasks } from "../features/terminal/RunningTasks";
+import type { CardChanges } from "../features/terminal/ChangesSection";
 import { TerminalDrawer } from "../features/terminal/TerminalDrawer";
 import { useEditorWindowShortcut } from "../features/editor-windows/EditorWindowButtons";
 import { Pane } from "../ui/WorkspacePanes";
@@ -92,10 +93,7 @@ export function ThreadHeaderActions({
   move?: ReactNode;
   onConnectHost: () => void;
 }) {
-  const { chat, panes, pull } = nav;
-  // A folder without Git has no Changes of its own, but what its agents
-  // changed in other repositories still shows there.
-  const elsewhere = useElsewhereListed(project.plain ? chat?.id : undefined);
+  const { panes, pull } = nav;
   return (
     <div className="thread-header-actions">
       <ProjectChecksButton
@@ -129,13 +127,10 @@ export function ThreadHeaderActions({
         )}
         <ThreadPaneToggles
           panes={panes}
-          plain={project.plain && !elsewhere.data?.groups.length}
           pull={pull}
-          lines={folder.tree?.lines}
           filesOpen={panel.has("files")}
           unseen={!panes.layout.open.panel && !!panel.unseen}
           onToggle={opens.togglePane}
-          onChanges={() => opens.openCode("changes")}
         />
         <span className="header-strip-sep" aria-hidden="true" />
         <TerminalToggle terminal={terminal} />
@@ -144,9 +139,42 @@ export function ThreadHeaderActions({
   );
 }
 
-/** The Running card, with Hand off for the open thread. */
+/**
+ * What the card counts as the thread's changes: its folder's, or for a folder
+ * without Git, what its agents changed in other repositories. A PR thread's
+ * changes are its Review, which the header opens.
+ */
+function useCardChanges(
+  { nav, folder }: ThreadTools,
+  project: Project,
+): CardChanges | undefined {
+  const elsewhere = useElsewhereListed(
+    project.plain ? nav.chat?.id : undefined,
+  );
+  if (nav.pull) return undefined;
+  if (!project.plain)
+    return (
+      folder.tree && {
+        files: folder.tree.changes.length,
+        lines: folder.tree.lines,
+      }
+    );
+  const groups = elsewhere.data?.groups ?? [];
+  if (!groups.length) return undefined;
+  const files = groups.flatMap((g) => g.files);
+  return {
+    files: files.length,
+    lines: {
+      additions: files.reduce((sum, f) => sum + f.additions, 0),
+      deletions: files.reduce((sum, f) => sum + f.deletions, 0),
+    },
+    elsewhere: groups.map((g) => g.name),
+  };
+}
+
+/** The Running card, with Hand off and the changes of the open thread. */
 function RunningCard({
-  tools: { nav, setError },
+  tools,
   project,
   onSettings,
 }: {
@@ -154,7 +182,9 @@ function RunningCard({
   project: Project;
   onSettings: (at: SettingsCategory) => void;
 }) {
+  const { nav, opens, setError } = tools;
   const { chat, chats, navigate } = nav;
+  const changes = useCardChanges(tools, project);
   const handoff = chat && !project.plain && !project.scratch ? chat : undefined;
   return (
     <RunningTasks
@@ -172,6 +202,8 @@ function RunningCard({
           />
         ))
       }
+      changes={changes}
+      onOpenChanges={() => opens.openCode("changes")}
       onOpenChat={(c) => navigate(project, c)}
     />
   );

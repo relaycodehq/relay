@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { openThreadChanges } from "../fixtures/navigation";
 
 test("shows what an agent turn changed and opens its files with the turn's changes", async () => {
   const root = await realpath(
@@ -144,11 +145,8 @@ test("shows what an agent turn changed and opens its files with the turn's chang
       .poll(async () => readFile(join(root, "agent.jsonl"), "utf8"))
       .toContain("I rolled back your edits to README.md");
 
-    // The title bar's Changes lists the folder's own changes beside the editor.
-    await page
-      .getByRole("group", { name: "Workspace panes" })
-      .getByRole("button", { name: /^Changes\b/ })
-      .click();
+    // The card's changes list the folder's own changes beside the editor.
+    await openThreadChanges(page);
     await expect(
       page.locator(".project-file-list").getByRole("region", { name: "Local changes" }),
     ).toBeVisible();

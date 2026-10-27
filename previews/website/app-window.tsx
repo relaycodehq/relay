@@ -433,6 +433,7 @@ export function AppWindow({
                 <RunningTasks
                   project={projects[0]}
                   chats={chats}
+                  onOpenChanges={() => setChanges(true)}
                   onOpenChat={() => {}}
                 />
               ) : null}

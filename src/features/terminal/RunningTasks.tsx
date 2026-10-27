@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
+import { ChangesSection, type CardChanges } from "./ChangesSection";
 import { ComputerSection } from "./ComputerSection";
 import { RunningStripe } from "./RunningStripe";
 import { useCostHistory } from "./TaskLoad";
@@ -130,12 +131,17 @@ export function RunningTasks({
   project,
   chats,
   handoff,
+  changes,
+  onOpenChanges,
   onOpenChat,
 }: {
   project: Project;
   chats: ChatSummary[];
   /** The open thread's Hand off button, given the card's button look. */
   handoff?: (className: string) => ReactNode;
+  /** None where the thread has no changes of its own to show, as in a PR thread. */
+  changes?: CardChanges;
+  onOpenChanges: () => void;
   onOpenChat: (chat: ChatSummary) => void;
 }) {
   const [folded, setFolded] = useStoredFlag("relay-tasks-collapsed");
@@ -172,6 +178,9 @@ export function RunningTasks({
             actions={handoff?.("running-card-button")}
             onFold={toggle}
           />
+          {changes && (
+            <ChangesSection changes={changes} onOpen={onOpenChanges} />
+          )}
           {!!list.length && (
             <section className="running-tasks-section">
               <div className="running-tasks-label">

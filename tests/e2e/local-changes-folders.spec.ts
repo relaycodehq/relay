@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { screenshot } from "../fixtures/screenshot";
+import { openThreadChanges } from "../fixtures/navigation";
 
 test("the Changes pane groups files by folder, per project", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-folders-"))),
@@ -51,10 +52,7 @@ test("the Changes pane groups files by folder, per project", async () => {
     await adding
       .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
-    await page
-      .getByRole("group", { name: "Workspace panes" })
-      .getByRole("button", { name: /^Changes\b/ })
-      .click();
+    await openThreadChanges(page);
     const changes = page.getByRole("region", { name: "Local changes" });
     const folders = () => changes.locator(".working-folder").allTextContents();
 

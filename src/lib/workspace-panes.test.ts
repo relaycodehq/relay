@@ -75,12 +75,12 @@ describe("fitPanes", () => {
 });
 
 describe("panesOf", () => {
-  it("leaves a folder without Git no Changes pane", () => {
-    expect(panesOf(["panel", "chat", "changes"], true)).toEqual([
+  it("lists Changes only for a PR thread", () => {
+    expect(panesOf(["panel", "chat", "changes"], false)).toEqual([
       "panel",
       "chat",
     ]);
-    expect(panesOf(order)).toBe(order);
+    expect(panesOf(order, true)).toBe(order);
   });
 });
 

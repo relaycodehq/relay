@@ -190,9 +190,12 @@ const bump = (recent: PaneId[], id: PaneId) => [
   id,
 ];
 
-/** A folder without Git has no changes to show. */
-export const panesOf = (order: PaneId[], plain?: boolean) =>
-  plain ? order.filter((id) => id !== "changes") : order;
+/**
+ * The panes a thread's header toggles. Only a PR thread has a Changes pane,
+ * its Review; any other thread's changes open in the editor.
+ */
+export const panesOf = (order: PaneId[], pullThread: boolean) =>
+  pullThread ? order : order.filter((id) => id !== "changes");
 
 /**
  * Where pane `id` sits in the row: its place in the order and its share of

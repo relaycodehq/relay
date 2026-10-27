@@ -15,7 +15,11 @@ import {
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { openInFileTree, openSurface } from "../fixtures/navigation";
+import {
+  openInFileTree,
+  openSurface,
+  openThreadChanges,
+} from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 
 test("chat and the panel are inline panes that can be reordered; Changes opens beside the editor", async () => {
@@ -61,7 +65,6 @@ test("chat and the panel are inline panes that can be reordered; Changes opens b
       .getByRole("button", { name: "Choose in Finder…", exact: true })
       .click();
     const toggles = page.getByRole("group", { name: "Workspace panes" });
-    // Changes carries its line counts after the label.
     const toggle = (name: string) =>
       toggles.getByRole("button", { name: new RegExp(`^${name}\\b`) });
     const order = () =>
@@ -113,12 +116,12 @@ test("chat and the panel are inline panes that can be reordered; Changes opens b
 
     // Changes isn't a pane of its own: it lists the folder's changes beside
     // the editor, and never pops the remembered file in a modal.
-    await toggle("Changes").click();
+    await openThreadChanges(page);
     const local = page.locator(".project-file-list").getByRole("region", { name: "Local changes" });
     await expect(local).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await order()).toEqual(["chat", "panel"]);
-    await expect(toggle("Changes")).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle("Changes")).toHaveCount(0);
 
     // A change opens in the editor with its changes in place.
     await page.locator('.change-select[aria-label$=" src/a.ts"]').click();

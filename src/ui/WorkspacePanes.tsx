@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useState,
-  type DragEvent,
-  type ReactNode,
-} from "react";
+import { useCallback, useState, type DragEvent, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { PANE_MIN, type PaneId } from "../lib/workspace-panes";
 import { IconButton } from "./ui";
@@ -71,8 +66,6 @@ export function PaneToggles({
     icon: ReactNode;
     open: boolean;
     disabled?: boolean;
-    /** Lines changed, shown after the label; hidden when there are none. */
-    stat?: { additions: number; deletions: number };
     /** Holds something new the user hasn't looked at: a dot. */
     unseen?: boolean;
   }[];
@@ -99,8 +92,6 @@ function PaneToggle({
     icon: ReactNode;
     open: boolean;
     disabled?: boolean;
-    /** Lines changed, shown after the label; hidden when there are none. */
-    stat?: { additions: number; deletions: number };
     unseen?: boolean;
   };
   onToggle: (id: PaneId) => void;
@@ -121,15 +112,6 @@ function PaneToggle({
       {pane.icon}
       <span className="pane-toggle-label">{pane.label}</span>
       {pane.unseen && <span className="unseen-dot" aria-hidden="true" />}
-      {!!(pane.stat?.additions || pane.stat?.deletions) && (
-        <span
-          className="pane-toggle-stat"
-          aria-label={`${pane.stat.additions} lines added, ${pane.stat.deletions} removed`}
-        >
-          <span className="pane-toggle-add">+{pane.stat.additions}</span>
-          <span className="pane-toggle-del">−{pane.stat.deletions}</span>
-        </span>
-      )}
     </button>
   );
 }

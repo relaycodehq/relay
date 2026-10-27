@@ -14,7 +14,11 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { ProjectChat } from "../../shared/projects";
 import { screenshot } from "../fixtures/screenshot";
-import { openInFileTree, openSurface } from "../fixtures/navigation";
+import {
+  openInFileTree,
+  openSurface,
+  openThreadChanges,
+} from "../fixtures/navigation";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { workspaceId } from "../../shared/workspaces";
 
@@ -194,7 +198,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
           call.method === "thread/start" && call.thread.cwd === worktree,
       ),
     ).toBe(true);
-    await page.getByRole("button", { name: /^Changes\b/ }).click();
+    await openThreadChanges(page);
     const changes = page.getByRole("region", { name: "Local changes" });
     await expect(changes).toContainText("feature.txt");
     await expect(changes).not.toContainText("main-only.txt");
@@ -239,7 +243,7 @@ test("explicitly selects a recovered worktree, persists the choice, and never sw
       page.locator(".composer-branch-trigger.workspace-trigger.static"),
     ).toHaveText("newer");
     // The sidebar went back to the files to open one; Changes shows them again.
-    await page.getByRole("button", { name: /^Changes\b/ }).click();
+    await openThreadChanges(page);
     await expect(changes).toContainText("newer.txt");
     await expect(page.locator(".project-history")).not.toContainText(
       "Worktree change",

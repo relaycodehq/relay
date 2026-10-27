@@ -22,6 +22,7 @@ import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import {
   openInFileTree,
   openSurface,
+  openThreadChanges,
   panelToggle,
 } from "../fixtures/navigation";
 
@@ -269,7 +270,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       path: "test-results/screenshots/45-thread-start-light.png",
       animations: "disabled",
     });
-    await page.getByRole("button", { name: /^Changes\b/ }).click();
+    await openThreadChanges(page);
     await expect(
       page.getByRole("button", { name: /example.ts/ }).first(),
     ).toBeVisible();
