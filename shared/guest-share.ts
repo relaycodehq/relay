@@ -196,6 +196,9 @@ export interface GuestMessage {
   /** "Host", the agent's name, or the guest whose suggestion it was. */
   from: string;
   role: "user" | "assistant";
+  created: number;
+  /** The agent that answered, for its mark. */
+  provider?: string;
   /** The body as HTML Relay built from its markdown; nothing in it runs. */
   html: string;
   streaming: boolean;

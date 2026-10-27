@@ -15,6 +15,17 @@ export const GUEST_SCRIPT = String.raw`(() => {
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  const CHEVRON = "M9 6l6 6-6 6";
+  const icon = (path, cls) => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    if (cls) svg.setAttribute("class", cls);
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    line.setAttribute("d", path);
+    svg.append(line);
+    return svg;
+  };
   // A browser blocking storage throws on reading it; the page then just doesn't remember.
   const stored = (key) => {
     try {
@@ -71,12 +82,15 @@ export const GUEST_SCRIPT = String.raw`(() => {
     const activities = m.activities || [];
     box.hidden = !activities.length;
     const reading = new Set(Array.from(box.querySelectorAll(".call"), (row) => row.querySelector("pre") ? row.dataset.id : null));
-    box.replaceChildren(el("summary", "", activities.length + (activities.length === 1 ? " tool call" : " tool calls")));
+    const summary = el("summary");
+    summary.append(icon(CHEVRON, "chevron"), el("span", "", activities.length + (activities.length === 1 ? " tool call" : " tool calls")));
+    const rows = el("div", "calls");
+    box.replaceChildren(summary, rows);
     for (const a of activities) {
       const row = el("div", "call " + a.status);
       row.dataset.id = a.id;
       const line = el("div", "call-line" + (a.detail ? " open" : ""));
-      line.append(el("span", "kind", kindLabel[a.kind] || a.kind), document.createTextNode(a.label));
+      line.append(el("span", "kind", kindLabel[a.kind] || a.kind), el("span", "label", a.label));
       row.append(line);
       if (a.detail) {
         line.addEventListener("click", () => {
@@ -86,7 +100,7 @@ export const GUEST_SCRIPT = String.raw`(() => {
         });
         if (reading.has(a.id)) showDetail(row, m, a);
       }
-      box.append(row);
+      rows.append(row);
     }
   }
 
@@ -98,12 +112,26 @@ export const GUEST_SCRIPT = String.raw`(() => {
     box.append(...added.map(renderFrame));
   }
 
+  // Pictures sent with a message are thumbnails, as in Relay; a click shows one whole.
   function fillShots(box, m) {
-    box.hidden = !((m.images && m.images.length) || m.preview);
-    box.replaceChildren();
-    for (const id of m.images || []) { const img = el("img"); img.dataset.media = id; img.alt = ""; box.append(img); }
-    if (m.preview) { box.append(el("p", "", "Browser preview")); const img = el("img"); img.dataset.media = m.preview; img.alt = "Browser preview"; box.append(img); }
+    const ids = (m.images || []).concat(m.preview ? [m.preview] : []);
+    box.hidden = !ids.length;
+    box.replaceChildren(...ids.map((id) => {
+      const button = el("button", "message-image");
+      button.type = "button";
+      button.title = id === m.preview ? "Browser preview" : "Open picture";
+      const img = el("img");
+      img.dataset.media = id;
+      img.alt = id === m.preview ? "Browser preview" : "";
+      button.append(img);
+      return button;
+    }));
     hydrate(box);
+  }
+
+  function showPicture(src) {
+    $("lightbox-image").src = src;
+    $("lightbox").showModal();
   }
 
   function renderFrame(r) {
@@ -141,9 +169,22 @@ export const GUEST_SCRIPT = String.raw`(() => {
     if (msg.relayRender === "link" && /^https?:/i.test(msg.href)) window.open(msg.href, "_blank", "noopener,noreferrer");
   });
 
+  // Laid out as Relay's thread is: what the user sent sits in a box under its
+  // pictures; an answer folds its tool calls above its text.
   function messageNode(m) {
     const li = el("li");
-    li.append(el("div", "msg-from", m.from), el("details", "calls"), el("div", "renders"), el("div", "msg-body"), el("div", "shots"));
+    const head = el("header");
+    const name = el("strong");
+    const mark = m.provider && data.marks[m.provider];
+    if (mark) { const glyph = el("span", "glyph"); glyph.innerHTML = mark; name.append(glyph); }
+    name.append(document.createTextNode(m.from));
+    head.append(name);
+    if (m.created) head.append(el("time", "", new Date(m.created).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })));
+    const body = el("div", "body");
+    body.append(el("div", "markdown"));
+    const shots = el("div", "message-images");
+    if (m.role === "user") li.append(head, shots, body);
+    else li.append(head, el("details", "agent-activity"), el("div", "renders"), body, shots);
     updateMessage(li, m, undefined);
     return li;
   }
@@ -152,11 +193,13 @@ export const GUEST_SCRIPT = String.raw`(() => {
   function updateMessage(li, m, before) {
     const same = (key) => before && JSON.stringify(before[key]) === JSON.stringify(m[key]);
     const part = (cls) => li.querySelector(":scope > ." + cls);
-    li.className = "msg " + m.role + (m.streaming ? " streaming" : "");
-    if (!same("activities")) fillCalls(part("calls"), m);
-    if (!same("renders")) fillRenders(part("renders"), m.renders || []);
-    if (!before || before.html !== m.html) { const body = part("msg-body"); body.innerHTML = m.html; hydrate(body); }
-    if (!same("images") || !same("preview")) fillShots(part("shots"), m);
+    li.className = "message " + m.role + (m.streaming ? " streaming" : "");
+    const calls = part("agent-activity");
+    if (calls && !same("activities")) fillCalls(calls, m);
+    const renders = part("renders");
+    if (renders && !same("renders")) fillRenders(renders, m.renders || []);
+    if (!before || before.html !== m.html) { const body = li.querySelector(".markdown"); body.innerHTML = m.html; hydrate(body); }
+    if (!same("images") || !same("preview")) fillShots(part("message-images"), m);
   }
 
   function renderMessages(changed, before) {
@@ -233,8 +276,8 @@ export const GUEST_SCRIPT = String.raw`(() => {
   function end() {
     ended = true;
     document.querySelector("main").hidden = true;
-    document.querySelector("header.top").hidden = true;
-    $("suggest").hidden = true;
+    document.querySelector("header.titlebar").hidden = true;
+    document.querySelector(".dock").hidden = true;
     $("ended").hidden = false;
   }
 
@@ -283,6 +326,14 @@ export const GUEST_SCRIPT = String.raw`(() => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("suggest").requestSubmit();
   });
   $("viewer-close").addEventListener("click", () => $("viewer").close());
+  $("lightbox").addEventListener("click", () => $("lightbox").close());
+  // A picture in a message or an answer opens whole; a video plays where it is.
+  $("messages").addEventListener("click", (e) => {
+    const img = e.target.closest(".message-image img, .message-image, .markdown img");
+    if (!img) return;
+    const picture = img.tagName === "IMG" ? img : img.querySelector("img");
+    if (picture && picture.src) showPicture(picture.src);
+  });
 
   renderHead();
   renderFiles();

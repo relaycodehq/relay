@@ -1,6 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ClaudeAI, OpenAI, OpenCode } from "./ProviderLogos";
+import { providerMarks } from "../../../shared/provider-marks";
+import { CursorGlyph } from "./CursorGlyph";
+import {
+  Amp,
+  Antigravity,
+  ClaudeAI,
+  Meta,
+  OpenAI,
+  OpenCode,
+} from "./ProviderLogos";
 
 const svgOf = (markup: string) => markup.match(/^<svg[^>]*>/)![0];
 
@@ -25,4 +34,20 @@ describe("provider logos", () => {
       expect(svg).not.toMatch(/\b(width|height)=/);
     },
   );
+
+  it("match the marks the guest page draws", () => {
+    const logos = {
+      codex: OpenAI,
+      claude: ClaudeAI,
+      opencode: OpenCode,
+      cursor: CursorGlyph,
+      muse: Meta,
+      amp: Amp,
+      antigravity: Antigravity,
+    };
+    for (const [provider, Logo] of Object.entries(logos))
+      expect(renderToStaticMarkup(<Logo />), provider).toBe(
+        providerMarks[provider as keyof typeof providerMarks],
+      );
+  });
 });

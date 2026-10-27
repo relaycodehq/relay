@@ -5,25 +5,26 @@ import {
   withSeries,
   type RenderTheme,
 } from "../../shared/html-render";
+import { providerMarks } from "../../shared/provider-marks";
 import { GUEST_SCRIPT } from "./page-script";
 import { GUEST_STYLE } from "./page-style";
 
-/** The colours a show_html page gets on a dark guest page. */
+/** The colours a show_html page gets on a dark guest page: Relay's dark theme. */
 const DARK_RENDER_THEME: RenderTheme = {
   scheme: "dark",
   vars: {
     ...LIGHT_RENDER_THEME.vars,
-    "--text": "#e7e7ea",
+    "--text": "#e1e1e5",
     "--muted": "#94949f",
-    "--surface": "#1f1f23",
-    "--background": "#1f1f23",
-    "--border": "#2e2e33",
-    "--hover": "#2a2a30",
-    "--accent": "#a3a3e6",
-    "--accent-soft": "#2b2b40",
-    "--accent-foreground": "#18181b",
-    "--code-background": "#232328",
-    "--code-foreground": "#e7e7ea",
+    "--surface": "#1e1e21",
+    "--background": "#1e1e21",
+    "--border": "#37373d",
+    "--hover": "#34343c",
+    "--accent": "#aaa8e5",
+    "--accent-soft": "#32313f",
+    "--accent-foreground": "#22222a",
+    "--code-background": "#1e1e21",
+    "--code-foreground": "#dedee6",
   },
 };
 
@@ -51,10 +52,11 @@ const CSP = [
 
 /** The page a guest's browser opens, with the thread in it so it shows at once. */
 export function guestPage(data: { view: GuestPageView; known: string }) {
-  const json = JSON.stringify({ ...data, themes: THEMES }).replace(
-    /</g,
-    "\\u003c",
-  );
+  const json = JSON.stringify({
+    ...data,
+    themes: THEMES,
+    marks: providerMarks,
+  }).replace(/</g, "\\u003c");
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -65,23 +67,27 @@ export function guestPage(data: { view: GuestPageView; known: string }) {
 <style>${GUEST_STYLE}</style>
 </head>
 <body>
-<header class="top"><div class="top-inner">
-  <div class="top-title"><h1 id="title"></h1><p>Shared from Relay. Suggest messages; the person who shared it decides what reaches the agent.</p></div>
-  <a id="continue" class="continue" title="Carry this conversation on in a new thread of your own Relay">Continue in Relay</a>
+<header class="titlebar"><div class="column titlebar-inner">
+  <span class="crumb">Shared thread</span><span class="crumb-sep">/</span><h1 id="title"></h1>
+  <a id="continue" class="button" title="Carry this conversation on in a new thread of your own Relay">Continue in Relay</a>
 </div></header>
-<main>
+<main class="column">
   <ol id="messages" class="messages" aria-live="polite"></ol>
-  <p id="working" hidden>The agent is working…</p>
+  <p id="working" hidden><span class="working-dot"></span>Working…</p>
   <section id="files" class="files" hidden><h2>Files the agent changed and read</h2><ul id="file-list"></ul></section>
   <section id="yours" class="yours" hidden><h2>Your suggestions</h2><ul id="suggestions"></ul></section>
 </main>
-<form id="suggest" class="suggest">
-  <input id="name" maxlength="40" placeholder="Your name" autocomplete="name" required>
-  <textarea id="text" rows="3" maxlength="4000" placeholder="Suggest a message…" required></textarea>
-  <div class="row"><span id="status" role="status"></span><button id="send" class="primary" type="submit">Suggest</button></div>
-</form>
+<div class="dock"><form id="suggest" class="composer column">
+  <textarea id="text" rows="3" maxlength="4000" placeholder="Suggest a message. The person who shared this decides what reaches the agent." required></textarea>
+  <div class="composer-tools">
+    <label class="name"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg><input id="name" maxlength="40" placeholder="Your name" autocomplete="name" required></label>
+    <span id="status" role="status"></span>
+    <button id="send" class="send" type="submit" aria-label="Suggest" title="Suggest (Ctrl/⌘ Enter)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
+  </div>
+</form></div>
 <dialog id="viewer" class="viewer"><div class="viewer-head"><span id="viewer-path"></span><button id="viewer-close" type="button">Close</button></div><div id="viewer-body" class="viewer-body"></div></dialog>
-<p id="ended" hidden>This link has ended.</p>
+<dialog id="lightbox" class="lightbox"><img id="lightbox-image" alt=""></dialog>
+<div id="ended" hidden><h2>This link has ended</h2><p>The person who shared this thread stopped sharing it, or it ran out.</p></div>
 <script type="application/json" id="relay-guest-data">${json}</script>
 <script>${GUEST_SCRIPT}</script>
 </body>

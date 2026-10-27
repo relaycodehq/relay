@@ -206,6 +206,8 @@ function guestMessage(
     id: m.id,
     from: guestAuthor(m),
     role: m.role,
+    created: m.created,
+    ...(m.role === "assistant" && m.provider ? { provider: m.provider } : {}),
     html,
     streaming: m.status === "streaming",
     ...(activities.length ? { activities } : {}),
