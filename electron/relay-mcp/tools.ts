@@ -390,13 +390,13 @@ export const relayToolSchemas = {
         .max(200)
         .optional()
         .describe(
-          "The new branch's name. Left out: Relay names it after the thread, relay/….",
+          "The branch to work on. An existing one joins the worktree it's checked out in, which another thread or the user may be working in, or gets one of its own. A new name makes that branch. Left out: Relay names a new one after the thread, relay/….",
         ),
       uncommitted: z
         .boolean()
         .optional()
         .describe(
-          "Start the worktree with a copy of the project folder's uncommitted edits, which stay in the folder too. Left out: from the last commit only.",
+          "Start a new branch's worktree with a copy of the project folder's uncommitted edits, which stay in the folder too. Not for an existing branch. Left out: from the last commit only.",
         ),
     })
     .strict(),
@@ -661,7 +661,7 @@ const descriptions: Record<RelayToolName, string> = {
   list_agents:
     'The agents you can start threads on here, with the models each offers (id, name, efforts, fast), and which agents can\'t run here and why. `fast` says the model offers Fast mode. `you` marks your own. Check it before start_threads when the user names an agent or model, which may be either: "sol" or "astra" can be a model\'s short name, not an agent.',
   move_to_worktree:
-    "Move this thread out of the project folder into a Git worktree of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
+    "Move this thread out of the project folder into a Git worktree: one of its own on a new branch, which Relay makes, shows and later cleans up like any thread's worktree, or the existing worktree of a branch you name, shared with whoever works there. Use it whenever you'd make a worktree to work in, instead of `git worktree add`: Relay doesn't follow a worktree you make yourself. Your shell and file tools keep starting in the project folder until this answer ends, so work in the returned folder by absolute path or `cd` into it; from your next message on you start there. Returns the folder, the branch, the worktree's environment variables, and the project's setup command for a new worktree, if it has one, which you run there yourself.",
   deep_review:
     "Start a deep review round in this thread: several agents review the changes on their own, each in a thread of its own listed under this one, using a review setup the user saved. Use it when the user asks for a deep review, another round, or several rounds. It returns at once: end your answer then. Once every reviewer has reported, their reports come to you here as your next turn, to verify, rank and publish as findings; the user's messages wait until then. One round at a time; for several rounds, fix what the user picked, then call it again.",
   list_review_setups:

@@ -1,12 +1,17 @@
 // A thread's agent moving it into a worktree in the middle of its answer.
 
+import type { ChatWorktree, ProjectChat } from "../../shared/projects";
+import { threadsSharing } from "../../shared/projects";
 import { sentAgent } from "../../shared/recipient";
 import { noteWorkspaceMove } from "../../shared/workspace-moves";
 import {
   copyIntoWorktree,
   createWorktree,
+  existingBranch,
+  fetchStart,
   newBranchProblem,
 } from "../git/worktrees";
+import { carriedOn } from "./carry-on";
 import type { ChatCore } from "./core";
 import type { WorktreeSetup } from "./worktree-setup";
 import type { ThreadWorktrees } from "./worktrees";
@@ -15,6 +20,12 @@ import type { ThreadWorktrees } from "./worktrees";
 export interface WorktreeRequest {
   branch?: string;
   uncommitted?: boolean;
+}
+
+/** What a thread's other agents hear came into the worktree with it; see `turn-prompt`. */
+function whatCameAlong(copy: boolean | undefined, existing: boolean) {
+  if (existing) return { joined: true as const };
+  return copy ? { copied: true as const } : { fresh: true as const };
 }
 
 export class WorktreeEntry {
@@ -27,14 +38,15 @@ export class WorktreeEntry {
   ) {}
 
   /**
-   * Moves a project-folder thread into a worktree of its own while its agent
-   * answers, at the agent's asking: from the checkout's commit, with a copy
-   * of its uncommitted edits when `uncommitted`. Unlike `move`, the project
-   * folder keeps its edits, since other threads may be at work there. The
-   * agent runs the project's setup itself, as nothing else may run in the
-   * middle of its answer.
+   * Moves a project-folder thread into a worktree while its agent answers,
+   * at the agent's asking: the worktree of an existing `branch`, shared with
+   * whoever works there, or one of its own from the checkout's commit, with
+   * a copy of its uncommitted edits when `uncommitted`. Unlike `move`, the
+   * project folder keeps its edits, since other threads may be at work
+   * there. The agent runs the setup of a folder Relay made itself, as
+   * nothing else may run in the middle of its answer.
    */
-  enter(id: string, { branch, uncommitted: copy }: WorktreeRequest) {
+  enter(id: string, request: WorktreeRequest) {
     return this.core.control(id, async () => {
       const chat = await this.core.storage.load(id);
       if (chat.worktree)
@@ -52,32 +64,12 @@ export class WorktreeEntry {
           `This thread works in ${chat.activeAgentWorktree.path}, a worktree it made earlier. The user can switch it back to the project folder first.`,
         );
       const root = await this.core.projects.root(chat.projectId);
-      const problem = branch && (await newBranchProblem(root, branch));
-      if (problem) throw new Error(problem);
-      const { worktree, copied } = await this.repo.inRepo(root, async () =>
-        copy
-          ? await copyIntoWorktree(
-              root,
-              this.folder,
-              chat.title,
-              root,
-              id,
-              branch,
-            )
-          : {
-              worktree: await createWorktree(
-                root,
-                this.folder,
-                chat.title,
-                branch ? { named: branch } : undefined,
-              ),
-              copied: 0,
-            },
+      const { copied, existing, freshFolder } = await this.enteredWorktree(
+        chat,
+        root,
+        request,
       );
-      const { included: _, ...made } = worktree;
-      chat.worktree = { ...made, setup: "done" };
-      chat.branch = made.branch;
-      delete chat.commit;
+      const made = { ...chat.worktree!, path: chat.worktree!.path! };
       // The agent that asked knows; the thread's other agents hear it next time.
       const active = this.core.active.get(id);
       const caller = active?.input ?? chat.lastInput;
@@ -97,20 +89,100 @@ export class WorktreeEntry {
           from: root,
           to: made.path,
           owed,
-          ...(copy ? { copied: true as const } : { fresh: true as const }),
+          ...whatCameAlong(request.uncommitted, existing),
         };
       await this.core.storage.save(chat);
       await active?.moved?.(made.path);
-      const setup = this.setup.command(chat);
+      // Whoever made the folder sets it up; the agent waits for a run going.
+      if (!freshFolder) await this.setup.settled(made.path);
+      const sharing = threadsSharing(this.core.store.get().chats ?? [], chat);
+      const setup = freshFolder && this.setup.command(chat);
       const env = await this.setup.env(chat);
       return {
         folder: made.path,
         branch: made.branch,
         ...(made.from ? { from: made.from } : {}),
-        ...(copy ? { uncommittedFilesCopied: copied } : {}),
+        ...(made.wanted ? { notOnWantedBranch: made.wanted.problem } : {}),
+        ...(sharing.length
+          ? { sharedWithThreads: sharing.map((c) => c.title) }
+          : {}),
+        ...(request.uncommitted ? { uncommittedFilesCopied: copied } : {}),
         ...(setup ? { setupCommand: setup } : {}),
         ...(Object.keys(env).length ? { environment: env } : {}),
       };
     });
+  }
+
+  /**
+   * Puts the thread in the worktree `enter` found or made for it, saved
+   * before the repository's queue lets go, so a thread dropping that folder
+   * sees this one in it. An existing branch goes wherever carrying it on
+   * goes: the folder a thread or the user has it checked out in, else a new
+   * one on it. `freshFolder` when Relay made the folder just now.
+   */
+  private async enteredWorktree(
+    chat: ProjectChat,
+    root: string,
+    { branch, uncommitted: copy }: WorktreeRequest,
+  ) {
+    const found = branch ? await existingBranch(root, branch) : undefined;
+    if (branch && found) {
+      if (found.inCheckout)
+        throw new Error(
+          `${found.branch} is the project folder's own branch, where this thread works already.`,
+        );
+      if (copy)
+        throw new Error(
+          `${branch} already exists, and joining it brings no uncommitted edits along. Leave out uncommitted to work on it.`,
+        );
+      // Outside the queue, like a thread carrying a branch on with its first message.
+      await fetchStart(root, { on: branch });
+      return this.repo.inRepoSettled(root, async () => {
+        const worktree = await carriedOn(
+          this.core,
+          this.folder,
+          chat,
+          root,
+          branch,
+          chat.title,
+        );
+        await this.claim(chat, worktree);
+        const freshFolder = worktree.setup === "pending";
+        return { copied: 0, existing: true, freshFolder };
+      });
+    }
+    const problem = branch && (await newBranchProblem(root, branch));
+    if (problem) throw new Error(problem);
+    return this.repo.inRepo(root, async () => {
+      const { worktree, copied } = copy
+        ? await copyIntoWorktree(
+            root,
+            this.folder,
+            chat.title,
+            root,
+            chat.id,
+            branch,
+          )
+        : {
+            worktree: await createWorktree(
+              root,
+              this.folder,
+              chat.title,
+              branch ? { named: branch } : undefined,
+            ),
+            copied: 0,
+          };
+      await this.claim(chat, worktree);
+      return { copied, existing: false, freshFolder: true };
+    });
+  }
+
+  /** Saves the thread as working in `worktree`; its agent runs a new folder's setup itself. */
+  private async claim(chat: ProjectChat, worktree: ChatWorktree) {
+    const { included: _, ...kept } = worktree;
+    chat.worktree = { ...kept, setup: "done" };
+    chat.branch = kept.branch;
+    delete chat.commit;
+    await this.core.storage.save(chat);
   }
 }

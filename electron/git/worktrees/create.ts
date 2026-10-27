@@ -271,6 +271,29 @@ async function carryOnPlace(
 }
 
 /**
+ * The branch `name` is here, as carrying it on takes it: a local one, or a
+ * remote's listed as `origin/…`, under its local name. `inCheckout` when the
+ * project folder has that one checked out. Undefined for a name that's no
+ * branch, and for a revision like `main~1`.
+ */
+export async function existingBranch(root: string, name: string) {
+  const isName = await git(root, [
+    "check-ref-format",
+    `refs/heads/${name}`,
+  ]).then(
+    () => true,
+    () => false,
+  );
+  if (!isName) return undefined;
+  const { sha, branch } = await resolveStart(root, name);
+  if (!sha) return undefined;
+  const at = await checkedOutAt(root, branch);
+  const checkout = (await git(root, ["rev-parse", "--show-toplevel"])).trim();
+  const inCheckout = !!at && (await real(at)) === (await real(checkout));
+  return { branch, inCheckout };
+}
+
+/**
  * Why a new thread's worktree can't start where it was picked to, if it
  * can't: only a branch that's neither here nor on a remote. One that's
  * checked out already, or kept for another thread, is still carried on.

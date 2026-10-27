@@ -29,7 +29,7 @@ import { awaitsReturn } from "./handoff";
 import { chatSummary } from "./storage";
 import { WorktreeSetup } from "./worktree-setup";
 import { carriedOn } from "./carry-on";
-import { WorktreeEntry, type WorktreeRequest } from "./enter-worktree";
+import { WorktreeEntry } from "./enter-worktree";
 import { AgentWorkspaces } from "./agent-workspaces";
 import {
   agentWorktreeUnavailableError,
@@ -68,7 +68,8 @@ export class ThreadWorktrees {
   readonly setup: WorktreeSetup;
   /** The worktrees a project-folder thread's agent made, and the one it works in. */
   readonly agents: AgentWorkspaces;
-  private entry: WorktreeEntry;
+  /** Moves a project-folder thread into a worktree at its agent's asking. */
+  readonly entry: WorktreeEntry;
   /** Worktree changes per repository root; see `inRepo`. */
   private making = keyedQueue();
   /** Worktree folders between their teardown and their removal, per repository root; see `drop`. */
@@ -307,11 +308,13 @@ export class ThreadWorktrees {
   async named(chat: ProjectChat) {
     const worktree = chat.worktree;
     if (!this.unnamed.delete(chat.id) || !worktree?.path) return worktree?.path;
-    // Another thread works there already: moving it would pull the folder from under it.
-    if ((await this.users(chat)).length) return worktree.path;
     const root = await this.core.projects.root(chat.projectId);
-    const moved = await this.inRepo(root, () =>
-      retitleWorktree(root, worktree, chat.title),
+    // In the queue, where a thread joining the folder saves itself: moving
+    // the folder would pull it from under that one.
+    const moved = await this.inRepo(root, async () =>
+      (await this.users(chat)).length
+        ? undefined
+        : await retitleWorktree(root, worktree, chat.title),
     ).catch((error: unknown) => {
       // A worktree with submodules, say, can't move; the message's name stays.
       console.warn("Could not name the worktree after the title:", error);
@@ -644,11 +647,6 @@ export class ThreadWorktrees {
       await this.core.storage.save(chat);
       return chatSummary(chat);
     });
-  }
-
-  /** Moves a project-folder thread into a worktree at its agent's asking; see `WorktreeEntry`. */
-  enter(id: string, request: WorktreeRequest) {
-    return this.entry.enter(id, request);
   }
 
   /** Where the thread's terminal opens: its worktree, or the project's checkout. */
