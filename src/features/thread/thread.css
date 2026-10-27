@@ -294,7 +294,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 30px 32px 12vh;
+  padding: 30px calc(32px + var(--thread-side-room, 0px)) 12vh 32px;
 }
 .thread-introduction {
   width: 100%;
@@ -322,9 +322,10 @@
 }
 .project-chat:not(.empty-thread) .project-messages {
   /* The same room each side, the scrollbar's 6px counted; the prompt rail
-     (thread-timeline.css) sits in the left one. */
+     (thread-timeline.css) sits in the left one. --thread-side-room is what
+     a card docked on the right takes (running-tasks.css). */
   padding-left: 50px;
-  padding-right: 44px;
+  padding-right: calc(44px + var(--thread-side-room, 0px));
   padding-bottom: calc(var(--composer-dock-height, 0px) + 12px);
 }
 .thread-bottom-composer {
@@ -337,7 +338,7 @@
   z-index: 2;
   /* The bottom leaves room under the composer for the line a thread on
      another computer shows there (`.composer-below`). */
-  padding: 28px 22px 30px 28px;
+  padding: 28px calc(22px + var(--thread-side-room, 0px)) 30px 28px;
   pointer-events: none;
   background: linear-gradient(
     to bottom,
@@ -483,10 +484,10 @@
 }
 @media (max-width: 1200px) {
   .thread-start {
-    padding: 24px 22px 9vh;
+    padding: 24px calc(22px + var(--thread-side-room, 0px)) 9vh 22px;
   }
   .thread-bottom-composer {
-    padding: 28px 9px 18px 15px;
+    padding: 28px calc(9px + var(--thread-side-room, 0px)) 18px 15px;
   }
   .project-messages {
     padding: 10px 20px;

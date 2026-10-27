@@ -36,6 +36,11 @@
 .running-tasks.collapsed:focus-within {
   background: color-mix(in srgb, var(--inbox) 80%, transparent);
 }
+/* Open beside the thread, it takes its room from the thread instead of
+   covering it: its width, its inset and a gap, less the thread's own 50px. */
+.workspace-pane:has(.running-tasks.docked) {
+  --thread-side-room: 258px;
+}
 /* A selection dragged under it would otherwise end in its text. */
 .workspace-pane:has(.project-messages:active) .running-tasks {
   pointer-events: none;

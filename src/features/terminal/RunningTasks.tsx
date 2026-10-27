@@ -5,20 +5,21 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown } from "lucide-react";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
-import { useChatWidth } from "../../lib/chat-width";
 import { useWindowFocused } from "../../lib/window-focus";
 import { ComputerSection } from "./ComputerSection";
 import { useCostHistory } from "./TaskLoad";
 import { TaskList } from "./TaskList";
 import "./running-tasks.css";
 
-/** The open card's width and inset from the pane's edge (running-tasks.css), and the gap it keeps from the text. */
-const CARD = 280 + 14 + 8;
+/** The open card's width and inset from the pane's edge, and the gap it keeps from the text (running-tasks.css). */
+const CARD = 280 + 14 + 14;
+/** The thread's own padding on the left (.project-messages). */
+const GUTTER = 50;
+/** The narrowest the thread's column gets beside the open card; a narrower pane folds the card. */
+const NARROWEST_COLUMN = 560;
 
-/** Whether the open card fits beside the thread's column, which centres in
- * the pane at --thread-width, instead of over its text. */
+/** Whether the pane is wide enough to keep the card open beside the thread, which makes room for it. */
 function useRoomBeside(card: HTMLElement | null) {
-  const column = useChatWidth();
   const [pane, setPane] = useState(0);
   // Measured before paint, so the card doesn't open for a frame and fold.
   useLayoutEffect(() => {
@@ -29,7 +30,7 @@ function useRoomBeside(card: HTMLElement | null) {
     observer.observe(parent);
     return () => observer.disconnect();
   }, [card]);
-  return pane - column >= 2 * CARD;
+  return pane - GUTTER - CARD >= NARROWEST_COLUMN;
 }
 
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
@@ -147,6 +148,8 @@ export function RunningTasks({
   // the pane, empty, so its room can still be measured.
   if (collapsed && !list.length)
     return <aside ref={setCard} className="running-tasks" hidden />;
+  // Open beside the thread, not over it: the thread makes room.
+  const docked = roomy && !collapsed;
   const toggle = () =>
     morph(card, collapsed ? "open" : "close", () =>
       roomy ? setFolded(!folded) : setPeeking(!peeking),
@@ -154,7 +157,7 @@ export function RunningTasks({
   return (
     <aside
       ref={setCard}
-      className={`running-tasks${collapsed ? " collapsed" : ""}`}
+      className={`running-tasks${collapsed ? " collapsed" : ""}${docked ? " docked" : ""}`}
       aria-label="Running processes"
     >
       {collapsed ? (
