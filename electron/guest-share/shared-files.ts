@@ -53,6 +53,7 @@ export async function sharedFiles(
   const seen = new Set<string>();
   /** Files already picked, by where their paths lead. */
   const pickedReal = new Set<string>();
+  const paths = new GuestPaths();
   let bytes = 0;
   for (const { absolute, changed } of candidates(messages, root)) {
     if (picked.length >= MAX_SHARED_FILES) break;
@@ -64,14 +65,18 @@ export async function sharedFiles(
     const real = await realpath(absolute).catch(() => undefined);
     if (!real || pickedReal.has(real) || mayHoldSecrets(real)) continue;
     if (!realRoots.some((r) => r && inside(r, real))) continue;
+    const inPlace = relative(place.root, absolute).split(sep).join("/");
+    const path = place.label ? `${place.label}/${inPlace}` : inPlace;
+    // A repository named like a folder of the thread's own can put two files on one path.
+    if (!paths.fit(path)) continue;
     pickedReal.add(real);
     const size = await textFileSize(real);
     if (size === undefined || bytes + size > MAX_SHARED_BYTES) continue;
     bytes += size;
-    const path = relative(place.root, absolute).split(sep).join("/");
+    paths.add(path);
     picked.push({
       id: fileId(absolute),
-      path: place.label ? `${place.label}/${path}` : path,
+      path,
       absolute,
       real,
       bytes: size,
@@ -150,6 +155,34 @@ function placeLabels(roots: string[]) {
   );
 }
 
+/**
+ * The shared files' paths as a guest's Relay saves them: no two on one file,
+ * nor a file where another's folder goes. Case is ignored, as macOS and
+ * Windows ignore it.
+ */
+class GuestPaths {
+  private files = new Set<string>();
+  private folders = new Set<string>();
+
+  fit(path: string) {
+    const key = path.toLowerCase();
+    if (this.files.has(key) || this.folders.has(key)) return false;
+    return !foldersOf(key).some((folder) => this.files.has(folder));
+  }
+
+  add(path: string) {
+    const key = path.toLowerCase();
+    this.files.add(key);
+    for (const folder of foldersOf(key)) this.folders.add(folder);
+  }
+}
+
+/** `a/b/c.ts` → `a`, `a/b`. */
+const foldersOf = (path: string) => {
+  const parts = path.split("/");
+  return parts.slice(1).map((_, i) => parts.slice(0, i + 1).join("/"));
+};
+
 const inside = (root: string, path: string) => {
   const rel = relative(root, path);
   const above = rel === ".." || rel.startsWith(`..${sep}`);
@@ -180,11 +213,16 @@ export function mayHoldSecrets(path: string) {
   );
 }
 
+/** Agents cut a tool call's line at this many characters. */
+const CUT_LABEL_CHARS = 500;
+
 /**
  * Whether a tool call's line names such a file: a read of `.env`, or a
  * command like `cat ~/.ssh/config`. Its output then stays off the guest page.
  */
 export function touchesSecrets(label: string) {
+  // A cut line may name one past the cut.
+  if (label.length >= CUT_LABEL_CHARS) return true;
   // Shell operators can sit right against a name: `cat .env|head`, `--env-file=.env`.
   const words = label.match(/[^\s|&;<>()`'"=:$,{}]+/g) ?? [];
   return words.some((word) => mayHoldSecrets(word) || globReachesSecrets(word));
@@ -206,10 +244,10 @@ const SECRET_SAMPLES = [
   "server.key",
 ];
 
-/** Whether a glob's file name could match a key file. A bare `*` isn't counted, as `.` isn't. */
+/** Whether a glob's file name could match a key file; a bare `*` matches `credentials`. */
 function globReachesSecrets(word: string) {
   const name = word.split(/[\\/]/).at(-1) ?? "";
-  if (!/[*?[]/.test(name) || /^[*?]+$/.test(name)) return false;
+  if (!/[*?[]/.test(name)) return false;
   const pattern = new RegExp(
     `^${name
       .replace(/\[[^\]]*\]/g, "?")

@@ -135,7 +135,11 @@ function parseJson(text: string): unknown {
   }
 }
 
-/** Writes the files under `folder`; the paths written, skipping any that would land outside it. */
+/**
+ * Writes the files under `folder`; the paths written. One that would land
+ * outside it, on a file already written, or where a folder or file is in the
+ * way is skipped: the rest of the conversation still comes over.
+ */
 async function saveFiles(folder: string, files: GuestBundle["files"]) {
   const saved: string[] = [];
   for (const file of files) {
@@ -143,11 +147,20 @@ async function saveFiles(folder: string, files: GuestBundle["files"]) {
     const rel = relative(folder, target);
     const above = rel === ".." || rel.startsWith(`..${sep}`);
     if (!rel || above || isAbsolute(rel)) continue;
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, file.content, { mode: 0o600 });
-    saved.push(rel);
+    if (await writeNew(target, file.content)) saved.push(rel);
   }
   return saved;
+}
+
+/** Writes a file that isn't there yet; false when something is in its way. */
+async function writeNew(target: string, content: string) {
+  try {
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, content, { mode: 0o600, flag: "wx" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

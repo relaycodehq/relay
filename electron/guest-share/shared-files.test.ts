@@ -53,6 +53,22 @@ async function folder(files: Record<string, string>) {
 }
 
 describe("sharedFiles", () => {
+  it("leaves out a file whose path another one already has", async () => {
+    const root = await folder({ "app/config.ts": "own" });
+    const app = join(await folder({ "app/config.ts": "other" }), "app");
+    const files = await sharedFiles(
+      [
+        answer({
+          changes: [{ path: "app/config.ts", additions: 1, deletions: 0 }],
+          elsewhere: [{ root: app, paths: ["config.ts"] }],
+        }),
+      ],
+      root,
+    );
+    expect(files.map((f) => f.path)).toEqual(["app/config.ts"]);
+    expect(files[0]!.absolute).toBe(join(root, "app/config.ts"));
+  });
+
   it("shares changed files first, then read ones, each once", async () => {
     const root = await folder({
       "src/a.ts": "a",
@@ -220,6 +236,9 @@ describe("touchesSecrets", () => {
       "docker run --env-file=.env app",
       "grep API .env*",
       "cat id_*",
+      "cat *",
+      "grep -rn TODO *",
+      `${"echo ok && ".repeat(50)}cat .env`.slice(0, 500),
     ])
       expect(touchesSecrets(label), label).toBe(true);
     for (const label of [
@@ -227,8 +246,8 @@ describe("touchesSecrets", () => {
       "cat .env.example",
       "rg API_KEY src",
       "/repo/src/env.ts",
-      "grep -rn TODO *",
       "ls src/*.ts",
+      "ls .*.ts",
     ])
       expect(touchesSecrets(label), label).toBe(false);
   });

@@ -77,6 +77,25 @@ describe("importGuestThread", () => {
     expect(shared!.note).toContain("Start one from the sidebar");
   });
 
+  it("skips files that would land on one another, and copies the rest", async () => {
+    const files = [
+      { path: "src/empty.tsx", content: "first\n" },
+      { path: "src/empty.tsx", content: "second\n" },
+      { path: "src", content: "a file where the folder is\n" },
+      { path: "README.md", content: "readme\n" },
+    ];
+    const { h, dir, created } = await host(() =>
+      Response.json({ ...bundle, files }),
+    );
+    const thread = await importGuestThread(h, projectId, link);
+    const folder = join(dir, thread.id);
+    expect(await readFile(join(folder, "src/empty.tsx"), "utf8")).toBe(
+      "first\n",
+    );
+    expect(await readFile(join(folder, "README.md"), "utf8")).toBe("readme\n");
+    expect(created[0]!.note).not.toContain('"src"');
+  });
+
   it("asks for the bundle at the link's path, whatever query or fragment it carries", async () => {
     const { h, asked } = await host(() => Response.json(bundle));
     await importGuestThread(h, projectId, `${link}?utm=x#top`);
