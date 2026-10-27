@@ -287,6 +287,12 @@ export async function existingBranch(root: string, name: string) {
   if (!isName) return undefined;
   const { sha, branch } = await resolveStart(root, name);
   if (!sha) return undefined;
+  // A ref like `origin/-Cx` resolves to a local name Git would read as an option.
+  const local = await git(root, ["check-ref-format", "--branch", branch]).then(
+    () => true,
+    () => false,
+  );
+  if (!local) return undefined;
   const at = await checkedOutAt(root, branch);
   const checkout = (await git(root, ["rev-parse", "--show-toplevel"])).trim();
   const inCheckout = !!at && (await real(at)) === (await real(checkout));

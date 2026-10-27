@@ -36,3 +36,9 @@ it("ends for moves made before the thread had a message", () => {
   const early: WorkspaceMove = { at: 1, how: "moved", to: "/wt/a", unasked: true };
   expect(shownWorkspaceMoves([early]).map((m) => m.at)).toEqual([1]);
 });
+
+it("shows a worktree switched to another branch in the folder it was already in", () => {
+  const joined = { ...move(1, "ask", "/wt/panel"), branch: "panel" };
+  const switched = { ...move(2, "next", "/wt/panel"), branch: "feature" };
+  expect(shown([joined, switched])).toEqual([1, 2]);
+});

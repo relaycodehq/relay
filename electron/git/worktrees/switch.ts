@@ -15,7 +15,7 @@ export async function switchWorktree(
   worktree: ChatWorktree & { path: string },
   branch: string,
 ): Promise<ChatWorktree> {
-  await git(worktree.path, ["switch", "--quiet", branch], 60000);
+  await git(worktree.path, ["switch", "--quiet", "--", branch], 60000);
   const { tip, fork, from } = await forkOff(root, branch);
   return {
     path: worktree.path,
@@ -35,13 +35,30 @@ export async function switchWorktree(
 
 /**
  * Deletes the branch Relay made for `worktree` once it's left with no
- * commit of its own and no folder has it checked out: nothing would be
- * lost, and it would only crowd the branch lists.
+ * commit of its own, no folder has it checked out and another ref still
+ * holds where it is: nothing would be lost, and it would only crowd the
+ * branch lists. Run in the repository's queue, so no thread carries it on
+ * meanwhile.
  */
 export async function dropUnusedBranch(root: string, worktree: ChatWorktree) {
   const { branch, head } = worktree;
   if (!branch || !head || worktree.existing || worktree.adopted) return;
   if (await checkedOutAt(root, branch)) return;
   if ((await commitOf(root, `refs/heads/${branch}`)) !== head) return;
+  if (!(await heldElsewhere(root, head, branch))) return;
   await git(root, ["branch", "-D", branch]).catch(() => {});
+}
+
+/** Another branch, remote branch or tag contains `commit`, besides `branch`. */
+async function heldElsewhere(root: string, commit: string, branch: string) {
+  const refs = await git(root, [
+    "for-each-ref",
+    "--format=%(refname)",
+    "--contains",
+    commit,
+    "refs/heads",
+    "refs/remotes",
+    "refs/tags",
+  ]);
+  return refs.split("\n").some((ref) => ref && ref !== `refs/heads/${branch}`);
 }

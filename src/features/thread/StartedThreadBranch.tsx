@@ -7,6 +7,7 @@ import {
 import type { ProjectCheckout } from "./ThreadComposer";
 import type { ThreadWorktree } from "./useThreadWorktree";
 import { pickBranch } from "./worktree-start";
+import { useNavigationLock } from "../../lib/navigation-lock";
 
 /**
  * A started thread's branch. Picking one takes the thread there: the
@@ -26,6 +27,7 @@ export function StartedThreadBranch({
   disabled: boolean;
   onStartThread?: (text: string, send: boolean) => Promise<void>;
 }) {
+  const lock = useNavigationLock();
   if (worktree.inWorktree)
     return (
       <WorktreeBranch
@@ -45,7 +47,7 @@ export function StartedThreadBranch({
     locked: checkout.locked,
     pick: ({ name, create }, list) => {
       // A new branch is made in the checkout, which waits while it's busy.
-      if (create) return !checkout.locked;
+      if (create) return !lock.blocked();
       const next = pickBranch({
         mode: "checkout",
         name,

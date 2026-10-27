@@ -12,7 +12,6 @@ import {
   newBranchProblem,
 } from "../git/worktrees";
 import { carriedOn } from "./carry-on";
-import { chatSummary } from "./chat-summaries";
 import type { ChatCore } from "./core";
 import type { WorktreeSetup } from "./worktree-setup";
 import type { ThreadWorktrees } from "./worktrees";
@@ -103,33 +102,25 @@ export class WorktreeEntry {
   }
 
   /**
-   * Moves a project-folder thread to existing `branch` at the user's
-   * picking: the folder it's checked out in, shared with whoever works
-   * there, or a worktree of its own on it. A folder Relay made just now is
-   * set up with the thread's next message, as with a first one.
+   * Puts `chat` on existing `branch`, picked by the user, wherever carrying
+   * it on goes: the folder it's checked out in, shared with whoever works
+   * there, or a worktree of its own on it, set up with the thread's next
+   * message. Saved in the repository's queue, so a thread dropping that
+   * folder sees this one in it; letting go of where the thread was is the
+   * caller's, under the thread's control. A remote branch was fetched before.
    */
-  join(id: string, branch: string) {
-    return this.core.control(id, async () => {
-      const chat = await this.core.storage.load(id);
-      await this.assertInProjectFolder(chat);
-      await this.core.active.assertIdle(id);
-      const root = await this.core.projects.root(chat.projectId);
-      if (!(await existingBranch(root, branch)))
-        throw new Error(`There's no branch ${branch}.`);
-      await this.enteredWorktree(chat, root, { branch }, "relay");
-      const joined = chat.worktree!;
-      noteWorkspaceMove(chat, {
-        how: "switched",
-        to: joined.path!,
-        ...(joined.branch ? { branch: joined.branch } : {}),
-      });
-      const owed = Object.keys(chat.scopeHeard ?? {});
-      if (owed.length)
-        chat.movedIn = { from: root, to: joined.path!, owed, joined: true };
-      // Live sessions started in the project folder; resumed, they start in the worktree.
-      this.core.sessions.close(id);
-      await this.core.storage.save(chat);
-      return chatSummary(chat);
+  carryOnto(chat: ProjectChat, root: string, branch: string) {
+    return this.repo.inRepoSettled(root, async () => {
+      const worktree = await carriedOn(
+        this.core,
+        this.folder,
+        chat,
+        root,
+        branch,
+        chat.title,
+      );
+      await this.claim(chat, worktree, "relay");
+      return worktree;
     });
   }
 

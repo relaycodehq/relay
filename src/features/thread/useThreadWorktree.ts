@@ -37,6 +37,8 @@ export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 /** Where a summary says the thread works, set even when it's the project folder, so the cached thread lets go of where it was. */
 const workspaceOf = (summary: ChatSummary) => ({
   worktree: summary.worktree,
+  branch: summary.branch,
+  commit: summary.commit,
   activeAgentWorktree: summary.activeAgentWorktree,
   agentWorktrees: summary.agentWorktrees,
 });
@@ -108,10 +110,9 @@ export function useThreadWorktree({
     setStart(branch ? { on: branch } : undefined);
   }, [joining, threads.data]);
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree, poll));
-  const status = query.data;
   // A thread that left its worktree keeps the last status it had there.
-  const live =
-    chat?.worktree && status?.path && !status.removed ? status : undefined;
+  const status = chat?.worktree ? query.data : undefined;
+  const live = status?.path && !status.removed ? status : undefined;
   const agentWorktree = !chat?.worktree ? threadWorktree(chat) : undefined;
   const unavailable = agentWorktreeUnavailable(chat);
   const where = workspaceId(

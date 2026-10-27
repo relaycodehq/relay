@@ -88,7 +88,7 @@ export class ThreadWorktrees {
   ) {
     this.setup = new WorktreeSetup(core);
     this.entry = new WorktreeEntry(core, folder, this.setup, this);
-    this.branches = new BranchSwitch(core, this);
+    this.branches = new BranchSwitch(core, this, councils);
     this.agents = new AgentWorkspaces(core, councils, (root, job) =>
       this.inRepo(root, job),
     );

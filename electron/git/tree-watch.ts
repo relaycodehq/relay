@@ -189,6 +189,19 @@ export class TreeWatch {
     return this.watches.get(where)?.ready ?? false;
   }
 
+  /**
+   * The folder `where` names is another one now, a thread having moved: its
+   * watch, if one is open, watches the new folder, and its owners refresh.
+   */
+  moved(where: string) {
+    const w = this.watches.get(where);
+    if (!w || w.closed) return;
+    w.attempt++;
+    for (const folder of w.folders) folder.close();
+    w.folders = [];
+    w.ready = this.open(where, w, true);
+  }
+
   /** `owner`'s page went: what it showed needs no watching for it. */
   release(owner: object) {
     const was = this.shown.get(owner);

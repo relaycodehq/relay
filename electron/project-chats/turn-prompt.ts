@@ -257,7 +257,7 @@ function movedNote(
   if (movedIn.switched)
     return `The user switched this thread's Git worktree ${to} to branch ${chat.worktree?.branch ?? "another branch"}. Its files are that branch's now; what earlier turns read there may have changed. Re-read files before relying on them.`;
   if (movedIn.joined)
-    return `This conversation now continues in the Git worktree ${to}${onBranch}, an existing branch's, which other threads or the user may be working in too. No uncommitted edits came along: the project folder ${from} keeps its own and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy. Re-read files before relying on them.`;
+    return `This conversation now continues in the Git worktree ${to}${onBranch}, an existing branch's, which other threads or the user may be working in too. No uncommitted edits came along: the folder it worked in before, ${from}, keeps its own and may still be in use. Work only in the worktree from now on; paths under that folder from earlier in this conversation point at the other copy. Re-read files before relying on them.`;
   if (movedIn.copied)
     return `This conversation now continues in its own Git worktree ${to}${onBranch}, made from the project folder ${from} with a copy of its uncommitted edits. The project folder keeps its own files and may still be in use. Work only in the worktree from now on; paths under the project folder from earlier in this conversation point at the other copy.`;
   if (movedIn.fresh)

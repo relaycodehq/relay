@@ -18,6 +18,7 @@ import { idSchema } from "../../shared/validation";
 import { terminalSessionPickSchema } from "../../shared/terminal-sessions";
 import { watchCloses } from "../../shared/watch";
 import { workingPathSchema } from "../../shared/working-tree";
+import { workspaceId } from "../../shared/workspaces";
 import { rememberSent } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
 import { mediaUrl } from "../media";
@@ -306,9 +307,12 @@ export function chatHandlers(ctx: ApiContext) {
     moveProjectChatToWorktree: takes([idSchema], (chatId) =>
       projectChats.worktrees.move(chatId),
     ),
-    projectChatWorkOn: takes([idSchema, z.string().min(1).max(250)], (chatId, branch) =>
-      projectChats.worktrees.branches.workOn(chatId, branch),
-    ),
+    projectChatWorkOn: takes([idSchema, branchSchema], async (chatId, branch) => {
+      const moved = await projectChats.worktrees.branches.workOn(chatId, branch);
+      // The thread's workspace id names its new folder now.
+      ctx.treeWatch?.moved(workspaceId(moved.projectId, chatId));
+      return moved;
+    }),
     revealProjectWorktree: takes([idSchema], (chatId) =>
       openPath(projectChats.worktrees.path(chatId)),
     ),
