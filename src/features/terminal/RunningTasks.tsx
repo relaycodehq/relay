@@ -2,11 +2,11 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { useStoredFlag } from "../../lib/useStoredFlag";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
 import type { ChatSummary, Project } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useWindowFocused } from "../../lib/window-focus";
 import { ComputerSection } from "./ComputerSection";
+import { RunningStripe } from "./RunningStripe";
 import { useCostHistory } from "./TaskLoad";
 import { TaskList } from "./TaskList";
 import "./running-tasks.css";
@@ -35,17 +35,17 @@ function useRoomBeside(card: HTMLElement | null) {
 
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const FROST = "color-mix(in srgb, var(--inbox) 55%, transparent)";
-/** The pill's size when last seen, for a card shrinking to it. */
-let pill = { width: 112, height: 30 };
+/** The stripe's size when last seen, for a card shrinking to it. */
+let stripe = { width: 32, height: 40 };
 
-/** Clips the card's box to the pill in its top right corner. */
-const toPill = (card: DOMRect) =>
-  `inset(0 0 ${card.height - pill.height}px ${card.width - pill.width}px round ${pill.height / 2}px)`;
+/** Clips the card's box to the stripe in its top right corner. */
+const toStripe = (card: DOMRect) =>
+  `inset(0 0 ${card.height - stripe.height}px ${card.width - stripe.width}px round ${stripe.width / 2}px)`;
 
 /**
- * Runs `change` as a morph between the pill and the card, on the element
+ * Runs `change` as a morph between the stripe and the card, on the element
  * itself: a View Transition animates snapshots, which can't blur what's
- * behind them, so the frosted pill went opaque for the length of one.
+ * behind them, so the frosted stripe went opaque for the length of one.
  */
 function morph(
   el: HTMLElement | null,
@@ -62,19 +62,19 @@ function morph(
         { duration, delay, fill: "both", easing: "ease-out" },
       ),
     );
-  // Mid-morph the card wears the pill's glass, so the frost never drops
+  // Mid-morph the card wears the stripe's glass, so the frost never drops
   // out; inline, since React rewrites the class as the shape changes.
   el.style.backdropFilter = "blur(10px) saturate(1.5)";
   const settle = () => el.style.removeProperty("backdrop-filter");
   if (way === "open") {
     const from = el.getBoundingClientRect();
-    pill = { width: from.width, height: from.height };
+    stripe = { width: from.width, height: from.height };
     flushSync(change);
     const card = el.getBoundingClientRect();
     fade([0, 1], 180, 80);
     el.animate(
       [
-        { clipPath: toPill(card), backgroundColor: FROST },
+        { clipPath: toStripe(card), backgroundColor: FROST },
         { clipPath: "inset(0 round 14px)" },
       ],
       { duration: 360, easing: EASE },
@@ -86,7 +86,7 @@ function morph(
   const shrink = el.animate(
     [
       { clipPath: "inset(0 round 14px)" },
-      { clipPath: toPill(card), backgroundColor: FROST },
+      { clipPath: toStripe(card), backgroundColor: FROST },
     ],
     { duration: 300, easing: EASE, fill: "forwards" },
   );
@@ -113,7 +113,7 @@ function useProjectTasks(project: Project, collapsed: boolean) {
     refetchInterval: focused ? 3000 : 30_000,
   });
   const { refetch } = tasks;
-  // One list for both shapes, so the pill and the card count the same tasks.
+  // One list for both shapes, so the stripe and the card count the same tasks.
   useEffect(() => {
     if (costed) void refetch();
   }, [costed, refetch]);
@@ -144,10 +144,6 @@ export function RunningTasks({
   if (roomy && peeking) setPeeking(false);
   const collapsed = roomy ? folded : !peeking;
   const { list, history, costed } = useProjectTasks(project, collapsed);
-  // Folded with nothing running there's no pill to show; the card stays in
-  // the pane, empty, so its room can still be measured.
-  if (collapsed && !list.length)
-    return <aside ref={setCard} className="running-tasks" hidden />;
   // Open beside the thread, not over it: the thread makes room.
   const docked = roomy && !collapsed;
   const toggle = () =>
@@ -161,23 +157,14 @@ export function RunningTasks({
       aria-label="Running processes"
     >
       {collapsed ? (
-        <button
-          type="button"
-          className="running-tasks-header"
-          aria-expanded={false}
-          onClick={toggle}
-        >
-          <span className="running-tasks-heading">Running</span>
-          <span className="running-tasks-count">{list.length}</span>
-          <span className="spacer" />
-          <ChevronDown size={14} className="running-tasks-chevron" />
-        </button>
+        <RunningStripe
+          project={project}
+          running={list.length}
+          onOpen={toggle}
+        />
       ) : (
         <>
-          <ComputerSection
-            project={project}
-            onFold={list.length ? toggle : undefined}
-          />
+          <ComputerSection project={project} onFold={toggle} />
           {!!list.length && (
             <section className="running-tasks-section">
               <div className="running-tasks-label">
