@@ -48,6 +48,9 @@ describe("guest names", () => {
     expect(guestNameSchema.safeParse("host").success).toBe(false);
     expect(guestNameSchema.safeParse(" Claude ").success).toBe(false);
     expect(guestNameSchema.safeParse("\u0421laude").success).toBe(false);
+    expect(guestNameSchema.safeParse("\u041dost").success).toBe(false);
+    expect(guestNameSchema.safeParse("\u0397ost").success).toBe(false);
+    expect(guestNameSchema.safeParse("you").success).toBe(false);
     expect(guestNameSchema.safeParse("Claudette").success).toBe(true);
   });
 });

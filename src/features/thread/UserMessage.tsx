@@ -182,6 +182,14 @@ export function UserMessage({
 /** Who wrote a message; another thread's agent opens that thread on a click. */
 function MessageAuthor({ message: m }: { message: ChatMessage }) {
   const started = useStartedThreads();
+  // Sent by the user, but never to be read as their own words.
+  if (m.guest)
+    return (
+      <>
+        <strong>{m.author}</strong>
+        <small className="message-guest">guest</small>
+      </>
+    );
   const from = m.fromThread
     ? started?.threads.find((c) => c.id === m.fromThread)
     : undefined;

@@ -163,7 +163,7 @@ export const sentBy = (
     ? { author: input.fromThread.name, fromThread: input.fromThread.id }
     : {}),
   ...(input.fromThread?.child ? { fromChild: input.fromThread.child } : {}),
-  ...(input.guest ? { author: input.guest.name } : {}),
+  ...(input.guest ? { author: input.guest.name, guest: true as const } : {}),
   ...(input.scheduled ? { scheduled: input.scheduled } : {}),
   ...(input.secondOpinion ? { secondOpinion: input.secondOpinion } : {}),
   ...(input.pageAnswer ? { pageAnswer: input.pageAnswer } : {}),

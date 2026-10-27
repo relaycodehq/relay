@@ -82,10 +82,30 @@ export const MAX_GUEST_NAME_CHARS = 40;
 // another: no control, format (zero-width, bidi) or separator characters.
 const NAME_BREAKING = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
-/** Cyrillic and Greek letters drawn like Latin ones, so "\u0421laude" can't pass for "Claude". */
+/**
+ * Cyrillic and Greek letters drawn like Latin ones, so "\u0421laude" can't
+ * pass for "Claude" nor "\u041dost" for "Host". Read before case is folded:
+ * Greek \u039d is an N, its small \u03bd a v.
+ */
 const LOOK_ALIKES: Record<string, string> = {
+  "\u0410": "A",
+  "\u0412": "B",
+  "\u0421": "C",
+  "\u0415": "E",
+  "\u041d": "H",
+  "\u0406": "I",
+  "\u0408": "J",
+  "\u041a": "K",
+  "\u041c": "M",
+  "\u041e": "O",
+  "\u0420": "P",
+  "\u0405": "S",
+  "\u0422": "T",
+  "\u0425": "X",
+  "\u0423": "Y",
   "\u0430": "a",
   "\u0441": "c",
+  "\u0501": "d",
   "\u0435": "e",
   "\u04bb": "h",
   "\u0456": "i",
@@ -94,8 +114,23 @@ const LOOK_ALIKES: Record<string, string> = {
   "\u043e": "o",
   "\u0440": "p",
   "\u0455": "s",
+  "\u051d": "w",
   "\u0445": "x",
   "\u0443": "y",
+  "\u0391": "A",
+  "\u0392": "B",
+  "\u0395": "E",
+  "\u0397": "H",
+  "\u0399": "I",
+  "\u039a": "K",
+  "\u039c": "M",
+  "\u039d": "N",
+  "\u039f": "O",
+  "\u03a1": "P",
+  "\u03a4": "T",
+  "\u03a5": "Y",
+  "\u03a7": "X",
+  "\u0396": "Z",
   "\u03b1": "a",
   "\u03b5": "e",
   "\u03b9": "i",
@@ -107,15 +142,19 @@ const LOOK_ALIKES: Record<string, string> = {
   "\u03c5": "u",
 };
 
-/** A name as it reads: compatibility forms folded, case and look-alike letters ignored. */
+/** A name as it reads: compatibility forms folded, look-alike letters and case ignored. */
 const asRead = (name: string) =>
-  [...name.normalize("NFKC").toLowerCase()]
+  [...name.normalize("NFKC")]
     .map((c) => LOOK_ALIKES[c] ?? c)
-    .join("");
+    .join("")
+    .toLowerCase();
 
-/** Whether a guest's message would read as the host's or an agent's under this name. */
+/**
+ * Whether a guest's message would read as the host's or an agent's under
+ * this name. "You" is how the host's own messages are headed.
+ */
 const someoneElsesName = (name: string) =>
-  ["Host", ...agentProviders.map(agentName)].some(
+  ["Host", "You", ...agentProviders.map(agentName)].some(
     (taken) => asRead(taken) === asRead(name),
   );
 

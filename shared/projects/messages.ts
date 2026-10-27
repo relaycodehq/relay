@@ -182,6 +182,8 @@ export interface ChatMessage {
   fromThread?: string;
   /** Local: `fromThread` is one this thread started, and this is what it said; see ChildSays. */
   fromChild?: import("./send").ChildSays;
+  /** Written by a guest the thread is shared with and sent by the user; `author` is the guest's name. */
+  guest?: true;
   /** Local: copied in from a thread someone shared; no agent here wrote or holds it. */
   imported?: true;
   /** Local: Relay sent this message for one of the user's schedules. */
