@@ -23,7 +23,8 @@ export function useThreadPreviewPanel(
     () => setUnseenSince((since) => (unseen ? (since ?? Date.now()) : null)),
     [unseen],
   );
-  const showing = open && panel.front?.surface === "browser";
+  const showing =
+    open && panel.front?.surface === "browser" && !panel.front.page;
   return useMemo(
     () => ({ projectId, showing, unseenSince, show }),
     [projectId, showing, unseenSince, show],

@@ -26,30 +26,41 @@ import "./browser.css";
 
 /**
  * The thread's own browser: its dev server's page in a cookie jar of its
- * own, laid over the panel as a native view.
+ * own, laid over the panel as a native view. Its other pages share the jar.
  */
 export function BrowserSurface({
   projectId,
   chatId,
+  page,
   front,
   draftKey,
 }: {
   projectId: string;
   chatId: string | null;
+  /** Another page beside the thread's own. */
+  page?: string;
   /** Its tab is in front, in an open panel. */
   front: boolean;
   /** The main conversation's draft, even while its composer is hidden. */
   draftKey: string;
 }) {
-  const key = previewKey(projectId, chatId);
+  const key = previewKey(projectId, chatId, page);
   const state = usePreviewState(key);
   const [opening, setOpening] = useState<string | null>(null);
   const inspect = useBrowserAnnotations(key, draftKey, front, setOpening);
   useEffect(() => {
     if (!front) return;
     setOpening(null);
-    openPreview(projectId, chatId).catch((e: Error) => setOpening(e.message));
-  }, [projectId, chatId, front]);
+    openPreview(projectId, chatId, page).catch((e: Error) =>
+      setOpening(e.message),
+    );
+  }, [projectId, chatId, page, front]);
+  const go = (url: string, command?: string) => {
+    setOpening(null);
+    void api
+      .navigatePreview(projectId, chatId, url, { command, page })
+      .catch((e: Error) => setOpening(e.message));
+  };
   const act = usePageActions(key, front && !!state, setOpening);
   const viewport = useRef<HTMLDivElement>(null);
   const place = useCallback(
@@ -70,12 +81,7 @@ export function BrowserSurface({
       <AddressBar
         state={state}
         onAct={act}
-        onGo={(url) => {
-          setOpening(null);
-          void api
-            .navigatePreview(projectId, chatId, url)
-            .catch((e: Error) => setOpening(e.message));
-        }}
+        onGo={go}
         onPick={() => void inspect()}
       />
       {opening && state?.url && (
@@ -98,13 +104,7 @@ export function BrowserSurface({
             state={state}
             failure={opening}
             onAct={act}
-            onStart={(command) => {
-              if (!state?.url) return;
-              setOpening(null);
-              void api
-                .navigatePreview(projectId, chatId, state.url, command)
-                .catch((e: Error) => setOpening(e.message));
-            }}
+            onStart={(command) => state?.url && go(state.url, command)}
           />
         )}
       </div>

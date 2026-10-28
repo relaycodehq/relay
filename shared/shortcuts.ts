@@ -118,11 +118,11 @@ const shortcutCommands = {
         : [combo(mac, "ctrl+Backquote")],
   },
   "new-terminal": {
-    title: "New terminal",
+    title: "New tab",
     group: "General",
     description:
-      "While you type in a terminal, opens another shell beside it, in the drawer or the panel.",
-    keywords: "shell console tab another",
+      "While you type in a terminal, opens another shell beside it, in the drawer or the panel. Elsewhere in the panel, shows what else it can open, as B for another browser page. Inside a page, a browser's usual new-tab key always works too.",
+    keywords: "shell console terminal browser page tab another",
     // Ctrl+T is a shell's own key off macOS, so Ctrl+Shift+` as in VS Code.
     defaults: (mac) => [combo(mac, mac ? "meta+KeyT" : "ctrl+shift+Backquote")],
   },

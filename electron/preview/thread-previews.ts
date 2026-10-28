@@ -15,6 +15,7 @@ import type {
   PreviewBounds,
   PreviewState,
 } from "../../shared/preview";
+import { pageKey, threadKeyOf } from "../../shared/preview";
 import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
@@ -23,12 +24,13 @@ import { pickElement } from "./element-pick";
 import { localPort, webUrl } from "./local-urls";
 import { keepConsole } from "./page-console";
 import { followPage } from "./page-events";
-import { reloadOnKey } from "./page-keys";
+import { browserKeys } from "./page-keys";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
 import { sleep } from "../util/sleep";
 
 /** Where a thread's preview runs and what it loads. */
 export interface PreviewTarget {
+  /** The page's own key; see `pageKey`. */
   key: string;
   projectId: string;
   chatId: string | null;
@@ -149,16 +151,24 @@ export class ThreadPreviews {
   open(
     projectId: string,
     chatId: string | null,
-    url?: string,
-    command?: string,
+    {
+      url,
+      command,
+      page,
+    }: {
+      url?: string;
+      command?: string;
+      /** Another page beside the thread's own. */
+      page?: string;
+    } = {},
   ) {
-    const key = chatId ?? `draft:${projectId}`;
+    const key = pageKey(chatId ?? `draft:${projectId}`, page);
     const pending = this.opening.get(key);
     const controller = pending?.controller ?? new AbortController();
     const result = (pending?.result ?? Promise.resolve())
       .catch(() => {})
       .then(() =>
-        this.openThread(projectId, chatId, url, controller.signal, command),
+        this.openPage(key, projectId, chatId, url, controller.signal, command),
       );
     const entry = { result, controller };
     this.opening.set(key, entry);
@@ -169,7 +179,8 @@ export class ThreadPreviews {
     return result;
   }
 
-  private async openThread(
+  private async openPage(
+    key: string,
     projectId: string,
     chatId: string | null,
     url: string | undefined,
@@ -177,26 +188,26 @@ export class ThreadPreviews {
     command?: string,
   ) {
     signal.throwIfAborted();
-    const previous = this.previews.get(chatId ?? `draft:${projectId}`);
-    const remembered = this.saved?.get(
-      projectId,
-      chatId ?? `draft:${projectId}`,
-    );
+    const previous = this.previews.get(key);
+    const remembered = this.saved?.get(projectId, key);
+    // A page opened beside the thread's own looks at the same server.
+    const threadsFolder = this.previews.get(threadKeyOf(key))?.target.folder;
     const selection = url ?? previous?.selectedUrl ?? remembered?.url;
     const requestedPort = localPort(url ?? "");
     const sameServer =
       requestedPort &&
       requestedPort ===
         localPort(previous?.selectedUrl ?? remembered?.url ?? "");
-    const target = await this.resolve(
+    const resolved = await this.resolve(
       projectId,
       chatId,
       selection,
       !url || sameServer
-        ? (previous?.target.folder ?? remembered?.folder)
+        ? (previous?.target.folder ?? remembered?.folder ?? threadsFolder)
         : undefined,
       remembered,
     );
+    const target = { ...resolved, key };
     signal.throwIfAborted();
     if (command !== undefined) {
       if (!target.dev || !localPort(target.url ?? selection ?? ""))
@@ -315,8 +326,13 @@ export class ThreadPreviews {
       },
     });
     keepConsole(wc, preview);
-    reloadOnKey(wc, () => {
-      if (current()) this.act(preview.target.key, "reload");
+    browserKeys(wc, {
+      reload: () => {
+        if (current()) this.act(preview.target.key, "reload");
+      },
+      newTab: () => {
+        if (current()) this.askForNewTab(preview);
+      },
     });
     return wc;
   }
@@ -411,10 +427,25 @@ export class ThreadPreviews {
       .catch((error) => console.warn("Could not save the preview:", error));
   }
 
+  /**
+   * The page has the keyboard, so Relay's window never hears the press: it
+   * gets the keyboard back, to answer the panel's picker, and is told.
+   */
+  private askForNewTab(preview: Preview) {
+    const win = this.hostFor(preview);
+    if (win && !win.isDestroyed()) win.webContents.focus();
+    this.window.send("relay:preview-new-tab", { key: preview.target.key });
+  }
+
+  /** The Relay window its thread is in: the main one, or the thread's own. */
+  private hostFor(preview: Preview) {
+    return this.window.hostFor(threadKeyOf(preview.target.key));
+  }
+
   /** Lays the preview over the panel, or takes it off when `bounds` is null. */
   place(key: string, bounds: PreviewBounds | null) {
     const preview = this.previews.get(key);
-    const win = this.window.hostFor(key);
+    const win = preview && this.hostFor(preview);
     if (!preview || preview.popOut || !win) return;
     const call = ++preview.placed;
     if (!bounds) return void this.hideWithSnapshot(preview, call);
@@ -482,10 +513,10 @@ export class ThreadPreviews {
     projectId: string,
     chatId: string | null,
     url: string,
-    command?: string,
+    { command, page }: { command?: string; page?: string } = {},
   ) {
     if (!webUrl(url)) return;
-    await this.open(projectId, chatId, url, command);
+    await this.open(projectId, chatId, { url, command, page });
   }
 
   act(key: string, action: PreviewAction) {
@@ -578,6 +609,18 @@ export class ThreadPreviews {
       : page;
   }
 
+  /**
+   * Its tab was closed. A page beside the thread's own never opens again, so
+   * its address goes; the thread's own keeps it for next time.
+   */
+  closeTab(key: string) {
+    this.close(key);
+    if (key === threadKeyOf(key)) return;
+    void this.saved
+      ?.forget(key)
+      .catch((error) => console.warn("Could not forget the page:", error));
+  }
+
   close(key: string) {
     this.opening.get(key)?.controller.abort();
     this.opening.delete(key);
@@ -661,7 +704,7 @@ export class ThreadPreviews {
 
   /** Gives a view never shown a surface: a moment in the window, outside what it shows. */
   private async prime(preview: Preview) {
-    const win = this.window.hostFor(preview.target.key);
+    const win = this.hostFor(preview);
     const view = preview.view;
     if (!win || win.isDestroyed() || !view)
       throw new Error(

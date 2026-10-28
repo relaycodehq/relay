@@ -3,10 +3,21 @@ import { idSchema } from "../../shared/validation";
 import { takes, type ApiContext } from "./context";
 import { browserAnnotationSchema } from "../../shared/browser-annotations";
 
-const previewKeySchema = z.union([
+const threadKeySchema = z.union([
   idSchema,
   z.templateLiteral(["draft:", idSchema]),
 ]);
+
+const pageSchema = z.string().regex(/^[a-z0-9]{1,16}$/);
+
+const previewKeySchema = z.string().refine((key) => {
+  const [thread, page, ...rest] = key.split("~");
+  return (
+    !rest.length &&
+    threadKeySchema.safeParse(thread).success &&
+    (page === undefined || pageSchema.safeParse(page).success)
+  );
+}, "Not a preview key");
 
 const boundsSchema = z
   .object({
@@ -25,8 +36,9 @@ export function previewHandlers(ctx: ApiContext) {
     return ctx.previews;
   };
   return {
-    openPreview: takes([idSchema, idSchema.nullable()], (projectId, chatId) =>
-      previews().open(projectId, chatId),
+    openPreview: takes(
+      [idSchema, idSchema.nullable(), pageSchema.optional()],
+      (projectId, chatId, page) => previews().open(projectId, chatId, { page }),
     ),
     placePreview: takes(
       [previewKeySchema, boundsSchema.nullable()],
@@ -37,10 +49,16 @@ export function previewHandlers(ctx: ApiContext) {
         idSchema,
         idSchema.nullable(),
         z.url({ protocol: /^https?$/ }).max(8192),
-        z.string().trim().min(1).max(8192).optional(),
+        z
+          .object({
+            command: z.string().trim().min(1).max(8192).optional(),
+            page: pageSchema.optional(),
+          })
+          .strict()
+          .optional(),
       ],
-      (projectId, chatId, url, command) =>
-        previews().navigate(projectId, chatId, url, command),
+      (projectId, chatId, url, options) =>
+        previews().navigate(projectId, chatId, url, options),
     ),
     previewAction: takes(
       [
@@ -63,6 +81,6 @@ export function previewHandlers(ctx: ApiContext) {
       [previewKeySchema, z.array(browserAnnotationSchema)],
       (key, annotations) => previews().pick(key, annotations),
     ),
-    closePreview: takes([previewKeySchema], (key) => previews().close(key)),
+    closePreview: takes([previewKeySchema], (key) => previews().closeTab(key)),
   };
 }

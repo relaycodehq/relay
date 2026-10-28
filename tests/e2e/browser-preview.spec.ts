@@ -201,6 +201,73 @@ test("the Browser surface starts the project's dev server and shows its page ove
       .poll(overlays)
       .toEqual([expect.objectContaining({ title: "Preview fixture" })]);
 
+    // The new-tab key in the panel shows the picker, where B opens another
+    // page beside the thread's own, on the same dev server.
+    const newTab =
+      process.platform === "darwin" ? "Meta+KeyT" : "Control+Shift+Backquote";
+    const front = panel.locator(".panel-body:not([hidden])");
+    await front.getByRole("textbox", { name: "Address" }).focus();
+    await page.keyboard.press(newTab);
+    await expect(panel.locator(".surface-picker")).toBeVisible();
+    await expect.poll(overlays).toEqual([]);
+    await page.keyboard.press("b");
+    const browserTabs = panel.getByRole("tab", { name: "Preview fixture" });
+    await expect(browserTabs).toHaveCount(2);
+    await expect(front.getByRole("textbox", { name: "Address" })).toHaveValue(
+      `http://localhost:${port}/`,
+      { timeout: 15_000 },
+    );
+    await expect
+      .poll(overlays)
+      .toEqual([expect.objectContaining({ title: "Preview fixture" })]);
+    const pagesOnPort = () =>
+      app.evaluate(
+        ({ webContents }, port) =>
+          webContents
+            .getAllWebContents()
+            .filter((wc) => wc.getURL().includes(`:${port}/`)).length,
+        port,
+      );
+    await expect.poll(pagesOnPort).toBe(2);
+    // Each page goes its own way.
+    await front
+      .getByRole("textbox", { name: "Address" })
+      .fill(`localhost:${port}/again`);
+    await front.getByRole("textbox", { name: "Address" }).press("Enter");
+    await expect(front.getByRole("textbox", { name: "Address" })).toHaveValue(
+      `http://localhost:${port}/again`,
+    );
+    await browserTabs.first().click();
+    await expect(front.getByRole("textbox", { name: "Address" })).toHaveValue(
+      `http://localhost:${port}/`,
+    );
+    // Inside a page, which Relay's window never hears, the key works too and
+    // hands the keyboard back for the picker's letters.
+    await browserTabs.last().click();
+    await expect.poll(overlays).toHaveLength(1);
+    await app.evaluate(({ webContents }, port) => {
+      const wc = webContents
+        .getAllWebContents()
+        .find((wc) => wc.getURL().endsWith(`:${port}/again`))!;
+      const mod = process.platform === "darwin" ? "meta" : "control";
+      wc.focus();
+      wc.sendInputEvent({ type: "keyDown", keyCode: "T", modifiers: [mod] });
+    }, port);
+    await expect(panel.locator(".surface-picker")).toBeVisible();
+    await page.screenshot({ path: "test-results/browser-new-tab-picker.png" });
+    expect(
+      await page.evaluate(() => document.activeElement === document.body),
+    ).toBe(true);
+    // Closing it ends its page alone.
+    await browserTabs.last().click();
+    await panel.getByRole("button", { name: "Close browser" }).last().click();
+    await expect(browserTabs).toHaveCount(1);
+    await expect.poll(pagesOnPort).toBe(1);
+    await browserTabs.click();
+    await expect
+      .poll(overlays)
+      .toEqual([expect.objectContaining({ title: "Preview fixture" })]);
+
     // Popped out, it lives in a window of its own until brought back.
     const windows = () =>
       app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);

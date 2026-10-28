@@ -3,6 +3,17 @@
  * draft's `draft:<projectId>`), with cookies of its own.
  */
 
+/**
+ * The preview a panel tab shows: the thread's own, which its agent sees too,
+ * or another page the user opened beside it, `<thread key>~<page>`. Every
+ * page of a thread shares its cookies and its dev server.
+ */
+export const pageKey = (threadKey: string, page?: string) =>
+  page ? `${threadKey}~${page}` : threadKey;
+
+/** The thread a preview key belongs to. */
+export const threadKeyOf = (key: string) => key.split("~")[0]!;
+
 /** The project's dev server as the preview sees it. */
 export type DevServerState =
   /** The project names no dev command. */
@@ -84,6 +95,11 @@ export interface PreviewReveal {
   chatId: string;
 }
 
+/** The new-tab key was pressed inside a preview's page. */
+export interface PreviewNewTab {
+  key: string;
+}
+
 export interface ConsoleEntry {
   level: "error" | "warning";
   message: string;
@@ -96,15 +112,23 @@ export interface PreviewApi {
    * The thread's preview, made on first open: it starts the project's dev
    * server in the thread's folder when nothing listens on its port yet.
    */
-  openPreview(projectId: string, chatId: string | null): Promise<PreviewState>;
+  openPreview(
+    projectId: string,
+    chatId: string | null,
+    /** Another page beside the thread's own; see `pageKey`. */
+    page?: string,
+  ): Promise<PreviewState>;
   /** Where the panel shows it, in the page's CSS pixels; null hides it. */
   placePreview(key: string, bounds: PreviewBounds | null): Promise<void>;
   navigatePreview(
     projectId: string,
     chatId: string | null,
     url: string,
-    /** Save a launch command for this thread's local preview. */
-    command?: string,
+    options?: {
+      /** Save a launch command for this thread's local preview. */
+      command?: string;
+      page?: string;
+    },
   ): Promise<void>;
   previewAction(key: string, action: PreviewAction): Promise<void>;
   /** Inspects without changing the draft; resolves on a saved/deleted comment, or cancellation. */
@@ -116,6 +140,7 @@ export interface PreviewApi {
   closePreview(key: string): Promise<void>;
   onPreview(callback: (state: PreviewState) => void): () => void;
   onPreviewReveal(callback: (reveal: PreviewReveal) => void): () => void;
+  onPreviewNewTab(callback: (press: PreviewNewTab) => void): () => void;
 }
 
 /** What someone typed in the address bar, as a URL the preview may load; null when it can't. */

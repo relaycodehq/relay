@@ -120,12 +120,11 @@ export async function answerPreviewTool(
     case "open_preview": {
       const started = Date.now();
       const absolute = input.url && URL.parse(input.url);
-      let state = await previews.open(
-        caller.projectId,
-        caller.chatId,
-        absolute ? previewTarget(input.url!, undefined) : undefined,
-        absolute ? input.command : undefined,
-      );
+      const url = absolute ? previewTarget(input.url!, undefined) : undefined;
+      let state = await previews.open(caller.projectId, caller.chatId, {
+        url,
+        command: absolute ? input.command : undefined,
+      });
       previews.reveal(caller.projectId, caller.chatId);
       const home = previews.home(key);
       if (!absolute && (input.url || input.command))
@@ -136,7 +135,7 @@ export async function answerPreviewTool(
             input.url ?? (state.url || home || ""),
             state.url || home,
           ),
-          input.command,
+          { command: input.command },
         );
       else if (!input.url && input.reload) previews.act(key, "reload");
       else if (!state.url && !home)

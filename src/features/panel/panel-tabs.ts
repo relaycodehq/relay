@@ -12,7 +12,10 @@ import { newThreadProject } from "../composer/drafts";
 import { newTerminalSlot } from "../terminal/terminal-dock";
 import { readJson, writeJson, writeText } from "../../lib/persisted-store";
 
-/** What the panel can show. Terminals stack as several tabs; the rest open once. */
+/**
+ * What the panel can show. Terminals and browser pages stack as several
+ * tabs; the rest open once.
+ */
 export type Surface = "files" | "history" | "terminal" | "browser" | "device";
 const SURFACES: Surface[] = ["files", "history", "terminal", "browser", "device"];
 
@@ -21,6 +24,8 @@ export interface PanelTab {
   surface: Surface;
   /** A terminal tab's shell, one of the thread's. */
   slot?: string;
+  /** A Browser tab beside the thread's own: the page it shows. */
+  page?: string;
 }
 
 interface PanelState {
@@ -46,11 +51,22 @@ function terminalTab() {
   return { key: `terminal:${slot}`, surface: "terminal" as const, slot };
 }
 
+/** The thread's own Browser tab, the one its agent opens and looks at. */
+const ownBrowser = (tab: PanelTab) => tab.surface === "browser" && !tab.page;
+
+/** The thread's own browser, or with that open, another page beside it. */
+function browserTab(tabs: PanelTab[]): PanelTab {
+  if (!tabs.some(ownBrowser)) return tabFor("browser");
+  const page = Math.random().toString(36).slice(2, 10) || "x";
+  return { key: `browser:${page}`, surface: "browser", page };
+}
+
 const isTab = (tab: unknown): tab is PanelTab =>
   typeof (tab as PanelTab)?.key === "string" &&
   SURFACES.includes((tab as PanelTab).surface) &&
   ((tab as PanelTab).surface !== "terminal" ||
-    typeof (tab as PanelTab).slot === "string");
+    typeof (tab as PanelTab).slot === "string") &&
+  ["string", "undefined"].includes(typeof (tab as PanelTab).page);
 
 /** The panel's tabs per thread, least recently used first. */
 const byThread = (() => {
@@ -124,7 +140,7 @@ function recall(thread: string): Omit<PanelState, "thread"> | undefined {
 
 /** A Browser tab for the thread, in front only when nothing else is, and unseen. */
 function withBrowser(s: Omit<PanelState, "thread">) {
-  const had = s.tabs.find((t) => t.surface === "browser");
+  const had = s.tabs.find(ownBrowser);
   const tab = had ?? tabFor("browser");
   return {
     tabs: had ? s.tabs : [...s.tabs, tab],
@@ -164,6 +180,41 @@ function useBrowserOnReveal(
   }, [thread, setState]);
 }
 
+/**
+ * The surface's tab brought to the front, opened if it isn't; a terminal
+ * always opens a new one, the browser is the thread's own.
+ */
+function withSurface(s: PanelState, surface: Surface): PanelState {
+  const had = s.tabs.find((t) =>
+    surface === "browser" ? ownBrowser(t) : t.surface === surface,
+  );
+  if (had && surface !== "terminal") return { ...s, front: had.key };
+  const tab = tabFor(surface);
+  return { ...s, tabs: [...s.tabs, tab], front: tab.key };
+}
+
+/** What the picker opens: like `withSurface`, but the browser opens another page too. */
+function withAnother(s: PanelState, surface: Surface): PanelState {
+  if (surface !== "browser") return withSurface(s, surface);
+  const tab = browserTab(s.tabs);
+  return { ...s, tabs: [...s.tabs, tab], front: tab.key };
+}
+
+/** The tab closed; the one that took its place comes to the front. */
+function withoutTab(s: PanelState, key: string): PanelState {
+  const at = s.tabs.findIndex((t) => t.key === key);
+  const tabs = s.tabs.filter((t) => t.key !== key);
+  return {
+    ...s,
+    tabs,
+    front:
+      s.front === key
+        ? (tabs[Math.min(at, tabs.length - 1)]?.key ?? null)
+        : s.front,
+    unseen: s.unseen === key ? null : s.unseen,
+  };
+}
+
 export type PanelTabs = ReturnType<typeof usePanelTabs>;
 
 /**
@@ -197,15 +248,12 @@ export function usePanelTabs(thread: string, shown: boolean) {
     if (seen) setState((s) => ({ ...s, unseen: null }));
   }, [seen]);
   useBrowserOnReveal(thread, setState);
-  /** Brings the surface's tab to the front, opening it; a terminal always opens a new one. */
   const show = useCallback(
-    (surface: Surface) =>
-      setState((s) => {
-        const had = s.tabs.find((t) => t.surface === surface);
-        if (had && surface !== "terminal") return { ...s, front: had.key };
-        const tab = tabFor(surface);
-        return { ...s, tabs: [...s.tabs, tab], front: tab.key };
-      }),
+    (surface: Surface) => setState((s) => withSurface(s, surface)),
+    [],
+  );
+  const add = useCallback(
+    (surface: Surface) => setState((s) => withAnother(s, surface)),
     [],
   );
   /** Opens one more shell as the tab in front, and says which. */
@@ -221,20 +269,7 @@ export function usePanelTabs(thread: string, shown: boolean) {
   /** Shows the picker to open one more. */
   const pick = useCallback(() => setState((s) => ({ ...s, front: null })), []);
   const close = useCallback(
-    (key: string) =>
-      setState((s) => {
-        const at = s.tabs.findIndex((t) => t.key === key);
-        const tabs = s.tabs.filter((t) => t.key !== key);
-        return {
-          ...s,
-          tabs,
-          front:
-            s.front === key
-              ? (tabs[Math.min(at, tabs.length - 1)]?.key ?? null)
-              : s.front,
-          unseen: s.unseen === key ? null : s.unseen,
-        };
-      }),
+    (key: string) => setState((s) => withoutTab(s, key)),
     [],
   );
   return {
@@ -243,7 +278,10 @@ export function usePanelTabs(thread: string, shown: boolean) {
     /** The tab the agent opened that the user hasn't looked at yet. */
     unseen: seen ? null : (state.unseen ?? null),
     has: (surface: Surface) => state.tabs.some((t) => t.surface === surface),
+    /** Brings the surface's tab to the front; see `withSurface`. */
     show,
+    /** What the picker opens; see `withAnother`. */
+    add,
     addTerminal,
     bring,
     pick,

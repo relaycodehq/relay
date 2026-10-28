@@ -348,12 +348,9 @@ it("restores the committed page and its launch command after the service is recr
     }),
   );
   const first = setup(resolve, new SavedPreviews(store)).previews;
-  await first.navigate(
-    "project",
-    "chat",
-    "http://localhost:3000/start",
-    "node server.cjs",
-  );
+  await first.navigate("project", "chat", "http://localhost:3000/start", {
+    command: "node server.cjs",
+  });
   mock.publish("/repo", { state: "running", port: 3000, ours: true });
   const wc = mock.views[0]!.webContents;
   wc.url = "http://localhost:3000/previews/example/?view=two#details";
@@ -380,6 +377,36 @@ it("restores the committed page and its launch command after the service is recr
   expect(resolve.mock.calls.at(-1)!.slice(2, 4)).toEqual([wc.url, "/repo"]);
 });
 
+it("gives a page beside the thread's own a browser that outlives a quit but not its tab", async () => {
+  const store = memoryStore();
+  const resolve = vi.fn<ConstructorParameters<typeof ThreadPreviews>[1]>(
+    async (_p, chat, url) => ({ ...target(chat), url }),
+  );
+  const first = setup(resolve, new SavedPreviews(store)).previews;
+  await first.navigate("project", "chat", "http://localhost:3000/own");
+  await first.navigate("project", "chat", "http://localhost:3000/other", {
+    page: "p1",
+  });
+  expect(mock.views.map((v) => v.webContents.getURL())).toEqual([
+    "http://localhost:3000/own",
+    "http://localhost:3000/other",
+  ]);
+  expect(first.current("chat")?.url).toBe("http://localhost:3000/own");
+  expect(first.current("chat~p1")?.url).toBe("http://localhost:3000/other");
+  first.dispose();
+
+  const next = setup(resolve, new SavedPreviews(store)).previews;
+  const restored = await next.open("project", "chat", { page: "p1" });
+  expect(restored).toMatchObject({
+    key: "chat~p1",
+    url: "http://localhost:3000/other",
+  });
+  next.closeTab("chat~p1");
+  await vi.waitFor(() =>
+    expect(Object.keys(store.get().previews ?? {})).toEqual(["chat"]),
+  );
+});
+
 it("restores remote pages without starting a local server", async () => {
   const store = memoryStore();
   const resolve = vi.fn<ConstructorParameters<typeof ThreadPreviews>[1]>(
@@ -395,7 +422,9 @@ it("restores remote pages without starting a local server", async () => {
   });
   expect(mock.ensure).not.toHaveBeenCalled();
   await expect(
-    next.navigate("project", "chat", "https://example.com/", "node server.cjs"),
+    next.navigate("project", "chat", "https://example.com/", {
+      command: "node server.cjs",
+    }),
   ).rejects.toThrow("localhost");
 });
 

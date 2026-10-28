@@ -1,12 +1,12 @@
 import type { WebContents } from "electron";
 
 /**
- * ⌘R (Ctrl+R off macOS) reloads the page while it has the keyboard, as in
- * a browser. Relay's window never hears keys pressed inside the page.
+ * A browser's own keys while the page has the keyboard, which Relay's window
+ * never hears: ⌘R (Ctrl+R off macOS) reloads, ⌘T (Ctrl+T) asks for a new tab.
  */
-export function reloadOnKey(
+export function browserKeys(
   wc: WebContents,
-  reload: () => void,
+  { reload, newTab }: { reload: () => void; newTab: () => void },
   mac = process.platform === "darwin",
 ) {
   wc.on("before-input-event", (event, input) => {
@@ -14,8 +14,10 @@ export function reloadOnKey(
     const mod = mac
       ? input.meta && !input.control
       : input.control && !input.meta;
-    if (!mod || input.alt || input.shift || input.code !== "KeyR") return;
+    if (!mod || input.alt || input.shift) return;
+    if (input.code === "KeyR") reload();
+    else if (input.code === "KeyT") newTab();
+    else return;
     event.preventDefault();
-    reload();
   });
 }

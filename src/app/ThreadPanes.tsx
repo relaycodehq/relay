@@ -44,16 +44,15 @@ import {
 } from "../features/terminal/thread-terminals";
 import { terminalLabel } from "../features/terminal/TerminalDrawer";
 import { TerminalView } from "../features/terminal/TerminalView";
-import {
-  BrowserSurface,
-  BrowserTabIcon,
-} from "../features/browser/BrowserSurface";
+import { BrowserTabIcon } from "../features/browser/BrowserSurface";
+import { PanelBrowsers } from "../features/browser/PanelBrowsers";
+import { useNewTabKey } from "../features/panel/useNewTabKey";
 import { DeviceSurface } from "../features/device/DeviceSurface";
 import { closeDeviceView } from "../features/device/device-hub";
 import {
   closePreview,
   previewKey,
-  usePreviewState,
+  usePreviewStates,
 } from "../features/browser/previews";
 import { readText, writeText } from "../lib/persisted-store";
 
@@ -218,41 +217,48 @@ function PanelFiles({
 }
 
 /** The panel's tab strip: each surface's icon and name, a file's own name for Files. */
-function panelTabItems(
+function usePanelTabItems(
   panel: PanelTabs,
-  preview: ReturnType<typeof usePreviewState>,
+  pageKey: (page?: string) => string,
   filesPath: string | null,
   locked: boolean,
 ) {
+  const previews = usePreviewStates();
   let terminals = 0;
-  return panel.tabs.map((tab) => ({
-    key: tab.key,
-    icon:
-      tab.surface === "browser" ? (
-        <BrowserTabIcon
-          key={preview?.favicon ?? "globe"}
-          favicon={preview?.favicon}
-        />
-      ) : (
-        SURFACE_ICONS[tab.surface]
-      ),
-    closeLabel:
-      tab.surface === "browser"
-        ? "Close browser"
-        : tab.surface === "files"
-          ? "Close files"
-          : undefined,
-    label:
-      tab.surface === "terminal"
-        ? terminalLabel(terminals++)
-        : tab.surface === "browser"
-          ? preview?.title.trim() || preview?.worktree || SURFACE_LABELS.browser
-          : tab.surface === "files" && filesPath
-            ? filesPath.split("/").pop() || SURFACE_LABELS.files
-            : SURFACE_LABELS[tab.surface],
-    closeDisabled: tab.surface === "files" && locked,
-    unseen: tab.key === panel.unseen,
-  }));
+  return panel.tabs.map((tab) => {
+    const preview =
+      tab.surface === "browser" ? previews(pageKey(tab.page)) : undefined;
+    return {
+      key: tab.key,
+      icon:
+        tab.surface === "browser" ? (
+          <BrowserTabIcon
+            key={preview?.favicon ?? "globe"}
+            favicon={preview?.favicon}
+          />
+        ) : (
+          SURFACE_ICONS[tab.surface]
+        ),
+      closeLabel:
+        tab.surface === "browser"
+          ? "Close browser"
+          : tab.surface === "files"
+            ? "Close files"
+            : undefined,
+      label:
+        tab.surface === "terminal"
+          ? terminalLabel(terminals++)
+          : tab.surface === "browser"
+            ? preview?.title.trim() ||
+              preview?.worktree ||
+              SURFACE_LABELS.browser
+            : tab.surface === "files" && filesPath
+              ? filesPath.split("/").pop() || SURFACE_LABELS.files
+              : SURFACE_LABELS[tab.surface],
+      closeDisabled: tab.surface === "files" && locked,
+      unseen: tab.key === panel.unseen,
+    };
+  });
 }
 
 /** Closes a panel tab and ends what it held: a shell, the preview, the device view. */
@@ -272,7 +278,8 @@ function closePanelTab(
 ) {
   const tab = panel.tabs.find((t) => t.key === key);
   if (tab?.slot) closeTerminal(projectId, chatId, tab.slot);
-  if (tab?.surface === "browser") closePreview(previewKey(projectId, chatId));
+  if (tab?.surface === "browser")
+    closePreview(previewKey(projectId, chatId, tab.page));
   if (tab?.surface === "device") closeDeviceView();
   panel.close(key);
   // The last tab gone leaves only the picker, so the panel goes with it.
@@ -330,8 +337,9 @@ export function ThreadPanel({
     );
   const { filesPath, filesViewing } = useFilesViewing(view.setViewing, where);
   const front = panel.front;
-  const preview = usePreviewState(previewKey(project.id, chatId));
-  const tabs = panelTabItems(panel, preview, filesPath, locked);
+  const pageKey = (page?: string) => previewKey(project.id, chatId, page);
+  const tabs = usePanelTabItems(panel, pageKey, filesPath, locked);
+  useNewTabKey(panel, pageKey);
   const close = (key: string) =>
     closePanelTab(key, { panel, projectId: project.id, chatId, opens });
   const folderShown =
@@ -392,7 +400,7 @@ export function ThreadPanel({
         <SurfacePicker
           plain={project.plain}
           elsewhere={!!project.computer}
-          onPick={panel.show}
+          onPick={panel.add}
         />
       )}
       {panel.has("files") && (
@@ -428,16 +436,12 @@ export function ThreadPanel({
           )}
         </div>
       )}
-      {panel.has("browser") && (
-        <div className="panel-body" hidden={front?.surface !== "browser"}>
-          <BrowserSurface
-            projectId={project.id}
-            chatId={chatId}
-            front={front?.surface === "browser"}
-            draftKey={opens.draftKey}
-          />
-        </div>
-      )}
+      <PanelBrowsers
+        panel={panel}
+        projectId={project.id}
+        chatId={chatId}
+        draftKey={opens.draftKey}
+      />
       {panel.has("device") && (
         <div className="panel-body" hidden={front?.surface !== "device"}>
           <DeviceSurface front={front?.surface === "device"} />

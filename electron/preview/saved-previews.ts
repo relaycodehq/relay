@@ -49,4 +49,12 @@ export class SavedPreviews {
       throw error;
     }
   }
+
+  async forget(key: string) {
+    this.latest.delete(key);
+    if (!this.store.get().previews?.[key]) return;
+    await this.store.update((s) => {
+      delete s.previews?.[key];
+    });
+  }
 }

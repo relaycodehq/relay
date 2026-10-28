@@ -1,6 +1,6 @@
 import type { DeviceHubState } from "./devices";
 import type { AddingJob, ChatMessage, ChatSummary } from "./projects";
-import type { PreviewReveal, PreviewState } from "./preview";
+import type { PreviewNewTab, PreviewReveal, PreviewState } from "./preview";
 import type { ReadAloudEvent, ReadAloudState } from "./read-aloud";
 import type { EditorWindowsState } from "./editor-windows";
 import type { PlaySoundEvent } from "./sounds";
@@ -35,6 +35,7 @@ export interface RelayEvents {
   "relay:project-adding": AddingJob | null;
   "relay:preview": PreviewState;
   "relay:preview-reveal": PreviewReveal;
+  "relay:preview-new-tab": PreviewNewTab;
   "relay:play-sound": PlaySoundEvent;
   "relay:thread-windows": ThreadWindowsState;
   "relay:editor-windows": EditorWindowsState;
