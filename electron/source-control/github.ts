@@ -6,7 +6,7 @@ import {
 import { runExecutable } from "../platform/executables";
 import { cliFields, probeCli, probeTimeout } from "./clis";
 
-const installGh =
+export const installGh =
   process.platform === "darwin"
     ? "Install it with `brew install gh`."
     : process.platform === "win32"

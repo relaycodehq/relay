@@ -2,6 +2,7 @@
 // a new repository for a new project.
 import type { GithubRepo, GithubRepos } from "../../shared/projects";
 import { findExecutable, runExecutable } from "../platform/executables";
+import { installGh } from "../source-control";
 
 const gh = () => findExecutable("gh").catch(() => null);
 
@@ -10,8 +11,7 @@ export async function githubRepos(): Promise<GithubRepos> {
   const path = await gh();
   if (!path)
     return {
-      problem:
-        "Install the GitHub CLI (`brew install gh`) to list your repositories.",
+      problem: `Listing your repositories needs the GitHub CLI. ${installGh}`,
     };
   const [user, list] = await Promise.all([
     runExecutable(path, ["api", "user", "--jq", ".login"], 15000),
@@ -74,7 +74,7 @@ export async function githubLogin(signal?: AbortSignal) {
   const path = await gh();
   if (!path)
     throw new Error(
-      "Install the GitHub CLI (`brew install gh`) to create the repository.",
+      `Creating the repository needs the GitHub CLI. ${installGh}`,
     );
   const user = await runExecutable(
     path,

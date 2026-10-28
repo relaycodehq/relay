@@ -11,6 +11,7 @@ import { gitea } from "./gitea";
 import { github } from "./github";
 
 export { applyLinkedTools, linkCli, resolveCliPath, unlinkCli } from "./clis";
+export { installGh } from "./github";
 export { teaTokenFor } from "./tea";
 
 /**

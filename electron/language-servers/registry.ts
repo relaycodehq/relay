@@ -73,6 +73,13 @@ const clangdKinds: Record<string, string | undefined> = {
   win32: "windows",
 };
 
+const installClangd =
+  process.platform === "darwin"
+    ? "Install clangd with `brew install llvm`."
+    : process.platform === "win32"
+      ? "Install clangd with `winget install -e --id LLVM.LLVM`."
+      : "Install clangd with your package manager (for example `apt install clangd`).";
+
 export const servers: Record<LspServerId, ServerSpec> = {
   "rust-analyzer": {
     id: "rust-analyzer",
@@ -123,7 +130,7 @@ export const servers: Record<LspServerId, ServerSpec> = {
         };
       },
     },
-    hint: "Install clangd with your package manager (for example `brew install llvm`).",
+    hint: installClangd,
   },
   vtsls: {
     id: "vtsls",
