@@ -296,13 +296,7 @@ export class RemoteBridge {
       case "uploadFile":
         if (!this.host.uploadFile)
           throw new Error("This computer can't take files.");
-        return this.host.uploadFile(
-          idSchema.parse(args[0]),
-          z.string().min(1).max(1000).parse(args[1]),
-          uploadSizeSchema.parse(args[2]),
-          uploadSizeSchema.parse(args[3]),
-          Buffer.from(uploadChunkSchema.parse(args[4]), "base64"),
-        );
+        return this.host.uploadFile(...uploadArgs(args));
       case "draftOther":
         return a.draftOther(
           draftKeySchema.parse(args[0]),
@@ -317,14 +311,7 @@ export class RemoteBridge {
       case "overview":
         return a.overview();
       case "chat":
-        return a.chat(
-          idSchema.parse(args[0]),
-          args[1] == null ? undefined : knownMessagesSchema.parse(args[1]),
-          args[2] == null
-            ? undefined
-            : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
-          args[3] == null ? undefined : idSchema.parse(args[3]),
-        );
+        return a.chat(...chatArgs(args));
       case "activityDetail":
       case "activityWritten":
         return a[method](...callIds(args));
@@ -340,16 +327,7 @@ export class RemoteBridge {
           args[0] == null ? undefined : newsCursorSchema.parse(args[0]),
         );
       case "renderPage":
-        return a.renderPage(
-          idSchema.parse(args[0]),
-          idSchema.parse(args[1]),
-          z
-            .number()
-            .int()
-            .min(0)
-            .max(RENDER_MAX_PAGES - 1)
-            .parse(args[2]),
-        );
+        return a.renderPage(...renderPageArgs(args));
       case "subagents":
         return a.subagents(
           idSchema.parse(args[0]),
@@ -411,6 +389,45 @@ export class RemoteBridge {
       ...(paired && !now ? { gone: true as const } : {}),
     };
   }
+}
+
+/** A thread's id, what the phone holds of it, how many messages it wants and the send it waits on. */
+function chatArgs(args: unknown[]): Parameters<RemoteApi["chat"]> {
+  return [
+    idSchema.parse(args[0]),
+    args[1] == null ? undefined : knownMessagesSchema.parse(args[1]),
+    args[2] == null
+      ? undefined
+      : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
+    args[3] == null ? undefined : idSchema.parse(args[3]),
+  ];
+}
+
+/** The upload's id, the file's name, its size, where this chunk goes in it and the chunk. */
+function uploadArgs(
+  args: unknown[],
+): Parameters<NonNullable<RemoteHost["uploadFile"]>> {
+  return [
+    idSchema.parse(args[0]),
+    z.string().min(1).max(1000).parse(args[1]),
+    uploadSizeSchema.parse(args[2]),
+    uploadSizeSchema.parse(args[3]),
+    Buffer.from(uploadChunkSchema.parse(args[4]), "base64"),
+  ];
+}
+
+/** The thread, the page an answer showed and which of its pages. */
+function renderPageArgs(args: unknown[]): Parameters<RemoteApi["renderPage"]> {
+  return [
+    idSchema.parse(args[0]),
+    idSchema.parse(args[1]),
+    z
+      .number()
+      .int()
+      .min(0)
+      .max(RENDER_MAX_PAGES - 1)
+      .parse(args[2]),
+  ];
 }
 
 function digest(value: unknown) {
