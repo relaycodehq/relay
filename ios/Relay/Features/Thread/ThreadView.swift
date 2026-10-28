@@ -107,8 +107,10 @@ struct ThreadView: View {
                     .scrollTargetLayout()
                     // In line with the composer's edge below.
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
                 }
+                // A margin rather than padding, so the stack starts where the content does and a
+                // scroll position's offset is the content offset.
+                .contentMargins(.top, 12, for: .scrollContent)
                 // Built only once the thread is here, so it opens at the end.
                 .followingEnd(live: live, last: shown.last?.id, mine: sentHere(shown.last), jump: jump)
                 .environment(\.renderCompose, { [composer] in composer.compose($0, $1) })

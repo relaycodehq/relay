@@ -8,6 +8,22 @@ extension View {
     }
 }
 
+/// Opens or closes something the reader tapped in a thread. The thread doesn't
+/// follow its end while that grows or shrinks, so the row stays under the finger;
+/// once it has, the thread follows on only if its end is still on screen.
+struct ReaderUnfold {
+    fileprivate var hold: (Bool) -> Void = { _ in }
+
+    func callAsFunction(_ animation: Animation = .snappy(duration: 0.2), _ change: () -> Void) {
+        hold(true)
+        withAnimation(animation, change) { hold(false) }
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var unfold = ReaderUnfold()
+}
+
 /// A message to scroll the thread to, each ask its own even for the same message.
 struct MessageJump: Equatable {
     let id: String
@@ -52,9 +68,14 @@ private struct FollowEnd: ViewModifier {
     @State private var touching = false
     /// The end row is on screen.
     @State private var atEnd = true
+    /// The reader is unfolding something; see `ReaderUnfold`.
+    @State private var unfolding = false
+    /// How far down the thread is scrolled, for an unfold to stay where it is.
+    @State private var offset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
+            .environment(\.unfold, ReaderUnfold(hold: hold))
             .scrollPosition($position)
             .onScrollTargetVisibilityChange(idType: String.self, threshold: 0.5) { shown in
                 atEnd = shown.contains(ThreadEnd.id)
@@ -67,9 +88,12 @@ private struct FollowEnd: ViewModifier {
                 if phase == .idle { following = atEnd }
             }
             .onScrollGeometryChange(for: Extent.self, of: Extent.init) { old, new in
-                guard !touching, following, settling || live || new.room != old.room || new.content < old.content else { return }
+                guard !touching, !unfolding, following,
+                    settling || live || new.room != old.room || new.content < old.content
+                else { return }
                 follow()
             }
+            .onScrollGeometryChange(for: CGFloat.self, of: \.contentOffset.y) { _, y in offset = y }
             .onChange(of: last) {
                 if mine { following = true }
                 // Not mid-flick: where the flick stops decides whether it follows.
@@ -93,6 +117,12 @@ private struct FollowEnd: ViewModifier {
                 try? await Task.sleep(for: .seconds(1.5))
                 if !Task.isCancelled { settling = false }
             }
+    }
+
+    private func hold(_ held: Bool) {
+        unfolding = held
+        // A position on the end row keeps that row at the bottom while what's above it grows.
+        if held { position.scrollTo(y: offset) } else { following = following && atEnd }
     }
 
     private func follow() {

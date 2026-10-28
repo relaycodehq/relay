@@ -13,6 +13,7 @@ struct ToolRow: View {
     let root: String?
     var looked: [MessageImage] = []
     @Environment(Connection.self) private var connection
+    @Environment(\.unfold) private var unfold
     @State private var open = false
     @State private var full: String?
 
@@ -40,7 +41,7 @@ struct ToolRow: View {
             .contentShape(.rect)
             .onTapGesture {
                 guard opens else { return }
-                withAnimation(.snappy(duration: 0.2)) { open.toggle() }
+                unfold { open.toggle() }
             }
             .accessibilityAddTraits(opens ? .isButton : [])
             .selectsOnHold(question ? doneLabel(activity) : activity.label, mono: activity.kind == "command")

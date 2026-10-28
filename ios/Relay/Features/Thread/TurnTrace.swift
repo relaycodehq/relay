@@ -17,13 +17,14 @@ struct TurnTrace: View {
     var startsOpen = false
     /// Nil follows the turn: open while it runs.
     @State private var expanded: Bool?
+    @Environment(\.unfold) private var unfold
 
     var body: some View {
         let turn = Turn(message)
         let open = expanded ?? (turn.live || startsOpen)
         VStack(alignment: .leading, spacing: 8) {
             Button {
-                withAnimation(.snappy(duration: 0.25)) { expanded = !open }
+                unfold(.snappy(duration: 0.25)) { expanded = !open }
             } label: {
                 heading(turnHeading(message, expanded: open, turn: turn), open: open)
             }
@@ -146,11 +147,12 @@ private struct Fold<Content: View>: View {
     let label: String
     @ViewBuilder let content: Content
     @State private var open = false
+    @Environment(\.unfold) private var unfold
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                withAnimation(.snappy(duration: 0.2)) { open.toggle() }
+                unfold { open.toggle() }
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "square.stack.3d.up")

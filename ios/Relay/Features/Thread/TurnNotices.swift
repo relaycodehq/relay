@@ -8,6 +8,7 @@ import SwiftUI
 struct AgentErrorNote: View {
     let error: String
     @Environment(\.colors) private var colors
+    @Environment(\.unfold) private var unfold
     @State private var open = false
 
     var body: some View {
@@ -21,7 +22,7 @@ struct AgentErrorNote: View {
                 }
                 if let details = shown.details {
                     Button(open ? "Hide technical details" : "Technical details") {
-                        withAnimation(.snappy(duration: 0.2)) { open.toggle() }
+                        unfold { open.toggle() }
                     }
                     .font(.caption)
                     .foregroundStyle(colors.muted)

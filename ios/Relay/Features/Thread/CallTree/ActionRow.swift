@@ -7,6 +7,7 @@ struct ActionRow: View {
     let rows: [TraceRow]
     let context: CallContext
     @Environment(\.colors) private var colors
+    @Environment(\.unfold) private var unfold
     @State private var open = false
 
     private var calls: [AgentActivity] {
@@ -43,7 +44,7 @@ struct ActionRow: View {
             .contentShape(.rect)
             .onTapGesture {
                 guard opens else { return }
-                withAnimation(.snappy(duration: 0.2)) { open.toggle() }
+                unfold { open.toggle() }
             }
             .accessibilityAddTraits(opens ? .isButton : [])
             .selectsOnHold(calls.map(\.label).joined(separator: "\n"), mono: calls[0].kind == "command")

@@ -56,6 +56,7 @@ private struct TreeFold<Item: Identifiable, Content: View>: View {
     let items: [Item]
     @ViewBuilder let content: (Item) -> Content
     @Environment(\.colors) private var colors
+    @Environment(\.unfold) private var unfold
     @State private var open = false
     /// Where a row's first line sits, for the elbow to meet it.
     @ScaledMetric(relativeTo: .footnote) private var firstLine: CGFloat = 11
@@ -63,7 +64,7 @@ private struct TreeFold<Item: Identifiable, Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.snappy(duration: 0.2)) { open.toggle() }
+                unfold { open.toggle() }
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Image(systemName: symbol).foregroundStyle(colors.muted).frame(width: 16)
