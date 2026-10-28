@@ -70,8 +70,6 @@ private struct FollowEnd: ViewModifier {
     @State private var atEnd = true
     /// The reader is unfolding something; see `ReaderUnfold`.
     @State private var unfolding = false
-    /// How far down the thread is scrolled, for an unfold to stay where it is.
-    @State private var offset: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
@@ -93,7 +91,6 @@ private struct FollowEnd: ViewModifier {
                 else { return }
                 follow()
             }
-            .onScrollGeometryChange(for: CGFloat.self, of: \.contentOffset.y) { _, y in offset = y }
             .onChange(of: last) {
                 if mine { following = true }
                 // Not mid-flick: where the flick stops decides whether it follows.
@@ -121,8 +118,9 @@ private struct FollowEnd: ViewModifier {
 
     private func hold(_ held: Bool) {
         unfolding = held
-        // A position on the end row keeps that row at the bottom while what's above it grows.
-        if held { position.scrollTo(y: offset) } else { following = following && atEnd }
+        // A position on the end row keeps that row at the bottom while what's above it grows;
+        // an empty one leaves the thread where it is.
+        if held { position = ScrollPosition(idType: String.self) } else { following = following && atEnd }
     }
 
     private func follow() {

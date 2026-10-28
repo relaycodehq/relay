@@ -85,31 +85,33 @@ struct ThreadView: View {
                 let counts = rootId == nil ? replyCounts(thread?.messages ?? []) : [:]
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
-                        if rootId == nil, let earlier = thread?.earlier, earlier > 0 {
-                            EarlierMessages(chatId: chatId, earlier: earlier)
+                        // In line with the composer's edge below. Each row is padded rather than the stack:
+                        // the scroll view nudged a padded stack sideways by its padding as rows grew.
+                        Group {
+                            if rootId == nil, let earlier = thread?.earlier, earlier > 0 {
+                                EarlierMessages(chatId: chatId, earlier: earlier)
+                            }
+                            let held = Dictionary((thread?.queue ?? []).filter { $0.held == true }.map { ($0.id, $0) }) { a, _ in a }
+                            ForEach(shown) { message in
+                                MessageView(
+                                    chatId: chatId, message: message, root: thread?.root, replies: counts[message.id] ?? 0,
+                                    main: rootId == nil, takeBack: held[message.id].map { item in { takeBackHeld(item) } })
+                                if rootId == nil { WorkspaceMoveLine(moves: thread?.workspaceMoves, messageId: message.id) }
+                            }
+                            if running, let newest = shown.last, newest.role == "user" {
+                                AwaitingAnswer(provider: settings.wrappedValue?.provider ?? thread?.settings?.provider ?? "claude", seed: newest.id)
+                            }
+                            if let thread, canResume(thread, conversation: shown, rootId: rootId, running: running) {
+                                ResumeAnswer(chatId: chatId, settings: settings.wrappedValue ?? thread.settings)
+                            }
                         }
-                        let held = Dictionary((thread?.queue ?? []).filter { $0.held == true }.map { ($0.id, $0) }) { a, _ in a }
-                        ForEach(shown) { message in
-                            MessageView(
-                                chatId: chatId, message: message, root: thread?.root, replies: counts[message.id] ?? 0,
-                                main: rootId == nil, takeBack: held[message.id].map { item in { takeBackHeld(item) } })
-                            if rootId == nil { WorkspaceMoveLine(moves: thread?.workspaceMoves, messageId: message.id) }
-                        }
-                        if running, let newest = shown.last, newest.role == "user" {
-                            AwaitingAnswer(provider: settings.wrappedValue?.provider ?? thread?.settings?.provider ?? "claude", seed: newest.id)
-                        }
-                        if let thread, canResume(thread, conversation: shown, rootId: rootId, running: running) {
-                            ResumeAnswer(chatId: chatId, settings: settings.wrappedValue ?? thread.settings)
-                        }
+                        .padding(.horizontal, 20)
                         // Room under the last line, so a turn's end doesn't sit on the composer.
                         ThreadEnd()
                     }
                     .scrollTargetLayout()
-                    // In line with the composer's edge below.
-                    .padding(.horizontal, 20)
                 }
-                // A margin rather than padding, so the stack starts where the content does and a
-                // scroll position's offset is the content offset.
+                // A margin rather than padding, so the stack starts where the scroll content does.
                 .contentMargins(.top, 12, for: .scrollContent)
                 // Built only once the thread is here, so it opens at the end.
                 .followingEnd(live: live, last: shown.last?.id, mine: sentHere(shown.last), jump: jump)
