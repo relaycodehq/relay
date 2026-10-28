@@ -21,6 +21,7 @@ import { DevServers } from "./dev-servers";
 import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
 import { localPort } from "./local-urls";
+import { keepConsole } from "./page-console";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
 import { sleep } from "../util/sleep";
 
@@ -77,7 +78,6 @@ interface Preview {
   placed: number;
 }
 
-const KEPT_CONSOLE = 200;
 /** What an agent's screenshot of a preview never shown is taken at. */
 const UNSHOWN_SIZE = { width: 1280, height: 800 };
 /** A preview out of sight this long gives its page's memory back. */
@@ -374,18 +374,7 @@ export class ThreadPreviews {
       preview.error = `The page stopped: ${details.reason}.`;
       emit();
     });
-    wc.on("console-message", ({ level, message, sourceId, lineNumber }) => {
-      if (level !== "error" && level !== "warning") return;
-      // Electron's own warnings (an unpackaged build's CSP nag) aren't the page's.
-      if (sourceId.startsWith("node:electron/")) return;
-      preview.console.push({
-        level,
-        message,
-        source: sourceId ? `${sourceId}:${lineNumber}` : undefined,
-        at: Date.now(),
-      });
-      if (preview.console.length > KEPT_CONSOLE) preview.console.shift();
-    });
+    keepConsole(wc, preview);
     return wc;
   }
 
