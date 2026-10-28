@@ -138,6 +138,7 @@ fun AgentRun(
     val live = turn.live
     // Open while the turn runs; folds back once it ends unless the reader toggled it.
     var toggled by rememberSaveable(message.id) { mutableStateOf<Boolean?>(null) }
+    val unfold = LocalUnfold.current
     // Scrolling away forgets it, so a trace held open folds while off screen.
     val fold = remember { TraceFold() }
     val opened = fold.open(live, LocalSavedCopy.current, LocalReadingBack.current)
@@ -151,7 +152,7 @@ fun AgentRun(
     val muted = RelayTheme.colors.mutedForeground
     Column(modifier.padding(top = 2.dp, bottom = 4.dp)) {
         Row(
-            Modifier.heightIn(min = 26.dp).pressable(onClick = { toggled = !expanded }, scale = false),
+            Modifier.heightIn(min = 26.dp).pressable(onClick = { unfold { toggled = !expanded } }, scale = false),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(7.dp),
         ) {
@@ -230,8 +231,9 @@ private fun Fold(
     body: @Composable () -> Unit,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val unfold = LocalUnfold.current
     Column {
-        Step(Modifier.pressable(onClick = { open = !open }, scale = false), content = heading)
+        Step(Modifier.pressable(onClick = { unfold { open = !open } }, scale = false), content = heading)
         under(open)
         if (open) body()
     }

@@ -21,6 +21,8 @@ data class ScrollState(
     val belowEndPx: Int? = 0,
     val nextRestoreToken: Long = 1,
     val readerSettledAtEnd: Boolean = false,
+    /** The reader is opening or closing something; nothing follows until it has laid out. */
+    val unfolding: Boolean = false,
 )
 
 sealed interface ScrollEvent {
@@ -37,11 +39,15 @@ sealed interface ScrollEvent {
     data class NavigationEnded(val id: Long, val completed: Boolean, val belowEndPx: Int?) : ScrollEvent
     data class ToBottom(val reason: String) : ScrollEvent
     data class RestoreResult(val token: Long, val applied: Boolean) : ScrollEvent
+    data object ReaderUnfold : ScrollEvent
+    data class UnfoldSettled(val belowEndPx: Int?) : ScrollEvent
 }
 
 sealed interface ScrollEffect {
     data class RequestEnd(val reason: String) : ScrollEffect
     data class RequestRow(val anchor: RowAnchor, val reason: String) : ScrollEffect
+    /** Keep the rows where they are, over a scroll to the end not laid out yet. */
+    data object Stay : ScrollEffect
     data class CancelNavigation(val id: Long) : ScrollEffect
     data class Transition(val from: ScrollMode, val to: ScrollMode, val cause: String) : ScrollEffect
 }
@@ -61,7 +67,7 @@ object ScrollPolicy {
             effects += ScrollEffect.Transition(previous, next, cause)
         }
         fun follow(reason: String) {
-            if (state.mode == ScrollMode.Following && !state.pointerDown && !state.scrolling &&
+            if (state.mode == ScrollMode.Following && !state.pointerDown && !state.scrolling && !state.unfolding &&
                 (state.applied?.rows ?: 0) > 0) effects += ScrollEffect.RequestEnd(reason)
         }
         fun observe(below: Int?) {
@@ -142,6 +148,18 @@ object ScrollPolicy {
             is ScrollEvent.ToBottom -> {
                 mode(ScrollMode.Following, event.reason)
                 follow(event.reason)
+            }
+            ScrollEvent.ReaderUnfold -> if (state.mode == ScrollMode.Following) {
+                // Lifting the finger already asked for the end, which would land with what opens.
+                state = state.copy(unfolding = true)
+                effects += ScrollEffect.Stay
+            }
+            is ScrollEvent.UnfoldSettled -> {
+                observe(event.belowEndPx)
+                state = state.copy(unfolding = false)
+                // What the reader opened stays under their finger; the thread follows on only if its end still shows.
+                if (state.mode == ScrollMode.Following && !atEnd(event.belowEndPx)) mode(ScrollMode.Reading, "reader_unfolded")
+                else follow("unfold_settled")
             }
             is ScrollEvent.RestoreResult -> {
                 if ((state.mode as? ScrollMode.Restoring)?.token == event.token)

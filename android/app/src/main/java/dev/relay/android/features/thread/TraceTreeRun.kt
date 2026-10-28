@@ -78,10 +78,11 @@ internal fun ClosedRun(calls: List<AgentActivity>, only: Boolean) {
     val summary = run.summary
     if (summary == null || only) return Column { for (piece in run.pieces) key(piece.id) { Piece(piece) } }
     var open by rememberSaveable { mutableStateOf(false) }
+    val unfold = LocalUnfold.current
     val first = run.pieces.first()
     val failed = allFailed(run.pieces.flatMap(::rowsIn))
     Column {
-        FoldHeading(branchIcon(firstKind(first), rowsIn(first)), summary, failed, open, onToggle = { open = !open })
+        FoldHeading(branchIcon(firstKind(first), rowsIn(first)), summary, failed, open, onToggle = { unfold { open = !open } })
         if (open) run.pieces.forEachIndexed { index, piece ->
             val elbow = Modifier.treeElbow(last = index == run.pieces.lastIndex, color = treeLine())
             key(piece.id) { Piece(piece, elbow.padding(start = INDENT)) }
@@ -152,8 +153,9 @@ private fun OpenableRow(
     label: @Composable () -> Unit,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val unfold = LocalUnfold.current
     val inside = rows.flatMap { it.calls }.distinctBy { it.id }.filter(::opensTo)
-    val press = if (inside.isEmpty()) Modifier else Modifier.pressable(onClick = { open = !open }, scale = false)
+    val press = if (inside.isEmpty()) Modifier else Modifier.pressable(onClick = { unfold { open = !open } }, scale = false)
     Column(modifier) {
         Row(press.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
             Box(Modifier.height(LINE), contentAlignment = Alignment.Center) { icon() }
@@ -224,9 +226,10 @@ private fun CommandLine(command: String) {
 @Composable
 private fun Branch(branch: TracePiece.Branch, modifier: Modifier = Modifier) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val unfold = LocalUnfold.current
     val failed = allFailed(branch.rows)
     Column(modifier) {
-        FoldHeading(branchIcon(branch.kind, branch.rows), branch.heading, failed, open, onToggle = { open = !open })
+        FoldHeading(branchIcon(branch.kind, branch.rows), branch.heading, failed, open, onToggle = { unfold { open = !open } })
         if (open) branch.rows.forEachIndexed { index, row ->
             val elbow = Modifier.treeElbow(last = index == branch.rows.lastIndex, color = treeLine())
             key(row.id) { ActionRow(row, elbow.padding(start = INDENT)) }

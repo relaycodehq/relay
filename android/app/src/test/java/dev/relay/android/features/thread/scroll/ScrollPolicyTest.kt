@@ -63,6 +63,40 @@ class ScrollPolicyTest {
         }
     }
 
+    private fun tapAFold(session: Session): List<ScrollEffect> {
+        session.send(ScrollEvent.PointerDown)
+        session.send(ScrollEvent.EndObserved(0))
+        session.send(ScrollEvent.PointerUp)
+        return session.send(ScrollEvent.ReaderUnfold)
+    }
+
+    @Test fun aFoldThatPushesTheEndOffStaysWhereItWasOpened() {
+        val session = following()
+        // The tap's release asked for the end; the fold opening takes that back.
+        assertEquals(listOf(ScrollEffect.Stay), tapAFold(session))
+        assertTrue(session.send(ScrollEvent.EndObserved(300)).endRequests().isEmpty())
+        assertTrue(session.send(ScrollEvent.UnfoldSettled(300)).endRequests().isEmpty())
+        assertEquals(ScrollMode.Reading, session.state.mode)
+        assertTrue(session.send(ScrollEvent.Content(initialContent.copy(tailVersion = 11))).endRequests().isEmpty())
+    }
+
+    @Test fun aFoldThatLeavesTheEndOnScreenKeepsFollowing() {
+        val session = following()
+        tapAFold(session)
+        session.send(ScrollEvent.EndObserved(0))
+        session.send(ScrollEvent.UnfoldSettled(0))
+        assertEquals(ScrollMode.Following, session.state.mode)
+        assertEquals(1, session.send(ScrollEvent.Content(initialContent.copy(tailVersion = 11))).endRequests().size)
+    }
+
+    @Test fun anAnswerStreamingWhileAFoldOpensDoesNotPullTheThreadToTheEnd() {
+        val session = following()
+        tapAFold(session)
+        assertTrue(session.send(ScrollEvent.Content(initialContent.copy(tailVersion = 11))).endRequests().isEmpty())
+        session.send(ScrollEvent.UnfoldSettled(300))
+        assertEquals(ScrollMode.Reading, session.state.mode)
+    }
+
     @Test fun geometryChangesCannotRepinSomeoneReadingEvenWhenTheEndBecomesVisible() {
         val session = following()
         session.send(ScrollEvent.UserScroll(true))

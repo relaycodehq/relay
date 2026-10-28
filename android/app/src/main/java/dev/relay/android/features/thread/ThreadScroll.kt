@@ -13,6 +13,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -26,10 +28,20 @@ import dev.relay.android.features.thread.scroll.ScrollEvent
 import dev.relay.android.features.thread.scroll.ScrollMode
 import dev.relay.android.features.thread.scroll.ScrollPolicy
 import dev.relay.android.features.thread.scroll.ScrollState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
+
+/** Opens or closes something the reader tapped in a thread, so the thread doesn't jump to its end as it grows. */
+fun interface ReaderUnfold {
+    operator fun invoke(change: () -> Unit)
+}
+
+/** Outside a thread an unfold is just the change. */
+internal val LocalUnfold = staticCompositionLocalOf { ReaderUnfold { change -> change() } }
 
 /** One intent policy owns follow/navigation; keyed restores and resize anchors use LazyList directly. */
 @Stable
@@ -74,6 +86,11 @@ class ThreadScroll internal constructor(
                 }
             }
             is ScrollEffect.RequestRow -> pendingAnchor = effect.anchor
+            // The list's own position already says where a pending request goes; the last layout is what's on screen.
+            ScrollEffect.Stay -> list.layoutInfo.let { info ->
+                val row = info.visibleItemsInfo.firstOrNull() ?: return@let
+                list.requestScrollToItem(row.index, (info.viewportStartOffset - row.offset).coerceAtLeast(0))
+            }
             is ScrollEffect.CancelNavigation -> { navigation?.cancel(); navigation = null }
             is ScrollEffect.Transition -> trace?.event("pin", "from" to (effect.from == ScrollMode.Following),
                 "to" to (effect.to == ScrollMode.Following), "reason" to effect.cause,
@@ -142,6 +159,17 @@ class ThreadScroll internal constructor(
     }
 
     fun toBottom(reason: String = "outgoing_message") { accept(ScrollEvent.ToBottom(reason)) }
+
+    /** The reader opened or closed something: hold still while it lays out, then follow on only if the end shows. */
+    fun unfold(scope: CoroutineScope) {
+        accept(ScrollEvent.ReaderUnfold)
+        scope.launch {
+            // The change lays out in the next frame; the frame after measures it.
+            withFrameNanos {}
+            withFrameNanos {}
+            accept(ScrollEvent.UnfoldSettled(below()))
+        }
+    }
 
     /** Semantic actions may complete between snapshot samples; intent must precede their mutation. */
     internal fun accessibilityIntent(towardOlder: Boolean) {

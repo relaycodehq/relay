@@ -38,6 +38,7 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Login
 @Composable
 fun AgentErrorNote(error: String) {
     var open by rememberSaveable { mutableStateOf(false) }
+    val unfold = LocalUnfold.current
     val shown = agentError(error)
     val c = RelayTheme.colors
     Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -48,7 +49,7 @@ fun AgentErrorNote(error: String) {
             val details = shown.details ?: return@Column
             Text(
                 if (open) "Hide technical details" else "Technical details",
-                Modifier.pressable(onClick = { open = !open }, scale = false),
+                Modifier.pressable(onClick = { unfold { open = !open } }, scale = false),
                 style = RelayTheme.type.xs,
                 color = c.mutedForeground,
             )
