@@ -147,7 +147,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/agents/model-picker-catalog.ts › pickerRows": 105,
   "src/features/agents/saved-resets/ResetUsage.tsx › ResetUsage": 149,
   "src/features/browser/BrowserSurface.tsx › AddressBar": 109,
-  "src/features/browser/BrowserSurface.tsx › BrowserSurface": 88,
+  "src/features/browser/BrowserSurface.tsx › BrowserSurface": 83,
   "src/features/browser/TurnPreview.tsx › TurnPreview": 94,
   "src/features/browser/useBrowserAnnotations.ts › useBrowserAnnotations": 89,
   "src/features/bug-report/ReportIncluded.tsx › ReportIncluded": 92,

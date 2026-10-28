@@ -49,12 +49,7 @@ export function BrowserSurface({
     setOpening(null);
     openPreview(projectId, chatId).catch((e: Error) => setOpening(e.message));
   }, [projectId, chatId, front]);
-  const act = (action: PreviewAction) => {
-    setOpening(null);
-    void api
-      .previewAction(key, action)
-      .catch((e: Error) => setOpening(e.message));
-  };
+  const act = usePageActions(key, setOpening);
   const viewport = useRef<HTMLDivElement>(null);
   const place = useCallback(
     (bounds: PreviewBounds | null) => void api.placePreview(key, bounds),
@@ -114,6 +109,20 @@ export function BrowserSurface({
       </div>
     </div>
   );
+}
+
+/** The address bar's actions on the page. */
+function usePageActions(
+  key: string,
+  setOpening: (failure: string | null) => void,
+) {
+  const act = (action: PreviewAction) => {
+    setOpening(null);
+    void api
+      .previewAction(key, action)
+      .catch((e: Error) => setOpening(e.message));
+  };
+  return act;
 }
 
 function AddressBar({
