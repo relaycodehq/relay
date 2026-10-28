@@ -18,6 +18,7 @@ import type {
 import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
+import { faviconData } from "./favicon";
 import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
 import { localPort } from "./local-urls";
@@ -66,6 +67,8 @@ interface Preview {
   stopPick?: () => void;
   /** When it last left the panel. */
   hiddenAt: number;
+  /** Captures under way; the idle sweep mustn't close the page under them. */
+  capturing: number;
   /** The Relay window it's laid over while shown: the main one, or its thread's own. */
   host?: BrowserWindow;
   popOut?: BrowserWindow;
@@ -279,6 +282,7 @@ export class ThreadPreviews {
       target,
       shown: false,
       hiddenAt: this.now(),
+      capturing: 0,
       server: { state: "none" },
       console: [],
       placed: 0,
@@ -330,27 +334,14 @@ export class ThreadPreviews {
       if (!current()) return;
       const request = {};
       preview.faviconRequest = request;
-      void (async () => {
-        let favicon: string | undefined;
-        for (const url of urls) {
-          if (!webUrl(url) && !url.startsWith("data:image/")) continue;
-          try {
-            const response = await wc.session.fetch(url);
-            if (!response.ok) continue;
-            const mime = response.headers.get("content-type")?.split(";")[0];
-            if (!mime?.startsWith("image/")) continue;
-            const bytes = Buffer.from(await response.arrayBuffer());
-            if (!bytes.length || bytes.length > 1024 * 1024) continue;
-            favicon = `data:${mime};base64,${bytes.toString("base64")}`;
-            break;
-          } catch {
-            // Missing icons should never stop a page from loading.
-          }
-        }
+      const icons = urls.filter(
+        (url) => webUrl(url) || url.startsWith("data:image/"),
+      );
+      void faviconData(wc.session, icons).then((favicon) => {
         if (!current() || preview.faviconRequest !== request) return;
         preview.favicon = favicon;
         emit();
-      })();
+      });
     });
     const navigated = () => {
       if (!current()) return;
@@ -410,6 +401,7 @@ export class ThreadPreviews {
         !wc ||
         preview.shown ||
         preview.popOut ||
+        preview.capturing ||
         this.now() - preview.hiddenAt < UNLOAD_MS ||
         (!wc.isDestroyed() && wc.isDevToolsOpened())
       )
@@ -691,24 +683,31 @@ export class ThreadPreviews {
   async capture(key: string): Promise<NativeImage | null> {
     const preview = this.previews.get(key);
     if (!preview) return null;
-    const wc = this.revive(preview);
-    await this.settled(key, 15_000);
-    if (preview.view?.webContents !== wc || wc.isDestroyed() || !wc.getURL())
-      return null;
-    const view = preview.view!;
-    if (!preview.shown && !preview.popOut) {
-      const { width, height } = view.getBounds();
-      if (!width || !height) view.setBounds({ x: 0, y: 0, ...UNSHOWN_SIZE });
-      if (!preview.drawn) await this.prime(preview);
-    }
-    // Chromium has no frame for a view just taken off a window at first.
-    for (let attempt = 1; ; attempt++) {
-      const image = await wc.capturePage().catch(() => null);
-      if (image && !image.isEmpty()) return image;
-      if (attempt === 10) throw new Error("The preview could not be drawn.");
-      if (attempt === 4 && !preview.shown && !preview.popOut)
-        await this.prime(preview);
-      await sleep(100);
+    preview.capturing++;
+    try {
+      const wc = this.revive(preview);
+      await this.settled(key, 15_000);
+      if (preview.view?.webContents !== wc || wc.isDestroyed() || !wc.getURL())
+        return null;
+      const view = preview.view!;
+      if (!preview.shown && !preview.popOut) {
+        const { width, height } = view.getBounds();
+        if (!width || !height) view.setBounds({ x: 0, y: 0, ...UNSHOWN_SIZE });
+        if (!preview.drawn) await this.prime(preview);
+      }
+      // Chromium has no frame for a view just taken off a window at first.
+      for (let attempt = 1; ; attempt++) {
+        // Closed meanwhile (the thread moved): capturePage would throw, not reject.
+        if (wc.isDestroyed()) return null;
+        const image = await wc.capturePage().catch(() => null);
+        if (image && !image.isEmpty()) return image;
+        if (attempt === 10) throw new Error("The preview could not be drawn.");
+        if (attempt === 4 && !preview.shown && !preview.popOut)
+          await this.prime(preview);
+        await sleep(100);
+      }
+    } finally {
+      preview.capturing--;
     }
   }
 

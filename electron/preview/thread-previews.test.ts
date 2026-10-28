@@ -306,6 +306,26 @@ it("waits for parked history before capturing the first screenshot", async () =>
   expect(previews.current("chat")?.url).toBe("http://localhost:3000/saved");
 });
 
+it("keeps a page being captured out of the idle sweep", async () => {
+  const { previews, advance } = setup();
+  await previews.navigate("project", "chat", "http://localhost:3000/saved");
+  advance();
+  previews.unloadIdle();
+  let finish!: () => void;
+  mock.restore.mockImplementationOnce(
+    () =>
+      new Promise((r) => {
+        finish = r;
+      }),
+  );
+  const capture = previews.capture("chat");
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  previews.unloadIdle();
+  finish();
+  expect(await capture).not.toBeNull();
+  expect(mock.views[1]!.webContents.closed).toBe(false);
+});
+
 function memoryStore() {
   const state: ReturnType<Store["get"]> = {
     version: 1,
