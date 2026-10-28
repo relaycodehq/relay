@@ -7,6 +7,7 @@ import type {
 import { inSetup } from "../../shared/handoff";
 import { working, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
+import { ListeningWork } from "./listening-work";
 import type { CleanupCandidate } from "./worktree-cleanup";
 
 /** Turns that make the thread read running; a side answer or a handoff note runs inside another. */
@@ -46,7 +47,11 @@ function awaySummary(
 
 /** A project's threads as the sidebar lists them: saved summaries, what runs in each now, and how they settle. */
 export class ThreadList {
-  constructor(private core: ChatCore) {}
+  private listening: ListeningWork;
+
+  constructor(private core: ChatCore) {
+    this.listening = new ListeningWork(core);
+  }
 
   autoSettleDays(): number | null {
     return this.core.prefs().autoSettleDays;
@@ -192,14 +197,19 @@ export class ThreadList {
 
   /**
    * What Claude left behind in the thread: its live session's background
-   * work, and the wake-ups kept when Relay last closed.
+   * work, servers with the ports they listen on, and the wake-ups kept
+   * when Relay last closed.
    */
   private pendingIn(
     c: ChatSummary,
     live: ReturnType<ChatCore["sessions"]["pending"]>,
   ): ChatPending[] {
+    const withPorts = (item: ChatPending): ChatPending => {
+      const ports = this.listening.portsOf(item.id);
+      return ports && item.kind === "task" ? { ...item, ports } : item;
+    };
     return [
-      ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
+      ...live.filter((p) => p.chatId === c.id).map((p) => withPorts(p.item)),
       ...(c.heldWakeups ?? []).map((w): ChatPending => ({
         kind: "wakeup",
         id: w.id,

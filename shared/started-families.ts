@@ -1,14 +1,15 @@
 // Threads another thread's agent started through Relay's tools, grouped under
 // that lead the same way in the desktop's Activity and the phone's.
-import type { StartedBy } from "./projects";
+import type { ChatPending, StartedBy } from "./projects";
 import { inputBlocksThread, type ThreadInputState } from "./thread-state";
+import { waitedOn } from "./waiting";
 
 /** What grouping reads; the phone's thread summaries carry just these. */
 export interface FamilyMember extends ThreadInputState {
   id: string;
   created: number;
   startedBy?: StartedBy;
-  pending?: readonly unknown[];
+  pending?: readonly ChatPending[];
 }
 
 /** Needs the user first, then working, then done; each oldest first. */
@@ -81,5 +82,5 @@ export const familySettled = <C extends FamilyMember>(
   unread: (c: C) => boolean,
 ) =>
   started.every(
-    (c) => !c.running && !c.waiting && !c.pending?.length && !unread(c),
+    (c) => !c.running && !c.waiting && !waitedOn(c.pending) && !unread(c),
   );

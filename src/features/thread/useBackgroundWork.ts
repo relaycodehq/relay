@@ -6,6 +6,7 @@ import {
   subagentFanOuts,
   type SubagentRun,
 } from "../../../shared/subagents";
+import { waitedOn } from "../../../shared/waiting";
 import { api } from "../../lib/api";
 import { readJson, writeJson } from "../../lib/persisted-store";
 import { usePoll } from "../../lib/poll";
@@ -25,9 +26,8 @@ export function useBackgroundWork(
   const poll = usePoll();
   // A turn doesn't end background work, so it stays listed through one; a
   // wake-up is relisted as the turn ends.
-  const live = running
-    ? chat?.pending?.filter((p) => p.kind === "task")
-    : chat?.pending;
+  const awaited = waitedOn(chat?.pending);
+  const live = running ? awaited?.filter((p) => p.kind === "task") : awaited;
   const pending = live?.length ? live : undefined;
   const stopped =
     !running && !chat?.pending?.length ? chat?.stopped?.items : undefined;

@@ -199,6 +199,8 @@ export type ChatPending =
       since: number;
       /** A subagent or workflow, which reports back, unlike a dev server. */
       agent?: boolean;
+      /** The ports its command listens on: a server, which never ends by itself. */
+      ports?: number[];
     }
   | {
       kind: "wakeup";

@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   claudePending,
+  claudeTaskCommand,
   listClaudeModels,
   onClaudePending,
   runClaudeProject,
@@ -266,6 +267,23 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
       (async function* () {
         const sent = await input.next();
         yield lifecycle(sent.value.uuid, "started");
+        yield {
+          type: "assistant",
+          parent_tool_use_id: null,
+          session_id,
+          message: {
+            id: "msg-ab",
+            content: [
+              {
+                type: "tool_use",
+                id: "toolu_ab",
+                name: "Bash",
+                input: { command: "npm run ab", run_in_background: true },
+              },
+            ],
+            usage: {},
+          },
+        };
         yield tasks(
           { task_id: "ab", task_type: "local_bash", description: "Run A/B" },
           {
@@ -280,6 +298,16 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
             ambient: true,
           },
         );
+        // The list carries ids only; the start names the Bash call.
+        yield {
+          type: "system",
+          subtype: "task_started",
+          task_id: "ab",
+          tool_use_id: "toolu_ab",
+          task_type: "local_bash",
+          description: "Run A/B",
+          session_id,
+        };
         await options.hooks!.Stop![0].hooks[0](
           {
             hook_event_name: "Stop",
@@ -339,6 +367,8 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
       at: wakeupTime("30 19 23 9 *"),
     },
   ]);
+  expect(claudeTaskCommand(key, "ab")).toBe("npm run ab");
+  expect(claudeTaskCommand(key, "rev")).toBeUndefined();
   await stopClaudeTask(key, "ab");
   expect(stopTask).toHaveBeenCalledWith("ab");
   await expect(stopClaudeTask(key, "later")).rejects.toThrow(
@@ -350,6 +380,7 @@ it("lists the background work and wake-ups Claude leaves running", async () => {
   finish();
   await vi.waitFor(() => expect(heard).toHaveBeenCalled());
   expect(claudePending(key).map((p) => p.id)).toEqual(["later"]);
+  expect(claudeTaskCommand(key, "ab")).toBeUndefined();
   unhear();
 });
 

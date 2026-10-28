@@ -1,6 +1,7 @@
 import type { ChatSummary, ProjectChat } from "../../shared/projects";
 import { inputBlocksThread } from "../../shared/thread-state";
 import { sliceWhole } from "../../shared/truncate";
+import { waitedOn } from "../../shared/waiting";
 
 type Progress =
   "working" | "needs-input" | "done" | "stopped" | "failed" | "idle";
@@ -25,7 +26,7 @@ export function chatStatus(summary: ChatSummary, chat: ProjectChat) {
   if (inputBlocksThread(summary)) status = "needs-input";
   else if (
     summary.running ||
-    summary.pending?.length ||
+    waitedOn(summary.pending) ||
     (chat.queue?.length && !chat.queuePaused)
   )
     status = "working";

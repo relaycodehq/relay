@@ -13,6 +13,11 @@ export function claudePending(key: string): ChatPending[] {
   return session.work.list();
 }
 
+/** The command a background task of the live session runs, when Claude started it with Bash. */
+export function claudeTaskCommand(key: string, taskId: string) {
+  return sessions.get(key)?.work.command(taskId);
+}
+
 /** The session still runs: it can start the turn its background work reports in. */
 export function claudeLive(key: string) {
   const session = sessions.get(key);

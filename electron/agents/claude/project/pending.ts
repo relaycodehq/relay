@@ -1,7 +1,11 @@
 import type { ChatPending } from "../../../../shared/projects";
+import type { SDKMessage } from "./sdk";
 
 type Task = Extract<ChatPending, { kind: "task" }>;
 type Wakeup = Extract<ChatPending, { kind: "wakeup" }>;
+
+/** Enough of the latest Bash calls to find the one a background task came from. */
+const BASH_CALLS_KEPT = 100;
 
 const listeners = new Set<() => void>();
 
@@ -21,6 +25,40 @@ export class ClaudeWork {
   private tasks = new Map<string, Task>();
   /** Wake-ups Claude scheduled for itself, as of the end of its last turn. */
   private wakeups: Wakeup[] = [];
+  /** The command of each recent Bash call, by tool use id. */
+  private bashCalls = new Map<string, string>();
+  /** The command each background task runs, by task id. */
+  private commands = new Map<string, string>();
+
+  /**
+   * Notes which command a background task runs. The task list carries ids
+   * only; the task's start names the Bash call that began it.
+   */
+  observe(frame: SDKMessage) {
+    if (frame.type === "assistant")
+      for (const block of frame.message.content) {
+        if (block.type !== "tool_use" || block.name !== "Bash") continue;
+        const { command } = block.input as { command?: unknown };
+        if (typeof command === "string") this.rememberBash(block.id, command);
+      }
+    if (frame.type !== "system" || frame.subtype !== "task_started") return;
+    const command = frame.tool_use_id && this.bashCalls.get(frame.tool_use_id);
+    if (!command) return;
+    this.commands.set(frame.task_id, command);
+    pendingChanged();
+  }
+
+  private rememberBash(toolUseId: string, command: string) {
+    this.bashCalls.set(toolUseId, command);
+    if (this.bashCalls.size <= BASH_CALLS_KEPT) return;
+    const [oldest] = this.bashCalls.keys();
+    this.bashCalls.delete(oldest);
+  }
+
+  /** The command a background task runs, when it came from a Bash call. */
+  command(taskId: string) {
+    return this.commands.get(taskId);
+  }
 
   /** Replaces the live task set; the SDK sends all of it on every change. */
   track(
@@ -44,6 +82,9 @@ export class ClaudeWork {
           since: previous.get(task.task_id)?.since ?? Date.now(),
           ...(agentTask(task.task_type) && { agent: true }),
         });
+    const live = new Set(tasks.map((task) => task.task_id));
+    for (const taskId of this.commands.keys())
+      if (!live.has(taskId)) this.commands.delete(taskId);
     pendingChanged();
   }
 

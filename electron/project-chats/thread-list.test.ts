@@ -32,7 +32,7 @@ it("counts blocking requests from helpers even when the parent keeps running", (
     prefs: () => ({ ...defaultPrefs, autoSettleDays: null }),
     projects: { get: () => ({ settings: {} }) },
     active: running,
-    sessions: { pending: () => [] },
+    sessions: { pending: () => [], onPending: () => () => {} },
   } as unknown as ChatCore;
   const threads = new ThreadList(core);
   const review = () => threads.list("p").find((c) => c.id === "parent")!;
@@ -106,7 +106,10 @@ it("keeps settling, pending work and remote approval state in a batch", () => {
     prefs: () => ({ ...defaultPrefs, autoSettleDays: 3 }),
     projects: { get: () => ({ settings: {} }) },
     active: new ActiveTurns(() => {}),
-    sessions: { pending: () => [{ chatId: "queued", item: pending }] },
+    sessions: {
+      pending: () => [{ chatId: "queued", item: pending }],
+      onPending: () => () => {},
+    },
     away: new Map([["away", { running: true, waiting: true, blocked: true }]]),
   } as unknown as ChatCore;
   const threads = new ThreadList(core);

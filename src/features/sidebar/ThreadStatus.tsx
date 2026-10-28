@@ -10,7 +10,7 @@ import {
 } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
 import type { ReviewCard } from "../../../shared/deep-review";
-import { agentsSince } from "../../../shared/waiting";
+import { agentsSince, waitedOn } from "../../../shared/waiting";
 import { inputBlocksThread } from "../../../shared/thread-state";
 import { useNow } from "../../lib/useNow";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
@@ -53,7 +53,7 @@ function ReviewAgents({ card }: { card: ReviewCard }) {
 
 /** Working, waiting on you or about to continue: worth showing even shelved. */
 export const isLive = (chat: ChatSummary) =>
-  inputBlocksThread(chat) || chat.running || !!chat.pending?.length;
+  inputBlocksThread(chat) || chat.running || !!waitedOn(chat.pending);
 
 export function StatusMark({
   chat,
@@ -70,7 +70,8 @@ export function StatusMark({
         <i />
       </span>
     );
-  if (chat.running || agentsSince(chat.pending))
+  const awaited = waitedOn(chat.pending);
+  if (chat.running || agentsSince(awaited))
     return (
       <span
         className="sb-status running"
@@ -81,7 +82,7 @@ export function StatusMark({
               : chat.waiting
                 ? "Working · needs your input"
                 : "Working"
-            : pendingTitle(chat.pending!)
+            : pendingTitle(awaited!)
         }
       >
         <Spinner size={11} steady />
@@ -93,7 +94,7 @@ export function StatusMark({
         <i />
       </span>
     );
-  if (chat.pending?.length)
+  if (awaited)
     return (
       <span
         className="sb-status pending"
@@ -147,7 +148,8 @@ export function CardState({
     );
   // A native /goal keeps the agent going across turns until it's met.
   const goal = chat.running && chat.goal?.status === "active";
-  const since = chat.running ? chat.runningSince : agentsSince(chat.pending);
+  const awaited = waitedOn(chat.pending);
+  const since = chat.running ? chat.runningSince : agentsSince(awaited);
   // Working is the time and the spinner; the title says what it's doing on hover.
   if (chat.running || since)
     return (
@@ -160,7 +162,7 @@ export function CardState({
               ? chat.waiting
                 ? "Working · needs your input"
                 : "Working"
-              : pendingTitle(chat.pending!)
+              : pendingTitle(awaited!)
         }
       >
         {since && <Elapsed since={since} />}
@@ -177,11 +179,11 @@ export function CardState({
     );
   if (wokeUnread(chat, now))
     return <span className="sb-card-state unread">Woke up</span>;
-  if (chat.pending?.length)
+  if (awaited)
     return (
       <span
         className={`sb-card-state pending ${unread ? "unread" : ""}`}
-        title={pendingTitle(chat.pending)}
+        title={pendingTitle(awaited)}
       >
         <i />
         <span className="sb-card-label">Waiting</span>

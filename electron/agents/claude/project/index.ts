@@ -10,6 +10,7 @@ export {
   claudeLive,
   claudePending,
   claudeSubagents,
+  claudeTaskCommand,
   readClaudeContext,
   stopClaudeAgent,
   stopClaudeTask,

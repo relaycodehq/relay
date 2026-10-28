@@ -54,6 +54,7 @@ export async function pump(
       // Here rather than in receive(): frames a turn leaves unread pass through that twice.
       if (unseen) session.agents.observe(unseen);
       forks.observe(next.value);
+      session.work.observe(next.value);
       // Replayed after a restart, turns already shown only rebuild what's running.
       const seq = session.hosted?.seqOf(next.value);
       if (seq !== undefined && seq < session.hosted!.split)

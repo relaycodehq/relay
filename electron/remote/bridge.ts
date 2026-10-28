@@ -25,6 +25,7 @@ import { shortHost } from "../../shared/handoff";
 import { RENDER_MAX_PAGES } from "../../shared/html-render";
 import { sentAgent } from "../../shared/recipient";
 import { queuedForPhone } from "../../shared/remote-queued";
+import { waitedOn } from "../../shared/waiting";
 import { idSchema } from "../../shared/validation";
 import type { ApiMethod, FilePair } from "../../shared/types";
 import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
@@ -139,7 +140,7 @@ export class RemoteBridge {
           ? { workspaceMoves: patch.workspaceMoves }
           : {}),
         ...(patch.stopped ? { stopped: patch.stopped } : {}),
-        ...(summary?.pending ? { pending: summary.pending } : {}),
+        ...(summary?.pending ? { pending: waitedOn(summary.pending) } : {}),
         ...(last
           ? {
               settings: {

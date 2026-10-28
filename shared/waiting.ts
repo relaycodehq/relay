@@ -28,6 +28,18 @@ export function timing(item: ChatPending, now: number) {
 }
 
 /**
+ * What Claude left behind that it comes back for: everything but servers.
+ * A server only ends when someone stops it, so the thread isn't waiting on
+ * it; it shows with the processes running in the project instead.
+ */
+export function waitedOn(pending: readonly ChatPending[] | undefined) {
+  const awaited = (pending ?? []).filter(
+    (item) => item.kind !== "task" || !item.ports?.length,
+  );
+  return awaited.length ? awaited : undefined;
+}
+
+/**
  * When the oldest subagent Claude left running started, if any. Those report
  * back and Claude carries on, so the thread is still working, not waiting.
  */

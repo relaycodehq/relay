@@ -9,6 +9,7 @@ import type {
 import { phoneDetailPreview, type RemoteChatSummary } from "../../shared/remote";
 import { isStartThreads } from "../../shared/started-threads";
 import { callActions } from "../../shared/call-actions";
+import { waitedOn } from "../../shared/waiting";
 import type { SubagentDetail } from "../../shared/subagents";
 
 const messageActivity = (m: ChatMessage | undefined): AgentActivity[] =>
@@ -115,7 +116,8 @@ export function summaryForPhone(c: ChatSummary): RemoteChatSummary {
       : {}),
     ...(c.branch ? { branch: c.branch } : {}),
     ...(c.worktree ? { worktree: true } : {}),
-    ...(c.pending?.length ? { pending: c.pending } : {}),
+    // Phones show only what Claude waits on; servers list on the desktop.
+    ...(c.pending?.length ? { pending: waitedOn(c.pending) } : {}),
     ...(c.nextSend ? { nextSend: c.nextSend } : {}),
     ...(c.queueMark ? { queueMark: c.queueMark } : {}),
     ...(c.empty ? { empty: true } : {}),
