@@ -108,9 +108,14 @@ fun summarizeActivity(activity: List<AgentActivity>, dropped: Map<String, Int>? 
     val stopped = HashSet<String>()
     val running = HashSet<String>()
     var questions = 0
+    var threads = 0
     for (a in activity) {
         if (isQuestionCall(a) && a.status == "complete") {
             questions += askedQuestions(a)?.size ?: 1
+            continue
+        }
+        if (isStartThreads(a) && a.status == "complete") {
+            threads += startedIds(a.detail)?.size ?: 1
             continue
         }
         if (a.status != "complete") {
@@ -131,6 +136,7 @@ fun summarizeActivity(activity: List<AgentActivity>, dropped: Map<String, Int>? 
     dropped?.forEach { (kind, n) -> if (kind != "failed" && n != 0) counts[kind] = n }
     for ((kind, seen) in groups) counts[kind] = (counts[kind] ?: 0) + seen.size
     val labels = counts.map { (kind, n) -> summary(kind, n) }.toMutableList()
+    if (threads > 0) labels += "Started ${plural(threads, "thread")}"
     if (questions > 0) labels += "Asked you ${plural(questions, "question")}"
     val failures = failed.size + (dropped?.get("failed") ?: 0)
     if (failures > 0) labels += "${plural(failures, "tool call")} failed"

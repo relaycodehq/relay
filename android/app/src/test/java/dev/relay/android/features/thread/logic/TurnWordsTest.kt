@@ -47,6 +47,13 @@ class TurnWordsTest {
         assertEquals("Edited 2 files", summarizeActivity(listOf(patch, call("e", "file", "complete", "src/app.ts"))))
     }
 
+    @Test fun threadsATurnStartedCountByTheIdsTheyReturned() {
+        val started = call("s", "tool", "complete", "relay: start_threads")
+            .copy(mcp = McpCall("relay", "start_threads"), detail = """[{"id":"a"},{"id":"b"}]""")
+        assertEquals("Read 1 file and started 2 threads", summarizeActivity(listOf(call("r", "read", "complete", "a.ts"), started)))
+        assertEquals("Started 1 thread", summarizeActivity(listOf(started.copy(detail = "Started."))))
+    }
+
     @Test fun addsDroppedCallsFirst() {
         assertEquals(
             "Ran 141 commands, read 3 files, and 2 tool calls failed",
