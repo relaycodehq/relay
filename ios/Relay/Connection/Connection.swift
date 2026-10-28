@@ -39,12 +39,12 @@ final class Connection {
     @ObservationIgnored let tunnels = TunnelListeners()
     /// Which of each computer's ports the browser may open: listed in Sites, or typed.
     @ObservationIgnored let tunnelPorts = TunnelPorts()
-    /// What a new thread opens on, and each agent's remembered model; asked once per connection,
-    /// the copy saved last time standing in until then.
+    /// What a new thread opens on, refreshed when New opens; the saved copy stands in until then.
     private(set) var newThread: (settings: ResumeSettings, models: NewThreadModels)?
-    /// The agents listed and the new thread asked on this connection, past the saved copies.
+    /// Lists and defaults fetched on this connection, past the saved copies.
     private var listedModels: Set<String> = []
     private var askedNewThread = false
+    @ObservationIgnored private var newThreadAsk = 0
     /// The agents as Settings → Agents orders and switches them; asked once per
     /// connection, and again each time the model sheet opens.
     private(set) var agentPrefs: NewThreadAI?
@@ -691,11 +691,18 @@ final class Connection {
         RelayRemote.offeredAgents(order: agentPrefs?.agentOrder ?? [], off: agentPrefs?.agentsOff ?? [], keep: keep)
     }
 
-    func loadNewThread() async {
-        guard !askedNewThread, let client, status.state == .online else { return }
+    /// Existing threads can use the cache; opening New asks for the current defaults.
+    func loadNewThread(fresh: Bool = false) async {
+        guard fresh || !askedNewThread, let client, status.state == .online else { return }
         askedNewThread = true
+        newThreadAsk += 1
+        let ask = newThreadAsk
         let defaults = await client.newThreadDefaults()
-        guard self.client === client else { return }
+        guard self.client === client, ask == newThreadAsk else { return }
+        guard !Task.isCancelled else {
+            askedNewThread = false
+            return
+        }
         newThread = defaults
         saveNewThread()
     }
@@ -709,6 +716,8 @@ final class Connection {
     /// the agent, or that agent's model, and the access.
     func rememberNewThread(_ settings: ResumeSettings, over before: ResumeSettings) {
         guard let client, settings != before else { return }
+        // An in-flight refresh mustn't overwrite a choice made while it was loading.
+        newThreadAsk += 1
         newThread?.settings = settings
         if settings.provider == before.provider { newThread?.models[settings.provider] = NewThreadModel(settings) }
         saveNewThread()

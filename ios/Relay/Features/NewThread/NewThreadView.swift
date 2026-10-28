@@ -136,7 +136,7 @@ struct NewThreadView: View {
         .navigationTitle("New thread")
         .usageToolbar(provider: connection.newThread?.settings.provider)
         .navigationBarTitleDisplayMode(.inline)
-        .task(id: connection.status.state) { await connection.loadNewThread() }
+        .task(id: connection.status.state) { await connection.loadNewThread(fresh: true) }
         .task(id: scratch && connection.status.state == .online) {
             if scratch && connection.status.state == .online { _ = try? await scratchFolder() }
         }
