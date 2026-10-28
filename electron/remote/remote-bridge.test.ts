@@ -848,3 +848,98 @@ it("names the computer a project lives on as it's called now, and says when it i
     { name: "old", gone: true },
   ]);
 });
+
+it("leaves a finished turn's steps out for a phone that asks, and hands them over when its fold opens", async () => {
+  const olderId = randomUUID(),
+    newestId = randomUUID();
+  const output = "x".repeat(1000);
+  const turn = (id: string): ChatMessage => ({
+    id,
+    role: "assistant",
+    body: "Done.",
+    status: "complete",
+    provider: "claude",
+    created: 1,
+    version: 1,
+    trace: [
+      {
+        kind: "activity",
+        id: "r1",
+        activity: { id: "r1", kind: "read", label: "a.ts", status: "complete" },
+      },
+      {
+        kind: "activity",
+        id: "c1",
+        activity: {
+          id: "c1",
+          kind: "command",
+          label: "npm test",
+          status: "complete",
+          detail: output,
+        },
+      },
+    ],
+  });
+  const host = {
+    projects: async () => [],
+    projectPath: () => "/r",
+    chats: () => [],
+    chat: async () => ({
+      id: chatId,
+      projectId,
+      title: "Tools",
+      scope: { kind: "project" },
+      created: 1,
+      updated: 2,
+      messages: [
+        turn(olderId),
+        {
+          id: randomUUID(),
+          role: "user",
+          body: "more",
+          status: "complete",
+          created: 2,
+          version: 1,
+        },
+        turn(newestId),
+      ],
+    }),
+    dispatch: async () => null,
+    name: () => "Studio",
+  } as unknown as RemoteHost;
+  const b = new RemoteBridge(host, () => {});
+  const ids = (m: ChatMessage) => m.trace?.map((e) => e.id);
+
+  const folded = (await b.handle("chat", [
+    chatId,
+    null,
+    null,
+    null,
+    "latest",
+  ])) as {
+    messages: ChatMessage[];
+  };
+  const [older, , newest] = folded.messages;
+  expect(ids(older!)).toEqual(["c1"]);
+  expect(older!.stepsSummary).toBe("Read 1 file and ran 1 command");
+  expect(older!.stepsLeftOut).toBe(1);
+  expect(ids(newest!)).toEqual(["r1", "c1"]);
+  expect(newest!.stepsLeftOut).toBeUndefined();
+
+  // A phone that didn't ask gets every turn whole, as before.
+  const whole = (await b.handle("chat", [chatId])) as {
+    messages: ChatMessage[];
+  };
+  expect(ids(whole.messages[0]!)).toEqual(["r1", "c1"]);
+
+  const steps = (await b.handle("messageSteps", [
+    chatId,
+    olderId,
+  ])) as ChatMessage;
+  expect(ids(steps)).toEqual(["r1", "c1"]);
+  // Cut as any call a phone gets; `activityDetail` still has it whole.
+  const command =
+    steps.trace![1]!.kind === "activity" && steps.trace![1]!.activity;
+  expect(command && command.detailCut).toBe(400);
+  expect(await b.handle("messageSteps", [chatId, randomUUID()])).toBeNull();
+});

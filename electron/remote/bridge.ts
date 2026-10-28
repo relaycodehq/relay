@@ -32,6 +32,7 @@ import type { SubagentDetail, SubagentRun } from "../../shared/subagents";
 import { draftKeySchema, draftWriteSchema } from "../../shared/drafts";
 import { phoneIcon } from "./svg-icon";
 import { callIn, forPhone, forPhoneRun, writtenForPhone } from "./for-phone";
+import { stepsAsAsked } from "./steps-left-out";
 import {
   activityIdSchema,
   callIds,
@@ -103,7 +104,7 @@ export class RemoteBridge {
         chats,
       };
     },
-    chat: async (id, known, history = remoteHistory, sendId) => {
+    chat: async (id, known, history = remoteHistory, sendId, steps) => {
       const dispatchedBefore =
         sendId !== undefined && this.sends.dispatching(id, sendId);
       const patch = await this.host.chat(id, known);
@@ -118,9 +119,9 @@ export class RemoteBridge {
         ...(sendId !== undefined
           ? this.sends.receipt(patch, sendId, dispatchedBefore)
           : {}),
-        messages: patch.messages
-          .slice(-history)
-          .map((m) => (typeof m === "string" ? m : forPhone(m))),
+        messages: stepsAsAsked(patch.messages.slice(-history), steps).map(
+          (m) => (typeof m === "string" ? m : forPhone(m)),
+        ),
         earlier: Math.max(0, patch.messages.length - history),
         ...(cost ? { cost } : {}),
         requests: patch.requests,
@@ -156,6 +157,14 @@ export class RemoteBridge {
             }
           : {}),
       };
+    },
+    messageSteps: async (chatId, messageId) => {
+      const message = (await this.host.chat(chatId)).messages.find(
+        (m): m is ChatMessage => typeof m !== "string" && m.id === messageId,
+      );
+      if (!message) return null;
+      const { trace, activity, traceDropped } = forPhone(message);
+      return { trace, activity, traceDropped };
     },
     activityDetail: async (chatId, messageId, id) =>
       callIn(await this.host.chat(chatId), messageId, id)?.detail ?? null,
@@ -315,6 +324,8 @@ export class RemoteBridge {
       case "activityDetail":
       case "activityWritten":
         return a[method](...callIds(args));
+      case "messageSteps":
+        return a.messageSteps(idSchema.parse(args[0]), idSchema.parse(args[1]));
       case "diff":
         return a.diff(diffSourceSchema.parse(args[0]));
       case "image":
@@ -391,7 +402,7 @@ export class RemoteBridge {
   }
 }
 
-/** A thread's id, what the phone holds of it, how many messages it wants and the send it waits on. */
+/** A thread's id, what the phone holds of it, how many messages it wants, the send it waits on and which turns' steps. */
 function chatArgs(args: unknown[]): Parameters<RemoteApi["chat"]> {
   return [
     idSchema.parse(args[0]),
@@ -400,6 +411,7 @@ function chatArgs(args: unknown[]): Parameters<RemoteApi["chat"]> {
       ? undefined
       : z.number().int().min(1).max(maxRemoteHistory).parse(args[2]),
     args[3] == null ? undefined : idSchema.parse(args[3]),
+    args[4] == null ? undefined : z.enum(["all", "latest"]).parse(args[4]),
   ];
 }
 

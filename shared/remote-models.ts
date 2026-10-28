@@ -8,6 +8,7 @@ import type { SharedDraft } from "./drafts";
 import type { ThreadGoal } from "./goal";
 import type { HandoffSettings, HandoffThread } from "./handoff";
 import type {
+  ChatMessage,
   ChatPending,
   ChatScope,
   FolderEntry,
@@ -216,6 +217,15 @@ export interface RemoteChat extends Pick<
   /** The requested send is still in dispatch, so its eventual failure must stay in the outbox. */
   sendPending?: boolean;
 }
+
+/** Which turns of a thread come with their steps: every one, or only the latest (`stepsOnOpenBridge`). */
+export type ChatSteps = "all" | "latest";
+
+/** A finished turn's steps, which the copy of it a phone first got left out. */
+export type MessageSteps = Pick<
+  ChatMessage,
+  "trace" | "activity" | "traceDropped"
+>;
 
 export const remoteHistory = 100;
 /** The most a phone may ask for at once, a page of `remoteHistory` at a time. */

@@ -208,7 +208,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 ## 4. Version negotiation and handshake messages (`shared/remote.ts`, `shared/remote-bridges.ts`)
 
 ### Current bridge version and feature thresholds
-`remoteBridgeVersion = 36`. Features switch on at these bridge versions:
+`remoteBridgeVersion = 38`. Features switch on at these bridge versions:
 
 | Bridge | Constant(s) | What it enables |
 |---|---|---|
@@ -238,6 +238,8 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 34 | `mergeBridge` | `pullMergeReadiness`, `mergePull` |
 | 35 | `traceTreeBridge` | A call's `actions` and `wroteCode`; `activityWritten` |
 | 36 | `secondOpinionBridge` | `askSecondOpinion`, `sendSecondOpinion` |
+| 37 | `branchMovesBridge` | `projectChatWorkOn`: move a started thread to any branch |
+| 38 | `stepsOnOpenBridge` | `chat`'s `steps:"latest"` folds finished turns (`stepsLeftOut`); `messageSteps` fetches one's steps |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.
@@ -290,12 +292,13 @@ Validated in `electron/remote/bridge.ts`; the schemas are at `bridge.ts`. Argume
     - `notesMark` (bridge ≥ 22) changes whenever the thread's notes do; fetch them again with `desktop("threadNotes", [id])`.
     - Up to 300, sorted by `updated` descending, then `id` ascending (`bridge.ts`, `chatOrder` `remote-delta.ts`).
   - `PhoneAppearance` / palette: `#rrggbb` colours, strict (`phone-remote.ts`).
-- **`chat(id:uuid, known?:Record<msgId,version> /* ≤20000 */, history?:1..1000 /* default 100 */, sendId?:uuid)`** → `RemoteChat` (built in `bridge.ts`):
+- **`chat(id:uuid, known?:Record<msgId,version> /* ≤20000 */, history?:1..1000 /* default 100 */, sendId?:uuid, steps?:"all"|"latest")`** → `RemoteChat` (built in `bridge.ts`):
   - `{id, projectId, title, scope, messages:(ChatMessage|string)[], requests, queuePaused, stopped?, pending?, worktree?, workspaceMoves? /* bridge ≥ 22, shared/workspace-moves.ts */, running, root?, earlier, cost?, queue:RemoteQueued[], scheduled:(RemoteQueued&{at})[], settings?, lastParentId?, hasSend?, sendPending?}`.
   - A string entry in `messages` is the id of a message the phone already holds at that version. Rebuild with `applyChatPatch` (`shared/projects/sync.ts`); a missing id throws `MissingMessage`.
   - `knownOf` = `{[m.id]: m.version}`.
   - `RemoteQueued` (`shared/remote-models.ts`): `{id, body, images?, error?, parentId?, to?, settings?, created?, held?}`. `held:true` is a steer the desktop holds ~3s before its agent gets it: show it as your sent message with a spinner and ×, not in the queue list.
   - `sendId` asks for a receipt: `hasSend` / `sendPending` (used by the outbox, `remote/outbox/Outbox.kt`).
+  - `steps:"latest"` (bridge ≥ 38; older desktops ignore it) folds every finished assistant turn but the newest (`electron/remote/steps-left-out.ts`): its `trace` keeps only the calls shown outside the fold (images it looked at, started threads) and the last call, for the heading's icon; `stepsSummary` is the heading the whole turn reads, shown in place of one counted from the calls held; `stepsLeftOut` says how many entries were left out. Fetch them with `messageSteps` when the fold opens.
 - **`ChatMessage`** (`shared/projects/messages.ts`):
   - required: `id, role:"user"|"assistant", body, status:"complete"|"streaming"|"failed"|"cancelled", created, provider, version`;
   - plus about 40 optional fields: `trace`, `activity`, `renders`, `images`, `questions`, `changes`, `parentId`, `seq`, `context`, `cost`, …
@@ -304,6 +307,7 @@ Validated in `electron/remote/bridge.ts`; the schemas are at `bridge.ts`. Argume
   - On phones, `detail` longer than 600 chars becomes `first300 + "\n…\n" + last300`, with `detailCut = len − 600` (`bridge.ts`).
   - Turn rendering logic: `shared/agent-trace.ts` (`groupTrace`, `readTurn`, `turnHeading`).
 - **`activityDetail(chatId, messageId, activityId /* 1..200 chars */)`** → `string|null`. The full tool output.
+- **`messageSteps(chatId:uuid, messageId:uuid)`** → `{trace?, activity?, traceDropped?}|null` (bridge ≥ 38). A folded turn's steps, cut as `chat` cuts them; put them in place of the folded ones and drop `stepsLeftOut` and `stepsSummary`. Null once the message is gone.
 - **`diff(source)`** → `RemoteDiff`:
   - `source` is one of:
     - `{kind:"turn", chatId, messageId, path}`

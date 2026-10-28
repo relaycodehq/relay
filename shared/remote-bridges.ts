@@ -2,7 +2,12 @@
 // version may use it. Bump `remoteBridgeVersion` when the bridge gains calls.
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 37;
+export const remoteBridgeVersion = 38;
+/**
+ * Phones may ask for a thread with only its latest turn's steps (`chat`'s
+ * `steps`), and fetch a finished turn's when its fold opens (`messageSteps`).
+ */
+export const stepsOnOpenBridge = 38;
 /** Phones may move a started thread to any branch, wherever it's worked on (`projectChatWorkOn`). */
 export const branchMovesBridge = 37;
 /** Phones may ask another agent for a second opinion on an answer and send it back (`askSecondOpinion`, `sendSecondOpinion`). */

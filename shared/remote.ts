@@ -29,11 +29,13 @@ import type {
   TerminalOp,
 } from "./remote-methods";
 import type {
+  ChatSteps,
   CloneProgress,
   ComputerFolders,
   ComputerProject,
   HandoffPart,
   HomeThread,
+  MessageSteps,
   PhoneAppearance,
   PhoneDictation,
   PhoneDictationHeard,
@@ -70,7 +72,10 @@ export interface RemoteApi {
     known?: KnownMessages,
     history?: number,
     sendId?: string,
+    steps?: ChatSteps,
   ): Promise<RemoteChat>;
+  /** A finished turn's steps, which `chat` left out; null once the message is gone. Missing before `stepsOnOpenBridge`. */
+  messageSteps(chatId: string, messageId: string): Promise<MessageSteps | null>;
   /** Null when unchanged; lists omit briefs, which belong in the run. */
   subagents(
     chatId: string,

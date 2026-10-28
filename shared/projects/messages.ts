@@ -153,6 +153,10 @@ export interface ChatMessage {
   trace?: AgentTrace[];
   /** Finished calls a long turn's full trace let go of, by kind; failed ones under `failed`. */
   traceDropped?: TraceDropped;
+  /** Phones only: how many trace entries a finished turn's copy left out; `messageSteps` has them. */
+  stepsLeftOut?: number;
+  /** Phones only: what that turn's heading reads with every step, which its copy can't count. */
+  stepsSummary?: string;
   /** Questions stay answerable after the turn ends or Relay restarts. */
   questions?: AsyncAgentQuestions[];
   /** Local: the message the person would likely send next, which the composer offers as a draft. */
