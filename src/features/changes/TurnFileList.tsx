@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { ChevronRight, FolderOpen } from "lucide-react";
 import type { TurnFileChange } from "../../../shared/projects";
-import { revealLabel } from "../../lib/mod-key";
+import { keys, revealLabel } from "../../lib/mod-key";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../ui/MiddleTruncate";
 import { DiffStatLabel } from "./DiffStatLabel";
@@ -56,7 +56,7 @@ export function TurnFileList({
             className="change-section-toggle"
             aria-label={name}
             aria-expanded={!closed}
-            title="⌥-click for every folder"
+            title={`${keys("⌥-click", "Alt+click")} for every folder`}
             onClick={(e) => fold(e.altKey)}
           >
             <ChevronRight size={13} />

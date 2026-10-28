@@ -16,6 +16,7 @@ import {
   type ListArea,
   type SelectedChange,
 } from "../working-changes";
+import { keys } from "../../../lib/mod-key";
 import { FileEntryIcon } from "../../../ui/FileEntryIcon";
 import { MiddleTruncate } from "../../../ui/MiddleTruncate";
 import { IgnoredChangeMenu, LocalChangeMenu } from "../LocalChangeMenu";
@@ -129,7 +130,7 @@ function Section(props: SectionProps) {
                       className="change-section-toggle"
                       aria-label={name}
                       aria-expanded={!shut}
-                      title="⌥-click for every folder"
+                      title={`${keys("⌥-click", "Alt+click")} for every folder`}
                       onClick={(e) => fold(e.altKey)}
                     >
                       <ChevronRight size={13} />

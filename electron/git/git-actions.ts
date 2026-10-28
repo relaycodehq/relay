@@ -169,8 +169,10 @@ async function addOrReset(
     );
 }
 
+const trashName = process.platform === "win32" ? "Recycle Bin" : "Trash";
+
 async function discard({ root, action, state, trash }: Act<"discard">) {
-  if (!trash) throw new Error("Discarding needs the system Trash.");
+  if (!trash) throw new Error(`Discarding needs the system ${trashName}.`);
   if (
     action.paths.some((p) => {
       const c = state.changes.find((c) => c.path === p);
@@ -178,7 +180,7 @@ async function discard({ root, action, state, trash }: Act<"discard">) {
     })
   )
     throw new Error(
-      "Only tracked files without conflicts can be discarded. Move untracked files to the Trash instead.",
+      `Only tracked files without conflicts can be discarded. Move untracked files to the ${trashName} instead.`,
     );
   const staged = action.area === "staged";
   const paths = withPreviousPaths(

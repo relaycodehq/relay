@@ -14,3 +14,6 @@ export const fileManager = mac
     : "file manager";
 
 export const revealLabel = `Show in ${fileManager}`;
+
+/** Where deleted files wait to be put back. */
+export const trashName = windows ? "Recycle Bin" : "Trash";

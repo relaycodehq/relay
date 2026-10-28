@@ -13,7 +13,7 @@ import {
 import { isEntryName } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import type { TreeRow } from "../../lib/file-tree";
-import { revealLabel } from "../../lib/mod-key";
+import { revealLabel, trashName } from "../../lib/mod-key";
 import { ContextMenuItem } from "../../ui/ContextMenuItem";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
 import type { useExpanded } from "./useFileTree";
@@ -139,7 +139,7 @@ export function FileTreeRow({
               disabled={frozen}
               onClick={onTrash}
             >
-              Move to Trash
+              Move to {trashName}
             </ContextMenuItem>
           </ContextMenu.Popup>
         </ContextMenu.Positioner>

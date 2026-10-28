@@ -8,6 +8,7 @@ import {
   type TreeRow,
 } from "../../lib/file-tree";
 import { directoryKey, useDirectories, type useExpanded } from "./useFileTree";
+import { trashName } from "../../lib/mod-key";
 import { workingTreeKey } from "../../lib/working-tree-key";
 import { ErrorBox, Modal } from "../../ui/ui";
 import { FileEntryIcon } from "../../ui/FileEntryIcon";
@@ -276,12 +277,12 @@ export function FileTree({
       {!!error && <ErrorBox error={error} />}
       {trashing && (
         <Modal
-          title={`Move “${trashing.name}” to the Trash?`}
+          title={`Move “${trashing.name}” to the ${trashName}?`}
           onClose={() => setTrashing(null)}
         >
           <p className="file-tree-confirm">
-            The folder and everything in it goes to the Trash, where you can put
-            it back.
+            The folder and everything in it goes to the {trashName}, where you
+            can put it back.
           </p>
           <div className="modal-actions">
             <button onClick={() => setTrashing(null)}>Cancel</button>
@@ -294,7 +295,7 @@ export function FileTree({
                 void trash(row);
               }}
             >
-              Move to Trash
+              Move to {trashName}
             </button>
           </div>
         </Modal>
