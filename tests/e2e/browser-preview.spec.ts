@@ -140,14 +140,31 @@ test("the Browser surface starts the project's dev server and shows its page ove
     await expect(
       panel.getByRole("tab", { name: "Updated page title" }),
     ).toBeVisible();
+    // ⌘R in Relay reloads the page in front, bringing its own title back.
+    await page.keyboard.press("ControlOrMeta+KeyR");
+    await expect(
+      panel.getByRole("tab", { name: "Preview fixture" }),
+    ).toBeVisible();
+    // So does ⌘R pressed inside the page, which Relay's window never hears.
     await app.evaluate(
       ({ webContents }, port) =>
         webContents
           .getAllWebContents()
           .find((wc) => wc.getURL().includes(`:${port}/`))!
-          .executeJavaScript('document.title = "Preview fixture"'),
+          .executeJavaScript('document.title = "Updated page title"'),
       port,
     );
+    await expect(
+      panel.getByRole("tab", { name: "Updated page title" }),
+    ).toBeVisible();
+    await app.evaluate(({ webContents }, port) => {
+      const wc = webContents
+        .getAllWebContents()
+        .find((wc) => wc.getURL().includes(`:${port}/`))!;
+      const mod = process.platform === "darwin" ? "meta" : "control";
+      wc.focus();
+      wc.sendInputEvent({ type: "keyDown", keyCode: "R", modifiers: [mod] });
+    }, port);
     await expect(
       panel.getByRole("tab", { name: "Preview fixture" }),
     ).toBeVisible();

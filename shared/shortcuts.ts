@@ -313,6 +313,14 @@ const shortcutCommands = {
     keywords: "references symbol",
     defaults: (mac) => [combo(mac, "shift+F12"), combo(mac, "alt+F7")],
   },
+  "browser-reload": {
+    title: "Reload the browser page",
+    group: "Window",
+    description:
+      "The thread's browser, while its tab is in front. Inside the page, a browser's usual reload key always works too.",
+    keywords: "refresh preview web",
+    defaults: one("mod+KeyR"),
+  },
   reload: {
     title: "Reload the window",
     group: "Window",

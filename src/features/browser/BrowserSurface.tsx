@@ -20,6 +20,7 @@ import { api } from "../../lib/api";
 import { IconButton } from "../../ui/ui";
 import { openPreview, previewKey, usePreviewState } from "./previews";
 import { useNativeView } from "../../lib/useNativeView";
+import { useShortcut } from "../../lib/shortcuts";
 import { useBrowserAnnotations } from "./useBrowserAnnotations";
 import "./browser.css";
 
@@ -49,7 +50,7 @@ export function BrowserSurface({
     setOpening(null);
     openPreview(projectId, chatId).catch((e: Error) => setOpening(e.message));
   }, [projectId, chatId, front]);
-  const act = usePageActions(key, setOpening);
+  const act = usePageActions(key, front && !!state, setOpening);
   const viewport = useRef<HTMLDivElement>(null);
   const place = useCallback(
     (bounds: PreviewBounds | null) => void api.placePreview(key, bounds),
@@ -111,9 +112,10 @@ export function BrowserSurface({
   );
 }
 
-/** The address bar's actions on the page. */
+/** The address bar's actions on the page, and its reload key while in front. */
 function usePageActions(
   key: string,
+  front: boolean,
   setOpening: (failure: string | null) => void,
 ) {
   const act = (action: PreviewAction) => {
@@ -122,6 +124,8 @@ function usePageActions(
       .previewAction(key, action)
       .catch((e: Error) => setOpening(e.message));
   };
+  // The editor's own ⌘R (Replace) takes the press first where it has focus.
+  useShortcut("browser-reload", front, () => act("reload"));
   return act;
 }
 

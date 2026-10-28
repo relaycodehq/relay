@@ -22,6 +22,7 @@ import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
 import { localPort } from "./local-urls";
 import { keepConsole } from "./page-console";
+import { reloadOnKey } from "./page-keys";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
 import { sleep } from "../util/sleep";
 
@@ -375,6 +376,9 @@ export class ThreadPreviews {
       emit();
     });
     keepConsole(wc, preview);
+    reloadOnKey(wc, () => {
+      if (current()) this.act(preview.target.key, "reload");
+    });
     return wc;
   }
 
