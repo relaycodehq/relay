@@ -74,7 +74,6 @@ export const bigFunctions: Record<string, number> = {
   "electron/preview/agent-tools.ts › answerPreviewTool": 95,
   "electron/preview/element-pick.ts › pickElement": 87,
   "electron/preview/projects.ts › target": 143,
-  "electron/preview/thread-previews.ts › mount": 92,
   "electron/project-chats/index.ts › constructor": 204,
   "electron/project-chats/project-import.ts › run": 92,
   "electron/project-chats/queue.ts › steer": 97,

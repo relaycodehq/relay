@@ -18,11 +18,11 @@ import type {
 import type { AppWindow } from "../app/window";
 import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
-import { faviconData } from "./favicon";
 import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
-import { localPort } from "./local-urls";
+import { localPort, webUrl } from "./local-urls";
 import { keepConsole } from "./page-console";
+import { followPage } from "./page-events";
 import { reloadOnKey } from "./page-keys";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
 import { sleep } from "../util/sleep";
@@ -90,11 +90,6 @@ const UNLOAD_MS =
     Number(process.env.RELAY_TEST_PREVIEW_UNLOAD_MS)) ||
   5 * 60_000;
 const prepared = new WeakSet<Session>();
-
-const webUrl = (url: string) => {
-  const parsed = URL.parse(url);
-  return parsed?.protocol === "http:" || parsed?.protocol === "https:";
-};
 
 /** Pages in a preview ask for nothing but the clipboard and full screen. */
 function prepare(ses: Session) {
@@ -311,60 +306,13 @@ export class ThreadPreviews {
     const emit = () => {
       if (current()) this.emit(preview);
     };
-    wc.setWindowOpenHandler(({ url }) => {
-      // One browser per thread: links that open a window open here.
-      if (webUrl(url)) void wc.loadURL(url);
-      return { action: "deny" };
-    });
-    wc.on("will-navigate", (e) => {
-      if (!webUrl(e.url)) e.preventDefault();
-    });
-    wc.on("did-start-loading", () => {
-      preview.error = undefined;
-      emit();
-    });
-    wc.on("did-stop-loading", emit);
-    wc.on("did-start-navigation", ({ isSameDocument, isMainFrame }) => {
-      if (!isMainFrame || isSameDocument || !current()) return;
-      preview.favicon = undefined;
-      preview.faviconRequest = undefined;
-      emit();
-    });
-    wc.on("page-favicon-updated", (_event, urls) => {
-      if (!current()) return;
-      const request = {};
-      preview.faviconRequest = request;
-      const icons = urls.filter(
-        (url) => webUrl(url) || url.startsWith("data:image/"),
-      );
-      void faviconData(wc.session, icons).then((favicon) => {
-        if (!current() || preview.faviconRequest !== request) return;
-        preview.favicon = favicon;
-        emit();
-      });
-    });
-    const navigated = () => {
-      if (!current()) return;
-      const url = wc.getURL();
-      if (webUrl(url)) {
+    followPage(wc, preview, {
+      current,
+      changed: emit,
+      navigated: (url) => {
         preview.selectedUrl = url;
         this.remember(preview);
-      }
-      emit();
-    };
-    wc.on("did-navigate", navigated);
-    wc.on("did-navigate-in-page", navigated);
-    wc.on("page-title-updated", emit);
-    wc.on("did-fail-load", (_e, code, description, url, mainFrame) => {
-      // -3 is a load another one replaced.
-      if (!mainFrame || code === -3 || !current()) return;
-      preview.error = `${description} (${url})`;
-      emit();
-    });
-    wc.on("render-process-gone", (_e, details) => {
-      if (!current()) return;
-      preview.error = `The page stopped: ${details.reason}.`;
-      emit();
+      },
     });
     keepConsole(wc, preview);
     reloadOnKey(wc, () => {

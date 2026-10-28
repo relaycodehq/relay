@@ -8,3 +8,9 @@ export function localPort(url: string): number | undefined {
     return;
   return Number(parsed.port || 80);
 }
+
+/** An address a preview may load: http or https. */
+export function webUrl(url: string) {
+  const parsed = URL.parse(url);
+  return parsed?.protocol === "http:" || parsed?.protocol === "https:";
+}
