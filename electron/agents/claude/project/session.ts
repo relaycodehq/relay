@@ -97,6 +97,8 @@ export type ClaudeSession = {
   threadId?: string;
   /** Asked for as the session starts; each result confirms it. */
   contextWindow?: number;
+  /** How much of the window Claude Code lets the conversation fill; CLAUDE_CODE_AUTO_COMPACT_WINDOW caps it below the model's. */
+  usableWindow?: number;
   /** What Relay's addition to its system prompt costs, roughly. */
   relayPrompt?: number;
   /** The cache lifetime Claude last reported writing with. */
@@ -335,8 +337,9 @@ export async function startSession(
 function watchWindow(holder: ClaudeSession) {
   void holder.stream
     .getContextUsage({ detail: "summary" })
-    .then(({ rawMaxTokens }) => {
+    .then(({ maxTokens, rawMaxTokens }) => {
       if (rawMaxTokens > 0) holder.contextWindow ??= rawMaxTokens;
+      if (maxTokens > 0) holder.usableWindow = maxTokens;
     })
     .catch(() => {});
 }

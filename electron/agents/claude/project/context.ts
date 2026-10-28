@@ -24,7 +24,10 @@ export class ContextMeter {
 
   constructor(
     private options: ClaudeRunOptions,
-    private session: Pick<ClaudeSession, "contextWindow" | "cacheTtl">,
+    private session: Pick<
+      ClaudeSession,
+      "contextWindow" | "usableWindow" | "cacheTtl"
+    >,
   ) {}
 
   /** A request for message `id` went out. */
@@ -68,14 +71,20 @@ export class ContextMeter {
 
   private report(usedTokens: number) {
     if (!(usedTokens > 0)) return;
+    const window = this.shownWindow();
     this.context = {
       usedTokens,
-      ...(this.session.contextWindow
-        ? { maxTokens: this.session.contextWindow }
-        : {}),
+      ...(window ? { maxTokens: window } : {}),
       ...(this.cache ? { cache: this.cache } : {}),
     };
     this.options.onContext?.(this.context);
+  }
+
+  /** The model's window, or less when Claude Code compacts before it fills. */
+  private shownWindow() {
+    const { contextWindow, usableWindow } = this.session;
+    if (!contextWindow || !usableWindow) return contextWindow ?? usableWindow;
+    return Math.min(contextWindow, usableWindow);
   }
 }
 
