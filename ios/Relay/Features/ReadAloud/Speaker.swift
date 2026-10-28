@@ -62,7 +62,8 @@ nonisolated final class Speaker: @unchecked Sendable {
             queued += seconds
             return self.generation
         }
-        player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+        // Sendable, so not the main actor's: it's called on the audio thread (see Microphone).
+        player.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { @Sendable [weak self] _ in
             guard let self else { return }
             self.lock.withLock {
                 guard self.generation == generation else { return }

@@ -45,7 +45,9 @@ nonisolated final class Microphone: @unchecked Sendable {
                 partial = []
                 chunks = continuation
             }
-            input.installTap(onBus: 0, bufferSize: 2048, format: heard) { [weak self] buffer, _ in
+            // Sendable, so not the main actor's: the tap runs on the audio thread, and a
+            // main-actor closure there traps on Swift's isolation check.
+            input.installTap(onBus: 0, bufferSize: 2048, format: heard) { @Sendable [weak self] buffer, _ in
                 self?.convert(buffer)
             }
             tapped = true
