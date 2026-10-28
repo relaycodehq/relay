@@ -28,8 +28,10 @@
   border-right: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
 /* Over frosted glass it lets the frost through like the sidebar, a shade
-   darker so it still reads as the edge, with the sidebar's see-through hover. */
-:root[data-glass] .activity-bar {
+   darker so it still reads as the edge, with the sidebar's see-through hover.
+   Folded, it peeks over the chat and stays solid like the peeking sidebar,
+   or the thread shows through it. */
+:root[data-glass] .activity-bar:not(.folded) {
   --hover: color-mix(in srgb, var(--text) 8%, transparent);
   background:
     linear-gradient(rgb(0 0 0 / 0.08), rgb(0 0 0 / 0.08)),
