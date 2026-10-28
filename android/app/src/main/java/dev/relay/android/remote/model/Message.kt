@@ -44,6 +44,10 @@ data class ChatMessage(
     val trace: List<AgentTrace>? = null,
     /** Dropped finished calls by kind ("command", …, "failed"). */
     val traceDropped: Map<String, Int>? = null,
+    /** Trace entries a finished turn's copy left out; [dev.relay.android.remote.client.messageSteps] has them. From Bridge.STEPS_ON_OPEN. */
+    val stepsLeftOut: Int? = null,
+    /** What that turn's heading reads with every step, which the calls held can't count. */
+    val stepsSummary: String? = null,
     val questions: List<AsyncAgentQuestions>? = null,
     /** Watch notes (shared/watch); untyped until a feature needs them. */
     val notes: List<JsonElement>? = null,
@@ -184,3 +188,11 @@ data class WorktreeCommandRun(
 @Serializable data class TurnPreview(val url: String, val title: String, val at: Long, val shot: Boolean? = null)
 
 @Serializable data class ForkPoint(val thread: String, val at: String)
+
+/** `shared/remote-models.ts` MessageSteps: a finished turn's steps, which its folded copy left out. */
+@Serializable
+data class MessageSteps(
+    val trace: List<AgentTrace>? = null,
+    val activity: List<AgentActivity>? = null,
+    val traceDropped: Map<String, Int>? = null,
+)

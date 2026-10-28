@@ -183,7 +183,9 @@ fun AgentRun(
                 modifier = if (expanded) Modifier.rotate(90f) else Modifier,
             )
         }
-        if (expanded && (turn.entries.isNotEmpty() || turn.thinking)) {
+        val loadSteps = LocalTurnSteps.current
+        if (expanded && message.stepsLeftOut != null && loadSteps != null) StepsComing(message.id, loadSteps)
+        else if (expanded && (turn.entries.isNotEmpty() || turn.thinking)) {
             CompositionLocalProvider(LocalTrace provides TraceScope(turn.calls, display, chatId, message.id, onOpenImage)) {
                 Column(Modifier.padding(top = 6.dp)) {
                     val parts = groupTrace(turn.shown)

@@ -103,8 +103,10 @@ sealed interface TurnHeading {
 
 /** What a turn's heading says. Open while live it's the whole run; folded, it stands in for the one live row. */
 fun turnHeading(message: ChatMessage, expanded: Boolean, turn: TurnRead = readTurn(message)): TurnHeading {
-    if (!turn.live)
-        return TurnHeading.Done(summarizeActivity(turn.activity, message.traceDropped).ifEmpty { "Thought" }, turn.activity.lastOrNull())
+    if (!turn.live) {
+        val text = message.stepsSummary ?: summarizeActivity(turn.activity, message.traceDropped).ifEmpty { "Thought" }
+        return TurnHeading.Done(text, turn.activity.lastOrNull())
+    }
     if (expanded) return TurnHeading.Working
     turn.current?.let { return TurnHeading.Call(it) }
     return if (message.body.isNotEmpty()) TurnHeading.Writing else TurnHeading.Thinking

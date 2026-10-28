@@ -17,6 +17,8 @@ object Bridge {
     const val SECOND_OPINION = 36
     /** Phones may move a started thread to any branch, wherever it's worked on (`projectChatWorkOn`). */
     const val BRANCH_MOVES = 37
+    /** Threads come with only their latest turn's steps, and a finished turn's arrive when its fold opens (`messageSteps`). */
+    const val STEPS_ON_OPEN = 38
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11

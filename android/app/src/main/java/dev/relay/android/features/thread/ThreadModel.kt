@@ -2,10 +2,12 @@ package dev.relay.android.features.thread
 
 import dev.relay.android.features.thread.logic.applyMessage
 import dev.relay.android.features.thread.logic.keepNewer
+import dev.relay.android.features.thread.logic.withSteps
 import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.chat
+import dev.relay.android.remote.client.messageSteps
 import dev.relay.android.remote.delta.MissingMessage
 import dev.relay.android.remote.model.RemoteChat
 import dev.relay.android.remote.model.RemoteChatSummary
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -110,6 +113,20 @@ class ThreadModel(
         // asks for more again. Otherwise a reconnect could unexpectedly prepend history.
         if (_history.value == history && history > _loadedHistory.value) _history.value = _loadedHistory.value
         _historyResult.value = HistoryLoadResult(request, history, false)
+    }
+
+    /** Puts a folded turn's steps in place; false when the desktop couldn't hand them over. */
+    suspend fun loadSteps(messageId: String): Boolean {
+        val steps = try {
+            remote.client.value?.messageSteps(id, messageId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return false
+        _thread.update { thread -> thread?.let { withSteps(it, messageId, steps) } }
+        _thread.value?.let { cache.save(computer, id, it) }
+        return true
     }
 
     suspend fun loadEarlier() {

@@ -1,6 +1,7 @@
 package dev.relay.android.features.thread.logic
 
 import dev.relay.android.remote.model.ChatMessage
+import dev.relay.android.remote.model.MessageSteps
 import dev.relay.android.remote.model.RemoteChat
 
 // mobile/src/remote/chat-state.ts and shared/projects/messages.ts: a held thread and its conversations.
@@ -34,11 +35,27 @@ fun applyMessage(thread: RemoteChat, message: ChatMessage): RemoteChat {
 fun keepNewer(fetched: RemoteChat, held: RemoteChat?, asked: RemoteChat?): RemoteChat {
     if (held == null) return fetched
     val newer = held.messages.associateBy { it.id }
-    val messages = fetched.messages.map { m -> newer[m.id]?.takeIf { it.version > m.version } ?: m }
+    val messages = fetched.messages.map { m -> newer[m.id]?.takeIf { heldIsNewer(it, m) } ?: m }
     val known = fetched.messages.mapTo(HashSet()) { it.id }.apply { asked?.messages?.forEach { add(it.id) } }
     val arrived = held.messages.filter { it.id !in known }
     return fetched.copy(messages = if (arrived.isEmpty()) messages else (messages + arrived).sortedWith(threadOrder))
 }
+
+/** A later version, or the same one with the steps its fetched copy left out. */
+private fun heldIsNewer(held: ChatMessage, fetched: ChatMessage): Boolean {
+    if (held.version != fetched.version) return held.version > fetched.version
+    return fetched.stepsLeftOut != null && held.stepsLeftOut == null
+}
+
+/** The thread with a folded turn's steps back in place. */
+fun withSteps(thread: RemoteChat, messageId: String, steps: MessageSteps): RemoteChat =
+    thread.copy(messages = thread.messages.map { m ->
+        if (m.id != messageId) m
+        else m.copy(
+            trace = steps.trace, activity = steps.activity, traceDropped = steps.traceDropped,
+            stepsLeftOut = null, stepsSummary = null,
+        )
+    })
 
 /** The main conversation: everything but replies. A reply whose parent is gone shows here rather than nowhere. */
 fun mainMessages(messages: List<ChatMessage>): List<ChatMessage> {

@@ -6,6 +6,7 @@ import dev.relay.android.remote.model.ComputerInfo
 import dev.relay.android.remote.model.DictationHeard
 import dev.relay.android.remote.model.DictationRequest
 import dev.relay.android.remote.model.DraftWrite
+import dev.relay.android.remote.model.MessageSteps
 import dev.relay.android.remote.model.PhoneAppReport
 import dev.relay.android.remote.model.ProjectChatSend
 import dev.relay.android.remote.model.ReadAloudAudio
@@ -47,11 +48,19 @@ private fun args(vararg values: JsonElement?): List<JsonElement?> {
 
 suspend fun RemoteClient.overview(): RemoteOverview = call("overview").to()
 
-/** The thread with its latest messages, those [previous] holds at the same version reused. */
+/**
+ * The thread with its latest messages, those [previous] holds at the same version reused.
+ * Finished turns but the newest come folded, their steps fetched when one opens; older
+ * desktops ignore the ask and send them all.
+ */
 suspend fun RemoteClient.chat(id: String, previous: RemoteChat? = null, history: Int? = null, sendId: String? = null): RemoteChat {
-    val patch = call("chat", args(s(id), j(knownOf(previous)), n(history), s(sendId)))
+    val patch = call("chat", args(s(id), j(knownOf(previous)), n(history), s(sendId), s("latest")))
     return applyChatPatch(patch.jsonObject, previous)
 }
+
+/** A folded turn's steps; null once the message is gone. From Bridge.STEPS_ON_OPEN. */
+suspend fun RemoteClient.messageSteps(chatId: String, messageId: String): MessageSteps? =
+    call("messageSteps", args(s(chatId), s(messageId))).takeUnless { it is JsonNull }?.to()
 
 suspend fun RemoteClient.diff(source: RemoteDiffSource): RemoteDiff = call("diff", args(j(source))).to()
 
