@@ -293,14 +293,18 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
             settings = settings,
             onSettings = { s: ResumeSettings ->
                 // The next new thread, here or on the desktop, starts on it too.
+                // Compare before the screen applies this pick and the coroutine runs.
+                val agentChanged = s.provider != settings.provider
+                val modelChanged = !sameModel(NewThreadModel(s.choice, s.contextWindow), NewThreadModel(settings.choice, settings.contextWindow))
+                val accessChanged = s.runtimeMode != settings.runtimeMode
                 val cl = client
                 if (cl != null) scope.launch {
                     runCatching {
-                        if (s.provider != settings.provider) cl.saveNewThreadAgent(s.provider)
-                        else if (!sameModel(NewThreadModel(s.choice, s.contextWindow), NewThreadModel(settings.choice, settings.contextWindow))) {
+                        if (agentChanged) cl.saveNewThreadAgent(s.provider)
+                        if (agentChanged || modelChanged) {
                             cl.saveNewThreadModel(s.provider, NewThreadModel(s.choice, s.contextWindow))
                         }
-                        if (s.runtimeMode != settings.runtimeMode && (overview?.bridge ?: 0) >= Bridge.READ_ONLY_MODE) {
+                        if (accessChanged && (overview?.bridge ?: 0) >= Bridge.READ_ONLY_MODE) {
                             cl.saveNewThreadRuntimeMode(s.runtimeMode)
                         }
                     }
