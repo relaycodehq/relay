@@ -28,7 +28,11 @@ struct TurnTrace: View {
                 heading(turnHeading(message, expanded: open, turn: turn), open: open)
             }
             .buttonStyle(.plain)
-            if open {
+            // A subagent's run has no thread to fetch from, and comes whole anyway.
+            if open, message.stepsLeftOut != nil, !chatId.isEmpty {
+                StepsComing(chatId: chatId, messageId: message.id)
+                    .padding(.leading, 4)
+            } else if open {
                 let parts = groupTrace(turn.shown)
                 let oneRun = parts.count(where: { if case .run = $0 { true } else { false } }) == 1
                 // A running turn shows its newest steps and folds the rest. One row thousands of points

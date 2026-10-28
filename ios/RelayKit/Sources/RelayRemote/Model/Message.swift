@@ -39,6 +39,10 @@ public struct ChatMessage: Codable, Sendable, Equatable, Identifiable {
     public var trace: [AgentTrace]?
     /// Dropped finished calls by kind ("command", …, "failed").
     public var traceDropped: [String: Int]?
+    /// Trace entries a finished turn's copy left out; `messageSteps` has them. From `Bridge.stepsOnOpen`.
+    public var stepsLeftOut: Int?
+    /// What that turn's heading reads with every step, which the calls held can't count.
+    public var stepsSummary: String?
     public var questions: [AsyncAgentQuestions]?
     /// Watch notes (shared/watch); untyped until a feature needs them.
     public var notes: [JSON]?
@@ -250,5 +254,18 @@ public struct ResumeSettings: Codable, Sendable, Equatable {
         self.contextWindow = contextWindow
         self.runtimeMode = runtimeMode
         self.interactionMode = interactionMode
+    }
+}
+
+/// `shared/remote-models.ts` MessageSteps: a finished turn's steps, which its folded copy left out.
+public struct MessageSteps: Codable, Sendable, Equatable {
+    public var trace: [AgentTrace]?
+    public var activity: [AgentActivity]?
+    public var traceDropped: [String: Int]?
+
+    public init(trace: [AgentTrace]? = nil, activity: [AgentActivity]? = nil, traceDropped: [String: Int]? = nil) {
+        self.trace = trace
+        self.activity = activity
+        self.traceDropped = traceDropped
     }
 }

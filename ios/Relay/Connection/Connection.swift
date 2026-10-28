@@ -413,6 +413,17 @@ final class Connection {
         }
     }
 
+    /// Puts a folded turn's steps in place; false when the computer couldn't hand them over.
+    func loadSteps(_ chatId: String, message messageId: String) async -> Bool {
+        guard let client else { return false }
+        guard let steps = try? await client.messageSteps(chatId: chatId, messageId: messageId) else { return false }
+        guard self.client === client, let thread = threads[chatId] else { return false }
+        let opened = withSteps(thread, messageId: messageId, steps)
+        threads[chatId] = opened
+        offline.save(active, chatId, opened)
+        return true
+    }
+
     /// The offline copy, until the thread loads.
     func openSaved(_ id: String) {
         if threads[id] == nil, let saved = offline.now(active, id) { threads[id] = saved }

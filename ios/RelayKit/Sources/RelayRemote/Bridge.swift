@@ -38,6 +38,8 @@ public enum Bridge {
     public static let secondOpinion = 36
     /// Phones may move a started thread to any branch, wherever it's worked on (`projectChatWorkOn`).
     public static let branchMoves = 37
+    /// Threads come with only their latest turn's steps, and a finished turn's arrive when its fold opens (`messageSteps`).
+    public static let stepsOnOpen = 38
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22

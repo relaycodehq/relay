@@ -9,11 +9,15 @@ public extension RemoteClient {
     }
 
     /// The thread with its latest messages, those `previous` holds at the same version reused.
+    /// Finished turns but the newest come folded, their steps fetched when one opens; older
+    /// desktops ignore the ask and send them all.
     func chat(_ id: String, previous: RemoteChat? = nil, history: Int? = nil, sendId: String? = nil) async throws
         -> RemoteChat
     {
         let known = try knownOf(previous).map { try JSON(encoding: $0) }
-        var args: [JSON?] = [.string(id), known, history.map { .number(Double($0)) }, sendId.map(JSON.string)]
+        var args: [JSON?] = [
+            .string(id), known, history.map { .number(Double($0)) }, sendId.map(JSON.string), .string("latest"),
+        ]
         while let last = args.last, last == nil { args.removeLast() }
         let patch = try await call("chat", args)
         guard let object = patch.object else { throw RemoteCallError.rejected("A thread that isn't one.") }
@@ -24,6 +28,12 @@ public extension RemoteClient {
     func projectIcons(known: [String: String?]) async throws -> [String: RemoteProjectIcon] {
         let map = JSON.object(known.mapValues { $0.map(JSON.string) ?? .null })
         return try await call("projectIcons", [map]).decode()
+    }
+
+    /// A folded turn's steps; nil once the message is gone. From `Bridge.stepsOnOpen`.
+    func messageSteps(chatId: String, messageId: String) async throws -> MessageSteps? {
+        let steps = try await call("messageSteps", [.string(chatId), .string(messageId)])
+        return steps.isNull ? nil : try steps.decode()
     }
 
     /// A tool call's whole output. From `Bridge.activityDetail`.

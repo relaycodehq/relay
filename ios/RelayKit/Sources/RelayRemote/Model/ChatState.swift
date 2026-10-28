@@ -35,11 +35,33 @@ public func keepNewer(_ fetched: RemoteChat, _ held: RemoteChat?, asked: RemoteC
     let newer = Dictionary(held.messages.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     var next = fetched
     next.messages = fetched.messages.map { m in
-        if let n = newer[m.id], n.version > m.version { n } else { m }
+        if let n = newer[m.id], heldIsNewer(n, than: m) { n } else { m }
     }
     let known = Set(fetched.messages.map(\.id)).union(asked?.messages.map(\.id) ?? [])
     let arrived = held.messages.filter { !known.contains($0.id) }
     if !arrived.isEmpty { next.messages = (next.messages + arrived).sorted(by: threadOrder) }
+    return next
+}
+
+/// A later version, or the same one with the steps its fetched copy left out.
+private func heldIsNewer(_ held: ChatMessage, than fetched: ChatMessage) -> Bool {
+    if held.version != fetched.version { return held.version > fetched.version }
+    return fetched.stepsLeftOut != nil && held.stepsLeftOut == nil
+}
+
+/// The thread with a folded turn's steps back in place.
+public func withSteps(_ thread: RemoteChat, messageId: String, _ steps: MessageSteps) -> RemoteChat {
+    var next = thread
+    next.messages = thread.messages.map { m in
+        guard m.id == messageId else { return m }
+        var opened = m
+        opened.trace = steps.trace
+        opened.activity = steps.activity
+        opened.traceDropped = steps.traceDropped
+        opened.stepsLeftOut = nil
+        opened.stepsSummary = nil
+        return opened
+    }
     return next
 }
 

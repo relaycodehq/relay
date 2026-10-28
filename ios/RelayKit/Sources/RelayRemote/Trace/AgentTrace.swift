@@ -81,6 +81,7 @@ public enum TurnHeading: Sendable, Equatable {
 public func turnHeading(_ message: ChatMessage, expanded: Bool, turn: Turn? = nil) -> TurnHeading {
     let turn = turn ?? Turn(message)
     if !turn.live {
+        if let summary = message.stepsSummary { return .done(text: summary) }
         let text = summarizeActivity(turn.activity, dropped: message.traceDropped ?? [:])
         return .done(text: text.isEmpty ? "Thought" : text)
     }
