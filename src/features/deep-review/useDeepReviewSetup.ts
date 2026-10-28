@@ -37,6 +37,7 @@ import { useClaudeModels } from "../agents/useClaudeModels";
 import { usePoll } from "../../lib/poll";
 import { readText, writeJson, writeText } from "../../lib/persisted-store";
 import { useReviewPasses } from "./passes/useReviewPasses";
+import { branchCountsQuery } from "../changes/branch-queries";
 
 /**
  * Keeps `change` with the unsent review, and the setup it was made with the
@@ -140,8 +141,7 @@ function useTargetPick(
     enabled: setup.kind === "branch",
   });
   const counts = useQuery({
-    queryKey: ["project-branch-counts", projectId],
-    queryFn: () => api.projectBranchCounts(projectId),
+    ...branchCountsQuery(projectId),
     enabled: setup.kind === "branch",
   });
   // Once it starts, the branch isn't kept, but the base is: the project's next review goes into the same one.

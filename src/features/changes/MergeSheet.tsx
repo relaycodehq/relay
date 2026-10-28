@@ -9,6 +9,7 @@ import { ErrorBox, Loading, Modal } from "../../ui/ui";
 import "./create-pull.css";
 import { SearchSelect } from "../../ui/SearchSelect";
 import { branchOptions, branchSelect } from "./branch-options";
+import { branchCountsQuery } from "./branch-queries";
 
 /** Merges the checkout's branch into another without leaving it, then offers to switch and clean up. */
 export function MergeSheet({
@@ -37,10 +38,7 @@ export function MergeSheet({
     queryKey: ["project-branches", projectId],
     queryFn: () => api.projectBranches(projectId),
   });
-  const branchCounts = useQuery({
-    queryKey: ["project-branch-counts", projectId],
-    queryFn: () => api.projectBranchCounts(projectId),
-  });
+  const branchCounts = useQuery(branchCountsQuery(projectId));
   const [push, setPush] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();

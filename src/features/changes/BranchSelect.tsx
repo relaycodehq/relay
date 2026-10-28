@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type { BranchList } from "../../../shared/branches";
-import { api } from "../../lib/api";
 import { SearchSelect } from "../../ui/SearchSelect";
 import { branchOptions, branchSelect, markCheckedOut } from "./branch-options";
+import { branchCountsQuery } from "./branch-queries";
 
 const allNames = (list: BranchList) => list.branches.map((b) => b.name);
 
@@ -56,8 +56,7 @@ export function BranchSelect({
   const [shown, setShown] = useState(false);
   // Ahead counts are their own, slower call, made only once the list is opened.
   const counts = useQuery({
-    queryKey: ["project-branch-counts", projectId],
-    queryFn: () => api.projectBranchCounts(projectId),
+    ...branchCountsQuery(projectId),
     enabled: open ?? shown,
   });
   const list = branches.data;
