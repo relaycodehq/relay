@@ -45,22 +45,22 @@ enum CrashRecovery {
             return String(exception.dropFirst("exception ".count).prefix(300))
         }
         let signal = lines.first { $0.hasPrefix("signal ") }.map { String($0.dropFirst("signal ".count)) } ?? "A crash"
-        // The frames above the signal trampoline are this file's handler.
+        // Above the signal trampoline is this file's handler. On a phone the system's
+        // frames, the trampoline's too, print as <redacted>, so the handler's go by name.
         let below = lines.drop { !$0.contains("_sigtramp") }.dropFirst()
-        let frame = (below.isEmpty ? lines[...] : below).lazy.compactMap(relayFrame).first
+        let frame = (below.isEmpty ? lines[...] : below).lazy.compactMap(relayFrame).first { !isHandler($0) }
         return frame.map { "\(signal) in \($0)" } ?? signal
     }
 
-    /// `6  Relay.debug.dylib  0x… $s5Relay9CrashTestO4boomyySiSgFZ + 204` → `CrashTest.boom(Optional<Int>)`.
+    private static func isHandler(_ frame: String) -> Bool {
+        frame == "crashed(_:)" || frame.hasSuffix(" in CrashRecovery.install()")
+    }
+
+    /// `6  Relay.debug.dylib  0x… $s5Relay9CrashTestO4boomyySiSgFZ + 204` → `CrashTest.boom(_:)`.
     private static func relayFrame(_ line: String) -> String? {
         let parts = line.split(separator: " ", omittingEmptySubsequences: true)
         guard parts.count >= 4, parts[1] == "Relay" || parts[1].hasPrefix("Relay.") else { return nil }
-        var name = demangle(String(parts[3]))
-        for cut in [" -> ", " : "] {
-            if let at = name.range(of: cut) { name = String(name[..<at.lowerBound]) }
-        }
-        for noise in ["static ", "Swift.", "Relay."] { name = name.replacingOccurrences(of: noise, with: "") }
-        return String(name.prefix(160))
+        return String(FrameName.simplified(demangle(String(parts[3]))).prefix(160))
     }
 
     private static func demangle(_ symbol: String) -> String {
