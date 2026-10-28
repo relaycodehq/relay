@@ -82,7 +82,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/project-chats/revive.ts › reviveChat": 107,
   "electron/project-chats/terminal-continue.ts › make": 96,
   "electron/project-chats/thread-create.ts › create": 83,
-  "electron/project-chats/thread-list.ts › live": 93,
+  "electron/project-chats/thread-list.ts › live": 84,
   "electron/project-chats/thread-triage.ts › triage": 92,
   "electron/project-chats/turn-files.ts › rewind": 89,
   "electron/project-chats/turn-flows/send.ts › sendNow": 134,

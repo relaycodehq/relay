@@ -158,16 +158,7 @@ export class ThreadList {
         // A stopped answer reads as stopping until its agent winds down.
         const stopping = !active && turns.some((t) => t.phase === "stopping");
         const running = [...new Set(crew.map((t) => t.provider))];
-        const pending = [
-          ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
-          ...(c.heldWakeups ?? []).map((w): ChatPending => ({
-            kind: "wakeup",
-            id: w.id,
-            prompt: w.prompt,
-            recurring: false,
-            at: w.at,
-          })),
-        ];
+        const pending = this.pendingIn(c, live);
         // Open questions need the user even while the agent continues.
         // A thread handed away is answered on that computer.
         const blocked = crew.some((t) => t.blocked);
@@ -197,6 +188,26 @@ export class ThreadList {
             }
           : c;
       });
+  }
+
+  /**
+   * What Claude left behind in the thread: its live session's background
+   * work, and the wake-ups kept when Relay last closed.
+   */
+  private pendingIn(
+    c: ChatSummary,
+    live: ReturnType<ChatCore["sessions"]["pending"]>,
+  ): ChatPending[] {
+    return [
+      ...live.filter((p) => p.chatId === c.id).map((p) => p.item),
+      ...(c.heldWakeups ?? []).map((w): ChatPending => ({
+        kind: "wakeup",
+        id: w.id,
+        prompt: w.prompt,
+        recurring: false,
+        at: w.at,
+      })),
+    ];
   }
 
   /** Threads with a worktree on disk, each with when it settled and how long it keeps the worktree after. */
