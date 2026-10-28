@@ -876,14 +876,16 @@
   background: var(--sb-waiting);
 }
 /* The ring scales and fades on the compositor; an animated box-shadow would
-   repaint every frame for as long as the thread waits. */
+   repaint every frame for as long as the thread waits. It pulses a few times
+   when the thread starts waiting, then holds still: a thread can wait for
+   hours, and a loop asks for frames all that time. */
 .sb-status.waiting i::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   background: color-mix(in srgb, var(--sb-waiting) 55%, transparent);
-  animation: sb-pulse 1.6s infinite;
+  animation: sb-pulse 1.6s 3 forwards;
 }
 
 /* Activity view rows: no chrome until hover; the open
