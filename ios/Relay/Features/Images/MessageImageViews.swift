@@ -52,7 +52,7 @@ private struct Thumb: View {
                 ZStack {
                     colors.fill
                     if let picture = loaded.image {
-                        Image(uiImage: picture).resizable().scaledToFill()
+                        Picture(image: picture, mode: .fill)
                     } else if loaded.failed {
                         Image(systemName: "photo").foregroundStyle(colors.faint)
                     } else {
@@ -87,8 +87,7 @@ struct AnswerImage: View {
             if let picture = loaded.image, picture.size.width > 0, picture.size.height > 0 {
                 let ratio = picture.size.width / picture.size.height
                 Button { openImage?(source, among: among) } label: {
-                    Image(uiImage: picture)
-                        .resizable()
+                    Picture(image: picture)
                         .aspectRatio(ratio, contentMode: .fit)
                         .clipShape(.rect(cornerRadius: 10))
                         .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(colors.border, lineWidth: 0.5) }
@@ -134,7 +133,7 @@ struct ReadPreview: View {
         let ratio = picture.map { min(max($0.size.width / max($0.size.height, 1), 0.75), 2) } ?? 4 / 3
         return ZStack {
             colors.fill
-            if let picture { Image(uiImage: picture).resizable().scaledToFill() }
+            if let picture { Picture(image: picture, mode: .fill) }
         }
         .frame(width: traceHeight * ratio, height: traceHeight)
         .clipShape(.rect(cornerRadius: 8))

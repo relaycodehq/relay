@@ -250,8 +250,11 @@ private fun CopyImage(remote: Remote, source: ImageSource) {
                     try {
                         val uri = withContext(Dispatchers.IO) {
                             val dir = File(context.cacheDir, "images").apply { mkdirs() }
-                            val file = File(dir, "copied.png")
-                            file.outputStream().use { bitmap.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            // A GIF is copied as it is, so it still plays where it's pasted.
+                            val gif = loaded.animation?.bytes
+                            val file = File(dir, if (gif != null) "copied.gif" else "copied.png")
+                            if (gif != null) file.writeBytes(gif)
+                            else file.outputStream().use { bitmap.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
                             FileProvider.getUriForFile(context, context.imageAuthority(), file)
                         }
                         clipboard.setClipEntry(ClipEntry(ClipData.newUri(context.contentResolver, "Image", uri)))
@@ -273,6 +276,7 @@ private fun CopyImage(remote: Remote, source: ImageSource) {
 private fun Page(remote: Remote, image: LightboxImage, active: Boolean, onZoom: (Boolean) -> Unit, onTap: () -> Unit) {
     val loaded = rememberImage(remote, image.source)
     val bitmap = loaded.bitmap
+    val picture = rememberPicture(loaded)
     val scale = remember { Animatable(1f) }
     val x = remember { Animatable(0f) }
     val y = remember { Animatable(0f) }
@@ -314,14 +318,14 @@ private fun Page(remote: Remote, image: LightboxImage, active: Boolean, onZoom: 
             y.snapTo(y.value.coerceIn(-edge.y, edge.y))
         }
 
-        if (bitmap == null) {
+        if (picture == null) {
             if (loaded.failed) Text("This image couldn’t be loaded.", color = Color.White.copy(alpha = 0.7f), style = androidx.compose.ui.text.TextStyle(fontSize = 14.sp))
             else Spinner(color = Color.White)
             return@BoxWithConstraints
         }
         val loneSlop = with(LocalDensity.current) { LONE_SLOP_DP.dp.toPx() }
         Image(
-            bitmap,
+            picture,
             image.name,
             Modifier
                 .fillMaxSize()

@@ -24,8 +24,9 @@ import kotlinx.serialization.json.jsonPrimitive
 // Data URLs by computer, source and size, so scrolling back doesn't fetch them again.
 private val dataUrls = ImageCache()
 // Decoded pictures, so a row mounted again doesn't decode again.
-private val bitmaps = object : LruCache<String, ImageBitmap>(48 * 1024 * 1024) {
-    override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * 4
+private val decoded = object : LruCache<String, DecodedImage>(48 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: DecodedImage) =
+        value.bitmap.width * value.bitmap.height * 4 + (value.animation?.bytes?.size ?: 0)
 }
 // Ones the desktop refused, so the lightbox skips them as the desktop's does.
 private val refused: MutableSet<String> = Collections.synchronizedSet(HashSet())
@@ -37,16 +38,28 @@ private fun scoped(source: ImageSource, computer: String?) = "$computer|$source"
 /** Whether the active computer refused this picture. */
 fun imageFailed(source: ImageSource, computer: String?) = scoped(source, computer) in refused
 
+/** A GIF's file as it came, which each place showing it plays with its own drawable. */
+class ImageAnimation(val bytes: ByteArray)
+
+/** [bitmap] is the first frame of an [animation]: what sizes it and what gets copied. */
 @Immutable
-data class LoadedImage(val bitmap: ImageBitmap?, val failed: Boolean)
+data class LoadedImage(val bitmap: ImageBitmap?, val failed: Boolean, val animation: ImageAnimation? = null)
+
+internal class DecodedImage(val bitmap: ImageBitmap, val animation: ImageAnimation?)
+
+private fun isGif(bytes: ByteArray) =
+    bytes.size >= 6 && String(bytes, 0, 6, Charsets.US_ASCII).let { it == "GIF87a" || it == "GIF89a" }
 
 /** A data URL as a picture; null if it isn't one. */
-internal fun decodeDataUrl(url: String): ImageBitmap? {
+internal fun decodeDataUrl(url: String): DecodedImage? {
     val comma = url.indexOf(',')
     if (!url.startsWith("data:") || comma < 0) return null
     val bytes = runCatching { Base64.decode(url.substring(comma + 1), Base64.DEFAULT) }.getOrNull() ?: return null
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() ?: return null
+    return DecodedImage(bitmap, if (isGif(bytes)) ImageAnimation(bytes) else null)
 }
+
+private fun DecodedImage.loaded() = LoadedImage(bitmap, false, animation)
 
 /**
  * The picture, with [max] at most that many pixels on its longer side, which
@@ -62,14 +75,15 @@ fun rememberImage(remote: Remote, source: ImageSource, max: Int? = null): Loaded
     val shrunk = source !is ImageSource.Pending && max != null && bridge >= Bridge.IMAGE
     val id = scoped(source, computer) + if (shrunk) "@$max" else ""
     val online = status.state == LinkState.Online
-    val cached = bitmaps.get(id)
+    val cached = decoded.get(id)
     // Keyed so another picture starts from its own state, not the last one's bitmap.
     val state = key(id) {
-        produceState(LoadedImage(cached, false), online, known) {
+        produceState(cached?.loaded() ?: LoadedImage(null, false), online, known) {
             if (value.bitmap != null) return@produceState
             if (source is ImageSource.Pending) {
                 val url = PendingImages.lookup(source.messageId, source.index)
-                value = LoadedImage(url?.let { withContext(Dispatchers.Default) { decodeDataUrl(it) } }, url == null)
+                val image = url?.let { withContext(Dispatchers.Default) { decodeDataUrl(it) } }
+                value = image?.loaded() ?: LoadedImage(null, url == null)
                 return@produceState
             }
             // Wait for the overview: a missing bridge field on an older desktop means bridge 1.
@@ -92,9 +106,9 @@ fun rememberImage(remote: Remote, source: ImageSource, max: Int? = null): Loaded
                         is ImageSource.Pending, is ImageSource.Preview -> error("unreachable")
                     }.jsonPrimitive.content
                 }
-                val bitmap = withContext(Dispatchers.Default) { decodeDataUrl(url) } ?: error("Not an image")
-                bitmaps.put(id, bitmap)
-                LoadedImage(bitmap, false)
+                val image = withContext(Dispatchers.Default) { decodeDataUrl(url) } ?: error("Not an image")
+                decoded.put(id, image)
+                image.loaded()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (_: Exception) {

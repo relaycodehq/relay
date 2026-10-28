@@ -55,11 +55,10 @@ enum Pictures {
                 task = Task {
                     defer { loading[key] = nil }
                     let url = try await request()
-                    guard let image = await Task.detached(operation: { decode(url) }).value else {
+                    guard let image = await Task.detached(operation: { decode(url, max: pixels) }).value else {
                         throw PairingError("Not an image.")
                     }
-                    let size = image.size
-                    decoded.setObject(image, forKey: key as NSString, cost: Int(size.width * size.height * image.scale * image.scale * 4))
+                    decoded.setObject(image, forKey: key as NSString, cost: AnimatedImages.cost(image))
                     return image
                 }
                 loading[key] = task
@@ -76,10 +75,12 @@ enum Pictures {
     }
 
     /// A data URL as a picture, decoded off the main thread; nil if it isn't one.
-    nonisolated private static func decode(_ url: String) -> UIImage? {
+    /// A GIF comes whole from the computer, so it's decoded at `max` pixels here.
+    nonisolated private static func decode(_ url: String, max: Int?) -> UIImage? {
         guard url.hasPrefix("data:"), let comma = url.firstIndex(of: ",") else { return nil }
         guard let data = Data(base64Encoded: String(url[url.index(after: comma)...]), options: .ignoreUnknownCharacters)
         else { return nil }
+        if AnimatedImages.isGif(data), let animated = AnimatedImages.decode(data, max: max) { return animated }
         return UIImage(data: data)?.preparingForDisplay()
     }
 }

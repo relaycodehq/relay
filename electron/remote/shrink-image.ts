@@ -5,8 +5,10 @@ import { nativeImage } from "electron";
  * in a strip; on a slow link that's most of what opening a thread costs.
  * JPEGs stay JPEG; anything else becomes a PNG, which keeps transparency.
  * Whatever nativeImage can't read, or doesn't come out smaller, goes as it was.
+ * A GIF goes as it was too: re-encoded, it would keep only its first frame.
  */
 export function shrinkImage(dataUrl: string, max: number): string {
+  if (dataUrl.startsWith("data:image/gif")) return dataUrl;
   const image = nativeImage.createFromDataURL(dataUrl);
   const { width, height } = image.getSize();
   const long = Math.max(width, height);

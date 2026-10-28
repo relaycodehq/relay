@@ -71,8 +71,8 @@ private fun Thumb(remote: Remote, image: LightboxImage, onClick: () -> Unit) {
             .pressable(onClick, role = Role.Image),
         contentAlignment = Alignment.Center,
     ) {
-        val bitmap = loaded.bitmap
-        if (bitmap != null) Image(bitmap, image.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        val picture = rememberPicture(loaded)
+        if (picture != null) Image(picture, image.name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         else if (!loaded.failed) Spinner(color = c.mutedForeground)
     }
 }
@@ -106,7 +106,7 @@ fun ReadPreview(
             .ring(c.border, shape)
             .then(if (done && onOpen != null) Modifier.pressable(onOpen, role = Role.Image, scale = false) else Modifier),
     ) {
-        if (bitmap != null) Image(bitmap, name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        loaded?.let { rememberPicture(it) }?.let { Image(it, name, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
 }
 
@@ -115,7 +115,7 @@ fun ReadPreview(
 fun ReadSwatch(remote: Remote, source: ImageSource, modifier: Modifier = Modifier) {
     val loaded = rememberImage(remote, source, pixels(TRACE_HEIGHT * TRACE_MAX_RATIO))
     Box(modifier.size(14.dp).clip(RoundedCornerShape(3.dp)).background(RelayTheme.colors.muted)) {
-        loaded.bitmap?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
+        rememberPicture(loaded)?.let { Image(it, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop) }
     }
 }
 
@@ -138,16 +138,16 @@ fun AnswerImage(
 
 @Composable
 internal fun AnswerImageFrame(loaded: LoadedImage, label: String, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val bitmap = loaded.bitmap
+    val picture = rememberPicture(loaded)
     val shape = RoundedCornerShape(10.dp)
     BoxWithConstraints(modifier.fillMaxWidth()) {
         Box(
             Modifier.fillMaxWidth().height(minOf(maxWidth, ANSWER_HEIGHT.dp))
                 .clip(shape).background(RelayTheme.colors.muted).ring(RelayTheme.colors.border, shape)
-                .then(if (bitmap != null) Modifier.pressable(onOpen, role = Role.Image, scale = false) else Modifier),
+                .then(if (picture != null) Modifier.pressable(onOpen, role = Role.Image, scale = false) else Modifier),
             contentAlignment = Alignment.Center,
         ) {
-            if (bitmap != null) Image(bitmap, label, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            if (picture != null) Image(picture, label, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
             else if (loaded.failed) Text("Image unavailable", color = RelayTheme.colors.mutedForeground)
             else Spinner(color = RelayTheme.colors.mutedForeground)
         }
