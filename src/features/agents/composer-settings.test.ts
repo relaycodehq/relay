@@ -14,6 +14,10 @@ import {
 } from "./composer-settings";
 import { newThreadModelsOf, withNewThreadModels } from "./composer-models";
 import { sentModel } from "../../../shared/new-thread-models";
+import {
+  saveUnsentAccountPicks,
+  unsentAccountPicks,
+} from "../../lib/thread-storage";
 
 const store = new Map<string, string>();
 
@@ -22,6 +26,7 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
+    removeItem: (key: string) => store.delete(key),
   });
 });
 
@@ -314,6 +319,14 @@ it("starts a thread on the agent its first message went to", () => {
     runtimeMode: "auto",
     interactionMode: "default",
   });
+});
+
+it("keeps a new thread's account picks only until the thread starts", () => {
+  saveUnsentAccountPicks("new:project", { claude: "work" });
+  expect(unsentAccountPicks("new:project")).toEqual({ claude: "work" });
+  startThreadSettings("new:project", "thread", "claude");
+  // The thread keeps its account itself; the next draft starts on the one in use.
+  expect(unsentAccountPicks("new:project")).toEqual({});
 });
 
 it("keeps another agent's model in its own entry, apart from Codex's and Claude's", () => {

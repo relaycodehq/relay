@@ -14,7 +14,10 @@ import {
 } from "../../../shared/new-thread-models";
 import { isAgentProvider, type AgentProvider } from "../../../shared/agents";
 import { readJson, writeJson } from "../../lib/persisted-store";
-import { composerSettingsKey } from "../../lib/thread-storage";
+import {
+  composerSettingsKey,
+  saveUnsentAccountPicks,
+} from "../../lib/thread-storage";
 import {
   readComposerModels,
   withNewThreadModels,
@@ -159,8 +162,8 @@ export function saveComposerSettings(
 /**
  * Hands a new thread's composer settings to the thread it started, on the
  * agent the first message went to. The new-thread composer keeps its models
- * and runtime mode, but Plan was for that thread: the next one
- * starts in Build.
+ * and runtime mode, but Plan and the accounts picked were for that thread:
+ * the next one starts in Build, on the accounts in use.
  */
 export function startThreadSettings(
   from: string,
@@ -174,6 +177,7 @@ export function startThreadSettings(
     ...settings,
     interactionMode: "default",
   });
+  saveUnsentAccountPicks(from, null);
   // A composer still open on it would save its frozen picks back over this.
   for (const listener of threadStartListeners.get(from) ?? []) listener();
 }

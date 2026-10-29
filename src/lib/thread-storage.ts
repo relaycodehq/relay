@@ -37,7 +37,7 @@ import {
   type ReviewDraft,
   type ThreadDraft,
 } from "./thread-draft";
-import { readText, writeText } from "./persisted-store";
+import { readJson, readText, writeText } from "./persisted-store";
 
 export { DRAFT_PREFIX };
 
@@ -53,6 +53,8 @@ export const TURN_FOLDS = "relay-turn-folds:";
 export const IMAGE_STRIPS = "relay-image-strips:";
 /** Per draft: "Compact first" ticked or unticked by hand, until it's sent. */
 export const COMPACT_PICKS = "relay-compact-pick:";
+/** Per unsent thread: the account picked for each agent, until it starts. */
+const ACCOUNT_PICKS = "relay-account-pick:";
 
 /** A thread's main draft, or with `reply` its side conversation's. */
 export const threadDraftKey = draftKeyOf;
@@ -63,6 +65,25 @@ export const scheduleDraftKey = (id: string) => draftKeyOf(SCHEDULE_DRAFT + id);
 export const localOnlyRecord = (thread: string) => thread.startsWith(SCHEDULE_DRAFT);
 /** A composer's settings: a thread's, or `<thread>:<reply>` for a side conversation. */
 export const composerSettingsKey = (key: string) => SETTINGS + key;
+
+/** The accounts picked in an unsent thread's composer, by agent, under its settings key. */
+export function unsentAccountPicks(
+  settingsKey: string,
+): Record<string, string> {
+  const saved = readJson(ACCOUNT_PICKS + settingsKey);
+  if (!saved || typeof saved !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(saved).filter(([, id]) => typeof id === "string"),
+  );
+}
+
+/** Keeps the picks until the thread starts; null lets them go. */
+export function saveUnsentAccountPicks(
+  settingsKey: string,
+  picks: Record<string, string> | null,
+) {
+  writeText(ACCOUNT_PICKS + settingsKey, picks && JSON.stringify(picks));
+}
 
 let migrated: Storage | undefined;
 // A draft storage refused (full, or unavailable), kept so it isn't lost
@@ -382,7 +403,7 @@ export function keyOwner(
 ): { thread: string } | { project: string } | undefined {
   for (const prefix of [OPEN_THREAD, CURRENT_NEW_THREAD])
     if (key.startsWith(prefix)) return { project: key.slice(prefix.length) };
-  for (const prefix of [TURN_FOLDS, IMAGE_STRIPS])
+  for (const prefix of [TURN_FOLDS, IMAGE_STRIPS, ACCOUNT_PICKS])
     if (key.startsWith(prefix))
       return key.length > prefix.length
         ? { thread: key.slice(prefix.length) }

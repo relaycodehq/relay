@@ -48,7 +48,7 @@ import { attachedImages, numberImages } from "../../../shared/image-refs";
 import { unsent } from "../../../shared/drafts";
 import { startsWithCommand } from "../../../shared/commands";
 import { flattenSketch } from "../images/sketch";
-import { draftChips } from "../../lib/thread-storage";
+import { draftChips, unsentAccountPicks } from "../../lib/thread-storage";
 import { pickedSkills } from "../../../shared/skill-mentions";
 import { aiSettingsQuery } from "../agents/useAISettings";
 import { agentModelsQuery } from "../agents/useAgentPicks";
@@ -146,7 +146,13 @@ export async function sendDraft(
   started.set(id, target);
   const attachments = loadDraftAttachments(id);
   const messageId = crypto.randomUUID();
-  const input = { ...withAttachments(value, attachments), id: messageId };
+  // A new thread starts on the account picked in its composer.
+  const account = chat ? undefined : unsentAccountPicks(id)[recipient];
+  const input = {
+    ...withAttachments(value, attachments),
+    ...(account ? { account } : {}),
+    id: messageId,
+  };
   // Its first message starts it there; later ones follow it there.
   if (home && !chat) await api.startProjectChatOn(target.id, input, home.id);
   else await api.sendProjectChat(target.id, input);

@@ -230,10 +230,7 @@ export function ProjectComposer({
     };
   }, []);
   const runs = useAgentRuns(composer, catalogs, draft.dropMention);
-  const accounts = useThreadAccounts(
-    conversation.chatId,
-    conversation.accounts,
-  );
+  const accounts = useThreadAccounts(conversation, keys.settings);
   const input = useRef<HTMLElement>(null);
   const agentSettings = useRef<ComposerHandle["agentSettings"]>(
     () => undefined,
