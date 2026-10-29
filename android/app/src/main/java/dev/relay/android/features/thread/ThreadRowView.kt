@@ -36,7 +36,8 @@ internal fun ThreadRowView(
     val trace = measurements.trace
     val messageTrace = remember(trace, m.id) { trace.child("message" to m.id) }
     val transient = row is ThreadMessageRow.Content && row.section in setOf(MessageSection.Header, MessageSection.Footer)
-    CompositionLocalProvider(LocalScrollTrace provides messageTrace) {
+    val unfold = LocalUnfold.current
+    CompositionLocalProvider(LocalScrollTrace provides messageTrace, LocalUnfold provides remember(unfold, geometry) { unfold.releasing(geometry) }) {
         Column(Modifier
             .readingColumn()
             .then(if (transient) Modifier.stableGeometry(geometry, holding) else Modifier)
@@ -58,4 +59,13 @@ internal fun ThreadRowView(
             }
         }
     }
+}
+
+/**
+ * What the reader opens or closes gives back the room the row held while they read; held, a fold they
+ * closed stays a blank gap until the thread follows its end again, then goes all at once.
+ */
+internal fun ReaderUnfold.releasing(geometry: StableGeometryState) = ReaderUnfold { change ->
+    geometry.forget()
+    this(change)
 }

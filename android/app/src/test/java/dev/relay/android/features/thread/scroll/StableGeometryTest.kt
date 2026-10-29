@@ -1,5 +1,7 @@
 package dev.relay.android.features.thread.scroll
 
+import dev.relay.android.features.thread.ReaderUnfold
+import dev.relay.android.features.thread.releasing
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -20,6 +22,15 @@ class StableGeometryTest {
         assertEquals(2400, size.height(400, 40, true))
         size.forget()
         assertEquals(40, size.height(400, 40, true))
+    }
+
+    @Test fun aFoldTheReaderClosesGivesItsRoomBackWhileTheyRead() {
+        val size = StableGeometryState()
+        size.height(400, 200, true)
+        var content = 900
+        size.height(400, content, true)
+        ReaderUnfold { it() }.releasing(size).invoke { content = 200 }
+        assertEquals(200, size.height(400, content, true))
     }
 
     @Test fun widthChangeStartsNewMeasurementRegime() {
