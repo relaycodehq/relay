@@ -2,7 +2,11 @@
 // until the fold opens and `messageSteps` hands them out. The tool calls were
 // most of a big thread's weight on a slow link, and nobody saw them unless
 // they opened the turn.
-import type { AgentActivity, ChatMessage } from "../../shared/projects";
+import type {
+  AgentActivity,
+  ChatMessage,
+  KnownMessages,
+} from "../../shared/projects";
 import type { ChatSteps } from "../../shared/remote";
 import { looksAtImage, readTurn, turnHeading } from "../../shared/agent-trace";
 import { isStartThreads } from "../../shared/started-threads";
@@ -57,17 +61,20 @@ function newestTurnAt(messages: (ChatMessage | string)[]) {
 
 /**
  * The messages a phone asked for, with `"latest"` every finished turn but the
- * newest folded. The newest is the one most likely opened, so it comes whole.
+ * newest folded. The newest is the one most likely opened, so it comes whole,
+ * and so does a turn the phone holds an older copy of: it may be open there.
  */
 export function stepsAsAsked<M extends ChatMessage | string>(
   messages: M[],
   steps: ChatSteps = "all",
+  known: KnownMessages = {},
 ): (M | ChatMessage)[] {
   if (steps === "all") return messages;
   const newest = newestTurnAt(messages);
   return messages.map((m, index) => {
     if (typeof m === "string" || index === newest) return m;
+    const held = known[m.id] !== undefined;
     const finishedTurn = m.role === "assistant" && m.status !== "streaming";
-    return finishedTurn ? withStepsLeftOut(m) : m;
+    return finishedTurn && !held ? withStepsLeftOut(m) : m;
   });
 }

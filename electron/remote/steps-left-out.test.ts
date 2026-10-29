@@ -119,6 +119,11 @@ describe("stepsAsAsked", () => {
     ]);
   });
 
+  it("sends a turn the phone holds an older copy of whole", () => {
+    const [first] = stepsAsAsked([older, asked, newest], "latest", { old: 0 });
+    expect(first).toBe(older);
+  });
+
   it("keeps the main thread's newest turn whole after a reply's answer", () => {
     const reply = { ...asked, id: "r1", parentId: "old" } as ChatMessage;
     const replyAnswer = answer(

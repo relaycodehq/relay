@@ -119,9 +119,11 @@ export class RemoteBridge {
         ...(sendId !== undefined
           ? this.sends.receipt(patch, sendId, dispatchedBefore)
           : {}),
-        messages: stepsAsAsked(patch.messages.slice(-history), steps).map(
-          (m) => (typeof m === "string" ? m : forPhone(m)),
-        ),
+        messages: stepsAsAsked(
+          patch.messages.slice(-history),
+          steps,
+          known,
+        ).map((m) => (typeof m === "string" ? m : forPhone(m))),
         earlier: Math.max(0, patch.messages.length - history),
         ...(cost ? { cost } : {}),
         requests: patch.requests,
