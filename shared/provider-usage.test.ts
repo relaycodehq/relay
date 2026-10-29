@@ -161,6 +161,23 @@ describe("provider usage windows", () => {
     expect(paceGap(week(50))).toBe("On pace");
     expect(paceGap(week(100))).toBeNull();
   });
+
+  it("keeps a meter a point either side of its pace mark calm", () => {
+    // 4% of the week to go: an even burn leaves 4%.
+    const week = (usedPercent: number) =>
+      presentWindow(
+        {
+          kind: "weekly",
+          usedPercent,
+          resetsAt: now + WEEK_MS * 0.04,
+          periodMs: WEEK_MS,
+        },
+        now,
+      ).pace;
+    expect(week(95)).toBe("ok");
+    expect(week(97)).toBe("ok");
+    expect(week(98)).not.toBe("ok");
+  });
 });
 
 describe("Codex credits", () => {

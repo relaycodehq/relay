@@ -86,6 +86,7 @@ const FIVE_MINUTES = 5 * 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 // Points behind the pace mark before an early run-out turns red.
 const BEHIND_HOT = 10;
+const ON_PACE_SLACK = 1;
 
 /** Rounded up to the minute, two units at most: "7m", "3h", "3h 20m", "2d 5h". */
 function compactDuration(ms: number): string | null {
@@ -171,7 +172,8 @@ export function presentWindow(
     };
   }
   const projected = project(used, window, now, clock, active != null);
-  if (projected?.status === "ahead") {
+  const onPace = nearPaceMark(leftPercent, paceLeftPercent);
+  if (projected?.status === "ahead" || onPace) {
     return {
       ...base,
       leftPercent,
@@ -224,6 +226,12 @@ export function paceGap(meter: UsageMeter): string | null {
   const gap = meter.leftPercent - Math.round(meter.paceLeftPercent);
   if (gap === 0) return "On pace";
   return gap > 0 ? `${gap}% ahead` : `${-gap}% behind`;
+}
+
+/** A point either side of the pace mark is spending evenly, not running hot. */
+function nearPaceMark(leftPercent: number, paceLeftPercent: number | null) {
+  if (paceLeftPercent == null) return false;
+  return Math.abs(leftPercent - Math.round(paceLeftPercent)) <= ON_PACE_SLACK;
 }
 
 function outIn(ms: number) {
