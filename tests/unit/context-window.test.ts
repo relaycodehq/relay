@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { codexContextUsage } from "../../electron/agents/codex/codex-turn";
 import {
   CODEX_CACHE_TTL,
@@ -17,6 +17,8 @@ import {
 } from "../../src/features/agents/ContextWindowMeter";
 import { latestContext } from "../../shared/context-usage";
 import type { ChatMessage } from "../../shared/projects";
+
+vi.mock("../../src/lib/api", () => ({ api: {} }));
 
 const answer = (patch: Partial<ChatMessage> = {}): ChatMessage => ({
   id: crypto.randomUUID(),

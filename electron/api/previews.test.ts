@@ -44,15 +44,20 @@ it("passes a validated launch command to the thread's preview", async () => {
     project,
     null,
     "http://localhost:5173/example/",
-    " npm run dev -- --port 5173 ",
+    { command: " npm run dev -- --port 5173 " },
   ]);
   expect(navigate).toHaveBeenCalledWith(
     project,
     null,
     "http://localhost:5173/example/",
-    "npm run dev -- --port 5173",
+    { command: "npm run dev -- --port 5173" },
   );
   expect(() =>
-    handlers.navigatePreview([project, null, "http://localhost:5173/", " "]),
+    handlers.navigatePreview([
+      project,
+      null,
+      "http://localhost:5173/",
+      { command: " " },
+    ]),
   ).toThrow();
 });
