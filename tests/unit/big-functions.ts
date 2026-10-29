@@ -103,7 +103,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/triage/classifier.ts › classifyWithClaude": 106,
   "electron/triage/service.ts › result": 82,
   "electron/triage/service.ts › run": 273,
-  "shared/provider-usage.ts › presentWindow": 103,
+  "shared/provider-usage.ts › presentWindow": 93,
   "shared/time-attribution.ts › attributeTime": 93,
   "shared/usage.ts › summarizeUsage": 157,
   "src/app/ProjectShell.tsx › ProjectShell": 362,

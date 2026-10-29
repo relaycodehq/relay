@@ -131,6 +131,7 @@ export function presentWindow(
   const leftPercent = clamp(Math.round(100 - used), 0, 100);
   const label =
     window.label ?? (window.kind === "session" ? "Session" : "Weekly");
+  const base = { id: window.id, kind: window.kind, label };
   const fresh =
     window.kind === "session" && window.resetsAt == null && used <= 0;
   const resetLabel = fresh
@@ -151,9 +152,7 @@ export function presentWindow(
         );
   if (fresh) {
     return {
-      id: window.id,
-      kind: window.kind,
-      label,
+      ...base,
       leftPercent: 100,
       paceLeftPercent: null,
       pace: "ok",
@@ -163,9 +162,7 @@ export function presentWindow(
   }
   if (leftPercent <= 0) {
     return {
-      id: window.id,
-      kind: window.kind,
-      label,
+      ...base,
       leftPercent: 0,
       paceLeftPercent,
       pace: "spent",
@@ -176,9 +173,7 @@ export function presentWindow(
   const projected = project(used, window, now, clock, active != null);
   if (projected?.status === "ahead") {
     return {
-      id: window.id,
-      kind: window.kind,
-      label,
+      ...base,
       leftPercent,
       paceLeftPercent,
       pace: "ok",
@@ -189,9 +184,7 @@ export function presentWindow(
   if (projected?.status === "onTrack") {
     const spare = Math.round(100 - projected.projected);
     return {
-      id: window.id,
-      kind: window.kind,
-      label,
+      ...base,
       leftPercent,
       paceLeftPercent,
       pace: spare >= 1 ? "warn" : "hot",
@@ -203,9 +196,7 @@ export function presentWindow(
     // A few points past the pace mark is one lighter afternoon, not a fire.
     const behind = (paceLeftPercent ?? 100) - leftPercent;
     return {
-      id: window.id,
-      kind: window.kind,
-      label,
+      ...base,
       leftPercent,
       paceLeftPercent,
       pace: behind >= BEHIND_HOT ? "hot" : "warn",
@@ -215,9 +206,7 @@ export function presentWindow(
   }
   const percentUsed = Math.round(used);
   return {
-    id: window.id,
-    kind: window.kind,
-    label,
+    ...base,
     leftPercent,
     paceLeftPercent,
     pace: percentUsed >= 90 ? "hot" : percentUsed >= 80 ? "warn" : "ok",
