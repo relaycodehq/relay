@@ -1,5 +1,6 @@
 package dev.relay.android.remote.client
 
+import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.delta.applyChatPatch
 import dev.relay.android.remote.delta.knownOf
 import dev.relay.android.remote.model.ComputerInfo
@@ -50,11 +51,12 @@ suspend fun RemoteClient.overview(): RemoteOverview = call("overview").to()
 
 /**
  * The thread with its latest messages, those [previous] holds at the same version reused.
- * Finished turns but the newest come folded, their steps fetched when one opens; older
- * desktops ignore the ask and send them all.
+ * Finished turns but the newest come folded, their steps fetched when one opens; desktops
+ * before Bridge.STEPS_ON_OPEN aren't asked, as those before Bridge.FILES refuse a fifth argument.
  */
 suspend fun RemoteClient.chat(id: String, previous: RemoteChat? = null, history: Int? = null, sendId: String? = null): RemoteChat {
-    val patch = call("chat", args(s(id), j(knownOf(previous)), n(history), s(sendId), s("latest")))
+    val steps = "latest".takeIf { supports(Bridge.STEPS_ON_OPEN) }
+    val patch = call("chat", args(s(id), j(knownOf(previous)), n(history), s(sendId), s(steps)))
     return applyChatPatch(patch.jsonObject, previous)
 }
 

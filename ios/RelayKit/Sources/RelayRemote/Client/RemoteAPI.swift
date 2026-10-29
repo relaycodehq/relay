@@ -9,15 +9,14 @@ public extension RemoteClient {
     }
 
     /// The thread with its latest messages, those `previous` holds at the same version reused.
-    /// Finished turns but the newest come folded, their steps fetched when one opens; older
-    /// desktops ignore the ask and send them all.
+    /// Finished turns but the newest come folded, their steps fetched when one opens; desktops
+    /// before `Bridge.stepsOnOpen` aren't asked, as those before `Bridge.files` refuse a fifth argument.
     func chat(_ id: String, previous: RemoteChat? = nil, history: Int? = nil, sendId: String? = nil) async throws
         -> RemoteChat
     {
         let known = try knownOf(previous).map { try JSON(encoding: $0) }
-        var args: [JSON?] = [
-            .string(id), known, history.map { .number(Double($0)) }, sendId.map(JSON.string), .string("latest"),
-        ]
+        let steps: JSON? = supports(Bridge.stepsOnOpen) ? .string("latest") : nil
+        var args: [JSON?] = [.string(id), known, history.map { .number(Double($0)) }, sendId.map(JSON.string), steps]
         while let last = args.last, last == nil { args.removeLast() }
         let patch = try await call("chat", args)
         guard let object = patch.object else { throw RemoteCallError.rejected("A thread that isn't one.") }
