@@ -61,6 +61,7 @@ describe("withStepsLeftOut", () => {
       call("c2", "command", "npm test", { status: "failed" }),
       call("ag", "agent", "Explore"),
       call("sub", "read", "src/c.ts", { parentId: "ag" }),
+      call("subShot", "read", "page.png", { parentId: "ag" }),
       call("ask", "tool", "AskUserQuestion"),
       call("start", "tool", "start_threads", {
         mcp: { server: "relay", tool: "start_threads" },
@@ -76,9 +77,9 @@ describe("withStepsLeftOut", () => {
     expect(withStepsLeftOut(busyTurn).stepsSummary).toBe(heading(busyTurn));
   });
 
-  it("keeps the calls shown outside the fold and the last", () => {
+  it("keeps the calls shown outside the fold, a subagent's too, and the last", () => {
     const folded = withStepsLeftOut(busyTurn);
-    expect(keptIds(folded)).toEqual(["shot", "start", "c3"]);
+    expect(keptIds(folded)).toEqual(["shot", "subShot", "start", "c3"]);
     expect(folded.stepsLeftOut).toBe(11);
   });
 

@@ -21,13 +21,11 @@ export function withStepsLeftOut(message: ChatMessage): ChatMessage {
   const last = turn.activity.at(-1);
   // No calls: its commentary is all the fold holds.
   if (!last) return message;
-  const keptIds = new Set(
-    turn.activity
-      .filter((call) => call === last || shownOutsideFold(call))
-      .map((call) => call.id),
-  );
+  // A subagent's calls too: phones look for pictures and started threads in the whole trace.
   const trace = turn.entries.filter(
-    (entry) => entry.kind === "activity" && keptIds.has(entry.activity.id),
+    (entry) =>
+      entry.kind === "activity" &&
+      (entry.activity === last || shownOutsideFold(entry.activity)),
   );
   const stepsLeftOut = turn.entries.length - trace.length;
   if (!stepsLeftOut) return message;
