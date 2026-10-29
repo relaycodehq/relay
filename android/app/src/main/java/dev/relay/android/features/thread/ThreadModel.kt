@@ -94,10 +94,12 @@ class ThreadModel(
                 historyFailed(request, history)
                 return
             }
-            _thread.value = keepNewer(next, _thread.value, asked)
+            // A fold whose steps came in meanwhile stays open, here and in the offline copy.
+            val merged = keepNewer(next, _thread.value, asked)
+            _thread.value = merged
             _fetched.value = started
             _loadedHistory.value = history
-            cache.save(computer, id, next)
+            cache.save(computer, id, merged)
             _error.value = null
             _historyResult.value = HistoryLoadResult(request, history, true)
         } catch (e: CancellationException) {

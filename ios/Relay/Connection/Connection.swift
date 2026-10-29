@@ -402,11 +402,13 @@ final class Connection {
                 chat = try await client.chat(id, history: history[id])
             }
             guard self.client === client else { return }
-            // A message the stream moved on while this was asked stays as the stream left it.
-            threads[id] = keepNewer(chat, threads[id], asked: asked)
-            offline.save(active, id, chat)
+            // A message the stream moved on while this was asked stays as the stream left it,
+            // and so does a fold whose steps came in meanwhile.
+            let merged = keepNewer(chat, threads[id], asked: asked)
+            threads[id] = merged
+            offline.save(active, id, merged)
             loadErrors[id] = nil
-            took(id, threads[id]!, fetched: fetched)
+            took(id, merged, fetched: fetched)
         } catch {
             log.error("Couldn't load thread \(id, privacy: .public): \(String(describing: error), privacy: .public)")
             loadErrors[id] = "Couldn't load this thread: \(error)"
