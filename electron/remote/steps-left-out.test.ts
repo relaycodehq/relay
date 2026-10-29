@@ -119,6 +119,27 @@ describe("stepsAsAsked", () => {
     ]);
   });
 
+  it("keeps the main thread's newest turn whole after a reply's answer", () => {
+    const reply = { ...asked, id: "r1", parentId: "old" } as ChatMessage;
+    const replyAnswer = answer(
+      "ra",
+      [call("r3", "read", "c.ts"), call("c3", "command", "ls")],
+      { parentId: "r1" },
+    );
+    const folded = stepsAsAsked(
+      [older, asked, newest, reply, replyAnswer],
+      "latest",
+    );
+    expect(folded[2]).toBe(newest);
+    expect((folded[4] as ChatMessage).stepsLeftOut).toBe(1);
+  });
+
+  it("folds an earlier page when the phone holds the newest turn", () => {
+    const [first, second] = stepsAsAsked([older, newest, "held"], "latest");
+    expect((first as ChatMessage).stepsLeftOut).toBe(1);
+    expect((second as ChatMessage).stepsLeftOut).toBe(1);
+  });
+
   it("folds nothing for a phone that didn't ask", () => {
     const messages = [older, newest];
     expect(stepsAsAsked(messages)).toBe(messages);

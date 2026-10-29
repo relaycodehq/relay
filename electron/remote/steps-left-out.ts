@@ -39,10 +39,18 @@ export function withStepsLeftOut(message: ChatMessage): ChatMessage {
   };
 }
 
+/**
+ * Where the main conversation's newest turn is; -1 when the phone holds what
+ * comes last, so it has that turn already. Replies are conversations of their
+ * own, which phones show apart from the main one.
+ */
 function newestTurnAt(messages: (ChatMessage | string)[]) {
+  const ids = new Set(messages.map((m) => (typeof m === "string" ? m : m.id)));
   for (let index = messages.length - 1; index >= 0; index--) {
-    const m = messages[index];
-    if (typeof m !== "string" && m.role === "assistant") return index;
+    const m = messages[index]!;
+    if (typeof m === "string") return -1;
+    const reply = !!m.parentId && ids.has(m.parentId);
+    if (!reply && m.role === "assistant") return index;
   }
   return -1;
 }
