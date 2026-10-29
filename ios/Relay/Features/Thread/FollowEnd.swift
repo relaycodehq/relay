@@ -68,8 +68,8 @@ private struct FollowEnd: ViewModifier {
     @State private var touching = false
     /// The end row is on screen.
     @State private var atEnd = true
-    /// The reader is unfolding something; see `ReaderUnfold`.
-    @State private var unfolding = false
+    /// What the reader is unfolding, each until it has laid out; see `ReaderUnfold`.
+    @State private var unfolding = 0
 
     func body(content: Content) -> some View {
         content
@@ -86,7 +86,7 @@ private struct FollowEnd: ViewModifier {
                 if phase == .idle { following = atEnd }
             }
             .onScrollGeometryChange(for: Extent.self, of: Extent.init) { old, new in
-                guard !touching, !unfolding, following,
+                guard !touching, unfolding == 0, following,
                     settling || live || new.room != old.room || new.content < old.content
                 else { return }
                 follow()
@@ -117,10 +117,15 @@ private struct FollowEnd: ViewModifier {
     }
 
     private func hold(_ held: Bool) {
-        unfolding = held
+        // A fold's steps arriving overlap the tap that opened it; the last to lay out decides.
+        unfolding += held ? 1 : -1
         // A position on the end row keeps that row at the bottom while what's above it grows;
         // an empty one leaves the thread where it is.
-        if held { position = ScrollPosition(idType: String.self) } else { following = following && atEnd }
+        if held {
+            position = ScrollPosition(idType: String.self)
+        } else if unfolding == 0 {
+            following = following && atEnd
+        }
     }
 
     private func follow() {

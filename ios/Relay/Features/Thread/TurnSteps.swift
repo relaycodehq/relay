@@ -5,6 +5,7 @@ struct StepsComing: View {
     let chatId: String
     let messageId: String
     @Environment(Connection.self) private var connection
+    @Environment(\.unfold) private var unfold
     @State private var attempt = 0
     @State private var failed = false
 
@@ -25,6 +26,6 @@ struct StepsComing: View {
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
-        .task(id: attempt) { failed = !(await connection.loadSteps(chatId, message: messageId)) }
+        .task(id: attempt) { failed = !(await connection.loadSteps(chatId, message: messageId, unfold: unfold)) }
     }
 }

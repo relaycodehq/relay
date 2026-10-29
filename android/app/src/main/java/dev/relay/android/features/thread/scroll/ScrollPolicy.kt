@@ -21,8 +21,8 @@ data class ScrollState(
     val belowEndPx: Int? = 0,
     val nextRestoreToken: Long = 1,
     val readerSettledAtEnd: Boolean = false,
-    /** The reader is opening or closing something; nothing follows until it has laid out. */
-    val unfolding: Boolean = false,
+    /** How many things the reader is opening or closing; nothing follows until they have laid out. */
+    val unfolding: Int = 0,
 )
 
 sealed interface ScrollEvent {
@@ -67,7 +67,7 @@ object ScrollPolicy {
             effects += ScrollEffect.Transition(previous, next, cause)
         }
         fun follow(reason: String) {
-            if (state.mode == ScrollMode.Following && !state.pointerDown && !state.scrolling && !state.unfolding &&
+            if (state.mode == ScrollMode.Following && !state.pointerDown && !state.scrolling && state.unfolding == 0 &&
                 (state.applied?.rows ?: 0) > 0) effects += ScrollEffect.RequestEnd(reason)
         }
         fun observe(below: Int?) {
@@ -149,17 +149,21 @@ object ScrollPolicy {
                 mode(ScrollMode.Following, event.reason)
                 follow(event.reason)
             }
-            ScrollEvent.ReaderUnfold -> if (state.mode == ScrollMode.Following) {
+            ScrollEvent.ReaderUnfold -> {
+                state = state.copy(unfolding = state.unfolding + 1)
                 // Lifting the finger already asked for the end, which would land with what opens.
-                state = state.copy(unfolding = true)
-                effects += ScrollEffect.Stay
+                if (state.mode == ScrollMode.Following) effects += ScrollEffect.Stay
             }
             is ScrollEvent.UnfoldSettled -> {
                 observe(event.belowEndPx)
-                state = state.copy(unfolding = false)
+                state = state.copy(unfolding = (state.unfolding - 1).coerceAtLeast(0))
                 // What the reader opened stays under their finger; the thread follows on only if its end still shows.
-                if (state.mode == ScrollMode.Following && !atEnd(event.belowEndPx)) mode(ScrollMode.Reading, "reader_unfolded")
-                else follow("unfold_settled")
+                // A fold's steps arriving overlap the tap that opened it, and the last to lay out decides.
+                when {
+                    state.unfolding > 0 -> {}
+                    state.mode == ScrollMode.Following && !atEnd(event.belowEndPx) -> mode(ScrollMode.Reading, "reader_unfolded")
+                    else -> follow("unfold_settled")
+                }
             }
             is ScrollEvent.RestoreResult -> {
                 if ((state.mode as? ScrollMode.Restoring)?.token == event.token)

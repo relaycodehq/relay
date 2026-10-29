@@ -415,13 +415,14 @@ final class Connection {
         }
     }
 
-    /// Puts a folded turn's steps in place; false when the computer couldn't hand them over.
-    func loadSteps(_ chatId: String, message messageId: String) async -> Bool {
+    /// Puts a folded turn's steps in place, opening as the fold the reader tapped did; false when
+    /// the computer couldn't hand them over.
+    func loadSteps(_ chatId: String, message messageId: String, unfold: ReaderUnfold) async -> Bool {
         guard let client else { return false }
         guard let steps = try? await client.messageSteps(chatId: chatId, messageId: messageId) else { return false }
         guard self.client === client, let thread = threads[chatId] else { return false }
         let opened = withSteps(thread, messageId: messageId, steps)
-        threads[chatId] = opened
+        unfold { threads[chatId] = opened }
         offline.save(active, chatId, opened)
         return true
     }

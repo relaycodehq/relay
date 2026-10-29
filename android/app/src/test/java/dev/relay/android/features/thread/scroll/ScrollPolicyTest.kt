@@ -97,6 +97,17 @@ class ScrollPolicyTest {
         assertEquals(ScrollMode.Reading, session.state.mode)
     }
 
+    @Test fun stepsArrivingBeforeTheirFoldSettlesKeepTheThreadStill() {
+        val session = following()
+        tapAFold(session)
+        session.send(ScrollEvent.ReaderUnfold)
+        // The tap's fold settles with the end still showing, before the steps are measured.
+        assertTrue(session.send(ScrollEvent.UnfoldSettled(0)).endRequests().isEmpty())
+        assertTrue(session.send(ScrollEvent.EndObserved(300)).endRequests().isEmpty())
+        session.send(ScrollEvent.UnfoldSettled(300))
+        assertEquals(ScrollMode.Reading, session.state.mode)
+    }
+
     @Test fun geometryChangesCannotRepinSomeoneReadingEvenWhenTheEndBecomesVisible() {
         val session = following()
         session.send(ScrollEvent.UserScroll(true))

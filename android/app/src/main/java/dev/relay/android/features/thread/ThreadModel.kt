@@ -117,8 +117,11 @@ class ThreadModel(
         _historyResult.value = HistoryLoadResult(request, history, false)
     }
 
-    /** Puts a folded turn's steps in place; false when the desktop couldn't hand them over. */
-    suspend fun loadSteps(messageId: String): Boolean {
+    /**
+     * Puts a folded turn's steps in place, opening as the fold the reader tapped did; false when
+     * the desktop couldn't hand them over.
+     */
+    suspend fun loadSteps(messageId: String, unfold: ReaderUnfold = ReaderUnfold { it() }): Boolean {
         val steps = try {
             remote.client.value?.messageSteps(id, messageId)
         } catch (e: CancellationException) {
@@ -126,7 +129,7 @@ class ThreadModel(
         } catch (_: Exception) {
             null
         } ?: return false
-        _thread.update { thread -> thread?.let { withSteps(it, messageId, steps) } }
+        unfold { _thread.update { thread -> thread?.let { withSteps(it, messageId, steps) } } }
         _thread.value?.let { cache.save(computer, id, it) }
         return true
     }
