@@ -402,6 +402,26 @@ it("sees a commit in a worktree, whose HEAD lives in the main checkout", async (
   trees.dispose();
 });
 
+it("watches a folder without Git, so its open files see an agent's edits", async () => {
+  temp = await realpath(await mkdtemp(join(tmpdir(), "relay-watch-")));
+  const changes: string[] = [];
+  const trees = new TreeWatch({
+    root: async () => temp!,
+    changed: (where) => changes.push(where),
+    platform: "darwin",
+    pace,
+  });
+  expect(await trees.show({}, "scratch")).toBe(true);
+  await new Promise((r) => setTimeout(r, 600));
+  changes.length = 0;
+
+  await writeFile(join(temp, "script.md"), "recorded");
+  await vi.waitFor(() => expect(changes).toEqual(["scratch"]), {
+    timeout: 5000,
+  });
+  trees.dispose();
+});
+
 it("on Linux, watches each folder Git shows and none it ignores", async () => {
   temp = await realpath(await mkdtemp(join(tmpdir(), "relay-watch-")));
   const git = (...args: string[]) =>

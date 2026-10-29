@@ -454,14 +454,19 @@ export function askedTogether(root: string) {
 const gitDirAt = (dir: string) => (rel: string) =>
   existsSync(join(dir, rel, "HEAD"));
 
+/** Git's folders for `root`; none for a folder without Git, which is watched all the same. */
 async function gitDirsOf(root: string) {
   const out = await git(root, [
     "rev-parse",
     "--absolute-git-dir",
     "--git-common-dir",
-  ]);
+  ]).catch((error: Error) => {
+    if (/not a git repository/i.test(error.message)) return "";
+    throw error;
+  });
   return out
     .trim()
     .split("\n")
+    .filter(Boolean)
     .map((dir) => resolve(root, dir));
 }
