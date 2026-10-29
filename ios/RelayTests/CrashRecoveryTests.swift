@@ -21,6 +21,7 @@ struct CrashRecoveryTests {
     @Test func shortensSymbolsAsSwiftsSimplifiedDemangling() {
         #expect(FrameName.simplified("static Relay.CrashTest.boom(Swift.Int?) -> ()") == "CrashTest.boom(_:)")
         #expect(FrameName.simplified("Relay.Feed.rows.getter : [Swift.String : Swift.Int]") == "Feed.rows.getter")
+        #expect(FrameName.simplified("closure #1 in Relay.Feed.handler.getter : () -> ()") == "closure #1 in Feed.handler.getter")
         #expect(
             FrameName.simplified("closure #1 () -> () in closure #3 (Swift.Int) -> () in Relay.A.b(x: [Swift.Int], _: (Swift.Int) -> ()) -> ()")
                 == "closure #1 in closure #3 in A.b(x:_:)")

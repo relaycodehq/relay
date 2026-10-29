@@ -21,9 +21,12 @@ enum FrameName {
     private static func function(_ symbol: Substring) -> String {
         // A private function's file discriminator: `(crashed in _A116…)` is `crashed`.
         let named = String(symbol).replacing(#/\((\w+) in _[0-9A-F]+\)/#) { String($0.output.1) }
+        // A property's accessor takes no arguments; its type follows: `Foo.handler.getter : () -> ()`.
+        if let type = topLevel(" : ", in: named[...], from: named.startIndex) {
+            return withoutModules(String(named[..<type.lowerBound]))
+        }
         guard let open = named.firstIndex(of: "("), let close = closing(named, from: open) else {
-            let name = named.components(separatedBy: " : ").first ?? named
-            return withoutModules(name.components(separatedBy: " -> ").first ?? name)
+            return withoutModules(named.components(separatedBy: " -> ").first ?? named)
         }
         let arguments = splitTopLevel(named[named.index(after: open)..<close])
         let labels = arguments.map { argument in
