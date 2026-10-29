@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import {
   lastComposerSettings,
+  type ChatScope,
   type ChatSummary,
 } from "../../../shared/projects";
 import {
@@ -141,16 +142,7 @@ export async function sendDraft(
     },
   );
   const target =
-    chat ??
-    started.get(id) ??
-    (await api.createProjectChat(
-      project.id,
-      scope,
-      scope.kind === "project" ? loadDraftWorkspace(id, project) : undefined,
-      scope.kind === "project" ? draftWorktreeBranch(id, project) : undefined,
-      loadDraftLinks(id),
-      scope.kind === "project" ? draftWorktreeStart(id, project) : undefined,
-    ));
+    chat ?? started.get(id) ?? (await createDraftThread(id, project, scope));
   started.set(id, target);
   const attachments = loadDraftAttachments(id);
   const messageId = crypto.randomUUID();
@@ -190,3 +182,20 @@ export async function sendDraft(
 }
 
 export { unsent };
+
+/** The thread an unsent draft's first message starts, with what the draft set up. */
+function createDraftThread(
+  id: string,
+  project: ActivityDraft["project"],
+  scope: ChatScope,
+) {
+  const inProject = scope.kind === "project";
+  return api.createProjectChat(
+    project.id,
+    scope,
+    inProject ? loadDraftWorkspace(id, project) : undefined,
+    inProject ? draftWorktreeBranch(id, project) : undefined,
+    loadDraftLinks(id),
+    inProject ? draftWorktreeStart(id, project) : undefined,
+  );
+}
