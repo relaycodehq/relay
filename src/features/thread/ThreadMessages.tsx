@@ -8,6 +8,7 @@ import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import type {
   ChatMessage,
+  ChatSummary,
   ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
 import { useArrival } from "./arrival";
@@ -65,6 +66,46 @@ function resumable(
     (lastInput.parentId ?? null) === rootId
     ? last
     : undefined;
+}
+
+/** What happened under `m`, said on one line. */
+function notesUnderMessage(
+  m: ChatMessage,
+  chat: ChatSummary,
+  {
+    renamedAfter,
+    moves,
+    landed,
+    last,
+  }: {
+    renamedAfter: string | undefined;
+    moves: ReturnType<typeof shownWorkspaceMoves>;
+    landed: MessageNote | undefined | false | null;
+    last: ChatMessage | undefined;
+  },
+): MessageNote[] {
+  return [
+    ...(m.id === chat.fromTerminal?.through
+      ? [{ key: "terminal-origin", ...terminalOriginNote(chat.fromTerminal) }]
+      : []),
+    ...(m.id === renamedAfter && chat.worktree
+      ? [renamedNote(chat.worktree)]
+      : []),
+    ...moves
+      .filter((move) => move.after === m.id)
+      .map((move) => ({
+        key: `workspace-move-${move.at}`,
+        text: workspaceMoveLine(move),
+        title: move.to,
+      })),
+    ...(chat.abandonedHandoffs ?? [])
+      .filter((a) => a.ranHere?.after === m.id)
+      .map((a) => ({
+        key: `ran-here-${a.id}`,
+        text: ranHereNote(a.computer, a.ranHere!.since),
+      })),
+    ...(m.id === last?.id ? [landed] : []),
+  ].filter((note): note is MessageNote => !!note);
 }
 
 /**
@@ -203,37 +244,15 @@ export function ThreadMessages({
   );
   const moves = shownWorkspaceMoves(chat?.workspaceMoves);
   const landed = worktree.status && landedNote(worktree.status);
-  /** What happened under `m`, said on one line. */
-  const notesUnder = (m: ChatMessage): MessageNote[] =>
+  const notesUnder = (m: ChatMessage) =>
     root || !chat
       ? []
-      : [
-          ...(m.id === chat.fromTerminal?.through
-            ? [
-                {
-                  key: "terminal-origin",
-                  ...terminalOriginNote(chat.fromTerminal),
-                },
-              ]
-            : []),
-          ...(m.id === renamedAfter && chat.worktree
-            ? [renamedNote(chat.worktree)]
-            : []),
-          ...moves
-            .filter((move) => move.after === m.id)
-            .map((move) => ({
-              key: `workspace-move-${move.at}`,
-              text: workspaceMoveLine(move),
-              title: move.to,
-            })),
-          ...(chat.abandonedHandoffs ?? [])
-            .filter((a) => a.ranHere?.after === m.id)
-            .map((a) => ({
-              key: `ran-here-${a.id}`,
-              text: ranHereNote(a.computer, a.ranHere!.since),
-            })),
-          ...(m.id === listed.at(-1)?.id ? [landed] : []),
-        ].filter((note): note is MessageNote => !!note);
+      : notesUnderMessage(m, chat, {
+          renamedAfter,
+          moves,
+          landed,
+          last: listed.at(-1),
+        });
   // A row that draws its own line carries the unread mark instead of a second
   // line stacking against it: the one where the unseen part starts, or the one
   // right above it when that also happened while you were away.
