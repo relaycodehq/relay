@@ -180,7 +180,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/composer/ComposerPromptInput.tsx › ComposerPromptInput": 93,
   "src/features/composer/ComposerToolbarSample.tsx › useSampleControls": 111,
   "src/features/composer/ComposerToolbarSettings.tsx › ComposerToolbarSettings": 152,
-  "src/features/composer/ProjectComposer.tsx › ProjectComposer": 546,
+  "src/features/composer/ProjectComposer.tsx › ProjectComposer": 505,
   "src/features/composer/UsageRing.tsx › UsageRing": 102,
   "src/features/composer/draft-intake.ts › attachImages": 106,
   "src/features/composer/draft-intake.ts › draftIntake": 251,

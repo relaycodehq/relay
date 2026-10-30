@@ -36,7 +36,7 @@ export const bigFiles: Record<string, number> = {
   "src/features/agents/ComposerModelPicker.tsx": 562,
   "src/features/agents/ContextWindowMeter.tsx": 575,
   "src/features/bug-report/ReportProblem.tsx": 506,
-  "src/features/composer/ProjectComposer.tsx": 672,
+  "src/features/composer/ProjectComposer.tsx": 620,
   "src/features/images/ImageSketch.tsx": 502,
   "src/features/images/ImageViewer.tsx": 592,
   "src/features/images/sketch.ts": 661,

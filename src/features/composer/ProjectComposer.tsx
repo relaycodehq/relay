@@ -8,11 +8,7 @@ import {
   type Ref,
 } from "react";
 import { Paperclip } from "lucide-react";
-import {
-  agentMentionPattern,
-  reportsUsage,
-  type AgentProvider,
-} from "../../../shared/agents";
+import { reportsUsage, type AgentProvider } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
 import type {
@@ -22,16 +18,7 @@ import type {
 import type { InheritedSettings } from "../agents/composer-settings";
 import { useComposerToolbar } from "./composer-toolbar";
 import { quickItems } from "../quick-switch/quick-switch";
-import {
-  sendKeyLabel,
-  useRunningSendAction,
-  useSendKey,
-} from "../../lib/send-key";
-import { mac } from "../../lib/mod-key";
-import { COMPACT_PICKS } from "../../lib/thread-storage";
-import { useStoredFlag } from "../../lib/useStoredFlag";
-import { useAutoCompactSaved } from "../agents/auto-compact";
-import { formatTokens } from "../../../shared/tokens";
+import { useRunningSendAction, useSendKey } from "../../lib/send-key";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
 import { useNextGuess, type NextGuess } from "./useNextGuess";
@@ -39,7 +26,8 @@ import { draftRecipient } from "../../../shared/recipient";
 import { useAgentSetup } from "./AgentSetup";
 import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
-import { composerKeys, type ComposerSubmitOptions } from "./composer-keys";
+import { composerKeys } from "./composer-keys";
+import { CompactFirstBox, useCompactFirst } from "./compact-first";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
 import { usePromptHistory } from "./usePromptHistory";
@@ -264,22 +252,6 @@ export function ProjectComposer({
   const sendKey = useSendKey();
   const runningAction = useRunningSendAction();
   const quick = useQuickSwitchHud(runs, to);
-  // The box by Send starts as Settings say, so it waits to know them.
-  const sendCompacts = useAutoCompactSaved()?.cold;
-  // Ticked or unticked for the draft being written, kept while you're away
-  // from it, or the box would tick itself again under the same draft.
-  // Sending it lets go.
-  const [compactFirst, setCompactFirst, forgetCompactPick] = useStoredFlag(
-    COMPACT_PICKS + keys.draft,
-    sendCompacts,
-  );
-  // A command means what it says, after an @mention too; the server sends it as is.
-  const compactOffer =
-    sendCompacts !== undefined &&
-    conversation.compactOffer?.provider === to &&
-    !/^\s*\//.test(draft.text.trim().replace(agentMentionPattern, ""))
-      ? conversation.compactOffer
-      : undefined;
   const settingCommands = useSettingCommands({
     state: composer,
     runs,
@@ -349,28 +321,15 @@ export function ProjectComposer({
       return accepted;
     },
   });
-  // Every send carries the box's pick on a cold cache, ⌥ the opposite of it.
-  const sending = {
-    ...composerSend,
-    send({
-      steer,
-      sendAt,
-      after,
-      flipCompact = false,
-    }: ComposerSubmitOptions = {}) {
-      const pick =
-        compactOffer && !running ? compactFirst !== flipCompact : undefined;
-      return composerSend.send({
-        steer,
-        sendAt,
-        after: () => {
-          forgetCompactPick();
-          after?.();
-        },
-        compact: pick === sendCompacts ? undefined : pick,
-      });
-    },
-  };
+  const compact = useCompactFirst({
+    draftKey: keys.draft,
+    draftText: draft.text,
+    offered: conversation.compactOffer,
+    to,
+    running,
+    send: composerSend.send,
+  });
+  const sending = { ...composerSend, send: compact.send };
   const onPromptKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     // The guess's own button keeps its keys.
     if ((event.target as Element).closest(".composer-ghost")) return;
@@ -384,7 +343,7 @@ export function ProjectComposer({
             return !!at && at.start === 0 && at.end === 0 && onEditQueued();
           }
         : undefined,
-      alternateCompact: !!compactOffer && !running,
+      alternateCompact: !!compact.offer,
       sendKey,
       runningAction,
       send: sending.send,
@@ -612,30 +571,14 @@ export function ProjectComposer({
                     onStop={() => onStop(false)}
                   />
                 )}
-                {compactOffer && !running && (
-                  <label
-                    className="composer-compact-first"
-                    title={`Compact ${formatTokens(compactOffer.tokens)} tokens before this message, as the cache went cold · ${mac ? "⌥" : "Alt+"}${sendKeyLabel(sendKey)} sends the other way`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={compactFirst}
-                      onChange={(e) => setCompactFirst(e.target.checked)}
-                    />
-                    Compact {formatTokens(compactOffer.tokens)} first
-                  </label>
-                )}
+                <CompactFirstBox compact={compact} sendKey={sendKey} />
                 {(!running ||
                   !onStop ||
                   !!draft.text.trim() ||
                   !!draft.attached.length) && (
                   <SendButton
                     disabled={sending.disabled}
-                    compactsFirst={
-                      !!compactOffer && !running && compactFirst
-                        ? compactOffer.tokens
-                        : undefined
-                    }
+                    compactsFirst={compact.tokens}
                     running={running}
                     sendKey={sendKey}
                     runningAction={runningAction}
