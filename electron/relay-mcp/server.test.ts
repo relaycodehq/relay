@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "vitest";
 import {
   relayToken,
   serveRelayTools,
+  SIDE_PATH,
   STARTED_PATH,
   toolText,
   verifyRelayToken,
@@ -296,6 +297,24 @@ test("dev=on adds restart_relay, and never for a started thread", async () => {
   expect(
     await names(`${url.replace(/\/mcp$/, STARTED_PATH)}?dev=on`),
   ).not.toContain("restart_relay");
+});
+
+test("a side conversation gets the tools that read, and message_main, which only it gets", async () => {
+  const url = await serve(async () => toolText("ok"));
+  const names = async (path: string) =>
+    (
+      await (
+        await post(path, { jsonrpc: "2.0", id: 1, method: "tools/list" })
+      ).json()
+    ).result.tools.map((t: { name: string }) => t.name);
+  const side = await names(url.replace(/\/mcp$/, SIDE_PATH));
+  expect(side).toEqual(expect.arrayContaining(["message_main", "read_thread"]));
+  for (const acting of ["send_to_thread", "move_to_worktree", "show_html"])
+    expect(side).not.toContain(acting);
+  expect(await names(url)).not.toContain("message_main");
+  expect(await names(url.replace(/\/mcp$/, STARTED_PATH))).not.toContain(
+    "message_main",
+  );
 });
 
 test("the import tools are listed only to a thread opened for an import", async () => {

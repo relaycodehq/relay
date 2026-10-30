@@ -36,12 +36,12 @@ import type { ProjectChats } from "../project-chats";
 import type { ThreadPreviews } from "../preview";
 import type { RenderTools } from "../html-renders";
 import {
-  relayToolSchemas,
+  relayToolsWhere,
   toolText,
   startedTools,
   type RelayToolArgs,
-  type RelayToolName,
 } from "../relay-mcp";
+import { checkedCall, type ToolCall } from "./tool-call";
 import { errorMessage } from "../../shared/error-message";
 
 export { localTime } from "./tool-output";
@@ -77,10 +77,8 @@ type Chats = Pick<
   onAnswersEnd?: ProjectChats["onAnswersEnd"];
 };
 
-/** Keeps each validated tool name paired with its own schema output. */
-type ToolCall = {
-  [N in RelayToolName]: { name: N; input: RelayToolArgs<N> };
-}[RelayToolName];
+/** Only a side conversation is served these, so only one calls them. */
+const sideOnlyTools = relayToolsWhere((t) => t.side === "only");
 
 type ReadUsage = (
   provider: UsageProvider,
@@ -201,26 +199,17 @@ export class StartedThreads {
     args: unknown,
     signal: AbortSignal,
   ) {
-    if (!Object.hasOwn(relayToolSchemas, name))
-      return toolText(`There is no tool ${name}.`, true);
-    const schema = relayToolSchemas[name as RelayToolName];
-    const parsed = schema.safeParse(args);
-    if (!parsed.success)
-      return toolText(
-        parsed.error.issues
-          .map((i) => `${i.path.join(".") || "arguments"}: ${i.message}`)
-          .join("\n"),
-        true,
-      );
+    const checked = checkedCall(name, args);
+    if ("refusal" in checked) return checked.refusal;
     const lead = await this.chats.get(chatId);
-    if (lead.startedBy && !startedTools.has(name))
+    // Its side conversations may still message it.
+    const startedMayCall = startedTools.has(name) || sideOnlyTools.has(name);
+    if (lead.startedBy && !startedMayCall)
       return toolText(
         "A thread started by another thread can't start or drive threads of its own.",
         true,
       );
-    // The lookup and parse above establish this pairing; keep it together so
-    // narrowing the tool name also narrows its arguments in every branch.
-    const { name: tool, input } = { name, input: parsed.data } as ToolCall;
+    const { name: tool, input } = checked.call;
     switch (tool) {
       case "start_threads":
         return this.starts.startThreads(lead, input, signal);
@@ -238,6 +227,8 @@ export class StartedThreads {
         return this.driving.stop(lead, input.id, signal);
       case "message_lead":
         return this.leads.message(lead, input.message);
+      case "message_main":
+        return this.leads.fromSide(lead, input.message);
       case "hand_off_thread":
         return this.handoffs.handOff(lead, input, signal);
       case "settle_thread":
@@ -361,7 +352,11 @@ export class StartedThreads {
     const schedules = this.schedules;
     if (!schedules) return toolText("This Relay can't run schedules.", true);
     const { last, agent } = leadSide(lead);
-    const defaults = { agent, choice: last.choice, runtimeMode: last.runtimeMode };
+    const defaults = {
+      agent,
+      choice: last.choice,
+      runtimeMode: last.runtimeMode,
+    };
     const always = (title: string, detail: string) =>
       this.approvals.ask(lead, title, detail, signal, true);
     switch (call.name) {

@@ -15,8 +15,8 @@ const writes = new Set([
   "ExitWorktree",
 ]);
 
-/** Relay's tools that only read or wait; the others act as the thread. */
-const relayReads = relayToolsWhere((t) => t.replayable);
+/** Relay's tools a side conversation gets: ones that read, and message_main. */
+const sideTools = relayToolsWhere((t) => t.side);
 
 const deny = (reason: string) => ({
   hookSpecificOutput: {
@@ -38,7 +38,7 @@ export async function readOnlyHook(input: unknown) {
   const relayTool = tool.startsWith(`mcp__${RELAY_SERVER}__`)
     ? tool.slice(`mcp__${RELAY_SERVER}__`.length)
     : undefined;
-  if (relayTool && relayReads.has(relayTool)) return {};
+  if (relayTool && sideTools.has(relayTool)) return {};
   return deny(
     "This thread only reads, and this tool could act. Say what you'd do with it instead.",
   );

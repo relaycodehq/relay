@@ -46,11 +46,7 @@ import {
 } from "../../shared/agent-defaults";
 
 const codex: AgentRuntime = {
-  // A read-only turn, a side question's included, works without Relay's tools.
-  run: (options) =>
-    runCodex(
-      options.readOnly ? { ...options, relayTools: undefined } : options,
-    ),
+  run: runCodex,
   closeSession: (key) => {
     codexSubagentBooks.drop(key);
     return closeCodexConnection(key).catch(() => {});

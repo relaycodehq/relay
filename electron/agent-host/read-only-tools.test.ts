@@ -19,5 +19,6 @@ it("lets reading through", async () => {
   expect(await call("Read", { file_path: "/project/a.ts" })).toEqual({});
   expect(await call("Grep")).toEqual({});
   expect(await call("mcp__relay__read_thread")).toEqual({});
+  expect(await call("mcp__relay__message_main")).toEqual({});
   expect(await call("Bash", { command: "git log -5" })).toEqual({});
 });

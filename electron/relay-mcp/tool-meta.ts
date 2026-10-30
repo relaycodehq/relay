@@ -6,6 +6,8 @@ interface ToolMeta {
   label: string;
   /** Also served at STARTED_PATH, to threads another thread started; "only": just there. */
   started?: true | "only";
+  /** Also served at SIDE_PATH, to a thread's side conversations; "only": just there. */
+  side?: true | "only";
   /** Left out unless the URL's query turns its group on, or `pages` off. */
   group?: "pages" | "dev" | "import";
   /** Only reads or waits, so a call a restart cut off can run again. */
@@ -15,17 +17,32 @@ interface ToolMeta {
 /** Every Relay tool has a row here; the compiler asks for one for a new tool. */
 export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
   start_threads: { label: "Started threads" },
-  list_threads: { label: "Checked on started threads", replayable: true },
+  list_threads: {
+    label: "Checked on started threads",
+    side: true,
+    replayable: true,
+  },
   find_threads: {
     label: "Looked through threads",
     started: true,
+    side: true,
     replayable: true,
   },
-  read_thread: { label: "Read a thread", started: true, replayable: true },
+  read_thread: {
+    label: "Read a thread",
+    started: true,
+    side: true,
+    replayable: true,
+  },
   send_to_thread: { label: "Messaged a started thread" },
-  wait_for_threads: { label: "Waited for started threads", replayable: true },
+  wait_for_threads: {
+    label: "Waited for started threads",
+    side: true,
+    replayable: true,
+  },
   stop_thread: { label: "Stopped a started thread" },
   message_lead: { label: "Messaged its lead", started: "only" },
+  message_main: { label: "Told the main thread", side: "only" },
   hand_off_thread: { label: "Moved a thread to another computer" },
   settle_thread: { label: "Settled a started thread" },
   settle_this_thread: { label: "Settles this thread when done", started: true },
@@ -38,7 +55,11 @@ export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
   },
   deep_review: { label: "Started a deep review" },
   list_review_setups: { label: "Listed review setups" },
-  list_schedules: { label: "Checked the schedules", replayable: true },
+  list_schedules: {
+    label: "Checked the schedules",
+    side: true,
+    replayable: true,
+  },
   add_schedule: { label: "Set up a schedule" },
   update_schedule: { label: "Changed a schedule" },
   pause_schedule: { label: "Paused or resumed a schedule" },
@@ -47,7 +68,12 @@ export const relayToolMeta: Record<RelayToolName, ToolMeta> = {
   list_notes: { label: "Read the notes", started: true },
   add_note: { label: "Added a note", started: true },
   tick_note: { label: "Ticked an item in the notes", started: true },
-  list_projects: { label: "Listed projects", started: true, replayable: true },
+  list_projects: {
+    label: "Listed projects",
+    started: true,
+    side: true,
+    replayable: true,
+  },
   open_preview: { label: "Opened the preview", started: true },
   screenshot: { label: "Looked at the preview", started: true },
   console_errors: { label: "Read the preview's console", started: true },

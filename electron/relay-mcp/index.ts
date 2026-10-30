@@ -8,7 +8,13 @@ import { createServer } from "node:net";
 import { join } from "node:path";
 import { z } from "zod";
 import type { RenderMode } from "../../shared/html-render";
-import { DEV_PARAM, IMPORT_PARAM, PAGES_PARAM, STARTED_PATH } from "./tools";
+import {
+  DEV_PARAM,
+  IMPORT_PARAM,
+  PAGES_PARAM,
+  SIDE_PATH,
+  STARTED_PATH,
+} from "./tool-lists";
 
 export { serveRelayTools, type McpHandlers } from "./server";
 
@@ -20,19 +26,22 @@ export { startedNote } from "./started-note";
 export {
   relayToolSchemas,
   relayToolList,
-  startedToolList,
-  STARTED_PATH,
   toolText,
   resultText,
   MESSAGE_CHARS,
   STARTED_LIMIT,
-  startedTools,
   WAIT_LIMIT_SECONDS,
   scheduleWeekdays,
   type RelayToolName,
   type RelayToolArgs,
   type ToolResult,
 } from "./tools";
+export {
+  SIDE_PATH,
+  startedToolList,
+  STARTED_PATH,
+  startedTools,
+} from "./tool-lists";
 
 const configSchema = z.object({
   port: z.number().int().min(1024).max(65535),
@@ -135,10 +144,19 @@ export function useRelayMcp(config: RelayMcpConfig | undefined) {
   current = config;
 }
 
+/** Who reaches the tools: a thread, one another thread started, or a side conversation of one. */
+export type RelayCaller = "thread" | "started" | "side";
+
+const pathOf: Record<RelayCaller, string> = {
+  thread: "/mcp",
+  started: STARTED_PATH,
+  side: SIDE_PATH,
+};
+
 /** What an agent session needs to reach the tools as `chatId`. */
 export function relayToolsFor(
   chatId: string,
-  started = false,
+  caller: RelayCaller,
   renders: RenderMode = "auto",
   /** The thread was opened to import another app's history. */
   imports = false,
@@ -150,7 +168,7 @@ export function relayToolsFor(
   if (process.env.RELAY_DEV_STALE) query.set(DEV_PARAM, "on");
   return current
     ? {
-        url: `http://127.0.0.1:${current.port}${started ? STARTED_PATH : "/mcp"}${query.size ? `?${query}` : ""}`,
+        url: `http://127.0.0.1:${current.port}${pathOf[caller]}${query.size ? `?${query}` : ""}`,
         token: relayToken(current.secret, chatId),
         renders,
       }

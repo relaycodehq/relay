@@ -1,6 +1,8 @@
 // What a started thread says to the thread that started it, its lead: a
 // message it sends with message_lead, and the end of a task the lead gave it,
 // which Relay hands back unless a wait_for_threads of the lead's hears of it.
+// A side conversation tells its own thread something the same way, with
+// message_main.
 import { sliceWhole } from "../../shared/truncate";
 import { agentError } from "../../shared/agent-error";
 import type { ChildSays, ProjectChat } from "../../shared/projects";
@@ -82,6 +84,16 @@ export class LeadMessages {
     );
   }
 
+  /** message_main, called by a side conversation of `thread`. */
+  async fromSide(thread: ProjectChat, text: string) {
+    const how = await this.send(
+      thread,
+      ["From a side conversation of this thread:", text].join("\n\n"),
+      { id: thread.id, name: "Side conversation" },
+    );
+    return toolText(mainHeard(how));
+  }
+
   /** A thread's turn ended. If another thread started it, tell that one how it went. */
   async ended(turn: Turn) {
     const thread = await this.chats.get(turn.threadId).catch(() => undefined);
@@ -129,6 +141,15 @@ export class LeadMessages {
     this.reads.messaged(lead.id, from.id);
     return how;
   }
+}
+
+/** How the main thread got a side conversation's message, for the side to say. */
+function mainHeard(how: Delivered) {
+  if (how.away) return `Sent; the thread runs on ${how.away}.`;
+  if (how.steered) return "Sent; the main thread reads it mid-answer.";
+  if (how.queued)
+    return "Queued; the main thread waits on the user and reads it after.";
+  return "Sent; the main thread reads it in a new turn.";
 }
 
 /**

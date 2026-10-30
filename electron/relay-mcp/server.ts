@@ -4,20 +4,20 @@
 import { createServer, type IncomingMessage, type Server } from "node:http";
 import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 import { relayPrompt, relayPromptList } from "./prompts";
+import { relayToolList, toolText, type ToolResult } from "./tools";
 import {
   DEV_PARAM,
   IMPORT_PARAM,
   PAGES_PARAM,
   leadToolList,
-  relayToolList,
+  sideToolList,
+  SIDE_PATH,
   startedToolList,
   STARTED_PATH,
-  toolText,
   withoutDev,
   withoutImports,
   withoutPages,
-  type ToolResult,
-} from "./tools";
+} from "./tool-lists";
 import { errorMessage } from "../../shared/error-message";
 
 const PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
@@ -26,6 +26,7 @@ type ToolList = typeof relayToolList;
 const toolsAt: Record<string, ToolList> = {
   "/mcp": leadToolList,
   [STARTED_PATH]: startedToolList,
+  [SIDE_PATH]: sideToolList,
 };
 
 const toolsFor = (url: URL) => {

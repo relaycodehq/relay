@@ -9,7 +9,7 @@ import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged } from "../../shared/goal";
 import type { AgentOptions } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
-import { relayToolsFor, startedNote } from "../relay-mcp";
+import { relayToolsFor, startedNote, type RelayCaller } from "../relay-mcp";
 import {
   threadWorktreePaths,
   turnWorkspace,
@@ -103,11 +103,17 @@ export async function turnOptions(
   };
 }
 
+/** Who the turn reaches Relay's tools as. */
+function callerOf(chat: ProjectChat, rules: TurnState["rules"]): RelayCaller {
+  if (rules.side) return "side";
+  return chat.startedBy ? "started" : "thread";
+}
+
 /** What the turn may do: its mode, and which of Relay's tools it gets. */
 function accessOf(core: ChatCore, { chat, input, rules }: TurnState) {
   const relayTools = relayToolsFor(
     chat.id,
-    !!chat.startedBy,
+    callerOf(chat, rules),
     core.store.get().renderMode,
     !!chat.importFrom,
   );
@@ -126,8 +132,7 @@ function accessOf(core: ChatCore, { chat, input, rules }: TurnState) {
     // tools. A side conversation changes nothing either.
     ...(readOnly ? { readOnly } : {}),
     // A started thread only gets the reading ones: no threads of threads.
-    // A side conversation gets its thread's, so its fork can keep the
-    // thread's cache; held to reading, it can't act with them.
+    // A side conversation gets those and message_main.
     ...(relayTools && !threadReadOnly ? { relayTools } : {}),
     // The thread's running answer owns its requests; a side turn asks none.
     onRequest: rules.side ? undefined : core.active.get(chat.id)?.requests.ask,
