@@ -16,6 +16,7 @@ import {
 import { RichText } from "../../ui/RichText";
 import { skillMentions, type SentSkill } from "../../../shared/skill-mentions";
 import { FilePill, ImagePill, QuotePill, type SentImage } from "./SentPills";
+import { ultrathinkPattern } from "../composer/prompt/ultrathink-word";
 import "./user-text.css";
 
 // A token becomes inline code the pill replaces; one already in a code span is
@@ -23,17 +24,30 @@ import "./user-text.css";
 const codeOrToken = /(```[\s\S]*?(?:```|$)|`[^`\n]*`)|\[Image #\d+\]/g;
 // Marks a skill's code span apart from a `$name` the user wrote as code.
 const skillMark = "\uE000";
+// Marks the ultrathink keyword the same way, to colour it.
+const ultrathinkMark = "\uE001";
 
-const tokenAsCode = (text: string, skills: ReadonlySet<string>) => {
+const tokenAsCode = (
+  text: string,
+  skills: ReadonlySet<string>,
+  ultrathink: boolean,
+) => {
   let out = "",
     last = 0;
+  const words = (chunk: string) =>
+    ultrathink
+      ? chunk.replace(
+          ultrathinkPattern,
+          (word) => `\`${ultrathinkMark}${word}\``,
+        )
+      : chunk;
   const prose = (chunk: string) => {
     let at = 0;
     for (const m of skillMentions(chunk, skills)) {
-      out += chunk.slice(at, m.start) + `\`${skillMark}${m.name}\``;
+      out += words(chunk.slice(at, m.start)) + `\`${skillMark}${m.name}\``;
       at = m.end;
     }
-    out += chunk.slice(at);
+    out += words(chunk.slice(at));
   };
   for (const m of text.matchAll(codeOrToken)) {
     prose(text.slice(last, m.index));
@@ -92,11 +106,15 @@ const fence = /(```[\s\S]*?(?:```|$))/;
  * quotes as pills of their own. A blockquote outside code reads as a quote
  * pill: the composer's quote pill sends one, and a typed `>` means the same.
  */
-function sentParts(text: string, skills: ReadonlySet<string>) {
+function sentParts(
+  text: string,
+  skills: ReadonlySet<string>,
+  ultrathink = false,
+) {
   const parts: SentPart[] = [];
   let prose = "";
   const flush = () => {
-    if (prose.trim()) parts.push(tokenAsCode(prose, skills));
+    if (prose.trim()) parts.push(tokenAsCode(prose, skills, ultrathink));
     prose = "";
   };
   const quotes = (chunk: string) =>
@@ -161,6 +179,8 @@ type SentCode = {
 
 /** What a code span in a sent message shows instead of code, if anything. */
 function shownCode(value: string, sent: SentCode) {
+  if (value.startsWith(ultrathinkMark))
+    return <span className="ultrathink-word">{value.slice(1)}</span>;
   const pilled = pilledCode(value, sent.projectRoot);
   if (!pilled) return undefined;
   if ("skill" in pilled) {
@@ -194,6 +214,7 @@ export function UserText({
   onOpenImage,
   projectRoot,
   onOpenFile,
+  ultrathink = false,
 }: {
   text: string;
   /** The skills picked as pills when it was sent. */
@@ -204,14 +225,16 @@ export function UserText({
   /** Where file paths in code spans are looked up, to pill the ones that are files. */
   projectRoot?: string;
   onOpenFile?: (target: ProjectFileLink) => void;
+  /** Colours the ultrathink keyword: it went to Claude, which reads it. */
+  ultrathink?: boolean;
 }) {
   const labels = useMemo(
     () => new Map(skills.map((s) => [s.name, s.label])),
     [skills],
   );
   const parts = useMemo(
-    () => sentParts(text, new Set(labels.keys())),
-    [text, labels],
+    () => sentParts(text, new Set(labels.keys()), ultrathink),
+    [text, labels, ultrathink],
   );
   const inlineCode = useCallback(
     (value: string) =>

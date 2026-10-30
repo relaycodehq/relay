@@ -53,3 +53,26 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+/* A sent message keeps its rainbow, still: a thread can hold many. */
+.project-message.user[data-ultrathink] > .user-text {
+  position: relative;
+  border-color: transparent;
+}
+.project-message.user[data-ultrathink] > .user-text::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: conic-gradient(var(--ultrathink-colors));
+  pointer-events: none;
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: content-box, border-box;
+  mask-composite: exclude;
+}
+.project-message.user[data-ultrathink] .ultrathink-word {
+  background: linear-gradient(90deg, var(--ultrathink-colors));
+  background-clip: text;
+  color: transparent;
+}

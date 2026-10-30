@@ -17,6 +17,7 @@ import { useStartedThreads } from "../agent-turn/StartedThreads";
 import { pilledImages, sentPills, UserText } from "./UserText";
 import type { SentImage } from "./SentPills";
 import { SentMemes, useSentMemes } from "../memes/SentMemes";
+import { asksUltrathink } from "../composer/ultrathink";
 
 function userImage(chatId: string, image: ChatImage): PreviewImage {
   return {
@@ -68,6 +69,7 @@ export function UserMessage({
   const said = parsed.body?.replace(agentMentionPattern, "");
   const text = said && onlyImageTokens(said) ? "" : said;
   const memes = useSentMemes(text);
+  const ultrathink = m.provider === "claude" && asksUltrathink(text ?? "");
   // A screenshot with a pill in the text needs no second copy below it.
   const pilled = useMemo(() => {
     const ns = text ? pilledImages(text) : new Set<number>();
@@ -88,6 +90,7 @@ export function UserMessage({
     <article
       className="project-message user"
       data-message-id={m.id}
+      data-ultrathink={ultrathink || undefined}
       aria-label="Your message"
     >
       <header>
@@ -155,6 +158,7 @@ export function UserMessage({
               onOpenImage={open}
               projectRoot={projectRoot}
               onOpenFile={onOpenFile}
+              ultrathink={ultrathink}
             />
           )}
         </>

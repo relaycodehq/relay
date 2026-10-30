@@ -323,7 +323,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/thread/ThreadMessages.tsx › ThreadMessages": 366,
   "src/features/thread/ThreadScope.tsx › ScopeButtons": 82,
   "src/features/thread/ThreadTimeline.tsx › ThreadTimeline": 123,
-  "src/features/thread/UserMessage.tsx › UserMessage": 131,
+  "src/features/thread/UserMessage.tsx › UserMessage": 134,
   "src/features/thread/WorktreeCommandRow.tsx › WorktreeCommandRow": 89,
   "src/features/thread/CheckoutControl.tsx › CheckoutControl": 131,
   "src/features/thread/WorktreeControls.tsx › WorktreeMenu": 137,
