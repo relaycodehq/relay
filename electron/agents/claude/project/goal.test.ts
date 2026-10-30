@@ -63,7 +63,10 @@ const started = (uuid: string) => ({
   session_id,
 });
 
+let closed = 0;
+
 function claude(frames: object[]) {
+  closed = 0;
   vi.mocked(query).mockImplementation(({ prompt }) => {
     const input = (prompt as AsyncIterable<{ uuid: string }>)[
       Symbol.asyncIterator
@@ -75,17 +78,21 @@ function claude(frames: object[]) {
         yield* frames;
         await new Promise(() => {});
       })(),
-      { close() {}, getContextUsage: async () => ({ rawMaxTokens: 200_000 }) },
+      { close: () => void closed++, getContextUsage: async () => ({ rawMaxTokens: 200_000 }) },
     ) as unknown as ReturnType<typeof query>;
   });
 }
 
-async function turn(frames: object[], goal?: ThreadGoal) {
+async function turn(
+  frames: object[],
+  goal?: ThreadGoal,
+  job: { kind: "prompt" } | { kind: "side" } = { kind: "prompt" },
+) {
   claude(frames);
   const goals: (ThreadGoal | null)[] = [];
   const notes: string[] = [];
   const answer = await runClaudeProject({
-    job: { kind: "prompt" },
+    job,
     cwd: "/project",
     prompt: `/goal ${objective}`,
     choice: {} as never,
@@ -181,4 +188,27 @@ it("doesn't call a goal met by a turn that only showed it", async () => {
   expect(goals).toEqual([
     expect.objectContaining({ status: "active", checks: 0 }),
   ]);
+});
+
+it("ends a side conversation at its thread's goal check instead of working on", async () => {
+  const goal: ThreadGoal = {
+    provider: "claude",
+    objective,
+    status: "active",
+    checks: 2,
+    updated: 1,
+  };
+  const { answer, goals, notes } = await turn(
+    [
+      said("Nothing odd in those functions."),
+      unmet("two.txt and three.txt are missing."),
+      said("Passing the pending work to the main thread."),
+    ],
+    goal,
+    { kind: "side" },
+  );
+  expect(answer).toBe("Nothing odd in those functions.");
+  expect(notes).toEqual([]);
+  expect(goals).toEqual([]);
+  expect(closed).toBe(1);
 });

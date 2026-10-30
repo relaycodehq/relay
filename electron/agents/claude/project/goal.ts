@@ -23,6 +23,16 @@ function textOf(content: unknown): string {
     .join("");
 }
 
+/** A Stop hook, a `/goal` check among them, turned down Claude's stop and has it work on. */
+export function stopTurnedDown(message: SDKMessage): boolean {
+  return (
+    message.type === "user" &&
+    !message.parent_tool_use_id &&
+    !!message.isSynthetic &&
+    textOf(message.message.content).startsWith("Stop hook feedback:\n")
+  );
+}
+
 /**
  * A thread's Claude goal, read from what its session says. It outlives each
  * turn: the goal does, and its checks are counted across them.

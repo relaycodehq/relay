@@ -71,7 +71,7 @@ export async function runClaudeProject(
     }
     turn = { unprompted: false };
   }
-  let succeeded = false;
+  let reusable = false;
   // Past the last frame this turn read from the host's log.
   let consumed: number | undefined;
   const controller = session?.controller ?? new AbortController();
@@ -202,17 +202,17 @@ export async function runClaudeProject(
           reader.followUp();
           continue;
         }
-        succeeded = true;
+        reusable = true;
         return reader.text;
       }
-      succeeded = true;
+      reusable = !verdict.cutShort;
       return verdict.answer;
     }
   } finally {
     options.signal.removeEventListener("abort", abort);
     if (session) {
       session.busy = false;
-      if (!key || !succeeded || options.signal.aborted) {
+      if (!key || !reusable || options.signal.aborted) {
         closeSession(session);
         if (key) sessions.delete(key);
       } else if (session.turn === turn) {

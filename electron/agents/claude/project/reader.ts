@@ -17,13 +17,17 @@ import { ToolRows } from "./tool-rows";
 import { forkStart } from "../forks";
 import { TurnWatcher } from "../../watch/watcher";
 import { TurnPredictor } from "../../predict/predictor";
-import { ClaudeGoalWatch } from "./goal";
+import { ClaudeGoalWatch, stopTurnedDown } from "./goal";
 
 /**
  * What a frame leaves the turn to do: read on, see whether Claude runs a
  * steer it couldn't fold in as a follow-up turn, or finish with the answer.
  */
-type Verdict = "more" | "follow-up" | { answer: string };
+type Verdict =
+  | "more"
+  | "follow-up"
+  // Cut short: Claude is still working, so the session must close.
+  | { answer: string; cutShort?: true };
 
 /** Reads one turn's frames into its answer, as they come. */
 export class ClaudeTurnReader {
@@ -116,6 +120,10 @@ export class ClaudeTurnReader {
           : content.map((p) => (p.type === "text" ? p.text : "")).join("\n");
     }
     this.failures.see(message);
+    // A fork carries its thread's goal, which would keep it working on the
+    // thread's task. A side conversation answers once; what it said is the answer.
+    if (this.options.job.kind === "side" && stopTurnedDown(message))
+      return { answer: this.text, cutShort: true };
     if (this.goal.see(message) === "checked") this.goalUnmet();
     if (message.type === "assistant") this.said(message);
     if (message.type === "user" && Array.isArray(message.message.content))
