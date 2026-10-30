@@ -184,7 +184,11 @@ const BOOTSTRAP = `(() => {
   const root = document.documentElement;
   const post = (m) => parent.postMessage(m, "*");
   const style = document.createElement("style");
-  style.textContent = ":root{color-scheme:light dark;font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;color:var(--text,CanvasText)}body{margin:0;background:transparent}html[data-relay-paused] *,html[data-relay-paused] *::before,html[data-relay-paused] *::after{animation-play-state:paused!important}";
+  // The frame fits the page's height, so the page's own vertical bar is hidden:
+  // shown, it narrows content whose height follows its width, which can then
+  // overflow by a pixel and keep the bar for good. Chromium styles that bar
+  // from body's ::-webkit-scrollbar, not the root's.
+  style.textContent = ":root{color-scheme:light dark;font-family:var(--font-sans,system-ui,sans-serif);font-size:13px;color:var(--text,CanvasText)}body{margin:0;background:transparent}html[data-relay-paused] *,html[data-relay-paused] *::before,html[data-relay-paused] *::after{animation-play-state:paused!important}::-webkit-scrollbar{width:6px;height:6px}body::-webkit-scrollbar{width:0}::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--text,CanvasText) 17%,transparent);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--text,CanvasText) 30%,transparent)}::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}";
   (document.head || root).prepend(style);
   const theme = (t) => {
     if (!t || typeof t.vars !== "object") return;
