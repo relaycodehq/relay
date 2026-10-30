@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useRef, type RefObject } from "react";
 import { ultrathinkPattern } from "./prompt/ultrathink-word";
+import type { Recipient } from "../../../shared/recipient";
+import { stepEffort } from "../quick-switch/effort-shortcut";
 import type { PromptInputHandle } from "./prompt/usePromptHandle";
+import type { AgentRuns } from "./useAgentRuns";
 import "./ultrathink.css";
 
 /** Whether the message being written asks Claude to ultrathink, and the switch that adds or removes the keyword. */
@@ -48,6 +51,26 @@ export function useUltrathink(
     () => (to === "claude" ? { on, toggle } : undefined),
     [to, on, toggle],
   );
+}
+
+/**
+ * The effort keys with Ultrathink as Claude's step above its top level:
+ * up from the top turns it on, down turns it off before lowering the effort.
+ */
+export function ultrathinkStep(
+  runs: AgentRuns,
+  to: Recipient,
+  ultrathink: Ultrathink | undefined,
+  step: -1 | 1,
+) {
+  if (ultrathink && ultrathink.on === step < 0) {
+    const { claudeEfforts, claude, levels } = runs;
+    const current = claude.reasoningEffort || levels.claude;
+    const atTop =
+      stepEffort(claudeEfforts, current, levels.claude, 1) === current;
+    if (step < 0 || atTop) return ultrathink.toggle();
+  }
+  runs.stepEffort(to, step);
 }
 
 /** The composer's rainbow edge while the message asks to ultrathink. */

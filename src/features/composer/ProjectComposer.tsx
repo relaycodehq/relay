@@ -28,7 +28,7 @@ import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
 import { composerKeys } from "./composer-keys";
 import { CompactFirstBox, useCompactFirst } from "./compact-first";
-import { UltrathinkRing, useUltrathink } from "./ultrathink";
+import { ultrathinkStep, UltrathinkRing, useUltrathink } from "./ultrathink";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
 import { usePromptHistory } from "./usePromptHistory";
@@ -353,7 +353,7 @@ export function ProjectComposer({
         // Not if the thread was left while it sent.
         if (mounted.current) onNextThread?.();
       },
-      stepEffort: (step) => runs.stepEffort(to, step),
+      stepEffort: (step) => ultrathinkStep(runs, to, ultrathink, step),
       stepQuick: quick.presets.length ? quick.step : undefined,
     });
   };
