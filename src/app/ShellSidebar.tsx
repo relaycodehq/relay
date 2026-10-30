@@ -34,7 +34,12 @@ export function ShellSidebar({
       aria-hidden={away || undefined}
       inert={away || undefined}
       hidden={page === "settings"}
-      onMouseEnter={sidebar.hidden ? sidebar.peekOpen : undefined}
+      onMouseEnter={(e) => {
+        // React also enters through what the sidebar portals out, like the
+        // thread search covering the window, which would peek it for good.
+        const onSidebar = e.currentTarget.contains(e.target as Node);
+        if (sidebar.hidden && onSidebar) sidebar.peekOpen();
+      }}
       onMouseLeave={sidebar.hidden ? sidebar.peekClose : undefined}
     >
       <PaneResizer pane="sidebar" {...SIDEBAR_WIDTH} />

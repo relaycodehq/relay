@@ -175,3 +175,35 @@ test("resting on the prompt rail at the window's edge doesn't peek the sidebar",
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("searching threads with the sidebar hidden doesn't peek it", async () => {
+  const data = await mkdtemp(join(tmpdir(), "relay-search-peek-"));
+  const app = await electron.launch({
+    env: { ...relayEnv(), RELAY_TEST_DATA: data },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1200, height: 800 });
+    const sidebar = page.locator(".projects-sidebar");
+    await page.getByTitle(/^Hide sidebar/).click();
+    await expect(sidebar).toBeHidden();
+
+    // The palette is the sidebar's in React, though it covers the window.
+    await page.mouse.move(700, 400);
+    await page.keyboard.press("ControlOrMeta+KeyK");
+    const palette = page.getByRole("dialog", { name: "Search threads" });
+    await expect(palette).toBeVisible();
+    await page.mouse.move(650, 300, { steps: 6 });
+    await page.waitForTimeout(400);
+    await expect(sidebar).toBeHidden();
+
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+    await page.mouse.move(800, 450, { steps: 6 });
+    await page.waitForTimeout(400);
+    await expect(sidebar).toBeHidden();
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
