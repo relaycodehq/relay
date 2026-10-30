@@ -12,14 +12,12 @@ import {
   type ChatScope,
   type ChatTriage,
   type ChatWorkspace,
-  type StartedBy,
   type KnownMessages,
   type LinkedFolder,
   type ProjectChat,
   type ProjectChatPatch,
   type ProjectChatSend,
   type ResumeSettings,
-  type WorktreeStart,
 } from "../../shared/projects";
 import { latestContext } from "../../shared/context-usage";
 import type { HtmlRender } from "../../shared/html-render";
@@ -59,7 +57,7 @@ import { asksYou, chatSummary } from "./chat-summaries";
 import { ThreadTitles } from "./titles";
 import { TurnFiles } from "./turn-files";
 import { TerminalContinue } from "./terminal-continue";
-import { ThreadCreate } from "./thread-create";
+import { ThreadCreate, type NewThread } from "./thread-create";
 import { ThreadList } from "./thread-list";
 import { ThreadNotes } from "./notes";
 import { ThreadTriage } from "./thread-triage";
@@ -581,20 +579,9 @@ export class ProjectChats {
     projectId: string,
     scope: ChatScope,
     workspace?: ChatWorkspace,
-    startedBy?: StartedBy,
-    branch?: string,
-    links?: LinkedFolder[],
-    start?: WorktreeStart,
+    made?: NewThread,
   ) {
-    return this.creating.create(
-      projectId,
-      scope,
-      workspace,
-      startedBy,
-      branch,
-      links,
-      start,
-    );
+    return this.creating.create(projectId, scope, workspace, made);
   }
 
   /**

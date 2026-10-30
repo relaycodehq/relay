@@ -17,6 +17,14 @@ import type { ChatCore } from "./core";
 import { ThreadNotes } from "./notes";
 import { chatSummary } from "./chat-summaries";
 
+/** What a new thread starts with besides its project, scope and workspace. */
+export interface NewThread {
+  startedBy?: StartedBy;
+  branch?: string;
+  links?: LinkedFolder[];
+  start?: WorktreeStart;
+}
+
 /** New threads: empty ones, and forks of an existing one up to an answer. */
 export class ThreadCreate {
   constructor(
@@ -28,10 +36,7 @@ export class ThreadCreate {
     projectId: string,
     scope: ChatScope,
     workspace: ChatWorkspace = "checkout",
-    startedBy?: StartedBy,
-    branch?: string,
-    links?: LinkedFolder[],
-    start?: WorktreeStart,
+    { startedBy, branch, links, start }: NewThread = {},
   ) {
     const project = this.core.projects.get(projectId);
     if (project.computer) {

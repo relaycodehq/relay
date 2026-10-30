@@ -66,15 +66,9 @@ async function thread(
   workspace: "checkout" | "worktree",
   start?: WorktreeStart,
 ) {
-  const chat = await chats.create(
-    projectId,
-    { kind: "project" },
-    workspace,
-    undefined,
-    undefined,
-    undefined,
+  const chat = await chats.create(projectId, { kind: "project" }, workspace, {
     start,
-  );
+  });
   await chats.send(chat.id, input("@codex fixture echo: hi"));
   return answered(chat.id, 2);
 }

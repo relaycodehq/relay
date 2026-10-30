@@ -55,10 +55,7 @@ function fakeChats(threads: ProjectChat[]) {
       _projectId: string,
       _scope: unknown,
       workspace?: string,
-      startedBy?: unknown,
-      _branch?: string,
-      _links?: unknown,
-      start?: unknown,
+      { startedBy, start }: { startedBy?: unknown; start?: unknown } = {},
     ) => {
       created.push({ workspace, startedBy, start });
       return { id: "opinion" } as ChatSummary;

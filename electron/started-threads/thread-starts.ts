@@ -328,12 +328,14 @@ export class ThreadStarts {
     const startedBy = agent ? { chatId: lead.id, agent } : undefined;
     const scope = { kind: "project" } as const;
     if (worktree === false)
-      return this.chats.create(projectId, scope, "checkout", startedBy);
+      return this.chats.create(projectId, scope, "checkout", { startedBy });
     try {
-      return await this.chats.create(projectId, scope, "worktree", startedBy);
+      return await this.chats.create(projectId, scope, "worktree", {
+        startedBy,
+      });
     } catch (error) {
       if (worktree === true) throw error;
-      return this.chats.create(projectId, scope, "checkout", startedBy);
+      return this.chats.create(projectId, scope, "checkout", { startedBy });
     }
   }
 }

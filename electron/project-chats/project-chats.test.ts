@@ -1007,19 +1007,13 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
     projectId,
     { kind: "project" },
     "worktree",
-    undefined,
-    undefined,
-    undefined,
-    { thread: first.id },
+    { start: { thread: first.id } },
   );
   const byBranch = await chats.create(
     projectId,
     { kind: "project" },
     "worktree",
-    undefined,
-    undefined,
-    undefined,
-    { on: made.branch! },
+    { start: { on: made.branch! } },
   );
   for (const joined of [byThread, byBranch])
     expect((await chats.get(joined.id)).worktree).toMatchObject({
@@ -1037,15 +1031,10 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
   // Its first message makes nothing new: it works in the same folder.
   expect((await chats.get(byThread.id)).worktree?.path).toBe(made.path);
   // A draft asking for a thread that's gone gets a worktree of its own.
-  const gone = await chats.create(
-    projectId,
-    { kind: "project" },
-    "worktree",
-    undefined,
-    "team/login",
-    undefined,
-    { thread: "00000000-0000-4000-8000-000000000000" },
-  );
+  const gone = await chats.create(projectId, { kind: "project" }, "worktree", {
+    branch: "team/login",
+    start: { thread: "00000000-0000-4000-8000-000000000000" },
+  });
   expect((await chats.get(gone.id)).worktree).toEqual({ named: "team/login" });
 
   // A folder removed by hand isn't joined; the first message makes it again.
@@ -1057,15 +1046,9 @@ it("lets threads share one worktree: joined by thread or by its branch, both wor
     "--force",
     made.path!,
   ]);
-  const late = await chats.create(
-    projectId,
-    { kind: "project" },
-    "worktree",
-    undefined,
-    undefined,
-    undefined,
-    { on: made.branch! },
-  );
+  const late = await chats.create(projectId, { kind: "project" }, "worktree", {
+    start: { on: made.branch! },
+  });
   expect((await chats.get(late.id)).worktree).toEqual({
     startFrom: { on: made.branch },
   });
@@ -1087,15 +1070,9 @@ it("starts a thread on the project folder's own branch off it, and refuses only 
   );
   const current = git("branch", "--show-current");
   const on = (branch: string) =>
-    chats.create(
-      projectId,
-      { kind: "project" },
-      "worktree",
-      undefined,
-      undefined,
-      undefined,
-      { on: branch },
-    );
+    chats.create(projectId, { kind: "project" }, "worktree", {
+      start: { on: branch },
+    });
   await expect(on("gone")).rejects.toThrow("There's no branch gone.");
 
   const chat = await on(current);
@@ -1128,21 +1105,13 @@ it("starts a thread whose named branch got taken before its first message on rel
     "First",
   );
   await expect(
-    chats.create(
-      projectId,
-      { kind: "project" },
-      "worktree",
-      undefined,
-      "my branch",
-    ),
+    chats.create(projectId, { kind: "project" }, "worktree", {
+      branch: "my branch",
+    }),
   ).rejects.toThrow("Branch names can't contain spaces.");
-  const chat = await chats.create(
-    projectId,
-    { kind: "project" },
-    "worktree",
-    undefined,
-    "feature/cache",
-  );
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree", {
+    branch: "feature/cache",
+  });
   // Someone else took the name while the thread waited to send.
   git("branch", "feature/cache");
   await chats.send(chat.id, input("@codex Explain the cache guard"));

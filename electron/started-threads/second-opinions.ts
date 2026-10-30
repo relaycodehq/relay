@@ -149,16 +149,13 @@ export class SecondOpinions {
     const scope = { kind: "project" } as const;
     const branch = lead.worktree?.path && lead.worktree.branch;
     if (!branch)
-      return this.chats.create(lead.projectId, scope, "checkout", startedBy);
-    return this.chats.create(
-      lead.projectId,
-      scope,
-      "worktree",
+      return this.chats.create(lead.projectId, scope, "checkout", {
+        startedBy,
+      });
+    return this.chats.create(lead.projectId, scope, "worktree", {
       startedBy,
-      undefined,
-      undefined,
-      { on: branch },
-    );
+      start: { on: branch },
+    });
   }
 
   /** The screenshots sent with the question, to send along with it. */

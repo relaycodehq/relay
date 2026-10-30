@@ -290,8 +290,7 @@ describe("cleaning up a real thread's worktree", () => {
       projectId,
       { kind: "project" },
       "worktree",
-      undefined,
-      branch,
+      { branch },
     );
     await chats.send(thread.id, input("@codex Add a changelog"));
     await finished(thread.id, 2);

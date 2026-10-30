@@ -141,32 +141,23 @@ it("does not expose missing or archived threads through status reads", async () 
 it("builds each project's live list once for explicit and started-thread batches", async () => {
   const lead = await chats.create(projectId, { kind: "project" });
   const startedBy = { chatId: lead.id, agent: "codex" as const };
-  const a = await chats.create(
-    projectId,
-    { kind: "project" },
-    "checkout",
+  const a = await chats.create(projectId, { kind: "project" }, "checkout", {
     startedBy,
-  );
-  const b = await chats.create(
-    projectId,
-    { kind: "project" },
-    "checkout",
+  });
+  const b = await chats.create(projectId, { kind: "project" }, "checkout", {
     startedBy,
-  );
+  });
   const folder = join(root, "other-project");
   await mkdir(folder);
   const other = await projects.add(folder, null, { exact: true });
-  const c = await chats.create(
-    other.id,
-    { kind: "project" },
-    "checkout",
+  const c = await chats.create(other.id, { kind: "project" }, "checkout", {
     startedBy,
-  );
+  });
   const archived = await chats.create(
     projectId,
     { kind: "project" },
     "checkout",
-    startedBy,
+    { startedBy },
   );
   await chats.triage(archived.id, { kind: "archive" });
   const expected = chats

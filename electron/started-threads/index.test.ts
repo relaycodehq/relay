@@ -106,7 +106,7 @@ function fakeChats() {
         projectId: string,
         scope: any,
         workspace?: string,
-        startedBy?: StartedBy,
+        { startedBy }: { startedBy?: StartedBy } = {},
       ) => {
         const id = `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
         const chat: ProjectChat = {
@@ -1542,8 +1542,7 @@ test("notes: a started thread keeps them only in its own", async () => {
   const { lead, api } = fakeChats();
   const threads = new StartedThreads(api);
   const child = await api.create("p", { kind: "project" }, "checkout", {
-    chatId: lead.id,
-    agent: "claude",
+    startedBy: { chatId: lead.id, agent: "claude" },
   });
   const elsewhere = await call(threads, child.id, "add_note", {
     text: "x",

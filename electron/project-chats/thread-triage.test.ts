@@ -43,10 +43,14 @@ const scope = { kind: "project" } as const;
 it("settling a thread settles the threads it started that are done, and undo brings them back", async () => {
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };
-  const done = await chats.create(projectId, scope, "checkout", startedBy);
-  const scheduled = await chats.create(projectId, scope, "checkout", startedBy);
+  const done = await chats.create(projectId, scope, "checkout", { startedBy });
+  const scheduled = await chats.create(projectId, scope, "checkout", {
+    startedBy,
+  });
   const stranger = await chats.create(projectId, scope);
-  const asking = await chats.create(projectId, scope, "checkout", startedBy);
+  const asking = await chats.create(projectId, scope, "checkout", {
+    startedBy,
+  });
   // Seed a saved child without starting a real agent.
   const storage = (chats as unknown as { core: import("./core").ChatCore }).core
     .storage;
@@ -95,7 +99,7 @@ it("settling a thread settles the threads it started that are done, and undo bri
 it("snoozing or unsettling a thread leaves the threads it started as they were", async () => {
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };
-  const done = await chats.create(projectId, scope, "checkout", startedBy);
+  const done = await chats.create(projectId, scope, "checkout", { startedBy });
   await chats.triage(lead.id, {
     kind: "snooze",
     until: Date.now() + 3_600_000,
@@ -107,7 +111,9 @@ it("snoozing or unsettling a thread leaves the threads it started as they were",
 
 /** A thread with a turn running, and the way to end it as `status`. */
 async function runningThread(startedBy?: { chatId: string; agent: "claude" }) {
-  const thread = await chats.create(projectId, scope, "checkout", startedBy);
+  const thread = await chats.create(projectId, scope, "checkout", {
+    startedBy,
+  });
   const core = (chats as unknown as { core: ChatCore }).core;
   const triaging = (chats as unknown as { triaging: ThreadTriage }).triaging;
   const active = core.active.claim(thread.id, {
@@ -343,8 +349,10 @@ it("brings a thread settled while running back when quitting Relay stopped its b
 it("a started thread settled on its own stays settled when its lead's settle is undone", async () => {
   const lead = await chats.create(projectId, scope);
   const child = await chats.create(projectId, scope, "checkout", {
-    chatId: lead.id,
-    agent: "codex",
+    startedBy: {
+      chatId: lead.id,
+      agent: "codex",
+    },
   });
   await chats.triage(child.id, { kind: "settle" });
   const own = (await chats.get(child.id)).settledAt;
@@ -362,7 +370,7 @@ it("a started thread settled on its own stays settled when its lead's settle is 
 it("a detached thread stands alone: settling its old lead leaves it be", async () => {
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };
-  const child = await chats.create(projectId, scope, "checkout", startedBy);
+  const child = await chats.create(projectId, scope, "checkout", { startedBy });
 
   const detached = await chats.detach(child.id);
   expect(detached.startedBy).toBeUndefined();
@@ -414,7 +422,7 @@ it("leave to drive threads stays with the thread until taken back, and a fork st
 it("a lead sees a started thread that settled by itself as settled", async () => {
   const lead = await chats.create(projectId, scope);
   const startedBy = { chatId: lead.id, agent: "claude" as const };
-  const child = await chats.create(projectId, scope, "checkout", startedBy);
+  const child = await chats.create(projectId, scope, "checkout", { startedBy });
   const quiet = Date.now() - 30 * 86_400_000;
   await store.update((s) => {
     s.chats!.find((c) => c.id === child.id)!.updated = quiet;
@@ -435,14 +443,7 @@ it("a lead sees a started thread that settled by itself as settled", async () =>
 
 it("promotes links atomically and does not resurrect the old thread link after reload", async () => {
   const links = [{ path: join(root, "backend"), access: "write" as const }];
-  const made = await chats.create(
-    projectId,
-    scope,
-    "checkout",
-    undefined,
-    undefined,
-    links,
-  );
+  const made = await chats.create(projectId, scope, "checkout", { links });
   await store.update((s) => {
     s.projects!.find((p) => p.id === projectId)!.settings = {
       worktreeSetup: "npm ci",
@@ -470,14 +471,7 @@ it("promotes links atomically and does not resurrect the old thread link after r
 
 it("leaves both link scopes unchanged when the promotion transaction fails", async () => {
   const links = [{ path: join(root, "backend"), access: "write" as const }];
-  const made = await chats.create(
-    projectId,
-    scope,
-    "checkout",
-    undefined,
-    undefined,
-    links,
-  );
+  const made = await chats.create(projectId, scope, "checkout", { links });
   const before = structuredClone(store.get());
   const failed = vi
     .spyOn(store, "update")
@@ -520,8 +514,10 @@ it("persists thread link edits in state and keeps them through later chat writes
 it("phone Undo restores the snooze under both a lead and its started thread", async () => {
   const lead = await chats.create(projectId, scope);
   const child = await chats.create(projectId, scope, "checkout", {
-    chatId: lead.id,
-    agent: "codex",
+    startedBy: {
+      chatId: lead.id,
+      agent: "codex",
+    },
   });
   const until = Date.now() + 3_600_000;
   await chats.triage(lead.id, { kind: "snooze", until });

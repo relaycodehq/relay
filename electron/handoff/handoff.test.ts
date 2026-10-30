@@ -393,8 +393,7 @@ async function awayWithChangelog(changelog = true, branch?: string) {
     laptop.projectId,
     { kind: "project" },
     "worktree",
-    undefined,
-    branch,
+    { branch },
   );
   await laptop.chats.send(thread.id, input("@codex Add a changelog"));
   await finished(laptop.chats, thread.id, 2);

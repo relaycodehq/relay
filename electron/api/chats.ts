@@ -54,15 +54,11 @@ export function chatHandlers(ctx: ApiContext) {
           undefined,
           ctx.projects.get(id).path,
         );
-        return projectChats.create(
-          id,
-          scope,
-          workspace,
-          undefined,
+        return projectChats.create(id, scope, workspace, {
           branch,
           links,
           start,
-        );
+        });
       },
     ),
     setProjectChatLinks: takes(
