@@ -47,6 +47,7 @@ import dev.relay.android.features.composer.Composer
 import dev.relay.android.features.composer.ComposerState
 import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Returned
+import dev.relay.android.features.composer.UsageRings
 import dev.relay.android.features.composer.logic.remotePlanGoAhead
 import dev.relay.android.features.composer.logic.sentWith
 import dev.relay.android.remote.drafts.Sends
@@ -418,6 +419,15 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                     }
                     if (projectId != null) Composer(remote, id, composer, rootId = rootId, settingsUp = true,
                         modifier = Modifier.scrollGeometry(trace, "composer"))
+                },
+                // Over the thread rather than in the header, so the title keeps the room (as on iOS).
+                overDock = {
+                    composer.usage?.let {
+                        // Padding on the rings' own modifier squeezed them sideways on the phone.
+                        Box(Modifier.padding(end = 16.dp, bottom = 10.dp)) {
+                            UsageRings(it.provider, it.usage, onClick = composer::openUsage)
+                        }
+                    }
                 },
             ) {
                 if (earlier != null) item("earlier") {

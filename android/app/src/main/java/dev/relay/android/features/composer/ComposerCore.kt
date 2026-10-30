@@ -307,6 +307,8 @@ internal fun ComposerCore(
             onFocus = { runCatching { focus.requestFocus() } }
             onSettingsOn = { to -> switched(settings, to) }
             onOpenSettings = { sheet = Sheet.Settings }
+            onOpenUsage = { sheet = Sheet.Usage }
+            this.usage = ComposerUsage(provider, usage.usage)
             line = ComposerLine(
                 modelLabel + (if (settings.choice.reasoningEffort.isNotEmpty()) " · ${effortLabel(settings.choice.reasoningEffort)}" else "") +
                     (if (agentInfo(provider)?.fast == true && settings.choice.fast) " · Fast" else ""),

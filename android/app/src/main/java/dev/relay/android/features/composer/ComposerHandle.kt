@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.relay.android.features.composer.logic.ComposeAttempt
+import dev.relay.android.features.composer.logic.ProviderUsage
 import dev.relay.android.remote.files.AttachedFile
 import dev.relay.android.remote.model.ResumeSettings
 
@@ -33,8 +34,12 @@ class ComposerHandle {
     internal var onFocus: () -> Unit = {}
     internal var onSettingsOn: (String) -> ResumeSettings? = { null }
     internal var onOpenSettings: () -> Unit = {}
+    internal var onOpenUsage: () -> Unit = {}
     /** What the composer sends with, in a line, for a header to show when the controls aren't in the composer. */
     var line: ComposerLine? by mutableStateOf(null)
+        internal set
+    /** The plan's limits, for a screen to show as rings when the composer's own aren't up. */
+    var usage: ComposerUsage? by mutableStateOf(null)
         internal set
     fun quote(markdown: String) = onQuote(markdown)
     /**
@@ -51,7 +56,11 @@ class ComposerHandle {
     fun settingsOn(to: String) = onSettingsOn(to)
     /** Model, permissions, plan and usage in one sheet. */
     fun openSettings() = onOpenSettings()
+    fun openUsage() = onOpenUsage()
 }
 
 /** The model with its effort, the permissions, plan mode, and how full the context is. */
 data class ComposerLine(val model: String, val mode: String, val plan: Boolean, val contextPercent: Int?)
+
+/** The agent the composer sends to and its plan's limits, as last fetched. */
+data class ComposerUsage(val provider: String, val usage: ProviderUsage?)

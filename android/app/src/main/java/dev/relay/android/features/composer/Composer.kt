@@ -206,6 +206,9 @@ class ComposerState(val screenFollows: Boolean = false) {
     /** What it sends with, once it's up; for a header that holds the settings. */
     val line: ComposerLine? get() = handle?.line
     fun openSettings() { handle?.openSettings() }
+    /** The plan's limits once the composer is up; the thread floats them as rings. */
+    val usage: ComposerUsage? get() = handle?.usage
+    fun openUsage() { handle?.openUsage() }
     fun quote(markdown: String) { handle?.quote(markdown) }
     /** Puts [back] after the draft and returns its undo; throws when it won't fit or the composer isn't up. */
     fun restore(back: Returned): () -> Unit =

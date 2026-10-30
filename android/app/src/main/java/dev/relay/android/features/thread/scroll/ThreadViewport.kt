@@ -1,6 +1,7 @@
 package dev.relay.android.features.thread.scroll
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.lazy.LazyColumn
@@ -9,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -52,6 +54,7 @@ internal fun ThreadViewport(
     historyResult: HistoryLoadResult? = null,
     empty: (@Composable ColumnScope.() -> Unit)? = null,
     dock: @Composable ColumnScope.() -> Unit = {},
+    overDock: @Composable () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
     SideEffect { scroll.content(keys, signature, restorationComplete, historyResult) }
@@ -83,6 +86,7 @@ internal fun ThreadViewport(
                 content = content,
             )
             Column(Modifier.readingColumn(), content = dock)
+            Box(Modifier.readingColumn(), contentAlignment = Alignment.CenterEnd) { overDock() }
         },
     ) { children, constraints ->
         scroll.diagnostics.viewportMeasured()
@@ -96,9 +100,12 @@ internal fun ThreadViewport(
                 holding = scroll.reading || scroll.touching, belowEnd = scroll::below)
             scroll.viewport(width, listHeight, density.fontScale, density.density)
             val list = children[0].measure(Constraints.fixed(width, listHeight))
+            // Floats over the thread's last lines and takes none of its height, so the reader doesn't move.
+            val floating = children[2].measure(constraints.copy(minHeight = 0))
             layout(width, height) {
                 list.placeRelative(0, 0)
                 dockSize.placeRelative(0, height - dockSize.height)
+                floating.placeRelative(0, height - dockSize.height - floating.height)
             }
         } finally { Trace.endSection() }
     }
