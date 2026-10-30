@@ -60,8 +60,7 @@
   color: #d99a2b;
 }
 /* In a call's row, right after its label rather than at the far end. */
-.agent-step-heading:has(> .agent-marks)
-  > span:not(.agent-marks, .agent-step-progress) {
+.agent-step .agent-step-heading > span.before-marks {
   flex: 0 1 auto;
 }
 .agent-step-heading > .agent-marks,

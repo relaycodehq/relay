@@ -69,7 +69,7 @@
   pointer-events: none;
 }
 /* While a call runs the thinking line only holds its room; the line stops at the last real row. */
-.agent-trace:has(> .agent-thinking.reserved)::before {
+.agent-trace[data-thinking-reserved]::before {
   bottom: 26px;
 }
 .agent-commentary {

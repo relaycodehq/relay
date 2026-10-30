@@ -6,6 +6,7 @@ import { formatCost } from "../../../shared/thread-cost";
 import { useCopy } from "../../lib/useCopy";
 import { PinMessageButton } from "../../ui/KeepBlock";
 import { ReadAloudButton } from "../read-aloud/ReadAloudButton";
+import { useReading } from "../read-aloud/playback";
 import { imageQuery } from "../images/ImagePreview";
 import { messageHtml } from "../images/image-clipboard";
 import { pillMarks, type CopiedPills } from "../composer/prompt/pill-clipboard";
@@ -43,11 +44,14 @@ export function MessageActions({
   secondOpinion?: SecondOpinionTarget;
 }) {
   const justAnswered = useJustAnswered(pending);
+  const reading = useReading();
+  const readingThis = !!readingKey && reading?.key === readingKey;
   return (
     <footer
       className="message-actions"
       inert={pending}
       data-just-answered={justAnswered || undefined}
+      data-reading-aloud={readingThis || undefined}
     >
       {!!text?.trim() && <CopyMessageButton text={text} label="Copy answer" />}
       {!!text?.trim() && readingKey && (

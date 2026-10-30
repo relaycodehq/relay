@@ -70,11 +70,11 @@
 }
 /* Open beside the thread, it takes its room from the thread instead of
    covering it: its width, its inset and a gap, less the thread's own 50px. */
-.workspace-pane:has(.running-tasks.docked) {
+.workspace-pane[data-tasks-docked] {
   --thread-side-room: 258px;
 }
 /* A selection dragged under it would otherwise end in its text. */
-.workspace-pane:has(.project-messages:active) .running-tasks {
+.workspace-pane[data-thread-pressed] .running-tasks {
   pointer-events: none;
 }
 .running-tasks-list {

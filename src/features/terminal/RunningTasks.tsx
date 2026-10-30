@@ -41,6 +41,41 @@ function useRoomBeside(card: HTMLElement | null) {
   return pane - GUTTER - CARD >= NARROWEST_COLUMN;
 }
 
+/**
+ * Marks the pane while the card is docked, which makes the thread room for
+ * it, and while a press in the thread lasts, so a selection dragged under the
+ * card ends in the thread's text. Attributes on the pane rather than `:has()`
+ * in running-tasks.css: those made the browser recheck the pane on every
+ * change inside a streaming answer.
+ */
+function usePaneMarks(card: HTMLElement | null, docked: boolean) {
+  useLayoutEffect(() => {
+    const pane = card?.parentElement;
+    if (!pane) return;
+    pane.toggleAttribute("data-tasks-docked", docked);
+    return () => pane.removeAttribute("data-tasks-docked");
+  }, [card, docked]);
+  useEffect(() => {
+    const pane = card?.parentElement;
+    if (!pane) return;
+    const release = () => pane.removeAttribute("data-thread-pressed");
+    const press = (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      if (!(e.target as Element).closest?.(".project-messages")) return;
+      pane.setAttribute("data-thread-pressed", "");
+      window.addEventListener("pointerup", release, { once: true });
+      window.addEventListener("pointercancel", release, { once: true });
+    };
+    pane.addEventListener("pointerdown", press);
+    return () => {
+      pane.removeEventListener("pointerdown", press);
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      release();
+    };
+  }, [card]);
+}
+
 const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
 const FROST = "color-mix(in srgb, var(--inbox) 55%, transparent)";
 /** The stripe's size when last seen, for a card shrinking to it. */
@@ -207,6 +242,7 @@ export function RunningTasks({
   const tasks = useProjectTasks(project, collapsed);
   // Open beside the thread, not over it: the thread makes room.
   const docked = roomy && !collapsed;
+  usePaneMarks(card, docked);
   const toggle = () =>
     morph(card, collapsed ? "open" : "close", () =>
       roomy ? setFolded(!folded) : setPeeking(!peeking),

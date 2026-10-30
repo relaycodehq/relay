@@ -194,6 +194,9 @@ export function AgentTurn({
             <div
               className="agent-trace"
               aria-label="Local agent activity"
+              data-thinking-reserved={
+                (live && !message.body && !thinking) || undefined
+              }
               ref={fold.ref}
             >
               <TraceParts

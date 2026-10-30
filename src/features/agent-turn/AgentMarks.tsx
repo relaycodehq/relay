@@ -27,7 +27,7 @@ export function AgentMark({
   style?: CSSProperties;
 }) {
   return (
-    <span className="agent-mark" style={style}>
+    <span className={state ? "agent-mark badged" : "agent-mark"} style={style}>
       <span className="agent-mark-disc">
         <ProviderIcon provider={provider} />
       </span>

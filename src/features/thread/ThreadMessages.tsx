@@ -32,6 +32,7 @@ import { HeldSends, ranHereNote } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
 import { ThreadSetup } from "./ThreadSetup";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
+import { useAnswerEdges } from "./answer-edges";
 import { ErrorBox, Loading } from "../../ui/ui";
 import { landedNote, renamedNote } from "./WorktreeControls";
 import { MessageNotes, type MessageNote } from "./MessageNotes";
@@ -180,6 +181,7 @@ export function ThreadMessages({
   /** Puts what a page in an answer composed in the composer below. */
   onCompose: RenderCompose;
 }) {
+  useAnswerEdges(column);
   // Keyed on the reports alone: a new renderer redraws the whole summary,
   // and statuses change with every finding dismissed or fixed.
   const reports = threadReports(findings);

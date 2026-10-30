@@ -1,5 +1,6 @@
-/* An answer being read keeps its actions in view, so Stop stays in reach. */
-.message-actions:has(.read-aloud-button[data-reading], .read-aloud-error) > * {
+/* An answer being read, or that failed to, keeps its actions in view, so
+   Stop and the error stay in reach. */
+.message-actions[data-reading-aloud] > * {
   opacity: 1;
 }
 .message-actions .read-aloud-button[data-reading] {

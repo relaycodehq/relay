@@ -451,7 +451,7 @@
 /* An answer that ends in text ends in its last line's leading and descent,
    which the eye counts as gap: what follows starts that much sooner, so the
    gap reads 44px from the baseline like the rest. */
-.project-message.assistant:has(> .markdown + .message-actions)
+.project-message.assistant[data-ends-in-text]
   + .project-message:not(.assistant) {
   padding-top: 16px;
 }
@@ -754,13 +754,14 @@
 /* Asked mid-turn, a side question sits right under the running answer. That
    answer's hidden copy/reply row would only hold empty space there: when the
    turn ends, its text streams in above and moves the question anyway. */
-.project-message.assistant:has(+ .side-question) {
+.project-message.assistant[data-before-side-question] {
   padding-bottom: 6px;
 }
-.project-message.assistant:has(+ .side-question) > .message-actions[inert] {
+.project-message.assistant[data-before-side-question]
+  > .message-actions[inert] {
   display: none;
 }
-.project-message.assistant:has(+ .side-question) > .message-actions {
+.project-message.assistant[data-before-side-question] > .message-actions {
   margin-bottom: -6px;
 }
 .agent-sign-in {

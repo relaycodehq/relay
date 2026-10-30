@@ -195,7 +195,14 @@ export function ToolRow({
   if (asked) return <AnsweredQuestions questions={asked} />;
   // A running call keeps its icon and its words shine; a question waiting on the reader doesn't move.
   const shines = a.status === "running" && !isQuestionCall(a);
-  const wordsClass = [a.kind === "command" && "mono", shines && "live-shine"].filter(Boolean).join(" ");
+  const marks = isStartThreads(a);
+  const wordsClass = [
+    a.kind === "command" && "mono",
+    shines && "live-shine",
+    marks && "before-marks",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const heading = (
     <>
       <ToolIcon activity={a} read={read} Icon={Icon} />
@@ -203,7 +210,7 @@ export function ToolRow({
         {isQuestionCall(a) ? questionWords(a) : label}
       </span>
       <Progress activity={a} />
-      {isStartThreads(a) && <StartedThreadMarks ids={startedIds(a.detail)} />}
+      {marks && <StartedThreadMarks ids={startedIds(a.detail)} />}
     </>
   );
   if (!expandable)
