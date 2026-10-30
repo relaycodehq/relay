@@ -151,6 +151,36 @@ export function sentPills(
   return pills;
 }
 
+type SentCode = {
+  labels: ReadonlyMap<string, string>;
+  images: SentImage[];
+  onOpenImage: (key: string) => void;
+  projectRoot?: string;
+  onOpenFile?: (target: ProjectFileLink) => void;
+};
+
+/** What a code span in a sent message shows instead of code, if anything. */
+function shownCode(value: string, sent: SentCode) {
+  const pilled = pilledCode(value, sent.projectRoot);
+  if (!pilled) return undefined;
+  if ("skill" in pilled) {
+    const { skill } = pilled;
+    const label = sent.labels.get(skill) ?? skill;
+    return <Pill look={skillPill(`$${skill}`, label)} />;
+  }
+  if ("image" in pilled)
+    return (
+      <ImagePill
+        sent={sent.images[pilled.image - 1]}
+        n={pilled.image}
+        onOpen={sent.onOpenImage}
+      />
+    );
+  return sent.onOpenFile ? (
+    <FilePill code={value} target={pilled.file} onOpen={sent.onOpenFile} />
+  ) : undefined;
+}
+
 // Shared, so a message without skills or images doesn't make a new list each
 // render: `inlineCode` would change with it, and RichText remount every pill.
 const noSkills: SentSkill[] = [];
@@ -184,27 +214,14 @@ export function UserText({
     [text, labels],
   );
   const inlineCode = useCallback(
-    (value: string) => {
-      const pilled = pilledCode(value, projectRoot);
-      if (!pilled) return undefined;
-      if ("skill" in pilled) {
-        const { skill } = pilled;
-        return (
-          <Pill look={skillPill(`$${skill}`, labels.get(skill) ?? skill)} />
-        );
-      }
-      if ("image" in pilled)
-        return (
-          <ImagePill
-            sent={images[pilled.image - 1]}
-            n={pilled.image}
-            onOpen={onOpenImage}
-          />
-        );
-      return onOpenFile ? (
-        <FilePill code={value} target={pilled.file} onOpen={onOpenFile} />
-      ) : undefined;
-    },
+    (value: string) =>
+      shownCode(value, {
+        labels,
+        images,
+        onOpenImage,
+        projectRoot,
+        onOpenFile,
+      }),
     [images, onOpenImage, labels, projectRoot, onOpenFile],
   );
   const [box, setBox] = useState<HTMLDivElement | null>(null);

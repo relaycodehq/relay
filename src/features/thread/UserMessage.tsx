@@ -93,18 +93,7 @@ export function UserMessage({
       <header>
         <MessageAuthor message={m} />
         <time>{clock(m.created)}</time>
-        {m.scheduled && (
-          <button
-            type="button"
-            className="message-scheduled"
-            title={`Open the “${m.scheduled.name}” schedule`}
-            onClick={() => openSchedule(m.scheduled!.id)}
-          >
-            {m.scheduled.test
-              ? "test run of Relay's schedule"
-              : "started by Relay's schedule"}
-          </button>
-        )}
+        {m.scheduled && <ScheduledBy schedule={m.scheduled} />}
         {m.unread && (
           <span
             className="steer-unread muted"
@@ -176,6 +165,26 @@ export function UserMessage({
         <small className="muted">Saved locally · waiting to share</small>
       )}
     </article>
+  );
+}
+
+/** The schedule that sent a message, opened on a click. */
+function ScheduledBy({
+  schedule,
+}: {
+  schedule: NonNullable<ChatMessage["scheduled"]>;
+}) {
+  return (
+    <button
+      type="button"
+      className="message-scheduled"
+      title={`Open the “${schedule.name}” schedule`}
+      onClick={() => openSchedule(schedule.id)}
+    >
+      {schedule.test
+        ? "test run of Relay's schedule"
+        : "started by Relay's schedule"}
+    </button>
   );
 }
 
