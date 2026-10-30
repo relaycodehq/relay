@@ -64,10 +64,11 @@ export function chatSummary({
   setupMark: _staleSetupMark,
   model: _staleModel,
   asking,
+  startingAgent,
   ...summary
 }: ProjectChat): ChatSummary {
   const latest = [...messages].reverse().find((m) => m.role === "assistant");
-  const provider = latest?.provider;
+  const provider = latest?.provider ?? startingAgent;
   const model = latest?.model?.name;
   const holder = contextAgent(messages.filter((m) => !m.parentId));
   const providers = [

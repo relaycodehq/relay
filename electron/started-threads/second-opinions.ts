@@ -3,7 +3,7 @@
 // thread whose answer it checks, and that thread's agent hears what it said
 // only when the user sends it.
 import { randomUUID } from "node:crypto";
-import { agentMentionPattern } from "../../shared/agents";
+import { agentMentionPattern, type AgentProvider } from "../../shared/agents";
 import { hasAccounts } from "../../shared/agent-accounts";
 import { fitModel } from "../../shared/model-fit";
 import type {
@@ -82,7 +82,7 @@ export class SecondOpinions {
       ? lead.accounts?.[agent.provider]
       : undefined;
     const images = await this.imagesOf(lead, found.question);
-    const thread = await this.create(lead, answerId);
+    const thread = await this.create(lead, answerId, agent.provider);
     await this.chats.rename(thread.id, `Second opinion: ${lead.title}`);
     await this.chats.send(thread.id, {
       id: randomUUID(),
@@ -140,20 +140,23 @@ export class SecondOpinions {
    * The thread, under the lead. It works in the lead's worktree when it has
    * one, so it reads the same files; read-only, it changes none of them.
    */
-  private async create(lead: ProjectChat, answerId: string) {
+  private async create(
+    lead: ProjectChat,
+    answerId: string,
+    startingAgent: AgentProvider,
+  ) {
     const startedBy = {
       chatId: lead.id,
       agent: leadSide(lead).agent,
       secondOpinionOn: answerId,
     };
+    const made = { startedBy, startingAgent };
     const scope = { kind: "project" } as const;
     const branch = lead.worktree?.path && lead.worktree.branch;
     if (!branch)
-      return this.chats.create(lead.projectId, scope, "checkout", {
-        startedBy,
-      });
+      return this.chats.create(lead.projectId, scope, "checkout", made);
     return this.chats.create(lead.projectId, scope, "worktree", {
-      startedBy,
+      ...made,
       start: { on: branch },
     });
   }

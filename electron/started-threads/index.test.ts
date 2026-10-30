@@ -23,6 +23,7 @@ import { chatStatus } from "../project-chats";
 import { chatSummary } from "../project-chats/chat-summaries";
 import { sentBy } from "../../shared/projects/send";
 import type { Turn } from "../../shared/turns";
+import type { AgentProvider } from "../../shared/agents";
 
 /** Just the thread operations the tools use, over plain records. */
 function fakeChats() {
@@ -106,7 +107,10 @@ function fakeChats() {
         projectId: string,
         scope: any,
         workspace?: string,
-        { startedBy }: { startedBy?: StartedBy } = {},
+        {
+          startedBy,
+          startingAgent,
+        }: { startedBy?: StartedBy; startingAgent?: AgentProvider } = {},
       ) => {
         const id = `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
         const chat: ProjectChat = {
@@ -119,6 +123,7 @@ function fakeChats() {
           messages: [],
           ...(workspace === "worktree" ? { worktree: {} } : {}),
           ...(startedBy ? { startedBy } : {}),
+          ...(startingAgent ? { startingAgent } : {}),
         };
         chats.set(id, chat);
         return chat;
@@ -265,6 +270,8 @@ test("starts threads on the lead's agent and settings, each saying who sent it",
     chatId: lead.id,
     agent: "claude",
   });
+  // Set before its first message is sent, so its mark is Codex from the start.
+  expect(chats.get(codex!.id)!.startingAgent).toBe("codex");
 });
 
 test("any thread finds and reads every other without asking", async () => {

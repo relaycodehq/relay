@@ -231,6 +231,7 @@ export class ThreadStarts {
         lead,
         destination.own ? destination.projectId : destination.project.id,
         worktree,
+        agent,
         // Without the lead's agent it's a thread of its own.
         detached ? undefined : leadAgent,
       );
@@ -317,25 +318,27 @@ export class ThreadStarts {
 
   /**
    * A worktree unless asked otherwise or the project isn't a repository.
-   * Without the starting agent it's a thread of its own, not under the lead.
+   * Without the lead's agent it's a thread of its own, not under the lead.
    */
   private async create(
     lead: ProjectChat,
     projectId: string,
     worktree: boolean | undefined,
-    agent: AgentProvider | undefined,
+    startingAgent: AgentProvider,
+    leadAgent: AgentProvider | undefined,
   ) {
-    const startedBy = agent ? { chatId: lead.id, agent } : undefined;
+    const startedBy = leadAgent
+      ? { chatId: lead.id, agent: leadAgent }
+      : undefined;
+    const made = { startedBy, startingAgent };
     const scope = { kind: "project" } as const;
     if (worktree === false)
-      return this.chats.create(projectId, scope, "checkout", { startedBy });
+      return this.chats.create(projectId, scope, "checkout", made);
     try {
-      return await this.chats.create(projectId, scope, "worktree", {
-        startedBy,
-      });
+      return await this.chats.create(projectId, scope, "worktree", made);
     } catch (error) {
       if (worktree === true) throw error;
-      return this.chats.create(projectId, scope, "checkout", { startedBy });
+      return this.chats.create(projectId, scope, "checkout", made);
     }
   }
 }

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AgentProvider } from "../../shared/agents";
 import type {
   ChatScope,
   ChatWorktree,
@@ -20,6 +21,8 @@ import { chatSummary } from "./chat-summaries";
 /** What a new thread starts with besides its project, scope and workspace. */
 export interface NewThread {
   startedBy?: StartedBy;
+  /** Known before the first message is sent, as with threads an agent starts. */
+  startingAgent?: AgentProvider;
   branch?: string;
   links?: LinkedFolder[];
   start?: WorktreeStart;
@@ -36,7 +39,7 @@ export class ThreadCreate {
     projectId: string,
     scope: ChatScope,
     workspace: ChatWorkspace = "checkout",
-    { startedBy, branch, links, start }: NewThread = {},
+    { branch, start, ...kept }: NewThread = {},
   ) {
     const project = this.core.projects.get(projectId);
     if (project.computer) {
@@ -77,7 +80,7 @@ export class ThreadCreate {
     const problem = named && branchNameProblem(named);
     if (problem) throw new Error(problem);
     if (!startFrom)
-      return this.add(projectId, scope, workspace, { startedBy, named, links });
+      return this.add(projectId, scope, workspace, { ...kept, named });
     const root = await this.core.projects.root(projectId);
     // In the repository's queue, where a worktree's removal asks again
     // whether anyone works in it: whichever comes second sees the other. One
@@ -105,9 +108,8 @@ export class ThreadCreate {
         !joined && (await worktreeStartProblem(root, startFrom));
       if (startProblem) throw new Error(startProblem);
       return this.add(projectId, scope, workspace, {
-        startedBy,
+        ...kept,
         named,
-        links,
         ...(joined ? { worktree: joined } : { startFrom }),
       });
     });
@@ -119,14 +121,13 @@ export class ThreadCreate {
     workspace: ChatWorkspace,
     {
       startedBy,
-      named,
+      startingAgent,
       links,
+      named,
       startFrom,
       worktree,
-    }: {
-      startedBy?: StartedBy;
+    }: Omit<NewThread, "branch" | "start"> & {
       named?: string;
-      links?: LinkedFolder[];
       startFrom?: WorktreeStart;
       worktree?: ChatWorktree;
     },
@@ -157,6 +158,7 @@ export class ThreadCreate {
       updated: Date.now(),
       messages: [],
       ...(startedBy ? { startedBy } : {}),
+      ...(startingAgent ? { startingAgent } : {}),
       ...(links?.length ? { links } : {}),
     };
     await this.core.storage.add(chat);

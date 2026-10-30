@@ -40,6 +40,8 @@ export interface ProjectChat extends ChatSummary {
   scheduled?: ScheduledChatMessage[];
   queuePaused?: boolean;
   lastInput?: ProjectChatSend;
+  /** The agent its first message goes to, so it shows as that agent before one answers. */
+  startingAgent?: AgentProvider;
   messages: ChatMessage[];
   /** Each agent's session on the main conversation. */
   sessions?: AgentSessions;

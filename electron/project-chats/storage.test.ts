@@ -78,6 +78,14 @@ it("lists each answering agent once, most recently used first, including side co
   expect(chatSummary(chat).providers).toEqual([]);
 });
 
+it("shows a thread as its starting agent until an answer says otherwise", () => {
+  const chat: ProjectChat = { ...thread(), startingAgent: "codex" };
+  expect(chatSummary(chat).provider).toBe("codex");
+  expect(chatSummary(chat)).not.toHaveProperty("startingAgent");
+  chat.messages = [{ ...answer("Done"), provider: "claude" }];
+  expect(chatSummary(chat).provider).toBe("claude");
+});
+
 it("backfills agent history for older summaries even when the thread file is old", async () => {
   const chat = thread();
   chat.messages = [
