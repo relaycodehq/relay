@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { ProjectRibbon } from "./ProjectRibbon";
 import { ProjectPicker, ScratchpadButton } from "./ProjectPicker";
@@ -12,6 +12,7 @@ export function ProjectHeadlinePicker({
   onSelect,
   onAdd,
   onScratch,
+  children,
 }: {
   project: Project;
   projects: Project[];
@@ -19,6 +20,8 @@ export function ProjectHeadlinePicker({
   onAdd: () => void;
   /** Absent where no Scratchpad thread can start, like a thread window. */
   onScratch?: () => void;
+  /** What the headline shows in place of the project's name. */
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -33,10 +36,14 @@ export function ProjectHeadlinePicker({
       <Popover.Trigger
         type="button"
         className="headline-project-trigger"
-        title={project.path}
+        title={project.scratch ? undefined : project.path}
       >
-        <span className="headline-project-name">{project.name}</span>
-        <ProjectRibbon key={project.id} />
+        {children ?? (
+          <>
+            <span className="headline-project-name">{project.name}</span>
+            <ProjectRibbon key={project.id} />
+          </>
+        )}
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner

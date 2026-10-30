@@ -58,6 +58,12 @@ test("⌘⇧N opens a Scratchpad chat in a folder of its own, outside Projects",
     await expect(sidebar.locator(".sb-project")).toHaveCount(0);
     expect(await folders()).toHaveLength(1);
 
+    // Its headline picks a project like any other thread's.
+    await headline.getByRole("button").click();
+    await expect(picker).toContainText("No projects yet");
+    await page.keyboard.press("Escape");
+    await expect(picker).toHaveCount(0);
+
     // Leaving it unused and opening another keeps the one folder.
     await page.keyboard.press("ControlOrMeta+Shift+N");
     await expect(headline).toBeVisible();

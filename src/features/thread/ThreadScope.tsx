@@ -174,7 +174,16 @@ export function ThreadIntroduction({
     return (
       <div className="thread-introduction">
         <h1 aria-label="What should we work on in Scratchpad?">
-          What should we work on in <ScratchpadWord />?
+          What should we work on in{" "}
+          <ProjectHeadlinePicker
+            project={project}
+            projects={projects}
+            onSelect={onSwitchProject}
+            onAdd={onAddProject}
+          >
+            <ScratchpadWord />
+          </ProjectHeadlinePicker>
+          ?
         </h1>
       </div>
     );
