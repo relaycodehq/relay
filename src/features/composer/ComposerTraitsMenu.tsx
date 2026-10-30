@@ -10,6 +10,17 @@ export type TraitSection = {
   value: string;
   options: { value: string; label: string; short?: string }[];
   onChange: (value: string) => void;
+  /** An on/off choice under the options, like Claude's Ultrathink. */
+  toggle?: TraitToggle;
+};
+
+type TraitToggle = {
+  label: string;
+  /** What it applies to, in muted text after the label. */
+  note?: string;
+  className?: string;
+  checked: boolean;
+  onChange: () => void;
 };
 
 /**
@@ -80,6 +91,7 @@ export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({
                       </Menu.RadioItem>
                     ))}
                   </Menu.RadioGroup>
+                  {section.toggle && <ToggleItem toggle={section.toggle} />}
                 </Menu.Group>
               </Fragment>
             ))}
@@ -89,3 +101,22 @@ export const ComposerTraitsMenu = memo(function ComposerTraitsMenu({
     </Menu.Root>
   );
 });
+
+function ToggleItem({ toggle }: { toggle: TraitToggle }) {
+  return (
+    <Menu.CheckboxItem
+      className={`composer-select-item ${toggle.className ?? ""}`}
+      checked={toggle.checked}
+      onCheckedChange={toggle.onChange}
+      closeOnClick
+    >
+      <span>
+        <span className="trait-toggle-label">{toggle.label}</span>
+        {toggle.note && <small>{toggle.note}</small>}
+      </span>
+      <Menu.CheckboxItemIndicator>
+        <Check size={13} />
+      </Menu.CheckboxItemIndicator>
+    </Menu.CheckboxItem>
+  );
+}

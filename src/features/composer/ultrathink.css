@@ -1,0 +1,55 @@
+:root {
+  --ultrathink-colors:
+    oklch(0.72 0.2 25), oklch(0.8 0.16 70), oklch(0.88 0.17 105),
+    oklch(0.78 0.19 150), oklch(0.76 0.14 225), oklch(0.66 0.2 285),
+    oklch(0.72 0.22 340), oklch(0.72 0.2 25);
+}
+
+/* The ring takes the border's place; the border keeps its width so the
+   composer doesn't change size under the thread. */
+.project-composer[data-ultrathink] {
+  border-color: transparent;
+}
+.ultrathink-ring {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  padding: 1.5px;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: content-box, border-box;
+  mask-composite: exclude;
+}
+/* A square wider than the composer's diagonal turns behind the ring, so
+   only a transform moves. */
+.ultrathink-ring::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 150%;
+  aspect-ratio: 1;
+  background: conic-gradient(var(--ultrathink-colors));
+  transform: translate(-50%, -50%);
+  animation: ultrathink-spin 5s steps(100) infinite;
+}
+@keyframes ultrathink-spin {
+  to {
+    transform: translate(-50%, -50%) rotate(1turn);
+  }
+}
+
+.project-composer[data-ultrathink] .ultrathink-word,
+.ultrathink-item .trait-toggle-label {
+  background: linear-gradient(90deg, var(--ultrathink-colors));
+  background-clip: text;
+  color: transparent;
+  caret-color: var(--text);
+}
+.ultrathink-item small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}

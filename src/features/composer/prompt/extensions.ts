@@ -7,6 +7,7 @@ import { promptText } from "../prompt-text";
 import { ComposerDictation } from "./dictation";
 import { ImageTag } from "./image-pill";
 import { FileTag, Paste, Quote, Skill } from "./pills";
+import { UltrathinkWord } from "./ultrathink-word";
 
 /** The most characters a message holds. */
 const LIMIT = 32000;
@@ -82,4 +83,5 @@ export const promptExtensions = () => [
   FileTag,
   ImageTag,
   ComposerDictation,
+  UltrathinkWord,
 ];

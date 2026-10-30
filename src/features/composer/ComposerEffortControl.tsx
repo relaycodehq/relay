@@ -16,16 +16,20 @@ import { useEffortKeysLabel } from "../quick-switch/effort-shortcut";
 import type { AgentRuns } from "./useAgentRuns";
 import { ComposerSelect } from "../../ui/ComposerSelect";
 import { ComposerTraitsMenu, type TraitSection } from "./ComposerTraitsMenu";
+import type { Ultrathink } from "./ultrathink";
 
 /** The recipient's reasoning effort, with Fast mode where it has one and Claude's context window. */
 export function ComposerEffortControl({
   to,
   runs,
   codexModels,
+  ultrathink,
 }: {
   to: AgentProvider;
   runs: AgentRuns;
   codexModels: AgentModel[];
+  /** Claude's keyword for thinking harder on the message being written. */
+  ultrathink?: Ultrathink;
 }) {
   const { codex, levels } = runs;
   const effortKeys = useEffortKeysLabel();
@@ -48,7 +52,7 @@ export function ComposerEffortControl({
         : [],
     [codex, codexModels, levels.codex],
   );
-  const claudeTraits = useClaudeTraits(runs, hint);
+  const claudeTraits = useClaudeTraits(runs, hint, ultrathink);
   const fast = runs.fastOf(to);
   const fastButton = runs.offersFast(to) && (
     <button
@@ -107,10 +111,11 @@ export function ComposerEffortControl({
   );
 }
 
-/** Claude's menu: its reasoning effort and context window. */
+/** Claude's menu: reasoning effort, with Ultrathink for the next message, and its context window. */
 function useClaudeTraits(
   runs: AgentRuns,
   hint: string | undefined,
+  ultrathink: Ultrathink | undefined,
 ): TraitSection[] {
   const { claude, claudeEfforts, claudeRuns, levels } = runs;
   return useMemo(
@@ -135,6 +140,15 @@ function useClaudeTraits(
               ],
               onChange: (value: string) =>
                 runs.setEffort("claude", reasoningEffortSchema.parse(value)),
+              ...(ultrathink && {
+                toggle: {
+                  label: "Ultrathink",
+                  note: "this message",
+                  className: "ultrathink-item",
+                  checked: ultrathink.on,
+                  onChange: ultrathink.toggle,
+                },
+              }),
             },
           ]
         : []),
@@ -160,6 +174,7 @@ function useClaudeTraits(
       claudeEfforts.join(),
       levels.claude,
       hint,
+      ultrathink,
     ],
   );
 }

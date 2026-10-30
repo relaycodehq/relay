@@ -28,6 +28,7 @@ import { OtherDraftNotice } from "./OtherDraftNotice";
 import { useComposerSend } from "./useComposerSend";
 import { composerKeys } from "./composer-keys";
 import { CompactFirstBox, useCompactFirst } from "./compact-first";
+import { UltrathinkRing, useUltrathink } from "./ultrathink";
 import { useComposerSettings } from "./useComposerSettings";
 import { useModelCatalogs } from "./useModelCatalogs";
 import { usePromptHistory } from "./usePromptHistory";
@@ -240,6 +241,7 @@ export function ProjectComposer({
   useToolbarFit(tools);
   const [viewingPaste, setViewingPaste] = useState<number>();
   const to = draftRecipient(draft.text, composer.provider);
+  const ultrathink = useUltrathink(to, draft.text, promptInput);
   const setup = useAgentSetup({
     provider: to,
     providers: Object.keys(runs.picker) as AgentProvider[],
@@ -406,11 +408,13 @@ export function ProjectComposer({
       <form
         ref={form}
         className="project-composer"
+        data-ultrathink={ultrathink?.on || undefined}
         onSubmit={(e) => {
           e.preventDefault();
           void sending.send({ steer: runningAction === "steer" });
         }}
       >
+        {ultrathink?.on && <UltrathinkRing />}
         <div className="composer-body">
           {attachment?.view}
           <ComposerAttachmentStrip
@@ -527,6 +531,7 @@ export function ProjectComposer({
                     to={to}
                     runs={runs}
                     codexModels={catalogs.codex}
+                    ultrathink={ultrathink}
                   />
                 ),
               context: meter,

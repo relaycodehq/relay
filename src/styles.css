@@ -1577,7 +1577,8 @@ body.resizing-table-column {
     .compaction-dots
   ),
 :root[data-inactive] .sb-status.waiting i::after,
-:root[data-inactive] .thinking-glyph::before {
+:root[data-inactive] .thinking-glyph::before,
+:root[data-inactive] .ultrathink-ring::before {
   animation-play-state: paused;
 }
 .modal {
