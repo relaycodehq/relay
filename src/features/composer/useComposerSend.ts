@@ -97,17 +97,21 @@ export function useComposerSend({
     ) {
       if (busy || sending.current || !settings) return;
       sending.current = true;
-      const outgoing = draft.take(false);
       try {
+        const prepared = await preparedImages(draft, btw.args);
+        if (!prepared) return;
+        const outgoing = draft.take(true);
         const sent = await onSend(
-          buildSend(settings, `@${to} ${btw.args}`, {
+          buildSend(settings, `@${to} ${prepared.body}`, {
             side: true,
             sendAt,
+            images: prepared.images,
           }),
           outgoing.dispatch,
         );
-        if (!sent) outgoing.restore();
-        else after?.();
+        if (!sent) return outgoing.restore();
+        await outgoing.forget();
+        after?.();
       } finally {
         sending.current = false;
       }
@@ -115,17 +119,11 @@ export function useComposerSend({
     }
     if (busy || intercept()) return;
     if (disabled || sending.current || !settings) return;
-    const outgoingImages = numberImages(draft.text.trim(), draft.images);
-    const body = outgoingImages.text;
     sending.current = true;
     try {
-      let flattened: DraftImage[];
-      try {
-        flattened = await Promise.all(outgoingImages.images.map(flattenSketch));
-      } catch {
-        draft.setError("Could not apply the drawing to the screenshot.");
-        return;
-      }
+      const prepared = await preparedImages(draft, draft.text.trim());
+      if (!prepared) return;
+      const { body, images } = prepared;
       const outgoing = draft.take(true);
       const sent = await onSend(
         buildSend(settings, body, {
@@ -133,12 +131,7 @@ export function useComposerSend({
           sendAt,
           skills: draft.skills(body),
           compact,
-          images: flattened.map(({ name, mimeType, dataUrl, browser }) => ({
-            name,
-            mimeType,
-            dataUrl,
-            ...(browser ? { browser } : {}),
-          })),
+          images,
         }),
         outgoing.dispatch,
       );
@@ -217,4 +210,26 @@ export function useComposerSend({
       );
     },
   };
+}
+
+/**
+ * The draft's screenshots as `text` numbers them, each drawing applied, and
+ * the text they're numbered in. Undefined when a drawing couldn't be applied.
+ */
+async function preparedImages(draft: ComposerDraft, text: string) {
+  const numbered = numberImages(text, draft.images);
+  let flattened: DraftImage[];
+  try {
+    flattened = await Promise.all(numbered.images.map(flattenSketch));
+  } catch {
+    draft.setError("Could not apply the drawing to the screenshot.");
+    return undefined;
+  }
+  const images = flattened.map(({ name, mimeType, dataUrl, browser }) => ({
+    name,
+    mimeType,
+    dataUrl,
+    ...(browser ? { browser } : {}),
+  }));
+  return { body: numbered.text, images };
 }

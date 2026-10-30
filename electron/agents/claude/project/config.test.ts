@@ -6,6 +6,7 @@ import {
 import {
   claudePermissionMode,
   linkedFolders,
+  sessionConfig,
   sessionSignature,
   type ClaudeRunOptions,
 } from "./config";
@@ -66,4 +67,41 @@ it("restarts the session when a link's folder or access changes, not its note", 
   expect(signature([api])).not.toBe(signature([]));
   expect(signature([{ ...api, access: "write" }])).not.toBe(signature([api]));
   expect(signature([{ ...api, note: "the backend" }])).toBe(signature([api]));
+});
+
+it("sets a side conversation up as its thread, so its fork reads the thread's cache", () => {
+  const thread: ClaudeRunOptions = {
+    job: { kind: "prompt" },
+    cwd: "/project",
+    prompt: "",
+    choice: {} as never,
+    model: "opus",
+    effort: "high",
+    signal: new AbortController().signal,
+    onText() {},
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    relayTools: { url: "http://127.0.0.1:1/mcp", token: "t", renders: "auto" },
+  };
+  const side: ClaudeRunOptions = {
+    ...thread,
+    job: { kind: "side" },
+    readOnly: true,
+  };
+  const { permissionMode: threadMode, ...threadSetup } = sessionConfig(
+    thread,
+    "/usr/bin/claude",
+    true,
+    {},
+  );
+  const { permissionMode: sideMode, ...sideSetup } = sessionConfig(
+    side,
+    "/usr/bin/claude",
+    true,
+    {},
+  );
+  // Same tools, MCP servers and system prompt; only asking differs.
+  expect(sideSetup).toEqual(threadSetup);
+  expect(threadMode).toBe("bypassPermissions");
+  expect(sideMode).toBe("default");
 });

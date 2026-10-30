@@ -65,6 +65,50 @@ it("preserves Send later when the draft starts with /btw", async () => {
   expect(after).toHaveBeenCalledOnce();
 });
 
+it("sends the draft's screenshot with a /btw", async () => {
+  const onSend = vi.fn(async (_value: unknown) => true);
+  const settings: SendSettings = {
+    to: "claude",
+    choice: { model: "", reasoningEffort: "", fast: false },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+  };
+  const outgoing = { dispatch: vi.fn(), restore: vi.fn(), forget: vi.fn() };
+  const take = vi.fn(() => outgoing);
+  const screenshot = {
+    id: "shot",
+    name: "screen.png",
+    mimeType: "image/png",
+    dataUrl: "data:image/png;base64,AAAA",
+  };
+  const sending = mount(() =>
+    useComposerSend({
+      draft: {
+        text: "/btw What's on this screen?",
+        attached: [screenshot],
+        images: [screenshot],
+        preparing: false,
+        isPreparing: () => false,
+        take,
+      } as never,
+      state: {} as never,
+      runs: { claude: true, sendSettings: () => settings } as never,
+      to: "claude",
+      conversation: { busy: false, running: true },
+      complete: false,
+      intercept: () => false,
+      onSend,
+    }),
+  );
+  await sending().send();
+  expect(take).toHaveBeenCalledWith(true);
+  expect(onSend.mock.calls[0]![0]).toMatchObject({
+    side: true,
+    images: [{ name: "screen.png", mimeType: "image/png" }],
+  });
+  expect(outgoing.forget).toHaveBeenCalledOnce();
+});
+
 it("sends a meme's line once while the first send is on its way", async () => {
   let accept!: (sent: boolean) => void;
   const onSend = vi.fn(

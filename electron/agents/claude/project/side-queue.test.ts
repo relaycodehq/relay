@@ -69,18 +69,4 @@ describe("SideQueue", () => {
       vi.useRealTimers();
     }
   });
-
-  it("puts one someone waits on ahead of the background ones still waiting", async () => {
-    const queue = new SideQueue();
-    const { job, order } = tracker();
-    const a = gate();
-    const first = queue.run(job("check", a.opened), live());
-    const rest = [
-      queue.run(job("guess", Promise.resolve()), live()),
-      queue.run(job("btw", Promise.resolve()), live(), { urgent: true }),
-    ];
-    a.open();
-    await Promise.all([first, ...rest]);
-    expect(order).toEqual(["check", "btw", "guess"]);
-  });
 });

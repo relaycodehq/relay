@@ -5,8 +5,10 @@ import {
   type AgentQuestion,
   type AskAgentRequest,
 } from "../../../../shared/agent-modes";
-import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
+import type { ClaudeRunOptions } from "./config";
+import { RELAY_SERVER } from "../../../relay-mcp";
 import { ANSWER_LIMIT } from "../../turn-kit";
+import { sideInstructions } from "../../instructions";
 
 /** The session a request comes from, as answering it needs. */
 type Asker = {
@@ -16,23 +18,33 @@ type Asker = {
   plan: string;
 };
 
+/**
+ * Relay's private note for a prompt, out of the transcript. A side
+ * conversation hears what it is here: changing its instructions would miss
+ * the thread's cache.
+ */
+async function promptNote(holder: Asker) {
+  // Claude Code holds the prompt until this returns; a slow scan just skips the note.
+  const note = await Promise.race([
+    holder.options.context?.().catch(() => undefined),
+    new Promise<undefined>((r) => setTimeout(() => r(undefined), 3000)),
+  ]);
+  const side =
+    holder.options.job.kind === "side" ? sideInstructions : undefined;
+  const context = [side, note].filter(Boolean).join("\n\n");
+  return context
+    ? {
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit" as const,
+          additionalContext: context,
+        },
+      }
+    : {};
+}
+
 /** What Claude Code asks of Relay while a session runs, answered with the current turn's options. */
 export function sessionCallbacks(holder: Asker) {
-  const promptSubmit = async () => {
-    // Claude Code holds the prompt until this returns; a slow scan just skips the note.
-    const note = await Promise.race([
-      holder.options.context?.().catch(() => undefined),
-      new Promise<undefined>((r) => setTimeout(() => r(undefined), 3000)),
-    ]);
-    return note
-      ? {
-          hookSpecificOutput: {
-            hookEventName: "UserPromptSubmit" as const,
-            additionalContext: note,
-          },
-        }
-      : {};
-  };
+  const promptSubmit = () => promptNote(holder);
   const canUseTool: NonNullable<Options["canUseTool"]> = async (
     tool,
     input,
@@ -40,7 +52,7 @@ export function sessionCallbacks(holder: Asker) {
   ) => {
     await holder.ready?.promise;
     const options = holder.options;
-    // A reviewer or a Read only thread leaves the checkout as it found it, unattended.
+    // A reviewer, a Read only thread or a /btw changes nothing, unattended.
     if (options.readOnly) {
       if (tool === "AskUserQuestion" || tool === "ExitPlanMode")
         return {

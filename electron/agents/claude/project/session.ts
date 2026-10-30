@@ -30,7 +30,7 @@ import {
   linksSignature,
   type ClaudeRunOptions,
 } from "./config";
-import { readOnlyBashHook } from "../../../agent-host/read-only-bash";
+import { readOnlyHook } from "../../../agent-host/read-only-tools";
 import { relayPromptTokens } from "./context";
 import { ClaudeWork } from "./pending";
 import { hostedHandlers, sessionCallbacks } from "./requests";
@@ -114,50 +114,46 @@ export type ClaudeSession = {
   goal?: ClaudeGoalWatch;
   /** What its side questions cost; made with the first frame it reads. */
   meter?: ClaudeMeter;
-  /** Its side questions, one at a time so the meter measures each alone. */
+  /** Its side checks, one at a time so the meter measures each alone. */
   asking?: SideQueue;
   /** Side checks for "Flag what I'd miss"; made the first time a turn asks for them. */
   watch?: { checks: WatchChecks; subagents: SubagentWatch };
 };
 
 /**
- * Measures the session's side questions, `/btw` and the watcher's checks.
- * It reads every frame from the first, so a question asked mid-turn can
- * take the turn's own requests back out.
+ * Measures the session's side questions: the watcher's checks and the
+ * next-message guess. It reads every frame from the first, so a question
+ * asked mid-turn can take the turn's own requests back out.
  */
 export function meterOf(session: ClaudeSession) {
   session.meter ??= new ClaudeMeter(() => sessionTotals(session.stream));
   return session.meter;
 }
 
-/** How long a background side question may run, and so hold the others up. */
+/** How long a side question may run, and so hold the others up. */
 const ASK_LIMIT_MS = 120_000;
 
 /**
  * A measured side question to the live session, after any asked before it.
- * `/btw`, the watcher's checks and the next-message guess all queue here;
- * `urgent` is for one someone waits on, which goes ahead of the background
- * ones and runs as long as it takes. Undefined when the session ended
- * while it waited.
+ * The watcher's checks and the next-message guess queue here. Undefined
+ * when the session ended while it waited.
  */
 export function measuredAsk(
   session: ClaudeSession,
   signal: AbortSignal,
   ask: (stream: ClaudeStream, signal: AbortSignal) => Promise<string | null>,
-  urgent = false,
 ) {
-  const limit = urgent ? undefined : ASK_LIMIT_MS;
   return (session.asking ??= new SideQueue()).run(
     async () => {
       if (session.frames.ended) return undefined;
-      const within =
-        limit === undefined
-          ? signal
-          : AbortSignal.any([signal, AbortSignal.timeout(limit)]);
+      const within = AbortSignal.any([
+        signal,
+        AbortSignal.timeout(ASK_LIMIT_MS),
+      ]);
       return meterOf(session).measure(() => ask(session.stream, within));
     },
     signal,
-    { urgent, holdMs: limit },
+    { holdMs: ASK_LIMIT_MS },
   );
 }
 
@@ -321,7 +317,7 @@ export async function startSession(
           // Relay's private environment note reaches Claude without entering the transcript.
           UserPromptSubmit: [{ hooks: [promptSubmit] }],
           ...(holder.options.readOnly
-            ? { PreToolUse: [{ matcher: "Bash", hooks: [readOnlyBashHook] }] }
+            ? { PreToolUse: [{ hooks: [readOnlyHook] }] }
             : {}),
         },
         canUseTool,
@@ -372,7 +368,7 @@ function openHosted(holder: ClaudeSession, config: Options, key?: string) {
       hooks: {
         Stop: "record",
         UserPromptSubmit: { ask: true, timeout: 4000 },
-        ...(options.readOnly ? { PreToolUse: "readOnlyBash" as const } : {}),
+        ...(options.readOnly ? { PreToolUse: "readOnly" as const } : {}),
       },
       handlers: hostedHandlers(holder),
     }),

@@ -274,6 +274,13 @@ export class ClaudeTurnReader {
     if (stopped) throw stopped;
     if (failed) {
       const reason = this.failures.reason(message);
+      // A new session is saved once Claude takes its first prompt in, after
+      // loading MCP servers: a fork asked before that has nothing to copy.
+      const unsaved = reason?.startsWith("No conversation found");
+      if (this.options.session?.fork && unsaved)
+        throw new Error(
+          "Claude hasn't saved this thread yet. Ask again in a moment.",
+        );
       throw new Error(
         reason
           ? `Claude could not complete this turn: ${reason}`

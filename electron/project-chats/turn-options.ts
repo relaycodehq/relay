@@ -111,8 +111,8 @@ function accessOf(core: ChatCore, { chat, input, rules }: TurnState) {
     core.store.get().renderMode,
     !!chat.importFrom,
   );
-  const readOnly =
-    !!chat.reviewer || !!rules.side || input.runtimeMode === "read-only";
+  const threadReadOnly = !!chat.reviewer || input.runtimeMode === "read-only";
+  const readOnly = threadReadOnly || !!rules.side;
   const options: Pick<
     AgentOptions,
     "runtimeMode" | "interactionMode" | "readOnly" | "relayTools" | "onRequest"
@@ -122,10 +122,13 @@ function accessOf(core: ChatCore, { chat, input, rules }: TurnState) {
         ? "approval-required"
         : input.runtimeMode,
     interactionMode: input.interactionMode,
-    // Read only runs as a reviewer does: no writes, MCP servers or Relay's tools.
+    // Read only runs as a reviewer does: no writes, MCP servers or Relay's
+    // tools. A side conversation changes nothing either.
     ...(readOnly ? { readOnly } : {}),
     // A started thread only gets the reading ones: no threads of threads.
-    ...(relayTools && !readOnly ? { relayTools } : {}),
+    // A side conversation gets its thread's, so its fork can keep the
+    // thread's cache; held to reading, it can't act with them.
+    ...(relayTools && !threadReadOnly ? { relayTools } : {}),
     // The thread's running answer owns its requests; a side turn asks none.
     onRequest: rules.side ? undefined : core.active.get(chat.id)?.requests.ask,
   };

@@ -1,11 +1,10 @@
 /**
  * A session's side questions, one at a time: they share its meter, and two
- * at once would each count the other's requests as their own. One someone
- * waits on (`/btw`) goes ahead of the background ones still waiting.
+ * at once would each count the other's requests as their own.
  */
 export class SideQueue {
   private running = false;
-  private waiting: { urgent: boolean; start: () => void }[] = [];
+  private waiting: { start: () => void }[] = [];
 
   /**
    * Runs `work` once the ones before it are done. Cancelled while it waits,
@@ -15,12 +14,11 @@ export class SideQueue {
   run<T>(
     work: () => Promise<T>,
     signal: AbortSignal,
-    options: { urgent?: boolean; holdMs?: number } = {},
+    options: { holdMs?: number } = {},
   ): Promise<T> {
     if (signal.aborted) return Promise.reject(signal.reason);
     return new Promise<T>((resolve, reject) => {
       const entry = {
-        urgent: !!options.urgent,
         start: () => {
           signal.removeEventListener("abort", cancel);
           this.running = true;
@@ -46,9 +44,7 @@ export class SideQueue {
       };
       if (!this.running) return entry.start();
       signal.addEventListener("abort", cancel, { once: true });
-      const at = entry.urgent ? this.waiting.findIndex((e) => !e.urgent) : -1;
-      if (at < 0) this.waiting.push(entry);
-      else this.waiting.splice(at, 0, entry);
+      this.waiting.push(entry);
     });
   }
 

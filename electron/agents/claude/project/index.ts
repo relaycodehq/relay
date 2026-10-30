@@ -16,7 +16,6 @@ export {
   stopClaudeTask,
 } from "./live";
 export { readClaudeUsage } from "./usage";
-export { askClaudeSide, type SideExchange } from "./side";
 export { claudeCacheTtl, claudeContextTokens } from "./context";
 export {
   claudeDefaults,

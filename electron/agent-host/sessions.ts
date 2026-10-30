@@ -21,7 +21,7 @@ import {
   type SessionInfo,
 } from "./protocol";
 import { AsyncQueue } from "../util/async-queue";
-import { readOnlyBashHook } from "./read-only-bash";
+import { readOnlyHook } from "./read-only-tools";
 import { terminate } from "../platform/terminate";
 import { errorMessage } from "../../shared/error-message";
 import { LineBuffer } from "../util/line-buffer";
@@ -175,8 +175,8 @@ export class ClaudeSession extends HostSession {
       HookMode,
     ][])
       matchers[event] =
-        mode === "readOnlyBash"
-          ? [{ matcher: "Bash", hooks: [readOnlyBashHook] }]
+        mode === "readOnly"
+          ? [{ hooks: [readOnlyHook] }]
           : [
               {
                 hooks: [

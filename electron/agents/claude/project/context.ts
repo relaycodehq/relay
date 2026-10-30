@@ -12,7 +12,8 @@ import {
   type RelayShare,
 } from "../../../../shared/context-report";
 import type { ContextUsage, PromptCache } from "../../../../shared/projects";
-import { RELAY_SERVER, type ClaudeRunOptions } from "./config";
+import type { ClaudeRunOptions } from "./config";
+import { RELAY_SERVER } from "../../../relay-mcp";
 import type { ClaudeSession } from "./session";
 
 /** How full a turn's context window is, and how long its cache stays warm. */

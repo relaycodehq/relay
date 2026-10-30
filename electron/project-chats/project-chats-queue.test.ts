@@ -765,7 +765,7 @@ const captured = async () =>
     .split("\n")
     .map((line) => JSON.parse(line));
 
-it("answers /btw from Claude's session beside its running turn, and remembers the side thread", async () => {
+it("asks /btw of a read-only Claude fork beside its running turn, screenshots included", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   const claude = (body: string) => ({
     ...input(body),
@@ -778,6 +778,13 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
   const question = {
     ...claude("@claude where is the cache guard?"),
     side: true as const,
+    images: [
+      {
+        name: "screen.png",
+        mimeType: "image/png" as const,
+        dataUrl: `data:image/png;base64,${tinyPng}`,
+      },
+    ],
   };
   await chats.send(chat.id, question);
   const answered = async () => {
@@ -785,33 +792,24 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
     const answers = saved.messages.filter(
       (m) => m.parentId === question.id && m.role === "assistant",
     );
+    expect(answers.length).toBeGreaterThan(0);
     expect(answers.every((m) => m.status === "complete")).toBe(true);
     return { saved, answers };
   };
   const first = await vi.waitFor(answered);
-  expect(first.answers.map((m) => m.body)).toEqual([
-    "On the side: where is the cache guard?",
-  ]);
   expect(first.saved.messages.find((m) => m.id === question.id)?.side).toBe(
     true,
   );
   // The main turn kept running, and nothing waited behind it.
   expect(first.saved.messages[1]!.status).toBe("streaming");
   expect(first.saved.queue ?? []).toEqual([]);
-  // Claude's side question is text only: a screenshot fails loudly, not silently.
-  await expect(
-    chats.send(chat.id, {
-      ...claude("@claude what's in this?"),
-      parentId: question.id,
-      images: [
-        {
-          name: "screen.png",
-          mimeType: "image/png",
-          dataUrl: `data:image/png;base64,${tinyPng}`,
-        },
-      ],
-    }),
-  ).rejects.toThrow("can't see screenshots in a side conversation");
+  const forks = async () =>
+    (await captured()).filter((c) => c.args?.includes("--fork-session"));
+  // The whole main session, its running turn included, in a copy of its own.
+  const [fork] = await forks();
+  expect(fork.args).toContain("--resume=fixture-claude");
+  expect(fork.args.join(" ")).not.toContain("--resume-session-at");
+  expect(fork.prompt).toContain('"type":"image"');
   await chats.send(chat.id, {
     ...claude("@claude and why?"),
     parentId: question.id,
@@ -819,17 +817,13 @@ it("answers /btw from Claude's session beside its running turn, and remembers th
   await vi.waitFor(async () =>
     expect((await answered()).answers).toHaveLength(2),
   );
-  const asked = (await captured()).filter((c) => c.side);
-  expect(asked.map((c) => c.side.question)).toEqual([
-    "where is the cache guard?",
-    "and why?",
-  ]);
-  expect(asked[1].side.history).toEqual([
-    {
-      question: "where is the cache guard?",
-      response: "On the side: where is the cache guard?",
-    },
-  ]);
+  // The follow-up goes to the side's own session, not a second copy.
+  const followUp = (await forks()).at(-1);
+  expect(followUp.prompt).toContain("and why?");
+  expect(followUp.pid).toBe(fork.pid);
+  expect((await chats.get(chat.id)).sessions?.claude?.thread).toBe(
+    "fixture-claude",
+  );
 });
 
 it("fails a /btw question outright when its folder is gone, instead of leaving an answer streaming", async () => {

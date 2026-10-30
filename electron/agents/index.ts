@@ -16,7 +16,6 @@ import {
 import { runClaude } from "./claude/claude";
 import { openCodeRuntime } from "./opencode";
 import {
-  askClaudeSide,
   claudeDefaults,
   claudeSubagents,
   closeClaudeSession,
@@ -47,7 +46,11 @@ import {
 } from "../../shared/agent-defaults";
 
 const codex: AgentRuntime = {
-  run: runCodex,
+  // A read-only turn, a side question's included, works without Relay's tools.
+  run: (options) =>
+    runCodex(
+      options.readOnly ? { ...options, relayTools: undefined } : options,
+    ),
   closeSession: (key) => {
     codexSubagentBooks.drop(key);
     return closeCodexConnection(key).catch(() => {});
@@ -83,8 +86,6 @@ const claude: AgentRuntime = {
     return defaults ? claudeAgentDefaults(defaults, models) : null;
   },
   commands: listClaudeCommands,
-  askSide: ({ choice, ...options }) =>
-    askClaudeSide({ ...options, model: claudeArgs(choice).model }),
   reattach: reattachClaudeSessions,
 };
 

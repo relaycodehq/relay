@@ -11,6 +11,10 @@ import type { RenderMode } from "../../shared/html-render";
 import { DEV_PARAM, IMPORT_PARAM, PAGES_PARAM, STARTED_PATH } from "./tools";
 
 export { serveRelayTools, type McpHandlers } from "./server";
+
+/** The MCP server name Relay's tools go by, so Claude reaches them as `mcp__relay__…`. */
+export const RELAY_SERVER = "relay";
+
 export { relayToolLabel, relayToolsWhere } from "./tool-meta";
 export { startedNote } from "./started-note";
 export {
