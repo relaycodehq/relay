@@ -15,7 +15,7 @@ import {
 import { useEffortKeysLabel } from "../quick-switch/effort-shortcut";
 import type { AgentRuns } from "./useAgentRuns";
 import { ComposerSelect } from "../../ui/ComposerSelect";
-import { ComposerTraitsMenu } from "./ComposerTraitsMenu";
+import { ComposerTraitsMenu, type TraitSection } from "./ComposerTraitsMenu";
 
 /** The recipient's reasoning effort, with Fast mode where it has one and Claude's context window. */
 export function ComposerEffortControl({
@@ -27,7 +27,7 @@ export function ComposerEffortControl({
   runs: AgentRuns;
   codexModels: AgentModel[];
 }) {
-  const { codex, claude, claudeEfforts, claudeRuns, levels } = runs;
+  const { codex, levels } = runs;
   const effortKeys = useEffortKeysLabel();
   const hint = effortKeys || undefined;
   const codexOptions = useMemo(
@@ -48,55 +48,7 @@ export function ComposerEffortControl({
         : [],
     [codex, codexModels, levels.codex],
   );
-  const claudeTraits = useMemo(
-    () => [
-      ...(claudeEfforts.length > 0
-        ? [
-            {
-              label: "Reasoning",
-              hint,
-              value: claude.reasoningEffort,
-              options: [
-                {
-                  value: "",
-                  label: defaultEffortLabel(levels.claude),
-                  short: defaultEffortShort(levels.claude),
-                },
-                ...claudeEfforts.map((value) => ({
-                  value,
-                  label: effortLabels[value],
-                  short: effortShortLabels[value],
-                })),
-              ],
-              onChange: (value: string) =>
-                runs.setEffort("claude", reasoningEffortSchema.parse(value)),
-            },
-          ]
-        : []),
-      ...(claudeRuns?.longContext
-        ? [
-            {
-              label: "Context window",
-              value: claude.contextWindow ?? "1m",
-              options: [
-                { value: "200k", label: "200k" },
-                { value: "1m", label: "1M" },
-              ],
-              onChange: (value: string) =>
-                runs.setContextWindow(value === "200k" ? "200k" : "1m"),
-            },
-          ]
-        : []),
-    ],
-    // The efforts list is rebuilt each render; its contents are what matter.
-    [
-      claude,
-      claudeRuns?.longContext,
-      claudeEfforts.join(),
-      levels.claude,
-      hint,
-    ],
-  );
+  const claudeTraits = useClaudeTraits(runs, hint);
   const fast = runs.fastOf(to);
   const fastButton = runs.offersFast(to) && (
     <button
@@ -152,5 +104,62 @@ export function ComposerEffortControl({
       )}
       {fastButton}
     </>
+  );
+}
+
+/** Claude's menu: its reasoning effort and context window. */
+function useClaudeTraits(
+  runs: AgentRuns,
+  hint: string | undefined,
+): TraitSection[] {
+  const { claude, claudeEfforts, claudeRuns, levels } = runs;
+  return useMemo(
+    () => [
+      ...(claudeEfforts.length > 0
+        ? [
+            {
+              label: "Reasoning",
+              hint,
+              value: claude.reasoningEffort,
+              options: [
+                {
+                  value: "",
+                  label: defaultEffortLabel(levels.claude),
+                  short: defaultEffortShort(levels.claude),
+                },
+                ...claudeEfforts.map((value) => ({
+                  value,
+                  label: effortLabels[value],
+                  short: effortShortLabels[value],
+                })),
+              ],
+              onChange: (value: string) =>
+                runs.setEffort("claude", reasoningEffortSchema.parse(value)),
+            },
+          ]
+        : []),
+      ...(claudeRuns?.longContext
+        ? [
+            {
+              label: "Context window",
+              value: claude.contextWindow ?? "1m",
+              options: [
+                { value: "200k", label: "200k" },
+                { value: "1m", label: "1M" },
+              ],
+              onChange: (value: string) =>
+                runs.setContextWindow(value === "200k" ? "200k" : "1m"),
+            },
+          ]
+        : []),
+    ],
+    // The efforts list is rebuilt each render; its contents are what matter.
+    [
+      claude,
+      claudeRuns?.longContext,
+      claudeEfforts.join(),
+      levels.claude,
+      hint,
+    ],
   );
 }
