@@ -4,9 +4,10 @@ import { checkForUpdates, useUpdates } from "./updates";
 import { useRecent } from "./useRecent";
 
 /**
- * The version this Relay runs, beside the mark. While no update is under
+ * The version this Relay runs, at the brand's end. While no update is under
  * way a click looks for a newer release, which a ↻ rolling out of the number
- * on hover says; otherwise, and in a development build, it opens About.
+ * to its left on hover says; otherwise, and in a development build, it opens
+ * About.
  */
 export function RunningVersion({ onAbout }: { onAbout: () => void }) {
   const { state, checking, failure } = useUpdates();
@@ -54,7 +55,6 @@ export function RunningVersion({ onAbout }: { onAbout: () => void }) {
         void checkForUpdates();
       }}
     >
-      {dev ? "dev" : `v${state.current}`}
       {checks && (
         // Every icon stays mounted in one cell, so states cross-fade and
         // hovering never changes the button's width.
@@ -68,6 +68,7 @@ export function RunningVersion({ onAbout }: { onAbout: () => void }) {
           <AlertCircle size={12} className="sb-version-failed" />
         </span>
       )}
+      {dev ? "dev" : `v${state.current}`}
     </button>
   );
 }

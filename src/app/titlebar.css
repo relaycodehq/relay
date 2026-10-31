@@ -283,6 +283,8 @@
   flex: none;
   gap: 4px;
   margin-left: auto;
+  /* Ends where the sidebar's buttons below do, 8px in. */
+  margin-right: -4px;
   height: 24px;
   padding: 0 6px;
   border-radius: 6px;
@@ -302,8 +304,9 @@
 .shell-brand .sb-version[aria-busy] {
   cursor: default;
 }
-/* The check's icons share the cell after the number. The ↻ rolls out of the
-   number on hover and turns while checking; ✓ or ! takes over after. */
+/* The check's icons share the cell before the number, so the number stays put
+   at the brand's end. The ↻ rolls out of the number on hover and turns while
+   checking; ✓ or ! takes over after. */
 .sb-version-icon {
   display: grid;
   width: 12px;
@@ -318,7 +321,7 @@
 }
 .sb-version-turn {
   display: inline-flex;
-  transform: translateX(-6px) rotate(-180deg) scale(0.6);
+  transform: translateX(6px) rotate(180deg) scale(0.6);
 }
 .sb-version:is(:hover, :focus-visible):not([data-shows]) .sb-version-turn,
 .sb-version[data-shows="checking"] .sb-version-turn {
