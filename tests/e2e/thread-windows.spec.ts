@@ -98,7 +98,15 @@ test("a thread pops out into its own window and back, and reopens after a restar
     });
   const saved = async () =>
     JSON.parse(await readFile(join(data, "state.json"), "utf8"))
-      .threadWindows as { chatId: string }[] | undefined;
+      .threadWindows as { chatId: string; pinned?: true }[] | undefined;
+  const onTop = (app: ElectronApplication, id: string) =>
+    app.evaluate(
+      ({ BrowserWindow }, id) =>
+        BrowserWindow.getAllWindows()
+          .find((w) => w.webContents.getURL().includes(`thread=${id}`))
+          ?.isAlwaysOnTop(),
+      id,
+    );
   const quit = async (app: ElectronApplication) => {
     const closed = app.waitForEvent("close");
     await app.evaluate(({ app }) => app.quit());
@@ -173,12 +181,24 @@ test("a thread pops out into its own window and back, and reopens after a restar
     const again = app.waitForEvent("window");
     await card("Pop me out").click({ button: "right" });
     await page.getByRole("menuitem", { name: /Open in new window/ }).click();
+    const reopened = await again;
     await expect(
-      (await again).getByText("Answer in the popped thread"),
+      reopened.getByText("Answer in the popped thread"),
     ).toBeVisible();
     await expect
       .poll(async () => (await saved())?.map((w) => w.chatId))
       .toEqual([popped.id]);
+
+    // Pinned, it stays on top of other apps' windows.
+    expect(await onTop(app, popped.id)).toBe(false);
+    await reopened
+      .getByRole("button", { name: "Keep on top of other apps" })
+      .click();
+    await expect.poll(() => onTop(app, popped.id)).toBe(true);
+    await expect(
+      reopened.getByRole("button", { name: "Stop keeping on top" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(async () => (await saved())?.[0]?.pinned).toBe(true);
     await quit(app);
   } catch (e) {
     await app.close().catch(() => {});
@@ -194,6 +214,11 @@ test("a thread pops out into its own window and back, and reopens after a restar
       .find((w) => new URL(w.url()).searchParams.get("thread") === popped.id)!;
     await expect(own.getByText("Answer in the popped thread")).toBeVisible();
     expect((await saved())?.map((w) => w.chatId)).toEqual([popped.id]);
+    // Still pinned, the button saying so.
+    expect(await onTop(app, popped.id)).toBe(true);
+    await expect(
+      own.getByRole("button", { name: "Stop keeping on top" }),
+    ).toBeVisible();
 
     // Closing it by hand drops it from the list; it doesn't come back next time.
     const gone = own.waitForEvent("close");

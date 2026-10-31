@@ -1,10 +1,12 @@
 import { app, screen, type BrowserWindow, type Rectangle } from "electron";
-import { placeOnScreen } from "../../shared/thread-windows";
+import { placeOnScreen, type PoppedPlace } from "../../shared/thread-windows";
 import { loadPage } from "./page";
 
 interface Entry<T> {
   win: BrowserWindow;
   item: T;
+  /** Stays on top of other apps' windows. */
+  pinned: boolean;
   /** Being closed as part of quitting; once it is closed, the quit carries on. */
   closingToQuit?: boolean;
 }
@@ -21,8 +23,8 @@ export interface PoppedKind<T> {
 
 /** Where the windows are kept between runs. */
 export interface PoppedStore<T> {
-  load(): (T & { bounds: Rectangle })[];
-  save(windows: (T & { bounds: Rectangle })[]): void;
+  load(): (T & PoppedPlace)[];
+  save(windows: (T & PoppedPlace)[]): void;
   /** The thing it shows is still there. */
   exists(item: T): boolean;
 }
@@ -76,12 +78,12 @@ export class PoppedWindows<T> {
   restore(store: PoppedStore<T>) {
     this.store = store;
     for (const saved of store.load())
-      if (store.exists(saved)) this.open(saved, saved.bounds, false);
+      if (store.exists(saved)) this.open(saved, saved, false);
     this.save();
   }
 
-  /** Pops `item` out, or brings its window up if it has one. */
-  open(item: T, bounds?: Rectangle, focus = true) {
+  /** Pops `item` out, or brings its window up if it has one; `place` is where it was last run. */
+  open(item: T, place?: PoppedPlace, focus = true) {
     const key = this.kind.key(item);
     const had = this.entries.get(key);
     if (had) {
@@ -92,7 +94,8 @@ export class PoppedWindows<T> {
     }
     const entry: Entry<T> = {
       item: this.kind.pick(item),
-      win: this.hooks.make(bounds && this.onScreen(bounds), () => {
+      pinned: !!place?.pinned,
+      win: this.hooks.make(place && this.onScreen(place.bounds), () => {
         if (!entry.closingToQuit) return;
         entry.closingToQuit = false;
         this.hooks.quitCancelled();
@@ -100,6 +103,7 @@ export class PoppedWindows<T> {
     };
     const { win } = entry;
     this.entries.set(key, entry);
+    if (entry.pinned) keepOnTop(win, true);
     win.on("focus", () => this.focus(key));
     win.on("blur", () => {
       if (this.focused === key) this.focus(null);
@@ -122,6 +126,25 @@ export class PoppedWindows<T> {
     void loadPage(win, this.kind.search(entry.item));
     this.save();
     this.changed();
+  }
+
+  /** Whether `win` stays on top; undefined when it isn't one of these windows. */
+  pinned(win: BrowserWindow) {
+    return this.entryOf(win)?.pinned;
+  }
+
+  /** Keeps `win` on top of other apps' windows, or stops; false when it isn't one of these windows. */
+  pin(win: BrowserWindow, pinned: boolean) {
+    const entry = this.entryOf(win);
+    if (!entry) return false;
+    entry.pinned = pinned;
+    keepOnTop(win, pinned);
+    this.save();
+    return true;
+  }
+
+  private entryOf(win: BrowserWindow) {
+    return [...this.entries.values()].find((e) => e.win === win);
   }
 
   /** Called after a window has closed and its entry is removed. */
@@ -189,9 +212,24 @@ export class PoppedWindows<T> {
     this.store.save(
       [...this.entries.values()]
         .filter((e) => !e.win.isDestroyed())
-        .map((e) => ({ ...e.item, bounds: e.win.getBounds() })),
+        .map((e) => ({
+          ...e.item,
+          bounds: e.win.getBounds(),
+          ...(e.pinned && { pinned: true as const }),
+        })),
     );
   }
+}
+
+/**
+ * Floats `win` above other apps' windows. On macOS a full-screen app is a
+ * Space of its own, which a floating window doesn't follow into unless it's
+ * on every Space.
+ */
+function keepOnTop(win: BrowserWindow, pinned: boolean) {
+  win.setAlwaysOnTop(pinned, "floating");
+  if (process.platform === "darwin")
+    win.setVisibleOnAllWorkspaces(pinned, { visibleOnFullScreen: true });
 }
 
 /** Brings a window to the front, restoring it if it was minimized. */

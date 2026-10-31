@@ -33,8 +33,7 @@ export interface SettingsCommand {
 }
 
 export type MainWindowCommand =
-  | (typeof mainWindowCommands)[number]
-  | SettingsCommand;
+  (typeof mainWindowCommands)[number] | SettingsCommand;
 
 type JumpCommand = Extract<MainWindowCommand, `jump-${string}`>;
 
@@ -80,10 +79,22 @@ export interface ThreadWindowsApi {
   onThreadMoved(callback: (thread: ThreadWindow) => void): () => void;
 }
 
-/** Where a popped thread's window was, so a restart opens it there again. */
-export interface SavedThreadWindow extends ThreadWindow {
-  bounds: { x: number; y: number; width: number; height: number };
+/** The calls behind a popped-out window, a thread's or an editor's, asked from its own page. */
+export interface PoppedWindowApi {
+  /** Whether this window stays on top of other apps' windows. */
+  windowPinned(): Promise<boolean>;
+  /** Keeps this window on top of other apps' windows, or stops. */
+  pinWindow(pinned: boolean): Promise<void>;
 }
+
+/** Where a popped-out window was and whether it stayed on top, so a restart opens it the same. */
+export interface PoppedPlace {
+  bounds: { x: number; y: number; width: number; height: number };
+  pinned?: true;
+}
+
+/** Where a popped thread's window was, so a restart opens it there again. */
+export interface SavedThreadWindow extends ThreadWindow, PoppedPlace {}
 
 export const boundsSchema = z.object({
   x: z.number().int(),
@@ -92,10 +103,14 @@ export const boundsSchema = z.object({
   height: z.number().int().min(100).max(20_000),
 });
 
-const savedSchema = z.object({
+export const poppedPlaceSchema = z.object({
+  bounds: boundsSchema,
+  pinned: z.literal(true).optional(),
+});
+
+const savedSchema = poppedPlaceSchema.extend({
   projectId: z.string().min(1),
   chatId: z.string().min(1),
-  bounds: boundsSchema,
 });
 
 /** Where the main window was and how, so the next launch opens it the same. */

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { boundsSchema } from "./thread-windows";
+import { poppedPlaceSchema, type PoppedPlace } from "./thread-windows";
 import { digestSchema } from "./validation";
 import { parseWorkspaceId } from "./workspaces";
 
@@ -25,9 +25,7 @@ export interface EditorWindowsState {
   waiting: string[];
 }
 
-export interface SavedEditorWindow extends EditorWindow {
-  bounds: { x: number; y: number; width: number; height: number };
-}
+export interface SavedEditorWindow extends EditorWindow, PoppedPlace {}
 
 /** A file's unsaved text, on its way from one window's editor to another's. */
 export interface UnsavedBuffer {
@@ -96,10 +94,9 @@ export const editorFileTargetSchema = z.object({
   snapshot: z.string().min(1).max(200).optional(),
 });
 
-const savedSchema = z.object({
+const savedSchema = poppedPlaceSchema.extend({
   projectId: z.string().min(1),
   where: z.string().min(1),
-  bounds: boundsSchema,
 });
 
 /** The saved windows that still read right; hand edits or old shapes drop out. */

@@ -4,6 +4,7 @@ import { liveAway } from "../../../shared/handoff";
 import type { ChatSummary } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
+import { PinButton } from "./PinButton";
 
 function MoveButton({
   label,
@@ -51,8 +52,24 @@ export function PopOutButton({
   );
 }
 
+/** A thread's own window's buttons: keeping it on top, and putting it back. */
+export function ThreadWindowControls({
+  chatId,
+  onError,
+}: {
+  chatId: string;
+  onError: (error: unknown) => void;
+}) {
+  return (
+    <>
+      <PinButton onError={onError} />
+      <BackButton chatId={chatId} />
+    </>
+  );
+}
+
 /** Puts a thread's own window's thread back in the main window. */
-export function BackButton({ chatId }: { chatId: string }) {
+function BackButton({ chatId }: { chatId: string }) {
   return (
     <MoveButton
       label="Back to the main window"

@@ -14,7 +14,7 @@ import type { GitActionsHandle } from "../features/changes/GitActions";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import { useUnread } from "../features/sidebar/useUnread";
-import { BackButton } from "../features/thread-windows/ThreadWindowButtons";
+import { ThreadWindowControls } from "../features/thread-windows/ThreadWindowButtons";
 import { WindowFlash } from "../features/thread-windows/WindowFlash";
 import { useJumpInMainWindow } from "../features/thread-windows/useJumpInMainWindow";
 import { ErrorBox, Loading } from "../ui/ui";
@@ -104,7 +104,7 @@ export default function ThreadWindowShell({
             tools={tools}
             project={project}
             gitActions={gitActions}
-            move={<BackButton chatId={chat.id} />}
+            move={<ThreadWindowControls chatId={chat.id} onError={setError} />}
             onConnectHost={toMain}
           />
         </div>

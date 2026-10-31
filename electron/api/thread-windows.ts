@@ -46,5 +46,21 @@ export function threadWindowHandlers(ctx: ApiContext) {
       (command) => window.runCommand(command),
     ),
     takeMainWindowCommand: () => window.takeCommand(),
+    // Pinning is the popped-out windows' own, an editor's as much as a thread's.
+    windowPinned: () => {
+      const win = window.caller();
+      if (!win) return false;
+      return window.threads.pinned(win) ?? window.editors.pinned(win) ?? false;
+    },
+    pinWindow: takes([z.boolean()], (pinned) => {
+      const win = window.caller();
+      const popped =
+        !!win &&
+        (window.threads.pin(win, pinned) || window.editors.pin(win, pinned));
+      if (!popped)
+        throw new Error(
+          "Only a thread's or an editor's own window stays on top.",
+        );
+    }),
   } satisfies Handlers;
 }

@@ -1,6 +1,7 @@
 import { BackToMainButton } from "../features/editor-windows/EditorWindowButtons";
+import { PinButton } from "../features/thread-windows/PinButton";
 
-/** The popped-out editor's title bar: the project, its checkout, and the way back to the main window. */
+/** The popped-out editor's title bar: the project, its checkout, keeping it on top, and the way back to the main window. */
 export function EditorWindowTitlebar({
   projectName,
   detail,
@@ -30,6 +31,7 @@ export function EditorWindowTitlebar({
         </div>
         <span className="spacer" />
         <div className="header-strip">
+          <PinButton onError={onError} />
           <BackToMainButton where={where} onError={onError} />
         </div>
       </div>

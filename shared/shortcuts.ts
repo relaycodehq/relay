@@ -321,6 +321,14 @@ const shortcutCommands = {
     keywords: "refresh preview web",
     defaults: one("mod+KeyR"),
   },
+  "pin-window": {
+    title: "Keep the window on top of other apps",
+    group: "Window",
+    description:
+      "A thread's or an editor's own window, so it stays in view over your editor or browser. Pressed again, it stops.",
+    keywords: "pin always on top float stay front",
+    defaults: one("mod+alt+KeyP"),
+  },
   reload: {
     title: "Reload the window",
     group: "Window",
