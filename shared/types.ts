@@ -15,6 +15,7 @@ import type { DevicesApi } from "./devices";
 import type { ProjectSearchApi } from "./project-search";
 import type { PoppedWindowApi, ThreadWindowsApi } from "./thread-windows";
 import type { EditorWindowsApi } from "./editor-windows";
+import type { ClipboardApi } from "./clipboard";
 import type { WorkingTreeApi } from "./working-tree";
 import type { LanguageServersApi } from "./language-servers";
 import type { LocalHistoryApi } from "./local-history";
@@ -316,6 +317,7 @@ export interface Api
     LocalHistoryApi,
     ThreadWindowsApi,
     PoppedWindowApi,
+    ClipboardApi,
     EditorWindowsApi,
     LanguageServersApi,
     ProjectApi,
@@ -654,10 +656,6 @@ export interface Api
     version: string,
     contents: string,
   ): Promise<{ version: string }>;
-  readClipboard(): Promise<string>;
-  /** `html`, when given, is what apps that take HTML paste instead. */
-  writeClipboard(text: string, html?: string): Promise<void>;
-  writeClipboardImage(dataUrl: string): Promise<void>;
   /** Where a dropped file sits on disk; empty when no file is behind it. */
   pathForFile(file: File): string;
   launchCodex(
