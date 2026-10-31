@@ -50,8 +50,10 @@ export function forgetRipgrep() {
  * cut to whole milliseconds, as Date.now() is; a time still to come is a
  * skewed clock (a network drive), not a write.
  */
-const writtenSince = (mtimeMs: number, since: number) =>
-  Math.trunc(mtimeMs) > since && mtimeMs <= Date.now();
+const writtenSince = (mtimeMs: number, since: number) => {
+  const written = Math.trunc(mtimeMs);
+  return written > since && written <= Date.now();
+};
 
 /**
  * The digest of each found file's bytes. A file that cannot be read any
