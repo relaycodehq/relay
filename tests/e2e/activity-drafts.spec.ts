@@ -11,6 +11,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 test("keeps several new-thread drafts in Activity and sends them from their cards", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "relay-drafts-")));
@@ -51,10 +52,12 @@ test("keeps several new-thread drafts in Activity and sends them from their card
     await page.evaluate(() => window.relay.addProject());
     await page.reload();
     await page.getByRole("button", { name: "View activity" }).click();
-    const newThread = () =>
-      page.keyboard.press(
+    const newThread = async () => {
+      await page.keyboard.press(
         process.platform === "darwin" ? "Meta+N" : "Control+N",
       );
+      await keepProjectInPicker(page);
+    };
     const prompt = page.getByLabel("Message project");
     const drafts = page.locator(".sb-card.draft");
     const card = (text: string) => drafts.filter({ hasText: text });

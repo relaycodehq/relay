@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 /** Relay with fake Codex and Claude on its PATH. */
 async function launch(root: string, withOpenRouter = false) {
@@ -296,6 +297,7 @@ test("reviews uncommitted changes with two agents, then fixes a finding with the
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
+    await keepProjectInPicker(page);
     await page
       .getByRole("button", { name: "Deep review", exact: true })
       .click();
@@ -655,6 +657,7 @@ test("a reviewer runs the prompt you typed, and the setup waits by Start next ti
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
+    await keepProjectInPicker(page);
     await page
       .getByRole("button", { name: "Deep review", exact: true })
       .click();
@@ -732,6 +735,7 @@ test("a deep review set up and left waits in Activity as a draft", async () => {
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
+    await keepProjectInPicker(page);
     await expect(page.getByLabel("Message project")).toBeVisible();
     await expect(card).not.toHaveClass(/selected/);
     await card.click();
@@ -757,6 +761,7 @@ test("a deep review set up and left waits in Activity as a draft", async () => {
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
+    await keepProjectInPicker(page);
     await page
       .getByRole("button", { name: "Deep review", exact: true })
       .click();

@@ -19,6 +19,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer } from "../fixtures/gitea";
 import { fakeCli } from "../fixtures/fake-cli";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 // A benchmark, not a check: how long a keystroke in the composer takes to
 // reach the screen, and how busy the main thread is between keystrokes, with
@@ -233,6 +234,7 @@ test("composer keystroke latency, quiet and with agents running", async () => {
         .getByRole("button", { name: "New thread", exact: true })
         .first()
         .click();
+      await keepProjectInPicker(page);
       await expect(stop).toHaveCount(0);
       // The project ribbon plays once for 7s on a new thread.
       await page.waitForTimeout(8000);

@@ -17,6 +17,7 @@ import {
   writeClaudeSession,
   writeCodexSession,
 } from "../fixtures/terminal-sessions";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 const HOUR = 3_600_000;
 
@@ -126,9 +127,15 @@ test("continues a terminal session as a thread: resumed in the checkout, forked 
     await page.evaluate(() => window.relay.addProject());
     await page.reload();
 
-    const newThread = page
-      .getByRole("button", { name: "New thread", exact: true })
-      .first();
+    const newThread = {
+      click: async () => {
+        await page
+          .getByRole("button", { name: "New thread", exact: true })
+          .first()
+          .click();
+        await keepProjectInPicker(page);
+      },
+    };
     const composer = page.getByLabel("Message project");
     const trigger = { click: () => composer.fill("/resume ") };
     await trigger.click();

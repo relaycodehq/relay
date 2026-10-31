@@ -153,3 +153,11 @@ export async function openThreadChanges(page: Page) {
     .getByRole("button", { name: /files? changed/ })
     .click();
 }
+
+/** Answers the New thread picker with the project it starts on, the one in view. */
+export async function keepProjectInPicker(page: Page) {
+  await page
+    .getByRole("dialog", { name: "New thread in…" })
+    .getByRole("combobox", { name: "Search projects" })
+    .press("Enter");
+}

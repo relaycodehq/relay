@@ -10,7 +10,7 @@ import {
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { openInFileTree } from "../fixtures/navigation";
+import { keepProjectInPicker, openInFileTree } from "../fixtures/navigation";
 
 const modifier = process.platform === "darwin" ? "Meta" : "Control";
 const LOCKED = "Save or close the edited file first.";
@@ -91,6 +91,7 @@ test("an unsaved file holds every way out with the same message until it's saved
       .getByRole("button", { name: "New thread", exact: true })
       .click();
     await expect(toast).toHaveCount(0);
+    await keepProjectInPicker(page);
     await expect(page.getByLabel("Message project")).toBeFocused();
   } finally {
     await app.close();

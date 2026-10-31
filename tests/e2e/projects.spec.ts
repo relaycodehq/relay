@@ -20,6 +20,7 @@ import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import {
+  keepProjectInPicker,
   openInFileTree,
   openSurface,
   openThreadChanges,
@@ -121,7 +122,9 @@ test("matches a project remote, reviews its PR and sends pinned lines into its r
     await expect(
       editor.getByRole("textbox", { name: path, exact: true }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Close useReview.ts", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Close useReview.ts", exact: true })
+      .click();
     await panelToggle(page).click();
     // Under 800px the review shows an inline diff instead of side by side.
     await page
@@ -314,6 +317,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
+    await keepProjectInPicker(page);
     const picker = page.getByRole("button", {
       name: "Choose model and provider",
       exact: true,
@@ -746,11 +750,7 @@ test("opens a local project without sign-in, edits safely, streams an agent conv
     await page.keyboard.press(
       process.platform === "darwin" ? "Meta+N" : "Control+N",
     );
-    // With two projects a new thread asks where; Enter keeps this one.
-    await page
-      .getByRole("dialog", { name: "New thread in…" })
-      .getByRole("combobox", { name: "Search projects" })
-      .press("Enter");
+    await keepProjectInPicker(page);
     await expect(page.getByLabel("Message project")).toBeFocused();
     await expect(page.locator(".thread-context-controls")).toContainText(
       "feature",

@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 // A thread left while its answer streams keeps a cached copy that still says
 // so. Events for threads that aren't open are ignored, so nothing corrects it
@@ -110,6 +111,7 @@ test("shows a thread's finished answer at once when it is opened again", async (
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
+    await keepProjectInPicker(page);
     const input = page.getByLabel("Message project");
     await expect(input).toBeEditable();
     await input.fill("@claude Count to twenty please");

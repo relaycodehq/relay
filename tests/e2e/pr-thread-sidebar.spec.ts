@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { fixtureServer, oldCode, newCode } from "../fixtures/gitea";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 const PR_TITLE = "Make pull request reviews faster";
 const PR_THREAD = "PR #7";
@@ -75,6 +76,7 @@ test("keeps a started PR review in the sidebar and remembers the sidebar beside 
       await page
         .getByRole("button", { name: "New thread", exact: true })
         .click();
+      await keepProjectInPicker(page);
       await expect(page.locator(".pane-header")).toHaveCount(0);
     };
 

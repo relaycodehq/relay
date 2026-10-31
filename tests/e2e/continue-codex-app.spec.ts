@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { fakeCli, pathWith } from "../fixtures/fake-cli";
 import { writeStoredCodexSession } from "../fixtures/codex-store";
 import { screenshot } from "../fixtures/screenshot";
+import { keepProjectInPicker } from "../fixtures/navigation";
 
 test("/resume chatgpt imports a saved desktop chat, forks on send and reopens the same thread", async () => {
   const root = await realpath(
@@ -143,6 +144,7 @@ test("/resume chatgpt imports a saved desktop chat, forks on send and reopens th
       .getByRole("button", { name: "New thread", exact: true })
       .first()
       .click();
+    await keepProjectInPicker(page);
     await composer.fill("/resume chatgpt");
     await expect(rows).toHaveCount(1);
     await expect(rows).toContainText("in Relay");
