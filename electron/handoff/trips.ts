@@ -2,7 +2,11 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { errorMessage } from "../../shared/error-message";
 import type { ProjectChat } from "../../shared/projects";
-import { needsFullBundle, type HandoffThread } from "../../shared/handoff";
+import {
+  needsFullBundle,
+  type ComputerInfo,
+  type HandoffThread,
+} from "../../shared/handoff";
 import { folderHandoffBridge, startHandoffBridge } from "../../shared/remote";
 import { Unanswered, type RemoteClient } from "../../shared/remote-client";
 import type { Store } from "../app/store";
@@ -64,10 +68,7 @@ export class HandoffTrips {
       const { name } = this.computers.get(computerId);
       const client = await this.computers.connected(computerId);
       const info = await this.infos.get(computerId, client, true);
-      if (outdated(info))
-        throw new Error(
-          `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
-        );
+      takesThreads(info, name);
       const repositories = await repositoryNames(
         await this.projects.root(summaryOf(this.store, chatId).projectId),
       );
@@ -94,30 +95,11 @@ export class HandoffTrips {
       if (!ready || !still()) return;
       const { chat, root, tip } = await this.chats.handoffs.leave(chatId, name);
       if (!still()) return;
-      const worktree = chat.worktree!;
-      const input = chat.lastInput;
-      if (!input)
-        throw new Error("Send a message before handing the thread off.");
-      // Nothing answered it here: its first message starts it there.
-      const start =
-        !chat.messages.some((m) => m.role === "assistant") &&
-        info!.bridge >= startHandoffBridge;
-      const thread: HandoffThread = {
-        from: computerName(),
+      const thread = await handedThread(chat, client, info!.bridge, {
         repositories,
-        title: chat.title,
-        scope: chat.scope,
-        settings: settingsOf(input),
-        messages: await carriedMessages(chat, client, info!.bridge),
-        git: {
-          branch: worktree.branch!,
-          tip,
-          bundle: false,
-          ...(worktree.from ? { from: worktree.from } : {}),
-          ...(worktree.start ? { start: worktree.start } : {}),
-        },
-        ...(start ? { start: true as const } : {}),
-      };
+        tip,
+      });
+      const start = !!thread.start;
       await carry(client, id, folder, root, thread);
       await this.chats.handoffs.updateSentTo(chatId, id, {
         state: "away",
@@ -218,6 +200,46 @@ export class HandoffTrips {
       });
     }
   }
+}
+
+/** Refuses a computer whose Relay is too old to take a thread in. */
+function takesThreads(info: ComputerInfo | null, name: string) {
+  if (outdated(info))
+    throw new Error(
+      `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
+    );
+}
+
+/** The thread as the other computer takes it in, its branch at `tip`. */
+async function handedThread(
+  chat: ProjectChat,
+  client: RemoteClient,
+  bridge: number,
+  { repositories, tip }: { repositories: string[]; tip: string },
+): Promise<HandoffThread> {
+  const worktree = chat.worktree!;
+  const input = chat.lastInput;
+  if (!input) throw new Error("Send a message before handing the thread off.");
+  // Nothing answered it here: its first message starts it there.
+  const start =
+    !chat.messages.some((m) => m.role === "assistant") &&
+    bridge >= startHandoffBridge;
+  return {
+    from: computerName(),
+    repositories,
+    title: chat.title,
+    scope: chat.scope,
+    settings: settingsOf(input),
+    messages: await carriedMessages(chat, client, bridge),
+    git: {
+      branch: worktree.branch!,
+      tip,
+      bundle: false,
+      ...(worktree.from ? { from: worktree.from } : {}),
+      ...(worktree.start ? { start: worktree.start } : {}),
+    },
+    ...(start ? { start: true as const } : {}),
+  };
 }
 
 /**

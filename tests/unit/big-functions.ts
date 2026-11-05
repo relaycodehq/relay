@@ -56,7 +56,6 @@ export const bigFunctions: Record<string, number> = {
   "electron/git/worktrees/create.ts › createWorktree": 96,
   "electron/handoff/receiver.ts › handle": 144,
   "electron/handoff/setups.ts › setUp": 88,
-  "electron/handoff/trips.ts › send": 96,
   "electron/headless/commands/args.ts › parse": 108,
   "electron/headless/commands/install.ts › setup": 174,
   "electron/headless/commands/remote.ts › status": 126,
