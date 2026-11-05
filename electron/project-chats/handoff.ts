@@ -444,7 +444,8 @@ export class ComputerHandoff {
   /**
    * A thread nothing answered yet where it was made: its first message, by
    * its own id, starts it here as any thread's first turn. Nothing is
-   * carried, so the computer it came from mirrors that message too.
+   * carried, so the computer it came from mirrors that message too. From
+   * `newThreadsBridge` it comes empty, and that message is sent after it.
    */
   private async adoptStart(
     projectId: string,
@@ -454,7 +455,6 @@ export class ComputerHandoff {
     worktree?: ChatWorktree,
   ) {
     const first = thread.messages.find((m) => m.role === "user" && !m.parentId);
-    if (!first) throw new Error("The thread came without its first message.");
     const chat: ProjectChat = {
       id: randomUUID(),
       projectId,
@@ -470,6 +470,7 @@ export class ComputerHandoff {
       carriedIds: {},
     };
     await this.core.storage.add(chat);
+    if (!first) return chatSummary(chat);
     const { provider, ...settings } = thread.settings;
     void this.host
       .send(chat.id, {

@@ -5,7 +5,9 @@
 export const remoteBridgeVersion = 41;
 /**
  * A paired computer makes a new thread of its own in a project it hosts, for
- * the computer asking to follow and write in (`newThreadInProject`).
+ * the computer asking to follow and write in (`newThreadInProject`). A thread
+ * handed to it to start there (`HandoffThread.start`) comes without messages,
+ * and its first message follows as a send.
  */
 export const newThreadsBridge = 41;
 /**

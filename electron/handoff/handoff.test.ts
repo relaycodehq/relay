@@ -31,7 +31,11 @@ import { RemoteProjects } from "./remote-projects";
 import { ThreadTerminals, threadTerminals } from "../terminal/thread-terminals";
 import { draftTerminalKey, type TerminalEvent } from "../../shared/terminals";
 import { awaitsReturn } from "../project-chats/handoff";
-import { liveHandoffBridge, setupBridge } from "../../shared/remote";
+import {
+  liveHandoffBridge,
+  newThreadsBridge,
+  setupBridge,
+} from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
 import { workspaceId } from "../../shared/workspaces";
 import type { UpdateState } from "../../shared/updates";
@@ -1408,6 +1412,63 @@ async function lackedProject(laptop: Awaited<ReturnType<typeof computer>>) {
   };
 }
 
+it("asks a Relay too old to take a started thread's first message as a send to update, before setting anything up", async () => {
+  const { laptop, sender, computerId } = await pairedComputers();
+  const { projectId } = await lackedProject(laptop);
+  vi.spyOn(
+    (sender as never as { infos: { get: () => unknown } }).infos,
+    "get",
+  ).mockResolvedValue({
+    version: "0.27.0",
+    bridge: newThreadsBridge - 1,
+    update: { status: "idle", current: "0.27.0" },
+  });
+  const id = await startOnMini(laptop, sender, computerId, projectId);
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(id)).sentTo?.error).toMatch(
+      /runs an older Relay. Update it/,
+    ),
+  );
+  expect((await laptop.chats.get(id)).setup).toBeUndefined();
+});
+
+it("takes a screenshot in a started thread's first message to the other computer", async () => {
+  const { laptop, mini, sender, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  const dataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+  const first = {
+    ...input("@codex What's in this?"),
+    images: [{ name: "shot.png", mimeType: "image/png" as const, dataUrl }],
+  };
+  await laptop.chats.firstMessageOnly(thread.id, first);
+  await sender.handOff(thread.id, computerId);
+  let arrived: string | undefined;
+  await vi.waitFor(() => {
+    arrived = mini.chats.list(mini.projectId).find((c) => c.cameFrom)?.id;
+    expect(arrived).toBeDefined();
+  });
+  await finished(mini.chats, arrived!, 2);
+  const [sent] = (await mini.chats.get(arrived!)).messages;
+  expect(sent).toMatchObject({ id: first.id, role: "user" });
+  expect(await mini.chats.files.image(arrived!, sent!.images![0]!.id)).toBe(
+    dataUrl,
+  );
+  // Here it's the message that came back, sent once.
+  await vi.waitFor(async () => {
+    const here = await laptop.chats.get(thread.id);
+    expect(here.messages.map((m) => m.id)).toEqual([
+      first.id,
+      expect.any(String),
+    ]);
+    expect(here.outbox).toBeUndefined();
+  });
+});
+
 /** A new thread in the project, started on the mini with its first message. */
 async function startOnMini(
   laptop: Awaited<ReturnType<typeof computer>>,
@@ -1583,7 +1644,15 @@ it("tells a Relay too old to set a project up apart from a failed clone, and end
     bridge: setupBridge - 1,
     update: { status: "idle", current: "0.17.0" },
   });
-  const id = await startOnMini(laptop, sender, computerId, projectId);
+  // An answered thread: one to start there asks for an update before any setup.
+  const { id } = await laptop.chats.create(
+    projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.sendYours(id, input("@codex Add a changelog"));
+  await finished(laptop.chats, id, 2);
+  await sender.handOff(id, computerId);
   await vi.waitFor(async () =>
     expect((await laptop.chats.get(id)).sentTo?.error).toMatch(
       /runs an older Relay, which can't set the project up itself/,

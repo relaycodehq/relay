@@ -7,7 +7,7 @@ import {
   type ComputerInfo,
   type HandoffThread,
 } from "../../shared/handoff";
-import { folderHandoffBridge, startHandoffBridge } from "../../shared/remote";
+import { folderHandoffBridge, newThreadsBridge } from "../../shared/remote";
 import { Unanswered, type RemoteClient } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import {
@@ -26,12 +26,13 @@ import { outdated, type ComputerInfos } from "./computer-infos";
 import { computerName, type Computers } from "./computers";
 import type { HandoffFollowing } from "./following";
 import type { HandoffNotices } from "./notices";
-import { keepYourFiles, sendPastes } from "./pastes";
+import { sendPastes } from "./pastes";
 import type { RemoteStatuses } from "./remote-statuses";
 import type { HandoffSetups } from "./setups";
 import { nameOf } from "./targets";
 import {
   download,
+  firstSendOf,
   readReturned,
   receivePastesFrom,
   settingsOf,
@@ -68,7 +69,7 @@ export class HandoffTrips {
       const { name } = this.computers.get(computerId);
       const client = await this.computers.connected(computerId);
       const info = await this.infos.get(computerId, client, true);
-      takesThreads(info, name);
+      takesThreads(info, name, await this.chats.get(chatId));
       const repositories = await repositoryNames(
         await this.projects.root(summaryOf(this.store, chatId).projectId),
       );
@@ -100,6 +101,7 @@ export class HandoffTrips {
         tip,
       });
       const start = !!thread.start;
+      const first = start ? await this.firstSend(chat) : undefined;
       await carry(client, id, folder, root, thread);
       await this.chats.handoffs.updateSentTo(chatId, id, {
         state: "away",
@@ -110,6 +112,8 @@ export class HandoffTrips {
         ...(start ? { start: true as const } : {}),
         ...(info!.bridge >= folderHandoffBridge ? { folder: true } : {}),
       });
+      // It waits here until the thread there is followed, then goes.
+      if (first) await this.chats.liveHandoff.hold(chatId, id, first);
       await rm(folder, { recursive: true, force: true });
       console.info(
         `Handoff ${named(id, name)}: sent in ${seconds(started)}${thread.git.bundle ? "" : ", no bundle needed"}.`,
@@ -130,6 +134,14 @@ export class HandoffTrips {
         error: errorMessage(e),
       });
     }
+  }
+
+  /**
+   * The first message of a thread nothing answered yet, as it was sent: it
+   * goes after the thread, as every later one does.
+   */
+  private firstSend(chat: ProjectChat) {
+    return firstSendOf(chat, (image) => this.chats.files.image(chat.id, image));
   }
 
   /** The other side stops, notes and commits; its work comes back into this worktree. */
@@ -202,9 +214,17 @@ export class HandoffTrips {
   }
 }
 
-/** Refuses a computer whose Relay is too old to take a thread in. */
-function takesThreads(info: ComputerInfo | null, name: string) {
-  if (outdated(info))
+/**
+ * Refuses a computer whose Relay is too old to take the thread in. One
+ * nothing answered yet starts there, and its first message goes after it.
+ */
+function takesThreads(
+  info: ComputerInfo | null,
+  name: string,
+  chat: ProjectChat,
+) {
+  const starts = !chat.messages.some((m) => m.role === "assistant");
+  if (outdated(info) || (starts && info!.bridge < newThreadsBridge))
     throw new Error(
       `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
     );
@@ -220,17 +240,15 @@ async function handedThread(
   const worktree = chat.worktree!;
   const input = chat.lastInput;
   if (!input) throw new Error("Send a message before handing the thread off.");
-  // Nothing answered it here: its first message starts it there.
-  const start =
-    !chat.messages.some((m) => m.role === "assistant") &&
-    bridge >= startHandoffBridge;
+  // Nothing answered it here: it goes empty, its first message after it.
+  const start = !chat.messages.some((m) => m.role === "assistant");
   return {
     from: computerName(),
     repositories,
     title: chat.title,
     scope: chat.scope,
     settings: settingsOf(input),
-    messages: await carriedMessages(chat, client, bridge),
+    messages: start ? [] : await carriedMessages(chat, client, bridge),
     git: {
       branch: worktree.branch!,
       tip,
@@ -273,21 +291,11 @@ async function carry(
   }
 }
 
-/**
- * A thread's messages as the other computer takes them, with the pastes they
- * name copied there. One nothing answered yet starts there, so the files its
- * first message names go too.
- */
-async function carriedMessages(
+/** A thread's messages as the other computer takes them, with the pastes they name copied there. */
+function carriedMessages(
   chat: ProjectChat,
   client: RemoteClient,
   bridge: number,
 ) {
-  const messages = portableMessages(chat.messages);
-  const starts = !messages.some((m) => m.role === "assistant");
-  return sendPastes(
-    starts ? await keepYourFiles(messages) : messages,
-    client,
-    bridge,
-  );
+  return sendPastes(portableMessages(chat.messages), client, bridge);
 }

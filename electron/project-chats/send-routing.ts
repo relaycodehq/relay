@@ -12,16 +12,6 @@ import type { TurnCompactions } from "./turn-flows/compaction";
 import type { TurnSends } from "./turn-flows/send";
 import type { ThreadWorktrees } from "./worktrees";
 
-/** What a first message needs to start its thread on another computer. */
-function startableThere(input: ProjectChatSend) {
-  if (input.images?.length)
-    throw new Error(
-      "Screenshots don't go along to another computer yet. Send it without them, or start it here.",
-    );
-  if (!agentAsked(input))
-    throw new Error("Pick the agent that starts it there.");
-}
-
 /** The thread holds this message already: sent, queued or scheduled. */
 const alreadyHolds = (chat: ProjectChat, inputId: string) =>
   chat.messages.some((m) => m.id === inputId) ||
@@ -131,7 +121,8 @@ export class SendRouting {
         throw new Error(
           "Send later doesn't start a thread on another computer yet. Send it now, or start it here.",
         );
-      startableThere(input);
+      if (!agentAsked(input))
+        throw new Error("Pick the agent that starts it there.");
       await this.flows.turns.sendNow(id, input, false, false);
       // Named after the message: the title's rename waits for a turn here.
       this.flows.worktrees.unnamed.delete(id);

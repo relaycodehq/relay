@@ -28,6 +28,34 @@ export const settingsOf = (
   ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
 });
 
+/**
+ * The send a thread nothing answered yet starts with on the computer it went
+ * to: its first message as it was sent, screenshots included.
+ */
+export async function firstSendOf(
+  chat: ProjectChat,
+  image: (imageId: string) => Promise<string>,
+): Promise<ProjectChatSend> {
+  const first = chat.messages.find((m) => m.role === "user" && !m.parentId);
+  const input = chat.lastInput;
+  if (!first || !input)
+    throw new Error("Send a first message to start the thread.");
+  const images = await Promise.all(
+    (first.images ?? []).map(async ({ id, name, mimeType, browser }) => ({
+      name,
+      mimeType,
+      dataUrl: await image(id),
+      ...(browser ? { browser } : {}),
+    })),
+  );
+  return {
+    ...input,
+    id: first.id,
+    body: first.body,
+    ...(images.length ? { images } : {}),
+  };
+}
+
 /** A thread's messages as the other computer answers them: full ones, or the ids of those already here. */
 export const readMirrored = (messages: unknown) =>
   z.array(z.union([z.string(), handoffMessageSchema])).parse(messages) as (
