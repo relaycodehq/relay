@@ -738,9 +738,9 @@ export class ProjectChats {
     return this.sending.send(id, input, fromRelay);
   }
 
-  /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
-  startsThereWith(start: (id: string, computerId: string) => Promise<void>) {
-    this.sending.starter = start;
+  /** How a new thread of a project on another computer is made there with its first message; Handoffs sets it. */
+  startsThereWith(start: NonNullable<SendRouting["startsThere"]>) {
+    this.sending.startsThere = start;
   }
 
   /**

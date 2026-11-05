@@ -169,13 +169,12 @@ export class TurnSends {
     try {
       const chat = await this.core.storage.load(id);
       assertHere(chat);
-      // A project on another computer only keeps the message here, for that
-      // computer to answer; its folder isn't on this one.
+      // A project on another computer has its threads there; its folder
+      // isn't on this one.
       const project = this.core.projects.get(chat.projectId);
-      if (project.computer && answer)
-        throw new Error(onComputerMessage(project));
+      if (project.computer) throw new Error(onComputerMessage(project));
       await this.worktrees.agents.refresh(chat);
-      if (!chat.worktree && !threadWorktree(chat) && !project.computer)
+      if (!chat.worktree && !threadWorktree(chat))
         this.core.projects.assertCheckoutAvailable(chat.projectId);
       // Sent again after it went in: nothing to check, move or start.
       if (chat.messages.some((m) => m.id === input.id)) {
@@ -217,10 +216,12 @@ export class TurnSends {
       }
       // Once the message is sure to go in, a review follows its branch to
       // wherever it's checked out, so the turn runs there.
-      if (!project.computer) await this.councils.fixing(chat, input);
-      const root = project.computer
-        ? ""
-        : await this.worktrees.root(chat, input.body, active.abort.signal);
+      await this.councils.fixing(chat, input);
+      const root = await this.worktrees.root(
+        chat,
+        input.body,
+        active.abort.signal,
+      );
       const user: ChatMessage = {
         id: input.id,
         role: "user",
@@ -257,11 +258,10 @@ export class TurnSends {
       // A fix request marks its findings as being fixed.
       startFixing(chat.findings, input);
       chat.updated = Date.now();
-      if (!project.computer)
-        ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
-          root,
-          chat,
-        ));
+      ({ branch: chat.branch, commit: chat.commit } = await checkedOutOr(
+        root,
+        chat,
+      ));
       if (chat.messages.length === 1 && !chat.renamed)
         chat.title = promptTitle(input.body);
       if (!answer) chat.lastInput = { ...input, images: undefined };

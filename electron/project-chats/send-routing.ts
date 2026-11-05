@@ -1,5 +1,5 @@
 import type { ProjectChat, ProjectChatSend } from "../../shared/projects";
-import { replyRoot } from "../../shared/projects";
+import { onComputerMessage, replyRoot } from "../../shared/projects";
 import { parseGoalCommand } from "../../shared/goal";
 import { agentAsked } from "../../shared/recipient";
 import type { SideQuestions } from "./asides";
@@ -13,10 +13,10 @@ import type { TurnSends } from "./turn-flows/send";
 import type { ThreadWorktrees } from "./worktrees";
 
 /** What a first message needs to start its thread on another computer. */
-function startableThere(input: ProjectChatSend, orHere: boolean) {
+function startableThere(input: ProjectChatSend) {
   if (input.images?.length)
     throw new Error(
-      `Screenshots don't go along to another computer yet. Send it without them${orHere ? ", or start it here" : ""}.`,
+      "Screenshots don't go along to another computer yet. Send it without them, or start it here.",
     );
   if (!agentAsked(input))
     throw new Error("Pick the agent that starts it there.");
@@ -44,8 +44,11 @@ interface SendFlows {
  * /btw side answer, or another computer that starts the thread there.
  */
 export class SendRouting {
-  /** Hands a thread to a paired computer; Handoffs sets it, as it can't be made before this. */
-  starter?: (id: string, computerId: string) => Promise<void>;
+  /**
+   * Makes a new thread of a project on another computer there and sends it
+   * its first message; Handoffs sets it, as it can't be made before this.
+   */
+  startsThere?: (id: string, first: ProjectChatSend) => Promise<void>;
 
   constructor(
     private core: ChatCore,
@@ -54,11 +57,10 @@ export class SendRouting {
 
   /** `fromRelay` marks Relay's own messages, which leave a stopped queue stopped. */
   send(id: string, input: ProjectChatSend, fromRelay = false) {
-    // A thread of a project on another computer starts there with its first
-    // message, from whichever caller sends it. Send later holds it here first.
-    const home = this.homeOf(id);
-    if (home && this.starter && !input.sendAt)
-      return this.startThere(id, input, home);
+    // A new thread of a project on another computer is made there, from
+    // whichever caller sends it, and its first message goes after it as
+    // every later one does.
+    if (this.homeOf(id) && this.startsThere) return this.startsThere(id, input);
     return this.core.control(id, () => this.held(id, input, fromRelay));
   }
 
@@ -71,7 +73,7 @@ export class SendRouting {
     assertHere(chat);
     // Sent again after its answer got lost: don't send it or pick a stopped queue back up.
     if (alreadyHolds(chat, input.id)) return;
-    if (input.sendAt) return this.later(id, chat, input);
+    if (input.sendAt) return this.flows.schedule.add(id, input);
     // A /btw question, or a reply under one, is answered beside the thread.
     const sideQuestion =
       input.side ||
@@ -88,22 +90,6 @@ export class SendRouting {
     const compactedFirst = await compactions.firstIfCold(id, input);
     if (!compactedFirst) await turns.sendNow(id, input);
     return queue.sentNow(id, input, fromRelay);
-  }
-
-  /**
-   * Held for later. One for a thread whose project lives on another computer
-   * starts the thread there then, which takes only a thread with nothing
-   * else waiting.
-   */
-  private later(id: string, chat: ProjectChat, input: ProjectChatSend) {
-    if (this.homeOf(id)) {
-      if (chat.messages.length || chat.scheduled?.length)
-        throw new Error(
-          "This thread starts on its project's computer with its first message. Schedule more once it has.",
-        );
-      startableThere(input, false);
-    }
-    return this.flows.schedule.add(id, input);
   }
 
   /**
@@ -131,24 +117,21 @@ export class SendRouting {
       // Sent again after the reply got lost.
       if (chat.messages.some((m) => m.id === input.id)) return;
       const project = this.core.projects.get(chat.projectId);
-      if (project.computer && chat.messages.length)
-        throw new Error(
-          `This thread hasn't started on ${project.computer.name} yet. Send that once it has.`,
-        );
+      // Its threads are made there, by a plain send.
+      if (project.computer) throw new Error(onComputerMessage(project));
       if (
         chat.messages.length ||
-        (!chat.worktree && !project.computer) ||
+        !chat.worktree ||
         chat.scope.kind !== "project"
       )
         throw new Error(
           "Only a new thread in a worktree starts on another computer.",
         );
-      // A project's own computer holds a scheduled one here instead (send).
       if (input.sendAt)
         throw new Error(
           "Send later doesn't start a thread on another computer yet. Send it now, or start it here.",
         );
-      startableThere(input, !project.computer);
+      startableThere(input);
       await this.flows.turns.sendNow(id, input, false, false);
       // Named after the message: the title's rename waits for a turn here.
       this.flows.worktrees.unnamed.delete(id);
@@ -168,7 +151,7 @@ export class SendRouting {
     });
   }
 
-  /** The computer the thread's project lives on, while the thread hasn't gone there yet. */
+  /** The computer the thread's project lives on, while the thread isn't there yet. */
   private homeOf(id: string) {
     const chat = this.core.store.get().chats?.find((c) => c.id === id);
     if (!chat || chat.sentTo) return undefined;
@@ -176,29 +159,6 @@ export class SendRouting {
       return this.core.projects.get(chat.projectId).computer?.id;
     } catch {
       return undefined;
-    }
-  }
-
-  private async startThere(
-    id: string,
-    input: ProjectChatSend,
-    computerId: string,
-  ) {
-    await this.firstMessageOnly(id, input);
-    // Sent again once it went there: nothing's left to start.
-    if (!this.homeOf(id)) return;
-    try {
-      await this.starter!(id, computerId);
-    } catch (e) {
-      // Refused before it set off: the thread is new again, to send once more.
-      await this.core.control(id, async () => {
-        const chat = await this.core.storage.load(id);
-        if (chat.sentTo || chat.messages.some((m) => m.id !== input.id)) return;
-        chat.messages = [];
-        delete chat.lastInput;
-        await this.core.storage.save(chat);
-      });
-      throw e;
     }
   }
 }

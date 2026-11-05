@@ -20,6 +20,8 @@ import { chatSummary } from "./chat-summaries";
 
 /** What a new thread starts with besides its project, scope and workspace. */
 export interface NewThread {
+  /** The id another computer asked for it by, which follows it by that id. */
+  id?: string;
   startedBy?: StartedBy;
   /** Known before the first message is sent, as with threads an agent starts. */
   startingAgent?: AgentProvider;
@@ -120,6 +122,7 @@ export class ThreadCreate {
     scope: ChatScope,
     workspace: ChatWorkspace,
     {
+      id = randomUUID(),
       startedBy,
       startingAgent,
       links,
@@ -133,7 +136,7 @@ export class ThreadCreate {
     },
   ) {
     const chat: ProjectChat = {
-      id: randomUUID(),
+      id,
       projectId,
       scope,
       // The worktree itself is made with the first message, named after it

@@ -31,6 +31,7 @@ const hostedMethods = new Set<string>([
   "computerFolders",
   "computerAddProject",
   "startInProject",
+  "newThreadInProject",
   "resumeInProject",
   "computerCall",
   "projectCall",
@@ -43,7 +44,7 @@ export const isHostedMethod = (method: ComputerMethod) =>
   hostedMethods.has(method);
 
 export class HostedProjects {
-  /** Threads being started in a project here, by id, so a repeat waits for the first. */
+  /** Threads being started or made in a project here, by id, so a repeat waits for the first. */
   private starting = new Map<string, Promise<{ chatId: string }>>();
   /** The shells other computers opened in projects here. */
   readonly shells = new ComputerShells();
@@ -66,17 +67,14 @@ export class HostedProjects {
       }
       case "startInProject": {
         const id = idSchema.parse(args[0]);
-        let job = this.starting.get(id);
-        if (!job) {
-          job = this.startIn(
-            id,
-            idSchema.parse(args[1]),
-            homeThreadSchema.parse(args[2]) as HomeThread,
-            device,
-          ).finally(() => this.starting.delete(id));
-          this.starting.set(id, job);
-        }
-        return job;
+        const projectId = idSchema.parse(args[1]);
+        const thread = homeThreadSchema.parse(args[2]) as HomeThread;
+        return this.once(id, () => this.startIn(id, projectId, thread, device));
+      }
+      case "newThreadInProject": {
+        const projectId = idSchema.parse(args[0]);
+        const id = idSchema.parse(args[1]);
+        return this.once(id, () => this.newThread(projectId, id));
       }
       case "resumeInProject":
         return this.resume(
@@ -112,6 +110,16 @@ export class HostedProjects {
     }
   }
 
+  /** Runs the job for a thread's id, or waits for the one already running for it. */
+  private once(id: string, job: () => Promise<{ chatId: string }>) {
+    let running = this.starting.get(id);
+    if (!running) {
+      running = job().finally(() => this.starting.delete(id));
+      this.starting.set(id, running);
+    }
+    return running;
+  }
+
   /** A project of this computer's own, not one another computer hosts or a Scratchpad's. */
   private async own(projectId: string) {
     const project = (await this.host.projects()).find(
@@ -141,9 +149,32 @@ export class HostedProjects {
   }
 
   /**
+   * A new thread of this computer's own in the project, for another computer
+   * that shows the project as its own to follow and write in. It works in
+   * the project's checkout. Asked again with the same id, it's that thread.
+   */
+  private async newThread(projectId: string, id: string) {
+    const project = await this.own(projectId);
+    const taken = (await this.host.projects())
+      .flatMap((p) => this.host.chats.list(p.id))
+      .find((c) => c.id === id);
+    if (taken && taken.projectId !== project.id)
+      throw new Error("This computer has a thread by that id already.");
+    if (taken) return { chatId: taken.id };
+    const chat = await this.host.chats.create(
+      project.id,
+      { kind: "project" },
+      "checkout",
+      { id },
+    );
+    return { chatId: chat.id };
+  }
+
+  /**
    * A thread another computer starts in a project of this one that it shows
    * as its own: its first message runs here as the thread's first turn, in
    * the project's checkout, and that computer follows it live by `id`.
+   * Computers before `newThreadsBridge` start threads this way.
    */
   private async startIn(
     id: string,

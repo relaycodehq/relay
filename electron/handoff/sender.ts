@@ -129,10 +129,12 @@ export class Handoffs {
         this.chats.liveHandoff.setLive(c.id, undefined);
     });
     computers.onEvent((id, event) => this.following.event(id, event));
-    // A thread of a project on another computer goes there with its first send.
-    chats.startsThereWith((chatId, computerId) =>
-      this.handOff(chatId, computerId),
-    );
+    // A new thread of a project on another computer is made there, and its
+    // first message goes across as every later one does.
+    chats.startsThereWith(async (chatId, first) => {
+      await this.threads.startThere(chatId, first);
+      await this.forwarding.forward("sendProjectChat", [chatId, first]);
+    });
     // The pages its answers showed there are fetched as they're shown here.
     chats.liveHandoff.rendersFrom((sentTo, renderId, page) =>
       this.threads.renderPage(sentTo, renderId, page),
@@ -202,11 +204,10 @@ export class Handoffs {
     const chat = summaryOf(this.store, chatId);
     if (chat.sentTo)
       throw new Error(`This thread is on ${chat.sentTo.computer} already.`);
-    // A thread of a project on another computer starts there, in its folder.
-    const home = this.projects.get(chat.projectId).computer;
-    if (home && home.id !== computerId)
-      throw new Error(onComputerMessage(this.projects.get(chat.projectId)));
-    const blocked = home ? undefined : handoffBlocked(chat);
+    // A thread of a project on another computer is made there by its first send.
+    const project = this.projects.get(chat.projectId);
+    if (project.computer) throw new Error(onComputerMessage(project));
+    const blocked = handoffBlocked(chat);
     if (blocked) throw new Error(blocked);
     const others = sharing(this.store, chat);
     if (others)
@@ -220,13 +221,8 @@ export class Handoffs {
       computerId,
       computer: computer.name,
       at: Date.now(),
-      ...(home ? { home: true as const } : {}),
     });
-    const done = this.run(chatId, () =>
-      this.trips.send(chatId, id, computerId),
-    );
-    // A refused start reaches whoever sent its first message.
-    if (home) await done;
+    void this.run(chatId, () => this.trips.send(chatId, id, computerId));
   }
 
   /** Once the handoff or bringing back under way for the thread is over, however it went. */
@@ -244,10 +240,21 @@ export class Handoffs {
     // Back in its setup, it catches up on what the agent wrote meanwhile.
     if (sentTo.setup)
       return this.following.followSetups(sentTo.computerId, chatId);
-    const done = this.run(chatId, () =>
+    if (sentTo.home) return this.startAfresh(chatId, sentTo.id);
+    void this.run(chatId, () =>
       this.trips.send(chatId, sentTo.id, sentTo.computerId),
     );
-    if (sentTo.home) await done;
+  }
+
+  /**
+   * A thread of a project on another computer that an older Relay here
+   * failed to start there as a handoff: new again, and its first message
+   * sent the way such threads start now.
+   */
+  private async startAfresh(chatId: string, handoffId: string) {
+    const first = (await this.chats.get(chatId)).lastInput;
+    await this.chats.handoffs.startRefused(chatId, handoffId);
+    if (first) await this.chats.send(chatId, first);
   }
 
   /**

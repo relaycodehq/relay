@@ -14,9 +14,14 @@ import type {
 import { errorMessage } from "../../shared/error-message";
 import {
   computerThreadsBridge,
+  newThreadsBridge,
   projectSessionsBridge,
 } from "../../shared/remote";
-import type { ChatTriage, Project } from "../../shared/projects";
+import type {
+  ChatTriage,
+  Project,
+  ProjectChatSend,
+} from "../../shared/projects";
 import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import type { Store } from "../app/store";
 import { summaryOf } from "./away";
@@ -126,6 +131,44 @@ export class ComputerThreads {
     });
     await this.following.follow(computerId, chat.id);
     return { projectId: project.id, chatId: chat.id, peek: true };
+  }
+
+  /**
+   * A new thread of a project that lives on the computer: made there as one
+   * of its own, by this thread's id, and followed from here like any other
+   * of its threads, before `first` goes there as its first message.
+   */
+  async startThere(chatId: string, first: ProjectChatSend) {
+    const chat = summaryOf(this.store, chatId);
+    const home = this.projects.get(chat.projectId).computer;
+    if (!home) throw new Error("This project isn't on another computer.");
+    const { name } = this.computers.get(home.id);
+    const client = await this.computers.connected(home.id);
+    const info = await this.infos.get(home.id, client, true);
+    if (!info || info.bridge < newThreadsBridge)
+      throw new Error(`Update Relay on ${name} to start threads there.`);
+    const there = await client.call(
+      "newThreadInProject",
+      home.projectId,
+      chatId,
+    );
+    await this.chats.liveHandoff.followNew(
+      chatId,
+      {
+        id: there.chatId,
+        computerId: home.id,
+        computer: name,
+        at: Date.now(),
+        state: "away",
+        live: true,
+        kept: 0,
+        folder: true,
+        home: true,
+      },
+      first,
+    );
+    // Followed before its first message goes, so what that writes comes here.
+    await this.following.follow(home.id, chatId);
   }
 
   /**

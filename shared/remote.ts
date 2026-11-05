@@ -245,6 +245,14 @@ export interface RemoteApi {
     thread: HomeThread,
   ): Promise<{ chatId: string }>;
   /**
+   * A new, empty thread of this computer's own in the project, by the id the
+   * computer asking follows it by. The same id again finds that thread.
+   */
+  newThreadInProject(
+    projectId: string,
+    id: string,
+  ): Promise<{ chatId: string }>;
+  /**
    * Resumes a saved session of the project here in a thread of its own, in
    * the project's checkout, or finds the thread that already continues it.
    */

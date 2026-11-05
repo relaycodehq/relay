@@ -79,8 +79,9 @@ export interface ChatSentTo {
    */
   setup?: string;
   /**
-   * Its project lives on that computer (`Project.computer`): the thread was
-   * started there, in the project's folder, and never comes back here.
+   * Its project lives on that computer (`Project.computer`): the thread is
+   * one of that computer's own, working in the project's folder there, and
+   * never comes back here.
    */
   home?: true;
   /**

@@ -163,11 +163,7 @@ export class ComputerHandoff {
         throw new Error("A deep review can't move to another computer.");
       if (!chat.messages.length)
         throw new Error("Send a first message before handing the thread off.");
-      // A thread of a project on that computer works in its folder there.
-      if (
-        !sentTo.home &&
-        (!chat.worktree || !(await worktreeExists(chat.worktree)))
-      )
+      if (!chat.worktree || !(await worktreeExists(chat.worktree)))
         throw new Error(
           "Only a thread in its own worktree can move to another computer; the checkout's changes aren't this thread's alone.",
         );
@@ -202,8 +198,8 @@ export class ComputerHandoff {
   }
 
   /**
-   * A thread of a project on another computer that computer refused to
-   * start: it's new again, to send once more, rather than stuck on its way.
+   * A thread of a project on another computer that an older Relay here
+   * started as a handoff, and couldn't: it's new again, to send once more.
    */
   startRefused(id: string, handoffId: string) {
     return this.core.control(id, async () => {

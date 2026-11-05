@@ -13,6 +13,7 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
+import { promptTitle } from "../../shared/prompt-title";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
 import { awaitsReturn } from "./handoff";
@@ -114,6 +115,24 @@ export class LiveHandoff {
     };
     await this.core.storage.add(chat);
     return chatSummary(chat);
+  }
+
+  /**
+   * A new thread here whose project lives on another computer, now that one
+   * of that computer's own was made for it: from here on it mirrors that
+   * one. Named after its first message, which goes there next.
+   */
+  followNew(id: string, sentTo: ChatSentTo, first: ProjectChatSend) {
+    return this.core.control(id, async () => {
+      const chat = await this.core.storage.load(id);
+      if (chat.sentTo) return;
+      if (chat.messages.length)
+        throw new Error("Only a new thread starts on its project's computer.");
+      chat.sentTo = sentTo;
+      if (!chat.renamed) chat.title = promptTitle(first.body);
+      chat.updated = Date.now();
+      await this.core.storage.save(chat);
+    });
   }
 
   /** What was written here since the thread came; those it holds at the same version as their ids. */

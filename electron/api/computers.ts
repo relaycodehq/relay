@@ -53,7 +53,7 @@ export function computerHandlers(ctx: ApiContext) {
       [idSchema, projectChatSendSchema, idSchema],
       async (chatId, input, computerId) => {
         const { sender } = handoffs();
-        // Its project's own computer: a send starts it there, or holds it for later.
+        // Its project's own computer: a plain send makes the thread there.
         const { projectId } = await ctx.projectChats.get(chatId);
         if (ctx.projects.get(projectId).computer?.id === computerId) {
           await ctx.projectChats.send(chatId, input);

@@ -3,12 +3,7 @@ import { join } from "node:path";
 import { errorMessage } from "../../shared/error-message";
 import type { ProjectChat } from "../../shared/projects";
 import { needsFullBundle, type HandoffThread } from "../../shared/handoff";
-import {
-  folderHandoffBridge,
-  remoteProjectsBridge,
-  startHandoffBridge,
-  type HomeThread,
-} from "../../shared/remote";
+import { folderHandoffBridge, startHandoffBridge } from "../../shared/remote";
 import { Unanswered, type RemoteClient } from "../../shared/remote-client";
 import type { Store } from "../app/store";
 import {
@@ -61,8 +56,6 @@ export class HandoffTrips {
 
   /** Stop, note and commit here, then the thread and its code across. */
   async send(chatId: string, id: string, computerId: string) {
-    if (summaryOf(this.store, chatId).sentTo?.home)
-      return this.sendHome(chatId, id, computerId);
     const folder = join(this.dir, id);
     const started = Date.now();
     const still = () => onHandoff(this.store, chatId, id);
@@ -220,73 +213,6 @@ export class HandoffTrips {
         `Handoff ${named(id, nameOf(this.computers, computerId))} didn't come back:`,
         errorMessage(e),
       );
-      await this.chats.handoffs.updateSentTo(chatId, id, {
-        error: errorMessage(e),
-      });
-    }
-  }
-
-  /**
-   * A thread of a project that lives on the computer: nothing here to stop,
-   * note or commit, so its first message just starts it in the project's
-   * folder there, and it's followed live from then on.
-   */
-  private async sendHome(chatId: string, id: string, computerId: string) {
-    const started = Date.now();
-    let asked = false;
-    try {
-      if (!onHandoff(this.store, chatId, id)) return;
-      const { name } = this.computers.get(computerId);
-      const client = await this.computers.connected(computerId);
-      const info = await this.infos.get(computerId, client, true);
-      if (!info || info.bridge < remoteProjectsBridge)
-        throw new Error(
-          `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
-        );
-      const chat = await this.chats.get(chatId);
-      const project = this.projects.get(chat.projectId).computer;
-      if (!project) throw new Error("This project isn't on another computer.");
-      const input = chat.lastInput;
-      if (!input) throw new Error("Send a first message to start the thread.");
-      const thread: HomeThread = {
-        from: computerName(),
-        title: chat.title,
-        scope: chat.scope,
-        settings: settingsOf(input),
-        messages: await carriedMessages(chat, client, info.bridge),
-      };
-      asked = true;
-      await client.call("startInProject", id, project.projectId, thread);
-      if (!onHandoff(this.store, chatId, id)) return;
-      await this.chats.handoffs.updateSentTo(chatId, id, {
-        state: "away",
-        error: undefined,
-        live: true,
-        // Its first message comes back from there as its own.
-        kept: 0,
-        start: true,
-        folder: true,
-      });
-      console.info(
-        `Thread ${named(id, name)}: started there in ${seconds(started)}.`,
-      );
-      void this.following.follow(computerId, chatId);
-    } catch (e) {
-      console.warn(
-        `Thread ${named(id, nameOf(this.computers, computerId))} didn't start there:`,
-        errorMessage(e),
-      );
-      // Refused there, or never asked: it isn't there, and trying again the
-      // same way would fail the same way, so the thread is new again. An
-      // answer lost on the way may have started it, so that one waits to retry.
-      if (
-        !asked ||
-        (!(e instanceof Unanswered) &&
-          this.computers.status(computerId) === "online")
-      ) {
-        await this.chats.handoffs.startRefused(chatId, id);
-        throw e;
-      }
       await this.chats.handoffs.updateSentTo(chatId, id, {
         error: errorMessage(e),
       });
