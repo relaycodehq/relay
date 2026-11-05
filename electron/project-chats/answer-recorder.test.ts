@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { AnswerRecorder, streamingAnswer } from "./answer-recorder";
+import { liveTurn, savedBase } from "./live-turn";
 import type {
   AgentActivity,
   ChatMessage,
@@ -226,6 +227,26 @@ it("moves the version of a change that came just before a checkpoint, so the che
   vi.advanceTimersByTime(10);
   expect(saved).toEqual([{ body: "ab", version: published + 1 }]);
   answer.end();
+  vi.useRealTimers();
+});
+
+it("moves the version of a change that lands after the turn ended at once, so the next turn's checkpoint keeps it", () => {
+  vi.useFakeTimers();
+  const message = streamingAnswer("claude");
+  const chat = { id: "c", messages: [message] } as unknown as ProjectChat;
+  const answer = new AnswerRecorder(
+    chat,
+    message,
+    () => {},
+    () => {},
+  );
+  message.status = "cancelled";
+  answer.end();
+  const ended = savedBase(chat, 1, 1_000_000);
+  // The model is looked up beside the turn and can resolve after a quick Stop.
+  answer.setModel({ name: "made-up-model", effort: "high" });
+  // The next message's send checkpoints the thread before 40ms have passed.
+  expect(liveTurn(chat, ended).messages).toEqual([message]);
   vi.useRealTimers();
 });
 

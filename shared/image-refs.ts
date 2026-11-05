@@ -8,12 +8,17 @@ import { pasteBlock } from "./pasted-texts";
 export const imageToken = (n: number) => `[Image #${n}]`;
 const imageTokenPattern = /\[Image #(\d+)\]/g;
 
-/** The text with its screenshot tokens taken out, and the gaps they leave. */
+/**
+ * The text with its screenshot tokens taken out, and the gaps they leave.
+ * Each run of spaces is tried once, from its start: retrying from every space
+ * of a long run takes quadratic time.
+ */
 export const withoutImageTokens = (text: string) =>
   text
-    .replace(/[ \t]*\[Image #\d+\]/g, "")
+    .replace(/(?<![ \t])[ \t]*\[Image #\d+\]/g, "")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/^\n+|\s+$/g, "");
+    .replace(/^\n+/, "")
+    .trimEnd();
 
 /** Text that is nothing but screenshot tokens, like a pasted image sent alone. */
 export const onlyImageTokens = (text: string) =>

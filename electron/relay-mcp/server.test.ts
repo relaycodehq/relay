@@ -46,7 +46,13 @@ const post = (
 
 test("a token names its thread only with the secret that signed it", () => {
   const token = relayToken(secret, "chat-1");
-  expect(verifyRelayToken(secret, token)).toBe("chat-1");
+  expect(verifyRelayToken(secret, token)).toEqual({
+    chatId: "chat-1",
+    side: false,
+  });
+  expect(
+    verifyRelayToken(secret, relayToken(secret, "chat-1", "side")),
+  ).toEqual({ chatId: "chat-1", side: true });
   expect(verifyRelayToken("b".repeat(64), token)).toBeUndefined();
   expect(
     verifyRelayToken(secret, token.replace("chat-1", "chat-2")),
@@ -315,6 +321,35 @@ test("a side conversation gets the tools that read, and message_main, which only
   expect(await names(url.replace(/\/mcp$/, STARTED_PATH))).not.toContain(
     "message_main",
   );
+});
+
+test("a side conversation's token reaches only its tools, whatever path it posts to", async () => {
+  const calls: string[] = [];
+  const url = await serve(async (_chat, name) => {
+    calls.push(name);
+    return toolText("ok");
+  });
+  const sideToken = relayToken(secret, "chat-1", "side");
+  const listed = await (
+    await post(url, { jsonrpc: "2.0", id: 1, method: "tools/list" }, sideToken)
+  ).json();
+  const names = listed.result.tools.map((t: { name: string }) => t.name);
+  expect(names).toContain("message_main");
+  expect(names).not.toContain("start_threads");
+  const refused = await (
+    await post(
+      url,
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: { name: "send_to_thread", arguments: {} },
+      },
+      sideToken,
+    )
+  ).json();
+  expect(refused.error.code).toBe(-32602);
+  expect(calls).toEqual([]);
 });
 
 test("the import tools are listed only to a thread opened for an import", async () => {

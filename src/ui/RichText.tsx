@@ -24,6 +24,7 @@ import remarkMath from "remark-math";
 import type { Position } from "unist";
 import type { PluggableList } from "unified";
 import { streamingMarkdownTail } from "./markdown-incremental";
+import { keepTree, keptTree, reuseTree } from "./markdown-tree-cache";
 import { keepIndent, typedSyntax } from "./typed-markdown";
 import {
   chatFileLink,
@@ -262,19 +263,33 @@ const MarkdownBlock = memo(function MarkdownBlock({
   const remarkPlugins = useMemo<PluggableList>(
     () =>
       typed
-        ? [remarkGfm, typedSyntax, streamingMarkdownTail("typed")]
+        ? [remarkGfm, typedSyntax, streamingMarkdownTail()]
         : [
             remarkGfm,
             [remarkMath, { singleDollarTextMath: false }],
-            streamingMarkdownTail("answer"),
+            streamingMarkdownTail(),
           ],
     [typed],
   );
+  const setup = `${typed ? "typed" : "answer"}${html ? "+html" : ""}`;
+  // Only the text a block mounted with is kept: a streaming block changes
+  // with every token, and keeping each would push out a whole thread.
+  const mountedWith = useRef(text).current;
+  const kept = keptTree(setup, text);
+  const plugins = kept
+    ? reuseTree(kept)
+    : {
+        remark: remarkPlugins,
+        rehype: [
+          ...(html ? htmlPlugins : []),
+          ...(text === mountedWith ? [keepTree(setup, text)] : []),
+        ],
+      };
   return (
     <MarkdownSource.Provider value={text}>
       <Markdown
-        remarkPlugins={remarkPlugins}
-        rehypePlugins={html ? htmlPlugins : undefined}
+        remarkPlugins={plugins.remark}
+        rehypePlugins={plugins.rehype}
         components={components}
         urlTransform={urlTransform}
       >

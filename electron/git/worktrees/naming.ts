@@ -27,11 +27,8 @@ export async function freeName(
   for (let n = 1; ; n++) {
     const candidate = n === 1 ? name : `${name}-${n}`;
     const relay = `relay/${candidate}`;
-    if (
-      (relay === own || !(await hasBranch(root, relay))) &&
-      !(await exists(join(dir, candidate)))
-    )
-      return candidate;
+    const branchFree = relay === own || !(await branchOrBelow(root, relay));
+    if (branchFree && !(await exists(join(dir, candidate)))) return candidate;
   }
 }
 
@@ -60,7 +57,7 @@ export async function retitleWorktree(
     const leaf = n === 1 ? name : `${name}-${n}`;
     if (leaf === basename(path)) return;
     const to = join(dirname(path), leaf);
-    if ((await hasBranch(root, `relay/${leaf}`)) || (await exists(to)))
+    if ((await branchOrBelow(root, `relay/${leaf}`)) || (await exists(to)))
       continue;
     await git(root, ["worktree", "move", path, to]);
     try {
@@ -94,7 +91,14 @@ export async function newBranchProblem(root: string, branch: string) {
     if (await hasBranch(root, above))
       return `There's a branch called ${above}, so ${branch} can't be made.`;
   }
-  const below = (
+  const below = await branchBelow(root, branch);
+  if (below)
+    return `There's a branch called ${below}, so ${branch} can't be made.`;
+}
+
+/** A branch named `branch/…`, which keeps `branch` from being made. */
+const branchBelow = async (root: string, branch: string) =>
+  (
     await git(root, [
       "for-each-ref",
       "--count=1",
@@ -102,9 +106,13 @@ export async function newBranchProblem(root: string, branch: string) {
       `refs/heads/${branch}/`,
     ])
   ).trim();
-  if (below)
-    return `There's a branch called ${below}, so ${branch} can't be made.`;
-}
+
+/**
+ * Whether `branch` or one under it exists. A branch above it is left to
+ * `git worktree add` to refuse, as it would take every name after it too.
+ */
+const branchOrBelow = async (root: string, branch: string) =>
+  (await hasBranch(root, branch)) || !!(await branchBelow(root, branch));
 
 /** Where the worktree goes and on which branch: the one the user named, or `relay/…` after `name`. */
 export async function placeFor(

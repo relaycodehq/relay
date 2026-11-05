@@ -1,4 +1,5 @@
 import { useState, type ComponentType, type ReactNode } from "react";
+import { errorMessage } from "../../../shared/error-message";
 import { plugins, type PluginId } from "../../../shared/plugins";
 import { usePluginEnabled, useSetPluginEnabled } from "./plugins";
 import { ToolRow, ToolRows } from "../../ui/ToolRow";
@@ -38,6 +39,7 @@ export function PluginRow({ id }: { id: PluginId }) {
   const setEnabled = useSetPluginEnabled();
   const [open, setOpen] = useState(false);
   const [savedAt, setSavedAt] = useState<number>();
+  const [toggleError, setToggleError] = useState<string>();
   const { mark, Panel, useSummary } = ui[id];
   const summary = useSummary();
   return (
@@ -50,17 +52,31 @@ export function PluginRow({ id }: { id: PluginId }) {
         open={open}
         onOpenChange={setOpen}
         aside={
-          savedAt && (
-            <span key={savedAt} className="plugin-saved" role="status">
-              Saved
+          toggleError ? (
+            <span className="plugin-failed" role="alert">
+              {toggleError}
             </span>
+          ) : (
+            savedAt && (
+              <span key={savedAt} className="plugin-saved" role="status">
+                Saved
+              </span>
+            )
           )
         }
         toggle={{
           checked: enabled,
           onChange: (on) => {
+            const wasOpen = open;
             setOpen(on);
-            void setEnabled(id, on);
+            setToggleError(undefined);
+            setEnabled(id, on).catch((error: unknown) => {
+              // The switch goes back, and the panel with it.
+              setOpen(wasOpen);
+              setToggleError(
+                `Couldn't turn it ${on ? "on" : "off"}: ${errorMessage(error)}`,
+              );
+            });
           },
         }}
         plainDetails={enabled}

@@ -185,7 +185,7 @@ describe("Durable local state", () => {
   it("preserves corrupted data instead of silently clearing it", async () => {
     const dir = await mkdtemp(join(tmpdir(), "relay-store-"));
     await writeFile(join(dir, "state.json"), "broken");
-    await expect(new Store(dir).load()).rejects.toThrow("preserved");
+    await expect(new Store(dir).load()).rejects.toThrow("It was left as it is");
     expect(await readFile(join(dir, "state.json"), "utf8")).toBe("broken");
   });
 });

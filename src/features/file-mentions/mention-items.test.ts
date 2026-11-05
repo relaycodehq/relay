@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { fileTree, listItems, mentionTrigger } from "./mention-items";
+import {
+  fileTree,
+  listItems,
+  mentionFill,
+  mentionTrigger,
+} from "./mention-items";
 import { foldersOf } from "./file-match";
 
 const files = [
@@ -21,6 +26,17 @@ describe("mentionTrigger", () => {
       end: 15,
     });
     expect(mentionTrigger("(@App", 5)?.query).toBe("App");
+  });
+
+  it("stays open inside a folder whose name has a space", () => {
+    const filled = `see ${mentionFill("Design Assets/")}`;
+    expect(mentionTrigger(filled)).toEqual({
+      query: "Design Assets/",
+      start: 4,
+      end: filled.length,
+    });
+    expect(mentionTrigger(`${filled}log`)?.query).toBe("Design Assets/log");
+    expect(mentionFill("src/app/")).toBe("@src/app/");
   });
 
   it("leaves e-mail addresses and finished mentions alone", () => {

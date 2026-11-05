@@ -309,13 +309,14 @@ export class ProcessSession extends HostSession {
   private stopByInput = false;
 
   launch(spec: ProcessSpec) {
-    this.group = spec.group && process.platform !== "win32";
+    // Windows has no process groups; stopping the group there is taskkill /T.
+    this.group = spec.group;
     this.stopByInput = !!spec.stopByInput;
     const child = spawn(spec.command, spec.args, {
       cwd: spec.cwd,
       env: spec.env,
       stdio: ["pipe", "pipe", "pipe"],
-      detached: this.group,
+      detached: this.group && process.platform !== "win32",
     });
     this.child = child;
     let errors = "";

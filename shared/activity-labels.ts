@@ -119,10 +119,22 @@ export function programName(command: string): string | undefined {
         setsValue(words[0]))
     )
       words.shift();
-    const word = words[0]?.replace(/^["'(]+|["')]+$/g, "");
+    const word = words[0] && unwrapped(words[0]);
     if (!word || commandSetup.has(word) || shellHeaders.has(word)) continue;
     return baseName(word) || word;
   }
+}
+
+/**
+ * `word` without the quotes and parentheses around it. A loop, not
+ * `/["')]+$/`, which reads a long run of them once per character.
+ */
+function unwrapped(word: string): string {
+  let start = 0,
+    end = word.length;
+  while (start < end && `"'(`.includes(word[start]!)) start++;
+  while (end > start && `"')`.includes(word[end - 1]!)) end--;
+  return word.slice(start, end);
 }
 
 /** The past-tense line for a finished call, e.g. "Ran rg" or "Read AgentTurn.tsx". */

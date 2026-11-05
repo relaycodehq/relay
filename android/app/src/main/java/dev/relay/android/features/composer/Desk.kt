@@ -27,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
 // The desktop calls the composer and a new thread make, typed. Each throws
 // what RemoteClient.desktop does.
 
-private fun p(value: String?): JsonElement = value?.let(::JsonPrimitive) ?: JsonNull
+/** Null is left out, as an optional argument is. */
+private fun p(value: String?): JsonElement? = value?.let(::JsonPrimitive)
 private inline fun <reified T> JsonElement.to(): T = RemoteJson.decodeFromJsonElement(this)
 
 suspend fun RemoteClient.agentModels(provider: String): List<AgentModel> =

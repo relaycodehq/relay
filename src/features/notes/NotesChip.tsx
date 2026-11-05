@@ -1,7 +1,7 @@
 // The thread's notes beside the composer: a pin with how many are kept, and
 // a card holding them. Lists tick off; any note can go into the draft or
 // take you back to where it was kept.
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import {
   ArrowUpToLine,
@@ -23,7 +23,8 @@ import { RichText } from "../../ui/RichText";
 import type { ThreadNotesHandle } from "./useThreadNotes";
 import "./notes.css";
 
-export function NotesChip({
+// Memoized: a streamed piece of the answer changes none of its props.
+export const NotesChip = memo(function NotesChip({
   notes,
   onQuote,
   onJump,
@@ -97,7 +98,7 @@ export function NotesChip({
       </Popover.Portal>
     </Popover.Root>
   );
-}
+});
 
 function Note({
   note,

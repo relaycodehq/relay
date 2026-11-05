@@ -7,7 +7,7 @@ import type { Projects } from "../projects/projects";
 import { projectTasks } from "../terminal/tasks";
 import { localPort } from "./local-urls";
 import { runningServerPorts } from "./running-server";
-import type { PreviewTarget } from "./thread-previews";
+import type { PreviewTarget } from "./preview-state";
 import type { SavedPreview } from "./saved-previews";
 
 /** The configured port in this worktree, validated before any socket is opened. */

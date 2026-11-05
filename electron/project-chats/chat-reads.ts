@@ -1,7 +1,8 @@
-import type {
-  KnownMessages,
-  ProjectChat,
-  ProjectChatPatch,
+import {
+  workingFor,
+  type KnownMessages,
+  type ProjectChat,
+  type ProjectChatPatch,
 } from "../../shared/projects";
 import { threadCost } from "../../shared/thread-cost";
 import type { ChatCore } from "./core";
@@ -69,10 +70,7 @@ export class ChatReads {
       "ids" in selection
         ? selection.ids
         : (this.core.store.get().chats ?? [])
-            .filter(
-              (c) =>
-                c.startedBy?.chatId === selection.startedBy && !c.archivedAt,
-            )
+            .filter((c) => workingFor(c, selection.startedBy) && !c.archivedAt)
             .map((c) => c.id);
     const loaded = new Map(
       await Promise.all(

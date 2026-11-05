@@ -406,7 +406,8 @@ export class PhoneRemote {
   /** Listens now, and keeps up as Tailscale or the local network goes off, comes back or moves. */
   private async follow() {
     if (!this.watch) {
-      this.watch = setInterval(() => void this.sync(), 10_000);
+      // A failed look is logged in sync and tried again on the next tick.
+      this.watch = setInterval(() => void this.sync().catch(() => {}), 10_000);
       this.watch.unref();
     }
     await this.sync();
@@ -414,7 +415,7 @@ export class PhoneRemote {
 
   /** Listens where `listenerFor` says, moving when that changes. */
   private sync() {
-    this.syncing = this.syncing.then(async () => {
+    const run = this.syncing.then(async () => {
       const settings = this.devices.settings;
       const tailnet = settings.enabled ? await this.tailnet() : undefined;
       const tail = tailnet?.status === "connected" ? tailnet.addresses : [];
@@ -438,7 +439,11 @@ export class PhoneRemote {
         this.error = errorMessage(e);
       }
     });
-    return this.syncing;
+    // One failed look at the network mustn't stop every later one.
+    this.syncing = run.catch((e) =>
+      console.warn("Phone remote: following the network failed:", e),
+    );
+    return run;
   }
 
   /** Where devices reach it by an address: none when only pipes do. */

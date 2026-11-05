@@ -7,6 +7,7 @@ import { agentRuntime, agentRuntimes } from "../../agents";
 import { streamingAnswer } from "../answer-recorder";
 import type { ChatCore } from "../core";
 import type { Councils } from "../councils";
+import { holdQueueBack } from "../queue";
 import { interrupt } from "../revive";
 import { parseSessionKey, sessionInput } from "../sessions";
 import type { TurnEndings } from "./end";
@@ -175,7 +176,7 @@ export class TurnRecovery {
             interrupt(m);
             failed = true;
           }
-        if (failed && chat.queue?.length) chat.queuePaused = true;
+        if (failed) holdQueueBack(chat);
         if (failed)
           await this.core.storage
             .save(chat)

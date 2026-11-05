@@ -1,9 +1,16 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { expect, it } from "vitest";
 import { readsOnly } from "../../agent-host/read-only-bash";
 import { readOnlyEnv, readOnlyShellPattern, readOnlySettings } from "./amp-review";
+
+/**
+ * Whether Amp runs `command` under the rule: it matches with `^` and `$` at
+ * every line (`amp permissions test`, Amp 0.0.1793868001).
+ */
+const ampAllows = (command: string) =>
+  new RegExp(readOnlyShellPattern.source, "m").test(command);
 
 const reads = [
   "git status --short",
@@ -64,6 +71,8 @@ const writes = [
   "git stash",
   "git -c core.pager=sh log",
   "git diff --output=patch.diff",
+  "git cat-file --filters HEAD:a.ts",
+  "git show --textconv HEAD:a.ts",
   "git status && rm -rf src",
   "rg --pre ./run.sh foo",
   "rg --hostname-bin=./evil.sh --hyperlink-format='file://{host}{path}' TODO .",
@@ -93,22 +102,77 @@ const writes = [
   "",
 ];
 
+/** Each ran a program or wrote in bash or zsh while the pattern took it for a read. */
+const splitByTheShell = [
+  "rg foo ';echo x' --pre=./evil.sh .",
+  "rg foo \"|echo x\" --pre=./evil.sh .",
+  "rg foo 'a\necho x' --pre=./evil.sh .",
+  "find src \\\necho -delete",
+  "rg foo\ntouch pwned",
+  "touch pwned\nls",
+  "ls\ntouch pwned",
+  "sed -n 1p a.ts\ntouch pwned",
+  "cat #'\ntouch pwned\n'",
+  "git -C ';x' status\ntouch pwned",
+];
+
+/** The shell turns these into something else before the command sees its words. */
+const expandedByTheShell = [
+  "rg foo *",
+  "rg foo ''*",
+  "rg foo ?-pre=sh",
+  "sort *",
+  "git diff *",
+  "sed -n 1p *",
+  "sed -n 1p '-i' f",
+  "rg foo \"$X\" .",
+  "ls *(e:'touch pwned':)",
+  "cat =(touch pwned)",
+  "echo ${x@P}",
+  "echo ${PATH[_]}",
+  "echo $_",
+];
+
+it("reads quotes, comments and continued lines as the shell does", () => {
+  for (const command of splitByTheShell)
+    expect(ampAllows(command), command).toBe(false);
+});
+
+it("turns down what the shell expands into flags or code", () => {
+  for (const command of expandedByTheShell) {
+    expect(readsOnly(command), command).toBe(false);
+    expect(ampAllows(command), command).toBe(false);
+  }
+});
+
+it("keeps quoted separators and quoted dollars that only search", () => {
+  for (const command of [
+    "rg -n 'foo|bar' src",
+    "rg 'a;b' src && git log --format='%h; %s' -3",
+    "grep -n \"$HOME\" a.txt",
+    "ls src/*.ts",
+  ]) {
+    expect(readsOnly(command), command).toBe(true);
+    expect(ampAllows(command), command).toBe(true);
+  }
+});
+
 it("lets through what readsOnly does", () => {
   for (const command of reads) {
     expect(readsOnly(command), command).toBe(true);
-    expect(readOnlyShellPattern.test(command), command).toBe(true);
+    expect(ampAllows(command), command).toBe(true);
   }
 });
 
 it("turns down whatever readsOnly does", () => {
   for (const command of writes)
-    expect(readOnlyShellPattern.test(command), command).toBe(false);
+    expect(ampAllows(command), command).toBe(false);
 });
 
 it("turns down flags spelled to slip past the look", () => {
   for (const command of disguised) {
     expect(readsOnly(command), command).toBe(false);
-    expect(readOnlyShellPattern.test(command), command).toBe(false);
+    expect(ampAllows(command), command).toBe(false);
   }
 });
 
@@ -143,4 +207,22 @@ it("writes the settings for reviewers starting together", async () => {
   await expect(
     Promise.all([readOnlyEnv(cwd), readOnlyEnv(cwd), readOnlyEnv(cwd)]),
   ).resolves.toHaveLength(3);
+});
+
+it("keeps the settings where no other user of a shared /tmp can swap them", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "amp-review-"));
+  const { env } = await readOnlyEnv(cwd);
+  const dir = dirname(env.AMP_SETTINGS_FILE);
+  expect(dir).not.toBe(join(tmpdir(), "relay-amp-read-only"));
+  expect((await stat(dir)).mode & 0o077).toBe(0);
+});
+
+it("keeps one settings folder for every start, and makes a new one once it's cleared out", async () => {
+  const cwd = await mkdtemp(join(tmpdir(), "amp-review-"));
+  const first = (await readOnlyEnv(cwd)).env.AMP_SETTINGS_FILE;
+  expect((await readOnlyEnv(cwd)).env.AMP_SETTINGS_FILE).toBe(first);
+  await rm(dirname(first), { recursive: true });
+  const next = (await readOnlyEnv(cwd)).env.AMP_SETTINGS_FILE;
+  expect(next).not.toBe(first);
+  expect(JSON.parse(await readFile(next, "utf8"))).toHaveProperty("amp.permissions");
 });

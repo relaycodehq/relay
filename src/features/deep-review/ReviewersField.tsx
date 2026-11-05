@@ -4,8 +4,13 @@ import {
   ownReviewCommand,
   type ReviewAgent,
 } from "../../../shared/deep-review";
-import { agentInfo, reviewerProviders } from "../../../shared/agents";
-import { nextReviewer, swapReviewer } from "./deep-review-setup";
+import { agentInfo } from "../../../shared/agents";
+import { useAISettings } from "../agents/useAISettings";
+import {
+  nextReviewer,
+  reviewerAgents,
+  swapReviewer,
+} from "./deep-review-setup";
 import { ModelField } from "../agents/ModelField";
 import { ReviewPromptLine } from "./ReviewPromptLine";
 
@@ -20,6 +25,8 @@ export function ReviewersField({
   onChange: (reviewers: ReviewAgent[]) => void;
 }) {
   const count = reviewers.length;
+  const ai = useAISettings().data;
+  const providers = reviewerAgents(reviewers, ai);
   const warnings = [
     ...new Set(reviewers.map((r) => agentInfo(r.provider).reviewWarning)),
   ].filter(Boolean);
@@ -34,7 +41,7 @@ export function ReviewersField({
               <ModelField
                 label={`Reviewer ${i + 1}`}
                 provider={reviewer.provider}
-                providers={reviewerProviders}
+                providers={providers}
                 value={reviewer.choice}
                 onChange={(choice, provider) =>
                   onChange(swapReviewer(reviewers, i, choice, provider))

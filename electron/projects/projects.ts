@@ -34,7 +34,7 @@ import {
 } from "../git/repository";
 import {
   readWorkingFile,
-  decodeText,
+  committedText,
   writeWorkingFile,
 } from "../git/working-files";
 
@@ -174,17 +174,16 @@ export class Projects {
   }
 
   /** Group paths in sidebar order; alphabetical until one is dragged. */
-  groups() {
-    const s = this.store.get();
+  groups(s = this.store.get()) {
     const groups = s.projectGroups ?? [];
     return s.projectGroupsOrdered ? groups : sortGroupPaths(groups);
   }
 
   async moveGroup(path: string, before: string | null) {
     if (!path) throw new Error("Choose a group.");
-    const groups = this.groups();
     await this.store.update((s) => {
-      s.projectGroups = moveGroupInList(groups, path, before);
+      // The groups as the changes queued before it left them.
+      s.projectGroups = moveGroupInList(this.groups(s), path, before);
       s.projectGroupsOrdered = true;
     });
   }
@@ -390,15 +389,6 @@ export class Projects {
     const repository = await repositoryRoot(root);
     if (repository && repository !== root)
       throw new Error("Choose the root of its Git repository.");
-    const existing = this.store
-      .get()
-      .projects?.find((p) => p.path === root && !p.computer);
-    if (existing?.removed)
-      await this.store.update((s) => {
-        const p = s.projects?.find((p) => p.id === existing.id);
-        if (p) delete p.removed;
-      });
-    if (existing) return withKind(this.get(existing.id));
     const project: Project = {
       id: randomUUID(),
       path: root,
@@ -407,9 +397,15 @@ export class Projects {
       repository: null,
       added: Date.now(),
     };
+    // Looked for inside the update: an add of the same folder may be queued ahead.
+    let existingId: string | undefined;
     await this.store.update((s) => {
-      (s.projects ??= []).push(project);
+      const existing = s.projects?.find((p) => p.path === root && !p.computer);
+      if (!existing) (s.projects ??= []).push(project);
+      else delete existing.removed;
+      existingId = existing?.id;
     });
+    if (existingId) return withKind(this.get(existingId));
     if (repository) {
       const linked = await this.linkBySite(project.id).catch(() => null);
       if (linked) return withKind(linked);
@@ -607,7 +603,7 @@ export class Projects {
       ? await git(root, ["ls-tree", "-z", head, "--", path])
       : "";
     const original = entry
-      ? decodeText(await gitBytes(root, ["show", `${head}:${path}`]))
+      ? committedText(await gitBytes(root, ["show", `${head}:${path}`]))
       : "";
     return {
       path,

@@ -76,3 +76,40 @@ it("keeps the tokens a refresh rotated in the Codex CLI's Windows auth file", as
   });
   expect(usage.windows.map((w) => w.usedPercent)).toEqual([12]);
 });
+
+it("leaves a Codex sign-in made while a refresh ran in its auth file", async () => {
+  Object.defineProperty(process, "platform", { value: "win32" });
+  vi.stubEnv("CODEX_HOME", "");
+  const auth = "C:\\Users\\me\\.codex\\auth.json";
+  const hour = Math.floor(Date.now() / 1000) + 3600;
+  const newToken = jwt(hour + 60);
+  const newLogin = JSON.stringify({
+    tokens: { access_token: newToken, refresh_token: "new-login" },
+  });
+  files.set(
+    auth,
+    JSON.stringify({
+      tokens: { access_token: jwt(hour - 7200), refresh_token: "old-login" },
+    }),
+  );
+  const usageReadWith: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: URL, init: RequestInit) => {
+      if (url.href !== "https://auth.openai.com/oauth/token") {
+        const headers = init.headers as Record<string, string>;
+        usageReadWith.push(headers.Authorization!);
+        return Response.json({ rate_limit: {} });
+      }
+      // `codex login` as another account lands before the refresh answers.
+      files.set(auth, newLogin);
+      return Response.json({ access_token: jwt(hour), refresh_token: "next" });
+    }),
+  );
+
+  await readProviderUsage("codex", true);
+
+  expect(files.get(auth)).toBe(newLogin);
+  // The usage shown is the new login's, not the account it replaced.
+  expect(usageReadWith).toEqual([`Bearer ${newToken}`]);
+});

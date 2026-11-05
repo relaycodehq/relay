@@ -20,6 +20,7 @@ import {
   sessions,
   setOptions,
   startSession,
+  type ClaudeSession,
 } from "./session";
 import {
   adopt,
@@ -71,7 +72,9 @@ export async function runClaudeProject(
     }
     turn = { unprompted: false };
   }
-  let reusable = false;
+  // A prompt that fails before it goes out, say on a deleted screenshot,
+  // leaves the session and Claude's background work in it as they were.
+  let reusable = !adopting;
   // Past the last frame this turn read from the host's log.
   let consumed: number | undefined;
   const controller = session?.controller ?? new AbortController();
@@ -120,6 +123,7 @@ export async function runClaudeProject(
         await settled(session.unprompted, options.signal);
       session.turn = turn;
       session.hosted?.mark("start");
+      reusable = false;
       session.input.push({
         type: "user",
         uuid: reader.prompt.uuid,
@@ -133,46 +137,7 @@ export async function runClaudeProject(
         },
       });
     }
-    if (!compacting)
-      options.onControl?.({
-        steer: (text, id, steerImages, request, afterTools) =>
-          guardSteer(
-            () => reader.steerable && !options.signal.aborted,
-            () =>
-              Promise.all([
-                claudeImages(steerImages),
-                skillDispatch(text, options.cwd, account.id, request),
-              ]),
-            ([attached, dispatch]) => {
-              const uuid = randomUUID();
-              reader.track(uuid, id);
-              // "now" cuts Claude off mid-reply or mid-tool and answers at once;
-              // the tools it cuts read as turned down by the user, so "next".
-              session!.input.push({
-                type: "user",
-                uuid,
-                session_id: session!.threadId ?? "",
-                parent_tool_use_id: null,
-                message: {
-                  role: "user",
-                  content:
-                    attached.length || dispatch
-                      ? userContent(text, attached, dispatch)
-                      : text,
-                },
-                priority: afterTools ? "next" : "now",
-              });
-            },
-          ),
-        retune: async (choice) => {
-          const tuned = { ...session!.options, ...claudeArgs(choice), choice };
-          // Kept with the session, so the next turn on these settings reuses it.
-          if (!(await retune(session!, tuned))) return false;
-          session!.options = tuned;
-          session!.signature = sessionSignature(tuned);
-          return true;
-        },
-      });
+    if (!compacting) offerControl(options, session, reader, account.id);
     while (true) {
       const message = await session.frames.next();
       const seq = message && session.hosted?.seqOf(message);
@@ -221,6 +186,54 @@ export async function runClaudeProject(
       }
     }
   }
+}
+
+/** What the thread can do to the running turn: steer it, or move it to other settings. */
+function offerControl(
+  options: ClaudeRunOptions,
+  session: ClaudeSession,
+  reader: ClaudeTurnReader,
+  account: string,
+) {
+  options.onControl?.({
+    steer: (text, id, steerImages, request, afterTools) =>
+      guardSteer(
+        () => reader.steerable && !options.signal.aborted,
+        () =>
+          Promise.all([
+            claudeImages(steerImages),
+            skillDispatch(text, options.cwd, account, request),
+          ]),
+        ([attached, dispatch]) => {
+          const uuid = randomUUID();
+          reader.track(uuid, id);
+          // "now" cuts Claude off mid-reply or mid-tool and answers at once;
+          // the tools it cuts read as turned down by the user, so "next".
+          session.input.push({
+            type: "user",
+            uuid,
+            session_id: session.threadId ?? "",
+            parent_tool_use_id: null,
+            message: {
+              role: "user",
+              content:
+                attached.length || dispatch
+                  ? userContent(text, attached, dispatch)
+                  : text,
+            },
+            priority: afterTools ? "next" : "now",
+          });
+        },
+      ),
+    retune: async (choice) => {
+      const tuned = { ...session.options, ...claudeArgs(choice), choice };
+      // Kept with the session, so the next turn on these settings reuses it.
+      if (!(await retune(session, tuned))) return false;
+      session.options = tuned;
+      session.signature = sessionSignature(tuned);
+      return true;
+    },
+  });
 }
 
 /**

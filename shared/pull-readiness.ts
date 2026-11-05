@@ -18,7 +18,12 @@ export interface MergeReadiness {
 
 /** What a pull request waits on before it can merge, and the merge itself. */
 export interface PullReadinessApi {
-  pullCiStatus(ref: PullRef, branch: string): Promise<CiStatus | null>;
+  /** CI on the PR's head commit `sha`; phones that don't send it get the newest CI on `branch` in the PR's repository. */
+  pullCiStatus(
+    ref: PullRef,
+    branch: string,
+    sha?: string,
+  ): Promise<CiStatus | null>;
   pullMergeReadiness(ref: PullRef): Promise<MergeReadiness>;
   /** Merges the PR if its head is still `head`. */
   mergePull(ref: PullRef, head: string, method: MergeMethod): Promise<void>;

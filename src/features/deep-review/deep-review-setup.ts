@@ -8,6 +8,9 @@ import {
   type ReviewTarget,
 } from "../../../shared/deep-review";
 import type { PullRef } from "../../../shared/types";
+import type { AISettings } from "../../../shared/settings";
+import { reviewerProviders } from "../../../shared/agents";
+import { offeredAgents } from "../../../shared/agent-prefs";
 import { readJson } from "../../lib/persisted-store";
 import { lastPrompt, latestReviewSetup } from "./review-setups";
 
@@ -38,7 +41,10 @@ export function firstSetup(projectId: string): Setup {
     savedSetup(projectId) ?? {
       kind: "uncommitted",
       ...(latest ?? {
-        reviewers: defaultPair.map((r) => ({ ...r, prompt: lastPrompt(r.provider) })),
+        reviewers: defaultPair.map((r) => ({
+          ...r,
+          prompt: lastPrompt(r.provider),
+        })),
         lead: claudeAgent("high"),
         runChecks: true,
       }),
@@ -66,6 +72,20 @@ export function withOpus(setup: Setup, opus: string): Setup {
 export const nextReviewer = (reviewers: ReviewAgent[]): ReviewAgent => ({
   ...reviewers.at(-1)!,
 });
+
+/**
+ * The agents a reviewer's picker offers, in Settings' order. Switched-off ones
+ * are left out except those the reviewers already run on.
+ */
+export const reviewerAgents = (
+  reviewers: ReviewAgent[],
+  prefs: AISettings | undefined,
+) =>
+  offeredAgents(
+    reviewerProviders,
+    prefs,
+    reviewers.map((r) => r.provider),
+  );
 
 /** Reviewer `i` on another model; prompts belong to an agent, so another starts where you left it. */
 export const swapReviewer = (

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { agentsSince, summary } from "./waiting";
+import { agentsSince, resetClock, summary } from "./waiting";
 import type { ChatPending } from "./projects";
 
 const now = Date.parse("2026-09-26T12:00:00Z");
@@ -48,4 +48,14 @@ it("counts a thread with subagents out as working, but not one with a dev server
   });
   expect(agentsSince([metro, watcher])).toBeUndefined();
   expect(agentsSince([metro, agent(5), agent(9)])).toBe(now - 9 * 60_000);
+});
+
+it("dates a weekly reset that falls on today's weekday next week", () => {
+  process.env.TZ = "Europe/Prague";
+  const thursday = new Date(2026, 10, 5, 8, 0).getTime();
+  const nextWednesday = new Date(2026, 10, 11, 9, 0).getTime();
+  const nextThursday = new Date(2026, 10, 12, 9, 0).getTime();
+  // A weekday alone would read as today's.
+  expect(resetClock(nextThursday, thursday)).toMatch(/12/);
+  expect(resetClock(nextWednesday, thursday)).not.toMatch(/11/);
 });

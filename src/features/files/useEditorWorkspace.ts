@@ -123,8 +123,14 @@ function followMove(ws: {
   closedTabs: ClosedTabs;
 }) {
   return (from: string, to: string, outside = false) => {
-    moveTabDocuments(allTabs(ws.layout), ws.home, from, to, outside);
-    ws.setLayout((l) => renameInGroups(l, from, to, outside));
+    const stayed = moveTabDocuments(
+      allTabs(ws.layout),
+      ws.home,
+      from,
+      to,
+      outside,
+    );
+    ws.setLayout((l) => renameInGroups(l, from, to, outside, stayed));
     const gone = (tab: EditorTab) => tabIsWithin(tab, from, outside);
     ws.history.current = forget(ws.history.current, gone);
     ws.closedTabs.forget(gone);

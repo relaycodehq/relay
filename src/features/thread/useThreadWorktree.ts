@@ -16,7 +16,6 @@ import {
 } from "../../../shared/projects";
 import { api } from "../../lib/api";
 import {
-  loadDraftWorkspace,
   projectWorkspace,
   saveDraftStart,
   saveDraftWorkspace,
@@ -31,6 +30,8 @@ import { useNavigationLock } from "../../lib/navigation-lock";
 import { worktreeQuery } from "../changes/turn-diff";
 import { projectChatsQuery } from "../../lib/workspace-queries";
 import { usePoll } from "../../lib/poll";
+import { useStableCallback } from "../../lib/useStableCallback";
+import { useSteady } from "../../lib/useSteady";
 
 export type ThreadWorktree = ReturnType<typeof useThreadWorktree>;
 
@@ -58,19 +59,16 @@ export function useThreadWorktree({
   const poll = usePoll();
   const qc = useQueryClient();
   const lock = useNavigationLock();
-  // Where a new thread will work; a started one keeps its own.
-  const [workspace, setWorkspace] = useState<ChatWorkspace>(() =>
-    chat ? "checkout" : loadDraftWorkspace(id, project),
-  );
-  // Until one is picked here, it follows the project's setting as that changes.
-  const projectDefault = projectWorkspace(project);
+  // Where a new thread will work, as picked here or for the same draft on a
+  // phone; until then, wherever the project's setting says. A started one
+  // keeps its own.
+  const picked = useDraftRecord(id, (draft) => draft.workspace);
+  const workspace = chat ? "checkout" : (picked ?? projectWorkspace(project));
+  const setWorkspace = useStableCallback((next: ChatWorkspace) => {
+    if (!chat) saveDraftWorkspace(id, next, project);
+  });
   useEffect(() => {
-    if (!chat) setWorkspace(loadDraftWorkspace(id, project));
-  }, [projectDefault]);
-  useEffect(() => {
-    if (chat) return;
-    saveDraftWorkspace(id, workspace, project);
-    onDraftWorkspace?.(workspace);
+    if (!chat) onDraftWorkspace?.(workspace);
   }, [workspace, !chat]);
   // A paired computer the new thread starts on instead, in a worktree there.
   const [startOn, setStartOn] = useState<{ id: string; name: string }>();
@@ -84,31 +82,7 @@ export function useThreadWorktree({
   useEffect(() => {
     if (!chat) threadStorage(id).branch.save(newBranch);
   }, [newBranch, !chat]);
-  // Where the new worktree starts; none is off the checkout's commit. Read
-  // from the draft, so dropping the scope there drops it here too.
-  const saved = useDraftRecord(id, (draft) =>
-    draft.start ? JSON.stringify(draft.start) : undefined,
-  );
-  const start = useMemo(
-    () => (saved ? (JSON.parse(saved) as WorktreeStart) : undefined),
-    [saved],
-  );
-  const setStart = (next: WorktreeStart | undefined) => {
-    if (!chat) saveDraftStart(id, next);
-  };
-  // A draft from when threads were joined by thread carries on that one's
-  // branch instead, as the picker shows; with the thread gone, it's none.
-  const joining =
-    !chat && start && "thread" in start ? start.thread : undefined;
-  const threads = useQuery({
-    ...projectChatsQuery(project.id),
-    enabled: !!joining,
-  });
-  useEffect(() => {
-    if (!joining || !threads.data) return;
-    const branch = threads.data.find((c) => c.id === joining)?.worktree?.branch;
-    setStart(branch ? { on: branch } : undefined);
-  }, [joining, threads.data]);
+  const { start, setStart } = useDraftStart(chat, id, project);
   const query = useQuery(worktreeQuery(chat?.id, !!chat?.worktree, poll));
   // A thread that left its worktree keeps the last status it had there.
   const status = chat?.worktree ? query.data : undefined;
@@ -130,7 +104,11 @@ export function useThreadWorktree({
   });
   // Offered only while the deleted worktree's branch is still there to make it from.
   const recreatable = useQuery({
-    queryKey: ["agent-worktree-recreatable", chat?.id, chat?.activeAgentWorktree?.path],
+    queryKey: [
+      "agent-worktree-recreatable",
+      chat?.id,
+      chat?.activeAgentWorktree?.path,
+    ],
     queryFn: () => api.agentWorktreeRecreatable(chat!.id),
     enabled: !!chat && unavailable,
   });
@@ -145,20 +123,23 @@ export function useThreadWorktree({
     // A finished turn leaves new changes to count.
     if (!running && chat?.worktree) void query.refetch();
   }, [running]);
-  async function select(path: string | null) {
+  const select = useStableCallback(async (path: string | null) => {
     await changeWorkspace(() => api.selectAgentWorktree(chat!.id, path));
-  }
+  });
   /** Moves the thread to `branch` wherever it's worked on; see `projectChatWorkOn`. */
-  async function workOn(branch: string) {
+  const workOn = useStableCallback(async (branch: string) => {
     await changeWorkspace(() => api.projectChatWorkOn(chat!.id, branch));
     void query.refetch();
     void qc.invalidateQueries({ queryKey: ["project-branches", project.id] });
-  }
-  async function recreate() {
+  });
+  const recreate = useStableCallback(async () => {
     await changeWorkspace(() => api.recreateAgentWorktree(chat!.id));
     // Its answer was about the folder now back; a later deletion asks again.
     qc.removeQueries({ queryKey: ["agent-worktree-recreatable", chat?.id] });
-  }
+  });
+  const showError = useStableCallback((reason: string) =>
+    setError(new Error(reason)),
+  );
   async function changeWorkspace(change: () => Promise<ChatSummary>) {
     if (!chat || lock.blocked() || running) return;
     await run(async () => {
@@ -176,7 +157,8 @@ export function useThreadWorktree({
       void listChanged();
     });
   }
-  return {
+  // Stable while nothing in it changes, so the controls showing it skip renders.
+  return useSteady({
     workspace,
     setWorkspace,
     startOn: chat ? undefined : startOn,
@@ -199,7 +181,8 @@ export function useThreadWorktree({
         : (agentWorktree?.branch ?? reviewFolderLabel(reviewFolder(chat)))),
     inWorktree: !!live || !!agentWorktree,
     /** A repository thread goes to any branch picked; a review keeps the code it reviews. */
-    branchSwitchable: !chat || (chat.scope.kind === "project" && !chat.reviewer),
+    branchSwitchable:
+      !chat || (chat.scope.kind === "project" && !chat.reviewer),
     /** Its worktree waits on the thread's title for a name. */
     naming: !!live?.naming,
     unavailable,
@@ -207,11 +190,45 @@ export function useThreadWorktree({
     select,
     workOn,
     /** Shows why a branch control couldn't do what was picked. */
-    showError: (reason: string) => setError(new Error(reason)),
+    showError,
     recreate,
     selectionDisabled: running || lock.locked,
     ...removal,
-  };
+  });
+}
+
+/** Where an unsent thread's new worktree starts, kept in its draft. */
+function useDraftStart(
+  chat: ChatSummary | undefined,
+  id: string,
+  project: Project,
+) {
+  // Where the new worktree starts; none is off the checkout's commit. Read
+  // from the draft, so dropping the scope there drops it here too.
+  const saved = useDraftRecord(id, (draft) =>
+    draft.start ? JSON.stringify(draft.start) : undefined,
+  );
+  const start = useMemo(
+    () => (saved ? (JSON.parse(saved) as WorktreeStart) : undefined),
+    [saved],
+  );
+  const setStart = useStableCallback((next: WorktreeStart | undefined) => {
+    if (!chat) saveDraftStart(id, next);
+  });
+  // A draft from when threads were joined by thread carries on that one's
+  // branch instead, as the picker shows; with the thread gone, it's none.
+  const joining =
+    !chat && start && "thread" in start ? start.thread : undefined;
+  const threads = useQuery({
+    ...projectChatsQuery(project.id),
+    enabled: !!joining,
+  });
+  useEffect(() => {
+    if (!joining || !threads.data) return;
+    const branch = threads.data.find((c) => c.id === joining)?.worktree?.branch;
+    setStart(branch ? { on: branch } : undefined);
+  }, [joining, threads.data]);
+  return { start, setStart };
 }
 
 /** Removing the thread's worktree, from its dialog. */
@@ -231,7 +248,7 @@ function useWorktreeRemoval({
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<"remove">();
-  async function remove() {
+  const remove = useStableCallback(async () => {
     if (!chatId || busy) return;
     setBusy(true);
     setError(undefined);
@@ -247,7 +264,7 @@ function useWorktreeRemoval({
       void qc.invalidateQueries({ queryKey: workingTreeKey() });
       void listChanged();
     }
-  }
+  });
   return {
     busy,
     /** The Remove dialog, while it is open. */

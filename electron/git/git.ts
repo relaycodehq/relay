@@ -1,11 +1,19 @@
 import { stopProcessTree } from "../platform/terminate";
 import { execFile, spawn } from "node:child_process";
 import { access } from "node:fs/promises";
-import { delimiter, dirname } from "node:path";
+import { delimiter, dirname, resolve } from "node:path";
+import type { Writable } from "node:stream";
 import { promisify } from "node:util";
 import { NotText, textLimit, tooLarge } from "./working-files";
 import { findGit } from "../platform/executables";
-import { gitMissing, type GitInfo } from "../../shared/working-tree";
+import {
+  gitMissing,
+  gitTooOld,
+  OLDEST_GIT,
+  type GitInfo,
+} from "../../shared/working-tree";
+import { filterOverride } from "./filter-guard";
+import { monitorOverride } from "./fsmonitor-guard";
 const exec = promisify(execFile);
 const missing = `${gitMissing} Install Git, or choose where it is in Settings → Integrations.`;
 /** The Git chosen in Settings; unset, Relay finds its own. */
@@ -52,6 +60,7 @@ async function lookUpGit() {
     (await findGit().catch(() => {
       throw new Error(missing);
     }));
+  await refuseOldGit(git);
   // Agents and terminals run Git too, and a PATH from before Git was
   // installed (Windows keeps the one the app started with) lacks it.
   const dir = dirname(git),
@@ -59,6 +68,16 @@ async function lookUpGit() {
   if (!paths.includes(dir))
     process.env.PATH = [dir, ...paths].filter(Boolean).join(delimiter);
   return git;
+}
+
+async function refuseOldGit(path: string) {
+  // One that won't say its version is left to fail on what it's asked.
+  const line = await gitVersion(path).catch(() => "");
+  if (!gitTooOld(line)) return;
+  const found = line.slice("git version ".length);
+  throw new Error(
+    `Relay needs Git ${OLDEST_GIT.major}.${OLDEST_GIT.minor} or newer; ${path} is ${found}. Update Git, or choose a newer one in Settings → Integrations.`,
+  );
 }
 
 /** Git's version line; fails when `path` isn't Git. */
@@ -120,6 +139,14 @@ export interface GitOptions {
   /** Added over `gitEnv`. */
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  /** Written to Git's stdin, e.g. paths for `--pathspec-from-file=-`. */
+  input?: string;
+  /**
+   * A look Relay takes on its own, like the snapshot behind a worktree's
+   * card: kept from the repository's fsmonitor hook and filters, as a
+   * polled status is, whatever the subcommand.
+   */
+  polled?: boolean;
 }
 
 /** Git's failure as the user should see it: its own message, no credentials. */
@@ -153,7 +180,36 @@ export function gitError(e: unknown) {
       .join("\n")
       .trim() || error.message,
   ].join("\n");
-  return new Error(redactCredentials(message).slice(0, 3000));
+  const failure = new Error(redactCredentials(message).slice(0, 3000));
+  return typeof error.code === "number"
+    ? Object.assign(failure, { exitCode: error.code })
+    : failure;
+}
+
+/** The code Git exited with, when it ran and failed; some commands tell what they did by it. */
+export const exitCodeOf = (error: unknown) =>
+  (error as { exitCode?: number }).exitCode;
+
+/**
+ * `args` run in `root`, without the repository's fsmonitor hook or filters
+ * when they only read. A promise only until `root`'s filters are known.
+ */
+function gitArgs(
+  file: string,
+  root: string,
+  args: string[],
+  { env, polled }: Pick<GitOptions, "env" | "polled">,
+): string[] | Promise<string[]> {
+  const monitor = monitorOverride(file, root, args, gitEnv(env), polled);
+  const filters = filterOverride(file, root, args, gitEnv(env), polled);
+  const full = (settings: string[]) => [
+    "-C",
+    root,
+    ...monitor,
+    ...settings,
+    ...args,
+  ];
+  return Array.isArray(filters) ? full(filters) : filters.then(full);
 }
 
 /** Runs Git in `root`; a timeout as a number is the common case. */
@@ -167,25 +223,36 @@ export async function git(
     maxBuffer = 16 * 1024 * 1024,
     env,
     signal,
+    input,
+    polled,
   } = typeof options === "number" ? { timeout: options } : options;
   const file = resolved ?? (await gitExecutable());
+  let fullArgs: string[];
+  try {
+    // Awaited only while it's a promise, so Git starts before this returns.
+    const pending = gitArgs(file, root, args, { env, polled });
+    fullArgs = Array.isArray(pending) ? pending : await pending;
+  } catch (error) {
+    throw gitError(error);
+  }
   signal?.throwIfAborted();
   if (signal)
-    return cancellableGit(file, root, args, {
+    return cancellableGit(file, fullArgs, {
       timeout,
       maxBuffer,
       env,
       signal,
+      input,
     });
   try {
-    return (
-      await exec(file, ["-C", root, ...args], {
-        timeout,
-        maxBuffer,
-        env: gitEnv(env),
-        encoding: "utf8",
-      })
-    ).stdout;
+    const running = exec(file, fullArgs, {
+      timeout,
+      maxBuffer,
+      env: gitEnv(env),
+      encoding: "utf8",
+    });
+    writeInput(running.child.stdin, input);
+    return (await running).stdout;
   } catch (error) {
     throw gitError(error);
   }
@@ -194,19 +261,20 @@ export async function git(
 /** Keep pipes open until the entire cancelled Git command has stopped. */
 function cancellableGit(
   file: string,
-  root: string,
-  args: string[],
+  fullArgs: string[],
   options: Required<Pick<GitOptions, "timeout" | "maxBuffer" | "signal">> &
-    Pick<GitOptions, "env">,
+    Pick<GitOptions, "env" | "input">,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const { signal, timeout, maxBuffer } = options;
-    const child = spawn(file, ["-C", root, ...args], {
+    const child = spawn(file, fullArgs, {
       env: gitEnv(options.env),
       detached: process.platform !== "win32",
       windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: "pipe",
     });
+    // Ended even without input, so Git never waits on it.
+    writeInput(child.stdin, options.input ?? "");
     let stopping: Promise<void> | undefined;
     let failure: Error | undefined;
     const stop = () => {
@@ -256,6 +324,23 @@ function cancellableGit(
     });
   });
 }
+
+function writeInput(stdin: Writable | null, input: string | undefined) {
+  if (input === undefined || !stdin) return;
+  // Git may exit before reading it all; its exit code says what went wrong.
+  stdin.on("error", () => {});
+  stdin.end(input);
+}
+
+/**
+ * Arguments that read pathspecs from `nulSeparated` input on stdin, for a
+ * command that takes `--pathspec-from-file`: hundreds of paths on the
+ * command line overflow Windows' 32k characters.
+ */
+export const pathsFromStdin = ["--pathspec-from-file=-", "--pathspec-file-nul"];
+
+export const nulSeparated = (paths: readonly string[]) =>
+  paths.join("\0") + "\0";
 
 /** Whether commit `a` is in `b`'s history. */
 export const isAncestor = (root: string, a: string, b: string) =>
@@ -312,13 +397,24 @@ export async function checkedOutOr(
  * has checked out; a prunable one's folder is gone, only Git's record is left.
  */
 export async function worktreeList(root: string) {
-  const out = await git(root, ["worktree", "list", "--porcelain"]);
+  return parseWorktreeList(
+    await git(root, ["worktree", "list", "--porcelain"]),
+  );
+}
+
+/**
+ * What `git worktree list --porcelain` says, with each folder as this
+ * computer writes paths: Git for Windows lists C:/Users/…, which Relay's
+ * C:\Users\… never equals.
+ */
+export function parseWorktreeList(out: string) {
   return out.split("\n\n").flatMap((block) => {
     const lines = block.split("\n");
     const value = (key: string) =>
       lines.find((l) => l.startsWith(key + " "))?.slice(key.length + 1);
-    const path = value("worktree");
-    if (!path) return [];
+    const listed = value("worktree");
+    if (!listed) return [];
+    const path = resolve(listed);
     const branch = value("branch")?.replace(/^refs\/heads\//, "");
     const prunable = lines.some((l) => /^prunable( |$)/.test(l));
     return [{ path, ...(branch ? { branch } : {}), prunable }];
@@ -334,7 +430,7 @@ export async function gitBytes(
   const file = resolved ?? (await gitExecutable());
   try {
     return (
-      await exec(file, ["-C", root, ...args], {
+      await exec(file, await gitArgs(file, root, args, {}), {
         timeout: 15000,
         maxBuffer: limit + 4096,
         encoding: "buffer",

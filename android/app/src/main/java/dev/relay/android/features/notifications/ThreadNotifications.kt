@@ -15,6 +15,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import dev.relay.android.lib.navigation.threadLink
 import dev.relay.android.remote.Remote
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteStatus
@@ -231,7 +232,7 @@ class ThreadNotifications(private val app: Application, private val remote: Remo
     }
 
     private fun post(news: ThreadNews) =
-        WatchService.post(app, news.chatId, news.title, news.body, "relay-native://chat/${news.chatId}")
+        WatchService.post(app, news.chatId, news.title, news.body, threadLink(news.chatId, remote.active.value))
 
     private companion object {
         const val TAG = "ThreadNotifications"

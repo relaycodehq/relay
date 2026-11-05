@@ -4,7 +4,18 @@
 // the Cursor worker, so it only uses Node.
 import { execFile } from "node:child_process";
 import type { SDKCustomTool, SDKCustomToolResult } from "@cursor/sdk";
-import { gitReads, gitReadsOnly } from "../../agent-host/read-only-bash";
+import {
+  diffDriversOff,
+  diffShowing,
+  gitReads,
+  gitReadsOnly,
+  subcommandAt,
+} from "../../agent-host/read-only-bash";
+import {
+  filtersEmptied,
+  foreignFilterKeys,
+} from "../../git-config/repository-filters";
+import { readOnlyGitEnv } from "../read-only-git";
 
 /** About 25k tokens; past it the model is asked to narrow what it asks for. */
 export const MAX_GIT_OUTPUT = 100_000;
@@ -39,9 +50,41 @@ export function gitTool(cwd: string, signal: AbortSignal): SDKCustomTool {
           `git ${words.join(" ")} isn't allowed: this turn only reads. Use ${[...gitReads].slice(0, 6).join(", ")} and the like.`,
           true,
         );
-      return run(cwd, words, signal);
+      let filtersOff: string[];
+      try {
+        filtersOff = filtersEmptied(
+          await foreignFilterKeys("git", cwd, readOnlyEnv()),
+        );
+      } catch (error) {
+        return text((error as Error).message, true);
+      }
+      return run(cwd, [...filtersOff, ...withoutDiffDrivers(words)], signal);
     },
   };
+}
+
+/**
+ * Not even `git status` refreshing the index: this turn changes nothing.
+ * The worker may predate the switch to Read only, so the read-only git
+ * settings go on every call rather than coming from its env.
+ */
+const readOnlyEnv = () => ({
+  ...process.env,
+  ...readOnlyGitEnv(process.env),
+  GIT_OPTIONAL_LOCKS: "0",
+  GIT_TERMINAL_PROMPT: "0",
+  GIT_PAGER: "cat",
+});
+
+/**
+ * A checkout's own `.git/config` can name a command that turns a file into
+ * text for a diff, or that shows the diff itself. A read-only turn runs
+ * neither: the flags go right after the subcommand.
+ */
+function withoutDiffDrivers(args: string[]) {
+  const at = subcommandAt(args);
+  if (!diffShowing.has(args[at]!)) return args;
+  return [...args.slice(0, at + 1), ...diffDriversOff, ...args.slice(at + 1)];
 }
 
 function run(cwd: string, args: string[], signal: AbortSignal) {
@@ -54,13 +97,7 @@ function run(cwd: string, args: string[], signal: AbortSignal) {
         signal,
         timeout: 60_000,
         maxBuffer: 64 * 1024 * 1024,
-        // Not even `git status` refreshing the index: this turn changes nothing.
-        env: {
-          ...process.env,
-          GIT_OPTIONAL_LOCKS: "0",
-          GIT_TERMINAL_PROMPT: "0",
-          GIT_PAGER: "cat",
-        },
+        env: readOnlyEnv(),
       },
       (error, stdout, stderr) => {
         // `git grep` finding nothing exits 1 and says nothing.

@@ -5,15 +5,22 @@ import {
 } from "../../../shared/working-tree";
 import { rankPaths } from "./file-match";
 
-/** `@` and what follows it up to the caret, when that is a mention being typed. */
+/**
+ * `@` and what follows it up to the caret, when that is a mention being
+ * typed: a word, or after `@"` anything on the line, for a path with spaces.
+ */
 export function mentionTrigger(text: string, cursor = text.length) {
   const before = text.slice(0, cursor);
   // After a space or an opening bracket or quote, so `me@host` stays text.
-  const match = /(^|[\s([{"'])@([^\s@`]*)$/.exec(before);
+  const match = /(^|[\s([{"'])@(?:"([^"\n]*)|([^\s@`]*))$/.exec(before);
   if (!match) return null;
   const start = match.index + match[1].length;
-  return { query: match[2], start, end: cursor };
+  return { query: match[2] ?? match[3], start, end: cursor };
 }
+
+/** The mention typed out to look inside a folder; quoted, as Claude Code does, when its path has a space. */
+export const mentionFill = (path: string) =>
+  /\s/.test(path) ? `@"${path}` : `@${path}`;
 
 /** A file, or a folder ending in `/`, offered for a mention. */
 export interface MentionItem {

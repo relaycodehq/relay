@@ -16,7 +16,13 @@ import {
   STARTED_PATH,
 } from "./tool-lists";
 
-export { serveRelayTools, type McpHandlers } from "./server";
+import type { RelayIdentity } from "./server";
+
+export {
+  serveRelayTools,
+  type McpHandlers,
+  type RelayIdentity,
+} from "./server";
 
 /** The MCP server name Relay's tools go by, so Claude reaches them as `mcp__relay__…`. */
 export const RELAY_SERVER = "relay";
@@ -119,23 +125,38 @@ export async function loadRelayMcp(dir: string): Promise<RelayMcpConfig> {
   return config;
 }
 
-const sign = (secret: string, chatId: string) =>
-  createHmac("sha256", secret).update(chatId).digest("base64url");
+/**
+ * A side conversation's token signs more than its thread's id, so it can't
+ * pass for its thread's own at another path.
+ */
+const sign = (secret: string, chatId: string, side: boolean) =>
+  createHmac("sha256", secret)
+    .update(side ? `${chatId}\nside` : chatId)
+    .digest("base64url");
 
 /** The bearer token that names `chatId` to the tools. */
-export const relayToken = (secret: string, chatId: string) =>
-  `${chatId}.${sign(secret, chatId)}`;
+export const relayToken = (
+  secret: string,
+  chatId: string,
+  caller: RelayCaller = "thread",
+) => `${chatId}.${sign(secret, chatId, caller === "side")}`;
 
-/** The thread a token names, if `secret` signed it. */
-export function verifyRelayToken(secret: string, token: string) {
+/** Who a token speaks for, if `secret` signed it. */
+export function verifyRelayToken(
+  secret: string,
+  token: string,
+): RelayIdentity | undefined {
   const dot = token.lastIndexOf(".");
   if (dot <= 0) return undefined;
   const chatId = token.slice(0, dot);
   const given = Buffer.from(token.slice(dot + 1));
-  const expected = Buffer.from(sign(secret, chatId));
-  return given.length === expected.length && timingSafeEqual(given, expected)
-    ? chatId
-    : undefined;
+  const signedFor = (side: boolean) => {
+    const expected = Buffer.from(sign(secret, chatId, side));
+    return given.length === expected.length && timingSafeEqual(given, expected);
+  };
+  if (signedFor(false)) return { chatId, side: false };
+  if (signedFor(true)) return { chatId, side: true };
+  return undefined;
 }
 
 let current: RelayMcpConfig | undefined;
@@ -170,7 +191,7 @@ export function relayToolsFor(
   return current
     ? {
         url: `http://127.0.0.1:${current.port}${pathOf[caller]}${query.size ? `?${query}` : ""}`,
-        token: relayToken(current.secret, chatId),
+        token: relayToken(current.secret, chatId, caller),
         renders,
       }
     : undefined;

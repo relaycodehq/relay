@@ -96,6 +96,11 @@ const waiting = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Set<string>();
 // Set while this window writes what came from elsewhere, so it isn't pushed back.
 let applying = false;
+/**
+ * Threads a phone's held send is clearing, with how many sends are clearing
+ * each; the computer drops their drafts itself.
+ */
+const quiet = new Map<string, number>();
 let started = false;
 /** Live changes received while the initial draft snapshot is on its way. */
 let catchingUp: Set<string> | undefined;
@@ -174,7 +179,7 @@ function syncState(key: string) {
 
 /** Waits out the pause after an edit, then pushes what changed. */
 function schedule(thread: string) {
-  if (applying || localOnlyRecord(thread)) return;
+  if (applying || quiet.has(thread) || localOnlyRecord(thread)) return;
   clearTimeout(waiting.get(thread));
   waiting.set(
     thread,
@@ -447,14 +452,20 @@ export async function resolveOther(composer: string, drop: boolean) {
 }
 
 /**
- * Runs `change` without pushing what it writes: a send through this page
- * clears what it held, and the computer drops the draft itself.
+ * Runs `change` without pushing what it writes to `thread`'s record: a send
+ * through this page clears what it held, and the computer drops the draft
+ * itself. Edits to other threads meanwhile are pushed as ever.
  */
-export async function quietly<T>(change: () => Promise<T>): Promise<T> {
-  applying = true;
+export async function quietly<T>(
+  thread: string,
+  change: () => Promise<T>,
+): Promise<T> {
+  quiet.set(thread, (quiet.get(thread) ?? 0) + 1);
   try {
     return await change();
   } finally {
-    applying = false;
+    const left = (quiet.get(thread) ?? 1) - 1;
+    if (left > 0) quiet.set(thread, left);
+    else quiet.delete(thread);
   }
 }

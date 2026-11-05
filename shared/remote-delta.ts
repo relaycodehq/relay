@@ -31,8 +31,31 @@ export interface ChatsPatch {
   remove: string[];
 }
 
-const same = (a: unknown, b: unknown) =>
-  a === b || JSON.stringify(a) === JSON.stringify(b);
+/**
+ * Whether two JSON-like values hold the same data. Walks them instead of
+ * serializing both: a streaming answer compares every step of its trace
+ * each update, and two JSON.stringify calls a step cost more than sending
+ * the answer whole.
+ */
+function same(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
+      return false;
+    for (let i = 0; i < a.length; i++) if (!same(a[i], b[i])) return false;
+    return true;
+  }
+  const was = a as Record<string, unknown>;
+  const now = b as Record<string, unknown>;
+  let keys = 0;
+  for (const key in was) {
+    if (!Object.hasOwn(now, key) || !same(was[key], now[key])) return false;
+    keys++;
+  }
+  for (const _ in now) keys--;
+  return keys === 0;
+}
 
 function listPatch<T>(was: readonly T[] = [], now: readonly T[]): ListPatch<T> {
   const items: [number, T][] = [];
@@ -65,6 +88,10 @@ export function diffMessage(
   }
   if (prev.body !== next.body) {
     let from = 0;
+    // A streaming answer nearly always just grows: skip the scan then. A
+    // slice compares natively, many times faster than startsWith or the loop.
+    if (next.body.slice(0, prev.body.length) === prev.body)
+      from = prev.body.length;
     const max = Math.min(prev.body.length, next.body.length);
     while (
       from < max &&

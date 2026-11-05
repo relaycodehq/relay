@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { createPortal } from "react-dom";
 import type { ChatScope, ChatSummary, Project } from "../../../shared/projects";
 import type { TurnDiffTarget } from "../changes/turn-diff";
@@ -206,12 +207,15 @@ function WhereControls({
 /**
  * The thread's folder, branch and linked folders: in the composer's row
  * until the thread starts, then in its Running card, folding away with it.
+ * Memoized: a streamed piece of the answer changes none of its props.
  */
-export function ThreadWhere(props: Omit<WhereProps, "inCard">) {
+export const ThreadWhere = memo(function ThreadWhere(
+  props: Omit<WhereProps, "inCard">,
+) {
   const cardSlot = useCardSlot();
   if (!props.chat || cardSlot === undefined)
     return <WhereControls {...props} />;
   return (
     cardSlot && createPortal(<WhereControls {...props} inCard />, cardSlot)
   );
-}
+});

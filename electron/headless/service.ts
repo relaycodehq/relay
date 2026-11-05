@@ -238,17 +238,17 @@ export async function serviceHome(kind: ServiceKind) {
     return /^env\("RELAY_HOME"\) = "((?:[^"]|"")*)"\r?$/m
       .exec(text)?.[1]
       ?.replace(/""/g, '"');
-  const found =
-    kind === "launchd"
-      ? /<key>RELAY_HOME<\/key>\s*<string>([^<]*)<\/string>/.exec(text)?.[1]
-      : /^Environment="RELAY_HOME=(.*)"$/m.exec(text)?.[1];
-  return found
+  if (kind === "systemd")
+    // Undoes unitQuote in one pass, so an escape never reads another's output.
+    return /^Environment="RELAY_HOME=(.*)"$/m
+      .exec(text)?.[1]
+      ?.replace(/\\(["\\])|%%/g, (_, escaped?: string) => escaped ?? "%");
+  return /<key>RELAY_HOME<\/key>\s*<string>([^<]*)<\/string>/
+    .exec(text)?.[1]
     ?.replace(/&quot;/g, '"')
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, "\\");
+    .replace(/&amp;/g, "&");
 }
 
 const uid = () => userInfo().uid;
@@ -283,6 +283,7 @@ export async function installService(spec: ServiceSpec) {
     };
   }
   if (kind === "launchd") {
+    const before = await readFile(file, "utf8").catch(() => undefined);
     await uninstallLaunchd({ keepFile: true });
     await writeFile(file, launchdPlist(spec));
     let last: unknown;
@@ -293,10 +294,24 @@ export async function installService(spec: ServiceSpec) {
       } catch (e) {
         last = e;
       }
+    // A new agent left behind would send every `relay start` to launchd,
+    // which fails the same way; one set up before is put back.
+    if (before === undefined) await rm(file, { force: true });
+    else await writeFile(file, before);
     throw new Error(`launchd wouldn't load Relay: ${message(last)}`);
   }
+  const before = await readFile(file, "utf8").catch(() => undefined);
   await writeFile(file, systemdService(spec));
-  await systemctl(["daemon-reload"]);
+  await systemctl(["daemon-reload"]).catch(async (e) => {
+    // No systemd for this user here, `sudo -u` say. A new unit left behind
+    // would send every `relay start` to systemctl too; one set up before,
+    // from a login session, still starts Relay at boot.
+    if (before === undefined) await rm(file, { force: true });
+    else await writeFile(file, before);
+    throw new Error(
+      `systemd wouldn't load Relay for this user (${message(e)}). Run this from a login session, or set Relay up with relay setup --no-service and run relay start after each restart.`,
+    );
+  });
   // Enabling an active unit does not apply a changed home or executable.
   await systemctl(["enable", systemdUnit]);
   await systemctl(["restart", systemdUnit]);

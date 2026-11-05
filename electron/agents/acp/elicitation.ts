@@ -82,6 +82,25 @@ function choiceQuestion(
   };
 }
 
+/** A yes-or-no field, whose value is a boolean rather than the card's "true" or "false". */
+function booleanQuestion(key: string, question: AgentQuestion): FormQuestion {
+  const yesOrNo = choiceQuestion(
+    key,
+    question,
+    [
+      { label: "Yes", value: "true" },
+      { label: "No", value: "false" },
+    ],
+    undefined,
+    false,
+  );
+  return {
+    question: yesOrNo.question,
+    fill: (answers) =>
+      yesOrNo.fill(answers).map(([field, value]) => [field, value === "true"]),
+  };
+}
+
 function numberQuestion(
   key: string,
   question: AgentQuestion,
@@ -113,16 +132,7 @@ function fieldQuestion(
   };
   switch (field.type) {
     case "boolean":
-      return choiceQuestion(
-        key,
-        question,
-        [
-          { label: "Yes", value: "true" },
-          { label: "No", value: "false" },
-        ],
-        undefined,
-        false,
-      );
+      return booleanQuestion(key, question);
     case "number":
     case "integer":
       return numberQuestion(key, question, field.type === "integer");

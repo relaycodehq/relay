@@ -5,6 +5,7 @@ import dev.relay.android.remote.model.HostAccount
 import dev.relay.android.remote.model.HostPage
 import dev.relay.android.remote.model.IssueHit
 import dev.relay.android.remote.model.MergeReadiness
+import dev.relay.android.remote.model.PullBranch
 import dev.relay.android.remote.model.PullComment
 import dev.relay.android.remote.model.PullDetail
 import dev.relay.android.remote.model.PullFile
@@ -38,8 +39,10 @@ suspend fun RemoteClient.searchPulls(filter: String, state: String, server: Stri
 
 suspend fun RemoteClient.pull(r: PullRef): PullDetail = desktop("pull", listOf(ref(r))).to()
 
-suspend fun RemoteClient.pullCiStatus(r: PullRef, branch: String): CiStatus? =
-    desktop("pullCiStatus", listOf(ref(r), s(branch))).takeUnless { it is JsonNull }?.to()
+/** CI on the PR's [head] commit; a desktop from before it read CI by commit ignores the sha and reads the branch. */
+suspend fun RemoteClient.pullCiStatus(r: PullRef, head: PullBranch): CiStatus? =
+    desktop("pullCiStatus", listOfNotNull(ref(r), s(head.ref), head.sha.ifBlank { null }?.let(::s)))
+        .takeUnless { it is JsonNull }?.to()
 
 suspend fun RemoteClient.pullFiles(r: PullRef, page: Int = 1): HostPage<PullFile> = desktop("files", listOf(ref(r), n(page))).to()
 

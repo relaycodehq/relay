@@ -165,3 +165,23 @@ it("refuses tools during compaction and keeps the original conversation selected
   await expect(runAcp(profile, compact)).rejects.toThrow("text-only");
   expect(onId).not.toHaveBeenCalled();
 });
+
+it("gives the next turn Relay's tools in the replacement conversation, which the seed opened without them", async () => {
+  const { profile, compact, sent } = await fixture({ sessions: ["s1", "s2"] });
+  await runAcp(profile, compact);
+  await runAcp(profile, {
+    ...compact,
+    job: { kind: "prompt" },
+    prompt: "Continue.",
+    session: { ...compact.session, id: "s2" },
+    relayTools: { url: "http://127.0.0.1:1/mcp", token: "t" },
+  });
+  const wire = await sent();
+  const resumed = wire.filter(
+    (m) => m.method === "session/resume" && m.params.sessionId === "s2",
+  );
+  expect(resumed.at(-1)?.params.mcpServers).toEqual([
+    expect.objectContaining({ name: "relay" }),
+  ]);
+  expect(wire.at(-1).params.sessionId).toBe("s2");
+});

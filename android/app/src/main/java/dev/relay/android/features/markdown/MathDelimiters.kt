@@ -100,14 +100,55 @@ private val FORMULA_CHARS = Regex("""[\\^_={}]""")
 private fun formulaLook(tex: String) =
     FORMULA_CHARS.containsMatchIn(tex.replace(PROSE_ESCAPES, "").replace(COUNTS, ""))
 
-private val PARENS = Regex("""\\\(\s*(.+?)\s*\\\)""")
-private val BRACKETS = Regex("""\\\[\s*(.+?)\s*\\]""")
+private fun trimmedTex(tex: String) = tex.trim().ifEmpty { tex }
 
 private fun convertInline(text: String): String {
-    val parens = text
-        .replace(PARENS) { "$$" + it.groupValues[1] + "$$" }
-        .replace(BRACKETS) { if (formulaLook(it.groupValues[1])) "$$" + it.groupValues[1] + "$$" else it.value }
-    return pandocDollars(parens)
+    val parens = replaceInline(text, "\\(", "\\)") { _, tex -> "$$" + trimmedTex(tex) + "$$" }
+    val brackets = replaceInline(parens, "\\[", "\\]") { all, tex ->
+        if (formulaLook(trimmedTex(tex))) "$$" + trimmedTex(tex) + "$$" else all
+    }
+    return pandocDollars(brackets)
+}
+
+/**
+ * Each `opener…closer` in a line, its formula at least a character, through
+ * [convert]. A formula never holds its own opener, so an unclosed one stops
+ * looking at the next; otherwise a long line of them takes quadratic time.
+ * A scan rather than shared/'s regex: Android's regex engine isn't the JVM's.
+ */
+internal fun replaceInline(text: String, opener: String, closer: String, convert: (all: String, tex: String) -> String): String {
+    val out = StringBuilder()
+    var copied = 0
+    var from = 0
+    while (true) {
+        val open = text.indexOf(opener, from)
+        if (open < 0) break
+        val body = open + opener.length
+        val close = closerBefore(text, closer, body + 1, formulaEnd(text, opener, body))
+        if (close < 0) {
+            from = open + 1
+            continue
+        }
+        val all = text.substring(open, close + closer.length)
+        out.append(text, copied, open).append(convert(all, text.substring(body, close)))
+        copied = close + closer.length
+        from = copied
+    }
+    return if (copied == 0) text else out.append(text, copied, text.length).toString()
+}
+
+/** The furthest a formula starting at [body] can reach: the next opener. [inlineMath] hands over one line. */
+private fun formulaEnd(text: String, opener: String, body: Int): Int =
+    text.indexOf(opener, body).let { if (it < 0) text.length else it }
+
+/** The first [closer] starting from [from] up to [end], or -1. */
+private fun closerBefore(text: String, closer: String, from: Int, end: Int): Int {
+    var k = from
+    while (k <= end && k + closer.length <= text.length) {
+        if (text.startsWith(closer, k)) return k
+        k++
+    }
+    return -1
 }
 
 /** `$x$` into `$$x$$`, leaving `$$…$$`, `\$` and prose with prices alone. */

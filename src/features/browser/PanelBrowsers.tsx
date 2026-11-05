@@ -1,5 +1,6 @@
 import type { PanelTabs } from "../panel/panel-tabs";
 import { BrowserSurface } from "./BrowserSurface";
+import { previewKey } from "./previews";
 
 /** A browser per Browser tab: the thread's own, and the pages opened beside it. */
 export function PanelBrowsers({
@@ -21,7 +22,9 @@ export function PanelBrowsers({
         className="panel-body"
         hidden={panel.front?.key !== tab.key}
       >
+        {/* Another thread's tab of the same name gets a browser of its own. */}
         <BrowserSurface
+          key={previewKey(projectId, chatId, tab.page)}
           projectId={projectId}
           chatId={chatId}
           page={tab.page}

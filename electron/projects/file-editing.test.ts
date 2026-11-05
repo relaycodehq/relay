@@ -120,3 +120,20 @@ it.each(["change", "delete"])(
       );
   },
 );
+
+it("opens a text file whose committed version isn't text, with nothing to compare it to", async () => {
+  initRepo(root);
+  // Latin-1, as the file was before it was converted to UTF-8.
+  await writeFile(
+    join(root, "file.txt"),
+    Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]),
+  );
+  gitIn(root, "add", "file.txt");
+  gitIn(root, "commit", "-qm", "latin-1");
+  await writeFile(join(root, "file.txt"), "café\n");
+
+  const file = await projects.file({ root, plain: false }, "file.txt");
+
+  expect(file.contents).toBe("café\n");
+  expect(file.original).toBeUndefined();
+});

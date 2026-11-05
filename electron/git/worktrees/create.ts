@@ -4,7 +4,7 @@ import { currentBranch, git as gitIn } from "../git";
 import { remoteOfBranch } from "../../../shared/branches";
 import type { ChatWorktree, WorktreeStart } from "../../../shared/projects";
 import { errorMessage } from "../../../shared/error-message";
-import { bootstrap } from "./bootstrap";
+import { bootstrap, unlinkModules } from "./bootstrap";
 import {
   git,
   type MadeWorktree,
@@ -395,8 +395,10 @@ async function carryOn(
   // is another thread's that got to the name first.
   const before = await exists(path);
   const unmake = async () => {
-    if (!before)
+    if (!before) {
+      await unlinkModules(path);
       await git(root, ["worktree", "remove", "--force", path]).catch(() => {});
+    }
     if (local) return;
     await git(root, ["worktree", "prune"]).catch(() => {});
     // At the remote's commit it holds nothing of anyone's, made here or not.

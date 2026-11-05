@@ -10,6 +10,7 @@ import {
   RENDER_SANDBOX,
 } from "../../../shared/html-render";
 import { api } from "../../lib/api";
+import { useElementWidth } from "../../lib/useElementWidth";
 import { useWindowFocused } from "../../lib/window-focus";
 import { useRenderTheme } from "./render-theme";
 import "./ask-page.css";
@@ -36,19 +37,11 @@ export function AskPage({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLIFrameElement>(null);
-  const [width, setWidth] = useState(0);
+  const width = useElementWidth(box) ?? 0;
   const [measured, setMeasured] = useState<number>();
   const [answer, setAnswer] = useState<string>();
   const theme = useRenderTheme();
   const focused = useWindowFocused();
-
-  useEffect(() => {
-    const resize = new ResizeObserver(([entry]) =>
-      setWidth(Math.round(entry.contentRect.width)),
-    );
-    resize.observe(box.current!);
-    return () => resize.disconnect();
-  }, []);
 
   const post = (message: RenderToFrame) =>
     frame.current?.contentWindow?.postMessage(message, "*");
@@ -62,6 +55,8 @@ export function AskPage({
     [chatId, page.id],
   );
   useEffect(() => post({ relayRender: "theme", ...theme }), [theme]);
+  const pausedNow = useRef(!focused);
+  pausedNow.current = !focused;
   useEffect(() => post({ relayRender: "pause", paused: !focused }), [focused]);
 
   useEffect(() => {
@@ -104,6 +99,11 @@ export function AskPage({
           sandbox={RENDER_SANDBOX}
           referrerPolicy="no-referrer"
           style={{ height, colorScheme: theme.scheme }}
+          // What was posted before the page loaded went to the blank document.
+          onLoad={() => {
+            post({ relayRender: "theme", ...themeNow.current });
+            post({ relayRender: "pause", paused: pausedNow.current });
+          }}
         />
       </div>
       <footer>

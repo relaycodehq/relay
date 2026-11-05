@@ -46,6 +46,17 @@ describe("installing a download", () => {
     expect((await stat(found.command)).mode & 0o111).toBeTruthy();
   });
 
+  it("refuses a version that names a folder above its own, leaving other agents alone", async () => {
+    const root = await folder();
+    await mkdir(join(root, "other", "1.0.0"), { recursive: true });
+    const dir = join(root, "goose");
+    for (const version of ["..", ".", "...", "1.0.", ".1", "", "../x", "a/b", "a\\b", "/abs", "..%2f"])
+      await expect(
+        installInto(dir, binary("https://example.com/goose", { version }), { fetch: download("bin") }),
+      ).rejects.toThrow(/isn't a version Relay can keep/);
+    expect(await readdir(join(root, "other"))).toEqual(["1.0.0"]);
+  });
+
   it("doesn't fetch a version it already has", async () => {
     const dir = await folder();
     const fetch = vi.fn(download("bin"));

@@ -1,8 +1,13 @@
-import { lstat, mkdtemp, rm } from "node:fs/promises";
+import { lstat, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git as gitIn } from "../git";
-import { parseNumstat, revisionDiff, snapshotTree } from "../turn-changes";
+import { gitDirs, memo } from "../repo-facts";
+import { parseNumstat } from "../turn-changes";
+import { revisionDiff } from "../revision-diff";
+import { snapshotTree } from "../turn-snapshots";
+import { parseStatusV2, statusArgs } from "../working-status";
+import { digest } from "../../util/hash";
 import type { ChatWorktree, TurnFileChange } from "../../../shared/projects";
 import { git, exists } from "./common";
 
@@ -98,12 +103,78 @@ async function forkPoint(worktree: ChatWorktree) {
   );
 }
 
+type WorktreeChanges = { tree: string; files: TurnFileChange[] };
+
+// The thread's card asks every few seconds while it shows. A snapshot walks
+// and hashes the whole worktree and writes its objects, so while neither the
+// worktree nor its source branch moved, the last answer stands.
+const kept = memo<WorktreeChanges>();
+
 /** The worktree's tree now, and what it has that its branch's source doesn't, committed or not. */
 export async function worktreeChanges(
   worktree: ChatWorktree,
-): Promise<{ tree: string; files: TurnFileChange[] }> {
+): Promise<WorktreeChanges> {
+  const root = worktree.path!;
+  const [contents, source] = await Promise.all([
+    contentsStamp(root),
+    sourceStamp(worktree),
+  ]);
+  if (contents === null) return readWorktreeChanges(worktree);
+  return kept(root, `${contents}\0${source}`, () =>
+    readWorktreeChanges(worktree),
+  );
+}
+
+/**
+ * Changes when what a snapshot of `root` would hold may have: HEAD, which
+ * files differ from it, and each of those files on disk. Null when `git
+ * status` can't tell: a submodule or nested repository moves without a row
+ * of its own changing.
+ */
+async function contentsStamp(root: string) {
+  // A submodule the config tells status to ignore still moves in the snapshot.
+  const status = parseStatusV2(
+    await git(root, [...statusArgs, "--ignore-submodules=none"]),
+  );
+  const nested = status.rows.some(
+    (row) => row.endsWith("/") || /^[12u] \S+ S/.test(row),
+  );
+  if (nested) return null;
+  const stamps = await Promise.all(
+    status.changes.map(async ({ path }) => {
+      const s = await lstat(join(root, path)).catch(() => null);
+      return s ? [s.size, s.mtimeMs, s.ctimeMs, s.ino, s.mode] : null;
+    }),
+  );
+  return digest(JSON.stringify([status.head, status.rows, stamps]));
+}
+
+/** Changes when where the worktree's changes count from may have: its source branch moving. */
+async function sourceStamp(worktree: ChatWorktree) {
+  const counted = [worktree.from, worktree.base, worktree.start];
+  if (!worktree.from) return JSON.stringify(counted);
+  const { commonDir } = await gitDirs(worktree.path!);
+  const refs = [
+    join(commonDir, "refs", "heads", worktree.from),
+    join(commonDir, "packed-refs"),
+    join(commonDir, "reftable"),
+  ];
+  const mtimes = await Promise.all(
+    refs.map((path) =>
+      stat(path).then(
+        (s) => s.mtimeMs,
+        () => 0,
+      ),
+    ),
+  );
+  return JSON.stringify([...counted, ...mtimes]);
+}
+
+async function readWorktreeChanges(
+  worktree: ChatWorktree,
+): Promise<WorktreeChanges> {
   const [tree, from] = await Promise.all([
-    snapshotTree(worktree.path!),
+    snapshotTree(worktree.path!, { polled: true }),
     forkPoint(worktree),
   ]);
   const diff = await git(worktree.path!, [
@@ -124,7 +195,7 @@ export const worktreeDiff = async (worktree: ChatWorktree, path: string) =>
   revisionDiff(
     worktree.path!,
     await forkPoint(worktree),
-    await snapshotTree(worktree.path!),
+    await snapshotTree(worktree.path!, { polled: true }),
     path,
   );
 

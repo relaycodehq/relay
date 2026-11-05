@@ -273,9 +273,14 @@ export class ThreadReads {
     });
   }
 
-  /** Whether the lead is in a wait_for_threads that covers `id`, a thread it started. */
+  /**
+   * Whether the lead is in a wait_for_threads that covers `id`, a thread it
+   * started. A cancelled one's result never reaches it.
+   */
   waitsFor(lead: string, id: string) {
-    return [...(this.waits.get(lead) ?? [])].some((w) => covers(w, id));
+    return [...(this.waits.get(lead) ?? [])].some(
+      (w) => !w.signal.aborted && covers(w, id),
+    );
   }
 
   /**

@@ -4,6 +4,8 @@ import type { ChatSummary } from "../../../shared/projects";
 import { errorMessage } from "../../../shared/error-message";
 import { api } from "../../lib/api";
 import { Modal } from "../../ui/ui";
+import { forgetThreadPreviews } from "../browser/previews";
+import { forgetThreadTerminals } from "../terminal/thread-terminals";
 
 /** The thread whose deletion waits for a yes, and deleting it once it has one. */
 export function useThreadDelete({
@@ -35,6 +37,10 @@ export function useThreadDelete({
       // reviewers may be what's open.
       const opened = openId();
       if (opened && gone.includes(opened)) latestMoveOn.current(c);
+      for (const id of gone) {
+        forgetThreadTerminals(id);
+        forgetThreadPreviews(id);
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {

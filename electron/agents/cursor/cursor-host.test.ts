@@ -276,6 +276,7 @@ it("numbers a picked-up worker's requests above the replies its log still holds"
     "thread-1",
     root,
     {} as InstalledSdk,
+    { adopting: true },
   );
 
   // The last Relay steered and cancelled; the worker answered both.

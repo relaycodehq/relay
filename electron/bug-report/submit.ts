@@ -1,6 +1,9 @@
 import { execFile } from "node:child_process";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ApiError } from "../pull-requests/host";
 import type { GitHub } from "../pull-requests/github";
+import { screenshotFile } from "./report";
 
 export interface CreatedIssue {
   number: number;
@@ -148,4 +151,36 @@ export async function ghCreateIssue(
     stderr.trim().split("\n").at(-1) ||
     `gh exited with code ${code} without an issue link.`;
   return { status: code === 4 ? "refused" : "unknown", error };
+}
+
+/**
+ * Creates the issue with `gh` from a `sending` folder in `dir`, holding the
+ * body and the screenshots under the names the body refers to.
+ */
+export async function ghSendIssue(
+  gh: string,
+  exec: Exec,
+  input: {
+    repo: string;
+    title: string;
+    body: string;
+    dir: string;
+    shots: string[];
+  },
+): Promise<GhResult> {
+  const sending = join(input.dir, "sending");
+  await rm(sending, { recursive: true, force: true });
+  await mkdir(sending, { recursive: true });
+  const files = input.shots.map((_, i) => screenshotFile(i));
+  await Promise.all(
+    input.shots.map((shot, i) => copyFile(shot, join(sending, files[i]))),
+  );
+  await writeFile(join(sending, "body.md"), input.body);
+  return ghCreateIssue(gh, exec, {
+    repo: input.repo,
+    title: input.title,
+    bodyFile: join(sending, "body.md"),
+    dir: sending,
+    files,
+  }).finally(() => rm(sending, { recursive: true, force: true }));
 }

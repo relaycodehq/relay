@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { chatSettled } from "../../../shared/chat-activity";
 import type { ChatPending, ChatSummary } from "../../../shared/projects";
@@ -20,7 +21,7 @@ import {
 
 /** What sits on top of a thread's composer: its goal, while one is set,
  * above the one strip that's most pressing. */
-export function ThreadNotice(props: {
+export const ThreadNotice = memo(function ThreadNotice(props: {
   chat: ChatSummary;
   stopped?: ChatPending[];
   leftBehind?: ChatPending[];
@@ -49,7 +50,7 @@ export function ThreadNotice(props: {
       <PressingStrip chat={chat} {...rest} />
     </>
   );
-}
+});
 
 /** The strip on top of a thread's composer, the most pressing first: the
  * thread is on another computer or back from one, a usage limit stopped its

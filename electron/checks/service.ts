@@ -1,26 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { basename, dirname, join } from "node:path";
-import {
-  mkdtemp,
-  readdir,
-  readFile,
-  writeFile,
-  rm,
-  realpath,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { z } from "zod";
+import { join } from "node:path";
+import { rm, realpath } from "node:fs/promises";
 import { terminate } from "../platform/terminate";
 import { findExecutable } from "../platform/executables";
 import { git } from "../git/git";
 import { inspectFolder } from "../git/repository";
 import { configPath, detectProject } from "./detect";
-import {
-  digestSchema,
-  filePathSchema,
-  textSchema,
-} from "../../shared/validation";
+import { filePathSchema } from "../../shared/validation";
 import type { PullRef } from "../../shared/types";
 import {
   CHECKS_MEMORY_MB,
@@ -30,91 +17,8 @@ import {
   type SymbolResult,
 } from "../../shared/checks";
 import { LineBuffer } from "../util/line-buffer";
-
-const resultSchema = z.object({
-  seq: z.number().int().nonnegative(),
-  diagnostics: z
-    .array(
-      z.object({
-        path: filePathSchema.optional(),
-        line: z.number().int().positive().optional(),
-        column: z.number().int().positive().optional(),
-        endLine: z.number().int().positive().optional(),
-        endColumn: z.number().int().positive().optional(),
-        severity: z.enum(["error", "warning", "info"]),
-        code: z.string().max(40),
-        message: z.string().max(8000),
-      }),
-    )
-    .max(1500),
-  files: z.record(
-    filePathSchema,
-    z.object({
-      hash: digestSchema,
-      errors: z.number().int().nonnegative(),
-      warnings: z.number().int().nonnegative(),
-      suggestions: z.number().int().nonnegative(),
-    }),
-  ),
-  errors: z.number().int().nonnegative(),
-  warnings: z.number().int().nonnegative(),
-  suggestions: z.number().int().nonnegative(),
-  truncated: z.boolean(),
-  message: z.string().max(2000).optional(),
-  engine: z.string().max(2000).optional(),
-});
-
-const symbolResultSchema = z.object({
-  source: z
-    .object({
-      path: filePathSchema,
-      text: textSchema,
-      hash: digestSchema,
-    })
-    .optional(),
-  display: z.string().max(20000),
-  documentation: z.string().max(50000),
-  locations: z
-    .array(
-      z.object({
-        path: filePathSchema,
-        line: z.number().int().positive(),
-        column: z.number().int().positive(),
-        length: z.number().int().nonnegative(),
-        preview: z.string().max(300),
-        hash: digestSchema,
-      }),
-    )
-    .max(500),
-  truncated: z.boolean(),
-  external: z.boolean(),
-});
-
-type Session = {
-  key: string;
-  root: string;
-  server: string | null;
-  ref: PullRef | null;
-  seq: number;
-  updates: Map<string, number>;
-  process: ChildProcessWithoutNullStreams;
-  state: ProjectCheckState;
-  lastValidated: number;
-  paused: boolean;
-  requests: Map<
-    string,
-    {
-      resolve: (value: SymbolResult) => void;
-      reject: (error: Error) => void;
-      timer: ReturnType<typeof setTimeout>;
-    }
-  >;
-  timer?: ReturnType<typeof setTimeout>;
-  /** Head, target and heap limit: a start asking for the same joins this session. */
-  signature: string;
-  /** Starts this session again with another heap limit. */
-  relimit: (memoryMb: number) => Promise<unknown>;
-};
+import { readWorkerLine, type Session } from "./session";
+import { stageWorker, workerEnv } from "./worker-runtime";
 
 /**
  * How often a state read looks at the checkout again; the window asks every
@@ -374,35 +278,13 @@ export class ProjectChecks {
         "This check configuration is no longer available. Refresh the project settings.",
       );
     const node = await findExecutable("node");
-    const runtime = await mkdtemp(join(tmpdir(), "relay-checks-"));
+    const runtime = await stageWorker(this.worker);
     const worker = join(runtime, "worker.mjs");
-    try {
-      await writeFile(worker, await readFile(this.worker), { mode: 0o600 });
-      // Unbundled (tests), worker.mjs imports its worker-*.mjs siblings.
-      if (basename(this.worker) === "worker.mjs")
-        for (const name of await readdir(dirname(this.worker)))
-          if (/^worker-.+\.mjs$/.test(name))
-            await writeFile(
-              join(runtime, name),
-              await readFile(join(dirname(this.worker), name)),
-              { mode: 0o600 },
-            );
-    } catch (e) {
-      await rm(runtime, { recursive: true, force: true });
-      throw e;
-    }
     if (generation !== this.generations.get(key)) {
       await rm(runtime, { recursive: true, force: true });
       throw new Error("Live checks were stopped.");
     }
-    const env = Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([key]) =>
-          !/TOKEN|SECRET|PASSWORD|API_KEY|ELECTRON_RUN_AS_NODE|NODE_OPTIONS|NODE_PATH/i.test(
-            key,
-          ),
-      ),
-    );
+    const env = workerEnv();
     const paused = this.wantsPause(key);
     const child = spawn(
       node,
@@ -449,6 +331,16 @@ export class ProjectChecks {
       },
     };
     this.sessions.set(key, s);
+    this.followWorker(s, runtime, limits);
+    return s.state;
+  }
+
+  /**
+   * Reads what the session's worker reports and fails the session when the
+   * worker stalls, floods its output or exits; `runtime` goes once it exits.
+   */
+  private followWorker(s: Session, runtime: string, limits: CheckLimits) {
+    const { key, process: child } = s;
     const fail = (message: string) => {
       if (this.sessions.get(key) !== s || s.state.status === "stopped") return;
       this.kill(key);
@@ -467,7 +359,7 @@ export class ProjectChecks {
       s.timer.unref();
     };
     let stderr = "";
-    if (!paused) deadline();
+    if (!s.paused) deadline();
     const lines = new LineBuffer((line) => {
       if (!line.trim()) return;
       if (
@@ -475,61 +367,7 @@ export class ProjectChecks {
         ["stopped", "failed"].includes(s.state.status)
       )
         return;
-      try {
-        const value = JSON.parse(line);
-        if (value.type === "memory") {
-          if (Number.isInteger(value.used) && value.used >= 0)
-            s.state.memory = { limit: limits.memoryMb, used: value.used };
-          return;
-        }
-        if (value.type === "symbol") {
-          const request = s.requests.get(value.requestId);
-          if (request) {
-            clearTimeout(request.timer);
-            s.requests.delete(value.requestId);
-            if (value.error || value.seq !== s.seq)
-              request.reject(
-                new Error(
-                  value.error ??
-                    "The file changed while finding the symbol. Retry.",
-                ),
-              );
-            else {
-              const parsed = symbolResultSchema.safeParse(value.result);
-              if (parsed.success) request.resolve(parsed.data);
-              else
-                request.reject(
-                  new Error(
-                    "The language service returned an invalid symbol response.",
-                  ),
-                );
-            }
-          }
-          return;
-        }
-        if (value.seq !== s.seq) return;
-        if (value.type === "checking" || value.type === "invalidated") {
-          // Do not show stale line positions while buffers or files change.
-          s.state.files = {};
-          s.state.diagnostics = [];
-          if (!s.paused) {
-            s.state.status = "checking";
-            deadline();
-          }
-        } else if (value.type === "result") {
-          const r = resultSchema.parse(value);
-          clearTimeout(s.timer);
-          Object.assign(s.state, {
-            ...r,
-            status: s.paused ? "paused" : "ready",
-            checkedAt: Date.now(),
-            message: r.message,
-          });
-        } else if (value.type === "failure")
-          fail(String(value.message).slice(0, 2000));
-      } catch {
-        fail("The project compiler returned an invalid diagnostic response.");
-      }
+      readWorkerLine(s, line, { memoryMb: limits.memoryMb, fail, deadline });
     });
     child.stdout.setEncoding("utf8").on("data", (chunk: string) => {
       lines.push(chunk);
@@ -558,7 +396,6 @@ export class ProjectChecks {
             : `The project compiler exited (${code ?? "signal"}). Check the installed dependencies and Node.js version.`,
         );
     });
-    return s.state;
   }
 
   async symbol(

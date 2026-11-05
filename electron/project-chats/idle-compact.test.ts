@@ -44,7 +44,7 @@ function planner(autoCompact = { idle: true, cold: true }) {
     busy: () => false,
     compact,
   });
-  return { idle, compact, autoCompact };
+  return { idle, compact, autoCompact, load: vi.spyOn(core.storage, "load") };
 }
 
 beforeEach(() => {
@@ -78,6 +78,19 @@ it("plans nothing while it's off in Settings, and drops a plan turned off since"
   on.autoCompact.idle = false;
   await vi.advanceTimersByTimeAsync(30 * MINUTE);
   expect(on.compact).not.toHaveBeenCalled();
+});
+
+it("reads no thread to plan while it's off, as at a launch with the default", async () => {
+  chat = answered(30 * MINUTE);
+  const off = planner({ idle: false, cold: true });
+  off.idle.armAll();
+  await off.idle.arm("chat");
+  expect(off.load).not.toHaveBeenCalled();
+
+  const on = planner();
+  on.idle.armAll();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(on.load).toHaveBeenCalledTimes(1);
 });
 
 it("compacts a read thread but leaves a settled or agent-started one to go cold", async () => {

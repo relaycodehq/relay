@@ -379,3 +379,58 @@ it("counts a new thread's picked worktree start as the desktop's part", async ()
   await pause();
   expect(main.get("new:p1")).toMatchObject({ extras: { start: true } });
 });
+
+it("shares what's typed in another composer while a phone's held send clears its own", async () => {
+  await start();
+  let cleared!: () => void;
+  const clearing = sync.quietly(
+    chat,
+    () => new Promise<void>((resolve) => (cleared = resolve)),
+  );
+  drafts.writeDraft("chat-draft:chat-2", "Typed meanwhile");
+  cleared();
+  await clearing;
+  await pause();
+  expect(main.get("chat-2")?.text).toBe("Typed meanwhile");
+});
+
+it("doesn't share what a phone's held send clears, though a phone's edit lands meanwhile", async () => {
+  await start();
+  drafts.writeDraft(key, "Look at [Image #1]");
+  await pause();
+  const sent = writes.length;
+  let cleared!: () => void;
+  const clearing = sync.quietly(chat, async () => {
+    // A phone's edit to another thread comes in while this one's clearing.
+    phone({ key: "chat-2", text: "From the phone" });
+    await new Promise<void>((resolve) => (cleared = resolve));
+    drafts.writeDraft(key, "");
+  });
+  cleared();
+  await clearing;
+  await pause();
+  expect(writes.slice(sent)).toEqual([]);
+});
+
+it("keeps a thread quiet until both of two overlapping held sends have cleared", async () => {
+  await start();
+  drafts.writeDraft(key, "Look at [Image #1]");
+  await pause();
+  const sent = writes.length;
+  let firstDone!: () => void;
+  let secondDone!: () => void;
+  const first = sync.quietly(
+    chat,
+    () => new Promise<void>((resolve) => (firstDone = resolve)),
+  );
+  const second = sync.quietly(chat, async () => {
+    await new Promise<void>((resolve) => (secondDone = resolve));
+    drafts.writeDraft(key, "");
+  });
+  firstDone();
+  await first;
+  secondDone();
+  await second;
+  await pause();
+  expect(writes.slice(sent)).toEqual([]);
+});

@@ -88,6 +88,8 @@ export const sessionSignature = (options: ClaudeRunOptions) =>
       : []),
     // Sessions from before linked folders match too.
     ...(options.links?.length ? [linksSignature(options.links)] : []),
+    // Read only runs as Supervised, but with fewer tools and the read-only hook.
+    ...(options.readOnly ? ["read-only"] : []),
   ]);
 
 /** What a thread's Claude Code session starts with; `env` signs in its account. */

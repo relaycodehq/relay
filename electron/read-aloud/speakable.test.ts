@@ -81,6 +81,18 @@ describe("spokenInline", () => {
     );
   });
 
+  it("keeps backslashes in inline code from leaving placeholders behind", () => {
+    expect(spokenInline("Match `\\d+\\.\\d+` or `\\\\server`.")).toBe(
+      "Match \\d+\\.\\d+ or \\\\server.",
+    );
+  });
+
+  it("ends inline code at its backtick even after a backslash", () => {
+    expect(spokenInline("Run `C:\\` then `D:\\Users\\` now.")).toBe(
+      "Run C:\\ then D:\\Users\\ now.",
+    );
+  });
+
   it("says file names in code by name, with the extension spelled out", () => {
     expect(
       spokenInline(

@@ -261,6 +261,8 @@ export class ThreadTerminals {
   }
 
   private output(session: Session, data: string) {
+    // A killed shell drains what it printed last; its key may be a new shell's now.
+    if (this.sessions.get(session.key) !== session) return;
     session.lastOutput = Date.now();
     const seen = session.outputTail + data;
     const on = seen.lastIndexOf("\x1b[?2004h"),

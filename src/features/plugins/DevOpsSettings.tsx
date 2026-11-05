@@ -1,21 +1,15 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Target } from "lucide-react";
 import {
   defaultDevOpsSettings,
-  devopsSettingsSchema,
   organizationLabel,
-  organizationUrl,
-  type DevOpsSecrets,
   type DevOpsSettings as Settings,
-  type DevOpsStatus,
 } from "../../../shared/devops";
 import type { SourceControlProvider } from "../../../shared/source-control";
 import { api } from "../../lib/api";
 import {
   devopsConnectionKey,
-  devopsKey,
-  usePluginEnabled,
   useDevOpsConnection,
   useDevOpsFields,
   useDevOpsStatus,
@@ -39,9 +33,9 @@ import {
 import {
   CommitInput,
   SecretField,
-  usePluginSaved,
   type PluginSummary,
 } from "./plugin-ui";
+import { useSaveDevOps } from "./devops-save";
 
 /** The row's line: where the items come from, or what's missing. */
 export function useDevOpsSummary(): PluginSummary | null {
@@ -92,8 +86,6 @@ function signInLine(connection: SourceControlProvider | undefined) {
  */
 export function DevOpsSettings() {
   const qc = useQueryClient();
-  const saved = usePluginSaved();
-  const on = usePluginEnabled("devops");
   const status = useDevOpsStatus();
   const settings = status.data?.settings;
   const connection = useDevOpsConnection(!!settings?.organization);
@@ -102,46 +94,13 @@ export function DevOpsSettings() {
   const [threshold, setThreshold] = useState<number>();
   const [linking, setLinking] = useState(false);
   const [error, setError] = useState<unknown>();
-  const latest = useRef(0);
+  const save = useSaveDevOps(status, setError);
   if (!status.data || !settings)
     return status.error ? (
       <ErrorBox error={status.error} retry={() => void status.refetch()} />
     ) : (
       <p className="setting-muted">Loading…</p>
     );
-
-  async function save(patch: Partial<Settings>, secrets: DevOpsSecrets = {}) {
-    // The plugin's switch owns `enabled`; what's cached here may predate it.
-    const next = { ...settings!, ...patch, enabled: on };
-    setError(undefined);
-    try {
-      if (next.organization) organizationUrl(next.organization);
-    } catch (e) {
-      setError(e);
-      return false;
-    }
-    if (!devopsSettingsSchema.safeParse(next).success) return false;
-    const seq = ++latest.current;
-    // Show the change at once; an older save landing late mustn't undo a newer one.
-    qc.setQueryData<DevOpsStatus>(
-      devopsKey,
-      (s) => s && { ...s, settings: next },
-    );
-    try {
-      const result = await api.saveDevOpsSettings(next, secrets);
-      if (seq === latest.current) qc.setQueryData(devopsKey, result);
-      saved();
-      void qc.invalidateQueries({ queryKey: ["devops-items"] });
-      void qc.invalidateQueries({ queryKey: devopsConnectionKey });
-      // The organization is one the Pull requests page asks.
-      void qc.invalidateQueries({ queryKey: ["pull-servers"] });
-      return true;
-    } catch (e) {
-      setError(e);
-      void status.refetch();
-      return false;
-    }
-  }
 
   async function linkAz(run: () => Promise<unknown>) {
     setLinking(true);

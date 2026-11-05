@@ -147,13 +147,21 @@ private func removing(_ regex: NSRegularExpression, from text: String) -> String
     regex.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
 }
 
-private let parens = try! NSRegularExpression(pattern: #"\\\(\s*(.+?)\s*\\\)"#)
-private let brackets = try! NSRegularExpression(pattern: #"\\\[\s*(.+?)\s*\\]"#)
+// A formula never holds its own opener, so an unclosed one stops looking at the next; otherwise
+// a long line of them takes quadratic time, on every streaming update.
+private let parens = try! NSRegularExpression(pattern: #"\\\(((?:(?!\\\().)+?)\\\)"#)
+private let brackets = try! NSRegularExpression(pattern: #"\\\[((?:(?!\\\[).)+?)\\]"#)
+
+/// Trimmed, unless that leaves nothing.
+private func trimmedTex(_ tex: String) -> String {
+    let trimmed = tex.trimmingCharacters(in: .whitespaces)
+    return trimmed.isEmpty ? tex : trimmed
+}
 
 private func convertInline(_ text: String) -> String {
-    let inParens = replacing(parens, in: text) { _, formula in "$$" + formula + "$$" }
+    let inParens = replacing(parens, in: text) { _, formula in "$$" + trimmedTex(formula) + "$$" }
     let inBrackets = replacing(brackets, in: inParens) { whole, formula in
-        formulaLook(formula) ? "$$" + formula + "$$" : whole
+        formulaLook(trimmedTex(formula)) ? "$$" + trimmedTex(formula) + "$$" : whole
     }
     return pandocDollars(inBrackets)
 }

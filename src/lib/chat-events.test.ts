@@ -6,11 +6,12 @@ import type {
   ProjectChat,
   ProjectChatPatch,
 } from "../../shared/projects";
-import type { ProjectChatEvent } from "../../shared/events";
+import { ChatPushSender, type ProjectChatPush } from "../../shared/chat-pushes";
 import { chatKey, fetchChat, followChatEvents } from "./chat-events";
 
 const desktop = vi.hoisted(() => ({
-  push: (_: ProjectChatEvent) => {},
+  push: (_: ProjectChatPush) => {},
+  subscriptions: 0,
   thread: [] as ChatMessage[],
   hold: false,
   release: () => {},
@@ -20,8 +21,9 @@ const desktop = vi.hoisted(() => ({
 vi.mock("./api", () => ({
   api: {
     onProjectChats: () => () => {},
-    onProjectChat: (callback: (e: ProjectChatEvent) => void) => {
+    onProjectChat: (callback: (push: ProjectChatPush) => void) => {
       desktop.push = callback;
+      desktop.subscriptions++;
       return () => {};
     },
     // Answers like ProjectChats.changes, from the thread as it is when called.
@@ -105,6 +107,41 @@ it("keeps a push that overtook a slower reply", async () => {
   desktop.release();
   qc.setQueryData(chatKey("t"), await fetching);
   expect(shown()).toEqual(["q:complete:1", "a:streaming:4"]);
+});
+
+it("places a streaming answer's patches in the cached thread", async () => {
+  await refetch();
+  const desktopSide = new ChatPushSender<object>(structuredClone);
+  const window = {};
+  let answer = message("a", { status: "streaming" });
+  desktop.thread.push(answer);
+  const sent: ProjectChatPush[] = [];
+  for (const body of ["One", "One two", "One two three"]) {
+    answer = { ...answer, body, version: answer.version + 1 };
+    for (const [, push] of desktopSide.pushes(
+      { chatId: "t", message: answer },
+      [window],
+    ))
+      sent.push(push);
+  }
+  for (const push of sent) desktop.push(structuredClone(push));
+  expect(sent.filter((p) => "patch" in p)).toHaveLength(2);
+  expect(qc.getQueryData<ProjectChat>(chatKey("t"))?.messages[1]).toEqual(
+    answer,
+  );
+});
+
+it("asks for whole answers again, once, when a patch builds on a copy it never got", () => {
+  const subscriptions = desktop.subscriptions;
+  const patch = (base: number): ProjectChatPush => ({
+    chatId: "t",
+    patch: { id: "a", body: { from: 3, text: " two" } },
+    base,
+  });
+  desktop.push(patch(2));
+  desktop.push(patch(3));
+  expect(desktop.subscriptions).toBe(subscriptions + 1);
+  expect(qc.getQueryData<ProjectChat>(chatKey("t"))).toBeUndefined();
 });
 
 const setup = (): NonNullable<ProjectChat["setup"]> => ({

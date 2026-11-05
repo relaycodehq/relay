@@ -1,5 +1,5 @@
 import { CodexPlanRows } from "../activity";
-import { answerLimitError, TurnEnd, TurnText } from "../turn-kit";
+import { answerLimitError, cancelledByYou, TurnEnd, TurnText } from "../turn-kit";
 import type { AgentOptions } from "../types";
 import { museActivity, museCommand, museEditedPaths, todoPlan } from "./activity";
 import type { MuseConnection } from "./connection";
@@ -170,6 +170,20 @@ export class MuseTurnEvents {
     this.subagents.dispose();
   }
 
+  /** Ends a /compact once its item has: done, stopped, or failed. */
+  private compactionEnded(item: MuseItem) {
+    if (item.status === "inProgress") return;
+    if (item.status === "completed") return this.complete("compacted");
+    if (item.status === "cancelled") return this.fail(cancelledByYou());
+    this.fail(
+      new Error(
+        item.reason
+          ? `Muse Code couldn't compact the conversation: ${item.reason}`
+          : "Muse Code couldn't compact the conversation.",
+      ),
+    );
+  }
+
   private addText(itemId: string, text: string) {
     if (!text) return;
     this.said.set(itemId, (this.said.get(itemId) ?? 0) + text.length);
@@ -222,7 +236,7 @@ export class MuseTurnEvents {
       this.compaction = item;
       // A /compact shows as its own line in the thread, not inside a turn.
       if (options.job.kind === "compact") {
-        if (item.status !== "inProgress") this.complete("compacted");
+        this.compactionEnded(item);
         return;
       }
     }

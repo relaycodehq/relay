@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -19,16 +19,43 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const oneOf = (words: Iterable<string>) =>
   `(?:${[...words].map(escape).join("|")})`;
 
-/** The rest of one command, up to the next `;`, `&&`, `|` or newline; `2>&1` stays in it. */
-const rest = "(?:>&|[^;&|\\n])*";
+// Words are read the way bash and zsh read them, so a `;` or newline inside
+// quotes doesn't end a command here while the shell reads on past it.
+
+/** Between the words of one command; a newline ends the command instead. */
+const blank = "[ \\t]";
+/** `$NAME` or `${NAME}`, which only read a variable; as read-only-bash's `variable`. */
+const variable = "\\$(?:[A-Za-z]\\w*(?![\\w[])|\\{[A-Za-z]\\w*\\})";
+const singleQuoted = "'[^']*'";
+const doubleQuoted = `"(?:[^"\\\\$\`]|\\\\[\\s\\S]|${variable}|\\$(?="))*"`;
+/** Not a backslash-newline, which joins the next line to this command. */
+const escaped = "\\\\[^\\n]";
+/**
+ * What the shell takes as it is. Not parentheses, which open subshells and
+ * zsh's `*(e:…:)` and `=(…)`, nor `#`, a comment the shell skips to the end
+ * of its line.
+ */
+const literal = "[^\\s;&|'\"\\\\$()<>`#]";
+const redirect = "[12]?>(?:&[12]|[ \\t]*\\/dev\\/null)(?=[\\s;&|]|$)";
+const word = `(?:${redirect}|(?:${singleQuoted}|${doubleQuoted}|${escaped}|${variable}|\\$(?=[\\s;&|]|$)|${literal})+)`;
+
+/** The rest of one command, up to the next `;`, `&&`, `||`, `|` or newline. */
+const rest = `(?:${blank}+${word})*`;
 const ends = "(?=[\\s;&|]|$)";
-/** No later argument of this command starts with one of `flags`, or hides a flag from that look. */
-const without = (flags: string) =>
-  `(?![^;&|\\n]*(?:\\s(?:${flags})|${disguisedFlag}))`;
-/** Each word a flag `flags` allows or an argument; nothing hides a flag from that look. */
+
+/** One piece of a command for a look ahead, which reads past a quoted `;` too. */
+const piece = `(?:${singleQuoted}|"(?:[^"\\\\]|\\\\[\\s\\S])*"|${escaped}|[^;&|\\n'"\\\\])`;
+/** A word starting with a wildcard, which may expand to a file named like a flag. */
+const globbedWord = `(?:^|\\s)(?:''|"")*[*?[{^]`;
+const quotedDollar = `"(?:[^"\\\\]|\\\\[\\s\\S])*?\\$(?!")`;
+/** No word of this command hides a flag from a look at its words. */
+const noHiddenFlag = `(?!${piece}*?(?:${disguisedFlag}|${globbedWord}|${quotedDollar}))`;
+/** No later word of this command starts with one of `flags`. */
+const without = (flags: string) => `(?!${piece}*?\\s(?:${flags}))`;
+/** Each word a flag `flags` allows, its value quoted or not, or an argument. */
 const flagged = (flags: string) =>
-  `(?![^;&|\\n]*(?:${disguisedFlag}))(?:\\s+(?:(?:${flags})${ends}|(?!-)(?:>&|[^\\s;&|])+))*\\s*`;
-const gitPrefix = "git(?:\\s+(?:--no-pager|-C\\s+[^\\s;&|]+))*\\s+";
+  `${noHiddenFlag}(?:${blank}+(?:(?=(?:${flags})${ends})${word}|(?!-)${word}))*`;
+const gitPrefix = `git${ends}${noHiddenFlag}(?:${blank}+(?:--no-pager|-C${blank}+${word}))*${blank}+`;
 const sedLines = "(?:\\d+|\\$)(?:,(?:\\d+|\\$))?p";
 
 const command = [
@@ -36,11 +63,12 @@ const command = [
   ...Object.entries(allowedFlags).map(
     ([name, flags]) => `${name}${ends}${flagged(flags)}`,
   ),
-  `sed(?:\\s+-n)+\\s+(?:'${sedLines}'|"${sedLines}"|${sedLines})(?:\\s+[^\\s;&|<>-][^\\s;&|<>]*)*\\s*`,
-  `${gitPrefix}${oneOf(gitReads)}${ends}${without("--(?:ou|op|ext)|-[^-\\s]*O")}${rest}`,
+  `sed${ends}${noHiddenFlag}(?:${blank}+-n)+${blank}+(?:'${sedLines}'|"${sedLines}"|${sedLines})(?:${blank}+(?!-)${word})*`,
+  // As gitReadsOnly: `--textconv` undoes `--no-textconv`, `--filters` runs smudge filters.
+  `${gitPrefix}${oneOf(gitReads)}${ends}${without("--(?:ou|op|ext|textc|filters)|-[^-\\s]*O")}${rest}`,
   ...Object.entries(gitListings).map(
     ([sub, flags]) =>
-      `${gitPrefix}${escape(sub)}(?:\\s+${oneOf(flags)}${ends})${gitBareWrites.has(sub) ? "+" : "*"}\\s*`,
+      `${gitPrefix}${escape(sub)}(?:${blank}+${oneOf(flags)}${ends})${gitBareWrites.has(sub) ? "+" : "*"}`,
   ),
 ].join("|");
 
@@ -52,12 +80,14 @@ const segment = `\\s*(?:${command})\\s*`;
  */
 export const readOnlyShellPattern = new RegExp(
   [
-    "^",
+    // Amp matches with `^` and `$` at every line, so `touch x\nls` passed
+    // for its `ls`; these hold at the ends of the whole command alone.
+    "(?<![\\s\\S])",
     // Writes, substitutions and here-documents, bar `>/dev/null` and `2>&1`.
     "(?![\\s\\S]*(?:[<`]|\\$\\(|>(?!\\s*\\/dev\\/null(?:\\s|$)|&1(?:\\s|$))))",
     // A lone `&` sends a command to the background.
     "(?![\\s\\S]*(?<![&>])&(?!&))",
-    `${segment}(?:(?:&&|\\|\\||[;|\\n])${segment})*$`,
+    `${segment}(?:(?:&&|\\|\\||[;|\\n])${segment})*(?![\\s\\S])`,
   ].join(""),
 );
 
@@ -152,17 +182,40 @@ async function overridingWorkspace(cwd: string) {
 }
 
 /**
+ * A folder of its own, made once per Relay: in a /tmp other users share, a
+ * fixed name is theirs to make first and swap the settings in, and one per
+ * start would leave a folder behind for every read-only turn.
+ */
+let settingsFolder: Promise<string> | undefined;
+
+async function writeReadOnlySettings(settings: string) {
+  settingsFolder ??= mkdtemp(join(tmpdir(), "relay-amp-read-only-"));
+  const folder = settingsFolder;
+  const dir = await folder.catch((error) => {
+    if (settingsFolder === folder) settingsFolder = undefined;
+    throw error;
+  });
+  const path = join(dir, "settings.json");
+  await writeFileAtomic(path, settings);
+  return path;
+}
+
+/**
  * The environment that starts Amp on the read-only settings, written fresh
  * for each process, and a warning when the project's own rules win over them.
  */
 export async function readOnlyEnv(cwd: string) {
-  const dir = join(tmpdir(), "relay-amp-read-only");
-  await mkdir(dir, { recursive: true });
-  const path = join(dir, "settings.json");
-  await writeFileAtomic(
-    path,
-    JSON.stringify(readOnlySettings(await userSettings()), null, 2),
+  const settings = JSON.stringify(
+    readOnlySettings(await userSettings()),
+    null,
+    2,
   );
+  const path = await writeReadOnlySettings(settings).catch((error) => {
+    // Its folder was cleared out of the temp dir: make a new one.
+    if (error?.code !== "ENOENT") throw error;
+    settingsFolder = undefined;
+    return writeReadOnlySettings(settings);
+  });
   const overriding = await overridingWorkspace(cwd);
   return {
     env: { AMP_SETTINGS_FILE: path },

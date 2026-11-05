@@ -16,6 +16,9 @@ const targetSchema = z.string().max(4096);
 /** A window's hold on a checker it shares with other windows. */
 const holderSchema = z.string().max(64);
 
+/** The key of the checker a workspace's windows share. */
+export const localChecksKey = (where: string) => "project:" + where;
+
 /** Diagnostics and symbols, in a project's folders and in linked pull requests. */
 export function checkHandlers(ctx: ApiContext) {
   const {
@@ -28,7 +31,7 @@ export function checkHandlers(ctx: ApiContext) {
     place,
     store,
   } = ctx;
-  const local = (where: string) => "project:" + where;
+  const local = localChecksKey;
   const limits = (projectId?: string): CheckLimits => ({
     projectId,
     memoryMb:

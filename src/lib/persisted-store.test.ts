@@ -101,4 +101,37 @@ describe("persistedStore", () => {
     event("n");
     expect(store.get()).toBe(1);
   });
+
+  it("listens to the window only while followed, so a store per thread leaves nothing behind", () => {
+    const target = new EventTarget();
+    vi.stubGlobal("window", target);
+    let listening = 0;
+    vi.spyOn(target, "addEventListener").mockImplementation(() => listening++);
+    vi.spyOn(target, "removeEventListener").mockImplementation(
+      () => listening--,
+    );
+    for (let thread = 0; thread < 20; thread++) {
+      const store = number(`n-${thread}`);
+      const stop = store.subscribe(() => {});
+      const again = store.subscribe(() => {});
+      expect(listening).toBe(1);
+      stop();
+      again();
+    }
+    expect(listening).toBe(0);
+  });
+
+  it("reads another window's change once nothing follows it", () => {
+    vi.stubGlobal("window", new EventTarget());
+    const store = number("n");
+    store.subscribe(() => {})();
+    const before = store.get();
+    expect(store.get()).toBe(before);
+    saved.set("n", "7");
+    expect(store.get()).toBe(7);
+    const changed = vi.fn();
+    saved.set("n", "8");
+    store.subscribe(changed);
+    expect(store.get()).toBe(8);
+  });
 });

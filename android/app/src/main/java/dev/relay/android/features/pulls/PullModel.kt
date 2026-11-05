@@ -62,7 +62,7 @@ class PullModel(private val remote: Remote, val ref: PullRef) : ViewModel() {
             val pull = remote.call { pull(ref) }
             val merges = remote.client.value?.supports(Bridge.MERGE) == true
             page.value = coroutineScope {
-                val ci = async { runCatching { remote.call { pullCiStatus(ref, pull.head.ref) } }.getOrNull() }
+                val ci = async { runCatching { remote.call { pullCiStatus(ref, pull.head) } }.getOrNull() }
                 val reviews = async { runCatching { remote.call { pullReviews(ref) }.items }.getOrDefault(emptyList()) }
                 val files = async { runCatching { remote.call { pullFiles(ref) } }.getOrNull() }
                 val comments = async { runCatching { remote.call { pullDiscussion(ref) }.items }.getOrDefault(emptyList()) }

@@ -269,6 +269,8 @@ it.skipIf(!posix)("cancels subprocesses spawned by an executable", async () => {
 
 // Shims as npm 11 and cmd-shim write them, copied from a Windows install.
 describe("reading a Windows .cmd shim", () => {
+  const runs = (file: string) => ({ file, args: [] });
+
   it("takes npm's and npx's CLI script, not the node.exe they check for first", () => {
     const npm = [
       'SET "NODE_EXE=%~dp0\\node.exe"',
@@ -276,14 +278,14 @@ describe("reading a Windows .cmd shim", () => {
       'SET "NPM_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npm-cli.js"',
       '"%NODE_EXE%" "%NPM_CLI_JS%" %*',
     ].join("\r\n");
-    expect(shimTarget(npm)).toBe("node_modules\\npm\\bin\\npm-cli.js");
+    expect(shimTarget(npm)).toEqual(runs("node_modules\\npm\\bin\\npm-cli.js"));
     expect(
       shimTarget(
         npm
           .replaceAll("NPM_CLI_JS", "NPX_CLI_JS")
           .replace("npm-cli", "npx-cli"),
       ),
-    ).toBe("node_modules\\npm\\bin\\npx-cli.js");
+    ).toEqual(runs("node_modules\\npm\\bin\\npx-cli.js"));
   });
 
   it("takes a package's script past the node.exe check", () => {
@@ -293,17 +295,39 @@ describe("reading a Windows .cmd shim", () => {
       ")",
       'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@openai\\codex\\bin\\codex.js" %*',
     ].join("\r\n");
-    expect(shimTarget(codex)).toBe(
-      "node_modules\\@openai\\codex\\bin\\codex.js",
+    expect(shimTarget(codex)).toEqual(
+      runs("node_modules\\@openai\\codex\\bin\\codex.js"),
     );
     const corepack = [
       '@IF EXIST "%~dp0\\node.exe" (',
       '  "%~dp0\\node.exe"  "%~dp0\\node_modules\\corepack\\dist\\corepack.js" %*',
       ")",
     ].join("\r\n");
-    expect(shimTarget(corepack)).toBe(
-      "node_modules\\corepack\\dist\\corepack.js",
+    expect(shimTarget(corepack)).toEqual(
+      runs("node_modules\\corepack\\dist\\corepack.js"),
     );
+  });
+
+  it("keeps the arguments the Azure CLI's shim gives its Python", () => {
+    // build_scripts/windows/scripts/az_msi.cmd in Azure/azure-cli.
+    const az = [
+      "::",
+      ":: Microsoft Azure CLI - Windows Installer - Author file components script",
+      ":: Copyright (C) Microsoft Corporation. All Rights Reserved.",
+      "::",
+      "",
+      '@IF EXIST "%~dp0\\..\\python.exe" (',
+      "  SET AZ_INSTALLER=MSI",
+      '  "%~dp0\\..\\python.exe" -IBm azure.cli %*',
+      ") ELSE (",
+      "  echo Failed to load python executable.",
+      "  exit /b 1",
+      ")",
+    ].join("\r\n");
+    expect(shimTarget(az)).toEqual({
+      file: "..\\python.exe",
+      args: ["-IBm", "azure.cli"],
+    });
   });
 
   it("finds nothing in a script that names no target", () => {

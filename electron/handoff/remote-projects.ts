@@ -3,6 +3,7 @@
 // rather than one of its threads, that run there, its shells among them.
 // Its threads go there as live handoffs do; see Handoffs.sendHome.
 import {
+  forwardedArgs,
   handoffHereOnlyMethods,
   remoteProjectMethods,
   type RemoteProjectMethod,
@@ -220,7 +221,7 @@ export class RemoteProjects {
         "projectCall",
         projectId,
         method as RemoteProjectMethod,
-        args,
+        forwardedArgs(args),
       );
     });
     if (kept) this.answered.set(kept, answer);

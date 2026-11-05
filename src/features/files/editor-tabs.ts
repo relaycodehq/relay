@@ -123,23 +123,36 @@ export function closeTab(state: TabState, id: string): TabState {
   return { tabs, active: fallback, recent };
 }
 
-/** A file or folder moved, in the project or with `outside` outside it: tabs on it or under it follow. */
+/**
+ * A file or folder moved, in the project or with `outside` outside it: tabs
+ * on it or under it follow, bar those whose new path is in `stayed`.
+ */
 export function renameTabs(
   state: TabState,
   from: string,
   to: string,
   outside = false,
+  stayed: ReadonlySet<string> = new Set(),
 ): TabState {
-  const moved = (tab: EditorTab) =>
-    tabIsWithin(tab, from, outside)
-      ? { ...tab, path: to + tab.path.slice(from.length) }
-      : tab;
+  const moved = (tab: EditorTab) => {
+    if (!tabIsWithin(tab, from, outside)) return tab;
+    const path = to + tab.path.slice(from.length);
+    return stayed.has(path) ? tab : { ...tab, path };
+  };
   const movedIds = new Map(state.tabs.map((t) => [tabId(t), tabId(moved(t))]));
   const movedId = (id: string) => movedIds.get(id) ?? id;
+  // A tab can still be open on a deleted file at the path something moved
+  // to; the moved tab replaces it.
+  const arrived = new Set(
+    state.tabs.filter((t) => moved(t) !== t).map((t) => tabId(moved(t))),
+  );
+  const tabs = state.tabs
+    .filter((t) => moved(t) !== t || !arrived.has(tabId(t)))
+    .map(moved);
   return {
-    tabs: state.tabs.map(moved),
+    tabs,
     active: state.active && movedId(state.active),
-    recent: state.recent.map(movedId),
+    recent: [...new Set(state.recent.map(movedId))],
   };
 }
 

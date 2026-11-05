@@ -10,7 +10,13 @@ import {
   refSchema,
   shaSchema,
 } from "../../shared/validation";
-import { pageSchema, takes, type ApiContext, type Handlers } from "./context";
+import {
+  optional,
+  pageSchema,
+  takes,
+  type ApiContext,
+  type Handlers,
+} from "./context";
 
 /** Reviewing a pull request on its host: finding it, its files and discussion, the review itself. */
 export function reviewHandlers(ctx: ApiContext) {
@@ -21,6 +27,7 @@ export function reviewHandlers(ctx: ApiContext) {
     requireClient,
     clientFor,
     prKey,
+    threadPrKey,
     projectChats,
     ci,
     login,
@@ -48,22 +55,22 @@ export function reviewHandlers(ctx: ApiContext) {
     parseUrl: takes([z.string().max(4096)], (url) => hosts.parseUrl(url)),
     pull: takes([refSchema], async (r) => (await clientFor(r)).pull(r)),
     pullCiStatus: takes(
-      [refSchema, z.string().min(1).max(255)],
-      (r, branch) => {
+      [refSchema, z.string().min(1).max(255), optional(shaSchema)],
+      (r, branch, sha) => {
         const server =
           r.server ?? login.client?.account.server ?? "https://github.com";
         const host = isAzureServer(server)
           ? "dev.azure.com"
           : new URL(server).hostname.toLowerCase();
         const settings = store.get().sourceControl;
-        return ci.branchStatus(
+        return ci.pullHeadStatus(
           {
             host,
             owner: r.owner,
             name: r.name,
             ...(isAzureServer(server) ? { server } : {}),
           },
-          branch,
+          { branch, sha },
           { gitea: login.client, azure: (s) => hosts.azureClient(s) },
           (kind) => isSourceControlOn(settings, kind),
         );
@@ -124,8 +131,7 @@ export function reviewHandlers(ctx: ApiContext) {
       });
       // An unused PR thread lists once its review begins; see listChats.
       for (const c of store.get().chats ?? [])
-        if (c.scope.kind === "pr" && prKey(c.scope.ref) === key)
-          projectChats.summariesChanged(c.projectId);
+        if (threadPrKey(c) === key) projectChats.summariesChanged(c.projectId);
     }),
     submitReview: takes(
       [

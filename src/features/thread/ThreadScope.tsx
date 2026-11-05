@@ -1,5 +1,5 @@
 import { ChevronDown, GitPullRequest, ScanSearch, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import type { ChatScope, Project } from "../../../shared/projects";
 import type { PullRef } from "../../../shared/types";
 import { ProjectHeadlinePicker } from "../projects/ProjectHeadlinePicker";
@@ -21,7 +21,7 @@ export interface ScopeChoice {
 }
 
 /** What a thread is about, picked beside the composer while it's empty. */
-export function ScopeButtons({
+export const ScopeButtons = memo(function ScopeButtons({
   project,
   scope,
   choosing,
@@ -102,7 +102,7 @@ export function ScopeButtons({
       )}
     </>
   );
-}
+});
 
 /**
  * A picked scope wears an × that takes the thread back to the repository.

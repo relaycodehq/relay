@@ -345,6 +345,26 @@ it("answers a steer at its new effort and keeps the session for that effort", as
   expect(vi.mocked(query).mock.calls.length - started).toBe(1);
 });
 
+it("keeps the session, and Claude's background work, when a prompt fails before it goes out", async () => {
+  claude(async function* ({ next }) {
+    const first = await next();
+    yield lifecycle(first.uuid, "started");
+    yield result("First.");
+    const again = await next();
+    yield lifecycle(again.uuid, "started");
+    yield result("Same session.");
+  });
+  const session = { key: crypto.randomUUID(), id: session_id, async onId() {} };
+  const started = vi.mocked(query).mock.calls.length;
+  await run({ session });
+  const gone = join(tmpdir(), `claude-turn-${crypto.randomUUID()}.png`);
+  await expect(
+    run({ session, images: [{ path: gone, mimeType: "image/png" }] }),
+  ).rejects.toThrow("ENOENT");
+  await expect(run({ session })).resolves.toBe("Same session.");
+  expect(vi.mocked(query).mock.calls.length - started).toBe(1);
+});
+
 it("answers a steer that cut a running tool short", async () => {
   let steer!: (text: string, id?: string) => Promise<void>;
   // The frames Claude Code 2.1.289 writes when a "now" steer lands mid-Bash.

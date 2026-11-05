@@ -52,6 +52,28 @@ it("links the usual home into a profile, but never its sign-in", async () => {
   ).toBe("conversation");
 });
 
+it("links the usual home on Windows without the symlinks only Developer Mode allows", async () => {
+  const platform = process.platform;
+  Object.defineProperty(process, "platform", { value: "win32" });
+  try {
+    await writeFile(join(home, "__store.db"), "");
+    await writeFile(join(home, "__store.db-wal"), "");
+    const profile = await prepareProfile("claude", "work");
+    // A junction for a folder; a hard link, sharing the file, for a file.
+    const settings = await lstat(join(profile, "settings.json"));
+    expect(settings.isSymbolicLink()).toBe(false);
+    expect(settings.nlink).toBe(2);
+    expect(
+      await readFile(join(profile, "projects", "-repo", "s.jsonl"), "utf8"),
+    ).toBe("conversation");
+    // A hard-linked database would get a journal of its own: the account keeps its own.
+    expect(await readdir(profile)).not.toContain("__store.db");
+    expect(await readdir(profile)).not.toContain("__store.db-wal");
+  } finally {
+    Object.defineProperty(process, "platform", { value: platform });
+  }
+});
+
 it("links what the usual home gained since, and keeps what the profile made its own", async () => {
   const profile = await prepareProfile("claude", "work");
   await rm(join(profile, "settings.json"));

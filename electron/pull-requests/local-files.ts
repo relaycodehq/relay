@@ -2,7 +2,7 @@ import type { LocalFile, PullRef } from "../../shared/types";
 import { shaSchema } from "../../shared/validation";
 import { inspectFolder } from "../git/repository";
 import {
-  decodeText,
+  committedText,
   safeWorkingPath,
   readWorkingFile,
   writeWorkingFile,
@@ -59,7 +59,7 @@ export async function readLocalFile(
     branch: local.branch,
     head,
     contents: disk.contents,
-    original: decodeText(original),
+    original: committedText(original),
     version: disk.hash,
   };
 }

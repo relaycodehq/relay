@@ -10,8 +10,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import dev.relay.android.app.RelayRoot
-import dev.relay.android.lib.navigation.Route
-import dev.relay.android.lib.navigation.routeForDeepLink
+import dev.relay.android.lib.navigation.DeepLink
+import dev.relay.android.lib.navigation.deepLinkFor
 import kotlinx.coroutines.channels.Channel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,7 +26,7 @@ import dev.relay.android.app.CrashRecovery
 import dev.relay.android.app.splash.handOffSplash
 
 class MainActivity : ComponentActivity() {
-    private val links = Channel<Route>(Channel.BUFFERED)
+    private val links = Channel<DeepLink>(Channel.BUFFERED)
 
     /** The crash this launch came back from, until the reader goes on to Home. */
     private var crash by mutableStateOf<Crash?>(null)
@@ -89,6 +89,6 @@ class MainActivity : ComponentActivity() {
 
     private fun deliver(intent: Intent?) {
         val url = intent?.takeIf { it.action == Intent.ACTION_VIEW }?.dataString ?: return
-        routeForDeepLink(url)?.let { links.trySend(it) }
+        deepLinkFor(url)?.let { links.trySend(it) }
     }
 }

@@ -524,13 +524,13 @@ export class AgentUpdates {
     const found = await Promise.all(
       this.providers().map((provider) => this.inspect(provider, fresh, online)),
     );
-    // An update running or finished since this look began knows better.
-    // Older outcomes give way to what's installed now.
-    return found.map((agent) => {
-      const { update } = this.agent(agent.provider);
-      return update && ("at" in update ? update.at >= started : true)
-        ? this.agent(agent.provider)
-        : agent;
+    // Registry agents added or removed, or updates begun since, know better.
+    return this.providers().map((provider) => {
+      const now = this.agent(provider);
+      const agent = found.find((a) => a.provider === provider);
+      const updatedSince =
+        now.update && (!("at" in now.update) || now.update.at >= started);
+      return agent && !updatedSince ? agent : now;
     });
   }
 

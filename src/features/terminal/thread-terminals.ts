@@ -6,6 +6,7 @@ import {
   draftTerminalKey,
   terminalBaseKey,
   terminalSlotKey,
+  terminalWrites,
   type TerminalEvent,
 } from "../../../shared/terminals";
 import type { AgentProvider } from "../../../shared/agents";
@@ -47,6 +48,7 @@ export class ThreadTerminal {
   private fitFrame?: number;
   private listeners = new Set<() => void>();
   private version = 0;
+  private disposed = false;
 
   constructor(
     public key: string,
@@ -86,8 +88,7 @@ export class ThreadTerminal {
         ),
     );
     this.term.onData((data) => {
-      if (this.status === "running")
-        void api.writeTerminal(this.key, data).catch(() => {});
+      if (this.status === "running") this.send(data);
       else if (this.status === "starting") this.typed += data;
       else if (this.status === "exited" && data.includes("\r")) {
         this.term.write("\r\n");
@@ -130,6 +131,12 @@ export class ThreadTerminal {
     });
   }
 
+  /** Types `data` into the shell; a long paste goes in several writes. */
+  private send(data: string) {
+    for (const write of terminalWrites(data))
+      void api.writeTerminal(this.key, write).catch(() => {});
+  }
+
   async start(fresh = false) {
     if (this.status === "starting") return;
     this.status = "starting";
@@ -144,6 +151,13 @@ export class ThreadTerminal {
         fresh,
         this.slot || undefined,
       );
+      // Its tab closed while the shell started: it's either ended now, or the
+      // new tab that took its key draws it.
+      if (this.disposed) {
+        if (!terminals.has(this.key))
+          void api.closeTerminal(this.key).catch(() => {});
+        return;
+      }
       this.cwd = opened.cwd;
       if (opened.backlog) this.term.write(opened.backlog);
       this.status = "running";
@@ -154,8 +168,7 @@ export class ThreadTerminal {
           .resizeTerminal(this.key, this.term.cols, this.term.rows)
           .catch(() => {});
       for (const data of this.early.splice(0)) this.output(data);
-      if (this.typed && opened.exitCode === undefined)
-        void api.writeTerminal(this.key, this.typed).catch(() => {});
+      if (this.typed && opened.exitCode === undefined) this.send(this.typed);
       this.typed = "";
       if (opened.exitCode !== undefined) this.exited(opened.exitCode);
     } catch (e) {
@@ -237,6 +250,7 @@ export class ThreadTerminal {
 
   /** Called once its tab closes for good. */
   dispose() {
+    this.disposed = true;
     clearTimeout(this.ackTimer);
     if (this.fitFrame) cancelAnimationFrame(this.fitFrame);
     this.element.remove();
@@ -316,6 +330,15 @@ export function closeTerminal(
   terminals.get(key)?.dispose();
   terminals.delete(key);
   void api.closeTerminal(key).catch(() => {});
+}
+
+/** Lets go of a deleted thread's shells; the main process has already ended them. */
+export function forgetThreadTerminals(chatId: string) {
+  for (const [key, terminal] of [...terminals]) {
+    if (terminalBaseKey(key) !== chatId) continue;
+    terminal.dispose();
+    terminals.delete(key);
+  }
 }
 
 /**

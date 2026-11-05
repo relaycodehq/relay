@@ -142,6 +142,22 @@ export const savedThreadWindows = (saved: unknown): SavedThreadWindow[] =>
       })
     : [];
 
+/**
+ * Whether a saved thread window still has something to show: its thread, in
+ * the project it was saved with, and that project not removed. A window
+ * without them would sit on its loading screen.
+ */
+export function threadWindowExists(
+  { projectId, chatId }: ThreadWindow,
+  projects: readonly { id: string; removed?: unknown }[],
+  chats: readonly { id: string; projectId: string }[],
+) {
+  return (
+    projects.some((p) => p.id === projectId && !p.removed) &&
+    chats.some((c) => c.id === chatId && c.projectId === projectId)
+  );
+}
+
 /** The query string a thread's window loads Relay's page with. */
 export const threadWindowSearch = (w: ThreadWindow) =>
   new URLSearchParams({ thread: w.chatId, project: w.projectId }).toString();
@@ -153,6 +169,9 @@ export function threadWindowOf(search: string): ThreadWindow | null {
     projectId = params.get("project");
   return chatId && projectId ? { projectId, chatId } : null;
 }
+
+/** About a title bar's height: the top of the window a user drags it by. */
+const titleBarHeight = 30;
 
 interface Rect {
   x: number;
@@ -166,18 +185,23 @@ interface Rect {
  * display that's still there, else the size it had centred on `fallback`.
  */
 export function placeOnScreen(saved: Rect, displays: Rect[], fallback: Rect) {
-  const visible = (d: Rect) =>
+  const across = (d: Rect) =>
     Math.max(
       0,
       Math.min(saved.x + saved.width, d.x + d.width) - Math.max(saved.x, d.x),
-    ) *
-    Math.max(
-      0,
-      Math.min(saved.y + saved.height, d.y + d.height) - Math.max(saved.y, d.y),
     );
-  // Its title bar has to be reachable, so a sliver at an edge doesn't count.
+  const down = (d: Rect, top: number, bottom: number) =>
+    Math.max(0, Math.min(bottom, d.y + d.height) - Math.max(top, d.y));
+  const visible = (d: Rect) =>
+    across(d) * down(d, saved.y, saved.y + saved.height);
+  // A sliver at an edge doesn't count.
   const enough = Math.min((saved.width * saved.height) / 4, 200 * 100);
-  if (displays.some((d) => visible(d) >= enough)) return saved;
+  // Its title bar has to be reachable, not left on a display that's gone.
+  const titleBarOn = (d: Rect) =>
+    across(d) >= Math.min(saved.width, 100) &&
+    down(d, saved.y, saved.y + titleBarHeight) >= 10;
+  if (displays.some((d) => visible(d) >= enough) && displays.some(titleBarOn))
+    return saved;
   const width = Math.min(saved.width, fallback.width),
     height = Math.min(saved.height, fallback.height);
   return {

@@ -1,3 +1,4 @@
+import { shell } from "electron";
 import { expect, it, vi } from "vitest";
 import type { ApiContext } from "./context";
 import { desktopHandlers } from "./desktop";
@@ -8,7 +9,7 @@ vi.mock("electron", () => ({
   ClipboardItem: class {},
   nativeImage: {},
   nativeTheme: {},
-  shell: {},
+  shell: { openExternal: vi.fn(async () => {}) },
 }));
 
 vi.mock("../app/menu", () => ({ setApplicationMenu: vi.fn() }));
@@ -50,4 +51,20 @@ it("applies the interface size independently in each window and preserves manual
   // Reinitializing after a renderer reload must not apply the scale twice.
   handlers.setInterfaceScale([11 / 13]);
   expect(thread.getZoomFactor()).toBeCloseTo(11 / 13);
+});
+
+it("opens web and mail links outside, and nothing else", async () => {
+  const handlers = desktopHandlers({} as ApiContext);
+  await handlers.openExternal(["mailto:someone@example.com"]);
+  await handlers.openExternal(["https://example.com/"]);
+  expect(shell.openExternal).toHaveBeenCalledWith("mailto:someone@example.com");
+  expect(shell.openExternal).toHaveBeenCalledWith("https://example.com/");
+  for (const url of [
+    "file:///etc/passwd",
+    "javascript:alert(1)",
+    "https://a:b@example.com/",
+  ])
+    await expect(handlers.openExternal([url])).rejects.toThrow(
+      "Unsupported URL.",
+    );
 });

@@ -129,7 +129,9 @@ async function commitFiles(
   const counts = new Map<string, [string, string]>();
   const stats = numstat.split("\0");
   for (let i = 0; i < stats.length - 1;) {
-    const [additions, deletions, path] = stats[i].split("\t");
+    // `-z` leaves the path unquoted, tabs and all.
+    const [additions, deletions, ...name] = stats[i].split("\t");
+    const path = name.join("\t");
     // Renames leave the path empty and follow with the old and new names.
     if (path) i += 1;
     else i += 3;

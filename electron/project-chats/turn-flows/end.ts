@@ -2,7 +2,7 @@ import type { ProjectChat, ProjectChatSend } from "../../../shared/projects";
 import type { ActiveChat } from "../active";
 import type { ChatCore } from "../core";
 import type { Councils } from "../councils";
-import type { ChatQueue } from "../queue";
+import { holdQueueBack, type ChatQueue } from "../queue";
 
 /**
  * A steer the agent took but gave back unread when its finished turn ended
@@ -80,13 +80,29 @@ export class TurnEndings {
   /**
    * A turn stopped or failed before its agent ran, so no run ends to move a
    * review on: a reviewer's review takes its step here, or would wait for good.
+   * Nor would the queue go on after a Stop that kept it going, to send a
+   * waiting steer. Any other stop holds the queue back, as a stopped run's.
    */
-  unstarted(chat: ProjectChat, input: ProjectChatSend, answer?: string) {
-    if (chat.reviewer)
-      void this.councils.step(chat.id, {
+  unstarted(
+    chat: ProjectChat,
+    input: ProjectChatSend,
+    { answer, stopped }: { answer?: string; stopped?: ActiveChat },
+  ) {
+    const holdsQueue = !!stopped && !stopped.keepsQueue && !!chat.queue?.length;
+    if (holdsQueue) holdQueueBack(chat);
+    const stepped =
+      chat.reviewer &&
+      this.councils.step(chat.id, {
         request: input.id,
         ...(answer ? { answer } : {}),
       });
+    void this.core
+      .control(chat.id, async () => {
+        if (holdsQueue) await this.core.storage.save(chat);
+        await stepped;
+        await this.queue.drain(chat.id);
+      })
+      .catch((e) => console.warn("Could not send the queued messages:", e));
   }
 
   /**

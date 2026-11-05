@@ -1,5 +1,6 @@
 import { currentBranch, git } from "../git/git";
 import { azureRepoOf, remoteUrl, repoOf } from "../git/repository";
+import { configStamp, memo } from "../git/repo-facts";
 import type { AzureDevOps } from "../pull-requests/azure-devops/client";
 import type { Gitea } from "../pull-requests/gitea";
 import type { FetchRequest } from "../pull-requests/host";
@@ -7,7 +8,7 @@ import type { CiRun, CiStatus } from "../../shared/ci";
 import type { SourceControlKind } from "../../shared/source-control";
 import { GitHub } from "./github";
 import { GithubCredentials } from "../github";
-import { giteaDefaultBranch, readGitea } from "./gitea";
+import { giteaDefaultBranch, readGitea, readGiteaCommit } from "./gitea";
 import { azureDefaultBranch, readAzure } from "./azure-devops";
 
 export interface CiRepo {
@@ -22,8 +23,17 @@ export interface CiReading {
   runs: CiRun[];
 }
 
+type RemoteRepo = CiRepo & { host: string };
+
+// CI is polled every 90s; the remote only changes with the config files.
+const remotes = memo<RemoteRepo | null>();
+
 /** `origin`, or the only remote there is, as host and owner/name. */
 export async function remoteRepo(root: string) {
+  return remotes(root, await configStamp(root), () => readRemoteRepo(root));
+}
+
+async function readRemoteRepo(root: string): Promise<RemoteRepo | null> {
   const names = (await git(root, ["remote"])).split("\n").filter(Boolean);
   const name = names.includes("origin") ? "origin" : names[0];
   if (!name) return null;
@@ -54,6 +64,8 @@ interface CiSource {
   /** As users know it, e.g. "GitHub". */
   name: string;
   read(repo: CiRepo, branch: string): Promise<CiReading | null>;
+  /** Unset where CI doesn't report on the head itself: Azure Pipelines builds a PR's merge commit. */
+  readCommit?(repo: CiRepo, sha: string): Promise<CiReading | null>;
   defaultBranch(repo: CiRepo): Promise<string>;
 }
 
@@ -104,6 +116,7 @@ export class Ci {
         host: "github.com",
         name: "GitHub",
         read: (repo, branch) => this.github.read(repo, branch),
+        readCommit: (repo, sha) => this.github.readCommit(repo, sha),
         defaultBranch: (repo) => this.github.defaultBranch(repo),
       },
       ...(gitea
@@ -114,6 +127,8 @@ export class Ci {
               name: "Gitea",
               read: (repo: CiRepo, branch: string) =>
                 readGitea(gitea, repo, branch),
+              readCommit: (repo: CiRepo, sha: string) =>
+                readGiteaCommit(gitea, repo, sha),
               defaultBranch: (repo: CiRepo) => giteaDefaultBranch(gitea, repo),
             },
           ]
@@ -121,19 +136,27 @@ export class Ci {
     ];
   }
 
-  /** CI on a branch of a repository on its host, with no checkout: a pull request's head. */
-  async branchStatus(
+  /**
+   * CI on a pull request's head, with no checkout. Read by its commit when
+   * that's known, since a fork's branch names nothing in the base repository;
+   * phones from before they sent the commit still ask by branch.
+   */
+  async pullHeadStatus(
     remote: CiRepo & { host: string },
-    branch: string,
+    head: { branch: string; sha?: string },
     hosts: CiHosts,
     isOn: (kind: SourceControlKind) => boolean = () => true,
   ): Promise<CiStatus | null> {
     const source = this.sources(hosts).find(
       (s) => s.host === remote.host && isOn(s.kind),
     );
-    const reading = source && (await source.read(remote, branch));
+    if (!source) return null;
+    const reading =
+      head.sha && source.readCommit
+        ? await source.readCommit(remote, head.sha)
+        : await source.read(remote, head.branch);
     return reading
-      ? { source: source.name, branch, ...reading, ahead: 0 }
+      ? { source: source.name, branch: head.branch, ...reading, ahead: 0 }
       : null;
   }
 

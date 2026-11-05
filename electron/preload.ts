@@ -32,7 +32,14 @@ const on = <C extends keyof RelayEvents>(channel: C) =>
 contextBridge.exposeInMainWorld("relay", {
   ...methods,
   pathForFile: (file: File) => webUtils.getPathForFile(file),
-  onProjectChat: on("relay:project-chat"),
+  onProjectChat: (
+    callback: (push: RelayEvents["relay:project-chat"]) => void,
+  ) => {
+    const off = on("relay:project-chat")(callback);
+    // From here on this window can place a streaming answer's patches.
+    ipcRenderer.send("relay:project-chat-resync");
+    return off;
+  },
   onProjectChats: on("relay:project-chats"),
   onThreadNews: on("relay:thread-news"),
   onProjectAdding: on("relay:project-adding"),

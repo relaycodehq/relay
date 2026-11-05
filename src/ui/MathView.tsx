@@ -1,5 +1,6 @@
 import { Check, Copy } from "lucide-react";
 import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { SizedCache } from "../lib/sized-cache";
 import { useCopy } from "../lib/useCopy";
 
 type Katex = (typeof import("katex"))["default"];
@@ -38,8 +39,23 @@ function useKatex() {
   return loaded;
 }
 
-/** Formulas come from an agent: no links, no raw HTML, no runaway sizes. */
+/** Typeset formulas, so a thread opened again doesn't lay them out again. */
+const typesetHtml = new SizedCache<string>(
+  2_000_000,
+  (key, html) => key.length + html.length,
+);
+
 function typeset(katex: Katex, tex: string, display: boolean) {
+  const key = `${display ? "display" : "inline"}\0${tex}`;
+  const kept = typesetHtml.get(key);
+  if (kept !== undefined) return kept;
+  const html = layOut(katex, tex, display);
+  typesetHtml.set(key, html);
+  return html;
+}
+
+/** Formulas come from an agent: no links, no raw HTML, no runaway sizes. */
+function layOut(katex: Katex, tex: string, display: boolean) {
   return katex.renderToString(tex, {
     displayMode: display,
     throwOnError: false,

@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import { attachedImages, dataUrlBytes } from "../../../shared/image-refs";
 import { splitDraftKey } from "../../lib/thread-draft";
 import {
@@ -163,36 +171,61 @@ export function useDraftImages(
       );
     },
     /** Keeps send cleanup scoped to the screenshots that actually went out. */
-    take() {
-      let taken: DraftImage[] | undefined;
-      const takenIds = () => new Set(taken?.map((image) => image.id));
-      return {
-        dispatch() {
-          taken = images;
-          // A screenshot pasted while this goes out starts a draft of its own.
-          reset([]);
-        },
-        restore() {
-          if (!taken?.length) return;
-          const back = taken;
-          const ids = takenIds();
-          void editImages(
-            key,
-            (now) => [...back, ...now.filter((image) => !ids.has(image.id))],
-            "Could not put the screenshot back in the draft.",
-          );
-        },
-        async forget() {
-          if (!taken?.length) return;
-          const ids = takenIds();
-          for (const id of ids) sketchHistories.current.delete(id);
-          await editImages(
-            key,
-            (now) => now.filter((image) => !ids.has(image.id)),
-            "Screenshot was sent, but its draft copy could not be cleared.",
-          );
-        },
-      };
+    take: () =>
+      takeImages(images, {
+        queue: imageQueue,
+        setImages,
+        edit: (change, failed) => editImages(key, change, failed),
+        histories: sketchHistories.current,
+      }),
+  };
+}
+
+/** A composer's screenshots, as a message going out takes them. */
+interface TakenFrom {
+  /** What the composer holds, after any change still being saved. */
+  queue: RefObject<Promise<DraftImage[]>>;
+  setImages: Dispatch<SetStateAction<DraftImage[]>>;
+  /** Changes and saves what the draft keeps. */
+  edit(
+    change: (now: DraftImage[]) => DraftImage[],
+    failed: string,
+  ): Promise<unknown>;
+  histories: Map<string, SketchHistory>;
+}
+
+/** `images` going out with a message, and what's left of them once it went or was refused. */
+function takeImages(images: DraftImage[], from: TakenFrom) {
+  let taken: DraftImage[] | undefined;
+  const takenIds = () => new Set(taken?.map((image) => image.id));
+  return {
+    dispatch() {
+      taken = images;
+      // One pasted while the message was readied, or while it goes out,
+      // stays for the next one.
+      const ids = takenIds();
+      const left = (now: DraftImage[]) =>
+        now.filter((image) => !ids.has(image.id));
+      from.queue.current = from.queue.current.then(left, () => []);
+      from.setImages(left);
+    },
+    restore() {
+      if (!taken?.length) return;
+      const back = taken;
+      const ids = takenIds();
+      void from.edit(
+        (now) => [...back, ...now.filter((image) => !ids.has(image.id))],
+        "Could not put the screenshot back in the draft.",
+      );
+    },
+    async forget() {
+      if (!taken?.length) return;
+      const ids = takenIds();
+      for (const id of ids) from.histories.delete(id);
+      await from.edit(
+        (now) => now.filter((image) => !ids.has(image.id)),
+        "Screenshot was sent, but its draft copy could not be cleared.",
+      );
     },
   };
 }

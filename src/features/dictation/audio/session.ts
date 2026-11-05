@@ -50,7 +50,10 @@ interface Session {
   target: DictationTarget;
   port?: MessagePort;
   capture?: Capture;
-  stopRequested: boolean;
+  /** Resolves true once the words are in the draft, false if they were dropped. */
+  stopping?: Promise<boolean>;
+  /** A stop asked for while starting, run once listening. */
+  stopWhenListening?: (stopped: Promise<boolean>) => void;
   heard: string;
   final?: (text: string) => void;
 }
@@ -70,7 +73,6 @@ export async function startDictation(target: DictationTarget, owner: unknown) {
   const current: Session = {
     id: ++sessionId,
     target,
-    stopRequested: false,
     heard: "",
   };
   session = current;
@@ -109,7 +111,7 @@ export async function startDictation(target: DictationTarget, owner: unknown) {
   }
   target.begin();
   set({ phase: "listening", analyser: current.capture.analyser });
-  if (current.stopRequested) void stopDictation();
+  current.stopWhenListening?.(finish(current));
   return true;
 }
 
@@ -131,15 +133,20 @@ function receive(current: Session, event: DictationEvent) {
 
 /**
  * Finishes: the last words settle, then the text stays in the composer.
- * Resolves true once it's there.
+ * Resolves true once it's there, also when asked again while starting or
+ * finishing.
  */
-export async function stopDictation() {
+export function stopDictation(): Promise<boolean> {
   const current = session;
-  if (!current) return false;
-  if (snapshot.phase === "starting") {
-    current.stopRequested = true;
-    return false;
-  }
+  if (!current) return Promise.resolve(false);
+  current.stopping ??=
+    snapshot.phase === "starting"
+      ? new Promise((resolve) => (current.stopWhenListening = resolve))
+      : finish(current);
+  return current.stopping;
+}
+
+async function finish(current: Session) {
   if (snapshot.phase !== "listening") return false;
   set({ phase: "finishing" });
   await current.capture?.stop();
@@ -176,6 +183,7 @@ export const clearDictationError = () => set({ error: undefined });
 
 function discard(current: Session) {
   if (session === current) session = undefined;
+  current.stopWhenListening?.(Promise.resolve(false));
   void current.capture?.stop().catch(() => {});
   current.port?.close();
 }
@@ -193,6 +201,9 @@ function openPort() {
         !event.ports[0]
       )
         return;
+      // Ports arrive in the order they were asked for, so each is the first
+      // waiting listener's; a cancelled start mustn't take the next one's.
+      event.stopImmediatePropagation();
       done();
       resolve(event.ports[0]);
     };

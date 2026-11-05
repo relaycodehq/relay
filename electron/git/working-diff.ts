@@ -1,3 +1,5 @@
+import { lstat } from "node:fs/promises";
+import { join } from "node:path";
 import { digest } from "../util/hash";
 import { workingPathSchema, type ChangeArea } from "../../shared/working-tree";
 import type { FilePair } from "../../shared/types";
@@ -13,11 +15,12 @@ import { parseStatusV2, statusArgs } from "./working-status";
  */
 async function changeOf(root: string, path: string) {
   workingPathSchema.parse(path);
-  const c = parseStatusV2(await git(root, statusArgs)).changes.find(
-    (c) => c.path === path,
-  );
-  if (!c) throw new Error("This file no longer has local changes.");
-  return c;
+  const status = parseStatusV2(await git(root, statusArgs));
+  const at = status.changes.findIndex((c) => c.path === path);
+  if (at < 0) throw new Error("This file no longer has local changes.");
+  // `1 XY sub …`, where `sub` starts with S for a submodule.
+  const submodule = /^[12] .. S/.test(status.rows[at]!);
+  return { ...status.changes[at]!, submodule };
 }
 
 export async function workingDiff(
@@ -46,7 +49,7 @@ export async function workingDiff(
       : c.worktree === "D"
         ? null
         : { name: path, disk: true };
-  return filePair(root, oldSource, nextSource);
+  return filePair(root, oldSource, nextSource, c.submodule);
 }
 
 /** The file as `oldSource` and `nextSource` have it, side by side; null for a side that doesn't exist. */
@@ -54,9 +57,11 @@ async function filePair(
   root: string,
   oldSource: FileSource | null,
   nextSource: FileSource | null,
+  submodule: boolean,
 ): Promise<FilePair> {
   const read = async (source: FileSource | null) => {
     if (!source) return null;
+    if (submodule) return submoduleSide(root, source);
     if ("spec" in source)
       return {
         name: source.name,
@@ -86,6 +91,30 @@ async function filePair(
 }
 
 /**
+ * A submodule's side as `git diff` writes it: the commit it points at, whose
+ * contents live in the submodule's repository, not this one.
+ */
+async function submoduleSide(root: string, source: FileSource) {
+  const commit = (
+    "spec" in source
+      ? await git(root, ["rev-parse", "-q", "--verify", source.spec]).catch(
+          () => "",
+        )
+      : await checkedOutCommit(join(root, source.name))
+  ).trim();
+  if (!commit) return null;
+  const contents = `Subproject commit ${commit}\n`;
+  return { name: source.name, contents, cacheKey: digest(contents) };
+}
+
+/** The commit a submodule's folder has checked out; empty when it has none of its own. */
+async function checkedOutCommit(dir: string) {
+  // An uninitialised submodule is an empty folder, where Git would answer for the outer repository.
+  if (!(await lstat(join(dir, ".git")).catch(() => null))) return "";
+  return git(dir, ["rev-parse", "-q", "--verify", "HEAD"]).catch(() => "");
+}
+
+/**
  * A changed file against HEAD, staged and unstaged changes together: what a
  * thread's agent left in a repository other than its own.
  */
@@ -104,5 +133,6 @@ export async function headDiff(root: string, path: string): Promise<FilePair> {
     c.worktree === "D" || (c.index === "D" && c.worktree === " ")
       ? null
       : { name: path, disk: true },
+    c.submodule,
   );
 }

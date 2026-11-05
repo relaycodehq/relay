@@ -1,15 +1,11 @@
 import {
-  BrowserWindow,
+  type BrowserWindow,
   session,
   shell,
   WebContentsView,
   type NativeImage,
-  type NavigationEntry,
-  type Session,
 } from "electron";
 import type {
-  ConsoleEntry,
-  DevServerState,
   PreviewAction,
   PreviewAnnotationChange,
   PreviewBounds,
@@ -17,7 +13,6 @@ import type {
 } from "../../shared/preview";
 import { pageKey, threadKeyOf } from "../../shared/preview";
 import type { AppWindow } from "../app/window";
-import { copyCookies } from "./cookies";
 import { DevServers } from "./dev-servers";
 import type { BrowserAnnotation } from "../../shared/browser-annotations";
 import { pickElement } from "./element-pick";
@@ -25,84 +20,23 @@ import { localPort, webUrl } from "./local-urls";
 import { keepConsole } from "./page-console";
 import { followPage } from "./page-events";
 import { browserKeys } from "./page-keys";
+import { drawFrame } from "./off-screen";
+import { popOutWindow } from "./pop-out";
+import { preparePreviewSession } from "./preview-session";
+import {
+  pageOf,
+  previewState,
+  type Preview,
+  type PreviewTarget,
+} from "./preview-state";
 import type { SavedPreview, SavedPreviews } from "./saved-previews";
 import { sleep } from "../util/sleep";
 
-/** Where a thread's preview runs and what it loads. */
-export interface PreviewTarget {
-  /** The page's own key; see `pageKey`. */
-  key: string;
-  projectId: string;
-  chatId: string | null;
-  /** The thread's folder: its worktree, or the project's checkout. */
-  folder: string;
-  project: string;
-  branch?: string;
-  /** Its worktree's name; unset in the checkout. */
-  worktree?: string;
-  /** The checkout's browser, used to seed a thread on its first open. */
-  checkoutPartition: string;
-  /** Every thread owns a partition, seeded from the checkout's. */
-  partition: string;
-  env: Record<string, string>;
-  url?: string;
-  settings?: SavedPreview["settings"];
-  /** The project's dev command and port, the port already moved by the worktree's offset. */
-  dev?: { command?: string; port: number };
-}
-
-interface Preview {
-  target: PreviewTarget;
-  /** An explicit endpoint survives reopening the Browser tab. */
-  selectedUrl?: string;
-  /** A requested page waits for its server before it loads. */
-  pendingUrl?: string;
-  /** Unset while unloaded; `parked` holds where it was. */
-  view?: WebContentsView;
-  parked?: { entries: NavigationEntry[]; index: number };
-  /** A parked history is loading back in; the dev server's home must not replace it. */
-  restoring?: boolean;
-  shown: boolean;
-  /** Its view was in a window once, so it can be captured off screen. */
-  drawn?: boolean;
-  /** Ends an element pick under way. */
-  stopPick?: () => void;
-  /** When it last left the panel. */
-  hiddenAt: number;
-  /** Captures under way; the idle sweep mustn't close the page under them. */
-  capturing: number;
-  /** The Relay window it's laid over while shown: the main one, or its thread's own. */
-  host?: BrowserWindow;
-  popOut?: BrowserWindow;
-  error?: string;
-  server: DevServerState;
-  console: ConsoleEntry[];
-  snapshot?: string;
-  favicon?: string;
-  faviconRequest?: object;
-  /** Counts place calls, so a hide still capturing knows it was overtaken. */
-  placed: number;
-}
-
-/** What an agent's screenshot of a preview never shown is taken at. */
-const UNSHOWN_SIZE = { width: 1280, height: 800 };
 /** A preview out of sight this long gives its page's memory back. */
 const UNLOAD_MS =
   (process.env.RELAY_TEST_DATA &&
     Number(process.env.RELAY_TEST_PREVIEW_UNLOAD_MS)) ||
   5 * 60_000;
-const prepared = new WeakSet<Session>();
-
-/** Pages in a preview ask for nothing but the clipboard and full screen. */
-function prepare(ses: Session) {
-  if (prepared.has(ses)) return;
-  prepared.add(ses);
-  const allowed = new Set(["clipboard-sanitized-write", "fullscreen"]);
-  ses.setPermissionRequestHandler((_wc, permission, callback) =>
-    callback(allowed.has(permission)),
-  );
-  ses.setPermissionCheckHandler((_wc, permission) => allowed.has(permission));
-}
 
 /**
  * Each thread's preview: a browser view laid over the panel. Native views
@@ -229,14 +163,14 @@ export class ThreadPreviews {
     const destination = target.url ?? selection;
     if (destination && webUrl(destination)) {
       preview.selectedUrl = destination;
-      if (url || destination !== selection || !this.page(preview).url)
+      if (url || destination !== selection || !pageOf(preview).url)
         preview.pendingUrl = destination;
     }
     this.remember(preview);
     this.revive(preview);
     this.wake(preview);
     signal.throwIfAborted();
-    return this.state(preview);
+    return previewState(preview);
   }
 
   /** Starts the dev server if it isn't up, and loads its page once it is. */
@@ -274,15 +208,7 @@ export class ThreadPreviews {
     target: PreviewTarget,
     signal: AbortSignal,
   ): Promise<Preview> {
-    const ses = session.fromPartition(target.partition);
-    prepare(ses);
-    if (target.partition !== target.checkoutPartition) {
-      const checkout = session.fromPartition(target.checkoutPartition);
-      if (!(await ses.cookies.get({})).length)
-        await copyCookies(checkout, ses).catch((e) =>
-          console.warn("Copying the checkout's cookies failed:", e),
-        );
-    }
+    await preparePreviewSession(target);
     signal.throwIfAborted();
     const preview: Preview = {
       target,
@@ -414,7 +340,7 @@ export class ThreadPreviews {
   private remember(preview: Preview) {
     const { target } = preview;
     const url =
-      preview.pendingUrl || preview.selectedUrl || this.page(preview).url;
+      preview.pendingUrl || preview.selectedUrl || pageOf(preview).url;
     if (!url || !webUrl(url)) return;
     void this.saved
       ?.set(target.key, {
@@ -533,7 +459,7 @@ export class ThreadPreviews {
         if (history.canGoForward()) history.goForward();
         return;
       case "reload": {
-        const server = this.state(preview).server.state;
+        const server = previewState(preview).server.state;
         if (server === "failed" || server === "asleep") {
           this.wake(preview);
           this.emit(preview);
@@ -562,48 +488,30 @@ export class ThreadPreviews {
   }
 
   private async openExternal(preview: Preview) {
-    const url = this.page(preview).url;
+    const url = pageOf(preview).url;
     if (url && webUrl(url)) await shell.openExternal(url);
   }
 
   private popOut(preview: Preview) {
     if (preview.popOut) return preview.popOut.focus();
     this.hide(preview);
-    const view = preview.view!;
-    const win = new BrowserWindow({
-      width: 1280,
-      height: 860,
-      title: this.title(preview),
-      backgroundColor: "#ffffff",
+    preview.popOut = popOutWindow(preview, {
+      title: () => this.title(preview),
+      closed: () => {
+        preview.popOut = undefined;
+        preview.hiddenAt = this.now();
+        this.servers.watch(preview.target.folder, false);
+        // Back in the panel, hidden until it asks for it again.
+        if (this.previews.get(preview.target.key) === preview)
+          this.emit(preview);
+      },
     });
-    win.removeMenu?.();
-    const fit = () => {
-      const { width, height } = win.getContentBounds();
-      view.setBounds({ x: 0, y: 0, width, height });
-    };
-    win.contentView.addChildView(view);
-    preview.drawn = true;
-    fit();
-    win.on("resize", fit);
-    preview.popOut = win;
     this.servers.watch(preview.target.folder, true);
-    const retitle = () => {
-      if (!win.isDestroyed()) win.setTitle(this.title(preview));
-    };
-    view.webContents.on("page-title-updated", retitle);
-    win.on("closed", () => {
-      view.webContents.off("page-title-updated", retitle);
-      preview.popOut = undefined;
-      preview.hiddenAt = this.now();
-      this.servers.watch(preview.target.folder, false);
-      // Back in the panel, hidden until it asks for it again.
-      if (this.previews.get(preview.target.key) === preview) this.emit(preview);
-    });
     this.emit(preview);
   }
 
   private title(preview: Preview) {
-    const page = this.page(preview).title || "Preview";
+    const page = pageOf(preview).title || "Preview";
     return preview.target.worktree
       ? `[${preview.target.worktree}] ${page}`
       : page;
@@ -619,6 +527,14 @@ export class ThreadPreviews {
     void this.saved
       ?.forget(key)
       .catch((error) => console.warn("Could not forget the page:", error));
+  }
+
+  /** The thread was deleted: its pages close, and none is kept for next time. */
+  async closeThread(chatId: string) {
+    const keys = [...this.previews.keys(), ...this.opening.keys()];
+    for (const key of new Set(keys))
+      if (threadKeyOf(key) === chatId) this.close(key);
+    await this.saved?.forgetThread(chatId);
   }
 
   close(key: string) {
@@ -640,7 +556,7 @@ export class ThreadPreviews {
   /** Where the preview is now; undefined before it was opened. */
   current(key: string) {
     const preview = this.previews.get(key);
-    return preview && this.state(preview);
+    return preview && previewState(preview);
   }
 
   /** Tells the window a thread's preview was opened for it, to give it a tab. */
@@ -658,7 +574,7 @@ export class ThreadPreviews {
       if (!preview) return;
       const wc = preview.view?.webContents;
       if (
-        this.state(preview).server.state !== "starting" &&
+        previewState(preview).server.state !== "starting" &&
         !preview.restoring &&
         !(wc && !wc.isDestroyed() && wc.isLoading())
       )
@@ -680,45 +596,10 @@ export class ThreadPreviews {
       await this.settled(key, 15_000);
       if (preview.view?.webContents !== wc || wc.isDestroyed() || !wc.getURL())
         return null;
-      const view = preview.view!;
-      if (!preview.shown && !preview.popOut) {
-        const { width, height } = view.getBounds();
-        if (!width || !height) view.setBounds({ x: 0, y: 0, ...UNSHOWN_SIZE });
-        if (!preview.drawn) await this.prime(preview);
-      }
-      // Chromium has no frame for a view just taken off a window at first.
-      for (let attempt = 1; ; attempt++) {
-        // Closed meanwhile (the thread moved): capturePage would throw, not reject.
-        if (wc.isDestroyed()) return null;
-        const image = await wc.capturePage().catch(() => null);
-        if (image && !image.isEmpty()) return image;
-        if (attempt === 10) throw new Error("The preview could not be drawn.");
-        if (attempt === 4 && !preview.shown && !preview.popOut)
-          await this.prime(preview);
-        await sleep(100);
-      }
+      return await drawFrame(preview, wc, () => this.hostFor(preview));
     } finally {
       preview.capturing--;
     }
-  }
-
-  /** Gives a view never shown a surface: a moment in the window, outside what it shows. */
-  private async prime(preview: Preview) {
-    const win = this.hostFor(preview);
-    const view = preview.view;
-    if (!win || win.isDestroyed() || !view)
-      throw new Error(
-        "Relay's window is closed, so the preview can't be drawn.",
-      );
-    const bounds = view.getBounds();
-    view.setBounds({ ...bounds, x: 100_000, y: 0 });
-    win.contentView.addChildView(view, 0);
-    await sleep(50);
-    // The panel may have asked for it meanwhile.
-    if (preview.view !== view || preview.shown || preview.popOut) return;
-    win.contentView.removeChildView(view);
-    view.setBounds(bounds);
-    preview.drawn = true;
   }
 
   /** The page's errors and warnings, oldest first; `clear` empties the list after. */
@@ -765,47 +646,7 @@ export class ThreadPreviews {
     else this.servers.dispose();
   }
 
-  /** Where the page is, live or parked. */
-  private page(preview: Preview) {
-    const wc = preview.view?.webContents;
-    if (wc && !wc.isDestroyed())
-      return {
-        url: wc.getURL(),
-        title: wc.getTitle(),
-        loading: wc.isLoading(),
-        canGoBack: wc.navigationHistory.canGoBack(),
-        canGoForward: wc.navigationHistory.canGoForward(),
-      };
-    const { entries = [], index = 0 } = preview.parked ?? {};
-    return {
-      url: entries[index]?.url ?? "",
-      title: entries[index]?.title ?? "",
-      loading: false,
-      canGoBack: index > 0,
-      canGoForward: index < entries.length - 1,
-    };
-  }
-
-  private state(preview: Preview): PreviewState {
-    const page = this.page(preview);
-    page.url = preview.pendingUrl || page.url || preview.selectedUrl || "";
-    const server = preview.server;
-    const dependsOnServer =
-      !page.url || ("port" in server && localPort(page.url) === server.port);
-    return {
-      key: preview.target.key,
-      ...page,
-      ...(preview.favicon ? { favicon: preview.favicon } : {}),
-      ...(preview.error ? { error: preview.error } : {}),
-      ...(preview.snapshot ? { snapshot: preview.snapshot } : {}),
-      poppedOut: !!preview.popOut,
-      picking: !!preview.stopPick,
-      server: dependsOnServer ? server : { state: "none" },
-      ...(preview.target.worktree ? { worktree: preview.target.worktree } : {}),
-    };
-  }
-
   private emit(preview: Preview) {
-    this.window.send("relay:preview", this.state(preview));
+    this.window.send("relay:preview", previewState(preview));
   }
 }

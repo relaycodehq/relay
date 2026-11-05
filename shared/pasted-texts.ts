@@ -11,10 +11,12 @@ export interface PastedText {
  * A pill's text in the message: the paste fenced under its label, set apart
  * by blank lines. A sent message can also start with it, or with it right
  * after the agent mention. Messages sent before pills put their pastes one
- * blank line apart, which the block before already took.
+ * blank line apart, which the block before already took. The mention's
+ * look back runs only where a paste starts: from every space of a long run,
+ * it takes quadratic time.
  */
 export const pasteBlock = new RegExp(
-  `(?:^|\\n\\n?|(?<=\\n\\n)|(?<=^@(?:${agentProviders.join("|")}) +))Pasted text #(\\d+):\\n\\n(\`{3,})\\n([\\s\\S]*?)\\n\\2(?:\\n\\n|$)`,
+  `(?:^|\\n\\n?|(?<=\\n\\n)|(?=Pasted text #)(?<=^@(?:${agentProviders.join("|")}) +))Pasted text #(\\d+):\\n\\n(\`{3,})\\n([\\s\\S]*?)\\n\\2(?:\\n\\n|$)`,
   "g",
 );
 
@@ -23,7 +25,8 @@ export const cleanPaste = (raw: string) =>
   raw
     .replace(/\r\n?/g, "\n")
     .replace(/^(?:[ \t]*\n)+/, "")
-    .replace(/\s+$/, "");
+    // Not /\s+$/: that retries from every space of a long run inside.
+    .trimEnd();
 
 export const pastedLines = (text: string) => text.split("\n").length;
 

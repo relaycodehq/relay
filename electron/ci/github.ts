@@ -2,74 +2,37 @@ import { networkError } from "../util/network-errors";
 import { readBounded } from "../../shared/http";
 import type { FetchRequest } from "../pull-requests/host";
 import { GithubCredentials } from "../github";
-import type { CiRun, CiState } from "../../shared/ci";
+import type { CiRun } from "../../shared/ci";
 import type { CiRepo, CiReading } from "./index";
 import {
-  groupRuns,
-  statusEntry,
-  statusRuns,
-  type CiEntry,
-  type CommitStatus,
-} from "./statuses";
+  githubRunState,
+  latestGithubRuns,
+  rollupRuns,
+  type GithubRun,
+  type RollupContext,
+} from "./github-runs";
+import { statusRuns, type CommitStatus } from "./statuses";
 
 const API = "https://api.github.com";
 const MAX_JSON = 4 * 1024 * 1024;
 const MAX_CACHED = 200;
 
-export interface GithubRun {
-  id: number;
-  name: string | null;
-  head_sha: string;
-  status: string | null;
-  conclusion: string | null;
-  html_url: string;
-  workflow_id: number;
-  run_attempt?: number;
-  run_started_at?: string | null;
-  created_at: string;
-  updated_at: string;
-  head_commit?: { message?: string; author?: { name?: string } } | null;
-}
-
-export function githubRunState(
-  run: Pick<GithubRun, "status" | "conclusion">,
-): CiState {
-  // Queued, in progress, waiting for a runner or for approval.
-  if (run.status !== "completed") return "running";
-  switch (run.conclusion) {
-    case "success":
-      return "success";
-    case "failure":
-    case "timed_out":
-    case "startup_failure":
-      return "failure";
-    case "action_required":
-      return "running";
-    default:
-      return "skipped";
-  }
-}
-
-/**
- * The newest commit that has runs, and the latest run of each workflow on it.
- * The API lists newest first, and a re-run keeps its run id, so the first run
- * per workflow is the current one.
- */
-export function latestGithubRuns(runs: GithubRun[]) {
-  const head = runs[0];
-  if (!head) return null;
-  const seen = new Set<number>();
-  const latest = runs.filter(
-    (r) =>
-      r.head_sha === head.head_sha &&
-      !seen.has(r.workflow_id) &&
-      !!seen.add(r.workflow_id),
-  );
-  return { head, runs: latest };
-}
+/** Commit statuses a page, GitHub's most. */
+const STATUS_PAGE = 100;
+/** A commit rarely carries more contexts than this. */
+const STATUS_PAGES = 5;
 
 /** How far back a branch is walked for a commit CI reported on, 100 commits a page. */
 const HISTORY_PAGES = 5;
+/** How many pages of one commit's checks and statuses are read, 100 a page. */
+const CONTEXT_PAGES = 10;
+
+const CONTEXTS = `pageInfo { hasNextPage endCursor }
+  nodes {
+    __typename
+    ... on CheckRun { name status conclusion detailsUrl startedAt completedAt checkSuite { workflowRun { url workflow { name } } } }
+    ... on StatusContext { context state targetUrl createdAt }
+  }`;
 
 const HISTORY_QUERY = `query($owner: String!, $name: String!, $ref: String!, $after: String) {
   repository(owner: $owner, name: $name) {
@@ -82,15 +45,7 @@ const HISTORY_QUERY = `query($owner: String!, $name: String!, $ref: String!, $af
               oid
               messageHeadline
               author { name }
-              statusCheckRollup {
-                contexts(first: 100) {
-                  nodes {
-                    __typename
-                    ... on CheckRun { name status conclusion detailsUrl startedAt completedAt checkSuite { workflowRun { url workflow { name } } } }
-                    ... on StatusContext { context state targetUrl createdAt }
-                  }
-                }
-              }
+              statusCheckRollup { contexts(first: 100) { ${CONTEXTS} } }
             }
           }
         }
@@ -99,78 +54,58 @@ const HISTORY_QUERY = `query($owner: String!, $name: String!, $ref: String!, $af
   }
 }`;
 
-export type RollupContext =
-  | {
-      __typename: "CheckRun";
-      name: string;
-      status: string;
-      conclusion: string | null;
-      detailsUrl: string | null;
-      startedAt: string | null;
-      completedAt: string | null;
-      checkSuite: {
-        workflowRun: { url: string; workflow: { name: string } } | null;
-      } | null;
+const COMMIT_QUERY = `query($owner: String!, $name: String!, $oid: GitObjectID!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    object(oid: $oid) {
+      ... on Commit {
+        oid
+        messageHeadline
+        author { name }
+        statusCheckRollup { contexts(first: 100, after: $after) { ${CONTEXTS} } }
+      }
     }
-  | {
-      __typename: "StatusContext";
-      context: string;
-      state: string;
-      targetUrl: string | null;
-      createdAt: string;
-    };
+  }
+}`;
 
-interface HistoryCommit {
+interface PageInfo {
+  hasNextPage: boolean;
+  endCursor: string | null;
+}
+
+interface RollupContexts {
+  pageInfo?: PageInfo;
+  nodes: (RollupContext | null)[];
+}
+
+interface RollupCommit {
   oid: string;
   messageHeadline: string;
   author: { name: string | null } | null;
-  statusCheckRollup: { contexts: { nodes: (RollupContext | null)[] } } | null;
+  statusCheckRollup: { contexts: RollupContexts } | null;
 }
 
 interface HistoryAnswer {
   repository: {
     ref: {
-      target: {
-        history?: {
-          pageInfo: { hasNextPage: boolean; endCursor: string | null };
-          nodes: HistoryCommit[];
-        };
-      };
+      target: { history?: { pageInfo: PageInfo; nodes: RollupCommit[] } };
     } | null;
   } | null;
 }
 
-/** A commit's checks and statuses as workflows: an Actions job under its workflow, any other check or status on its own. */
-export function rollupRuns(contexts: (RollupContext | null)[]): CiRun[] {
-  return groupRuns(
-    contexts.flatMap((c): CiEntry[] => {
-      if (c?.__typename === "StatusContext")
-        return [
-          statusEntry({
-            context: c.context,
-            state: c.state.toLowerCase(),
-            target_url: c.targetUrl,
-            updated_at: c.createdAt,
-          }),
-        ];
-      if (c?.__typename !== "CheckRun") return [];
-      const state = githubRunState({
-        status: c.status.toLowerCase(),
-        conclusion: c.conclusion?.toLowerCase() ?? null,
-      });
-      const run = c.checkSuite?.workflowRun;
-      const at = state === "running" ? c.startedAt : c.completedAt;
-      return [
-        {
-          workflow: run?.workflow.name ?? c.name,
-          job: run ? c.name : undefined,
-          state,
-          url: run?.url ?? c.detailsUrl ?? "",
-          at: Date.parse(at ?? c.startedAt ?? "") || 0,
-        },
-      ];
-    }),
-  );
+interface CommitAnswer {
+  repository: { object: RollupCommit | null } | null;
+}
+
+/** Where a reading without a login looks: which Actions runs, and whose commit statuses. */
+function restTarget(at: { branch: string } | { sha: string }) {
+  if ("sha" in at) {
+    const sha = encodeURIComponent(at.sha);
+    return { runs: `head_sha=${sha}`, ref: sha };
+  }
+  return {
+    runs: `branch=${encodeURIComponent(at.branch)}`,
+    ref: `heads/${at.branch.split("/").map(encodeURIComponent).join("/")}`,
+  };
 }
 
 export class GitHub {
@@ -299,7 +234,41 @@ export class GitHub {
   async read(repo: CiRepo, branch: string): Promise<CiReading | null> {
     return (await this.credentials.read()).token
       ? this.readHistory(repo, branch)
-      : this.readTip(repo, branch);
+      : this.readTip(repo, { branch });
+  }
+
+  /**
+   * CI on one commit: a pull request's head, which a fork's branch of any
+   * name may hold, so its branch name says nothing in this repository.
+   */
+  async readCommit(repo: CiRepo, sha: string): Promise<CiReading | null> {
+    if (!(await this.credentials.read()).token)
+      return this.readTip(repo, { sha });
+    const answer = await this.graphql<CommitAnswer>(COMMIT_QUERY, {
+      owner: repo.owner,
+      name: repo.name,
+      oid: sha,
+      after: null,
+    });
+    const commit = answer.repository?.object;
+    return commit ? this.rollupReading(repo, commit) : null;
+  }
+
+  private async graphql<T>(
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<T> {
+    const answer: {
+      data?: T;
+      errors?: { type?: string; message: string }[];
+    } = await this.get("/graphql", { query, variables });
+    if (answer.errors?.length || !answer.data)
+      throw new Error(
+        answer.errors?.[0]?.type === "NOT_FOUND"
+          ? "GitHub can't find this repository, or your gh login can't see it."
+          : `GitHub refused the CI query: ${answer.errors?.[0]?.message ?? "no answer"}`,
+      );
+    return answer.data;
   }
 
   private async readHistory(
@@ -308,37 +277,17 @@ export class GitHub {
   ): Promise<CiReading | null> {
     let after: string | null = null;
     for (let page = 0; page < HISTORY_PAGES; page++) {
-      const answer: {
-        data?: HistoryAnswer;
-        errors?: { type?: string; message: string }[];
-      } = await this.get("/graphql", {
-        query: HISTORY_QUERY,
-        variables: {
-          owner: repo.owner,
-          name: repo.name,
-          ref: `refs/heads/${branch}`,
-          after,
-        },
+      const answer: HistoryAnswer = await this.graphql(HISTORY_QUERY, {
+        owner: repo.owner,
+        name: repo.name,
+        ref: `refs/heads/${branch}`,
+        after,
       });
-      if (answer.errors?.length || !answer.data)
-        throw new Error(
-          answer.errors?.[0]?.type === "NOT_FOUND"
-            ? "GitHub can't find this repository, or your gh login can't see it."
-            : `GitHub refused the CI query: ${answer.errors?.[0]?.message ?? "no answer"}`,
-        );
-      const history = answer.data.repository?.ref?.target.history;
+      const history = answer.repository?.ref?.target.history;
       if (!history) return null;
       for (const commit of history.nodes) {
-        const runs = rollupRuns(commit.statusCheckRollup?.contexts.nodes ?? []);
-        if (runs.length)
-          return {
-            commit: {
-              sha: commit.oid,
-              message: commit.messageHeadline || undefined,
-              author: commit.author?.name ?? undefined,
-            },
-            runs,
-          };
+        const reading = await this.rollupReading(repo, commit);
+        if (reading) return reading;
       }
       if (!history.pageInfo.hasNextPage) return null;
       after = history.pageInfo.endCursor;
@@ -346,19 +295,77 @@ export class GitHub {
     return null;
   }
 
+  /**
+   * The latest status of every context on the commit `ref` points at. GitHub
+   * pages them, 30 by default; later pages go by the sha the first one named,
+   * so a push in between can't mix two commits' statuses.
+   */
+  private async tipStatuses(repo: CiRepo, ref: string) {
+    const page = (at: string, n: number) =>
+      this.get<{ sha: string; statuses: CommitStatus[] }>(
+        `${this.repoPath(repo)}/commits/${at}/status?per_page=${STATUS_PAGE}&page=${n}`,
+      );
+    const tip = await page(ref, 1);
+    const statuses = [...tip.statuses];
+    let last = tip.statuses;
+    // The page body is all `get` keeps of a cached answer, so a short page, not the Link header, says it was the last.
+    for (let n = 2; n <= STATUS_PAGES && last.length === STATUS_PAGE; n++) {
+      last = (await page(tip.sha, n)).statuses;
+      statuses.push(...last);
+    }
+    return { sha: tip.sha, statuses };
+  }
+
+  /** A commit's checks and statuses, or null when CI reported nothing on it. */
+  private async rollupReading(
+    repo: CiRepo,
+    commit: RollupCommit,
+  ): Promise<CiReading | null> {
+    const contexts = commit.statusCheckRollup?.contexts;
+    if (!contexts?.nodes.length) return null;
+    const runs = rollupRuns(await this.allContexts(repo, commit.oid, contexts));
+    if (!runs.length) return null;
+    return {
+      commit: {
+        sha: commit.oid,
+        message: commit.messageHeadline || undefined,
+        author: commit.author?.name ?? undefined,
+      },
+      runs,
+    };
+  }
+
+  /** The pages after `first`, so a failure past the first 100 checks still shows. */
+  private async allContexts(repo: CiRepo, oid: string, first: RollupContexts) {
+    const nodes = [...first.nodes];
+    let pageInfo = first.pageInfo;
+    for (let page = 1; page < CONTEXT_PAGES && pageInfo?.hasNextPage; page++) {
+      const answer: CommitAnswer = await this.graphql(COMMIT_QUERY, {
+        owner: repo.owner,
+        name: repo.name,
+        oid,
+        after: pageInfo.endCursor,
+      });
+      const next = answer.repository?.object?.statusCheckRollup?.contexts;
+      if (!next) break;
+      nodes.push(...next.nodes);
+      pageInfo = next.pageInfo;
+    }
+    return nodes;
+  }
+
+  /** Without a login: the Actions runs and commit statuses on a branch's tip, or on one commit. */
   private async readTip(
     repo: CiRepo,
-    branch: string,
+    at: { branch: string } | { sha: string },
   ): Promise<CiReading | null> {
-    const ref = `heads/${branch.split("/").map(encodeURIComponent).join("/")}`;
+    const target = restTarget(at);
     const [{ workflow_runs }, tip] = await Promise.all([
       this.get<{ workflow_runs: GithubRun[] }>(
-        `${this.repoPath(repo)}/actions/runs?branch=${encodeURIComponent(branch)}&per_page=30&exclude_pull_requests=true`,
+        `${this.repoPath(repo)}/actions/runs?${target.runs}&per_page=30&exclude_pull_requests=true`,
       ),
       // CI outside Actions, like a build machine of your own, posts commit statuses.
-      this.get<{ sha: string; statuses: CommitStatus[] }>(
-        `${this.repoPath(repo)}/commits/${ref}/status`,
-      ).catch(() => null),
+      this.tipStatuses(repo, target.ref).catch(() => null),
     ]);
     const latest = latestGithubRuns(workflow_runs);
     const statuses = tip ? statusRuns(tip.statuses) : [];

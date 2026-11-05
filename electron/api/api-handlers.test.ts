@@ -44,6 +44,30 @@ describe("takes", () => {
     expect(() => searchThemes([7])).toThrow();
   });
 
+  it("takes the null a forwarded call's JSON makes of a left-out argument", () => {
+    // MergeSheet's projectMergePlan(where, undefined), run on a paired computer.
+    const mergePlan = takes(
+      [z.string(), z.string().optional()],
+      (where, base) => ({ where, base }),
+    );
+    expect(mergePlan(["p", null])).toEqual({ where: "p", base: undefined });
+  });
+
+  it("takes a null a phone left off the end", () => {
+    // selectAgentWorktree(chatId, null) from a phone that drops trailing nulls.
+    const select = takes(
+      [z.string(), z.string().nullable()],
+      (chatId, path) => ({ chatId, path }),
+    );
+    expect(select(["c"])).toEqual({ chatId: "c", path: null });
+  });
+
+  it("still refuses a missing argument the schema needs", () => {
+    const rename = takes([z.string(), z.string()], (_, name) => name);
+    expect(() => rename(["c", null])).toThrow();
+    expect(() => rename(["c"])).toThrow();
+  });
+
   it("turns a refused argument into a sentence the app can show", () => {
     const keep = takes([noteTextSchema], (text) => text);
     expect(() => keep(["n".repeat(NOTE_MAX_CHARS + 1)])).toThrow(

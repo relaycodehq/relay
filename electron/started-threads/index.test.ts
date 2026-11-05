@@ -235,6 +235,21 @@ test("rejects invalid tool arguments before reading the caller or sending", asyn
   expect(sent).toEqual([]);
 });
 
+test("refuses to wait for an empty list of threads instead of returning as if they were done", async () => {
+  const { lead, api } = fakeChats();
+  const result = await call(
+    new StartedThreads(api),
+    lead.id,
+    "wait_for_threads",
+    {
+      ids: [],
+      timeoutSeconds: 1,
+    },
+  );
+  expect(result.isError).toBe(true);
+  expect(resultText(result)).toContain("ids:");
+});
+
 test("starts threads on the lead's agent and settings, each saying who sent it", async () => {
   const { lead, sent, chats, api } = fakeChats();
   const threads = new StartedThreads(api);
@@ -2134,4 +2149,64 @@ test("message_lead is refused in a thread nothing started", async () => {
   expect(result).toMatchObject({ isError: true });
   expect(resultText(result)).toMatch(/No thread started this one/);
   expect(sent).toEqual([]);
+});
+
+test("a deep review's running reviewers don't use up the lead's started-thread limit", async () => {
+  const { lead, chats, api } = fakeChats();
+  lead.lastInput!.runtimeMode = "full-access";
+  const threads = new StartedThreads(api);
+  for (let i = 0; i < 6; i++) {
+    const reviewer = await api.create(
+      lead.projectId,
+      { kind: "project" },
+      "checkout",
+      {
+        startedBy: { chatId: lead.id, agent: "claude" },
+        startingAgent: "codex",
+      },
+    );
+    Object.assign(chats.get(reviewer.id)!, {
+      reviewer: { title: "Reviewer" },
+      running: true,
+    });
+  }
+  const result = await call(threads, lead.id, "start_threads", {
+    threads: [{ prompt: "Fix the build" }],
+  });
+  expect(resultText(result)).not.toMatch(/at most 6 may at once/);
+  expect(result.isError).toBeFalsy();
+});
+
+test("a wait cancelled as the thread ends still leaves the end report to the lead", async () => {
+  const { lead, chats, child, sent, threads, api, end } = await startedChild();
+  child.running = true;
+  chats.get(lead.id)!.running = true;
+  const cancel = new AbortController();
+  const waiting = threads.handle(
+    lead.id,
+    "wait_for_threads",
+    { timeoutSeconds: 5 },
+    cancel.signal,
+  );
+  await tick();
+  // The wait's last read is in flight when the lead's call is cancelled.
+  let release = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const statuses = api.statuses;
+  api.statuses = async (...args: Parameters<typeof statuses>) => {
+    await gate;
+    return statuses(...args);
+  };
+  cancel.abort();
+  await tick();
+  child.running = false;
+  end(child.id);
+  await tick();
+  release();
+  await waiting;
+  await tick();
+  // The cancelled wait never reached the lead, so only the report tells it.
+  expect(sent).toHaveLength(1);
+  expect(sent[0]!.id).toBe(lead.id);
+  expect(sent[0]!.input.body).toContain("Saved in artwork/.");
 });

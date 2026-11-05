@@ -59,6 +59,12 @@ function record(data) {
         codexHome: process.env.CODEX_HOME,
         // A worktree thread's dev-server port offset; see project-chats/worktree-setup.
         portOffset: process.env.RELAY_PORT_OFFSET,
+        // Git settings a read-only turn adds; see agents/read-only-git.
+        gitConfig: Object.fromEntries(
+          Object.entries(process.env).filter(([name]) =>
+            name.startsWith("GIT_CONFIG_"),
+          ),
+        ),
         ...data,
       }) + "\n",
     );

@@ -26,7 +26,7 @@ export async function withCatalog<T>(ask: (agent: MuseAgent) => Promise<T>): Pro
     if (!live || live.closed) host = undefined;
   }
   if (!host) {
-    const agent = acquireMuse(undefined, process.cwd(), undefined, true);
+    const agent = acquireMuse(undefined, { cwd: process.cwd() }, true);
     host = { agent, uses: 0 };
     agent.catch(() => (host = undefined));
   }

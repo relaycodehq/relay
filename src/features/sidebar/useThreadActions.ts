@@ -17,6 +17,7 @@ import { errorMessage } from "../../../shared/error-message";
 import { forkThreadSettings } from "../agents/composer-settings";
 import { fetchChat } from "../../lib/chat-events";
 import { useThreadDelete } from "./DeleteThreadDialog";
+import type { StartedFamilies } from "../../../shared/started-families";
 
 export type ThreadMenuAction =
   | { kind: "new" }
@@ -67,6 +68,19 @@ async function worktreeWork(qc: QueryClient, c: ChatSummary) {
   return status && !status.removed ? status.files.length : 0;
 }
 
+/** Forks `c` from its latest answer, the fork's composer set as that answer's was. */
+async function forkThread(qc: QueryClient, c: ChatSummary) {
+  const forked = await api.forkProjectChat(c.id);
+  const history = await fetchChat(qc, forked.id);
+  forkThreadSettings(
+    c.id,
+    forked.id,
+    forked.provider,
+    lastComposerSettings(history),
+  );
+  return forked;
+}
+
 /**
  * What the sidebar does to a thread: opening, triage, naming, forking it and
  * reloading its agent. Each change shows at once in every list holding the
@@ -74,7 +88,7 @@ async function worktreeWork(qc: QueryClient, c: ChatSummary) {
  */
 export function useThreadActions({
   chatId,
-  active,
+  families,
   projects,
   scratch,
   open,
@@ -84,8 +98,8 @@ export function useThreadActions({
 }: {
   /** The open thread. */
   chatId: string | undefined;
-  /** Activity's open threads, in order. */
-  active: ChatSummary[];
+  /** Activity's cards in order, started threads left under their lead. */
+  families: Pick<StartedFamilies<ChatSummary>, "top" | "headers">;
   projects: Map<string, Project>;
   /** Scratchpad's projects, whose threads share one list. */
   scratch: Set<string>;
@@ -194,7 +208,7 @@ export function useThreadActions({
    * comes back to `c` unless you went elsewhere meanwhile.
    */
   const moveOn = (c: ChatSummary) => {
-    const next = nextAfterSettle(active, c.id);
+    const next = nextAfterSettle(families, c);
     const p = projects.get(c.projectId);
     if (next) open(next);
     else if (p) onNew(p);
@@ -270,20 +284,14 @@ export function useThreadActions({
       void refresh(c);
     }
   };
-  /** Forks from the latest answer and opens the fork on that answer's agent. */
+  /** Forks from the latest answer and opens the fork, unless the user opened another thread meanwhile. */
   const fork = async (c: ChatSummary) => {
     setError(undefined);
+    const from = latest.current.chatId;
     try {
-      const forked = await api.forkProjectChat(c.id);
-      const history = await fetchChat(qc, forked.id);
-      forkThreadSettings(
-        c.id,
-        forked.id,
-        forked.provider,
-        lastComposerSettings(history),
-      );
+      const forked = await forkThread(qc, c);
       await refresh(c);
-      open(forked);
+      if (latest.current.chatId === from) open(forked);
     } catch (e) {
       failed(e);
     }

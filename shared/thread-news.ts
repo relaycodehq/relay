@@ -127,15 +127,27 @@ export function threadsRead(
 const read = (c: Pick<RemoteChatSummary, "seenAt" | "updated"> | undefined) =>
   !!c?.seenAt && c.seenAt >= c.updated;
 
+// A fence closes with the backticks that opened it, so a ```` fence around a
+// ``` one goes whole. Tried only from the first backtick of a run: from every
+// one, a long run takes quadratic time.
+const FENCE = /(?<!`)(`{3,})[^\n`]*\n[\s\S]*?(?:\1|$)/g;
+
+// Neither part holds a bracket or paren of its own beyond one level of
+// parentheses in the target, as in https://example.com/wiki/Foo_(bar), so
+// an unclosed link stops at the next instead of rescanning the answer.
+const LINK_TARGET = String.raw`\((?:[^()]|\([^()]*\))*\)`;
+const IMAGE = new RegExp(String.raw`!\[([^[\]]*)\]${LINK_TARGET}`, "g");
+const LINK = new RegExp(String.raw`\[([^[\]]+)\]${LINK_TARGET}`, "g");
+
 /**
  * The start of an answer as plain words: no fences, marks or link targets. A
  * heading runs into what follows it, so it gets a colon.
  */
 export function preview(markdown: string, length = previewLength) {
   const text = markdown
-    .replace(/```[^\n]*\n[\s\S]*?(```|$)/g, " ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(FENCE, " ")
+    .replace(IMAGE, "$1")
+    .replace(LINK, "$1")
     .replace(/^\s{0,3}#{1,6}\s+(.*?)\s*#*\s*$(?=\n\s*\S)/gm, (_, heading: string) =>
       /[.:!?]$/.test(heading) ? heading : `${heading}:`,
     )
@@ -143,7 +155,8 @@ export function preview(markdown: string, length = previewLength) {
     .replace(/(\*\*|__|\*|_|~~|`)(?=\S)([^\n]*?\S)\1/g, "$2")
     .replace(/\s+/g, " ")
     .trim();
-  return text.length > length
-    ? `${text.slice(0, length - 1).trimEnd()}…`
-    : text;
+  if (text.length <= length) return text;
+  // Not half an emoji, which shows as a broken glyph in the notification.
+  const cut = text.slice(0, length - 1).replace(/[\uD800-\uDBFF]$/, "");
+  return `${cut.trimEnd()}…`;
 }

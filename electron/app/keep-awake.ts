@@ -52,6 +52,10 @@ export class KeepAwake {
         this.held = undefined;
       }
     });
+    // Callers don't wait for it, and one failed check mustn't stop the next.
+    this.checking = this.checking.catch((e) =>
+      console.warn("Keep awake: checking power failed:", e),
+    );
     return this.checking;
   }
 

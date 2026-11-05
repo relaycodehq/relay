@@ -1,5 +1,5 @@
 import type { ProjectChat } from "./chat";
-import { replyRoots, threadOrder } from "./messages";
+import { replyRoots, threadOrder, type ChatMessage } from "./messages";
 import { sentSettingsOf, type ResumeSettings } from "./send";
 
 export type SentComposerSettings = ResumeSettings & { id: string };
@@ -11,8 +11,19 @@ export function lastComposerSettings(
 ): SentComposerSettings | undefined {
   if (!chat) return;
   const messages = [...chat.messages].sort(threadOrder);
-  const roots = replyRoots(messages);
-  const last = chat.lastInput;
+  return lastSentIn(messages, replyRoots(messages), chat.lastInput, rootId);
+}
+
+/**
+ * lastComposerSettings over messages already in thread order, with their
+ * reply roots: an open thread has both, and asks on every streamed piece.
+ */
+export function lastSentIn(
+  messages: readonly ChatMessage[],
+  roots: ReadonlyMap<string, string>,
+  last: ProjectChat["lastInput"],
+  rootId?: string,
+): SentComposerSettings | undefined {
   // Older threads kept only one input, shared by all their conversations.
   // It is useful only in the conversation it actually went to.
   const legacy =

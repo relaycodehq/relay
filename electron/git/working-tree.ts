@@ -1,10 +1,9 @@
 import { chunks } from "../util/chunks";
 import { keyedQueue } from "../util/keyed-queue";
-import { execFile } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inspectRepository } from "./repository";
-import { git, gitEnv, gitError, gitExecutable, redactCredentials } from "./git";
+import { exitCodeOf, git, nulSeparated, redactCredentials } from "./git";
 import { digest } from "../util/hash";
 import { ignoredTouches } from "./ignored-touches";
 import { configStamp, gitDirs, memo, remoteRefsStamp } from "./repo-facts";
@@ -32,25 +31,14 @@ export async function ignoreRules(root: string, paths: string[]) {
 
 async function checkIgnore(root: string, paths: string[]) {
   if (!paths.length) return "";
-  const file = await gitExecutable();
-  return new Promise<string>((resolve, reject) => {
-    const child = execFile(
-      file,
-      ["-C", root, "check-ignore", "-v", "--no-index", "--stdin", "-z"],
-      {
-        timeout: 15000,
-        maxBuffer: 16 * 1024 * 1024,
-        encoding: "utf8",
-        // check-ignore rejects literal pathspec magic outright.
-        env: gitEnv({ GIT_LITERAL_PATHSPECS: undefined }),
-      },
-      (error, stdout) => {
-        if (error && Number(error.code) !== 1) reject(gitError(error));
-        else resolve(stdout);
-      },
-    );
-    child.stdin?.on("error", () => {});
-    child.stdin?.end(paths.join("\0") + "\0");
+  return git(root, ["check-ignore", "-v", "--no-index", "--stdin", "-z"], {
+    // check-ignore rejects literal pathspec magic outright.
+    env: { GIT_LITERAL_PATHSPECS: undefined },
+    input: nulSeparated(paths),
+  }).catch((error: unknown) => {
+    // Exit code 1: none of the paths is ignored.
+    if (exitCodeOf(error) === 1) return "";
+    throw error;
   });
 }
 

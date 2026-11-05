@@ -337,11 +337,15 @@ export const loadDraftWorkspace = (
   project: Pick<Project, "settings">,
 ): ChatWorkspace => threadStorage(id).workspace.load(projectWorkspace(project));
 
-export const saveDraftWorkspace = (
+export function saveDraftWorkspace(
   id: string,
   workspace: ChatWorkspace,
   project: Pick<Project, "settings">,
-) => threadStorage(id).workspace.save(workspace, projectWorkspace(project));
+) {
+  const was = isReviewDraft(id);
+  threadStorage(id).workspace.save(workspace, projectWorkspace(project));
+  changedRecord(id, was);
+}
 
 export function clearDraftWorkspace(id: string) {
   threadStorage(id).workspace.clear();

@@ -11,6 +11,7 @@ const az = vi.hoisted(() => ({
 
 vi.mock("../../platform/executables", () => ({
   findExecutable: async () => "az",
+  executableCommand: (command: string, args: string[]) => ({ command, args }),
 }));
 
 vi.mock("node:child_process", () => ({

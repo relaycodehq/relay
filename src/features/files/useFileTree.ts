@@ -107,6 +107,10 @@ export function useDirectories(
       listings: Object.fromEntries(
         dirs.map((dir, i) => [dir, results[i]?.data]),
       ),
+      /** Why a folder couldn't be listed, by its path. */
+      failures: Object.fromEntries(
+        dirs.map((dir, i) => [dir, results[i]?.error ?? undefined]),
+      ),
       error: results[0]?.error,
     }),
     [dirs],

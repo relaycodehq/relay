@@ -194,6 +194,7 @@ let relayToolLabels = [
     "move_to_worktree": "Moved the thread to its own worktree",
     "move_to_project": "Moved the thread to another project",
     "message_lead": "Messaged its lead",
+    "message_main": "Told the main thread",
     "deep_review": "Started a deep review",
     "list_review_setups": "Listed review setups",
     "list_notes": "Read the notes",

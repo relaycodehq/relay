@@ -36,3 +36,26 @@ it("keeps thread previews across disk reloads, isolated by project and thread", 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("forgets a deleted thread's page whose save was still being written", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-saved-previews-"));
+  try {
+    const store = new Store(dir);
+    await store.load();
+    const saved = new SavedPreviews(store);
+    const page: SavedPreview = {
+      projectId: "project",
+      folder: "/repo",
+      url: "http://localhost:3000/",
+      settings: {},
+    };
+    await saved.set("kept", page);
+    const writing = saved.set("thread~p1", page);
+    await saved.forgetThread("thread");
+    await writing;
+    expect(Object.keys(store.get().previews ?? {})).toEqual(["kept"]);
+    expect(saved.get("project", "thread~p1")).toBeUndefined();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

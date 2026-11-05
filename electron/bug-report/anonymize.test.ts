@@ -46,6 +46,19 @@ it("hides the Mac's own names, apostrophes, accents and all", () => {
   ).toBe("paired as <host> (<host>), handoff to <host> done");
 });
 
+it("hides a user name that ends in an accented letter", () => {
+  const jiri = anonymizer({
+    home: "C:\\Users\\jiri",
+    user: "Jiří",
+    hosts: [],
+    relayData: "/x",
+    projects: [],
+  });
+  expect(jiri("signed in as Jiří, not Jiříkov")).toBe(
+    "signed in as <user>, not Jiříkov",
+  );
+});
+
 it("doesn't eat a longer folder that starts with the same name", () => {
   expect(mac("/Users/janaother/x and /Users/jana")).toBe(
     "/Users/janaother/x and ~",

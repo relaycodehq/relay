@@ -123,6 +123,16 @@ struct GitTests {
         #expect(newPullRequestUrl(remote: "https://github.com/a/b", branch: "") == nil)
     }
 
+    @Test func newPullRequestPageKeepsAWebRemotesSchemeAndPort() {
+        // A self-hosted Gitea on its own port, over plain HTTP on the LAN: its web page is at that address.
+        #expect(
+            newPullRequestUrl(remote: "http://gitea.local:3000/me/site.git", branch: "fix")?.absoluteString
+                == "http://gitea.local:3000/me/site/compare/fix")
+        #expect(
+            newPullRequestUrl(remote: "https://git.example.com:8443/me/site.git", branch: "fix")?.absoluteString
+                == "https://git.example.com:8443/me/site/compare/fix")
+    }
+
     @Test func azurePullRequestBranchStaysOneQueryValue() throws {
         for host in ["dev.azure.com/acme/web/_git/app", "acme.visualstudio.com/web/_git/app"] {
             for branch in ["fix&targetRef=main", "feature/a+b", "fix#123", "fix%20cache"] {

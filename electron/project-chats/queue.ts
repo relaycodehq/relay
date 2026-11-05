@@ -66,6 +66,16 @@ const sameChoice = (a: ModelChoice, b: ModelChoice) =>
 type Queued = NonNullable<ProjectChat["queue"]>[number];
 
 /**
+ * A stopped or failed answer holds back what's queued behind it. An empty
+ * queue has nothing to hold: a pause left on it would hold back what's
+ * queued once a resume or Relay's own message runs, and hide the cold
+ * compaction the next message gets.
+ */
+export function holdQueueBack(chat: ProjectChat) {
+  if (chat.queue?.length) chat.queuePaused = true;
+}
+
+/**
  * The queue with `next` at its front, behind only the message a cold cache
  * held back: that one went out as far as its sender knows, and only waits
  * for the compaction, so nothing jumps ahead of it.

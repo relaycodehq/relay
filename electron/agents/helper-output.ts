@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,10 +20,24 @@ export function excerpt(text: string, budget: number) {
 // (denied) AGENTS.md.
 let emptyDirectory: Promise<string> | undefined;
 
-export function emptyCwd() {
-  emptyDirectory ??= mkdtemp(join(tmpdir(), "relay-helper-")).catch((e) => {
+export async function emptyCwd(): Promise<string> {
+  const made = (emptyDirectory ??= mkdtemp(
+    join(tmpdir(), "relay-helper-"),
+  ).catch((e) => {
     emptyDirectory = undefined;
     throw e;
-  });
-  return emptyDirectory;
+  }));
+  const dir = await made;
+  // The system's temp cleaner takes a folder left alone for days, and a run
+  // started in a missing folder fails as if its CLI weren't installed.
+  if (await isDirectory(dir)) return dir;
+  // Whoever notices first makes the next one.
+  if (emptyDirectory === made) emptyDirectory = undefined;
+  return emptyCwd();
 }
+
+const isDirectory = (path: string) =>
+  stat(path).then(
+    (info) => info.isDirectory(),
+    () => false,
+  );

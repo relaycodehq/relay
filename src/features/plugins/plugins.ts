@@ -1,5 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ClockifyStatus } from "../../../shared/clockify";
+import type {
+  ClockifySettings,
+  ClockifyStatus,
+} from "../../../shared/clockify";
 import type { PluginId, PluginToggles } from "../../../shared/plugins";
 import { api } from "../../lib/api";
 import { useProjectList } from "../../lib/workspace-queries";
@@ -12,7 +15,10 @@ export function usePluginEnabled(id: PluginId) {
   return !!usePlugins().data?.[id];
 }
 
-/** Flips the switch at once and settles on what was saved. */
+/**
+ * Flips the switch at once and settles on what was saved; when saving
+ * fails, the switch goes back and the error is thrown on.
+ */
 export function useSetPluginEnabled() {
   const qc = useQueryClient();
   return async (id: PluginId, enabled: boolean) => {
@@ -20,15 +26,20 @@ export function useSetPluginEnabled() {
     if (before) qc.setQueryData(["plugins"], { ...before, [id]: enabled });
     try {
       qc.setQueryData(["plugins"], await api.setPluginEnabled(id, enabled));
-    } catch {
+    } catch (error) {
       qc.setQueryData(["plugins"], before);
+      throw error;
+    } finally {
+      // Asked again meanwhile, so the switch settles without waiting on them.
+      void Promise.all([
+        // A running day pauses when its plugin is turned off.
+        qc.invalidateQueries({ queryKey: clockifyKey }),
+        // Azure DevOps keeps its switch in its own settings.
+        qc.invalidateQueries({ queryKey: devopsKey }),
+        // Its organization is one the Pull requests page asks.
+        qc.invalidateQueries({ queryKey: ["pull-servers"] }),
+      ]);
     }
-    // A running day pauses when its plugin is turned off.
-    await qc.invalidateQueries({ queryKey: clockifyKey });
-    // Azure DevOps keeps its switch in its own settings.
-    await qc.invalidateQueries({ queryKey: devopsKey });
-    // Its organization is one the Pull requests page asks.
-    await qc.invalidateQueries({ queryKey: ["pull-servers"] });
   };
 }
 
@@ -38,15 +49,20 @@ export const devopsConnectionKey = ["devops-connection"];
 export const useDevOpsStatus = () =>
   useQuery({ queryKey: devopsKey, queryFn: () => api.devopsStatus() });
 
-/** The organization's work item fields, for sorting and team filters. */
-export const useDevOpsFields = (enabled: boolean) =>
-  useQuery({
-    queryKey: ["devops-fields"],
+/**
+ * The work item fields of the saved organization and project, for sorting
+ * and team filters; saving another one asks again.
+ */
+export function useDevOpsFields(enabled: boolean) {
+  const settings = useDevOpsStatus().data?.settings;
+  return useQuery({
+    queryKey: ["devops-fields", settings?.organization, settings?.project],
     queryFn: () => api.devopsFields(),
-    enabled,
+    enabled: enabled && !!settings,
     staleTime: 60 * 60_000,
     retry: false,
   });
+}
 
 /** Who Azure DevOps signs Relay in as, and where `az` is; once it has an organization. */
 export const useDevOpsConnection = (enabled: boolean) =>
@@ -86,14 +102,24 @@ export const useClockifyWorkspaces = (host: string, enabled: boolean) =>
 export const useTrackableProjects = () =>
   useProjectList((projects) => projects.filter((p) => !p.scratch));
 
-/** The workspace's Clockify projects, for names and colours. */
-export const useClockifyProjects = (enabled = true) =>
-  useQuery({
-    queryKey: ["clockify-projects-list"],
+/**
+ * The saved workspace's Clockify projects, for names and colours. Keyed by
+ * that workspace, so choosing another one in Settings asks again.
+ */
+export function useClockifyProjects(enabled = true) {
+  const status = useClockifyStatus(enabled).data;
+  const settings = status?.settings;
+  return useQuery({
+    queryKey: clockifyProjectsKey(settings),
     queryFn: () => api.clockifyProjects(),
-    enabled,
+    enabled: enabled && !!status?.hasToken && !!settings?.workspaceId,
     staleTime: 5 * 60_000,
   });
+}
+
+export const clockifyProjectsKey = (
+  settings: Pick<ClockifySettings, "host" | "workspaceId"> | undefined,
+) => ["clockify-projects", settings?.host, settings?.workspaceId];
 
 /** A Clockify project's colour, or the accent when it has none. */
 export const projectColor = (

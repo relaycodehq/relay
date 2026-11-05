@@ -12,7 +12,7 @@ import {
 } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
-import { timelineTurns } from "./timeline";
+import { sameTimeline, timelineTurns, type Timeline } from "./timeline";
 import type { ThreadScroll } from "./useThreadScroll";
 import "./thread-timeline.css";
 
@@ -25,6 +25,18 @@ const LENS = 4;
 const REACH = 40;
 /** The most a tick widens, as a scale of its resting width. */
 const WIDEST = 2.2;
+
+/** The thread's turns, the same object for as long as they read the same,
+ * so a streamed piece that changes none doesn't measure the rail again. */
+function useSteadyTimeline(listed: ChatMessage[]) {
+  const last = useRef<Timeline>(undefined);
+  return useMemo(() => {
+    const next = timelineTurns(listed);
+    if (last.current && sameTimeline(last.current, next)) return last.current;
+    last.current = next;
+    return next;
+  }, [listed]);
+}
 
 /** The turn at the top of the view, or at the very bottom the last one. */
 function turnInView(view: HTMLElement, turnOf: Map<string, number>) {
@@ -121,7 +133,7 @@ export function ThreadTimeline({
   /** The composer docked over the view's end; the rail centres above it. */
   bottomInset: number;
 }) {
-  const { turns, turnOf } = useMemo(() => timelineTurns(listed), [listed]);
+  const { turns, turnOf } = useSteadyTimeline(listed);
   const lastTurn = turnOf.get(listed.at(-1)?.id ?? "") ?? -1;
   const { active, room } = useRailPlace(scroll, { following, lastTurn }, turnOf, bottomInset);
   const [pointer, setPointer] = useState<number | null>(null);

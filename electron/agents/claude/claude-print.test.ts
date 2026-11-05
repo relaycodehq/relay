@@ -1,12 +1,18 @@
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawn } from "node:child_process";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { findExecutable } from "../../platform/executables";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { runClaude } from "./claude";
 
 vi.mock("../../platform/executables");
+
+vi.mock("node:child_process", async (real) => {
+  const actual = await real<typeof import("node:child_process")>();
+  return { ...actual, spawn: vi.fn(actual.spawn) };
+});
 
 let root: string;
 
@@ -95,4 +101,11 @@ it("keeps the reason Claude gave, trimmed and without secrets", async () => {
 it("falls back to the generic line when Claude gave no reason", async () => {
   const error = await ask([failed("")]);
   expect(error.message).toMatch(/^Claude could not complete this question/);
+});
+
+it("runs Claude without a console window, which Windows would open for each question", async () => {
+  await ask([{ type: "result", subtype: "success", result: "Because." }]);
+  expect(vi.mocked(spawn).mock.calls.at(-1)?.[2]).toMatchObject({
+    windowsHide: true,
+  });
 });

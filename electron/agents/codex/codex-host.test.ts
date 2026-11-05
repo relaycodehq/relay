@@ -189,6 +189,27 @@ it("carries on a turn Relay restarted in, and shows the whole answer", async () 
   expect(after.filter((m) => m === "thread/resume")).toHaveLength(0);
 });
 
+it("picks up a turn a restart cut off even when the thread's mode now differs", async () => {
+  newRelay();
+  const first = threadTurn();
+  runCodex(first.options).catch(() => {});
+  await first.working;
+
+  newRelay();
+  await reattachCodexSessions((key) => key === "thread-1");
+  // Read only on the thread now, as a server from before Relay kept the mode
+  // with it, or another agent's last message, would say.
+  const second = threadTurn({
+    job: { kind: "adopt" },
+    readOnly: true,
+    session: { key: "thread-1", id: first.seen.ids[0], onId: async () => {} },
+  });
+  const continued = runCodex(second.options);
+  await Promise.race([second.working, continued]);
+  await writeFile(release, "");
+  await expect(continued).resolves.toBe("part one and part two");
+});
+
 it("lets a thread that isn't Relay's go", async () => {
   await writeFile(release, "");
   newRelay();

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { attention, draftsFirst, nextAfterSettle, triaged } from "./activity";
 import { chatActivitySection } from "../../../shared/chat-activity";
 import type { ChatSummary } from "../../../shared/projects";
+import { startedFamilies } from "../../../shared/started-families";
 
 const chat = (patch: Partial<ChatSummary> = {}): ChatSummary => ({
   id: "c",
@@ -48,16 +49,50 @@ describe("triaged", () => {
 });
 
 describe("nextAfterSettle", () => {
-  const active = ["a", "b", "c"].map((id) => chat({ id }));
+  const cards = startedFamilies(["a", "b", "c"].map((id) => chat({ id })));
 
   it("opens the one below, or above when it was last", () => {
-    expect(nextAfterSettle(active, "b")?.id).toBe("c");
-    expect(nextAfterSettle(active, "c")?.id).toBe("b");
+    expect(nextAfterSettle(cards, { id: "b" })?.id).toBe("c");
+    expect(nextAfterSettle(cards, { id: "c" })?.id).toBe("b");
   });
 
   it("opens the first when the settled one wasn't listed, and none when it was alone", () => {
-    expect(nextAfterSettle(active, "x")?.id).toBe("a");
-    expect(nextAfterSettle([chat({ id: "a" })], "a")).toBeUndefined();
+    expect(nextAfterSettle(cards, { id: "x" })?.id).toBe("a");
+    const alone = startedFamilies([chat({ id: "a" })]);
+    expect(nextAfterSettle(alone, { id: "a" })).toBeUndefined();
+  });
+
+  const startedBy = { chatId: "lead" } as ChatSummary["startedBy"];
+
+  it("steps over the threads a lead started, which have no cards of their own", () => {
+    // Newest first, as Activity lists them: a lead's threads often write last.
+    const active = [
+      chat({ id: "a", updated: 9_000 }),
+      chat({ id: "s1", updated: 8_000, startedBy }),
+      chat({ id: "lead", updated: 7_000 }),
+      chat({ id: "s2", updated: 6_000, startedBy }),
+      chat({ id: "c", updated: 5_000 }),
+    ];
+    const families = startedFamilies(active);
+    expect(nextAfterSettle(families, active[0])?.id).toBe("lead");
+    // Settling the lead settles its threads with it.
+    expect(nextAfterSettle(families, active[2])?.id).toBe("c");
+    expect(nextAfterSettle(families, active[1])?.id).toBe("lead");
+  });
+
+  it("opens the card below a settled lead's header for one of its threads", () => {
+    const lead = chat({ id: "lead", settledAt: 1_000 });
+    const active = [
+      chat({ id: "a", updated: 9_000 }),
+      chat({ id: "s1", updated: 8_000, startedBy }),
+      chat({ id: "c", updated: 7_000 }),
+      chat({ id: "s2", updated: 6_000, startedBy }),
+    ];
+    const families = startedFamilies(active, [lead]);
+    expect(nextAfterSettle(families, active[3])?.id).toBe("c");
+    expect(nextAfterSettle(families, active[1])?.id).toBe("c");
+    const last = startedFamilies(active.slice(0, 2), [lead]);
+    expect(nextAfterSettle(last, active[1])?.id).toBe("a");
   });
 });
 

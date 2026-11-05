@@ -174,7 +174,7 @@ function PullReview({
         onDiscuss: (target, pr) =>
           void prs
             .open(pr)
-            .then(() => opens.askAbout(target, pr))
+            .then((opened) => opened && opens.askAbout(target, pr))
             .catch(setError),
         onConnect,
       }}

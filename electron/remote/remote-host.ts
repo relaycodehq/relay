@@ -66,6 +66,10 @@ export interface RemoteHost {
     write(write: DraftWrite, by: DraftDevice): SharedDraft | null;
     other(key: string, drop: boolean): SharedDraft | null;
     holds(key: string): boolean;
+    sentLate(
+      key: string,
+      send: ProjectChatSend,
+    ): { chatId: string } | undefined;
     sendHeld(
       key: string,
       chatId: string | undefined,

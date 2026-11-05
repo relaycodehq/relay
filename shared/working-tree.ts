@@ -174,6 +174,22 @@ export const checkoutChanged = "Your checkout changed.";
 export const gitMissing = "Git wasn’t found.";
 export const isGitMissing = (error: unknown) =>
   error instanceof Error && error.message.startsWith(gitMissing);
+/**
+ * The oldest Git Relay runs: `rev-parse --path-format` came in 2.31, and an
+ * older one prints the flag back as if it were a path. Ubuntu 20.04 ships
+ * 2.25, Debian 11 2.30.
+ */
+export const OLDEST_GIT = { major: 2, minor: 31 };
+
+/** Whether a `git --version` line names a Git older than that; false when it can't tell. */
+export function gitTooOld(versionLine: string) {
+  const [, major, minor] = /^git version (\d+)\.(\d+)/.exec(versionLine) ?? [];
+  if (major === undefined || minor === undefined) return false;
+  if (Number(major) !== OLDEST_GIT.major)
+    return Number(major) < OLDEST_GIT.major;
+  return Number(minor) < OLDEST_GIT.minor;
+}
+
 /** The Git Relay runs: one chosen in Settings, or the one it found. */
 export interface GitInfo {
   /** The executable, or null when none was found. */

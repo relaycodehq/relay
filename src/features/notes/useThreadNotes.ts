@@ -8,6 +8,7 @@ import {
   type ThreadNote,
 } from "../../../shared/thread-notes";
 import { api } from "../../lib/api";
+import type { Keeper } from "../../ui/KeepBlock";
 
 const NONE: ThreadNote[] = [];
 /** The mark each thread's cached notes were last brought up to. */
@@ -162,5 +163,29 @@ export function useThreadNotes(
       },
     }),
     [notes, id, qc, key, change],
+  );
+}
+
+/** What a block in an answer keeps, pins and unkeeps through; none before the thread exists. */
+export function useNoteKeeper(
+  chatId: string | undefined,
+  notes: ThreadNotesHandle,
+): Keeper | null {
+  return useMemo(
+    () =>
+      chatId
+        ? {
+            keep: (markdown, at) =>
+              void notes.keep(
+                markdown,
+                at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
+              ),
+            kept: notes.kept,
+            unkeep: notes.unkeep,
+            togglePin: notes.togglePin,
+            pinned: notes.pinned,
+          }
+        : null,
+    [chatId, notes],
   );
 }

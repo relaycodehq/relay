@@ -74,6 +74,21 @@ function scrollParent(el: HTMLElement) {
   return null;
 }
 
+/**
+ * The height the page last said it needs, if it still holds at `width`. A
+ * page in its frame reports again only once its height changes, so its last
+ * report holds at a new width; out of its frame, the heights measured
+ * offscreen guess better.
+ */
+function reportedHeight(
+  report: { width: number; height: number } | undefined,
+  width: number,
+  inFrame: boolean,
+) {
+  if (!report) return undefined;
+  return inFrame || report.width === width ? report.height : undefined;
+}
+
 const RenderCard = memo(function RenderCard({
   chatId,
   render,
@@ -130,8 +145,7 @@ const RenderCard = memo(function RenderCard({
     };
   }, []);
 
-  const live = sizes[index];
-  const liveHeight = live && live.width === width ? live.height : undefined;
+  const liveHeight = reportedHeight(sizes[index], width, near);
   const height =
     liveHeight !== undefined
       ? clampRenderHeight(liveHeight)

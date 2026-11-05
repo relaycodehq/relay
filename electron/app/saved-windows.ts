@@ -1,6 +1,7 @@
 import {
   savedMainWindow,
   savedThreadWindows,
+  threadWindowExists,
 } from "../../shared/thread-windows";
 import {
   editorWindowExists,
@@ -33,7 +34,12 @@ export function restorePoppedWindows(window: AppWindow, store: Store) {
           s.threadWindows = windows;
         })
         .catch((e) => console.warn("Could not save thread windows:", e)),
-    exists: ({ chatId }) => !!store.get().chats?.some((c) => c.id === chatId),
+    exists: (thread) =>
+      threadWindowExists(
+        thread,
+        store.get().projects ?? [],
+        store.get().chats ?? [],
+      ),
   });
   window.editors.restore({
     load: () => savedEditorWindows(store.get().editorWindows),

@@ -3,6 +3,7 @@ import { agentProviderSchema } from "../../shared/agents";
 import { idSchema } from "../../shared/validation";
 import {
   draftTerminalKey,
+  TERMINAL_WRITE_LIMIT,
   terminalKeySchema,
   terminalSizeSchema,
   terminalSlotKey,
@@ -62,7 +63,7 @@ export function terminalHandlers(ctx: ApiContext) {
       threadTerminals.close(key),
     ),
     writeTerminal: takes(
-      [terminalKeySchema, z.string().max(1 << 20)],
+      [terminalKeySchema, z.string().max(TERMINAL_WRITE_LIMIT)],
       (key, data) => threadTerminals.write(key, data),
     ),
     prefillSignIn: takes(

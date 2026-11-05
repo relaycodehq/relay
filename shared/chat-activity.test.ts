@@ -5,6 +5,7 @@ import {
   chatActivitySection,
   chatActivitySections,
   chatIsEmpty,
+  chatStillGoing,
   elapsedLabel,
   openedUpTo,
   shortAge,
@@ -25,6 +26,17 @@ const chat = (patch: Partial<ChatSummary> = {}): ChatSummary => ({
   created: 1_000,
   updated: 5_000,
   ...patch,
+});
+
+it("counts a Send later message and Claude's background work as still going", () => {
+  expect(chatStillGoing(chat())).toBe(false);
+  expect(chatStillGoing(chat({ running: true }))).toBe(true);
+  expect(chatStillGoing(chat({ nextSend: 9_000 }))).toBe(true);
+  expect(
+    chatStillGoing(
+      chat({ pending: [{ id: "w", kind: "wakeup" } as never] }),
+    ),
+  ).toBe(true);
 });
 
 describe("chat activity", () => {

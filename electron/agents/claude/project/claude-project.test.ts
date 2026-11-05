@@ -620,3 +620,69 @@ it("moves a session with background work to new settings instead of ending it", 
     CLAUDE_CODE_DISABLE_1M_CONTEXT: "1",
   });
 });
+
+it("restarts a Supervised session switched to Read only, even with work running", async () => {
+  const close = vi.fn();
+  vi.mocked(query).mockClear();
+  vi.mocked(query).mockImplementation(({ prompt }) => {
+    const input = (prompt as AsyncIterable<{ uuid: string }>)[
+      Symbol.asyncIterator
+    ]();
+    return Object.assign(
+      (async function* () {
+        for (;;) {
+          const sent = await input.next();
+          if (sent.done) return;
+          yield lifecycle(sent.value.uuid, "started");
+          // Work still running is what makes a session retune rather than restart.
+          yield {
+            type: "system",
+            subtype: "background_tasks_changed",
+            tasks: [{ task_id: "dev", description: "npm run dev" }],
+            session_id,
+          };
+          yield answer("ok");
+          yield result("ok");
+        }
+      })(),
+      {
+        close,
+        getContextUsage: async () => ({}),
+        setPermissionMode: async () => {},
+      },
+    ) as unknown as ReturnType<typeof query>;
+  });
+  const key = crypto.randomUUID();
+  const relayTools = { url: "http://127.0.0.1:1/mcp", token: "t" };
+  const turn = (patch: Partial<Parameters<typeof runClaudeProject>[0]> = {}) =>
+    runClaudeProject({
+      job: { kind: "prompt" },
+      cwd: "/project",
+      prompt: "Look around.",
+      choice: {} as never,
+      model: "",
+      effort: "",
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+      signal: new AbortController().signal,
+      onText() {},
+      relayTools,
+      session: { key, id: session_id, async onId() {} },
+      ...patch,
+    });
+  await turn();
+  // Read only reaches the agent as Supervised with `readOnly`, and no Relay tools.
+  await turn({ readOnly: true, relayTools: undefined });
+  expect(close).toHaveBeenCalledTimes(1);
+  const readOnly = vi.mocked(query).mock.lastCall![0].options!;
+  expect(readOnly.hooks?.PreToolUse).toHaveLength(1);
+  expect(readOnly.disallowedTools).toContain("Edit");
+  expect(readOnly.mcpServers).toEqual({});
+  // Back in Supervised it gets its tools again.
+  await turn();
+  expect(close).toHaveBeenCalledTimes(2);
+  const supervised = vi.mocked(query).mock.lastCall![0].options!;
+  expect(supervised.hooks?.PreToolUse).toBeUndefined();
+  expect(supervised.disallowedTools).not.toContain("Edit");
+  expect(vi.mocked(query)).toHaveBeenCalledTimes(3);
+});

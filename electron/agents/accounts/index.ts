@@ -100,8 +100,7 @@ export class AgentAccounts {
   }
 
   /** Saved accounts made whole: each agent's usual sign-in is always there. */
-  private stored(): Accounts {
-    const saved = this.store.get().agentAccounts;
+  private stored(saved = this.store.get().agentAccounts): Accounts {
     const accounts = [...(saved?.accounts ?? [])];
     for (const provider of accountProviders)
       if (
@@ -124,9 +123,10 @@ export class AgentAccounts {
   }
 
   private async save(change: (saved: Accounts) => void) {
-    const saved = this.stored();
-    change(saved);
+    // Read in its turn, so a change saved meanwhile isn't written over.
     await this.store.update((s) => {
+      const saved = this.stored(s.agentAccounts);
+      change(saved);
       s.agentAccounts = saved;
     });
     await this.changed();
@@ -204,7 +204,7 @@ export class AgentAccounts {
         if (!signedIn) throw new Error("The sign-in didn't save an account.");
         if (fresh)
           await this.store.update((s) => {
-            const saved = this.stored();
+            const saved = this.stored(s.agentAccounts);
             saved.accounts.push({ provider, id, label });
             s.agentAccounts = saved;
           });

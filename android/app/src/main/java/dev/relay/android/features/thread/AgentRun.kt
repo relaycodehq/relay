@@ -54,6 +54,7 @@ import dev.relay.android.features.thread.logic.liveLabel
 import dev.relay.android.features.thread.logic.plural
 import dev.relay.android.features.thread.logic.readTurn
 import dev.relay.android.features.thread.logic.summarizeActivity
+import dev.relay.android.features.thread.logic.terminalText
 import dev.relay.android.features.thread.logic.thinkingWord
 import dev.relay.android.features.thread.logic.turnHeading
 import dev.relay.android.remote.Bridge
@@ -314,11 +315,12 @@ private fun AnsweredQuestions(questions: List<AskedQuestion>) {
 /** A call's output; the desktop sends a long one cut, and the whole of it once the fold opens. */
 @Composable
 internal fun Detail(a: AgentActivity, detail: String = fetchedDetail(a) ?: a.detail.orEmpty()) {
+    val shown = if (a.kind == "command") remember(detail) { terminalText(detail) } else detail
     SelectionContainer(
         Modifier.padding(start = 21.dp, top = 2.dp, bottom = 8.dp).fillMaxWidth().heightIn(max = 220.dp)
             .background(RelayTheme.colors.muted, Radii.smShape).verticalScroll(rememberScrollState()).padding(9.dp),
     ) {
-        Text(detail, style = RelayTheme.type.monoSm, color = RelayTheme.colors.mutedForeground)
+        Text(shown, style = RelayTheme.type.monoSm, color = RelayTheme.colors.mutedForeground)
     }
 }
 

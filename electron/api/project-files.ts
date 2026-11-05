@@ -8,6 +8,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { saveKept } from "../local-history";
 import { mediaUrl } from "../media";
+import { linkedFileOnDisk } from "../platform/msys-path";
 import { expandHome } from "../projects/folder-inspect";
 import {
   entryPath,
@@ -25,8 +26,12 @@ export const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
 export async function fileRoot(place: ApiContext["place"], where: string) {
   return workspaceIdSchema.safeParse(where).success
     ? place(where)
-    : { root: await realpath(expandHome(where)), plain: true };
+    : { root: await outsideFolder(where), plain: true };
 }
+
+/** A folder outside every project; on Windows an agent may name it as Git Bash does, like /tmp. */
+export const outsideFolder = async (where: string) =>
+  realpath(await linkedFileOnDisk(expandHome(where)));
 
 /** Browsing and editing a project's files, or a folder outside every project. */
 export function projectFileHandlers(ctx: ApiContext) {

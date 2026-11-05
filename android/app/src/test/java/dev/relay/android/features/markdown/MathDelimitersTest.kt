@@ -1,7 +1,9 @@
 package dev.relay.android.features.markdown
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.random.Random
 
 /** The cases of shared/math-delimiters.test.ts. */
 class MathDelimitersTest {
@@ -57,5 +59,37 @@ class MathDelimitersTest {
             "> $$ x $$\n\n- \\[ a^2 \\]",
             "$$\nunfinished",
         ).forEach { assertEquals(normalizeMath(it), normalizeMath(normalizeMath(it))) }
+    }
+
+    @Test fun readsALongLineOfUnclosedOpenersInLinearTime() {
+        for (text in listOf("x " + "\\( a".repeat(20_000), "x " + "\\(".repeat(25_000), "x " + "\\[a".repeat(20_000))) {
+            val started = System.nanoTime()
+            assertEquals(text, normalizeMath(text))
+            val ms = (System.nanoTime() - started) / 1_000_000
+            assertTrue("took ${ms}ms", ms < 500)
+        }
+    }
+
+    @Test fun pairsAnOpenerWithTheCloserAfterTheLastOpener() {
+        assertEquals("a \\( b $\$x^2$$ c", normalizeMath("a \\( b \\(x^2\\) c"))
+        assertEquals("a \\[ b $\$x_1$$ c", normalizeMath("a \\[ b \\[x_1\\] c"))
+        assertEquals("a $\$\\)x$$ b", normalizeMath("a \\(\\)x\\) b"))
+    }
+
+    @Test fun scansInlineFormulasAsTheDesktopsRegexDoes() {
+        // shared/math-delimiters.ts's INLINE_PARENS and INLINE_BRACKETS.
+        val desktop = listOf(
+            Triple("\\(", "\\)", Regex("""\\\(((?:(?!\\\().)+?)\\\)""")),
+            Triple("\\[", "\\]", Regex("""\\\[((?:(?!\\\[).)+?)\\\]""")),
+        )
+        val pieces = listOf("\\(", "\\)", "\\[", "\\]", "\\", "(", ")", "[", "]", "x", "^2", " ")
+        val random = Random(7)
+        repeat(50_000) {
+            val line = buildString { repeat(random.nextInt(12)) { append(pieces.random(random)) } }
+            for ((opener, closer, regex) in desktop) {
+                val expected = regex.replace(line) { "<" + it.groupValues[1] + ">" }
+                assertEquals(line, expected, replaceInline(line, opener, closer) { _, tex -> "<$tex>" })
+            }
+        }
     }
 }

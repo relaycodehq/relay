@@ -98,6 +98,9 @@ export function useResumeCommand({
   }
 
   return {
+    /** Goes up as each listing the menu asked for arrives. */
+    listed: listing.arrivals,
+
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "resume") return undefined;
       if (project.scratch) return "Scratchpad has no sessions to resume.";

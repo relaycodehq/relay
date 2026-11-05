@@ -1,14 +1,9 @@
 import { Popover } from "@base-ui/react/popover";
+import { terminalText } from "../lib/terminal-text";
 import "./install-log.css";
 
 /** A CLI's output without colours and cursor moves; progress lines keep their last state. */
-export const plainOutput = (output: string) =>
-  output
-    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
-    .split("\n")
-    .map((line) => line.split("\r").filter(Boolean).at(-1) ?? "")
-    .join("\n")
-    .trim();
+export const plainOutput = (output: string) => terminalText(output).trim();
 
 /** What an install printed, shown on hover: its end, following along as it grows. */
 export function InstallLog({ output }: { output: string }) {

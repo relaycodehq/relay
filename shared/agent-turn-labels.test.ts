@@ -11,6 +11,18 @@ describe("programName", () => {
     expect(programName("export A=1; ./scripts/build.sh")).toBe("build.sh");
   });
 
+  it("unwraps quotes and parentheses around the program", () => {
+    expect(programName(`("rg" -n foo)`)).toBe("rg");
+    expect(programName(`)(`)).toBe(")(");
+  });
+
+  it("reads a word with a long run of closing parentheses in linear time", () => {
+    const command = ")".repeat(20_000) + "x";
+    const started = performance.now();
+    programName(command);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
+
   it("looks inside Codex's shell wrapper", () => {
     expect(programName(`/bin/zsh -lc 'sed -n 1,80p electron/main.ts'`)).toBe(
       "sed",

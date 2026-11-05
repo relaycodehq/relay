@@ -1,4 +1,4 @@
-import { it, expect, beforeEach, afterEach } from "vitest";
+import { it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtemp, mkdir, writeFile, rm, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -126,7 +126,17 @@ function harness() {
   };
   const askedSlots = () =>
     asked.map((a) => state().reviewers.findIndex((r) => r.chatId === a.chatId));
-  return { reviews, review, state, answer, asked, askedSlots, leads, threads };
+  return {
+    reviews,
+    host,
+    review,
+    state,
+    answer,
+    asked,
+    askedSlots,
+    leads,
+    threads,
+  };
 }
 
 it("runs a split review's passes one after another, the seams last, then the lead", async () => {
@@ -203,4 +213,24 @@ it("won't run a later pass's reviewer before its pass", async () => {
   await expect(reviews.resume("review", { slot: 2 })).rejects.toThrow(
     "That reviewer's pass hasn't started yet.",
   );
+});
+
+it("goes on to the lead when a reviewer ends while the next pass is still starting", async () => {
+  const { reviews, host, state, answer, askedSlots, leads } = harness();
+  await reviews.start("review", config({ seams: false }));
+  const send = host.send;
+  let failSend!: (e: Error) => void;
+  host.send = async (chatId, input) => {
+    if (chatId !== state().reviewers[3]!.chatId) return send(chatId, input);
+    await new Promise((_, reject) => (failSend = reject));
+  };
+  await answer(0);
+  // Pass 2 starts: its first reviewer gets its task, the other's hangs.
+  const starting = answer(1);
+  await vi.waitFor(() => expect(askedSlots()).toEqual([0, 1, 2]));
+  await answer(2);
+  failSend(new Error("Its thread is gone."));
+  await starting;
+  expect(state().status).toBe("leading");
+  expect(leads).toHaveLength(1);
 });

@@ -4,7 +4,12 @@ import { z } from "zod";
 import { openWithAppIdSchema } from "../../shared/open-with";
 import { workingPathSchema } from "../../shared/working-tree";
 import { openWith, openWithApps } from "../open-with";
-import { entryPath, createEntry, renameEntry } from "../projects/project-files";
+import {
+  createEntry,
+  entryItself,
+  entryPath,
+  renameEntry,
+} from "../projects/project-files";
 import { takes, type ApiContext, type Handlers } from "./context";
 import { openPath } from "./open-path";
 import { fileRoot, fileRootSchema, folderPathSchema } from "./project-files";
@@ -16,7 +21,7 @@ export function projectEntryHandlers(ctx: ApiContext) {
     revealProjectPath: takes(
       [fileRootSchema, folderPathSchema],
       async (where, path) => {
-        const full = await entryPath((await rootOf(where)).root, path);
+        const full = await entryItself((await rootOf(where)).root, path);
         // A folder opens in Finder to show what's inside; a file is selected in its folder.
         if (await lstat(full).then((s) => s.isDirectory())) {
           await openPath(full);
@@ -47,7 +52,7 @@ export function projectEntryHandlers(ctx: ApiContext) {
     trashProjectEntry: takes(
       [fileRootSchema, workingPathSchema],
       async (where, path) =>
-        shell.trashItem(await entryPath((await rootOf(where)).root, path)),
+        shell.trashItem(await entryItself((await rootOf(where)).root, path)),
     ),
   } satisfies Handlers;
 }

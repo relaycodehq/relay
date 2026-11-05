@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { watch, type FSWatcher } from "node:fs";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { lstat, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /** What a tree watch hands back: closed when nobody shows the place. */
@@ -176,16 +176,36 @@ class EachFolder extends EventEmitter implements FolderWatch {
 
   /** `rel` was made, moved or deleted. */
   private async appeared(rel: string) {
+    let folder;
     try {
-      if (!(await stat(join(this.root, rel))).isDirectory()) return;
+      // Not through a link, as the first crawl doesn't: one back up the tree
+      // would watch all of it again under its name.
+      folder = (await lstat(join(this.root, rel))).isDirectory();
     } catch {
-      return this.drop(rel);
+      this.drop(rel);
+      if (!rel.includes("/")) await this.rootGone();
+      return;
     }
+    // A file or link may have taken a watched folder's place.
+    if (!folder) return this.drop(rel);
     // Deleted and made again, or another moved over it: the old watch sees
     // the folder that went.
     this.drop(rel);
     if (await this.options.skipLater?.(rel).catch(() => false)) return;
     await this.add(rel).catch((error: Error) => this.fail(error));
+  }
+
+  /**
+   * inotify watches a folder, not its path: once the root is deleted (a
+   * worktree removed), one made again in its place is never seen. Failing
+   * sends the owner to poll and watch again once it's back.
+   */
+  private async rootGone() {
+    const gone = await lstat(this.root).then(
+      () => false,
+      (error: unknown) => unreachable(error),
+    );
+    if (gone) this.fail(new Error(`${this.root} is gone`));
   }
 
   private fail(error: Error) {

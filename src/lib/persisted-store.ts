@@ -80,35 +80,56 @@ export function persistedStore<T>(
   serialize: (value: T) => string | null,
 ) {
   const listeners = new Set<() => void>();
-  const read = () => {
+  const parsed = (text: string | null) => {
     try {
-      return parse(readText(key));
+      return parse(text);
     } catch {
       return parse(null);
     }
   };
-  let current = read();
+  let saved = readText(key);
+  let current = parsed(saved);
+  // Picks up what another window saved; the same text keeps the same value.
+  const refresh = () => {
+    const text = readText(key);
+    if (text === saved) return false;
+    saved = text;
+    current = parsed(text);
+    return true;
+  };
   const notify = () => {
     for (const listener of listeners) listener();
   };
   // A thread's own window shares storage, but has its own store and listeners.
-  if (typeof window !== "undefined")
-    window.addEventListener?.("storage", (event) => {
-      if (
-        event.storageArea !== localStorage ||
-        (event.key !== null && event.key !== key)
-      )
-        return;
-      current = read();
-      notify();
-    });
+  const heard = (event: StorageEvent) => {
+    if (
+      event.storageArea !== localStorage ||
+      (event.key !== null && event.key !== key)
+    )
+      return;
+    if (refresh()) notify();
+  };
+  const inWindow = typeof window !== "undefined";
+  // Heard only while something follows it: stores made per thread would
+  // otherwise leave a window listener behind for every thread opened.
   const subscribe = (listener: () => void) => {
+    if (!listeners.size && inWindow) {
+      refresh();
+      window.addEventListener?.("storage", heard);
+    }
     listeners.add(listener);
-    return () => listeners.delete(listener);
+    return () => {
+      listeners.delete(listener);
+      if (!listeners.size && inWindow)
+        window.removeEventListener?.("storage", heard);
+    };
   };
   const fallback = parse(null);
   return {
-    get: () => current,
+    get() {
+      if (!listeners.size) refresh();
+      return current;
+    },
     subscribe,
     use: () =>
       useSyncExternalStore(
@@ -119,6 +140,7 @@ export function persistedStore<T>(
     set(next: T) {
       current = next;
       writeText(key, serialize(next));
+      saved = readText(key);
       notify();
     },
   };

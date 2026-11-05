@@ -40,6 +40,7 @@ import { useQueuedMessages } from "./useQueuedMessages";
 import { useSessionCommands } from "./useSessionCommands";
 import { useThreadScroll } from "./useThreadScroll";
 import { useStableCallback } from "../../lib/useStableCallback";
+import { useSteady } from "../../lib/useSteady";
 import { flashPassage, quotedPassage } from "./quote-passage";
 import { QuoteJump } from "./SentPills";
 import { useThreadSend } from "./useThreadSend";
@@ -74,8 +75,8 @@ import { WorkItemCards } from "../plugins/WorkItemCards";
 import { WorktreeDialogs } from "./WorktreeControls";
 import { useThreadLinks } from "../linked-folders/useThreadLinks";
 import { NotesChip } from "../notes/NotesChip";
-import { useThreadNotes } from "../notes/useThreadNotes";
-import { KeepBlock, type Keeper } from "../../ui/KeepBlock";
+import { useNoteKeeper, useThreadNotes } from "../notes/useThreadNotes";
+import { KeepBlock } from "../../ui/KeepBlock";
 import { useThreadFind } from "./find/useThreadFind";
 import "./thread.css";
 
@@ -161,6 +162,10 @@ export function ProjectChat({
     queryKey: workingTreeKey(project.id),
     queryFn: () => api.projectWorkingTree(project.id),
     enabled: !project.plain,
+  });
+  const projectCheckout = useSteady({
+    branch: checkout.data?.branch,
+    locked: checkoutDisabled,
   });
   const [rootId, setRootId] = useState<string | null>(() =>
     threadStorage(id).reply.load(),
@@ -305,7 +310,7 @@ export function ProjectChat({
   });
   // A note's message may sit in another conversation than the one shown, or
   // under an open subagent: go there first.
-  const jumpToNote = (messageId: string) => {
+  const jumpToNote = useStableCallback((messageId: string) => {
     setAgentView(null);
     if (shown.some((m) => m.id === messageId))
       return view.jumpTo(messageId, { flash: true });
@@ -313,7 +318,17 @@ export function ProjectChat({
     const to = thread.roots.get(messageId) ?? null;
     view.jumpInto(placeOf(to), messageId);
     setRootId(to);
-  };
+  });
+  const quoteNote = useCallback(
+    (text: string) => composer.current?.insertQuote(text),
+    [],
+  );
+  // Changes when a message comes or goes, not with each streamed piece.
+  const messageIds = messages.map((m) => m.id).join("\n");
+  const notePresent = useCallback(
+    (id: string) => messageIds.split("\n").includes(id),
+    [messageIds],
+  );
   // A quote pill takes the reader back up to the passage it quotes, lit.
   const jumpToQuote = useStableCallback((quote: string, pill: HTMLElement) => {
     const quoting = pill.closest("[data-message-id]");
@@ -331,23 +346,7 @@ export function ProjectChat({
     () => ({ runs: background.agents, onOpen: setAgentView }),
     [background.agents],
   );
-  const keeper = useMemo<Keeper | null>(
-    () =>
-      chatId
-        ? {
-            keep: (markdown, at) =>
-              void notes.keep(
-                markdown,
-                at.closest<HTMLElement>("[data-message-id]")?.dataset.messageId,
-              ),
-            kept: notes.kept,
-            unkeep: notes.unkeep,
-            togglePin: notes.togglePin,
-            pinned: notes.pinned,
-          }
-        : null,
-    [chatId, notes],
-  );
+  const keeper = useNoteKeeper(chatId, notes);
   const councils = useCouncils({
     handle,
     data: history.data,
@@ -555,23 +554,21 @@ export function ProjectChat({
                 />
               )
             }
-            checkout={{
-              branch: checkout.data?.branch,
-              locked: checkoutDisabled,
-            }}
+            checkout={projectCheckout}
             scopeButtons={scopeButtons}
             notesChip={
               <NotesChip
                 notes={notes}
-                onQuote={(text) => composer.current?.insertQuote(text)}
+                onQuote={quoteNote}
                 onJump={jumpToNote}
-                present={(id) => messages.some((m) => m.id === id)}
+                present={notePresent}
               />
             }
             links={links}
             commandOptions={(command, query) =>
               links.options(command, query) ?? terminalResume.options(command, query)
             }
+            commandListings={links.listed + terminalResume.listed}
             onProjectSettings={onProjectSettings}
             onSend={send}
             onEditQueued={() => queue.editLast(root?.id ?? null)}

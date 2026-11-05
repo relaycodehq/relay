@@ -1,5 +1,6 @@
 import {
   Annotation,
+  Compartment,
   EditorState,
   Transaction,
   type ChangeSet,
@@ -7,7 +8,7 @@ import {
   Text,
   type Extension,
 } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import type { ChangeBaseline } from "../../../shared/editor-windows";
 import type { LocalFile, Pull } from "../../../shared/types";
 import { api } from "../../lib/api";
@@ -15,6 +16,17 @@ import { lineBreakOf, minimalChange } from "./text-changes";
 
 /** Marks a change copied from another view of the same document, so it is not copied back. */
 const mirrored = Annotation.define<boolean>();
+
+/** The line break the text is split at, which follows the file's when it is written with others. */
+const lineBreaks = new Compartment();
+
+/**
+ * Pasted or dropped text takes the file's line breaks. The text is split at
+ * the file's alone, so an LF line pasted into a CRLF file would join the next.
+ */
+const pastedLineBreaks = EditorView.clipboardInputFilter.of((text, state) =>
+  text.replace(/\r\n?|\n/g, state.lineBreak),
+);
 
 /**
  * Where a file is read from and saved to: a project's folder (the checkout,
@@ -90,7 +102,8 @@ export class FileDocument {
   private disposers = new Set<() => void>();
   /** The views showing it. The first one owns the document's state. */
   private views: EditorView[] = [];
-  private config: Extension = [];
+  private textExtensions: Extension = [];
+  private lineBreak = "\n";
   private savers = new Set<() => void>();
   private live = true;
   /** Applies an edit through the first view, which owns the state while it is attached. */
@@ -172,19 +185,15 @@ export class FileDocument {
       this.file && (this.file.original !== file.original || this.file.head !== file.head);
     this.file = file;
     this.version = file.version;
-    if (!this.state) {
-      this.config = [
-        EditorState.lineSeparator.of(lineBreakOf(file.contents)),
-        this.extensions(file.contents),
-      ];
-      this.state = EditorState.create({ doc: file.contents, extensions: this.config });
-    } else if (this.state.sliceDoc() !== file.contents) {
+    if (!this.state) this.state = this.create(file.contents);
+    else if (this.state.sliceDoc() !== file.contents) {
       // Record text written by something else (an agent, another editor) in
       // local history before the buffer replaces it.
       if (this.source.kind === "project")
         void api
           .localHistoryRecord(this.source.where, this.path, file.contents, "external")
           .catch(() => {});
+      this.takeLineBreak(lineBreakOf(file.contents));
       const changes = minimalChange(this.state, file.contents);
       if (this.dispatchToView) this.dispatchToView({ changes, userEvent: "reload" });
       else {
@@ -252,9 +261,35 @@ export class FileDocument {
    */
   keepUnread(text: string) {
     if (this.state) return;
-    this.config = [EditorState.lineSeparator.of(lineBreakOf(text)), this.extensions(text)];
-    this.state = EditorState.create({ doc: text, extensions: this.config });
+    this.state = this.create(text);
     this.set({ dirty: true });
+  }
+
+  /** A first state for the file's text, split at its line breaks. */
+  private create(text: string) {
+    this.lineBreak = lineBreakOf(text);
+    this.textExtensions = this.extensions(text);
+    return EditorState.create({ doc: text, extensions: this.config });
+  }
+
+  private get config() {
+    return [
+      lineBreaks.of(EditorState.lineSeparator.of(this.lineBreak)),
+      pastedLineBreaks,
+      this.textExtensions,
+    ];
+  }
+
+  /**
+   * Splits the text at `lineBreak` from now on, as the file on disk now does.
+   * Otherwise a CRLF file rewritten with LF shows as one long line.
+   */
+  private takeLineBreak(lineBreak: string) {
+    if (!this.state || lineBreak === this.lineBreak) return;
+    this.lineBreak = lineBreak;
+    const effects = lineBreaks.reconfigure(EditorState.lineSeparator.of(lineBreak));
+    if (!this.views.length) this.state = this.state.update({ effects }).state;
+    for (const view of this.views) view.dispatch({ effects });
   }
 
   /** Looks at the disk. A change is taken without asking when there are no edits to lose. */

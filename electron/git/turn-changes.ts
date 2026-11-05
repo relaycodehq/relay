@@ -1,139 +1,32 @@
 import { randomUUID } from "node:crypto";
 import {
   chmod,
-  copyFile,
   lstat,
   mkdtemp,
-  readFile,
   readlink,
   readdir,
   rm,
   rmdir,
   stat,
-  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve, sep } from "node:path";
-import { within } from "../util/paths";
-import { NotText, decodeText, textLimit } from "./working-files";
-import { digest } from "../util/hash";
-import { imageSides, type FileSource } from "./image-pair";
-import { videoSides } from "./video-pair";
-import { git, gitBytes } from "./git";
+import { dirname, join } from "node:path";
+import { ownFiles, type TurnClaim } from "./turn-claims";
+import { checkOut, durable, noMonitor, run, snapshot } from "./turn-snapshots";
+import { revisionDiff } from "./revision-diff";
+import { mergeBack } from "./merge-back";
+import { eachLimited } from "../util/each-limited";
 import type { FilePair } from "../../shared/types";
 import type { TurnFileChange } from "../../shared/projects";
 import { errorMessage } from "../../shared/error-message";
 
 // Each agent turn snapshots the whole worktree before and after; its card
 // lists the changes the agent made itself.
-const identity = {
-  GIT_AUTHOR_NAME: "Relay",
-  GIT_AUTHOR_EMAIL: "relay@localhost",
-  GIT_COMMITTER_NAME: "Relay",
-  GIT_COMMITTER_EMAIL: "relay@localhost",
-};
-
-// Git renames objects and refs into place without fsync by default, so an
-// unclean restart could leave empty files under refs/relay that break fetches.
-const durable = [
-  "-c",
-  "core.fsync=objects,reference",
-  "-c",
-  "core.fsyncMethod=fsync",
-];
-
-const noMonitor = ["-c", "core.fsmonitor=false"];
 const maxFiles = 1000;
-
-/** Snapshots walk the whole worktree, so they get twice Git's usual time. */
-const run = (root: string, args: string[], env?: NodeJS.ProcessEnv) =>
-  git(root, args, { timeout: 30000, env });
 
 /** One ref per turn: its commit is the after snapshot, its parent the before. */
 export const turnRef = (messageId: string) => `refs/relay/turns/${messageId}`;
-
-/** Writes the worktree's tree, untracked files included, without touching the real index. */
-export async function snapshotTree(root: string) {
-  const index = (
-    await run(root, [
-      "rev-parse",
-      "--path-format=absolute",
-      "--git-path",
-      "index",
-    ])
-  ).trim();
-  const temp = `${index}.relay-${randomUUID()}`;
-  const env = { GIT_INDEX_FILE: temp, ...identity };
-  try {
-    // A copy of the real index keeps Git's stat cache, so `add` only rehashes
-    // files that changed. Dating the copy just below the original keeps Git's
-    // racy-clean check rehashing files touched in the same second.
-    const seeded = await stat(index).then(
-      async ({ mtimeMs }) => {
-        const seconds = Math.floor((mtimeMs - 1) / 1000);
-        if (seconds <= 0) return false;
-        await copyFile(index, temp);
-        await utimes(temp, seconds, seconds);
-        return true;
-      },
-      () => false,
-    );
-    if (!seeded) {
-      await rm(temp, { force: true });
-      const head = await run(root, [
-        "rev-parse",
-        "-q",
-        "--verify",
-        "HEAD^{commit}",
-      ]).then(
-        () => true,
-        () => false,
-      );
-      if (head) await run(root, ["read-tree", "HEAD"], env);
-    }
-    await run(root, [...noMonitor, ...durable, "add", "-A", "--", "."], env);
-    return (
-      await run(root, [...noMonitor, ...durable, "write-tree"], env)
-    ).trim();
-  } finally {
-    await rm(temp, { force: true });
-    await rm(`${temp}.lock`, { force: true });
-  }
-}
-
-/** Commits a tree as Relay, outside any branch. */
-export async function commitTree(
-  root: string,
-  tree: string,
-  parent: string | undefined,
-  message: string,
-) {
-  return (
-    await run(
-      root,
-      [
-        ...durable,
-        "commit-tree",
-        tree,
-        ...(parent ? ["-p", parent] : []),
-        "-m",
-        message,
-      ],
-      identity,
-    )
-  ).trim();
-}
-
-/** Commits the worktree, untracked files included, without touching the real index. */
-async function snapshot(root: string, parent?: string) {
-  return commitTree(
-    root,
-    await snapshotTree(root),
-    parent,
-    "Relay turn snapshot",
-  );
-}
 
 /** A numstat count: digits, or `-` where Git counted no lines; null for anything else. */
 function numstatCount(field: string): number | "-" | null {
@@ -187,74 +80,6 @@ export async function resumeTurn(root: string, messageId: string) {
     .then((out) => out.trim())
     .catch(() => "");
   return kept || startTurn(root, messageId);
-}
-
-/** What the agent itself did to files during a turn, as its tools reported. */
-export interface TurnClaim {
-  /** Paths its file tools wrote, absolute or relative to the checkout. */
-  edited: string[];
-  /** Shell commands it ran; a file one names outright counts as its own. */
-  commands: string[];
-}
-
-const pathChar = /[\w.@+~\/-]/;
-
-/** `text` names `path` as a whole path, not as part of a longer one. */
-function names(text: string, path: string) {
-  for (let at = text.indexOf(path); at >= 0; at = text.indexOf(path, at + 1)) {
-    const before = text[at - 1] ?? "";
-    const after = text[at + path.length] ?? "";
-    if (!pathChar.test(before) && !pathChar.test(after)) return true;
-  }
-  return false;
-}
-
-/** Git lists paths with forward slashes, on Windows too. */
-const gitPath = (path: string) => path.split(sep).join("/");
-/** `cd dir`, `cd "dir"` or `cd 'dir'`, also inside a quoted `zsh -lc "…"`. */
-const cdTarget = /(?:^|[\s;&|("'])cd\s+(?:"([^"]+)"|'([^']+)'|([^\s;&|)"']+))/g;
-
-/**
- * The files among `files` (relative to the checkout `root`) that the agent
- * changed: written by its file tools, or named in a command it ran. The
- * snapshots see the whole checkout, so without this a turn would also claim
- * edits from the user's editor, other threads and CLI sessions that ran
- * meanwhile. Changes a command made without naming the file are missed.
- */
-export function ownFiles(
-  files: TurnFileChange[],
-  claim: TurnClaim,
-  root: string,
-) {
-  const edited = new Set<string>();
-  for (const path of claim.edited) {
-    const rel = within(root, resolve(root, path));
-    if (rel) edited.add(gitPath(rel));
-  }
-  // A command can name a file from a folder it moves into: `cd sub && sed -i … file.ts`.
-  const commands = claim.commands.map((command) => ({
-    command,
-    folders: [
-      root,
-      ...[...command.matchAll(cdTarget)].map((m) =>
-        resolve(root, m[1] ?? m[2] ?? m[3]!),
-      ),
-    ],
-  }));
-  return files.filter((file) => {
-    if (edited.has(file.path)) return true;
-    const absolute = join(root, file.path);
-    return commands.some(({ command, folders }) => {
-      const forms = new Set([absolute]);
-      for (const folder of folders) {
-        const from = within(folder, absolute);
-        if (from) forms.add(from).add(`./${from}`);
-      }
-      // A command on Windows may write a path with either slash.
-      for (const form of [...forms]) forms.add(gitPath(form));
-      return [...forms].some((form) => names(command, form));
-    });
-  });
 }
 
 /**
@@ -320,48 +145,6 @@ export async function turnDiff(
   );
   if (!exists) throw new Error("This turn's snapshot is no longer available.");
   return revisionDiff(root, `${ref}^`, ref, path);
-}
-
-/** One file between two commits or trees, as text unless it's binary or too big. */
-export async function revisionDiff(
-  root: string,
-  from: string,
-  to: string,
-  path: string,
-): Promise<FilePair> {
-  let binary = false;
-  const read = async (rev: string) => {
-    const spec = `${rev}:${path}`;
-    const size = await run(root, ["cat-file", "-s", spec]).then(
-      (s) => Number(s.trim()),
-      () => null,
-    );
-    if (size === null) return null;
-    if (size > textLimit) {
-      binary = true;
-      return null;
-    }
-    let contents: string;
-    try {
-      contents = decodeText(await gitBytes(root, ["cat-file", "blob", spec]));
-    } catch (e) {
-      if (!(e instanceof NotText)) throw e;
-      binary = true;
-      return null;
-    }
-    return { name: path, contents, cacheKey: digest(contents) };
-  };
-  const [old, next] = await Promise.all([read(from), read(to)]);
-  if (!binary) return { old, next, binary: false };
-  const sides: [FileSource, FileSource] = [
-    { name: path, spec: `${from}:${path}` },
-    { name: path, spec: `${to}:${path}` },
-  ];
-  const [images, videos] = await Promise.all([
-    imageSides(root, ...sides),
-    videoSides(root, ...sides),
-  ]);
-  return { old: null, next: null, binary: true, images, videos };
 }
 
 /** Where a rollback keeps its before/after snapshots, so it can be redone. */
@@ -467,33 +250,6 @@ async function clearEmptyDirectory(root: string, path: string): Promise<void> {
   await rmdir(join(root, path));
 }
 
-/** A blob as it would be checked out, line endings and filters applied. */
-async function checkedOut(root: string, rev: string, path: string) {
-  // Filters such as LFS may reach the network; gitEnv keeps them from prompting.
-  return gitBytes(root, ["cat-file", "--filters", `${rev}:${path}`]);
-}
-
-/** Undoes `from` → `to` on top of whatever the file holds now; null when it conflicts. */
-async function mergeBack(root: string, path: string, from: string, to: string) {
-  const dir = await mkdtemp(join(tmpdir(), "relay-rewind-"));
-  try {
-    const base = join(dir, "base");
-    const other = join(dir, "other");
-    await writeFile(base, await checkedOut(root, from, path));
-    await writeFile(other, await checkedOut(root, to, path));
-    // Exits non-zero on conflicts and refuses binary files: both stay as they are.
-    return await gitBytes(
-      root,
-      ["merge-file", "-p", "-q", join(root, path), base, other],
-      textLimit * 2,
-    );
-  } catch {
-    return null;
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-}
-
 /**
  * Plans moving files from how `from` has them to how `to` has them, keeping
  * edits made since: an untouched file is replaced, an edited one merged.
@@ -512,51 +268,46 @@ export async function plan(
     (value) => value.trim() !== "false",
     () => true,
   );
-  await Promise.all(
-    paths.map(async (path) => {
-      const [had, want, entry] = await Promise.all([
-        blobEntry(root, from, path),
-        blobEntry(root, to, path),
-        worktreeEntry(root, path),
-      ]);
-      const directory = entry?.mode === "040000";
-      const now = directory ? null : (entry ?? null);
-      if (sameEntry(now, want, trustMode))
-        return steps.push({ path, kind: "keep" });
-      if (entry?.file && want?.mode.startsWith("100") && entry.id === want.id) {
-        const mode = force || entry.mode === had?.mode ? want.mode : entry.mode;
-        return steps.push(
-          mode === entry.mode
-            ? { path, kind: "keep" }
-            : { path, kind: "mode", mode },
-        );
-      }
-      const replace: Step = { path, kind: want ? "restore" : "delete" };
-      if (force || sameEntry(now, had, trustMode)) {
-        if (directory && want) directories.push(path);
-        return steps.push(replace);
-      }
-      // Text and executable mode merge separately, so a later chmod survives
-      // a content rollback and later text survives an executable-bit rollback.
-      const contents =
-        had?.mode.startsWith("100") &&
-        want?.mode.startsWith("100") &&
-        entry?.file
-          ? had.id === want.id
-            ? await readFile(join(root, path))
-            : await mergeBack(root, path, from, to)
-          : null;
-      if (contents) {
-        const mode = entry!.mode === had!.mode ? want!.mode : entry!.mode;
-        steps.push({
-          path,
-          kind: "merge",
-          contents,
-          ...(trustMode && mode !== entry!.mode ? { mode } : {}),
-        });
-      } else conflicts.push(path);
-    }),
-  );
+  // Each file starts up to three Git processes; thousands at once fail to spawn.
+  await eachLimited(paths, 8, async (path) => {
+    const [had, want, entry] = await Promise.all([
+      blobEntry(root, from, path),
+      blobEntry(root, to, path),
+      worktreeEntry(root, path),
+    ]);
+    const directory = entry?.mode === "040000";
+    const now = directory ? null : (entry ?? null);
+    if (sameEntry(now, want, trustMode))
+      return steps.push({ path, kind: "keep" });
+    if (entry?.file && want?.mode.startsWith("100") && entry.id === want.id) {
+      const mode = force || entry.mode === had?.mode ? want.mode : entry.mode;
+      return steps.push(
+        mode === entry.mode
+          ? { path, kind: "keep" }
+          : { path, kind: "mode", mode },
+      );
+    }
+    const replace: Step = { path, kind: want ? "restore" : "delete" };
+    if (force || sameEntry(now, had, trustMode)) {
+      if (directory && want) directories.push(path);
+      return steps.push(replace);
+    }
+    // Text and executable mode merge separately, so a later chmod survives
+    // a content rollback and later text survives an executable-bit rollback.
+    const contents =
+      had?.mode.startsWith("100") && want?.mode.startsWith("100") && entry?.file
+        ? await mergeBack(root, path, from, to, had.id === want.id)
+        : null;
+    if (contents) {
+      const mode = entry!.mode === had!.mode ? want!.mode : entry!.mode;
+      steps.push({
+        path,
+        kind: "merge",
+        contents,
+        ...(trustMode && mode !== entry!.mode ? { mode } : {}),
+      });
+    } else conflicts.push(path);
+  });
   const deleted = new Set(
     steps.filter((step) => step.kind === "delete").map((step) => step.path),
   );
@@ -638,7 +389,7 @@ async function applySteps(
       await run(root, ["read-tree", to], env);
       await deleteSteps(root, steps);
       for (const path of restore) await clearEmptyDirectory(root, path);
-      await run(root, ["checkout-index", "-f", "--", ...restore], env);
+      await checkOut(root, restore, env);
       for (const path of restore) {
         const mode = permissions.get(path);
         if (mode === undefined) continue;

@@ -28,6 +28,7 @@ import { liveAway } from "../../../shared/handoff";
 import type { ChatSummary, ChatTriage } from "../../../shared/projects";
 import {
   chatActivitySection,
+  chatStillGoing,
   snoozePresets,
   wakeLabel,
 } from "../../../shared/chat-activity";
@@ -316,11 +317,7 @@ function RemoveItems({
   onAction: (action: ThreadMenuAction) => void;
 }) {
   // Both refuse what would still run with nothing left to stop it.
-  const going =
-    !!chat.running ||
-    !!chat.reviewing ||
-    !!chat.pending?.length ||
-    !!chat.nextSend;
+  const going = chatStillGoing(chat);
   return (
     <>
       <MenuAction

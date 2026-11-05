@@ -1,9 +1,12 @@
 import { rm } from "node:fs/promises";
-import { apply, commitTree, plan } from "../turn-changes";
+import { apply, plan } from "../turn-changes";
+import { commitTree } from "../turn-snapshots";
 import { adoptWorktree } from "./adopt";
 import { uncommitted } from "./changes";
 import { git, type MadeWorktree, movedRef, copiedRef } from "./common";
+import { git as gitIn, nulSeparated, pathsFromStdin } from "../git";
 import { createWorktree } from "./create";
+import { unlinkModules } from "./bootstrap";
 
 // Carrying the checkout's uncommitted work into a thread's new worktree.
 
@@ -50,6 +53,7 @@ export async function moveIntoWorktree(
       steps = planned.steps;
     }
   } catch (e) {
+    await unlinkModules(made.path);
     await git(root, ["worktree", "remove", "--force", made.path])
       .catch(() => rm(made.path, { recursive: true, force: true }))
       .then(() => git(root, ["branch", "-D", made.branch]))
@@ -59,8 +63,11 @@ export async function moveIntoWorktree(
   // From here the worktree holds the edits, so it stays even if this fails.
   await apply(root, head, steps);
   // A staged edit would otherwise linger in the checkout's index.
-  for (let i = 0; i < paths.length; i += 500)
-    await git(root, ["reset", "-q", "--", ...paths.slice(i, i + 500)]);
+  if (paths.length)
+    await gitIn(root, ["reset", "-q", ...pathsFromStdin], {
+      timeout: 30000,
+      input: nulSeparated(paths),
+    });
   return made;
 }
 
@@ -104,6 +111,7 @@ export async function copyIntoWorktree(
         ),
       ]);
     } catch (e) {
+      await unlinkModules(worktree.path);
       await git(root, ["worktree", "remove", "--force", worktree.path])
         .catch(() => rm(worktree.path, { recursive: true, force: true }))
         .then(() => git(root, ["branch", "-D", worktree.branch]))

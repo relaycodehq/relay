@@ -56,9 +56,10 @@ export async function codexRequest(
       params.reason,
       params.cwd ? `Directory: ${params.cwd}` : null,
       permissions ? JSON.stringify(params.permissions, null, 2) : null,
-      !command && !permissions
-        ? JSON.stringify(params.changes ?? params.grantRoot, null, 2)
+      typeof params.grantRoot === "string"
+        ? `Also lets Codex write anywhere under ${params.grantRoot} for the rest of this thread.`
         : null,
+      params.changes ? JSON.stringify(params.changes, null, 2) : null,
     ]
       .filter(Boolean)
       .join("\n\n");

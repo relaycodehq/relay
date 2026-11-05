@@ -82,7 +82,15 @@ it("keeps a deep review's Claude reviewer from changing the checkout", async () 
       "tool",
       { signal: new AbortController().signal },
     );
-  expect(await run("git diff main...HEAD")).toEqual({});
+  // A diff still runs, without the checkout's own diff drivers.
+  expect(await run("git diff main...HEAD")).toMatchObject({
+    hookSpecificOutput: {
+      permissionDecision: "allow",
+      updatedInput: {
+        command: "git diff --no-textconv --no-ext-diff main...HEAD",
+      },
+    },
+  });
   expect(await run("touch marker.txt")).toMatchObject({
     hookSpecificOutput: { permissionDecision: "deny" },
   });

@@ -27,6 +27,7 @@ export const cursorMetaSchema = z
     provider: z.literal("cursor"),
     agentId: z.string().optional(),
     run: z.object({ run: z.string(), id: z.number() }).optional(),
+    readOnly: z.boolean().optional(),
   })
   .loose();
 export type CursorMeta = z.infer<typeof cursorMetaSchema>;
@@ -44,6 +45,8 @@ export class CursorConnection extends LineConnection {
   busy = false;
   /** The turn a restart cut off, for an `adopt` turn to show. */
   inflight?: { run: string; id: number };
+  /** Started for a Read only thread, with Read only's settings in its environment. */
+  readOnly = false;
   private listeners = new Map<string, (update: CursorUpdate) => void>();
   /** Hears the sign-in page of an `auth.login` asked not to open a browser. */
   onLoginUrl?: (url: string) => void;
@@ -94,8 +97,12 @@ export class CursorConnection extends LineConnection {
   }
 
   /** What the next Relay reads about this worker, replacing what it had. */
-  override keep(meta: Omit<CursorMeta, "provider">) {
-    super.keep({ provider: "cursor", ...meta } satisfies CursorMeta);
+  override keep(meta: Omit<CursorMeta, "provider" | "readOnly">) {
+    super.keep({
+      provider: "cursor",
+      readOnly: this.readOnly,
+      ...meta,
+    } satisfies CursorMeta);
   }
 
   private cleaning = false;
@@ -103,7 +110,10 @@ export class CursorConnection extends LineConnection {
   override close() {
     if (!this.cleaning) {
       this.cleaning = true;
-      this.child.once("exit", () => void this.cleanup?.());
+      const { exitCode, signalCode } = this.child;
+      // A worker that crashed has no exit left to wait for.
+      if (exitCode !== null || signalCode) void this.cleanup?.();
+      else this.child.once("exit", () => void this.cleanup?.());
     }
     super.close();
   }
@@ -140,25 +150,36 @@ const sessions = new HostedSessions<CursorConnection>({
 
 /**
  * The worker for a thread's session, started if it isn't running. A thread's
- * runs in the agent host; without a key it's a private one that ends with its turn.
+ * runs in the agent host; without a key it's a private one that ends with its
+ * turn. A thread switched to or from Read only gets a new worker, as its
+ * environment is fixed at launch; the agent resumes from the thread's store.
  */
-export function acquireCursorConnection(
+export async function acquireCursorConnection(
   key: string | undefined,
   cwd: string,
   sdk: InstalledSdk,
-  env?: Record<string, string>,
+  turn: { env?: Record<string, string>; readOnly?: boolean; adopting: boolean },
 ): Promise<CursorConnection> {
+  const readOnly = !!turn.readOnly;
+  const live = key ? sessions.get(key) : undefined;
+  // Picking up a turn the worker runs gives it nothing new, so it stays where it runs.
+  const otherMode = !turn.adopting && live?.readOnly !== readOnly;
+  if (key && live && !live.busy && otherMode) await sessions.close(key);
   return sessions.acquire(key, async () => {
-    if (key)
-      return new CursorConnection(
-        await launch(key, cwd, sdk, threadStore(key), env),
+    if (key) {
+      const connection = new CursorConnection(
+        await launch(key, cwd, sdk, readOnly, threadStore(key), turn.env),
       );
+      connection.readOnly = readOnly;
+      return connection;
+    }
     // A one-off job leaves no agent behind: its history goes with it.
     const parent = cursorSetup().store;
     await mkdir(parent, { recursive: true });
     const store = await mkdtemp(join(parent, "tmp-"));
-    return new CursorConnection(await launch(undefined, cwd, sdk, store), () =>
-      rm(store, { recursive: true, force: true }),
+    return new CursorConnection(
+      await launch(undefined, cwd, sdk, readOnly, store),
+      () => rm(store, { recursive: true, force: true }),
     );
   });
 }
@@ -177,13 +198,14 @@ function launch(
   key: string | undefined,
   cwd: string,
   sdk: InstalledSdk,
+  readOnly: boolean,
   store?: string,
   env?: Record<string, string>,
 ) {
   const spec = command(sdk, store, env);
   return sessions.spawn(
     key,
-    { provider: "cursor" } satisfies CursorMeta,
+    { provider: "cursor", readOnly } satisfies CursorMeta,
     { ...spec, cwd, group: false, stopByInput: true },
     () =>
       spawn(spec.command, spec.args, {
@@ -255,6 +277,7 @@ export function reattachCursorSessions(owns: (key: string) => boolean) {
     });
     const connection = new CursorConnection(child);
     connection.inflight = inflight;
+    connection.readOnly = !!meta.readOnly;
     if (!info.open) child.release();
     return connection;
   });

@@ -4,16 +4,17 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ciSummary, type CiRun } from "../../shared/ci";
+import { GitHub } from "./github";
 import {
-  GitHub,
   latestGithubRuns,
   githubRunState,
   type GithubRun,
   type RollupContext,
-} from "./github";
+} from "./github-runs";
 import { statusRuns } from "./statuses";
 import { remoteRepo } from "./index";
 import { gitIn } from "../../tests/fixtures/git-repo";
+import { gitRuns } from "../../tests/fixtures/git-runs";
 
 const run = (workflow: string, state: CiRun["state"], at: number): CiRun => ({
   workflow,
@@ -117,6 +118,47 @@ it("shows commit statuses from CI outside Actions next to Actions runs", async (
   }).read({ owner: "o", name: "r" }, "feature/x");
   expect(actionsOnly?.commit.sha).toBe("old");
   expect(actionsOnly?.runs.map((r) => r.workflow)).toEqual(["Checks"]);
+});
+
+it("reads every page of the tip's statuses, so an early failure still counts", async () => {
+  /** 150 contexts, newest first; the oldest failed. */
+  const statuses = Array.from({ length: 150 }, (_, i) => ({
+    context: `job${150 - i}`,
+    state: i === 149 ? "failure" : "success",
+    target_url: `https://ci.example/${150 - i}`,
+    updated_at: "2026-11-05T10:00:00Z",
+  }));
+  const asked: string[] = [];
+  const github = new GitHub(
+    async (url) => {
+      const { pathname, searchParams } = new URL(url);
+      asked.push(pathname);
+      if (pathname.endsWith("/actions/runs"))
+        return Response.json({ workflow_runs: [] });
+      if (!pathname.endsWith("/status"))
+        return Response.json({ commit: { message: "m" } });
+      // GitHub's combined status: 30 a page unless asked, 100 at most.
+      const size = Math.min(Number(searchParams.get("per_page")) || 30, 100);
+      const page = Number(searchParams.get("page")) || 1;
+      return Response.json({
+        sha: "tip",
+        statuses: statuses.slice((page - 1) * size, page * size),
+      });
+    },
+    new GithubCredentials(async () => null),
+  );
+
+  const reading = await github.read({ owner: "o", name: "r" }, "main");
+
+  expect(reading?.runs).toHaveLength(150);
+  expect(reading?.runs).toContainEqual(
+    expect.objectContaining({ workflow: "job1", state: "failure" }),
+  );
+  // The second page is asked by the sha, in case the branch moved meanwhile.
+  expect(asked.filter((p) => p.endsWith("/status"))).toEqual([
+    "/repos/o/r/commits/heads/main/status",
+    "/repos/o/r/commits/tip/status",
+  ]);
 });
 
 it("walks back past commits CI never saw to the last one it reported on", async () => {
@@ -232,6 +274,101 @@ it("walks back past commits CI never saw to the last one it reported on", async 
   ]);
 });
 
+it("reads every page of a commit's checks, so a failure past the first 100 still shows", async () => {
+  const check = (name: string, conclusion: string): RollupContext => ({
+    __typename: "CheckRun",
+    name,
+    status: "COMPLETED",
+    conclusion,
+    detailsUrl: `https://github.com/o/r/runs/${name}`,
+    startedAt: "2026-10-09T22:00:00Z",
+    completedAt: "2026-10-09T22:05:00Z",
+    checkSuite: null,
+  });
+  const passes = Array.from({ length: 100 }, (_, i) =>
+    check(`ok${i}`, "SUCCESS"),
+  );
+  const commit = (contexts: RollupContext[], next: string | null) => ({
+    oid: "c1",
+    messageHeadline: "Commit c1",
+    author: { name: "Ada" },
+    statusCheckRollup: {
+      contexts: {
+        pageInfo: { hasNextPage: !!next, endCursor: next },
+        nodes: contexts,
+      },
+    },
+  });
+  const asked: { oid?: string; after: string | null }[] = [];
+  const github = new GitHub(
+    async (_url, init) => {
+      const { query, variables } = JSON.parse(init.body as string);
+      if (query.includes("history(")) {
+        asked.push({ after: variables.after });
+        return Response.json({
+          data: {
+            repository: {
+              ref: {
+                target: {
+                  history: {
+                    pageInfo: { hasNextPage: false, endCursor: null },
+                    nodes: [commit(passes, "p2")],
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+      asked.push({ oid: variables.oid, after: variables.after });
+      const object =
+        variables.after === "p2"
+          ? commit(passes, "p3")
+          : commit([check("e2e", "FAILURE")], null);
+      return Response.json({ data: { repository: { object } } });
+    },
+    new GithubCredentials(async () => "token"),
+  );
+
+  const reading = await github.read({ owner: "o", name: "r" }, "main");
+  expect(asked).toEqual([
+    { after: null },
+    { oid: "c1", after: "p2" },
+    { oid: "c1", after: "p3" },
+  ]);
+  // Page two repeats page one's names, which group into the same runs.
+  expect(reading?.runs).toHaveLength(101);
+  expect(ciSummary(reading!.runs)?.state).toBe("failure");
+
+  // A rollup that never ends stops at ten pages.
+  let pages = 0;
+  const endless = new GitHub(
+    async (_url, init) => {
+      const { query } = JSON.parse(init.body as string);
+      const next = commit(passes, `p${++pages + 1}`);
+      return Response.json({
+        data: {
+          repository: query.includes("history(")
+            ? {
+                ref: {
+                  target: {
+                    history: {
+                      pageInfo: { hasNextPage: false, endCursor: null },
+                      nodes: [next],
+                    },
+                  },
+                },
+              }
+            : { object: next },
+        },
+      });
+    },
+    new GithubCredentials(async () => "token"),
+  );
+  await endless.read({ owner: "o", name: "r" }, "main");
+  expect(pages).toBe(10);
+});
+
 it("groups Gitea Actions job statuses under their workflow", () => {
   const at = "2026-09-24T10:00:00Z";
   const runs = statusRuns([
@@ -304,3 +441,22 @@ it("reads host and repository off origin, scp-style and under a subpath", async 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// CI polls every 90s; the remote it reads off only changes with the config.
+it.skipIf(process.platform === "win32")(
+  "reads the remote again only once the config changed",
+  async () => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), "relay-ci-")));
+    const git = (...args: string[]) => gitIn(root, ...args);
+    try {
+      git("init", "-q");
+      git("remote", "add", "origin", "https://github.com/else/where.git");
+      await remoteRepo(root);
+      expect(await gitRuns(() => remoteRepo(root))).toEqual([]);
+      git("remote", "set-url", "origin", "https://github.com/team/app.git");
+      expect(await remoteRepo(root)).toMatchObject({ owner: "team" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);

@@ -1,9 +1,9 @@
 import { readFile, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { commitTree, snapshotTree } from "../turn-changes";
+import { commitTree, snapshotTree } from "../turn-snapshots";
 import type { ChatWorktree } from "../../../shared/projects";
 import { errorMessage } from "../../../shared/error-message";
-import { bootstrap } from "./bootstrap";
+import { bootstrap, unlinkModules } from "./bootstrap";
 import {
   git,
   keptRef,
@@ -135,7 +135,10 @@ export async function removeWorktree(
   // Never Relay's to take, whoever asks.
   if (worktree.adopted) return;
   if (worktree.path && (await exists(worktree.path))) {
-    const tree = await snapshotTree(worktree.path).catch(() => null);
+    // Whatever the copy can't hold stays, with the worktree.
+    const tree = await snapshotTree(worktree.path, { whole: true }).catch(
+      () => null,
+    );
     if (tree) {
       const kept = await commitTree(
         root,
@@ -144,7 +147,8 @@ export async function removeWorktree(
         "Relay: the worktree as it was removed",
       );
       await git(root, ["update-ref", keptRef(chatId), kept]);
-    }
+    } else await assertNothingUnsaved(worktree.path);
+    await unlinkModules(worktree.path);
     await git(root, ["worktree", "remove", "--force", worktree.path]).catch(
       async () => {
         await rm(worktree.path!, { recursive: true, force: true });
@@ -154,4 +158,22 @@ export async function removeWorktree(
   }
   if (worktree.branch && !keepBranch && !worktree.existing)
     await git(root, ["branch", "-D", worktree.branch]).catch(() => {});
+}
+
+/** Throws unless Git sees nothing uncommitted in the folder, which then stays. */
+async function assertNothingUnsaved(path: string) {
+  const status = await git(path, [
+    "status",
+    "--porcelain",
+    "--untracked-files=all",
+  ]).catch(() => undefined);
+  // Its repository moved or lost track of it: only the user can tell what's in it.
+  if (status === undefined)
+    throw new Error(
+      `Git can't read this worktree any more, so it wasn't removed. Move what you need out of ${path}, then delete the folder.`,
+    );
+  if (status.trim())
+    throw new Error(
+      "Couldn't save a copy of this worktree's changes, so it wasn't removed",
+    );
 }

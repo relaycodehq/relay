@@ -47,6 +47,8 @@ export class IdleCompactions {
   /** After launch: threads whose cache may still be warm. */
   armAll() {
     this.stopped = false;
+    // Off, as by default: no thread file is read to plan nothing.
+    if (!this.on()) return;
     const since = Date.now() - LOOK_BACK;
     for (const c of this.core.store.get().chats ?? [])
       if (c.updated >= since) void this.arm(c.id);
@@ -63,7 +65,7 @@ export class IdleCompactions {
   async arm(id: string) {
     clearTimeout(this.timers.get(id));
     this.timers.delete(id);
-    if (this.stopped || this.core.closing()) return;
+    if (this.stopped || this.core.closing() || !this.on()) return;
     const mine = Symbol();
     this.arming.set(id, mine);
     const chat = await this.core.storage.load(id).catch(() => undefined);

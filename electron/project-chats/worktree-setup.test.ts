@@ -356,3 +356,101 @@ it("runs a shared folder's setup once, and the other thread's turn waits for it"
   expect(late.messages).toEqual([]);
   expect(early.messages).toHaveLength(1);
 });
+
+it("stopping during setup to send a waiting steer sends it as the next turn", async () => {
+  await settle({
+    worktreeSetup: "test -f .ran || { touch .ran; echo installing; sleep 30; }",
+  });
+  (chats as unknown as { queue: { steerHoldMs: number } }).queue.steerHoldMs =
+    0;
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(chat.id, input("@codex Build it"));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
+    ).toBe("installing\n"),
+  );
+  // No agent runs yet to take it, so it waits at the front of the queue.
+  const steer = {
+    ...input("@codex Use pnpm instead"),
+    delivery: "steer" as const,
+  };
+  await chats.send(chat.id, steer);
+  expect((await chats.get(chat.id)).queue?.[0]?.input.id).toBe(steer.id);
+
+  await chats.cancel(chat.id, { steers: true });
+  await vi.waitFor(
+    async () => {
+      const { messages, queue } = await chats.get(chat.id);
+      expect(queue ?? []).toHaveLength(0);
+      expect(messages.some((m) => m.id === steer.id)).toBe(true);
+      expect(messages.at(-1)?.status).toBe("complete");
+    },
+    { timeout: 10_000 },
+  );
+});
+
+it("a stop during setup that isn't for a steer holds the queue back", async () => {
+  await settle({
+    worktreeSetup: "test -f .ran || { touch .ran; echo installing; sleep 30; }",
+  });
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(chat.id, input("@codex Build it"));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
+    ).toBe("installing\n"),
+  );
+  const next = input("@codex Then write the docs");
+  await chats.send(chat.id, next);
+  expect((await chats.get(chat.id)).queue?.[0]?.input.id).toBe(next.id);
+
+  // A handoff stops the turn as a stopped run would: the queue waits.
+  await chats.handoffs.halt(chat.id);
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).queuePaused).toBe(true),
+  );
+  const { messages, queue } = await chats.get(chat.id);
+  expect(queue?.[0]?.input.id).toBe(next.id);
+  expect(messages.some((m) => m.id === next.id)).toBe(false);
+});
+
+it("a plain stop during setup with nothing queued leaves the queue unpaused", async () => {
+  await settle({
+    worktreeSetup: "test -f .ran || { touch .ran; echo installing; sleep 30; }",
+  });
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(chat.id, input("@codex Build it"));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
+    ).toBe("installing\n"),
+  );
+
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  // A pause on an empty queue would hold back what a resume or Relay queues later.
+  expect((await chats.get(chat.id)).queuePaused).toBeFalsy();
+});
+
+it("a plain stop during setup holds back a queue that holds messages", async () => {
+  await settle({
+    worktreeSetup: "test -f .ran || { touch .ran; echo installing; sleep 30; }",
+  });
+  const chat = await chats.create(projectId, { kind: "project" }, "worktree");
+  await chats.send(chat.id, input("@codex Build it"));
+  await vi.waitFor(async () =>
+    expect(
+      (await chats.get(chat.id)).messages[1]?.worktreeCommand?.output,
+    ).toBe("installing\n"),
+  );
+  const next = input("@codex Then write the docs");
+  await chats.send(chat.id, next);
+
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  const { messages, queue, queuePaused } = await chats.get(chat.id);
+  expect(queuePaused).toBe(true);
+  expect(queue?.[0]?.input.id).toBe(next.id);
+  expect(messages.some((m) => m.id === next.id)).toBe(false);
+});

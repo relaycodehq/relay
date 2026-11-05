@@ -7,6 +7,7 @@ import { fitModel } from "../../shared/model-fit";
 import type { NewThreadModel } from "../../shared/new-thread-models";
 import {
   projectChatSendSchema,
+  workingFor,
   type ChatMessage,
   type Project,
   type ProjectChat,
@@ -160,7 +161,9 @@ export class ThreadStarts {
       leadAgent,
     );
     if (refused) return refused;
-    const working = this.reads.children(lead).filter((c) => c.running).length;
+    const working = this.reads
+      .children(lead)
+      .filter((c) => c.running && workingFor(c, lead.id)).length;
     if (!detached && working + threads.length > STARTED_LIMIT)
       return `${working} of your threads are working; at most ${STARTED_LIMIT} may at once. Wait for some to finish first.`;
     return undefined;

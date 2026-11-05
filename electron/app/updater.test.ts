@@ -9,7 +9,13 @@ vi.mock("electron", () => ({
   net: { fetch: vi.fn() },
 }));
 
+vi.mock("./install-update", async (importOriginal) => {
+  const real = await importOriginal<typeof import("./install-update")>();
+  return { ...real, apply: vi.fn(real.apply) };
+});
+
 import { app, net } from "electron";
+import { apply } from "./install-update";
 import { Updater } from "./updater";
 import type { UpdateFile, UpdateState } from "../../shared/updates";
 
@@ -291,9 +297,10 @@ it("gives up on a stalled connection", async () => {
 function staged(
   runningTasks: () => number,
   emit: (state: UpdateState) => void = () => {},
+  quit: (cancelled: () => void) => void = () => {},
 ) {
   process.env.APPIMAGE = join(tmpdir(), "relay-missing-dir", "Relay.AppImage");
-  const updater = new Updater(emit, { runningTasks, beforeQuit() {} });
+  const updater = new Updater(emit, { runningTasks, quit });
   Object.assign(updater as any, {
     state: { status: "ready", current: "0.1.0", version: "0.2.0" },
     staged: { version: "0.2.0", path: join(tmpdir(), "relay-missing-update") },
@@ -332,4 +339,27 @@ it("restarts right away when asked again while waiting", async () => {
   const updater = staged(() => 1);
   await updater.installAndRestart();
   expect((await updater.installAndRestart()).status).toBe("error");
+});
+
+it("offers Restart again when the quit is cancelled, reusing the installer", async () => {
+  const cancels: (() => void)[] = [];
+  const updater = staged(
+    () => 0,
+    () => {},
+    (cancelled) => cancels.push(cancelled),
+  );
+  vi.mocked(apply).mockClear().mockResolvedValueOnce();
+  expect((await updater.installAndRestart()).status).toBe("installing");
+  // Cancel on the unsaved-edits prompt keeps Relay open.
+  cancels[0]();
+  expect(updater.current).toMatchObject({ status: "ready", version: "0.2.0" });
+
+  // The waiting installer holds 0.2.0, so a newer release doesn't replace it.
+  answer("0.3.0");
+  expect(await updater.check()).toMatchObject({ status: "ready" });
+  expect((updater as any).staged).toMatchObject({ version: "0.2.0" });
+
+  expect((await updater.installAndRestart()).status).toBe("installing");
+  expect(cancels).toHaveLength(2);
+  expect(apply).toHaveBeenCalledTimes(1);
 });

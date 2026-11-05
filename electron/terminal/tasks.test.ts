@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { spawn } from "node:child_process";
 import type { ProcessRow } from "../platform/processes";
-import { agentName, liveCwd, netstatListening, projectTasks } from "./tasks";
+import { liveCwd, netstatListening } from "./process-lookups";
+import { agentName } from "./command-lines";
+import { projectTasks } from "./tasks";
 import {
   commandKey,
   describeTask,
@@ -492,3 +494,64 @@ it.each(["leader", "child"])(
     }
   },
 );
+
+it("stops a server an agent started a moment ago in a worktree about to go away", async () => {
+  const worktree = "/projects/app/.worktrees/thread-1";
+  fake.cwd = worktree;
+  const [host, agent, shell] = [4_000_001, 4_000_002, 4_000_003];
+  const longAgo = Date.now() - 60_000;
+  fake.rows = [
+    { pid: process.pid, ppid: 4_000_000, pgid: 0, started: 1, line: "relay" },
+    { pid: host, ppid: process.pid, pgid: 0, started: longAgo, line: "agent-host" },
+    { pid: agent, ppid: host, pgid: 0, started: longAgo, line: "/usr/local/bin/claude" },
+    // `npm run dev` started a second ago and isn't listening yet.
+    {
+      pid: shell,
+      ppid: agent,
+      pgid: 0,
+      started: Date.now() - 1000,
+      line: "/bin/zsh -lc npm run dev",
+    },
+  ];
+  projectTasks.hosts = () => [host];
+  const kill = vi.spyOn(process, "kill").mockImplementation((pid) => {
+    fake.rows = fake.rows.filter((r) => r.pid !== Math.abs(pid));
+    return true;
+  });
+  try {
+    await projectTasks.stopWithin(worktree);
+    expect(kill).toHaveBeenCalledWith(shell, "SIGTERM");
+  } finally {
+    kill.mockRestore();
+  }
+});
+
+it("reuses a plain look for costs on macOS, whose ps says them anyway", async () => {
+  const platform = process.platform;
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  try {
+    const root = "/projects/costs-anyway";
+    await projectTasks.list(root, [], { fresh: true });
+    fake.usage.length = 0;
+    await projectTasks.list(root);
+    await projectTasks.list(root, [], { costed: true });
+    expect(fake.usage).toEqual([]);
+  } finally {
+    Object.defineProperty(process, "platform", { value: platform });
+  }
+});
+
+it("doesn't take a stranger that reuses the pid of a dev server gone before a scan saw it", async () => {
+  const root = "/projects/quick-exit";
+  fake.cwd = root;
+  const pid = 9_000_101;
+  fake.rows = [];
+  projectTasks.trackServer(pid, "npm run dev", root, async () => {});
+  expect(await projectTasks.list(root, [], { fresh: true })).toEqual([]);
+
+  // Much later another program in the folder gets the same pid.
+  fake.rows = [
+    { pid, ppid: 77, pgid: pid, started: Date.now(), line: "vitest --watch" },
+  ];
+  expect(await projectTasks.list(root, [], { fresh: true })).toEqual([]);
+});

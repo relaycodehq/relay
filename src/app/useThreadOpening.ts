@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { ChatSummary, Project } from "../../shared/projects";
 import type { ThreadWindow } from "../../shared/thread-windows";
 import { api } from "../lib/api";
@@ -9,6 +9,23 @@ import { projectChatsQuery } from "../lib/workspace-queries";
 import { hasOwnWindow } from "../features/thread-windows/thread-windows";
 import type { ShellNavigation } from "./useShellNavigation";
 import type { useProjects } from "./useProjects";
+import { useShellSpot } from "./shell-spot";
+
+/** The thread and its project as they are now, either of them maybe only just added. */
+async function lookUpThread(
+  qc: QueryClient,
+  projects: ReturnType<typeof useProjects>,
+  t: ThreadWindow,
+) {
+  const listed = projects.data?.some((p) => p.id === t.projectId)
+    ? projects.data
+    : (await projects.refetch()).data;
+  const p = listed?.find((p) => p.id === t.projectId);
+  if (!p) return;
+  const list = await qc.query({ ...projectChatsQuery(p.id), staleTime: 0 });
+  const next = list.find((c) => c.id === t.chatId);
+  return next && { p, next };
+}
 
 /**
  * Opening threads in this window: from the sidebar, by their ids, back from
@@ -21,6 +38,7 @@ export function useThreadOpening(
 ) {
   const qc = useQueryClient();
   const { navigate } = nav;
+  const spotNow = useShellSpot(nav);
   /**
    * Opens `c`, or brings its own window up when it has one. Pass `fresh`
    * to show it in this window regardless.
@@ -60,23 +78,14 @@ export function useThreadOpening(
     void api.takeOpenThread().then(show).catch(setError);
     return api.onOpenThread(show);
   }, [loaded]);
-  /** The thread and its project as they are now, either of them maybe only just added. */
-  async function lookUpFresh(t: ThreadWindow) {
-    const listed = projects.data?.some((p) => p.id === t.projectId)
-      ? projects.data
-      : (await projects.refetch()).data;
-    const p = listed?.find((p) => p.id === t.projectId);
-    if (!p) return;
-    const list = await qc.query({ ...projectChatsQuery(p.id), staleTime: 0 });
-    const next = list.find((c) => c.id === t.chatId);
-    return next && { p, next };
-  }
+  const lookUpFresh = (t: ThreadWindow) => lookUpThread(qc, projects, t);
   // A thread its agent moved to another project goes along while it shows,
   // into a project the agent may have only just added.
   const followMoved = useStableCallback(async (t: ThreadWindow) => {
-    if (t.chatId !== nav.chatId) return;
+    const stillShown = () => spotNow().chatId === t.chatId;
+    if (!stillShown()) return;
     const found = await lookUpFresh(t);
-    if (found) navigate(found.p, found.next);
+    if (found && stillShown()) navigate(found.p, found.next);
   });
   useEffect(
     () => api.onThreadMoved((t) => void followMoved(t).catch(setError)),

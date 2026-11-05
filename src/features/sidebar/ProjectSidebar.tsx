@@ -117,7 +117,7 @@ export function ProjectSidebar({
     : realProjects;
   const groups = useProjectGroups(
     treeProjects,
-    folds.setOpen,
+    folds,
     setError,
     plan && {
       move: (id, folder, before) =>
@@ -188,7 +188,7 @@ export function ProjectSidebar({
   const families = startedFamilies(sections.active, sections.settled);
   const actions = useThreadActions({
     chatId: shown,
-    active: sections.active,
+    families,
     projects: byId,
     scratch: scratchIds,
     open: openChat,

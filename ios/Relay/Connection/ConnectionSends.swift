@@ -57,6 +57,14 @@ extension Connection {
         outbox.arrived(computer: active, chatId: chatId, held: heldIds(thread), fetched: fetched)
     }
 
+    /// Copies the latest threads for reading offline while the link is up. The overview counts
+    /// as a list too: after a (re)connect the computer sends no list until a thread moves.
+    func readAheadLatest() {
+        guard let active, status.state == .online else { return }
+        let wanted = ReadAhead.wanted(chats, computer: active)
+        Task { [readAhead] in await readAhead?.want(wanted) }
+    }
+
     /// The list as the events left it, saved a moment after they settle.
     func cacheSoon() {
         caching?.cancel()

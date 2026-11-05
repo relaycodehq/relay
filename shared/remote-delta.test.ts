@@ -18,6 +18,7 @@ it.each([
   ["😀 before", "😀 after", 3, "after"],
   ["😀", "😀 done", 2, " done"],
   ["😀 done", "😀", 2, ""],
+  ["Answer \uD83D", "Answer 😀", 7, "😀"],
 ])(
   "keeps Unicode pairs whole when replacing %s with %s",
   (before, after, from, text) => {

@@ -22,6 +22,15 @@ it("resolves the forms an agent writes an image in", () => {
   );
 });
 
+it.each([
+  ["a relative path", "shots/a.png", "C:\\Users\\me\\proj\\shots\\a.png"],
+  ["a path up a folder", "..\\b.png", "C:\\Users\\me\\b.png"],
+  ["a file URL", "file:///C:/Users/me/a.png", "C:/Users/me/a.png"],
+  ["a drive path", "D:\\shots\\a.png", "D:\\shots\\a.png"],
+])("resolves %s on Windows to a drive path", (_, src, path) => {
+  expect(localImagePath(src, "C:\\Users\\me\\proj")).toBe(path);
+});
+
 it("leaves out what isn't a local image file", () => {
   expect(localImagePath("https://example.com/a.png", root)).toBeNull();
   expect(localImagePath("data:image/png;base64,AAAA", root)).toBeNull();

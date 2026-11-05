@@ -162,3 +162,17 @@ export async function sweepPastes(places: string[], now = Date.now()) {
   for (const name of old)
     await rm(join(root, name), { recursive: true, force: true });
 }
+
+/**
+ * Sweeps old pastes a minute after launch: looking for the pastes still in
+ * use can read every saved thread, and nothing needs the room sooner.
+ */
+export function sweepPastesSoon(places: string[], after = 60_000) {
+  setTimeout(
+    () =>
+      void sweepPastes(places).catch((e) =>
+        console.warn("Could not sweep old pastes:", e),
+      ),
+    after,
+  ).unref();
+}

@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from "react";
-import { pageKey, type PreviewState } from "../../../shared/preview";
+import {
+  pageKey,
+  threadKeyOf,
+  type PreviewState,
+} from "../../../shared/preview";
 import { api } from "../../lib/api";
 
 /** The previews' last pushed states, by key. */
@@ -58,4 +62,11 @@ export async function openPreview(
 export function closePreview(key: string) {
   states.delete(key);
   void api.closePreview(key);
+}
+
+/** Lets go of a deleted thread's pages; the main process has already closed them. */
+export function forgetThreadPreviews(chatId: string) {
+  for (const key of [...states.keys()])
+    if (threadKeyOf(key) === chatId) states.delete(key);
+  changed();
 }

@@ -31,6 +31,17 @@ describe("relayItem", () => {
     expect(ready).toMatchObject({ label: "Restart", run: "install", phase: "idle" });
   });
 
+  it("shows a failure put off for one version again when the next one fails the same way", () => {
+    const failed = (version: string) =>
+      relayItem({
+        status: "error",
+        current: "0.13.4",
+        version,
+        message: "The download stalled. Try again.",
+      })!;
+    expect(failed("0.15.0").key).not.toBe(failed("0.14.0").key);
+  });
+
   it("shows nothing while idle or in a development build", () => {
     expect(relayItem({ status: "idle", current: "0.13.4" })).toBeUndefined();
     expect(relayItem({ status: "off", current: "0.13.4" })).toBeUndefined();

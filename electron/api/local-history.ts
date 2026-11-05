@@ -8,9 +8,9 @@ import { digestSchema, textSchema } from "../../shared/validation";
 import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceIdSchema } from "../../shared/workspaces";
 import { folderInputSchema } from "../../shared/projects";
-import { expandHome } from "../projects/folder-inspect";
 import { historyKey, localHistory, revertToVersion } from "../local-history";
 import { takes, type ApiContext, type Handlers } from "./context";
+import { outsideFolder } from "./project-files";
 
 /** Where a file call works: a workspace, or the folder of a file outside every project. */
 const fileRootSchema = workspaceIdSchema.or(folderInputSchema);
@@ -21,7 +21,7 @@ export function localHistoryHandlers(ctx: ApiContext) {
   async function folderOf(where: string) {
     return workspaceIdSchema.safeParse(where).success
       ? (await ctx.place(where)).root
-      : realpath(expandHome(where));
+      : outsideFolder(where);
   }
   async function keyOf(where: string, path: string) {
     return historyKey(await folderOf(where), path);

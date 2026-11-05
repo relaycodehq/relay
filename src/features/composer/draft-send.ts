@@ -31,7 +31,11 @@ import {
   loadDraftAttachments,
   withAttachments,
 } from "./draft-attachments";
-import { loadDraftImages, saveDraftImages } from "../images/draft-images";
+import {
+  loadDraftImages,
+  saveDraftImages,
+  type DraftImage,
+} from "../images/draft-images";
 import {
   forgetNewThread,
   loadDraftLinks,
@@ -56,8 +60,9 @@ import { codexModels } from "../agents/useCodexModels";
 import { newThreadAgentQuery } from "./useNewThreadAgent";
 import { fetchChat } from "../../lib/chat-events";
 
-// A thread made for a draft whose message then failed takes the next try.
-const started = new Map<string, ChatSummary>();
+// A thread made for a draft whose message then failed takes that message's
+// retry; a message written afresh in the slot gets a thread of its own.
+const started = new Map<string, { message: string; thread: ChatSummary }>();
 
 /**
  * Sends a thread's main draft the way its composer would, without opening
@@ -141,9 +146,7 @@ export async function sendDraft(
       })),
     },
   );
-  const target =
-    chat ?? started.get(id) ?? (await createDraftThread(id, project, scope));
-  started.set(id, target);
+  const target = chat ?? (await startedThread(id, project, scope, outgoing));
   const attachments = loadDraftAttachments(id);
   const messageId = crypto.randomUUID();
   // A new thread starts on the account picked in its composer.
@@ -188,6 +191,37 @@ export async function sendDraft(
 }
 
 export { unsent };
+
+/** The thread a new draft's message goes to: one its failed send made, else a new one. */
+async function startedThread(
+  id: string,
+  project: ActivityDraft["project"],
+  scope: ChatScope,
+  outgoing: { text: string; images: DraftImage[] },
+) {
+  const message = JSON.stringify([
+    outgoing.text,
+    outgoing.images.map((image) => image.id),
+  ]);
+  const failed = started.get(id);
+  const retry =
+    failed?.message === message &&
+    (await threadStillThere(project.id, failed.thread.id));
+  const thread = retry
+    ? failed.thread
+    : await createDraftThread(id, project, scope);
+  started.set(id, { message, thread });
+  return thread;
+}
+
+/**
+ * Whether the thread a failed send made is still in its project to take the
+ * retry: it may have been deleted since. A list that can't be read keeps it.
+ */
+export async function threadStillThere(projectId: string, id: string) {
+  const threads = await api.projectChats(projectId).catch(() => undefined);
+  return !threads || threads.some((t) => t.id === id && !t.archivedAt);
+}
 
 /** The thread an unsent draft's first message starts, with what the draft set up. */
 function createDraftThread(

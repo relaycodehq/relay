@@ -85,23 +85,38 @@ function searchPaths() {
  * JavaScript entry that `spawnExecutable` runs with Node.
  */
 async function unwrapShim(path: string) {
-  const target = shimTarget(await readFile(path, "utf8").catch(() => ""));
-  return target ? join(dirname(path), target) : path;
+  const shim = shimTarget(await readFile(path, "utf8").catch(() => ""));
+  if (!shim) return path;
+  const target = join(dirname(path), shim.file);
+  if (shim.args.length) shimArgs.set(target, shim.args);
+  return target;
 }
 
 /**
- * The file a `.cmd` shim runs, relative to the shim. npm's and npx's own name
- * it in `NPM_CLI_JS` or `NPX_CLI_JS`; packages' shims quote it on the command
- * line. Both first check for a `node.exe` beside the shim, which is the
- * interpreter, never the target.
+ * Arguments a shim puts before the caller's, by the target it runs: the
+ * Azure CLI's `az.cmd` runs `python.exe -IBm azure.cli`.
+ */
+const shimArgs = new Map<string, string[]>();
+
+/**
+ * What a `.cmd` shim runs: the file, relative to the shim, and the arguments
+ * it puts before the caller's. npm's and npx's own name the file in
+ * `NPM_CLI_JS` or `NPX_CLI_JS`; other shims quote it on the line that passes
+ * the caller's arguments on as `%*`. npm's first check for a `node.exe`
+ * beside the shim, which is the interpreter, never the target.
  */
 export function shimTarget(text: string) {
   const npm = /^SET "NP[MX]_CLI_JS=%~dp0\\([^"%]+\.js)"/im.exec(text)?.[1];
-  if (npm) return npm;
-  for (const [, target] of text.matchAll(
-    /"%~?dp0%?\\([^"%]+\.(?:exe|js|cjs|mjs))"/gi,
-  ))
-    if (!/^node\.exe$/i.test(target)) return target;
+  if (npm) return { file: npm, args: [] };
+  for (const [, file, rest] of text.matchAll(
+    /"%~?dp0%?\\([^"%]+\.(?:exe|js|cjs|mjs))"(?=([^\r\n]*))/gi,
+  )) {
+    if (/^node\.exe$/i.test(file)) continue;
+    // Only plain words between the file and `%*`; anything else needs cmd.exe.
+    const leading = /^((?:\s+[\w.=-]+)*)\s+%\*/.exec(rest)?.[1];
+    if (leading === undefined) continue;
+    return { file, args: leading.split(/\s+/).filter(Boolean) };
+  }
 }
 
 /** No program by that name is installed or on PATH, as opposed to one that's there but failed. */
@@ -263,19 +278,24 @@ async function saysVersion(path: string) {
 
 /** The command line for a path from `findExecutable`: JavaScript entries run with Node. */
 export function executableCommand(file: string, args: readonly string[]) {
+  const all = [...(shimArgs.get(file) ?? []), ...args];
   return /^\.[cm]?js$/i.test(extname(file))
-    ? { command: "node", args: [file, ...args] }
-    : { command: file, args: [...args] };
+    ? { command: "node", args: [file, ...all] }
+    : { command: file, args: all };
 }
 
-/** Runs a path from `findExecutable`, starting JavaScript entries with Node. */
+/**
+ * Runs a path from `findExecutable`, starting JavaScript entries with Node.
+ * On Windows a console program started from the app opens a console window
+ * of its own unless hidden, so it is hidden unless `options` say otherwise.
+ */
 export const spawnExecutable = ((
   file: string,
   args: readonly string[],
   options: object,
 ) => {
   const line = executableCommand(file, args);
-  return spawn(line.command, line.args, options);
+  return spawn(line.command, line.args, { windowsHide: true, ...options });
 }) as typeof spawn;
 
 export interface Exec {

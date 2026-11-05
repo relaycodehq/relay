@@ -7,6 +7,7 @@
 import { lstat, readFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { within } from "../util/paths";
+import { commandLineRuns } from "../util/chunks";
 import { git } from "./git";
 import { ignoreRules } from "./working-tree";
 import { keyedQueue } from "../util/keyed-queue";
@@ -140,10 +141,10 @@ export function recordIgnored(
   return queue(root, async () => {
     const rules = await ignoreRules(root, paths);
     // A file added despite its rule is tracked: Git shows its changes already.
-    const tracked = rules.size
-      ? await git(root, ["ls-files", "-z", "--", ...rules.keys()])
-      : "";
-    for (const path of tracked.split("\0")) rules.delete(path);
+    for (const part of commandLineRuns([...rules.keys()])) {
+      const tracked = await git(root, ["ls-files", "-z", "--", ...part]);
+      for (const path of tracked.split("\0")) rules.delete(path);
+    }
     if (!rules.size) return;
     const head = await headOf(root);
     const stored = await load(root);

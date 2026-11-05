@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest";
-import { ownFiles } from "./turn-changes";
+import { ownFiles } from "./turn-claims";
 
 // Windows paths, while Git still lists files with forward slashes.
 vi.mock("node:path", async () => (await vi.importActual("node:path")).win32);

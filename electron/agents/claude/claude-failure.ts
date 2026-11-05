@@ -38,14 +38,18 @@ export class ClaudeFailureWatch {
     this.afterResult = frame.type === "result";
     if (frame.type === "rate_limit_event" && frame.rate_limit_info) {
       const info = frame.rate_limit_info;
-      if (info.status === "rejected")
-        this.rejected = {
-          resetsAt: info.resetsAt,
-          overage:
-            !!(info.isUsingOverage || info.overageInUse) ||
-            info.overageStatus === "allowed" ||
-            info.overageStatus === "allowed_warning",
-        };
+      // The newest status stands: a limit that reset, or a fallback model
+      // with room left, lets requests through again.
+      this.rejected =
+        info.status === "rejected"
+          ? {
+              resetsAt: info.resetsAt,
+              overage:
+                !!(info.isUsingOverage || info.overageInUse) ||
+                info.overageStatus === "allowed" ||
+                info.overageStatus === "allowed_warning",
+            }
+          : undefined;
     }
     if (frame.type !== "assistant") return;
     if (!frame.parent_tool_use_id)

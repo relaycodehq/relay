@@ -21,6 +21,27 @@ async function filesIn(source: string, dir: string) {
     );
 }
 
+/** Copies `entry`, a file or a `dir/`, unless `target` has it already; resolves to whether it did. */
+async function copyEntry(source: string, target: string, entry: string) {
+  const path = entry.replace(/\/$/, "");
+  const to = join(target, path);
+  if (await lstat(to).catch(() => null)) return false;
+  await mkdir(dirname(to), { recursive: true });
+  await cp(join(source, path), to, {
+    recursive: true,
+    force: false,
+    errorOnExist: false,
+    verbatimSymlinks: true,
+    preserveTimestamps: true,
+  });
+  return true;
+}
+
+const warnSkipped = (entry: string) => (error: unknown) => {
+  console.warn(`Could not copy ${entry} into the worktree:`, error);
+  return false;
+};
+
 /**
  * Copies what `source`'s `.worktreeinclude` names from `source` into
  * `target`, leaving anything already there alone. Resolves to the copied
@@ -66,20 +87,10 @@ export async function copyIncluded(source: string, target: string) {
         for (const file of await filesIn(source, path))
           if (matches(rules, file, false)) take.push(file);
     }
-    for (const entry of take) {
-      const path = entry.replace(/\/$/, "");
-      const to = join(target, path);
-      if (await lstat(to).catch(() => null)) continue;
-      await mkdir(dirname(to), { recursive: true });
-      await cp(join(source, path), to, {
-        recursive: true,
-        force: false,
-        errorOnExist: false,
-        verbatimSymlinks: true,
-        preserveTimestamps: true,
-      });
-      copied.push(entry);
-    }
+    for (const entry of take)
+      // One file that can't be read leaves the others to copy.
+      if (await copyEntry(source, target, entry).catch(warnSkipped(entry)))
+        copied.push(entry);
   } catch (e) {
     console.warn(`Could not copy ${INCLUDE_FILE} files into ${target}:`, e);
   }

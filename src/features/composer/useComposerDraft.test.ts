@@ -168,6 +168,39 @@ it("restores a refused send to its original draft after navigating away", async 
   expect(readDraft(other)).toBe("Other conversation [Image #1]");
 });
 
+it("keeps what was typed after Send while the message was still being prepared", async () => {
+  const draft = await composer();
+  const { readDraft, writeDraft } = await import("./drafts");
+  update(() => draft().set("Fix the header"));
+  // Send read the draft, then waits on a drawing being applied.
+  const sending = draft();
+  update(() => writeDraft(KEY, "Fix the header\n\nand the footer"));
+  const outgoing = sending.take(true);
+  update(() => outgoing.dispatch());
+  expect(readDraft(KEY)).toBe("and the footer");
+  update(() => outgoing.restore());
+  expect(readDraft(KEY)).toBe("Fix the header\n\nand the footer");
+});
+
+it("keeps a screenshot pasted after Send while the message was still being prepared", async () => {
+  const draft = await composer();
+  update(() => draft().addFiles([screenshot("first.png")]));
+  await settle();
+  // Send read the draft, then waits on a drawing being applied.
+  const sending = draft();
+  update(() => draft().addFiles([screenshot("second.png")]));
+  await settle();
+  const outgoing = sending.take(true);
+  update(() => outgoing.dispatch());
+  expect(state(draft).shown).toEqual(["second.png"]);
+  await outgoing.forget();
+  await settle();
+  expect(state(draft)).toEqual({
+    shown: ["second.png"],
+    stored: ["second.png"],
+  });
+});
+
 it("keeps drawing history through refusal and clears only sent screenshots' history", async () => {
   const draft = await composer();
   const history: SketchHistory = {

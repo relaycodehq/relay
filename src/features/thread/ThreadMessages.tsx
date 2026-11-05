@@ -69,6 +69,10 @@ function resumable(
     : undefined;
 }
 
+/** The same empty list under every message with nothing to say, so its
+ * memoized notes line skips each streamed piece. */
+const NO_NOTES: MessageNote[] = [];
+
 /** What happened under `m`, said on one line. */
 function notesUnderMessage(
   m: ChatMessage,
@@ -85,7 +89,7 @@ function notesUnderMessage(
     last: ChatMessage | undefined;
   },
 ): MessageNote[] {
-  return [
+  const notes = [
     ...(m.id === chat.fromTerminal?.through
       ? [{ key: "terminal-origin", ...terminalOriginNote(chat.fromTerminal) }]
       : []),
@@ -107,6 +111,7 @@ function notesUnderMessage(
       })),
     ...(m.id === last?.id ? [landed] : []),
   ].filter((note): note is MessageNote => !!note);
+  return notes.length ? notes : NO_NOTES;
 }
 
 /**
@@ -248,7 +253,7 @@ export function ThreadMessages({
   const landed = worktree.status && landedNote(worktree.status);
   const notesUnder = (m: ChatMessage) =>
     root || !chat
-      ? []
+      ? NO_NOTES
       : notesUnderMessage(m, chat, {
           renamedAfter,
           moves,

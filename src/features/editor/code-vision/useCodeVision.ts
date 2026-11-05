@@ -66,7 +66,8 @@ export function useCodeVision({
       outlineWasEmpty.current = !symbols.length;
       const edited = text !== committed;
       // An edited file's committed lines come from the change bars, which compare with HEAD or not at all.
-      const authorsFit = !edited || barsAreHead;
+      // A committed version that isn't text has no bars to map lines with.
+      const authorsFit = committed !== undefined && (!edited || barsAreHead);
       // Their worker catches up a moment after an edit; until then no author rather than a wrong "new *".
       const needsLines = edited && authorsFit && !!authors;
       const linesKnown = !needsLines || (await hunksWorked(view, () => current));

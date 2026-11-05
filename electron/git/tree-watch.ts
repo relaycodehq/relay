@@ -7,7 +7,7 @@ import {
   watchEachFolder,
   type FolderWatch,
 } from "./folder-watch";
-import { git } from "./git";
+import { git, nulSeparated } from "./git";
 
 /** A change waits this long for the ones that come with it, so a save or a commit refreshes once. */
 const SETTLE_MS = 400;
@@ -424,15 +424,15 @@ export function askedTogether(root: string) {
       const batch = waiting.slice(0, ASK_AT_ONCE);
       waiting = waiting.slice(ASK_AT_ONCE);
       const rels = batch.map((b) => b.rel);
-      // check-ignore rejects literal pathspec magic outright, and -z without
-      // --stdin. It exits 1 when it ignores none, and fails the lot on one it
-      // can't judge; those, and names it quotes, are watched.
-      const ignored = await git(
-        root,
-        ["-c", "core.quotePath=false", "check-ignore", "--", ...rels],
-        { env: { GIT_LITERAL_PATHSPECS: undefined } },
-      ).then(
-        (out) => new Set(out.split("\n")),
+      // The folders go through stdin: hundreds of them overflow Windows' 32k
+      // command line. check-ignore rejects literal pathspec magic outright.
+      // It exits 1 when it ignores none, and fails the lot on one it can't
+      // judge; those are watched.
+      const ignored = await git(root, ["check-ignore", "--stdin", "-z"], {
+        env: { GIT_LITERAL_PATHSPECS: undefined },
+        input: nulSeparated(rels),
+      }).then(
+        (out) => new Set(out.split("\0")),
         () => new Set<string>(),
       );
       for (const { rel, answer } of batch) answer(ignored.has(rel));

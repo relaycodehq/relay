@@ -237,6 +237,8 @@ class WindowsReader {
     this.buffer = "";
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
+      // One given up on can still print the table it was stuck on.
+      if (this.child !== child) return;
       this.buffer += chunk;
       const end = this.buffer.indexOf(`${END}\n`);
       if (end < 0) return;

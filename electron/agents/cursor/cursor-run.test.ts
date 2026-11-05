@@ -21,11 +21,14 @@ import {
   vi,
 } from "vitest";
 import { forgetCursorModels, cursorDefaults, cursorModels } from "./catalog";
+import { cursorPrompt } from "./commands";
 import { closeCursorConnection } from "./connection";
 import { cursorPolicy, runCursor } from "./run";
 import { configureCursor } from "./sdk";
 import { runtimeModesFor } from "../../../shared/agent-modes";
 import type { AgentOptions } from "../types";
+import { CANCEL_GRACE_MS } from "../turn-kit";
+import { readOnlyGitEnv } from "../read-only-git";
 import type { AgentActivity } from "../../../shared/projects";
 import {
   relayToken,
@@ -33,6 +36,11 @@ import {
   toolText,
   verifyRelayToken,
 } from "../../relay-mcp";
+
+vi.mock("./commands", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./commands")>();
+  return { ...actual, cursorPrompt: vi.fn(actual.cursorPrompt) };
+});
 
 let dir: string;
 let log: string;
@@ -288,6 +296,28 @@ describe("a Cursor turn", () => {
     await cancelled;
   });
 
+  it("stops a turn stopped while its prompt was being prepared", async () => {
+    // Stuck, so only Relay giving up on the worker can end it.
+    const { controller, options } = turn("[[stuck]]");
+    vi.mocked(cursorPrompt).mockImplementationOnce(async (prompt) => {
+      controller.abort();
+      return prompt;
+    });
+    await expect(runCursor(options)).rejects.toThrow(/Cancelled by you/);
+  }, 15_000);
+
+  it("stops a turn at once when Stop comes before Cursor started the run", async () => {
+    const { controller, options } = turn("[[slowstart]] [[slow]]");
+    const running = runCursor(options);
+    const stopped = expect(running).rejects.toThrow(/Cancelled by you/);
+    await vi.waitFor(async () => expect(await asked()).toHaveLength(1));
+    const at = Date.now();
+    controller.abort();
+    await stopped;
+    // Cursor heard it, rather than Relay giving up on the worker.
+    expect(Date.now() - at).toBeLessThan(CANCEL_GRACE_MS);
+  });
+
   it("ends a worker whose turn ignores Stop, so the thread's next turn resumes its agent instead of finding it busy", async () => {
     const alive = (pid: number) => {
       try {
@@ -329,6 +359,37 @@ describe("a Cursor turn", () => {
       expect(resumed.pid).not.toBe(first.pid);
     } finally {
       await closeCursorConnection("stuck-thread");
+    }
+  }, 30_000);
+
+  it("starts a new worker when a thread switches to or from Read only, and resumes its agent there", async () => {
+    // Read only's git settings go in the worker's environment, read once at launch.
+    const readOnlyEnv = readOnlyGitEnv(process.env);
+    const ids: string[] = [];
+    const session = {
+      key: "switching-thread",
+      onId: async (id: string) => void ids.push(id),
+    };
+    const resumed = () => ({ ...session, id: ids.at(-1) });
+    const promptsSent = async () =>
+      (await asked()).filter((entry) => entry.prompt);
+    try {
+      await runCursor(turn("say hello", { session }).options);
+      const readOnlyTurn = { readOnly: true, env: readOnlyEnv };
+      await runCursor(
+        turn("say hello", { session: resumed(), ...readOnlyTurn }).options,
+      );
+      await runCursor(turn("say hello", { session: resumed() }).options);
+
+      const [supervised, readOnly, again] = await promptsSent();
+      expect(readOnly.gitConfig).toMatchObject(readOnlyEnv);
+      expect(again.gitConfig).not.toMatchObject(readOnlyEnv);
+      expect(readOnly.pid).not.toBe(supervised.pid);
+      expect(again.pid).not.toBe(readOnly.pid);
+      expect(readOnly.agent).toBe(supervised.agent);
+      expect(again.agent).toBe(supervised.agent);
+    } finally {
+      await closeCursorConnection("switching-thread");
     }
   }, 30_000);
 

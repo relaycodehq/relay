@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import { CHECKS_MEMORY_MB } from "../../shared/checks";
-import { chatIsEmpty } from "../../shared/chat-activity";
+import { chatIsEmpty, chatStillGoing } from "../../shared/chat-activity";
 import { projectFolderSchema } from "../../shared/project-folders";
 import {
   linkedFoldersSchema,
@@ -131,10 +131,10 @@ export function projectHandlers(ctx: ApiContext) {
       projects.rename(id, name),
     ),
     removeProject: takes([idSchema], async (id) => {
-      const running = projectChats.list(id).filter((c) => c.running).length;
-      if (running)
+      const going = projectChats.list(id).filter(chatStillGoing).length;
+      if (going)
         throw new Error(
-          `Stop the ${running === 1 ? "running thread" : `${running} running threads`} first.`,
+          `Stop or cancel what's still going in ${going === 1 ? "a thread" : `${going} threads`} first.`,
         );
       await projects.remove(id);
     }),

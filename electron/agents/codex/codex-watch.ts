@@ -30,6 +30,13 @@ export function codexTokens(u: Usage): WatchTokens {
   };
 }
 
+const noTokens = (): WatchTokens => ({
+  input: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  output: 0,
+});
+
 const add = (a: WatchTokens, b: WatchTokens): WatchTokens => ({
   input: a.input + b.input,
   cacheRead: a.cacheRead + b.cacheRead,
@@ -88,12 +95,7 @@ export async function askCodexSide(
   })) as { thread: { id: string }; model?: string };
   const forkId = fork.thread.id;
   let reply = "";
-  let tokens: WatchTokens = {
-    input: 0,
-    cacheRead: 0,
-    cacheWrite: 0,
-    output: 0,
-  };
+  let tokens = noTokens();
   let turnId = "";
   let worked = false;
   let settle!: () => void;
@@ -109,7 +111,8 @@ export async function askCodexSide(
     }
     if (method === "item/completed" && item?.type === "agentMessage")
       reply += item.text ?? "";
-    if (method === "turn/completed" || method === "error") settle();
+    const failed = method === "error" && !params?.willRetry;
+    if (method === "turn/completed" || failed) settle();
   });
   const stop = () =>
     turnId
@@ -121,6 +124,8 @@ export async function askCodexSide(
   const abort = () => void stop().then(settle);
   signal.addEventListener("abort", abort, { once: true });
   try {
+    // Called off while forking: abort came before its listener, so no turn may start.
+    if (signal.aborted) return { reply: null };
     const started = (await wire.request("turn/start", {
       threadId: forkId,
       input: [
@@ -135,7 +140,7 @@ export async function askCodexSide(
       sandboxPolicy: { type: "readOnly", networkAccess: false },
     })) as { turn?: { id?: string } };
     turnId ||= started.turn?.id ?? "";
-    if (worked) await stop();
+    if (worked || signal.aborted) await stop();
     await ended;
   } finally {
     clearTimeout(timer);

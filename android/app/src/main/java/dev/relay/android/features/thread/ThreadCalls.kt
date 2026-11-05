@@ -34,9 +34,9 @@ fun jsonOf(value: Any?): JsonElement = when (value) {
 
 fun Remote.connected(): RemoteClient = client.value ?: throw NotConnected("Not connected to your computer.")
 
-/** One of the desktop's own calls, as `remote.desktop(method, ...args)` makes it. */
+/** One of the desktop's own calls, as `remote.desktop(method, ...args)` makes it. A null argument is left out; [JsonNull] goes. */
 suspend fun Remote.desktop(method: String, vararg args: Any?): JsonElement =
-    connected().desktop(method, args.map(::jsonOf))
+    connected().desktop(method, args.map { it?.let(::jsonOf) })
 
 /** What went wrong, as a modal says it. */
 data class Failure(val title: String, val message: String)

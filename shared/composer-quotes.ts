@@ -1,6 +1,8 @@
 // A quoted passage travels in the draft as a Markdown blockquote, so the
 // agent and the transcript read it the same way the composer pill shows it.
 
+import { sliceWhole } from "./truncate";
+
 /** Serialises a quote pill: every line prefixed, then a blank line. */
 export const quoteMarkdown = (text: string) =>
   text
@@ -25,7 +27,8 @@ export function selectionQuote(raw: string) {
     .replace(/\r\n?/g, "\n")
     .replace(/ /g, " ")
     .split("\n")
-    .map((line) => line.replace(/\s+$/, ""))
+    // Not /\s+$/, which retries from every space of a long run inside.
+    .map((line) => line.trimEnd())
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/^\n+|\n+$/g, "");
@@ -34,5 +37,7 @@ export function selectionQuote(raw: string) {
 /** One-line preview for a pill or tooltip. */
 export function quoteLabel(text: string, max: number) {
   const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? flat.slice(0, max - 1).trimEnd() + "…" : flat;
+  return flat.length > max
+    ? sliceWhole(flat, 0, max - 1).trimEnd() + "…"
+    : flat;
 }

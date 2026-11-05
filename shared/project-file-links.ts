@@ -4,6 +4,7 @@ import {
   isOutsideFilePath,
   isOutsideFolderPath,
   resolveFileLink,
+  withoutTrailingSlashes,
 } from "./markdown-links";
 
 export type ProjectFileLink = {
@@ -47,11 +48,11 @@ export function projectFileLink(
   const target =
     parsed ?? (directoryCandidate ? { path: directoryCandidate } : null);
   if (!target || !root) return null;
-  const normalizedRoot = root.replaceAll("\\", "/").replace(/\/+$/, "");
   let path = target.path.replaceAll("\\", "/");
   if (path.startsWith("/") || /^[A-Za-z]:\//.test(path)) {
-    if (!path.startsWith(normalizedRoot + "/")) return null;
-    path = path.slice(normalizedRoot.length + 1);
+    const inRoot = pathInRoot(path, root);
+    if (inRoot === null) return null;
+    path = inRoot;
   } else if (path.startsWith("~/")) return null;
   while (path.startsWith("./")) path = path.slice(2);
   const directory = path.endsWith("/");
@@ -65,6 +66,20 @@ export function projectFileLink(
       : {}),
     directory,
   };
+}
+
+/**
+ * An absolute `path` from inside `root`, relative to it with `/`s; null when
+ * it's elsewhere. Windows paths match in any case, as Windows opens them.
+ */
+function pathInRoot(path: string, root: string) {
+  const slashed = path.replaceAll("\\", "/");
+  const prefix = root.replaceAll("\\", "/").replace(/\/+$/, "") + "/";
+  const windows = /^([A-Za-z]:|\/\/)/.test(prefix);
+  const inside = windows
+    ? slashed.toLowerCase().startsWith(prefix.toLowerCase())
+    : slashed.startsWith(prefix);
+  return inside ? slashed.slice(prefix.length) : null;
 }
 
 /**
@@ -82,12 +97,10 @@ export function chatFileLink(
   const target = candidate ? resolveFileLink(candidate) : null;
   if (!target) return null;
   // What the clone itself turned down stays text.
-  const slashed = (path: string) => path.replaceAll("\\", "/");
-  if (slashed(target.path).startsWith(slashed(root).replace(/\/+$/, "") + "/"))
-    return null;
+  if (pathInRoot(target.path, root) !== null) return null;
   if (isOutsideFolderPath(target.path))
     return {
-      path: target.path.replace(/[/\\]+$/, ""),
+      path: withoutTrailingSlashes(target.path),
       directory: true,
       outside: true,
     };

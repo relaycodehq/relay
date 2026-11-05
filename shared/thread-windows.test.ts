@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   placeOnScreen,
   savedThreadWindows,
+  threadWindowExists,
   threadWindowOf,
   threadWindowSearch,
 } from "./thread-windows";
@@ -43,6 +44,17 @@ describe("placeOnScreen", () => {
     expect(placeOnScreen(saved, [screen], screen).x).toBe(510);
   });
 
+  it("moves a window whose title bar was on a display above that's gone", () => {
+    const saved = { x: 200, y: -1000, width: 1500, height: 1100 };
+    expect(placeOnScreen(saved, [screen], screen).y).toBe(0);
+  });
+
+  it("keeps a window whose title bar sits on a display above", () => {
+    const above = { x: 0, y: -1440, width: 2560, height: 1440 };
+    const saved = { x: 200, y: -1000, width: 1500, height: 1100 };
+    expect(placeOnScreen(saved, [screen, above], screen)).toEqual(saved);
+  });
+
   it("shrinks a window bigger than the display it lands on", () => {
     const saved = { x: 5000, y: 0, width: 2500, height: 1400 };
     expect(placeOnScreen(saved, [screen], screen)).toEqual(screen);
@@ -60,5 +72,27 @@ describe("savedThreadWindows", () => {
       savedThreadWindows([good, { chatId: "c" }, { ...good, bounds: null }, 3]),
     ).toEqual([good]);
     expect(savedThreadWindows(undefined)).toEqual([]);
+  });
+});
+
+describe("threadWindowExists", () => {
+  const projects = [{ id: "p" }, { id: "gone", removed: 1 }];
+  const chats = [
+    { id: "c", projectId: "p" },
+    { id: "hidden", projectId: "gone" },
+  ];
+
+  it("keeps a window whose thread is still in its project", () => {
+    expect(
+      threadWindowExists({ projectId: "p", chatId: "c" }, projects, chats),
+    ).toBe(true);
+  });
+
+  it("drops one whose project was removed, or whose thread is elsewhere or gone", () => {
+    const exists = (projectId: string, chatId: string) =>
+      threadWindowExists({ projectId, chatId }, projects, chats);
+    expect(exists("gone", "hidden")).toBe(false);
+    expect(exists("p", "hidden")).toBe(false);
+    expect(exists("p", "deleted")).toBe(false);
   });
 });

@@ -18,6 +18,7 @@ import { Projects } from "../projects/projects";
 import { ProjectChats } from "../project-chats";
 import { ChatStorage } from "../project-chats/storage";
 import { WorktreeSetup } from "../project-chats/worktree-setup";
+import { TurnCompactions } from "../project-chats/turn-flows/compaction";
 import type {
   ChatMessage,
   ProjectChat,
@@ -1330,6 +1331,70 @@ it("checks a pull request thread's reviewed code out for its fix, rather than sw
   expect(answer.cwd).toBe(there);
 });
 
+it("fixes an earlier round's findings once checked out, after a later round's were", async () => {
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync(
+      "git",
+      ["-C", cwd, "-c", "user.name=R", "-c", "user.email=r@x", ...args],
+      { encoding: "utf8" },
+    ).trim();
+  const main = git(repo, "branch", "--show-current");
+  for (const branch of ["panel", "dash"]) {
+    git(repo, "switch", "-q", "-c", branch, main);
+    await writeFile(join(repo, "src", `${branch}.ts`), "export {};\n");
+    git(repo, "add", ".");
+    git(repo, "commit", "-q", "-m", `Add the ${branch}`);
+  }
+  git(repo, "switch", "-q", main);
+
+  const chat = await chats.create(projectId, {
+    kind: "pr",
+    ref: { owner: "team", name: "app", number: 4 },
+  });
+  for (const head of ["panel", "dash"]) {
+    await chats.startDeepReview(
+      chat.id,
+      config({ target: { kind: "branch", head, base: main } }),
+    );
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).reviews?.at(-1)?.status).toBe("done"),
+    );
+  }
+  const { reports } = (await chats.get(chat.id)).findings!;
+  const [panelFinding, dashFinding] = [reports[0]!, reports.at(-1)!].map(
+    (r) => r.findings[0]!,
+  );
+  const pull = async () => {
+    throw new Error("A branch review asks no forge.");
+  };
+  const fixThere = async (finding: typeof panelFinding) => {
+    const fix = () =>
+      chats.send(chat.id, {
+        id: randomUUID(),
+        body: fixRequest("claude", [finding]),
+        provider: "claude",
+        choice: { ...choice, model: "" },
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        fixes: [finding.id],
+      });
+    await expect(fix()).rejects.toThrow("isn't checked out where");
+    await chats.councils.checkOut(chat.id, [finding.id], pull);
+    await fix();
+    await vi.waitFor(async () =>
+      expect((await chats.get(chat.id)).findings?.statuses?.[finding.id]).toBe(
+        "fixed",
+      ),
+    );
+  };
+  await fixThere(dashFinding);
+  await fixThere(panelFinding);
+  const fixes = (await capture()).filter((r) =>
+    r.prompt?.includes("Fix this finding"),
+  );
+  expect(git(fixes.at(-1).cwd, "branch", "--show-current")).toBe("panel");
+});
+
 it("answers a question when edits in the review's worktree keep the branch out, and fixes in a worktree beside it", async () => {
   const git = (cwd: string, ...args: string[]) =>
     execFileSync(
@@ -2487,6 +2552,49 @@ describe("reviewers in threads of their own", () => {
       status: "failed",
       error: "setup broke",
     });
+    await chats.resumeDeepReview(review);
+    await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
+  });
+
+  it("stays stopped when Stop lands while it's still sending a reviewer its task", async () => {
+    const firstIfCold = TurnCompactions.prototype.firstIfCold;
+    let stopped = false;
+    const stopping = vi
+      .spyOn(TurnCompactions.prototype, "firstIfCold")
+      .mockImplementation(async function (
+        this: TurnCompactions,
+        ...args: Parameters<TurnCompactions["firstIfCold"]>
+      ) {
+        if (args[1].fromThread?.id === review && !stopped) {
+          stopped = true;
+          await chats.cancel(review);
+        }
+        return firstIfCold.apply(this, args);
+      });
+    try {
+      await chats.startDeepReview(
+        review,
+        config({ reviewers: [{ provider: "codex", choice }] }),
+      );
+      const codex = await memberOf(review, 0);
+      // Its task went in; whatever its turn did is over.
+      await vi.waitFor(async () => {
+        expect((await chats.get(codex)).messages).not.toHaveLength(0);
+        expect(
+          chats.list(projectId).find((c) => c.id === codex)?.running,
+        ).toBeFalsy();
+      });
+      await Promise.allSettled(chats.councils.stepping());
+    } finally {
+      stopping.mockRestore();
+    }
+    expect(stopped).toBe(true);
+    expect(await statusOf(review)).toBe("stopped");
+    // Neither the reviewer nor the lead answered.
+    expect((await chats.get(review)).messages).toHaveLength(1);
+    expect(
+      (await chats.get(await memberOf(review, 0))).messages.map((m) => m.role),
+    ).toEqual(["user"]);
     await chats.resumeDeepReview(review);
     await vi.waitFor(async () => expect(await statusOf(review)).toBe("done"));
   });

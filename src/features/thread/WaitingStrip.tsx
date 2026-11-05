@@ -10,7 +10,13 @@ import {
 } from "lucide-react";
 import { agentName } from "../../../shared/agents";
 import type { ChatPending, LimitResume } from "../../../shared/projects";
-import { clock, summary, timing, wakeupTitle } from "../../../shared/waiting";
+import {
+  clock,
+  resetClock,
+  summary,
+  timing,
+  wakeupTitle,
+} from "../../../shared/waiting";
 import "../handoff/waiting-strip.css";
 
 /** "Run the A/B" reads as "…waiting on run the A/B"; acronyms keep their case. */
@@ -170,14 +176,6 @@ export function StoppedStrip({
       </div>
     </div>
   );
-}
-
-/** "14:30" today, "Mon 14:30" on another day: weekly limits lift days out. */
-function resetClock(at: number, now: number) {
-  const day = new Date(at);
-  return day.toDateString() === new Date(now).toDateString()
-    ? clock(at)
-    : `${day.toLocaleDateString([], { weekday: "short" })} ${clock(at)}`;
 }
 
 /** A usage limit stopped the answer; Relay carries it on once the limit lifts. */

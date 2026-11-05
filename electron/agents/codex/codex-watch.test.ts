@@ -106,6 +106,86 @@ describe("askCodexSide", () => {
     });
   });
 
+  it("waits out an error Codex retries, as the thread's own turn does", async () => {
+    const { wire } = fakeServer([
+      ["turn/started", { turn: { id: "side-turn" } }],
+      [
+        "error",
+        { error: { message: "Reconnecting... 1/5" }, willRetry: true },
+      ],
+    ]);
+    const side = wire.side.bind(wire);
+    // The retry answers a while after the error.
+    wire.side = (threadId, listen) =>
+      side(threadId, (method, params) => {
+        listen(method, params);
+        if (method === "error")
+          setTimeout(() => {
+            listen("item/completed", {
+              threadId,
+              item: { type: "agentMessage", text: "learn: x" },
+            });
+            listen("turn/completed", {
+              threadId,
+              turn: { id: "side-turn", status: "completed" },
+            });
+          }, 10);
+      });
+    const answer = await askCodexSide(
+      wire,
+      "thread",
+      settings,
+      "Is there one thing?",
+      new AbortController().signal,
+    );
+    expect(answer.reply).toBe("learn: x");
+  });
+
+  it("starts no turn on a fork when the check was called off while forking", async () => {
+    const { wire, calls } = fakeServer([
+      ["turn/started", { turn: { id: "side-turn" } }],
+      ["item/completed", { item: { type: "agentMessage", text: "learn: x" } }],
+      ["turn/completed", { turn: { id: "side-turn", status: "completed" } }],
+    ]);
+    const stop = new AbortController();
+    const request = wire.request.bind(wire);
+    wire.request = async (method, params) => {
+      const answer = await request(method, params);
+      if (method === "thread/fork") stop.abort();
+      return answer;
+    };
+    const answer = await askCodexSide(
+      wire,
+      "thread",
+      settings,
+      "Is there one thing?",
+      stop.signal,
+    );
+    expect(calls.map((c) => c.method)).not.toContain("turn/start");
+    expect(answer.reply).toBeNull();
+  });
+
+  it("stops the fork's turn when the check was called off while it started", async () => {
+    const { wire, calls } = fakeServer([
+      ["turn/started", { turn: { id: "side-turn" } }],
+    ]);
+    const stop = new AbortController();
+    const request = wire.request.bind(wire);
+    wire.request = async (method, params) => {
+      if (method === "turn/start") stop.abort();
+      return request(method, params);
+    };
+    const answer = await askCodexSide(
+      wire,
+      "thread",
+      settings,
+      "Is there one thing?",
+      stop.signal,
+    );
+    expect(calls.map((c) => c.method)).toContain("turn/interrupt");
+    expect(answer.reply).toBeNull();
+  });
+
   it("stops a fork that starts a tool and drops what it says", async () => {
     const { wire, calls } = fakeServer([
       ["turn/started", { turn: { id: "side-turn" } }],
@@ -149,10 +229,13 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
 });
 `,
     );
-    const connection = await acquireCodexConnection(undefined, cli, [], root, {
-      id: SYSTEM_ACCOUNT,
-      env: {},
-    });
+    const connection = await acquireCodexConnection(
+      undefined,
+      cli,
+      [],
+      { cwd: root },
+      { id: SYSTEM_ACCOUNT, env: {} },
+    );
     const asked: unknown[] = [];
     connection.onRequest = async (_method, params) => {
       asked.push(params);

@@ -41,7 +41,7 @@ it.skipIf(process.platform === "win32")(
       const file = join(dir, "git"),
         ready = join(dir, "ready"),
         done = join(dir, "done");
-      const script = `#!${process.execPath}\nconst fs = require('node:fs'); process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(${JSON.stringify(done)}, 'done'); process.exit(); }, 100)); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
+      const script = `#!${process.execPath}\nif (process.argv.includes('--version')) { console.log('git version 2.43.0'); process.exit(); }\nconst fs = require('node:fs'); process.on('SIGTERM', () => setTimeout(() => { fs.writeFileSync(${JSON.stringify(done)}, 'done'); process.exit(); }, 100)); fs.writeFileSync(${JSON.stringify(ready)}, 'ready'); setInterval(() => {}, 1000);`;
       await writeFile(file, script);
       await chmod(file, 0o755);
       setGitPath(file);
@@ -104,6 +104,31 @@ it.skipIf(process.platform === "win32")(
         try {
           process.kill(pid, "SIGKILL");
         } catch {}
+      await rm(dir, { recursive: true, force: true });
+    }
+  },
+);
+
+const fakeGit = async (dir: string, version: string) => {
+  const file = join(dir, "git");
+  await writeFile(file, `#!/bin/sh\necho "git version ${version}"\n`);
+  await chmod(file, 0o755);
+  return file;
+};
+
+it.skipIf(process.platform === "win32")(
+  "refuses a Git too old for what Relay asks of it, saying which",
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), "relay-old-git-"));
+    try {
+      // Ubuntu 20.04's: its rev-parse prints --path-format back as a path.
+      setGitPath(await fakeGit(dir, "2.25.1"));
+      const failure = await git(dir, ["status"]).catch((e) => e);
+      expect(failure.message).toMatch(/Git 2\.31 or newer.*2\.25\.1/);
+      expect((await gitInfo()).error).toMatch(/Git 2\.31 or newer/);
+      setGitPath(await fakeGit(dir, "2.39.3 (Apple Git-146)"));
+      expect(await git(dir, ["status"])).toContain("git version 2.39.3");
+    } finally {
       await rm(dir, { recursive: true, force: true });
     }
   },

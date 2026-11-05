@@ -23,6 +23,7 @@ export const codexMetaSchema = z
     provider: z.literal("codex"),
     started: threadStartedSchema.optional(),
     account: z.string().optional(),
+    readOnly: z.boolean().optional(),
   })
   .loose();
 type CodexMeta = z.infer<typeof codexMetaSchema>;
@@ -35,6 +36,8 @@ class CodexConnection {
   started?: CodexThreadStarted;
   /** The account its app server signed in as; see agents/accounts. */
   account?: string;
+  /** Started for a Read only thread: its thread has no MCP servers, plugins or Relay's tools. */
+  readOnly = false;
   busy = false;
   closed = false;
   onNotification?: (method: string, params: unknown) => void;
@@ -51,6 +54,8 @@ class CodexConnection {
   /** Watch state for "Flag what I'd miss", made the first time a turn asks. */
   watch?: CodexWatch;
   private release!: () => void;
+  /** Fails `ready`; nothing once it is. */
+  private unready!: (error: Error) => void;
   /** Why its process went, once it's going. */
   private death?: Promise<Error>;
 
@@ -58,13 +63,18 @@ class CodexConnection {
     open: () => Promise<ChildProcessWithoutNullStreams | HostedChild>,
   ) {
     let ready!: (wire: CodexTransport) => void;
-    this.ready = new Promise((resolve) => {
+    this.ready = new Promise((resolve, reject) => {
       ready = resolve;
+      this.unready = reject;
     });
+    // Nobody may be waiting for it when it fails.
+    this.ready.catch(() => {});
     const lifetime = new Promise<void>((resolve) => {
       this.release = resolve;
     });
     const fail = (error: Error) => {
+      // A process that never started fails whoever waits to talk to it.
+      this.unready(error);
       this.onError?.(error);
       void this.close();
     };
@@ -124,21 +134,22 @@ class CodexConnection {
             ready(wire);
             await lifetime;
           },
-          async (method, params) => {
-            // A fork never asks the person anything, and never through the turn.
-            if (this.sides.has(threadOf(params))) {
-              if (method.endsWith("requestApproval"))
-                return { decision: "decline" };
-              throw new Error(`A side check can't answer ${method}.`);
-            }
-            if (this.onRequest) return this.onRequest(method, params);
-            if (method.endsWith("requestApproval"))
-              return { decision: "decline" };
-            throw new Error(`No active handler for ${method}.`);
-          },
+          (method, params) => this.answer(method, params),
         );
       })
       .catch(fail);
+  }
+
+  /** What Codex asked of Relay: the turn answers, never a side check's fork. */
+  private async answer(method: string, params: unknown) {
+    // A fork never asks the person anything, and never through the turn.
+    if (this.sides.has(threadOf(params))) {
+      if (method.endsWith("requestApproval")) return { decision: "decline" };
+      throw new Error(`A side check can't answer ${method}.`);
+    }
+    if (this.onRequest) return this.onRequest(method, params);
+    if (method.endsWith("requestApproval")) return { decision: "decline" };
+    throw new Error(`No active handler for ${method}.`);
   }
 
   /**
@@ -180,6 +191,7 @@ class CodexConnection {
         provider: "codex",
         started,
         account: this.account,
+        readOnly: this.readOnly,
       } satisfies CodexMeta);
   }
 
@@ -196,6 +208,7 @@ class CodexConnection {
   close() {
     if (!this.closed) {
       this.closed = true;
+      this.unready(new Error("Codex was closed before it started."));
       this.release();
       this.stop();
     }
@@ -228,12 +241,19 @@ export async function acquireCodexConnection(
   key: string | undefined,
   executable: string,
   args: string[],
-  cwd: string,
+  turn: { cwd: string; readOnly?: boolean; job?: { kind: string } },
   account: { id: string; env: Record<string, string> },
 ) {
-  // Another account needs an app server signed in as it; the thread resumes there.
+  const { cwd } = turn;
+  const readOnly = !!turn.readOnly;
+  // Another account needs an app server signed in as it, and Read only on or
+  // off a thread with other tools; the thread resumes there. Picking up a
+  // turn a restart cut off gives it nothing new, so it stays where it runs.
   const live = key ? sessions.get(key) : undefined;
-  if (live && !live.busy && (live.account ?? SYSTEM_ACCOUNT) !== account.id)
+  const otherAccount = (live?.account ?? SYSTEM_ACCOUNT) !== account.id;
+  const adopting = turn.job?.kind === "adopt";
+  const otherMode = !adopting && live?.readOnly !== readOnly;
+  if (live && !live.busy && (otherAccount || otherMode))
     await sessions.close(key!);
   // A thread's session runs in the host; helper jobs end with their turn.
   return sessions.acquire(key, async () => {
@@ -256,6 +276,7 @@ export async function acquireCodexConnection(
       ),
     );
     connection.account = account.id;
+    connection.readOnly = readOnly;
     return connection;
   });
 }
@@ -298,6 +319,7 @@ export function reattachCodexSessions(owns: (key: string) => boolean) {
     const connection = new CodexConnection(async () => child);
     connection.started = meta.started;
     connection.account = meta.account;
+    connection.readOnly = !!meta.readOnly;
     if (!info.open) child.release();
     return connection;
   });

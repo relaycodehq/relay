@@ -13,7 +13,7 @@ import type { CursorRun, CursorRunResult } from "./protocol";
 import { CursorTurnEvents } from "./turn-events";
 import { currentSdk, ensureSdk } from "./sdk";
 import { signedOutError, usageLimitError } from "../errors";
-import { CANCEL_GRACE_MS, cancelledByYou, guardSteer } from "../turn-kit";
+import { cancelGrace, guardSteer } from "../turn-kit";
 
 /** What Cursor may do in a turn, from Relay's approval mode. Its SDK can't ask, only limit. */
 export function cursorPolicy(
@@ -125,12 +125,11 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     }
   }
   signal.throwIfAborted();
-  const connection = await acquireCursorConnection(
-    key,
-    options.cwd,
-    sdk,
-    options.env,
-  );
+  const connection = await acquireCursorConnection(key, options.cwd, sdk, {
+    env: options.env,
+    readOnly: options.readOnly,
+    adopting: job.kind === "adopt",
+  });
 
   const adopted = job.kind === "adopt" ? connection.inflight : undefined;
   if (job.kind === "adopt" && !adopted) {
@@ -148,7 +147,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
   const { turn, steers } = events;
   connection.listen(run, events.handle);
 
-  let cancelTimer: NodeJS.Timeout | undefined;
+  let grace: ReturnType<typeof cancelGrace> | undefined;
   const abort = () => {
     void connection.request("cancel", { run }).catch(() => {});
   };
@@ -223,19 +222,8 @@ export async function runCursor(options: AgentOptions): Promise<string> {
     });
     if (signal.aborted) abort();
     // The worker reports the cancel; if it doesn't, stop waiting anyway.
-    const cancelled = new Promise<never>((_, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => {
-          cancelTimer = setTimeout(
-            () => reject(cancelledByYou()),
-            CANCEL_GRACE_MS,
-          );
-          cancelTimer.unref();
-        },
-        { once: true },
-      );
-    });
+    grace = cancelGrace(signal);
+    const { cancelled } = grace;
     let result: CursorRunResult;
     try {
       result = await Promise.race([reply, cancelled, overflowed]);
@@ -274,7 +262,7 @@ export async function runCursor(options: AgentOptions): Promise<string> {
       options.onPlan?.(answer);
     return answer;
   } finally {
-    clearTimeout(cancelTimer);
+    grace?.clear();
     signal.removeEventListener("abort", abort);
     connection.unlisten(run);
     // What the last Relay's steers and cancels were answered with, in the replay.

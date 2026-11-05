@@ -1,8 +1,7 @@
-import { execFile, spawn } from "node:child_process";
-import { readlink } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { cpus } from "node:os";
 import { sep } from "node:path";
-import { agentProviders, type AgentProvider } from "../../shared/agents";
+import type { AgentProvider } from "../../shared/agents";
 import {
   commandKey,
   describeTask,
@@ -10,7 +9,6 @@ import {
   taskNote,
   lastingTask,
   tidyCommand,
-  windowsArgs,
   type ProjectTask,
 } from "../../shared/tasks";
 import {
@@ -18,6 +16,8 @@ import {
   processTable,
   type ProcessRow,
 } from "../platform/processes";
+import { agentName, ignoredOrphans, runnable } from "./command-lines";
+import { listeningPorts, workingFolders } from "./process-lookups";
 
 type Proc = ProcessRow;
 const windows = process.platform === "win32";
@@ -51,50 +51,11 @@ interface Tracked {
   pids: Map<number, number>;
 }
 
-function run(file: string, args: string[]) {
-  return new Promise<string>((resolve) => {
-    execFile(
-      file,
-      args,
-      {
-        maxBuffer: 16 << 20,
-        timeout: 5000,
-        windowsHide: true,
-        env: { ...process.env, LC_ALL: "C" },
-      },
-      (_e, out) => resolve(out ?? ""),
-    );
-  });
-}
-
-/** Linux marks the working folder of a process whose folder was deleted with a suffix. */
-export const liveCwd = (link: string) => link.replace(/ \(deleted\)$/, "");
 const within = (path: string, root: string) =>
   path === root || path.startsWith(root + sep);
-/** Which agent's CLI a command line runs, if any. */
-export const agentName = (line: string) => {
-  const [bin, arg] = windows ? windowsArgs(line) : line.split(/\s+/);
-  const file = /[^/\\]+$/.exec(bin ?? "")?.[0] ?? "";
-  // Windows names files in any case; elsewhere "Claude" is the desktop app.
-  const name = windows ? file.replace(/\.exe$/i, "").toLowerCase() : file;
-  // Each agent's CLI is named after it; Codex may also run as a Node script.
-  if (agentProviders.some((p) => p === name)) return name as AgentProvider;
-  if (name === "node" && /[/\\]codex(\.js)?$/.test(arg ?? ""))
-    return "codex" as const;
-};
 
-// Processes that are only incidentally in a project folder: installed apps, system daemons,
-// Git's own helpers and other editors' agents.
-const ignoredOrphans =
-  /^(\/System\/|\/Applications\/|\/Users\/[^/]+\/Applications\/|\/usr\/libexec\/|\/usr\/sbin\/|\/sbin\/|\/Library\/)|\bgit fsmonitor--daemon\b|\bwatchman\b|\bgitstatusd\b|\bcursor-agent\b|--relay-agent-host\b|\bchrome_crashpad_handler\b/;
 // Skip the agent's quick commands: the list is for things that keep running.
 const minimumAge = 3000;
-/** A process's command line as something a shell can run: `ps` loses the quoting of an executable path with spaces. */
-const runnable = (line: string) =>
-  shellCommand(line) ??
-  line.replace(/^(\/.*?)(?= -| \/|$)/, (path) =>
-    path.includes(" ") ? `'${path.replaceAll("'", `'\\''`)}'` : path,
-  );
 
 /**
  * Finds the shell commands Claude and Codex leave running, per project.
@@ -116,12 +77,6 @@ class ProjectTasks {
   /** Project folders Relay has asked about; processes elsewhere aren't followed. */
   private roots = new Set<string>();
   private scanning?: { costed: boolean; done: Promise<Proc[]> };
-
-  private portLook?: {
-    wanted: Set<number>;
-    done: Promise<Map<number, number[]>>;
-  };
-
   private scanned = 0;
   private last: Proc[] = [];
   /** Relay's terminal shells, and the thread each belongs to. */
@@ -202,7 +157,9 @@ class ProjectTasks {
           now - t.started >= minimumAge ||
           options.includeNewServers),
     );
-    const ports = await this.ports(tasks.flatMap((t) => [...t.pids.keys()]));
+    const ports = await listeningPorts(
+      tasks.flatMap((t) => [...t.pids.keys()]),
+    );
     const cost = options.costed ? this.costs() : undefined;
     // An editor or pager open in a terminal isn't worth listing; servers are.
     return tasks
@@ -267,7 +224,8 @@ class ProjectTasks {
 
   /** Stops everything running in a folder about to go away, and waits for it. */
   async stopWithin(path: string) {
-    const tasks = await this.list(path).catch(() => []);
+    // A server started a moment ago would keep its port in the deleted folder.
+    const tasks = await this.runningIn(path).catch(() => []);
     await Promise.all(
       tasks.map(
         async (t) =>
@@ -326,11 +284,26 @@ class ProjectTasks {
   }
 
   private async findTask(root: string, id: string, worktrees: Worktree[]) {
-    const tasks = await this.list(root, worktrees, { fresh: true });
-    const task = this.tracked.get(id);
-    if (!task || !tasks.some((t) => t.id === id))
-      throw new Error("This process is no longer running.");
+    const tasks = await this.runningIn(root, worktrees);
+    const task = tasks.find((t) => t.id === id);
+    if (!task) throw new Error("This process is no longer running.");
     return task;
+  }
+
+  /**
+   * Every task a fresh scan finds in `root` and the `worktrees`, without the
+   * ones `list` leaves out for being too young or a terminal's passing job.
+   */
+  private async runningIn(root: string, worktrees: Worktree[] = []) {
+    this.watch(root);
+    for (const w of worktrees) this.watch(w.path);
+    this.scanned = 0;
+    await this.scan();
+    const folders = [root, ...worktrees.map((w) => w.path)];
+    return [...this.tracked.values()].filter((t) => {
+      const cwd = t.cwd;
+      return !!cwd && folders.some((folder) => within(cwd, folder));
+    });
   }
 
   private async terminate(
@@ -414,7 +387,9 @@ class ProjectTasks {
     this.scanned = 0;
   }
 
-  private scan(costed = false): Promise<Proc[]> {
+  private scan(asked = false): Promise<Proc[]> {
+    // macOS's `ps` says what each process costs in every look.
+    const costed = asked || process.platform === "darwin";
     if (Date.now() - this.scanned < 1500) return Promise.resolve(this.last);
     const under = this.scanning;
     if (under && (under.costed || !costed)) return under.done;
@@ -434,6 +409,8 @@ class ProjectTasks {
   }
 
   private async read(costed: boolean) {
+    // One not in a table read after it was handed over is gone; its pid may be a stranger's next.
+    const handedOver = new Map(this.adopting);
     const procs = await processTable({ usage: costed });
     if (costed) this.rates.fill(procs);
     this.costed = costed;
@@ -513,10 +490,10 @@ class ProjectTasks {
         fresh.push(child.pid);
       }
     }
-    for (const [pid, task] of this.adopting) {
+    for (const [pid, task] of handedOver) {
       const p = byPid.get(pid);
+      if (this.adopting.get(pid) === task) this.adopting.delete(pid);
       if (!p) continue;
-      this.adopting.delete(pid);
       firstSight(p);
       fresh.push(p.pid);
       const id = `${p.pid}:${p.started}`;
@@ -528,28 +505,7 @@ class ProjectTasks {
         pids: new Map([[p.pid, p.started]]),
       });
     }
-    // Follow every task's descendants so a detached server stays in its task.
-    const owner = new Map<number, Tracked>();
-    for (const task of this.tracked.values()) {
-      for (const [pid, started] of task.pids)
-        if (byPid.get(pid)?.started !== started) task.pids.delete(pid);
-      const root = byPid.get(task.root);
-      if (root?.started === task.started) task.pids.set(root.pid, root.started);
-      const queue = [...task.pids.keys()];
-      while (queue.length) {
-        const pid = queue.pop()!;
-        owner.set(pid, task);
-        for (const child of children.get(pid) ?? [])
-          if (!task.pids.has(child.pid) && !agentName(child.line)) {
-            task.pids.set(child.pid, child.started);
-            this.seen.set(child.pid, child.started);
-            queue.push(child.pid);
-          }
-      }
-      if (!task.pids.size) this.tracked.delete(task.id);
-      else if (!task.pids.has(task.root) && task.origin !== "external")
-        task.origin = "detached";
-    }
+    const owner = this.followDescendants(byPid, children);
     // `nohup … &` and `(cmd &)` leave launchd as the parent before any scan
     // sees them. Windows doesn't hand orphans on, and can't say where one runs.
     for (const p of windows ? [] : procs) {
@@ -588,6 +544,35 @@ class ProjectTasks {
     return procs;
   }
 
+  /** Follows every task's descendants so a detached server stays in its task; the task each pid belongs to. */
+  private followDescendants(
+    byPid: Map<number, Proc>,
+    children: Map<number, Proc[]>,
+  ) {
+    const owner = new Map<number, Tracked>();
+    for (const task of this.tracked.values()) {
+      for (const [pid, started] of task.pids)
+        if (byPid.get(pid)?.started !== started) task.pids.delete(pid);
+      const root = byPid.get(task.root);
+      if (root?.started === task.started) task.pids.set(root.pid, root.started);
+      const queue = [...task.pids.keys()];
+      while (queue.length) {
+        const pid = queue.pop()!;
+        owner.set(pid, task);
+        for (const child of children.get(pid) ?? [])
+          if (!task.pids.has(child.pid) && !agentName(child.line)) {
+            task.pids.set(child.pid, child.started);
+            this.seen.set(child.pid, child.started);
+            queue.push(child.pid);
+          }
+      }
+      if (!task.pids.size) this.tracked.delete(task.id);
+      else if (!task.pids.has(task.root) && task.origin !== "external")
+        task.origin = "detached";
+    }
+    return owner;
+  }
+
   private findChat(key: string, started: number) {
     let best: { chatId: string; at: number; root: string } | undefined;
     for (const [root, list] of this.commands)
@@ -601,7 +586,7 @@ class ProjectTasks {
     return best && { chatId: best.chatId, root: best.root };
   }
 
-  /** Working folders decide the project. One `lsof` call for everything not placed yet. */
+  /** Working folders decide the project. One look for everything not placed yet. */
   private async placeFolders(pids: number[]) {
     // Windows keeps a process's folder where only a debugger reads it; tasks
     // go by the thread that started them instead.
@@ -611,101 +596,9 @@ class ProjectTasks {
       return !this.cwds.has(`${pid}:${started}`);
     });
     if (!pending.length) return;
-    if (process.platform === "linux") {
-      await Promise.all(
-        pending.map(async (pid) =>
-          this.cwds.set(
-            `${pid}:${this.seen.get(pid)}`,
-            await readlink(`/proc/${pid}/cwd`).then(liveCwd, () => null),
-          ),
-        ),
-      );
-      return;
-    }
-    const out = await run("lsof", [
-      "-a",
-      "-d",
-      "cwd",
-      "-Fn",
-      "-p",
-      pending.join(","),
-    ]);
-    const found = lsofFolders(out);
-    for (const pid of pending)
-      this.cwds.set(`${pid}:${this.seen.get(pid)}`, found.get(pid) ?? null);
+    for (const [pid, folder] of await workingFolders(pending))
+      this.cwds.set(`${pid}:${this.seen.get(pid)}`, folder);
   }
-
-  /**
-   * Lists asked for together, as Sites does over every project, share one
-   * look: the pids asked for before the next turn of the event loop.
-   */
-  private ports(pids: number[]): Promise<Map<number, number[]>> {
-    if (!pids.length) return Promise.resolve(new Map());
-    if (!this.portLook) {
-      const wanted = new Set<number>();
-      this.portLook = {
-        wanted,
-        done: new Promise((resolve) => setImmediate(resolve)).then(() => {
-          this.portLook = undefined;
-          return this.listening([...wanted]);
-        }),
-      };
-    }
-    for (const pid of pids) this.portLook.wanted.add(pid);
-    return this.portLook.done;
-  }
-
-  private async listening(pids: number[]) {
-    const ports = new Map<number, number[]>();
-    if (windows) {
-      const wanted = new Set(pids);
-      for (const [pid, port] of netstatListening(
-        await run("netstat", ["-ano"]),
-      ))
-        if (wanted.has(pid)) ports.set(pid, [...(ports.get(pid) ?? []), port]);
-      for (const [pid, list] of ports) ports.set(pid, [...new Set(list)]);
-      return ports;
-    }
-    const out = await run("lsof", [
-      "-nP",
-      "-a",
-      "-iTCP",
-      "-sTCP:LISTEN",
-      "-Fn",
-      "-p",
-      pids.join(","),
-    ]);
-    let pid = 0;
-    for (const line of out.split("\n"))
-      if (line[0] === "p") pid = +line.slice(1);
-      else if (line[0] === "n" && pid) {
-        const port = Number(/:(\d+)$/.exec(line)?.[1]);
-        if (port) ports.set(pid, [...(ports.get(pid) ?? []), port]);
-      }
-    return ports;
-  }
-}
-
-/** `lsof -d cwd -Fn`'s answer, by pid. */
-function lsofFolders(out: string) {
-  const found = new Map<number, string>();
-  let pid = 0;
-  for (const line of out.split("\n"))
-    if (line[0] === "p") pid = +line.slice(1);
-    else if (line[0] === "n" && pid) found.set(pid, line.slice(1));
-  return found;
-}
-
-/**
- * `netstat -ano` rows listening for connections, as [pid, port]. The state's
- * name is translated on non-English Windows; a listening socket is the one
- * whose remote end is port 0.
- */
-export function netstatListening(out: string): [number, number][] {
-  return out.split(/\r?\n/).flatMap((row) => {
-    const m = /^\s*TCP\s+\S*:(\d+)\s+\S*:0\s+\S+\s+(\d+)\s*$/i.exec(row);
-    return m ? [[+m[2], +m[1]] as [number, number]] : [];
-  });
 }
 
 export const projectTasks = new ProjectTasks();

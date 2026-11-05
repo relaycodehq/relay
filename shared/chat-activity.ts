@@ -16,6 +16,21 @@ type Triaged = Pick<
   | "updated"
 >;
 
+/**
+ * Something runs in the thread, or would go out by itself later: archiving,
+ * deleting or removing its project leaves nothing in view to stop it.
+ */
+export function chatStillGoing(
+  chat: Pick<ChatSummary, "running" | "reviewing" | "pending" | "nextSend">,
+) {
+  return (
+    !!chat.running ||
+    !!chat.reviewing ||
+    !!chat.pending?.length ||
+    !!chat.nextSend
+  );
+}
+
 export function chatSettled(chat: Triaged): boolean {
   if (chat.waiting || chat.settledAt == null) return false;
   // Settled mid-answer: the answer it waits for moves `updated` past it.
@@ -336,7 +351,7 @@ export function sendLaterPresets(now: Date): { label: string; at: number }[] {
 }
 
 /** Midnights from `from`'s date to `to`'s, negative when `to` is earlier. */
-function calendarDays(from: Date, to: Date) {
+export function calendarDays(from: Date, to: Date) {
   const midnight = (date: Date) => new Date(date).setHours(0, 0, 0, 0);
   // Rounded: a day the clocks change on lasts 23 or 25 hours.
   return Math.round((midnight(to) - midnight(from)) / 86_400_000);

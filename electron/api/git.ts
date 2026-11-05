@@ -15,7 +15,11 @@ import {
 import { helperOffMessage, helperOn } from "../../shared/settings";
 import { idSchema } from "../../shared/validation";
 import { gitActionSchema, workingPathSchema } from "../../shared/working-tree";
-import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
+import {
+  parseWorkspaceId,
+  workspaceId,
+  workspaceIdSchema,
+} from "../../shared/workspaces";
 import {
   catchUpBranch,
   deleteMergedBranch,
@@ -36,6 +40,7 @@ import { performGitAction } from "../git/git-actions";
 import { workingDiff } from "../git/working-diff";
 import { workingTree } from "../git/working-tree";
 import { dismissIgnored, ignoredDiff } from "../git/ignored-touches";
+import { localChecksKey } from "./checks";
 import { takes, type ApiContext, type Handlers } from "./context";
 
 const branchNameSchema = z.string().min(1).max(250);
@@ -103,7 +108,7 @@ export function gitHandlers(ctx: ApiContext) {
               "Stop the running agent in this project before switching branches.",
             );
           const result = await changeBranch(root, action);
-          projectChecks.stop();
+          projectChecks.stop(localChecksKey(workspaceId(id)));
           return result;
         } finally {
           projects.changingBranch.delete(id);

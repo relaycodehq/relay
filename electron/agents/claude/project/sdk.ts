@@ -42,10 +42,14 @@ export async function readSettings(stream: ClaudeStream) {
 // SDK sessions ignore the CLI's "Chrome enabled by default"; ask as `claude --chrome` does.
 export const chromeArgs = { chrome: null };
 
+// A probe starts when a composer opens, before anyone asked anything there, so
+// a cloned repo's `.claude/settings.json` hooks mustn't run in it.
+const noHooks = { disableAllHooks: true };
+
 /**
- * Runs `work` on a throwaway Claude session with no prompt and no MCP servers;
- * closed after. `kind` and `account` name it in what `main.log` says about
- * its sign-in.
+ * Runs `work` on a throwaway Claude session with no prompt, no MCP servers
+ * and no hooks; closed after. `kind` and `account` name it in what `main.log`
+ * says about its sign-in.
  */
 export async function withProbe<T>(
   options: Partial<Options>,
@@ -70,6 +74,7 @@ export async function withProbe<T>(
       env: running?.env,
       debugFile: trace.debugFile,
       ...options,
+      settings: noHooks,
     },
   });
   try {

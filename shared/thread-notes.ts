@@ -2,6 +2,7 @@
 // a decision. Notes live on the thread; a list note's items tick off.
 import { z } from "zod";
 import type { AgentProvider } from "./agents";
+import { sliceWhole } from "./truncate";
 
 /** The most notes one thread keeps. */
 export const NOTES_LIMIT = 50;
@@ -173,7 +174,7 @@ export function messageLabel(markdown: string): string {
   if (!line) return "An answer";
   const sentence = /^.{12,}?[.!?:](?=\s|$)/.exec(line)?.[0] ?? line;
   if (sentence.length <= LABEL_CHARS) return sentence.replace(/:$/, "");
-  const cut = sentence.slice(0, LABEL_CHARS);
+  const cut = sliceWhole(sentence, 0, LABEL_CHARS);
   const space = cut.lastIndexOf(" ");
   return `${(space > LABEL_CHARS / 2 ? cut.slice(0, space) : cut).replace(/[\s,;:.-]+$/, "")}…`;
 }

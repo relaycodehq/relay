@@ -1,8 +1,35 @@
+// @vitest-environment happy-dom
 import { expect, it, vi } from "vitest";
 vi.mock("../lib/api", () => ({ api: {} }));
+const tokenized: string[] = [];
+
+vi.mock("@pierre/diffs", async (importOriginal) => {
+  const diffs = await importOriginal<typeof import("@pierre/diffs")>();
+  return {
+    ...diffs,
+    getSharedHighlighter: async (
+      ...args: Parameters<typeof diffs.getSharedHighlighter>
+    ) => {
+      const shared = await diffs.getSharedHighlighter(...args);
+      return {
+        codeToTokens: (...call: Parameters<typeof shared.codeToTokens>) => {
+          tokenized.push(call[0]);
+          return shared.codeToTokens(...call);
+        },
+      };
+    },
+  };
+});
+
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { highlight, RunCommand } from "./CodeBlock";
+import { CodeBlock, highlight, RunCommand } from "./CodeBlock";
 import { RichText } from "./RichText";
+
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const inThread = (text: string) =>
   renderToStaticMarkup(
@@ -72,4 +99,40 @@ it("colours code, and leaves a language the lexers don't know plain", async () =
   };
   expect(await colours("tsx")).toBeGreaterThan(3);
   expect(await colours("prisma")).toBe(1);
+});
+
+function mount(code: string, closed: boolean) {
+  const element = document.createElement("div");
+  const root = createRoot(element);
+  act(() => root.render(<CodeBlock code={code} lang="ts" closed={closed} />));
+  const coloured = () => !!element.querySelector("code span[style]");
+  return { coloured, unmount: () => act(() => root.unmount()) };
+}
+
+it("paints a finished block opened again in colour at once, tokenizing it once", async () => {
+  const code = "const answer: number = 42;";
+  const first = mount(code, true);
+  expect(first.coloured()).toBe(false);
+  await vi.waitFor(() => expect(first.coloured()).toBe(true));
+  first.unmount();
+
+  vi.useFakeTimers();
+  try {
+    const again = mount(code, true);
+    expect(again.coloured()).toBe(true);
+    // Nothing is left to tokenize, so nothing waits on the throttle either.
+    expect(vi.getTimerCount()).toBe(0);
+    again.unmount();
+  } finally {
+    vi.useRealTimers();
+  }
+  expect(tokenized.filter((text) => text === code)).toHaveLength(1);
+});
+
+it("doesn't keep the colours of a block still streaming in", async () => {
+  const code = "const streamed = 1;\nconst half";
+  const first = mount(code, false);
+  await vi.waitFor(() => expect(first.coloured()).toBe(true));
+  first.unmount();
+  expect(mount(code, false).coloured()).toBe(false);
 });

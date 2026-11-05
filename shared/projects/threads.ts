@@ -170,6 +170,22 @@ export interface StartedBy {
   secondOpinionOn?: string;
 }
 
+/**
+ * A thread `leadId`'s agent started to work for it. A deep review's
+ * reviewers report through their review, and a second opinion goes to the
+ * user, so neither is one the lead waits on or counts.
+ */
+export function workingFor(
+  chat: Pick<ChatSummary, "startedBy" | "reviewer">,
+  leadId: string,
+) {
+  return (
+    chat.startedBy?.chatId === leadId &&
+    !chat.reviewer &&
+    !chat.startedBy.secondOpinionOn
+  );
+}
+
 export interface HeldWakeup {
   id: string;
   prompt: string;

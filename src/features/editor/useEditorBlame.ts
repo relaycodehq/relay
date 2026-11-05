@@ -40,7 +40,8 @@ export function useEditorBlame({
   barsAreHead: boolean;
 }) {
   const revision = file?.head ?? ("head" in target ? target.head.sha : "");
-  const edited = text !== undefined && committed !== undefined && text !== committed;
+  // A committed version that isn't text can't be matched line by line, so it counts as edited.
+  const edited = text !== undefined && text !== committed;
 
   /**
    * The committed line number for an editor line. Null means it is no line of

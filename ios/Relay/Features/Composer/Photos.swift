@@ -1,3 +1,4 @@
+import ImageIO
 import PhotosUI
 import RelayRemote
 import SwiftUI
@@ -48,10 +49,23 @@ private nonisolated let steps: [(side: CGFloat, quality: CGFloat)] = [(1600, 0.8
 /// The picked photo as a JPEG the desktop takes; nil when it isn't an image.
 @concurrent
 nonisolated func pickedPhoto(_ item: PhotosPickerItem, name: String) async throws -> PickedPhoto? {
-    guard let data = try await item.loadTransferable(type: Data.self), let original = UIImage(data: data) else {
+    guard let data = try await item.loadTransferable(type: Data.self), let original = downsampled(data) else {
         return nil
     }
     return pickedPhoto(original, name: name)
+}
+
+/// The photo decoded no bigger than the largest step: a 48MP photo decoded whole takes ~190MB.
+private nonisolated func downsampled(_ data: Data) -> UIImage? {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+    let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceShouldCacheImmediately: true,
+        kCGImageSourceThumbnailMaxPixelSize: steps[0].side,
+    ]
+    guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+    return UIImage(cgImage: image)
 }
 
 /// A photo from the camera or the clipboard, as small as the desktop needs; nil when it can't fit.

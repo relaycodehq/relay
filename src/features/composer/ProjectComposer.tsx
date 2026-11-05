@@ -1,5 +1,7 @@
 import {
+  memo,
   useEffect,
+  type ComponentProps,
   useImperativeHandle,
   useRef,
   useState,
@@ -11,17 +13,14 @@ import { Paperclip } from "lucide-react";
 import { reportsUsage, type AgentProvider } from "../../../shared/agents";
 import type { CommandOption, RelayCommand } from "../../../shared/commands";
 import type { ComposedSend } from "../../../shared/compose-send";
-import type {
-  ResumeSettings,
-  SentComposerSettings,
-} from "../../../shared/projects";
+import type { ResumeSettings } from "../../../shared/projects";
 import type { InheritedSettings } from "../agents/composer-settings";
 import { useComposerToolbar } from "./composer-toolbar";
 import { quickItems } from "../quick-switch/quick-switch";
 import { useRunningSendAction, useSendKey } from "../../lib/send-key";
 import { useAgentRuns } from "./useAgentRuns";
 import { useComposerDraft } from "./useComposerDraft";
-import { useNextGuess, type NextGuess } from "./useNextGuess";
+import { useNextGuess } from "./useNextGuess";
 import { draftRecipient } from "../../../shared/recipient";
 import { useAgentSetup } from "./AgentSetup";
 import { OtherDraftNotice } from "./OtherDraftNotice";
@@ -65,7 +64,14 @@ import {
   accountUsageFooter,
   accountUsageName,
 } from "../accounts/AccountSwitch";
-import type { AccountProvider } from "../../../shared/agent-accounts";
+import type { ComposerConversation } from "./composer-conversation";
+import {
+  ComposerBelow,
+  ComposerNotice,
+  ComposerSlot,
+  ComposerSlotsProvider,
+  type ComposerSlots,
+} from "./composer-slots";
 import "./composer.css";
 
 export interface ComposerHandle {
@@ -83,49 +89,16 @@ export interface ComposerHandle {
 /** What the rest of the window may do with the open thread's composer. */
 export type ComposerControls = Pick<ComposerHandle, "focus" | "submit">;
 
-/** What the strips above the input may send through the composer. */
-export interface ComposerNoticeActions {
-  sendGoal: ReturnType<typeof useComposerSend>["sendGoal"];
-}
-
-/** What the conversation the composer writes to is doing, and allows. */
-export interface ComposerConversation {
-  /** An answer is coming; a message now queues, or steers it. */
-  running: boolean;
-  /** Nothing can go out now. */
-  busy: boolean;
-  /** The agent holding its context; the composer runs it until one is picked here. */
-  agent?: AgentProvider;
-  /** This conversation's own latest sent settings, once its history loads. */
-  lastSent?: SentComposerSettings;
-  /** The agent whose last answer proposed a plan, offered to build it. */
-  planner?: AgentProvider;
-  /** The thread, once it exists, and the accounts it keeps; see shared/agent-accounts. */
-  chatId?: string;
-  /**
-   * Compacting first, offered when a message to this agent would find a big
-   * conversation's prompt cache cold: Send does as Settings say, and the box
-   * beside it flips that.
-   */
-  compactOffer?: { provider: AgentProvider; tokens: number };
-  accounts?: Partial<Record<AccountProvider, string>>;
-  /** The message the agent guessed comes next, offered while the draft is empty. */
-  prediction?: NextGuess;
-}
-
-export function ProjectComposer({
+const ComposerBody = memo(function ComposerBody({
   ref,
   projectId,
   computer,
   files = projectId,
   keys,
   conversation,
-  context,
-  notice,
-  below,
-  meter,
   threadCost,
-  attachment,
+  complete,
+  withMeter,
   placeholder,
   sent,
   onSend,
@@ -147,18 +120,12 @@ export function ProjectComposer({
    */
   keys: { draft: string; settings: string; inherit?: InheritedSettings };
   conversation: ComposerConversation;
-  /** The row above it: what the conversation is about, and where it works. */
-  context?: ReactNode;
-  /** Sits on top of the input, attached to it; given what it may send through the composer. */
-  notice?: ReactNode | ((composer: ComposerNoticeActions) => ReactNode);
-  /** A quiet line under the composer, in the room its dock keeps there anyway. */
-  below?: ReactNode;
-  /** The context window's meter, among the controls. */
-  meter?: ReactNode;
   /** What this thread's answers cost, where their agent priced them. */
   threadCost?: ThreadCost;
-  /** What goes with the message besides its text; `complete` when that alone is a message. */
-  attachment?: { view: ReactNode; complete: boolean };
+  /** What goes with the message besides its text is a message on its own. */
+  complete: boolean;
+  /** The meter's slot holds one, which the toolbar makes room for. */
+  withMeter: boolean;
   placeholder?: string;
   /** What was sent in the conversation, newest first, for ↑ to bring back. */
   sent?: () => string[];
@@ -300,7 +267,7 @@ export function ProjectComposer({
     runs,
     to,
     conversation,
-    complete: !!attachment?.complete,
+    complete,
     intercept: commands.interceptSend,
     // A new thread's agent starts on the account picked here.
     onSend: async (value, dispatch) => {
@@ -388,10 +355,10 @@ export function ProjectComposer({
           {accounts.error}
         </p>
       )}
-      <div className="thread-context-controls">{context}</div>
-      {typeof notice === "function"
-        ? notice({ sendGoal: sending.sendGoal })
-        : notice}
+      <div className="thread-context-controls">
+        <ComposerSlot name="context" />
+      </div>
+      <ComposerNotice sendGoal={sending.sendGoal} />
       <OtherDraftNotice draftKey={keys.draft} />
       <QuickSwitchHud
         style={quick.style}
@@ -416,7 +383,7 @@ export function ProjectComposer({
       >
         {ultrathink?.on && <UltrathinkRing />}
         <div className="composer-body">
-          {attachment?.view}
+          <ComposerSlot name="attached" />
           <ComposerAttachmentStrip
             draft={draft}
             onOpenPaste={setViewingPaste}
@@ -534,7 +501,7 @@ export function ProjectComposer({
                     ultrathink={ultrathink}
                   />
                 ),
-              context: meter,
+              context: withMeter && <ComposerSlot name="meter" />,
               access: to !== "message" && (
                 <RuntimeModeSelect
                   provider={to}
@@ -595,7 +562,7 @@ export function ProjectComposer({
           />
         </div>
       </form>
-      {below && <div className="composer-below">{below}</div>}
+      <ComposerBelow />
       {draft.images
         .filter((image) => image.id === draft.sketching)
         .map((image) => (
@@ -616,5 +583,33 @@ export function ProjectComposer({
         />
       )}
     </div>
+  );
+});
+
+/**
+ * The composer, redrawn as a whole only when the draft or the conversation's
+ * state changes; its slots (see composer-slots) redraw on their own.
+ */
+export function ProjectComposer({
+  context,
+  notice,
+  below,
+  meter,
+  attachment,
+  ...props
+}: Omit<ComponentProps<typeof ComposerBody>, "complete" | "withMeter"> &
+  Omit<ComposerSlots, "attached"> & {
+    /** What goes with the message besides its text; `complete` when that alone is a message. */
+    attachment?: { view: ReactNode; complete: boolean };
+  }) {
+  const slots = { context, notice, below, meter, attached: attachment?.view };
+  return (
+    <ComposerSlotsProvider value={slots}>
+      <ComposerBody
+        {...props}
+        complete={!!attachment?.complete}
+        withMeter={!!meter}
+      />
+    </ComposerSlotsProvider>
   );
 }

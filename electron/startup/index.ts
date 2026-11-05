@@ -16,9 +16,9 @@ import { configureCursor } from "../agents/cursor/sdk";
 import { keepUsageHistory } from "../agents/usage-history";
 import type { KeepAwake } from "../app/keep-awake";
 import { GiteaLogin, seal, unseal } from "../app/login";
-import type { Store } from "../app/store";
+import { BACKUP_FILE, type Store } from "../app/store";
 import { rearmOnWake } from "../app/wake";
-import { setPastesRoot, sweepPastes, writeUploadChunk } from "../drafts";
+import { setPastesRoot, sweepPastesSoon, writeUploadChunk } from "../drafts";
 import { gitExecutable, setGitPath } from "../git/git";
 import type { GithubLogin } from "../github";
 import { Computers } from "../handoff/computers";
@@ -45,6 +45,7 @@ import {
   prepareRelayTools,
   threadAgents,
 } from "../started-threads/serve";
+import { toolText } from "../relay-mcp/tools";
 import { projectTasks } from "../terminal/tasks";
 import { Schedules } from "../schedules";
 import { chatIsEmpty } from "../../shared/chat-activity";
@@ -92,11 +93,12 @@ export async function prepareData(
   setOwnAgentsDir(join(dir, "agent-clis"));
   setProfilesRoot(join(dir, "agent-accounts"));
   setPastesRoot(join(dir, "pastes"));
-  void sweepPastes([
+  sweepPastesSoon([
     join(dir, "project-chats"),
     join(dir, "drafts.json"),
     join(dir, "state.json"),
-  ]).catch((e) => console.warn("Could not sweep old pastes:", e));
+    join(dir, BACKUP_FILE),
+  ]);
   const accounts = new AgentAccounts(store, accountsChanged);
   watchSavedSignIns();
   applyLinkedTools(store);
@@ -390,6 +392,10 @@ export async function resumeThreads({
       agentProjects(projects, () => login.client, dir),
       { ...tools, agents: threadAgents(agentUpdates, aiSettings) },
     );
+  // A call a host carried over from the last run would wait for them forever.
+  else if (agentHosts)
+    agentHosts.tools = async () =>
+      toolText("Relay's tools are off: they couldn't start.", true);
   chats.armWakeups();
   schedules.armAll();
   void chats

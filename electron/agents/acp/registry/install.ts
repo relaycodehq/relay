@@ -37,7 +37,12 @@ export interface InstalledAgent {
   icon?: string;
 }
 
-const versionName = /^[\w.+-]+$/;
+/**
+ * A version's folder name. It starts and ends with a letter or digit, so it's
+ * never `.` or `..`, nor `1.0.`, which Windows opens as the folder `1.0`.
+ */
+const versionName = /^\w(?:[\w.+-]*\w)?$/;
+const stagingPrefix = ".installing-";
 
 const pointerSchema = z.object({
   version: z.string().regex(versionName),
@@ -331,7 +336,7 @@ async function install(
   const target = join(dir, plan.version);
   let got: { cmd: string; node?: boolean };
   if (plan.kind === "binary") {
-    const staging = join(dir, `.installing-${process.pid}-${Date.now()}`);
+    const staging = join(dir, `${stagingPrefix}${process.pid}-${Date.now()}`);
     try {
       await mkdir(staging);
       const out = join(staging, "out");
@@ -362,13 +367,14 @@ async function install(
     args: plan.args,
     env: plan.env,
   });
+  // Older versions, and what an install cut short left behind.
+  const leftOver = (name: string) =>
+    (versionName.test(name) || name.startsWith(stagingPrefix)) &&
+    name !== "current.json" &&
+    name !== plan.version &&
+    name !== previous?.version;
   for (const name of await readdir(dir))
-    if (
-      versionName.test(name) &&
-      name !== "current.json" &&
-      name !== plan.version &&
-      name !== previous?.version
-    )
+    if (leftOver(name))
       await rm(join(dir, name), { recursive: true, force: true });
   return (await installedIn(dir))!;
 }

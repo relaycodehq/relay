@@ -4,11 +4,9 @@ import { CircleAlert, MonitorCheck, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { inSetup, liveAway, type HandoffView } from "../../../shared/handoff";
 import { api } from "../../lib/api";
-import { readDraft, writeDraft } from "../composer/drafts";
-import { threadDraftKey } from "../../lib/thread-storage";
 import { AbandonDialog } from "./AbandonDialog";
 import "./waiting-strip.css";
-import { retryHandoff } from "./retry-handoff";
+import { putFirstInDraft, retryHandoff } from "./retry-handoff";
 import "./handoff.css";
 import { usePoll } from "../../lib/poll";
 
@@ -222,10 +220,8 @@ export function HandoffStrip({
               disabled={busy || !data.online}
               title="Bring it back with its work set aside, and ask it to replay that work here"
               onClick={() => {
-                const key = threadDraftKey(chat.id),
-                  draft = readDraft(key).trim();
                 const prompt = resolveReturnPrompt({ ...chat, sentTo });
-                writeDraft(key, draft ? `${prompt}\n\n${draft}` : prompt);
+                putFirstInDraft(chat.id, prompt);
                 act(() => api.bringBackThread(chat.id, true));
               }}
             >

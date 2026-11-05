@@ -105,6 +105,9 @@ async function modelSelection(run: CursorRun): Promise<ModelSelection> {
 // Agents stay open between a thread's turns, so the next one starts warm.
 const open = new Map<string, { key: string; agent: SDKAgent }>();
 const runs = new Map<string, Run>();
+/** Runs being started, and those of them stopped before the SDK gave back their run. */
+const starting = new Set<string>();
+const stoppedEarly = new Set<string>();
 /** Agents with a turn running in this worker. */
 const busy = new Set<string>();
 
@@ -269,10 +272,13 @@ function runFailure(error: unknown) {
 async function start(params: CursorRun): Promise<CursorRunResult> {
   // Relay's tools stop with the turn, like a wait it was cancelled in.
   const toolCalls = new AbortController();
+  starting.add(params.run);
   try {
     return await startWith(params, toolCalls.signal);
   } finally {
     toolCalls.abort();
+    starting.delete(params.run);
+    stoppedEarly.delete(params.run);
   }
 }
 
@@ -329,6 +335,7 @@ async function startWith(
   });
   runs.set(params.run, run);
   busy.add(agent.agentId);
+  if (stoppedEarly.has(params.run)) run.cancel().catch(() => {});
   try {
     const result = await run.wait();
     flush(params.run);
@@ -389,7 +396,9 @@ const handlers: Handlers = {
   },
   run: start,
   cancel: async ({ run }) => {
-    await runs.get(run)?.cancel();
+    const running = runs.get(run);
+    if (running) await running.cancel();
+    else if (starting.has(run)) stoppedEarly.add(run);
     return null;
   },
   steer: async ({ run, text }) => {

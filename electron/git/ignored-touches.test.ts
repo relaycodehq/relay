@@ -10,6 +10,7 @@ import {
 } from "./ignored-touches";
 import { workingTree } from "./working-tree";
 import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
+import { writeLongPaths } from "../../tests/fixtures/long-paths";
 
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
@@ -125,3 +126,15 @@ it("clears at the next commit and on dismiss", async () => {
   expect((await workingTree(root)).ignored).toBeUndefined();
   await expect(ignoredDiff(root, ".env.dev.local")).rejects.toThrow();
 });
+
+it("records more ignored files than fit on a command line", async () => {
+  await write(".gitignore", `${"0".repeat(240)}/\n`);
+  git("commit", "-qam", "Ignore the long folder");
+  const paths = await writeLongPaths(root);
+
+  await recordIgnored(root, null, paths, "claude");
+
+  const head = git("rev-parse", "HEAD");
+  const { touches } = await ignoredTouches(root, head);
+  expect(touches.at(-1)?.path).toBe(paths[1499]);
+}, 60000);

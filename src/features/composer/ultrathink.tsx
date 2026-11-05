@@ -16,16 +16,17 @@ export const asksUltrathink = (text: string) =>
 
 /**
  * Puts the keyword at the end of the draft, or takes every one out with a
- * space beside it. Each edit's offsets are in the text the edits before it
- * left, so they apply in order.
+ * space beside it. Only words in `typed`, the text with its pills blotted
+ * out, count: a pill can't be edited, only removed whole. Each edit's
+ * offsets are in the text the edits before it left, so they apply in order.
  */
-export function ultrathinkEdits(text: string): TextEdit[] {
-  if (!asksUltrathink(text)) {
+export function ultrathinkEdits(text: string, typed = text): TextEdit[] {
+  if (!asksUltrathink(typed)) {
     const gap = text && !/\s$/.test(text) ? " " : "";
     return [{ start: text.length, end: text.length, text: `${gap}ultrathink` }];
   }
   const edits: TextEdit[] = [];
-  let rest = text;
+  let rest = typed;
   for (let found = firstKeyword(rest); found; found = firstKeyword(rest)) {
     const edit = removal(rest, found);
     edits.push(edit);
@@ -43,10 +44,13 @@ export function useUltrathink(
   const latest = useRef(text);
   latest.current = text;
   const toggle = useCallback(() => {
-    for (const edit of ultrathinkEdits(latest.current))
-      prompt.current?.insertText(edit);
+    const input = prompt.current;
+    if (!input) return;
+    for (const edit of ultrathinkEdits(latest.current, input.typedText()))
+      input.insertText(edit);
   }, [prompt]);
-  const on = asksUltrathink(text);
+  // Read with each change of the text; a pill's words can't be switched off.
+  const on = asksUltrathink(prompt.current?.typedText() ?? text);
   return useMemo(
     () => (to === "claude" ? { on, toggle } : undefined),
     [to, on, toggle],

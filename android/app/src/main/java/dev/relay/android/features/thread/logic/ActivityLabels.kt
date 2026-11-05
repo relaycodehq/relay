@@ -36,6 +36,7 @@ internal val RELAY_TOOL_LABELS = mapOf(
     "wait_for_threads" to "Waited for started threads",
     "stop_thread" to "Stopped a started thread",
     "message_lead" to "Messaged its lead",
+    "message_main" to "Told the main thread",
     "hand_off_thread" to "Moved a thread to another computer",
     "settle_thread" to "Settled a started thread",
     "settle_this_thread" to "Settles this thread when done",

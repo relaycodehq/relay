@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentProvider } from "./agents";
+import { sliceWhole } from "./truncate";
 import { idSchema } from "./validation";
 
 /** Output from a thread's shell, or its exit; -1 when Relay ended it. */
@@ -12,6 +13,20 @@ export interface TerminalOpened {
   /** Recent output, when the shell was already running. */
   backlog: string;
   exitCode?: number;
+}
+
+/** The most one write to a shell carries, in UTF-16 code units. */
+export const TERMINAL_WRITE_LIMIT = 1 << 20;
+
+/** `data` cut into writes the shell takes, never between a surrogate pair. */
+export function terminalWrites(data: string) {
+  const writes: string[] = [];
+  for (let start = 0; start < data.length;) {
+    const write = sliceWhole(data, start, start + TERMINAL_WRITE_LIMIT);
+    writes.push(write);
+    start += write.length;
+  }
+  return writes;
 }
 
 /** A thread's shell is keyed by its chat id, a draft's by `draft:<projectId>`. */

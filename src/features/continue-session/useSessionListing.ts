@@ -9,9 +9,12 @@ const FRESH_MS = 15_000;
 /** The saved Claude Code and Codex sessions run in the project's folder. */
 export function useSessionListing(projectId: string) {
   const qc = useQueryClient();
-  const [, bump] = useReducer((n: number) => n + 1, 0);
+  const [arrivals, bump] = useReducer((n: number) => n + 1, 0);
   const key = ["terminal-sessions", projectId];
   return {
+    /** Goes up as each lookup the menu asked for arrives. */
+    arrivals,
+
     /**
      * The last lookup: the sessions it found, or why it failed. Asking looks
      * again once it's old; a failed one waits as long before the next try.

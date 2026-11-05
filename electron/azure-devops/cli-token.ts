@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { findExecutable } from "../platform/executables";
+import { executableCommand, findExecutable } from "../platform/executables";
 
 const exec = promisify(execFile);
 
@@ -122,21 +122,23 @@ export class AzureCliTokens {
         "The Azure CLI was not found. Install it and run `az login`, or use a personal access token.",
       );
     });
+    // On Windows `az` is Python running the Azure CLI module.
+    const line = executableCommand(az, [
+      "account",
+      "get-access-token",
+      "--resource",
+      devopsResource,
+      ...(tenant ? ["--tenant", tenant] : []),
+      "--output",
+      "json",
+    ]);
     let out: string;
     try {
-      ({ stdout: out } = await exec(
-        az,
-        [
-          "account",
-          "get-access-token",
-          "--resource",
-          devopsResource,
-          ...(tenant ? ["--tenant", tenant] : []),
-          "--output",
-          "json",
-        ],
-        { timeout: 30_000 },
-      ));
+      ({ stdout: out } = await exec(line.command, line.args, {
+        timeout: 30_000,
+        // Python is a console program: unhidden, each token flashes a window.
+        windowsHide: true,
+      }));
     } catch (e) {
       const failure = e as Error & { stderr?: string; killed?: boolean };
       const said = `${failure.stderr ?? ""}\n${failure.message ?? ""}`;

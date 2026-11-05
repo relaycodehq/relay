@@ -89,7 +89,9 @@ struct CallOutput: View {
                 ReadCodeView(read: read)
             } else {
                 if call.kind == "command" { ToolOutput(text: shown(call.label)) }
-                if printed, let output, !output.isEmpty { ToolOutput(text: output) }
+                if printed, let output, !output.isEmpty {
+                    ToolOutput(text: call.kind == "command" ? terminalText(output) : output)
+                }
             }
         }
         // Output still coming in is cut again with every update; the rest is fetched once it's all there.

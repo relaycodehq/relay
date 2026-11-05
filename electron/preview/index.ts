@@ -1,4 +1,5 @@
-export { ThreadPreviews, type PreviewTarget } from "./thread-previews";
+export { ThreadPreviews } from "./thread-previews";
+export type { PreviewTarget } from "./preview-state";
 export { DevServers, listening } from "./dev-servers";
 export { runningServerPort } from "./running-server";
 export { PreviewProjects, worktreeDevPort } from "./projects";

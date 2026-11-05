@@ -38,6 +38,22 @@ it("trades a pairing code once for a token it only keeps hashed", async () => {
   }
 });
 
+it("keeps the shown code working after refusing a pair at the device limit", async () => {
+  const { dir, devices } = await setup();
+  try {
+    const paired = [];
+    for (let i = 0; i < 10; i++)
+      paired.push(await devices.pair(devices.newPairing().code, `Phone ${i}`));
+    const { code } = devices.newPairing();
+    await expect(devices.pair(code, "Eleventh")).rejects.toThrow(/Remove/);
+
+    await devices.revoke(paired[0].device.id);
+    expect((await devices.pair(code, "Eleventh")).device.name).toBe("Eleventh");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("turns a sign-in away when the phone is removed while it signs in", async () => {
   const { dir, devices } = await setup();
   try {

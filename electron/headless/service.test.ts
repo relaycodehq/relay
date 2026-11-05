@@ -44,6 +44,27 @@ it("writes a systemd unit that leaves the agent host running", () => {
   expect(unit).toContain("Environment=RELAY_SERVICE=systemd");
 });
 
+it("reads back the home a systemd unit runs, percent signs and all", async () => {
+  const { mkdir, mkdtemp, realpath, rm, writeFile } =
+    await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  if (process.platform === "win32") return;
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "relay-unit-")));
+  const saved = process.env.HOME;
+  process.env.HOME = dir;
+  try {
+    const home = '/srv/100% "relay" \\ &amp;';
+    const file = serviceFile("systemd", dir);
+    await mkdir(join(file, ".."), { recursive: true });
+    await writeFile(file, systemdService({ ...spec, home }));
+    expect(await serviceHome("systemd")).toBe(home);
+  } finally {
+    process.env.HOME = saved;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 it("starts Relay with the node on PATH rather than a versioned path behind it", async () => {
   const { mkdtemp, mkdir, realpath, rm, symlink, writeFile } =
     await import("node:fs/promises");

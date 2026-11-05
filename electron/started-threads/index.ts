@@ -183,7 +183,7 @@ export class StartedThreads {
     this.reportProblem = options.reportProblem;
     this.reviews = options.reviews;
     this.schedules = options.schedules
-      ? new ThreadSchedules(options.schedules)
+      ? new ThreadSchedules(options.schedules, this.agentChoices)
       : undefined;
   }
 

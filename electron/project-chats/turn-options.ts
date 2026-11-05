@@ -7,6 +7,7 @@ import type {
 } from "../../shared/projects";
 import { linksInstructions, threadLinks } from "../../shared/projects";
 import { goalChanged } from "../../shared/goal";
+import { readOnlyGitEnvIn } from "../agents/read-only-git";
 import type { AgentOptions } from "../agents/types";
 import { projectTasks } from "../terminal/tasks";
 import {
@@ -45,9 +46,14 @@ export async function turnOptions(
   // Each agent session hears about running processes on its own.
   const noteKey = JSON.stringify([t.sessionKey, t.provider]);
   if (!sessionId) projectTasks.forgetNote(noteKey);
-  const env = await host.env(chat);
-  const links = await linksOf(core, chat, root);
   const access = accessOf(core, t);
+  const env = {
+    ...(await host.env(chat)),
+    ...(access.options.readOnly
+      ? await readOnlyGitEnvIn(root, process.env)
+      : {}),
+  };
+  const links = await linksOf(core, chat, root);
   const attached = [
     ...((turn.kind === "reply" && turn.carried) || []),
     ...(chat.messages.find((m) => m.id === input.id)?.images ?? []),

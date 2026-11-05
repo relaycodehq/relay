@@ -122,7 +122,7 @@ export async function branches(root: string): Promise<BranchList> {
             name,
             remote,
             ...(on ? { local: name.slice(on.length + 1) } : {}),
-            worktree: !!worktree && !gone.has(worktree),
+            worktree: !!worktree && !gone.has(resolve(worktree)),
             current: !remote && name === current.trim(),
             unrelated:
               remote && [...elsewhere].some((r) => name.startsWith(`${r}/`)),

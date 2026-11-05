@@ -12,45 +12,22 @@ import {
   protocolVersion,
   readLines,
   writeLine,
-  type AskMessage,
-  type Asks,
   type ClientMessage,
-  type Entry,
-  type HookFrame,
   type HookMode,
   type HostMessage,
   type HostRecord,
   type ProcessSpec,
   type SessionInfo,
 } from "./protocol";
-import { AsyncQueue } from "../util/async-queue";
 import { toolText, type ToolResult } from "../relay-mcp/tools";
 import { errorMessage } from "../../shared/error-message";
 import { pidAlive as alive } from "../util/pid";
+import { HostedProcess } from "./hosted-process";
+import { HostedQuery, type HostedHandlers } from "./hosted-query";
+import { ToolHandlerSlot } from "./tool-handler-slot";
 
-/**
- * How long a session's control call may take. Claude Code answers them at
- * once, even mid-turn, so a slower one met a stuck host or CLI. 20 seconds is
- * what Relay already gives a freshly started CLI to answer the same requests
- * when it lists models and commands.
- */
-const callLimit = 20_000;
-
-/** A question's arguments, its last one carrying the signal that withdraws it. */
-type WithSignal<T extends unknown[]> = T extends [...infer Head, infer Context]
-  ? [...Head, context: Context & { signal: AbortSignal }]
-  : never;
-
-/** What the host asks of Relay while a session runs. */
-export interface HostedHandlers {
-  canUseTool?: (
-    ...args: WithSignal<Asks["canUseTool"]["args"]>
-  ) => Promise<Asks["canUseTool"]["answer"]>;
-  onElicitation?: (
-    ...args: WithSignal<Asks["onElicitation"]["args"]>
-  ) => Promise<Asks["onElicitation"]["answer"]>;
-  hooks: Record<string, (input: unknown) => Promise<unknown>>;
-}
+export { HostedProcess, type ProcessReader } from "./hosted-process";
+export { HostedQuery, type HostedHandlers } from "./hosted-query";
 
 export interface HostedOpen {
   key: string;
@@ -76,8 +53,7 @@ export type ToolHandler = (
 ) => Promise<ToolResult>;
 
 export class AgentHosts {
-  /** Who answers the agents' calls to Relay's tools, once Relay can. */
-  tools: ToolHandler | undefined;
+  private toolSlot = new ToolHandlerSlot();
   private connections: HostConnection[] = [];
   private starting?: Promise<HostConnection>;
   private discovered?: Promise<FoundSession[]>;
@@ -94,6 +70,15 @@ export class AgentHosts {
       .update(readFileSync(script))
       .digest("hex")
       .slice(0, 16);
+  }
+
+  /** Who answers the agents' calls to Relay's tools, once Relay can. */
+  get tools() {
+    return this.toolSlot.handler;
+  }
+
+  set tools(handler: ToolHandler | undefined) {
+    this.toolSlot.fill(handler);
   }
 
   /** The hosts' process ids: the agents they start are Relay's own. */
@@ -127,7 +112,7 @@ export class AgentHosts {
           connection = await HostConnection.open(
             record,
             () => this.forget(connection),
-            () => this.tools,
+            (signal) => this.toolSlot.waitFor(signal),
           );
         } catch (error) {
           console.warn("Could not reach an agent host:", error);
@@ -223,10 +208,12 @@ export class AgentHosts {
       })(),
     ]);
     child.removeAllListeners();
-    const connection = await HostConnection.open(
+    // A host hanging up before its welcome calls back before this is set.
+    let connection: HostConnection;
+    connection = await HostConnection.open(
       record,
       () => this.forget(connection),
-      () => this.tools,
+      (signal) => this.toolSlot.waitFor(signal),
     );
     this.connections.push(connection);
     return connection;
@@ -262,13 +249,13 @@ class HostConnection {
   private constructor(
     private socket: Socket,
     private onClose: () => void,
-    private tools: () => ToolHandler | undefined,
+    private tools: (signal: AbortSignal) => Promise<ToolHandler>,
   ) {}
 
   static open(
     record: HostRecord,
     onClose: () => void,
-    tools: () => ToolHandler | undefined,
+    tools: (signal: AbortSignal) => Promise<ToolHandler>,
   ) {
     return new Promise<HostConnection>((resolve, reject) => {
       if (record.protocol !== protocolVersion)
@@ -365,9 +352,7 @@ class HostConnection {
 
   attach(info: SessionInfo, handlers: HostedHandlers) {
     const query = new HostedQuery(this, info.id, handlers, info.split);
-    this.endpoints.set(info.id, query);
-    this.send({ t: "attach", session: info.id });
-    return query;
+    return this.takeBack(info, query);
   }
 
   openProcess(request: HostedProcessOpen) {
@@ -388,10 +373,18 @@ class HostConnection {
   }
 
   attachProcess(info: SessionInfo) {
-    const running = new HostedProcess(this, info.id, info);
-    this.endpoints.set(info.id, running);
-    this.send({ t: "attach", session: info.id });
-    return running;
+    return this.takeBack(info, new HostedProcess(this, info.id, info));
+  }
+
+  /** A session found running; a host that died since has nothing to replay, only its end. */
+  private takeBack<T extends HostedQuery | HostedProcess>(
+    info: SessionInfo,
+    endpoint: T,
+  ) {
+    this.endpoints.set(info.id, endpoint);
+    if (this.closed) ended(endpoint);
+    else this.send({ t: "attach", session: info.id });
+    return endpoint;
   }
 
   forget(id: string) {
@@ -449,17 +442,15 @@ class HostConnection {
   private async tool(message: Extract<HostMessage, { t: "tool" }>) {
     const abort = new AbortController();
     this.toolCalls.set(message.id, abort);
-    const handler = this.tools();
     let result: ToolResult;
     try {
-      result = handler
-        ? await handler(
-            message.chatId,
-            message.name,
-            message.args,
-            abort.signal,
-          )
-        : toolText("Relay is still starting. Try again in a moment.", true);
+      const handler = await this.tools(abort.signal);
+      result = await handler(
+        message.chatId,
+        message.name,
+        message.args,
+        abort.signal,
+      );
     } catch (error) {
       result = toolText(errorMessage(error), true);
     } finally {
@@ -478,298 +469,12 @@ class HostConnection {
     for (const call of this.calls.values())
       call.reject(new Error("The agent host has stopped."));
     this.calls.clear();
-    for (const endpoint of this.endpoints.values())
-      endpoint.entry({
-        seq: -1,
-        kind: "end",
-        failure: "The agent host stopped.",
-      });
+    for (const endpoint of this.endpoints.values()) ended(endpoint);
   }
 }
 
-/**
- * Stands in for the SDK's query: frames come off the host's log, calls go to
- * the query running there. `split` marks where replayed frames stop only
- * restoring state and start being a turn to show.
- */
-export class HostedQuery {
-  private entries = new AsyncQueue<Entry>();
-  private closed = false;
-  private seqs = new WeakMap<object, number>();
-  private asking = new Map<number, AbortController>();
-
-  constructor(
-    private connection: HostConnection,
-    private id: string,
-    private handlers: HostedHandlers,
-    readonly split: number,
-  ) {}
-
-  entry(entry: Entry) {
-    this.entries.push(entry);
-  }
-
-  /** The replay is over; `split` already told replay from live. */
-  attached() {}
-
-  /** Where a frame sits in the host's log. */
-  seqOf(frame: object) {
-    return this.seqs.get(frame);
-  }
-
-  async *[Symbol.asyncIterator](): AsyncGenerator<any, void> {
-    for await (const entry of this.entries) {
-      if (entry.kind === "end") {
-        this.connection.forget(this.id);
-        if (entry.failure) throw new Error(entry.failure);
-        return;
-      }
-      if (entry.kind !== "frame" && entry.kind !== "hook") continue;
-      const frame =
-        entry.kind === "frame"
-          ? (entry.message as object)
-          : ({
-              type: "relay_hook",
-              event: entry.event,
-              input: entry.input,
-            } satisfies HookFrame);
-      this.seqs.set(frame, entry.seq);
-      yield frame;
-    }
-  }
-
-  ask(message: AskMessage) {
-    const controller = new AbortController();
-    this.asking.set(message.id, controller);
-    const run = async () => {
-      if (message.name === "canUseTool") {
-        const [tool, input, context] = message.args;
-        if (!this.handlers.canUseTool)
-          throw new Error("This session asks no permissions.");
-        return this.handlers.canUseTool(tool, input, {
-          ...context,
-          signal: controller.signal,
-        });
-      }
-      if (message.name === "onElicitation") {
-        if (!this.handlers.onElicitation)
-          throw new Error("This session answers no MCP requests.");
-        const [request, context] = message.args;
-        return this.handlers.onElicitation(request, {
-          ...context,
-          signal: controller.signal,
-        });
-      }
-      const [event, input] = message.args;
-      return (await this.handlers.hooks[event]?.(input)) ?? {};
-    };
-    void run().then(
-      (value) => this.answer(message.id, { value }),
-      (error) =>
-        this.answer(message.id, {
-          error: errorMessage(error),
-        }),
-    );
-  }
-
-  cancel(id: number) {
-    this.asking.get(id)?.abort();
-    this.asking.delete(id);
-  }
-
-  private answer(id: number, result: { value?: unknown; error?: string }) {
-    if (!this.asking.delete(id)) return;
-    this.connection.send({ t: "answer", id, ...result });
-  }
-
-  push(message: unknown) {
-    if (!this.closed)
-      this.connection.send({ t: "push", session: this.id, message });
-  }
-
-  /** A turn starts or ends; `at` is the log position, when Relay knows it. */
-  mark(mark: "start" | "end", at?: number) {
-    if (!this.closed)
-      this.connection.send({
-        t: "mark",
-        session: this.id,
-        mark,
-        ...(at !== undefined ? { at } : {}),
-      });
-  }
-
-  abort() {
-    if (!this.closed) this.connection.send({ t: "abort", session: this.id });
-  }
-
-  close() {
-    if (this.closed) return;
-    this.closed = true;
-    this.connection.send({ t: "close", session: this.id });
-    this.connection.forget(this.id);
-    for (const controller of this.asking.values()) controller.abort();
-    this.asking.clear();
-    this.entry({ seq: -1, kind: "end" });
-  }
-
-  private call(method: string, ...args: unknown[]) {
-    return this.connection.call(this.id, method, args, callLimit);
-  }
-
-  interrupt() {
-    return this.call("interrupt");
-  }
-
-  setModel(model?: string) {
-    return this.call("setModel", model);
-  }
-
-  setPermissionMode(mode: string) {
-    return this.call("setPermissionMode", mode);
-  }
-
-  applyFlagSettings(settings: Record<string, unknown>) {
-    return this.call("applyFlagSettings", settings);
-  }
-
-  getSettings() {
-    return this.call("getSettings");
-  }
-
-  getContextUsage(options?: { detail?: "summary" | "full" }) {
-    return this.call("getContextUsage", options);
-  }
-
-  accountInfo() {
-    return this.call("accountInfo");
-  }
-
-  usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET(options?: {
-    skipBehaviors?: boolean;
-  }) {
-    return this.call(
-      "usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET",
-      options,
-    );
-  }
-
-  /** The signal stays here: an answer that comes too late is dropped. */
-  askSideQuestion(
-    question: string,
-    options?: { history?: unknown[]; signal?: AbortSignal },
-  ) {
-    // A whole answer, so no limit; the caller's signal cancels it.
-    const asked = this.connection.call(this.id, "askSideQuestion", [
-      question,
-      { history: options?.history },
-    ]);
-    const signal = options?.signal;
-    if (!signal) return asked;
-    return Promise.race([
-      asked,
-      new Promise<never>((_, reject) => {
-        if (signal.aborted) reject(new Error("Cancelled by you."));
-        signal.addEventListener(
-          "abort",
-          () => reject(new Error("Cancelled by you.")),
-          { once: true },
-        );
-      }),
-    ]);
-  }
-
-  stopTask(taskId: string) {
-    return this.call("stopTask", taskId);
-  }
-
-  supportedCommands() {
-    return this.call("supportedCommands");
-  }
-
-  /** A host older than this Relay refuses it. */
-  supportedAgents() {
-    return this.call("supportedAgents");
-  }
-}
-
-export interface ProcessReader {
-  replayed?: (entries: Entry[]) => void;
-  entry: (entry: Entry) => void;
-}
-
-/**
- * A process the host runs for Relay, e.g. Codex's app server: its output
- * lines come off the host's log, and what Relay writes goes to its input.
- * Picked up after a restart, the log comes first, marked as replayed.
- */
-export class HostedProcess {
-  private reader?: ProcessReader;
-  private replay: Entry[] = [];
-  private live: Entry[] = [];
-  private replaying: boolean;
-  private closed = false;
-
-  constructor(
-    private connection: HostConnection,
-    private id: string,
-    /** What the host said about it, when picked up after a restart. */
-    readonly info?: SessionInfo,
-  ) {
-    this.replaying = !!info;
-  }
-
-  /** Hands over the replayed log in one piece, once it's all in, then each entry as it comes. */
-  read(reader: ProcessReader) {
-    this.reader = reader;
-    if (!this.replaying && this.info) reader.replayed?.(this.replay.splice(0));
-    for (const entry of this.live.splice(0)) reader.entry(entry);
-  }
-
-  entry(entry: Entry) {
-    // Mid-replay the endpoint stays: "attached" still has to find it.
-    if (entry.kind === "end" && !this.replaying)
-      this.connection.forget(this.id);
-    if (this.replaying) this.replay.push(entry);
-    else if (this.reader) this.reader.entry(entry);
-    else this.live.push(entry);
-  }
-
-  attached() {
-    this.replaying = false;
-    if (this.replay.some((e) => e.kind === "end"))
-      this.connection.forget(this.id);
-    this.reader?.replayed?.(this.replay.splice(0));
-  }
-
-  write(line: string) {
-    if (!this.closed)
-      this.connection.send({ t: "push", session: this.id, message: line });
-  }
-
-  /** A turn starts or ends; `turn` names one of several a shared process runs. */
-  mark(mark: "start" | "end", options: { at?: number; turn?: string } = {}) {
-    if (!this.closed)
-      this.connection.send({ t: "mark", session: this.id, mark, ...options });
-  }
-
-  /** What the next Relay reads about this process, replacing what it had. */
-  keep(meta: unknown) {
-    if (!this.closed)
-      this.connection.send({ t: "meta", session: this.id, meta });
-  }
-
-  /** The process's pid on the host's machine; hosts before it don't say. */
-  pid(): Promise<number | undefined> {
-    return this.connection
-      .call(this.id, "pid", [], 5000)
-      .then((pid) => (typeof pid === "number" ? pid : undefined))
-      .catch(() => undefined);
-  }
-
-  close() {
-    if (this.closed) return;
-    this.closed = true;
-    this.connection.send({ t: "close", session: this.id });
-    this.connection.forget(this.id);
-  }
+/** The host is gone: the session ends, and a replay under way is over with it. */
+function ended(endpoint: HostedQuery | HostedProcess) {
+  endpoint.entry({ seq: -1, kind: "end", failure: "The agent host stopped." });
+  endpoint.attached();
 }

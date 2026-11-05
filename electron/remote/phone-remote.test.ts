@@ -1620,3 +1620,23 @@ it("takes a phone's file in chunks through the real socket", async () => {
   );
   expect(await readFile(done.path!, "utf8")).toBe("abcdef");
 });
+
+it("keeps following the network after one look at it fails", async () => {
+  let failNext = false;
+  let current: PhoneTailnet = { status: "connected", addresses: ["127.0.0.1"] };
+  const tailnet = {
+    get current(): PhoneTailnet {
+      if (!failNext) return current;
+      failNext = false;
+      throw new Error("Couldn't read the network interfaces");
+    },
+  };
+  const { remote } = await desktop(undefined, tailnet);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  failNext = true;
+  await expect(remote.start()).rejects.toThrow("network interfaces");
+  current = { status: "missing", addresses: [] };
+  await remote.start();
+  expect(await remote.state()).toMatchObject({ listening: false, hosts: [] });
+  warn.mockRestore();
+});

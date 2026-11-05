@@ -80,11 +80,12 @@ ${summary}`,
     if (!replacement || replacement === previous.id)
       throw new Error("Antigravity didn't create a fresh conversation.");
     await previous.onId(replacement);
-  } catch (error) {
-    // The saved ID still names the old history. Do not leave a half-seeded live
-    // session masquerading as it when the next turn resumes.
+  } finally {
+    // After a failure the saved ID still names the old history: don't leave a
+    // half-seeded live session masquerading as it. After a success the seed
+    // opened the replacement without Relay's tools; the next turn resumes it
+    // in a new process with them.
     await closeAcpSession(profile, previous.key);
-    throw error;
   }
   if (context) options.onContext?.(context);
   options.onText(summary);

@@ -21,6 +21,7 @@ import {
   type UsageTokens,
 } from "../../shared/usage";
 import { writtenInAnswer } from "../../shared/written-code";
+import { holdBack } from "./live-turn";
 
 /** A fresh assistant message the agent is about to stream into. */
 export const streamingAnswer = (
@@ -111,6 +112,8 @@ const checkpointMostMs = 10_000;
  */
 export class AnswerRecorder {
   private flush: ReturnType<typeof setTimeout> | null = null;
+  /** Lets go of the thread's hold on the edit `flush` waits to publish. */
+  private release?: () => void;
   private checkpoint: ReturnType<typeof setTimeout> | null = null;
   private checkpointMs = checkpointLeastMs;
   private model?: TurnModel;
@@ -118,6 +121,8 @@ export class AnswerRecorder {
   private offer?: ImportOffer;
   /** Stopped by the user; see `stop`. */
   stopped = false;
+  /** The turn ended: nothing streams any more for a change to wait on. */
+  private ended = false;
 
   constructor(
     private chat: ProjectChat,
@@ -129,12 +134,24 @@ export class AnswerRecorder {
 
   publish() {
     this.flush = null;
+    this.release?.();
+    this.release = undefined;
     this.message.version++;
     this.emit(structuredClone(this.message));
   }
 
   changed() {
-    this.flush ??= setTimeout(() => this.publish(), 40);
+    // A late change, such as the model resolving after a quick Stop, would
+    // otherwise sit unpublished while the next turn's send checkpoints the
+    // thread by version.
+    if (this.ended) this.publish();
+    else if (!this.flush) {
+      this.flush = setTimeout(() => this.publish(), 40);
+      this.release = holdBack(this.chat, () => {
+        if (this.flush) clearTimeout(this.flush);
+        this.publish();
+      });
+    }
     this.checkpoint ??= setTimeout(() => {
       this.checkpoint = null;
       // The version only moves on publish; a checkpoint reads changes by it.
@@ -387,6 +404,7 @@ export class AnswerRecorder {
     if (this.flush) clearTimeout(this.flush);
     if (this.checkpoint) clearTimeout(this.checkpoint);
     this.flush = this.checkpoint = null;
+    this.ended = true;
     this.publish();
   }
 }

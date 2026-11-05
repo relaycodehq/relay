@@ -58,6 +58,70 @@ describe("Cursor's read-only git", () => {
     expect(git("stash", "list")).toBe("");
   });
 
+  it("doesn't open a bare repository committed in the checkout", async () => {
+    // Its config runs a command on status. The worker may have started before
+    // the thread was switched to Read only, without the turn's git settings.
+    const marker = join(repo, "ran");
+    const trap = ["-C", "fixtures/evil.git", "config"];
+    git("init", "--quiet", "--bare", "fixtures/evil.git");
+    git(...trap, "core.bare", "false");
+    git(...trap, "core.worktree", "..");
+    git(...trap, "core.fsmonitor", `touch '${marker}'; false`);
+    await said(["-C", "fixtures/evil.git", "status"]);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  it("doesn't run the diff commands the checkout's own config names", async () => {
+    const marker = join(repo, "ran");
+    await writeFile(join(repo, ".gitattributes"), "*.ts diff=evil\n");
+    git("config", "diff.evil.textconv", `touch '${marker}'; cat`);
+    git("config", "diff.external", `touch '${marker}'; true`);
+    await writeFile(join(repo, "a.ts"), "one\ntwo\n");
+    for (const args of [
+      ["diff"],
+      ["-C", ".", "diff", "HEAD"],
+      ["log", "-p"],
+      ["show"],
+      ["blame", "a.ts"],
+    ]) {
+      expect((await said(args)).isError, args.join(" ")).toBe(false);
+      expect(existsSync(marker), args.join(" ")).toBe(false);
+    }
+    expect((await said(["diff"])).text).toContain("+two");
+  });
+
+  it("doesn't run the clean filter the checkout's own config names", async () => {
+    const marker = join(repo, "ran");
+    await writeFile(join(repo, ".gitattributes"), "*.ts filter=evil\n");
+    git("config", "filter.evil.clean", `touch '${marker}'; cat`);
+    git("config", "filter.evil.required", "true");
+    await writeFile(join(repo, "a.ts"), "one\ntwo\n");
+    for (const args of [["status"], ["diff"], ["blame", "a.ts"]]) {
+      expect((await said(args)).isError, args.join(" ")).toBe(false);
+      expect(existsSync(marker), args.join(" ")).toBe(false);
+    }
+    expect((await said(["diff"])).text).toContain("+two");
+  });
+
+  it("refuses flags that switch a checkout's drivers back on", async () => {
+    const marker = join(repo, "ran");
+    await writeFile(
+      join(repo, ".gitattributes"),
+      "*.ts diff=evil filter=evil\n",
+    );
+    git("config", "diff.evil.textconv", `touch '${marker}'; cat`);
+    await writeFile(join(repo, "a.ts"), "one\ntwo\n");
+    git("config", "filter.evil.smudge", `touch '${marker}'; cat`);
+    for (const args of [
+      ["diff", "--textconv"],
+      ["log", "-p", "--textc"],
+      ["cat-file", "--filters", "HEAD:a.ts"],
+    ]) {
+      expect((await said(args)).isError, args.join(" ")).toBe(true);
+      expect(existsSync(marker), args.join(" ")).toBe(false);
+    }
+  });
+
   it("leaves the index alone, where a plain git status would refresh it", async () => {
     await utimes(
       join(repo, "a.ts"),

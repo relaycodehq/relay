@@ -65,14 +65,19 @@ export async function openClaudeQuestionTerminal(
   choice: ModelChoice,
 ) {
   const claude = await findExecutable("claude");
+  await openTerminal(dir, dataDir, prompt, claude, claudeQuestionArgs(choice));
+}
+
+export function claudeQuestionArgs(choice: ModelChoice) {
   const { model, effort } = claudeArgs(choice);
-  const args = [
-    "--disallowedTools",
-    "Edit,Write,NotebookEdit",
+  return [
     ...(model ? ["--model", model] : []),
     ...(effort ? ["--effort", effort] : []),
+    "--disallowedTools",
+    "Edit,Write,NotebookEdit",
+    // --disallowedTools takes any number of values: without this the prompt becomes one.
+    "--",
   ];
-  await openTerminal(dir, dataDir, prompt, claude, args);
 }
 
 /** Runs `executable ...args "<prompt>"` in a new terminal window at dir. */

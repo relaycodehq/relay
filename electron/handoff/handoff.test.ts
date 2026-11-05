@@ -34,6 +34,7 @@ import { awaitsReturn } from "../project-chats/handoff";
 import {
   liveHandoffBridge,
   newThreadsBridge,
+  readOnlyModeBridge,
   setupBridge,
 } from "../../shared/remote";
 import { handoffMessagesSchema } from "../../shared/handoff";
@@ -1664,6 +1665,37 @@ it("tells a Relay too old to set a project up apart from a failed clone, and end
   expect(chat.setup!.error).toMatch(/older Relay/);
 });
 
+it("refuses to hand a Read only thread to a Relay too old to keep it read only, before stopping it here", async () => {
+  const { laptop, sender, computers, computerId } = await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, {
+    ...input("@codex Look around"),
+    runtimeMode: "read-only",
+  });
+  await finished(laptop.chats, thread.id, 2);
+  vi.spyOn(
+    (sender as never as { infos: { get: () => unknown } }).infos,
+    "get",
+  ).mockResolvedValue({
+    version: "0.21.0",
+    bridge: readOnlyModeBridge - 1,
+    update: { status: "idle", current: "0.21.0" },
+  });
+  await sender.handOff(thread.id, computerId);
+  const name = computers.get(computerId).name;
+  await vi.waitFor(async () =>
+    expect((await laptop.chats.get(thread.id)).sentTo?.error).toBe(
+      `Update Relay on ${name} to hand off a Read only thread.`,
+    ),
+  );
+  // Still here as it was: nothing left a note or stopped it.
+  expect((await laptop.chats.get(thread.id)).messages).toHaveLength(2);
+});
+
 it("has threads waiting on the same project there share one setup, and lets one go without the other", async () => {
   const { laptop, mini, sender, computerId } = await pairedComputers();
   const { url, projectId, reachable } = await lackedProject(laptop);
@@ -2121,6 +2153,47 @@ it("leaves nothing owed on the other computer when the thread is taken back mid-
   expect(after.sentTo).toBeUndefined();
   expect(after.abandonedHandoffs).toHaveLength(1);
   expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
+});
+
+it("sends nothing to take over when the thread is taken back before its upload starts", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const thread = await laptop.chats.create(
+    laptop.projectId,
+    { kind: "project" },
+    "worktree",
+  );
+  await laptop.chats.send(thread.id, input("@codex Add a changelog"));
+  await finished(laptop.chats, thread.id, 2);
+  const client = await computers.connected(computerId);
+  const real = client.call.bind(client) as (
+    ...a: unknown[]
+  ) => Promise<unknown>;
+  let tookBack = false;
+  vi.spyOn(client, "call").mockImplementation((async (
+    method: string,
+    ...args: unknown[]
+  ) => {
+    // Given up on while the bundle was being made: the mini hears it before any upload.
+    if (method === "handoffUpload" && !tookBack) {
+      tookBack = true;
+      await sender.abandon(thread.id);
+      await vi.waitFor(() =>
+        expect(computers.get(computerId).abandoned).toBeUndefined(),
+      );
+    }
+    return real(method, ...args);
+  }) as never);
+
+  await sender.handOff(thread.id, computerId);
+  await sender.finished(thread.id);
+  expect(tookBack).toBe(true);
+  const after = await laptop.chats.get(thread.id);
+  expect(after.sentTo).toBeUndefined();
+  expect(mini.chats.list(mini.projectId).filter((c) => c.cameFrom)).toEqual([]);
+  // What was uploaded anyway isn't left behind there.
+  const [{ id }] = after.abandonedHandoffs!;
+  expect(existsSync(join(mini.dir, "handoffs", id))).toBe(false);
 });
 
 it("adds a folder on the other computer as a project that lives there, and starts its threads there in that folder", async () => {

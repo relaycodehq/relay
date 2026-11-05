@@ -27,8 +27,9 @@ export function plainText(markdown: string, limit = 280) {
   // read again on every streamed piece.
   const text = markdown
     .slice(0, limit * 6)
-    .replace(/```[\s\S]*?(```|$)/g, " ")
-    .replace(/<[^>\n]+>/g, " ")
+    .replace(/(```|~~~)[\s\S]*?(\1|$)/g, " ")
+    // A tag, comment or <?xml?> declaration, not a comparison like `a < b and c > d`.
+    .replace(/<(?:[!?][^<>\n]*|\/?[A-Za-z][\w:.-]*(?:\s[^<>\n]*)?\/?)>/g, " ")
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+[.)])\s+/gm, "")
@@ -151,4 +152,23 @@ export function timelineTurns(listed: ChatMessage[]) {
   }
   settle();
   return { turns, turnOf };
+}
+
+export type Timeline = ReturnType<typeof timelineTurns>;
+
+/** Both say the same turns, from the same messages: most streamed pieces
+ * change nothing the rail shows once the answer's opening is written. */
+export function sameTimeline(a: Timeline, b: Timeline) {
+  const sameTurn = (x: TimelineTurn, y: TimelineTurn) =>
+    x.id === y.id &&
+    x.agent === y.agent &&
+    x.prompt === y.prompt &&
+    x.answer === y.answer &&
+    x.answering === y.answering;
+  return (
+    a.turns.length === b.turns.length &&
+    a.turns.every((turn, i) => sameTurn(turn, b.turns[i]!)) &&
+    a.turnOf.size === b.turnOf.size &&
+    [...a.turnOf].every(([id, turn]) => b.turnOf.get(id) === turn)
+  );
 }

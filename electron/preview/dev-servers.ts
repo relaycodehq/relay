@@ -1,18 +1,21 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect } from "node:net";
 import { stripVTControlCharacters } from "node:util";
-import { z } from "zod";
 import type { DevServerState } from "../../shared/preview";
 import { HostedChild } from "../agent-host/child";
-import type { Entry } from "../agent-host/protocol";
 import { foundSessions, inAgentHost, savedMeta } from "../agents";
 import { terminate } from "../platform/terminate";
 import { inheritedEnv, userShell } from "../terminal/env";
 import { projectTasks } from "../terminal/tasks";
 import { connectedPorts } from "./connected-ports";
+import {
+  keepChars,
+  lastLines,
+  savedServer,
+  type SavedServer,
+} from "./hosted-server";
 import { errorMessage } from "../../shared/error-message";
 
-const keepChars = 16 * 1024;
 const START_TIMEOUT_MS = 3 * 60_000;
 export const IDLE_MS = 30 * 60_000;
 /** Sweeps in a row that couldn't tell who's connected before only previews count. */
@@ -34,28 +37,6 @@ export function listening(port: number, timeoutMs = 400): Promise<boolean> {
   return Promise.all([one("127.0.0.1"), one("::1")]).then(([a, b]) => a || b);
 }
 
-/** What the agent host keeps with a server it runs, for the next Relay. */
-const savedServer = z.object({
-  provider: z.literal("dev-server"),
-  folder: z.string(),
-  port: z.number().int(),
-  command: z.string(),
-  env: z.record(z.string(), z.string()).optional(),
-});
-
-/** The output a server taken back after a restart printed last, as much as is kept. */
-function lastLines(entries: Entry[]) {
-  const lines: string[] = [];
-  let chars = 0;
-  for (let i = entries.length - 1; i >= 0 && chars < keepChars; i--) {
-    const entry = entries[i]!;
-    if (entry.kind !== "line") continue;
-    lines.push(entry.text);
-    chars += entry.text.length + 1;
-  }
-  return lines.reverse();
-}
-
 interface Server {
   folder: string;
   port: number;
@@ -68,8 +49,6 @@ interface Server {
   /** In the agent host when there is one, so it outlives a restart of Relay. */
   child?: ChildProcess | HostedChild;
   state: DevServerState;
-  /** Previews showing it now; it sleeps only with none. */
-  watchers: number;
   usedAt: number;
 }
 
@@ -80,6 +59,11 @@ interface Server {
  */
 export class DevServers {
   private servers = new Map<string, Server>();
+  /**
+   * Previews showing each folder now; its server sleeps only with none. Kept
+   * apart from the server, which a port change or a restart of Relay replaces.
+   */
+  private watchers = new Map<string, number>();
   private sweep: NodeJS.Timeout;
   private reattached?: Promise<void>;
   private reattaching = false;
@@ -132,7 +116,6 @@ export class DevServers {
             port,
             command,
             env: { ...env },
-            watchers: 0,
             usedAt: this.now(),
             state: { state: "starting", port },
           };
@@ -144,6 +127,15 @@ export class DevServers {
     this.set(server, { state: "starting", port });
     const up = await listening(port);
     if (this.servers.get(folder) !== server) return server.state;
+    const owner = up && this.folderServing(port, folder);
+    if (owner) {
+      this.set(server, {
+        state: "failed",
+        port,
+        output: `Port ${port} is taken by the dev server Relay started in ${owner}.\n`,
+      });
+      return server.state;
+    }
     if (up) {
       this.set(server, { state: "running", port, ours: false });
       return server.state;
@@ -158,6 +150,13 @@ export class DevServers {
     }
     this.follow(server, child);
     return this.waitFor(server);
+  }
+
+  /** Another folder whose server Relay started listens on `port`. */
+  private folderServing(port: number, except: string) {
+    for (const server of this.servers.values())
+      if (server.folder !== except && server.port === port && server.child)
+        return server.folder;
   }
 
   /** Runs the command in the agent host, or in Relay without one. */
@@ -185,7 +184,7 @@ export class DevServers {
           port,
           command,
           env,
-        } satisfies z.infer<typeof savedServer>,
+        } satisfies SavedServer,
         process: {
           command: shell,
           args: ["-lc", command],
@@ -299,7 +298,6 @@ export class DevServers {
           port: saved.port,
           command: saved.command,
           env: saved.env,
-          watchers: 0,
           usedAt: this.now(),
           state: { state: "starting", port: saved.port },
         };
@@ -398,10 +396,15 @@ export class DevServers {
 
   /** A preview of the folder shows, or stops showing. */
   watch(folder: string, on: boolean) {
+    const watchers = Math.max(0, this.watched(folder) + (on ? 1 : -1));
+    if (watchers) this.watchers.set(folder, watchers);
+    else this.watchers.delete(folder);
     const server = this.servers.get(folder);
-    if (!server) return;
-    server.watchers = Math.max(0, server.watchers + (on ? 1 : -1));
-    server.usedAt = this.now();
+    if (server) server.usedAt = this.now();
+  }
+
+  private watched(folder: string) {
+    return this.watchers.get(folder) ?? 0;
   }
 
   /**
@@ -410,7 +413,7 @@ export class DevServers {
    */
   async sleepIdle() {
     const unwatched = [...this.servers.values()].filter(
-      (server) => server.child && !server.watchers,
+      (server) => server.child && !this.watched(server.folder),
     );
     if (!unwatched.length) return;
     const busy = await this.connected(unwatched.map((s) => s.port)).then(
@@ -426,7 +429,7 @@ export class DevServers {
       const child = server.child;
       if (
         child &&
-        !server.watchers &&
+        !this.watched(server.folder) &&
         this.servers.get(server.folder) === server &&
         this.now() - server.usedAt > IDLE_MS
       ) {

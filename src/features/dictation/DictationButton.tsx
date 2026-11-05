@@ -27,6 +27,7 @@ import {
   useMicrophones,
 } from "./audio/microphones";
 import { matchedCombo, useShortcutLabel } from "../../lib/shortcuts";
+import { keyboardPopups } from "../../lib/popup-keyboard";
 import type { KeyCombo } from "../../../shared/shortcuts";
 import { DictationWave } from "./DictationWave";
 import { noteUsed } from "../../lib/used";
@@ -57,6 +58,13 @@ function pick() {
   return best;
 }
 
+/**
+ * Settings or a dialog covers the composers, so the key is theirs. The mic's
+ * own prompt doesn't count: after "the microphone is busy" the key tries again.
+ */
+const composersCovered = () =>
+  keyboardPopups().some((popup) => !popup.matches(".dictation-prompt"));
+
 function onKeyDown(e: KeyboardEvent) {
   const phase = dictationSnapshot().phase;
   if (e.key === "Escape" && phase !== "idle") {
@@ -69,6 +77,7 @@ function onKeyDown(e: KeyboardEvent) {
   }
   const combo = matchedCombo("dictate", e);
   if (!combo || e.isComposing) return;
+  if (phase === "idle" && composersCovered()) return;
   e.preventDefault();
   if (e.repeat) return;
   if (phase === "idle") {

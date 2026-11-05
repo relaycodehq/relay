@@ -50,12 +50,32 @@ internal class DecodedImage(val bitmap: ImageBitmap, val animation: ImageAnimati
 private fun isGif(bytes: ByteArray) =
     bytes.size >= 6 && String(bytes, 0, 6, Charsets.US_ASCII).let { it == "GIF87a" || it == "GIF89a" }
 
+/** Android refuses to draw a bitmap over 100 MiB, and throws doing it; this stays clear of that. */
+internal const val MAX_BITMAP_BYTES = 90L * 1024 * 1024
+
+/**
+ * The [BitmapFactory.Options.inSampleSize] that keeps a [width] × [height]
+ * picture under [MAX_BITMAP_BYTES]: 1 for most, 2, 4… for a long full-page
+ * screenshot that whole would crash the screen showing it.
+ */
+internal fun sampleSizeFor(width: Int, height: Int): Int {
+    var sample = 1
+    while (ceilDiv(width, sample).toLong() * ceilDiv(height, sample) * 4 > MAX_BITMAP_BYTES) sample *= 2
+    return sample
+}
+
+private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
+
 /** A data URL as a picture; null if it isn't one. */
 internal fun decodeDataUrl(url: String): DecodedImage? {
     val comma = url.indexOf(',')
     if (!url.startsWith("data:") || comma < 0) return null
     val bytes = runCatching { Base64.decode(url.substring(comma + 1), Base64.DEFAULT) }.getOrNull() ?: return null
-    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() ?: return null
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    val options = BitmapFactory.Options().apply { inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight) }
+    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)?.asImageBitmap() ?: return null
     return DecodedImage(bitmap, if (isGif(bytes)) ImageAnimation(bytes) else null)
 }
 

@@ -11,23 +11,14 @@ import {
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import {
-  applyEdits,
-  getNodeValue,
-  findNodeAtLocation,
-  modify,
-  parse,
-  parseTree,
-  printParseErrorCode,
-  type Edit,
-  type ParseError,
-} from "jsonc-parser";
+import { parse, printParseErrorCode, type ParseError } from "jsonc-parser";
 import {
   SETTINGS_FILE_NAME,
   type SettingsEdit,
   type SettingsFileError,
   type SettingsFileState,
 } from "../../shared/settings-file";
+import { holdsNothing, withEdits } from "./settings-edits";
 
 /**
  * Where settings.json lives: with the rest of a person's dotfiles on macOS and
@@ -55,7 +46,7 @@ function parseSettings(
 ):
   | { values: Record<string, unknown>; error?: undefined }
   | { error: SettingsFileError } {
-  if (!text.trim()) return { values: {} };
+  if (holdsNothing(text)) return { values: {} };
   const errors: ParseError[] = [];
   const value: unknown = parse(text, errors, { allowTrailingComma: true });
   const at = (offset: number) => {
@@ -84,119 +75,6 @@ function parseSettings(
 function describe(code: string) {
   const words = code.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
-/** The whitespace a line starts with, for the line `offset` is on. */
-function indentAt(text: string, offset: number) {
-  const start = text.lastIndexOf("\n", offset - 1) + 1;
-  return /^[ \t]*/.exec(text.slice(start))![0];
-}
-
-/**
- * `value` as JSON laid out like its section: spread over lines indented
- * from `indent` where the section is, on one line where the section is.
- */
-function render(value: unknown, indent: string, unit: string | null) {
-  return unit === null
-    ? JSON.stringify(value, null, 1).replace(/\n\s*/g, " ")
-    : JSON.stringify(value, null, unit).replace(/\n/g, `\n${indent}`);
-}
-
-/**
- * One edit putting `value` at `path`, or removing it, written in the file's
- * own layout. jsonc-parser finds where it goes; its formatter would also
- * redo every line the edit touches, spreading a `{ "mode": "dark" }` beside
- * it over several lines, so the text is written here instead.
- */
-function editAt(text: string, path: string[], value: unknown): Edit[] {
-  const [raw] = modify(text, path, value, {});
-  if (!raw) return [];
-  const root = parseTree(text)!;
-  let depth = path.length - 1;
-  while (depth > 0 && !findNodeAtLocation(root, path.slice(0, depth))) depth--;
-  const section = depth
-    ? findNodeAtLocation(root, path.slice(0, depth))!
-    : root;
-  const inside = text.slice(
-    section.offset + 1,
-    section.offset + section.length - 1,
-  );
-  const children = section.children ?? [];
-  const sectionIndent = indentAt(text, section.offset);
-  const childIndent = children.length
-    ? indentAt(text, children[0].offset)
-    : sectionIndent + "  ";
-  const unit =
-    inside.includes("\n") || (section === root && !children.length)
-      ? childIndent.slice(sectionIndent.length) || "  "
-      : null;
-
-  if (value === undefined) {
-    // The first key leaves with the space after it, the next one keeping its line.
-    if (raw.offset === section.offset + 1 && children.length > 1) {
-      const after = children[0].offset + children[0].length;
-      const gap = text.slice(after, children[1].offset);
-      const [offset, end] = gap.includes("\n")
-        ? [raw.offset, after + gap.lastIndexOf("\n")]
-        : [children[0].offset, children[1].offset];
-      return [{ offset, length: end - offset, content: "" }];
-    }
-    return [raw];
-  }
-  if (raw.length) {
-    return [
-      { ...raw, content: render(value, indentAt(text, raw.offset), unit) },
-    ];
-  }
-  const wrapped = path
-    .slice(depth + 1)
-    .reduceRight<unknown>((inner, key) => ({ [key]: inner }), value);
-  const property = `${JSON.stringify(path[depth])}: ${render(wrapped, childIndent, unit)}`;
-  const content = raw.content.startsWith(",")
-    ? unit === null
-      ? `, ${property}`
-      : `,\n${childIndent}${property}`
-    : unit === null
-      ? ` ${property} `
-      : inside.includes("\n")
-        ? `\n${childIndent}${property}`
-        : `\n${childIndent}${property}\n${sectionIndent}`;
-  return [{ ...raw, content }];
-}
-
-/** The file's text with each edit's value put at its path, or the key removed. */
-function withEdits(text: string, edits: SettingsEdit[]) {
-  let next = text.trim() ? text : "{}\n";
-  const node = (path: string[]) => findNodeAtLocation(parseTree(next)!, path);
-  const edit = (path: string[], value: unknown) => {
-    next = applyEdits(next, editAt(next, path, value));
-  };
-  for (const { path, value } of edits) {
-    if (value === undefined) {
-      // Not there, so nothing to remove; jsonc-parser throws on a missing section.
-      if (!node(path)) continue;
-    } else
-      for (let depth = 1; depth < path.length; depth++) {
-        const parent = node(path.slice(0, depth));
-        if (!parent) break;
-        if (parent.type !== "object")
-          throw new Error(
-            `"${path.slice(0, depth).join(".")}" in settings.json should be a { … } section; fix it there first.`,
-          );
-      }
-    edit(path, value);
-    if (value !== undefined) continue;
-    // A section emptied by its last key goes with it.
-    for (let depth = path.length - 1; depth > 0; depth--) {
-      const parent = node(path.slice(0, depth));
-      const left = parent && getNodeValue(parent);
-      if (!left || typeof left !== "object" || Object.keys(left).length) break;
-      edit(path.slice(0, depth), undefined);
-    }
-  }
-  if (next.replace(/\s/g, "") === "{}") next = "{}\n";
-  if (!next.endsWith("\n")) next += "\n";
-  return next;
 }
 
 /**

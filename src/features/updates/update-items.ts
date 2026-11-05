@@ -127,7 +127,7 @@ export function relayItem(state: UpdateState | undefined): UpdateItem | undefine
     case "error":
       return {
         ...base,
-        key: `relay:error:${state.message}`,
+        key: `relay:error:${state.version ?? state.current}:${state.message}`,
         failed: true,
         phase: "idle",
         label: "Retry",

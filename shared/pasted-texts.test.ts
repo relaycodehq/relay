@@ -127,4 +127,18 @@ describe("pasted texts", () => {
       "    indented\n  next",
     );
   });
+
+  it("finds pastes in a message with a long run of spaces at once", () => {
+    const body = `@claude${" ".repeat(40_000)}hi`;
+    const started = performance.now();
+    expect(pastedTexts(body)).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it("cleans a paste with a long run of spaces inside it at once", () => {
+    const text = `start${" ".repeat(40_000)}end`;
+    const started = performance.now();
+    expect(cleanPaste(`${text}\n\n`)).toBe(text);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
 });

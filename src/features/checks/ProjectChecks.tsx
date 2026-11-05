@@ -8,16 +8,50 @@ import {
   PauseCircle,
   RefreshCw,
 } from "lucide-react";
-import type { ChecksController } from "./useProjectChecks";
+import { useCheckerHeapUsed, type ChecksController } from "./useProjectChecks";
 import {
   diagnosticSummary,
   diagnosticSeverity,
   memoryLabel,
+  type ProjectCheckState,
   type ProjectDiagnostic,
 } from "../../../shared/checks";
 import { openSettings } from "../../lib/settings-page";
 import { ErrorBox, Modal } from "../../ui/ui";
 import "./checks.css";
+
+/** The checker's heap against its limit, re-rendering on its own as the heap moves. */
+function CheckerMemory({
+  checks,
+  state,
+  onSettings,
+}: {
+  checks: ChecksController;
+  state: ProjectCheckState;
+  onSettings: () => void;
+}) {
+  const used = useCheckerHeapUsed(checks);
+  if (used === undefined) return null;
+  return (
+    <p className="field-note checks-memory">
+      Using {memoryLabel(used)} of {memoryLabel(state.memory.limit)}
+      {state.projectId && (
+        <>
+          {" · "}
+          <button
+            className="text-button"
+            onClick={() => {
+              onSettings();
+              openSettings("project", state.projectId);
+            }}
+          >
+            Change limit in Settings
+          </button>
+        </>
+      )}
+    </p>
+  );
+}
 
 function DiagnosticIcon({
   severity,
@@ -226,25 +260,12 @@ export function ProjectChecksButton({
                   <RefreshCw size={13} /> Recheck
                 </button>
               </div>
-              {s?.memory.used !== undefined && s.status !== "stopped" && (
-                <p className="field-note checks-memory">
-                  Using {memoryLabel(s.memory.used)} of{" "}
-                  {memoryLabel(s.memory.limit)}
-                  {s.projectId && (
-                    <>
-                      {" · "}
-                      <button
-                        className="text-button"
-                        onClick={() => {
-                          setOpen(false);
-                          openSettings("project", s.projectId);
-                        }}
-                      >
-                        Change limit in Settings
-                      </button>
-                    </>
-                  )}
-                </p>
+              {s && s.status !== "stopped" && (
+                <CheckerMemory
+                  checks={checks}
+                  state={s}
+                  onSettings={() => setOpen(false)}
+                />
               )}
               {s?.status === "ready" && (
                 <>

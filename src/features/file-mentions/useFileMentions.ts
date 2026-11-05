@@ -14,6 +14,7 @@ import {
   changesByPath,
   fileTree,
   listItems,
+  mentionFill,
   mentionTrigger,
   type MentionItem,
 } from "./mention-items";
@@ -90,7 +91,7 @@ export function useFileMentions({
   /** Puts `@folder/` in place of what was typed, to look inside it. */
   function enter(dir: string) {
     if (!trigger) return;
-    onFill({ start: trigger.start, end: at, text: "@" + dir });
+    onFill({ start: trigger.start, end: at, text: mentionFill(dir) });
   }
   function choose(item = selected) {
     if (!item || !trigger) return;

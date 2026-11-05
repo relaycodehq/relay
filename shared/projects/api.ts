@@ -23,7 +23,8 @@ import type { OpenWithApi } from "../open-with";
 import type { HelperPick } from "../settings";
 import type { ElsewhereChanges } from "../elsewhere";
 import type { ThreadNotesApi } from "../thread-notes";
-import type { ProjectChatEvent, ProjectChatsEvent } from "../events";
+import type { ProjectChatsEvent } from "../events";
+import type { ProjectChatPush } from "../chat-pushes";
 import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
 import type { DirListing, FileInfo, FilePreview } from "../project-files";
@@ -330,7 +331,8 @@ export interface ProjectChatApi {
     messageId: string | null,
     path: string,
   ): Promise<void>;
-  onProjectChat(callback: (event: ProjectChatEvent) => void): () => void;
+  /** Subscribing asks for every streaming answer whole, so the patches after it can be placed. */
+  onProjectChat(callback: (push: ProjectChatPush) => void): () => void;
   /** A project's thread list, pushed whenever any of its threads reads differently. */
   onProjectChats(callback: (event: ProjectChatsEvent) => void): () => void;
   /** What a thread is news of: an answer that finished or failed, a thread that needs you. */

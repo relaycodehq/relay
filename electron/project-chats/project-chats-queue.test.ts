@@ -467,6 +467,27 @@ it("stops while awaiting approval without leaving a request or replaying queued 
   expect(state.messages.at(-1)?.error).toBeUndefined();
 });
 
+it("sends a follow-up queued behind a resumed answer once it ends, though the stop paused an empty queue", async () => {
+  vi.stubEnv("RELAY_AGENT_TURN_MS", "1500");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, input("@codex Rework the cache"));
+  await waitForSummary(chat.id, (summary) => !!summary.running);
+  await chats.cancel(chat.id);
+  await vi.waitFor(() => expect(chats.hasActiveProject(projectId)).toBe(false));
+  await chats.resume(chat.id);
+  const followUp = input("@codex Follow-up while it carries on");
+  await chats.send(chat.id, followUp);
+  expect((await chats.get(chat.id)).queue).toHaveLength(1);
+  await vi.waitFor(
+    async () => {
+      const after = await chats.get(chat.id);
+      expect(after.queue ?? []).toEqual([]);
+      expect(after.messages.some((m) => m.id === followUp.id)).toBe(true);
+    },
+    { timeout: 8000 },
+  );
+});
+
 it("uses native Plan mode and answers harness questions without adding answers to chat", async () => {
   const chat = await chats.create(projectId, { kind: "project" });
   await chats.send(chat.id, {

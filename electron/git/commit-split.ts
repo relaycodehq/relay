@@ -1,4 +1,4 @@
-import { chunks } from "../util/chunks";
+import { chunks, commandLineRuns } from "../util/chunks";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -147,11 +147,9 @@ async function readUnits(root: string) {
     ).then((diff) => ({ change: c, paths, diff }));
   });
   const hashes: string[] = [];
-  for (const part of chunks(untracked, 100))
+  for (const part of commandLineRuns(untracked.map((c) => c.path)))
     hashes.push(
-      ...(await git(root, ["hash-object", "--", ...part.map((c) => c.path)]))
-        .trim()
-        .split("\n"),
+      ...(await git(root, ["hash-object", "--", ...part])).trim().split("\n"),
     );
   const parsed = diffs
     // Staged as added, then deleted from disk: nothing against HEAD.
@@ -400,7 +398,7 @@ export async function applyCommitSplit(
         const whole = [
           ...new Set(chosen.filter((u) => !u.hunk).flatMap((u) => u.paths)),
         ];
-        for (const part of chunks(whole, 100))
+        for (const part of commandLineRuns(whole))
           await git(root, ["add", "-A", "--", ...part], { env });
         const hunks = chosen.filter((u) => u.hunk);
         if (hunks.length) {
@@ -427,7 +425,7 @@ export async function applyCommitSplit(
       );
     } finally {
       const list = [...paths];
-      for (const part of chunks(list, 100))
+      for (const part of commandLineRuns(list))
         await git(root, ["reset", "-q", "HEAD", "--", ...part]);
       await rm(dir, { recursive: true, force: true });
     }

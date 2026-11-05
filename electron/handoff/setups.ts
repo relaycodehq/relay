@@ -207,7 +207,7 @@ export class HandoffSetups {
           url,
           repositories,
           error: failed,
-          settings: settingsOf(input),
+          settings: settingsOf(input, { name, bridge }),
         })
         .then(() => setup);
       starting = { job, waiting: new Set() };

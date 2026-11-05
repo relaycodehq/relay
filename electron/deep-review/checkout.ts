@@ -391,10 +391,17 @@ export async function sweepReviewCheckouts(
 /**
  * Removes a worktree Relay made for a review that never started. Only what
  * Git no longer counts as a worktree, a half-made folder, is deleted
- * outright: one it does may hold work by now.
+ * outright: one it does may hold work by now. One with edits in it is an
+ * earlier round's, whatever the thread's rounds still say: an earlier round
+ * checked out for its fix takes later rounds' checkouts away.
  */
 export async function discardReviewCheckout(checkout: ReviewCheckout) {
   if (!checkout.made) return;
+  // A worktree Git can't read may hold edits too; a half-made folder can't.
+  const holdsEdits = await dirty(checkout.path).catch(() =>
+    exists(join(checkout.path, ".git")),
+  );
+  if (holdsEdits) return;
   await removeReviewCheckout(checkout.path).catch(async (e: unknown) => {
     if (await exists(join(checkout.path, ".git")))
       return console.warn(
@@ -443,9 +450,15 @@ export async function placeRound(
   const checkout = opened ?? at;
   if (checkout) scope.checkout = checkout;
   else scope.folder = root;
+  // Git lists folders by their real paths, which an earlier round's needn't be.
+  const earlier = (chat.reviews ?? []).flatMap(
+    (r) => r.scope.checkout?.path ?? [],
+  );
   const kept =
     !!checkout &&
-    chat.reviews?.some((r) => r.scope.checkout?.path === checkout.path);
+    (await Promise.all(earlier.map((p) => sameFolder(p, checkout.path)))).some(
+      Boolean,
+    );
   return () =>
     !checkout
       ? undefined

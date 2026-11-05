@@ -46,7 +46,7 @@ import { Councils } from "./councils";
 import { ComputerHandoff } from "./handoff";
 import { LiveHandoff } from "./handoff-live";
 import { SetupMirror } from "./handoff-setup";
-import { ChatQueue } from "./queue";
+import { ChatQueue, holdQueueBack } from "./queue";
 import { LimitResumes } from "./limit-resume";
 import { IdleCompactions } from "./idle-compact";
 import { ChatSchedule } from "./schedule";
@@ -932,7 +932,7 @@ export class ProjectChats {
       steers && running && chat?.queue?.[0]?.input.delivery === "steer";
     // Only a stopped turn holds the queue back; nothing queues behind a side answer.
     if (chat && !unread && !queued && (running || this.councils.busy(chat)))
-      chat.queuePaused = true;
+      holdQueueBack(chat);
     const active = this.active.get(id);
     if (active && (unread || queued)) active.keepsQueue = true;
     this.active.stop(id);

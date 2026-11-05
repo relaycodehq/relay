@@ -155,6 +155,36 @@ describe.each(engines)("searching with %s", (engine) => {
     expect(file.matches[1].preview.endsWith("\r")).toBe(false);
   });
 
+  it("counts a UTF-8 BOM in the first line's columns, as the editor's text keeps it", async () => {
+    await put("bom.cs", "\uFEFFusing needle;\nneedle\n");
+    const r = await run(find("needle"), engine);
+    const file = r.files.find((f) => f.path === "bom.cs")!;
+    expect(file.matches.map((m) => [m.line, m.column])).toEqual([
+      [1, 7],
+      [2, 0],
+    ]);
+    const first = file.matches[0];
+    const atMatch = first.preview.slice(first.column - first.previewStart);
+    expect(atMatch.startsWith("needle")).toBe(true);
+  });
+
+  it("counts a BOM and wide characters together on the first line", async () => {
+    const text = "\uFEFFčau 😀 needle, needle\n🙂 needle\n";
+    await put("bom-wide.cs", text);
+    const r = await run(find("needle"), engine);
+    const file = r.files.find((f) => f.path === "bom-wide.cs")!;
+    const lines = text.split("\n");
+    expect(file.matches.map((m) => [m.line, m.column])).toEqual([
+      [1, 8],
+      [1, 16],
+      [2, 3],
+    ]);
+    for (const m of file.matches)
+      expect(lines[m.line - 1].slice(m.column, m.column + m.length)).toBe(
+        "needle",
+      );
+  });
+
   it("matches case on request", async () => {
     const r = await run(find("Needle", { caseSensitive: true }), engine);
     expect(summary(r)).toEqual([

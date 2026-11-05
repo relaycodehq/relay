@@ -1,9 +1,11 @@
-import { expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { NetworkInterfaceInfo } from "node:os";
+import type { PhoneTailnet } from "../../shared/remote";
 import {
   readTailscaleStatus,
   tailnetAddresses,
   tailnetPeer,
+  tailnetProbe,
 } from "./tailscale";
 
 const nic = (address: string): NetworkInterfaceInfo =>
@@ -67,4 +69,65 @@ it("reads the CLI's status: this computer's name and the phones on the tailnet",
   expect(
     readTailscaleStatus(JSON.stringify({ BackendState: "NeedsLogin" })),
   ).toEqual({ status: "stopped", addresses: [] });
+});
+
+describe("watching for the tailnet with Tailscale off", () => {
+  const off: PhoneTailnet = { status: "stopped", addresses: [] };
+  const wifi = { en0: [nic("192.168.1.20")] };
+
+  function watched() {
+    let at = 0;
+    let interfaces: Record<string, NetworkInterfaceInfo[]> = wifi;
+    const ask = vi.fn(async () => off);
+    const probe = tailnetProbe(
+      {},
+      { interfaces: () => interfaces, ask, now: () => at },
+    );
+    return {
+      ask,
+      // Phone access looks every 10s, as PhoneRemote's watch does.
+      tenSecondsLater: () => {
+        at += 10_000;
+        return probe();
+      },
+      settingsFiveSecondsLater: () => {
+        at += 5000;
+        return probe(true);
+      },
+      network: (next: Record<string, NetworkInterfaceInfo[]>) =>
+        (interfaces = next),
+    };
+  }
+
+  it("asks the Tailscale CLI once a minute, not on every look", async () => {
+    const { ask, tenSecondsLater } = watched();
+    for (let look = 0; look < 60; look++) await tenSecondsLater();
+    // 10 idle minutes; every look asked it before: 60.
+    expect(ask).toHaveBeenCalledTimes(10);
+  });
+
+  it("asks again at once when the network changes", async () => {
+    const { ask, tenSecondsLater, network } = watched();
+    await tenSecondsLater();
+    network({ ...wifi, utun4: [nic("10.0.0.2")] });
+    await tenSecondsLater();
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+
+  it("answers from the interfaces alone once Tailscale is up", async () => {
+    const { ask, tenSecondsLater, network } = watched();
+    network({ ...wifi, tailscale0: [nic("100.101.102.103")] });
+    expect(await tenSecondsLater()).toEqual({
+      status: "connected",
+      addresses: ["100.101.102.103"],
+    });
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it("asks afresh for Settings' detail", async () => {
+    const { ask, tenSecondsLater, settingsFiveSecondsLater } = watched();
+    await tenSecondsLater();
+    await settingsFiveSecondsLater();
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
 });

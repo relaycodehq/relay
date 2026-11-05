@@ -37,6 +37,7 @@ import {
   type SketchHistory,
   type Stroke,
 } from "./sketch";
+import { closedWith, committed, redone, undone } from "./sketch-history";
 import "./image-sketch.css";
 import { mac } from "../../lib/mod-key";
 import { readJson, writeJson } from "../../lib/persisted-store";
@@ -154,37 +155,12 @@ export function SketchEditor({
     return () => observer.disconnect();
   }, [size]);
 
-  function commit(next: (present: Stroke[]) => Stroke[]) {
-    setHistory((h) => ({
-      past: [...h.past, h.present],
-      present: next(h.present),
-      future: [],
-    }));
-  }
-  function undo() {
-    setHistory((h) =>
-      h.past.length
-        ? {
-            past: h.past.slice(0, -1),
-            present: h.past.at(-1)!,
-            future: [h.present, ...h.future],
-          }
-        : h,
-    );
-  }
-  function redo() {
-    setHistory((h) =>
-      h.future.length
-        ? {
-            past: [...h.past, h.present],
-            present: h.future[0],
-            future: h.future.slice(1),
-          }
-        : h,
-    );
-  }
+  const commit = (next: (present: Stroke[]) => Stroke[]) =>
+    setHistory((h) => committed(h, next));
+  const undo = () => setHistory(undone);
+  const redo = () => setHistory(redone);
   function close() {
-    if (size) onClose(history, { width: size.width, height: size.height });
+    onClose(...closedWith(history, initial, size));
   }
 
   /** Image pixels per on-screen pixel, and the pointer in image pixels. */

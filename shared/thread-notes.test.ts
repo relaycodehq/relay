@@ -213,3 +213,8 @@ it("pins a message once, apart from text kept from it, and quotes only its label
   const listy = { ...pinned.note, text: "- looks like a list" };
   expect(() => tickNote([listy], "n2", 1, true)).toThrow("isn't a list");
 });
+
+it("never cuts an emoji in half when it shortens a label", () => {
+  const label = messageLabel(`${"a".repeat(79)}🎉${"b".repeat(40)}`);
+  expect(label).toBe(`${"a".repeat(79)}…`);
+});

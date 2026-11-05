@@ -192,9 +192,9 @@ public func splitRows(_ diff: RemoteDiff) -> [SplitRow] {
 /// page for opening one from it, which on GitHub and Gitea also links one already open.
 /// Nil for a remote that isn't a web host.
 public func newPullRequestUrl(remote: String, branch: String) -> URL? {
-    guard !branch.isEmpty, let (host, path) = webRepo(remote) else { return nil }
+    guard !branch.isEmpty, let (origin, host, path) = webRepo(remote) else { return nil }
     let encoded = branch.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? branch
-    let base = "https://\(host)/\(path)"
+    let base = "\(origin)/\(path)"
     if host == "dev.azure.com" || host.hasSuffix(".visualstudio.com") {
         let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
         guard let ref = branch.addingPercentEncoding(withAllowedCharacters: unreserved) else { return nil }
@@ -204,13 +204,21 @@ public func newPullRequestUrl(remote: String, branch: String) -> URL? {
     return URL(string: "\(base)/compare/\(encoded)")
 }
 
-/// A remote's web host and repository path: `https://u@host/o/r.git`,
-/// `git@host:o/r.git` and `ssh://git@host/o/r` all give ("host", "o/r").
-private func webRepo(_ remote: String) -> (String, String)? {
+/// A remote's web origin, host and repository path: `https://u@host/o/r.git`,
+/// `git@host:o/r.git` and `ssh://git@host/o/r` all give ("https://host", "host", "o/r").
+/// An HTTP remote's scheme and port are its web page's; an SSH remote's port isn't.
+private func webRepo(_ remote: String) -> (origin: String, host: String, path: String)? {
     var rest = remote.trimmingCharacters(in: .whitespaces)
     var host: String
-    if let scheme = rest.range(of: "://") {
-        rest = String(rest[scheme.upperBound...])
+    var scheme = "https"
+    var webPort = false
+    if let separator = rest.range(of: "://") {
+        let given = rest[..<separator.lowerBound].lowercased()
+        if given == "http" || given == "https" {
+            scheme = given
+            webPort = true
+        }
+        rest = String(rest[separator.upperBound...])
         if let at = rest.firstIndex(of: "@"), rest[..<at].contains("/") == false { rest = String(rest[rest.index(after: at)...]) }
         guard let slash = rest.firstIndex(of: "/") else { return nil }
         host = String(rest[..<slash])
@@ -223,15 +231,20 @@ private func webRepo(_ remote: String) -> (String, String)? {
     } else {
         return nil
     }
-    if let port = host.firstIndex(of: ":") { host = String(host[..<port]) }
+    var port = ""
+    if let colon = host.firstIndex(of: ":") {
+        if webPort { port = String(host[colon...]) }
+        host = String(host[..<colon])
+    }
     if rest.hasSuffix(".git") { rest.removeLast(4) }
     rest = rest.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     // Azure's SSH remotes: ssh.dev.azure.com:v3/org/project/repo.
     if host == "ssh.dev.azure.com", rest.hasPrefix("v3/") {
         let parts = rest.dropFirst(3).split(separator: "/")
         guard parts.count == 3 else { return nil }
-        return ("dev.azure.com", "\(parts[0])/\(parts[1])/_git/\(parts[2])")
+        return ("https://dev.azure.com", "dev.azure.com", "\(parts[0])/\(parts[1])/_git/\(parts[2])")
     }
     guard !host.isEmpty, rest.contains("/") else { return nil }
-    return (host.lowercased(), rest)
+    host = host.lowercased()
+    return ("\(scheme)://\(host)\(port)", host, rest)
 }

@@ -9,7 +9,7 @@ import {
 import { recipient } from "../../../shared/recipient";
 import { returnedDraft } from "../../../shared/returned-draft";
 import { api } from "../../lib/api";
-import { moveQueued, type QueueDrop } from "./chat-queue";
+import { moveQueued, newestQueued, type QueueDrop } from "./chat-queue";
 import { saveSentSettings } from "../agents/composer-settings";
 import { loadDraftImages, saveDraftImages } from "../images/draft-images";
 import { readDraft, writeDraft } from "../composer/drafts";
@@ -111,13 +111,7 @@ export function useQueuedMessages({
   /** Takes the conversation's newest queued message back, as its × does; false when none waits. */
   function editLast(rootId: string | null) {
     if (!chat || busy) return false;
-    let last: NonNullable<typeof queue>[number] | undefined;
-    for (const queued of queue ?? [])
-      if (
-        conversationOf(queued.input) === rootId &&
-        (!last || queued.created >= last.created)
-      )
-        last = queued;
+    const last = newestQueued(queue ?? [], rootId, conversationOf);
     if (!last) return false;
     void returnToComposer(last.input);
     return true;

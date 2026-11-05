@@ -83,6 +83,12 @@ class FakeAgent {
     const customTools = sendOptions.local?.customTools;
     log({
       pid: process.pid,
+      // The git settings its worker was started with, as Read only adds them.
+      gitConfig: Object.fromEntries(
+        Object.entries(process.env).filter(([name]) =>
+          name.startsWith("GIT_CONFIG"),
+        ),
+      ),
       agent: this.agentId,
       options: this.options,
       sendOptions: {
@@ -119,6 +125,8 @@ class FakeAgent {
       mkdirSync(storeDir, { recursive: true });
       writeFileSync(active, String(process.pid));
     }
+    // Like a send that takes a while to start the run, e.g. a cold agent.
+    if (/\[\[slowstart\]\]/.test(prompt)) await pause(1000);
     const say = (update) => sendOptions.onDelta({ update });
     const run = new Run(undefined);
     const script = async () => {
@@ -143,9 +151,11 @@ class FakeAgent {
         );
       if (/\[\[slow\]\]/.test(prompt)) {
         say({ type: "text-delta", text: "Working. " });
-        await new Promise((resolve) => {
-          run.wake = resolve;
-        });
+        // Cancelled already, as a run can be before anyone waits for it.
+        if (!run.cancelled)
+          await new Promise((resolve) => {
+            run.wake = resolve;
+          });
         return { status: "cancelled", result: "" };
       }
       if (/\[\[steer\]\]/.test(prompt)) {

@@ -135,20 +135,28 @@ public actor RemoteClient {
         return try await request(method, .array(args.map { $0 ?? .null }), wait)
     }
 
-    /// One of the desktop's own calls on the phone's allowlist. Trailing nils
-    /// go (JSON would turn a left-out argument into null, which the desktop
-    /// refuses), and a send's `to` goes for desktops that don't know it.
+    /// One of the desktop's own calls on the phone's allowlist. A nil argument is
+    /// left out, `.null` is a null the desktop gets; see `desktopArgs`.
     public func desktop(_ method: String, _ args: [JSON?] = []) async throws -> JSON {
+        let sent = Self.desktopArgs(method, args, bridge: bridgeVersion)
+        let wait = Bridge.slowPhoneMethods.contains(method) ? options.slowTimeout : options.timeout
+        return try await request("desktop", [.string(method), sent], wait)
+    }
+
+    /// A desktop call's arguments as they go, as shared/remote-client sends them. Left-out (nil)
+    /// ones at the end go: JSON would turn them into nulls, which an optional parameter refuses.
+    /// An explicit `.null` stays, for a parameter that takes null, such as `selectAgentWorktree`'s
+    /// "the project folder". A send's `to` goes for desktops that don't know it.
+    static func desktopArgs(_ method: String, _ args: [JSON?], bridge: Int?) -> JSON {
         var sent = args
-        while let last = sent.last, last == nil || last == .null { sent.removeLast() }
-        if method == "sendProjectChat", (bridgeVersion ?? 0) < Bridge.recipient, sent.count > 1,
+        while let last = sent.last, last == nil { sent.removeLast() }
+        if method == "sendProjectChat", (bridge ?? 0) < Bridge.recipient, sent.count > 1,
             case .object(var send)? = sent[1]
         {
             send.removeValue(forKey: "to")
             sent[1] = .object(send)
         }
-        let wait = Bridge.slowPhoneMethods.contains(method) ? options.slowTimeout : options.timeout
-        return try await request("desktop", [.string(method), .array(sent.map { $0 ?? .null })], wait)
+        return .array(sent.map { $0 ?? .null })
     }
 
     private func request(_ method: String, _ args: JSON, _ wait: Duration) async throws -> JSON {

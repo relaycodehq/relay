@@ -1,7 +1,7 @@
 // The composer's chip for the threads the open thread started, while any
 // works or asks: beside the subagents chip and drawn like it, with the same
 // two-sided card, each thread's task and latest line on the right.
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronRight, MessagesSquare } from "lucide-react";
@@ -72,7 +72,7 @@ function Detail({ chat, onOpen }: { chat: ChatSummary; onOpen: () => void }) {
   );
 }
 
-export function StartedChip() {
+export const StartedChip = memo(function StartedChip() {
   const view = useStartedThreads();
   const started = useStarted(undefined, true);
   const [open, setOpen] = useState(false);
@@ -158,4 +158,4 @@ export function StartedChip() {
       </Popover.Portal>
     </Popover.Root>
   );
-}
+});

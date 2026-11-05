@@ -1,6 +1,8 @@
 import {
   appendFile,
   mkdir,
+  readdir,
+  rename,
   writeFile,
   mkdtemp,
   realpath,
@@ -378,4 +380,51 @@ it("finds a picked session again by id, only in the project's folder", async () 
   expect(
     await sessions.find(repo, { provider: "codex", session: "c-terminal-1" }),
   ).toBeUndefined();
+});
+
+it("finds yesterday's Codex sessions in the hour after a short day", async () => {
+  await writeCodexSession(codex, repo, "x-terminal-1", turns);
+  const sessions = join(codex, "sessions");
+  const [year] = await readdir(sessions);
+  const [month] = await readdir(join(sessions, year!));
+  const [day] = await readdir(join(sessions, year!, month!));
+  await mkdir(join(sessions, "2026", "03"), { recursive: true });
+  await rename(
+    join(sessions, year!, month!, day!),
+    join(sessions, "2026", "03", "29"),
+  );
+  const zone = process.env.TZ;
+  try {
+    // Clocks in Prague went forward on 29 March 2026, so that day had 23 hours.
+    process.env.TZ = "Europe/Prague";
+    const now = new Date(2026, 2, 30, 0, 30).getTime();
+    const rows = await new TerminalSessions(homes(), () => now).list(repo);
+    expect(rows.map((r) => r.id)).toEqual(["x-terminal-1"]);
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
+});
+
+it("finds Claude sessions of a folder whose name is decomposed on disk", async () => {
+  // Finder can write "í" as "i" and a combining accent; Claude Code names
+  // the folder, and records where it ran, composed.
+  const folder = join(dir, "Míla".normalize("NFD"));
+  await mkdir(folder);
+  await writeClaudeSession(
+    claude,
+    folder.normalize("NFC"),
+    "c-terminal-1",
+    claudeTurns(turns),
+  );
+  const sessions = new TerminalSessions(homes());
+  expect((await sessions.list(folder)).map((r) => r.id)).toEqual([
+    "c-terminal-1",
+  ]);
+  expect(
+    await sessions.find(folder, {
+      provider: "claude",
+      session: "c-terminal-1",
+    }),
+  ).toMatchObject({ id: "c-terminal-1" });
 });

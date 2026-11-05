@@ -10,6 +10,8 @@ final class ChangesModel {
     private(set) var tree: WorkingTree?
     private(set) var error: String?
     private(set) var busy: Busy?
+    /// Counts the actions that went through, for the buzz; a tree changed on the computer isn't one.
+    private(set) var succeeded = 0
     /// The message being written. Once typed in it's yours: a message still being written doesn't replace it.
     var message = "" {
         didSet { if message != written { typed = true } }
@@ -94,6 +96,7 @@ final class ChangesModel {
             defer { busy = nil }
             do {
                 show(try await client().gitAction(self.where, action))
+                succeeded += 1
             } catch {
                 asks.failure(error, "Git said no")
                 await load()
@@ -123,10 +126,15 @@ final class ChangesModel {
             writing = false
             setMessage("")
             show(next)
-            guard push else { return }
+            // One success for one tap: Commit & Push has it once the push lands.
+            guard push else {
+                succeeded += 1
+                return
+            }
             busy = .push
             do {
                 show(try await client.gitAction(self.where, .push(revision: next.revision)))
+                succeeded += 1
             } catch {
                 asks.alert(
                     "Committed, but the push failed",

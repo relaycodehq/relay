@@ -67,16 +67,20 @@ export async function createReviewers(
   return created;
 }
 
-/** Sends `slots` their tasks; `done` goes on past any that couldn't start. */
+/**
+ * Sends `slots` their tasks; `done` goes on past any that couldn't start,
+ * and `sent` hears of each slot once its send is over, gone or not.
+ */
 export async function sendReviewers(
   host: ReviewersHost,
   chat: ProjectChat,
   state: DeepReviewState,
   slots: number[],
   done: () => Promise<unknown>,
+  sent: (slot: number) => void = () => {},
 ) {
   try {
-    await startReviewers(host, chat, state, slots, done);
+    await startReviewers(host, chat, state, slots, done, sent);
   } catch (error) {
     // Nothing is running that would ever hand over to the lead, so leave
     // the review where Resume picks it up.
@@ -99,28 +103,43 @@ async function startReviewers(
   state: DeepReviewState,
   slots: number[],
   done: () => Promise<unknown>,
+  sent: (slot: number) => void,
 ) {
   await startSlots(
     slots,
     async (slot) => {
-      const reviewer = state.reviewers[slot]!;
-      const { body } = reviewerTask(
-        reviewer,
-        state.scope,
-        state.focus,
-        passTask(state, reviewer),
-      );
-      await host.send(reviewer.chatId, {
-        id: randomUUID(),
-        body,
-        to: reviewer.provider,
-        provider: reviewer.provider,
-        choice: reviewer.choice,
-        ...councilTurn,
-        // Signed by the review, whose name opens it from the reviewer's thread.
-        fromThread: { id: chat.id, name: "Deep review" },
-      });
+      try {
+        await sendTask(host, chat, state, slot);
+      } finally {
+        sent(slot);
+      }
     },
     done,
   );
+}
+
+/** Sends the reviewer in `slot` its task, signed by the review. */
+async function sendTask(
+  host: ReviewersHost,
+  chat: ProjectChat,
+  state: DeepReviewState,
+  slot: number,
+) {
+  const reviewer = state.reviewers[slot]!;
+  const { body } = reviewerTask(
+    reviewer,
+    state.scope,
+    state.focus,
+    passTask(state, reviewer),
+  );
+  await host.send(reviewer.chatId, {
+    id: randomUUID(),
+    body,
+    to: reviewer.provider,
+    provider: reviewer.provider,
+    choice: reviewer.choice,
+    ...councilTurn,
+    // Signed by the review, whose name opens it from the reviewer's thread.
+    fromThread: { id: chat.id, name: "Deep review" },
+  });
 }

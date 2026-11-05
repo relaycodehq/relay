@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Menu } from "@base-ui/react/menu";
 import { Check, ChevronDown, Copy, Folder, FolderGit2 } from "lucide-react";
 import type {
@@ -94,7 +95,7 @@ export function WorkspaceControl({
 }
 
 /** Kept out of the composer, which remounts with each side conversation: a dialog in it would start over. */
-export function WorktreeDialogs({
+export const WorktreeDialogs = memo(function WorktreeDialogs({
   chat,
   worktree,
 }: {
@@ -116,7 +117,7 @@ export function WorktreeDialogs({
       />
     );
   return null;
-}
+});
 
 const workspaces: Record<
   ChatWorkspace,

@@ -1,5 +1,7 @@
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { errorMessage } from "../../../shared/error-message";
+import { maxDirEntries, type DirListing } from "../../../shared/project-files";
 import { api } from "../../lib/api";
 import {
   joinPath,
@@ -16,6 +18,8 @@ import { FileTreeHead, type TreeFold } from "./FileTreeHead";
 import { FileTreeRow, NameInput } from "./FileTreeRow";
 import "../../ui/tree.css";
 import "./file-browser.css";
+
+const partOfFolder = `Showing the first ${maxDirEntries.toLocaleString("en-US")} entries.`;
 
 type Editing =
   | { mode: "rename"; path: string }
@@ -240,25 +244,14 @@ export function FileTree({
                   }
                 />
               )}
-              {row.loading && (
-                <div
-                  className="file-tree-hint"
-                  style={{ "--depth": row.depth + 1 } as never}
-                >
-                  Loading…
-                </div>
-              )}
-              {row.open &&
-                !row.loading &&
-                directories.listings[row.path]?.entries.length === 0 &&
-                !(editing?.mode === "create" && editing.dir === row.path) && (
-                  <div
-                    className="file-tree-hint"
-                    style={{ "--depth": row.depth + 1 } as never}
-                  >
-                    Empty
-                  </div>
-                )}
+              <FolderHint
+                row={row}
+                listing={directories.listings[row.path]}
+                failure={directories.failures[row.path]}
+                creatingHere={
+                  editing?.mode === "create" && editing.dir === row.path
+                }
+              />
               {editing?.mode === "create" &&
                 editing.dir === row.path &&
                 createRow(editing.kind, row.depth + 1)}
@@ -268,9 +261,7 @@ export function FileTree({
             <div className="file-tree-hint">This folder is empty.</div>
           )}
           {directories.listings[""]?.truncated && (
-            <div className="file-tree-hint">
-              Showing the first 5,000 entries.
-            </div>
+            <div className="file-tree-hint">{partOfFolder}</div>
           )}
         </div>
       )}
@@ -302,6 +293,39 @@ export function FileTree({
       )}
     </div>
   );
+}
+
+/**
+ * What an open folder says under its name: that it's still loading, why it
+ * can't be listed, that it's empty, or that it shows only part of itself.
+ */
+function FolderHint({
+  row,
+  listing,
+  failure,
+  creatingHere,
+}: {
+  row: TreeRow;
+  listing: DirListing | undefined;
+  failure: unknown;
+  /** A new entry's name is being typed in it. */
+  creatingHere: boolean;
+}) {
+  const hint = (text: string) => (
+    <div
+      className="file-tree-hint"
+      style={{ "--depth": row.depth + 1 } as never}
+    >
+      {text}
+    </div>
+  );
+  if (!row.open) return null;
+  // A listing that failed after one arrived keeps showing the one it had.
+  if (row.loading && failure) return hint(errorMessage(failure));
+  if (row.loading) return hint("Loading…");
+  if (listing?.truncated) return hint(partOfFolder);
+  if (listing?.entries.length === 0 && !creatingHere) return hint("Empty");
+  return null;
 }
 
 /** Where a new file lands: in the selected folder, beside the selected file, else the root. */

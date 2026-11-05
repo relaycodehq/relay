@@ -105,3 +105,55 @@ it("keeps unsaved edits when the file moves to another folder", async () => {
   doc.detach(view);
   documents.close(to, "c.txt", true);
 });
+
+it("shows a file rewritten with other line breaks line by line", async () => {
+  const source = { kind: "project" as const, where: "w" };
+  const read = (contents: string, version: string) =>
+    vi.mocked(api.projectFile).mockImplementationOnce(async (_where, path) => ({
+      path,
+      branch: "main",
+      head: "abc",
+      version,
+      contents,
+      original: "one\ntwo\n",
+    }));
+  read("one\r\ntwo\r\n", "crlf");
+  const doc = documents.get(source, "d.txt", () => history());
+  await vi.waitFor(() => expect(doc.state).toBeDefined());
+  const view = viewOf(doc);
+
+  read("one\ntwo\nthree\n", "lf");
+  await doc.check();
+  expect(view.state.doc.lines).toBe(4);
+  expect(doc.text()).toBe("one\ntwo\nthree\n");
+
+  // A line typed now ends the way the file's lines do.
+  view.dispatch({ changes: { from: view.state.doc.length, insert: view.state.lineBreak } });
+  expect(doc.text()).toBe("one\ntwo\nthree\n\n");
+  doc.detach(view);
+  documents.close(source, "d.txt", true);
+});
+
+it("gives pasted text the file's line breaks", async () => {
+  const source = { kind: "project" as const, where: "w" };
+  vi.mocked(api.projectFile).mockImplementationOnce(async (_where, path) => ({
+    path,
+    branch: "main",
+    head: "abc",
+    version: "crlf",
+    contents: "one\r\n",
+    original: "one\r\n",
+  }));
+  const doc = documents.get(source, "e.txt", () => history());
+  await vi.waitFor(() => expect(doc.state).toBeDefined());
+  const view = viewOf(doc);
+
+  const clipboardData = new DataTransfer();
+  clipboardData.setData("text/plain", "two\nthree\n");
+  view.contentDOM.dispatchEvent(
+    new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }),
+  );
+  expect(doc.text()).toBe("two\r\nthree\r\none\r\n");
+  doc.detach(view);
+  documents.close(source, "e.txt", true);
+});

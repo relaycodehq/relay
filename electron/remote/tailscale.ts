@@ -123,28 +123,65 @@ async function probe(): Promise<PhoneTailnet> {
 }
 
 /**
- * Without `detail` the interfaces answer alone, which is cheap enough to watch
- * with; Settings asks for the CLI's names and phones too, one probe serving a
+ * Without `detail` the interfaces answer, which is cheap enough to watch with;
+ * when they show no tailnet the CLI is asked again only once the network
+ * changes or a minute has passed. Settings asks for the CLI's names and phones too, one probe serving a
  * few seconds of its polling. RELAY_REMOTE_TAILNET stands in addresses
  * instead, e.g. 127.0.0.1 for tests and the Android emulator, which reaches
  * this computer through its loopback.
  */
 export function tailnetProbe(
   env: NodeJS.ProcessEnv = process.env,
+  look: TailnetLook = {
+    interfaces: networkInterfaces,
+    ask: probe,
+    now: Date.now,
+  },
 ): TailnetProbe {
   const fixed = env.RELAY_REMOTE_TAILNET;
   if (fixed) {
     const addresses = fixed.split(",").filter(Boolean);
     return async () => ({ status: "connected", addresses });
   }
-  let last: { at: number; result: Promise<PhoneTailnet> } | undefined;
+  let last:
+    { at: number; network: string; result: Promise<PhoneTailnet> } | undefined;
   return async (detail) => {
+    const interfaces = look.interfaces();
     if (!detail) {
-      const addresses = tailnetAddresses(networkInterfaces());
+      const addresses = tailnetAddresses(interfaces);
       if (addresses.length) return { status: "connected", addresses };
     }
-    if (!last || Date.now() - last.at > 2500)
-      last = { at: Date.now(), result: probe() };
+    const network = networkShape(interfaces);
+    if (!last || !stillAnswers(last, network, detail))
+      last = { at: look.now(), network, result: look.ask() };
     return last.result;
   };
+
+  // Tailscale coming up adds an interface, which the watch sees at its next
+  // look; the CLI alone tells only of a tailnet without one (userspace mode).
+  function stillAnswers(
+    answer: { at: number; network: string },
+    network: string,
+    detail?: boolean,
+  ) {
+    const age = look.now() - answer.at;
+    if (detail) return age <= 2500;
+    return answer.network === network && age < watchAsksEvery;
+  }
+}
+
+const watchAsksEvery = 60_000;
+
+const networkShape = (interfaces: NodeJS.Dict<NetworkInterfaceInfo[]>) =>
+  Object.entries(interfaces)
+    .map(([name, infos = []]) => `${name}=${infos.map((i) => i.address)}`)
+    .sort()
+    .join(" ");
+
+/** What a probe reads, swapped in tests. */
+export interface TailnetLook {
+  interfaces: () => NodeJS.Dict<NetworkInterfaceInfo[]>;
+  /** The full probe: the Tailscale CLI, then the interfaces. */
+  ask: () => Promise<PhoneTailnet>;
+  now: () => number;
 }

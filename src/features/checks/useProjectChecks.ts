@@ -34,6 +34,51 @@ function useAsleep(away: boolean) {
   return asleep;
 }
 
+/** Where the folder's or PR's check settings are saved here; "" for neither. */
+function preferenceKey(pull?: Pull, local?: { id: string }) {
+  if (local) return `relay-checks:project:${local.id}`;
+  if (pull) return `relay-checks:${pull.html_url}`;
+  return "";
+}
+
+/** Whether checks are on for the folder or PR, and the target picked, as saved here. */
+function useCheckPreference(pull?: Pull, local?: { id: string }) {
+  const preference = preferenceKey(pull, local);
+  const [preferenceVersion, setPreferenceVersion] = useState(0);
+  const { selection, enabled } = useMemo(
+    () => ({
+      selection: readText(preference + ":target") ?? "",
+      enabled: readText(preference) !== "off",
+    }),
+    [preference, preferenceVersion],
+  );
+  const toggle = (value: boolean) => {
+    writeText(preference, value ? "on" : "off");
+    setPreferenceVersion((n) => n + 1);
+  };
+  const choose = (value: string) => {
+    writeText(preference + ":target", value);
+    setPreferenceVersion((n) => n + 1);
+  };
+  return { preference, selection, enabled, toggle, choose };
+}
+
+/** Where the checker's results are cached and how they're asked for. */
+function useCheckStateQuery(
+  identity: string,
+  pull?: Pull,
+  local?: { id: string; head: string },
+) {
+  const queryKey = useMemo(() => ["project-check-state", identity], [identity]);
+  return {
+    queryKey,
+    queryFn: () =>
+      local
+        ? api.localCheckState(local.id, local.head)
+        : api.projectCheckState(pull!, pull!.head.sha),
+  };
+}
+
 /**
  * `busy` pauses rechecking (e.g. while an agent is editing the tree); so does a
  * hidden window. The language service stays loaded and checks once on resume.
@@ -57,18 +102,9 @@ export function useProjectChecks(
     : pull
       ? `${pull.html_url}:${pull.head.sha}`
       : "";
-  const preference = local
-    ? `relay-checks:project:${local.id}`
-    : pull
-      ? `relay-checks:${pull.html_url}`
-      : "";
-  const [preferenceVersion, setPreferenceVersion] = useState(0);
-  const { selection, enabled } = useMemo(
-    () => ({
-      selection: readText(preference + ":target") ?? "",
-      enabled: readText(preference) !== "off",
-    }),
-    [preference, preferenceVersion],
+  const { preference, selection, enabled, toggle, choose } = useCheckPreference(
+    pull,
+    local,
   );
   const [error, setError] = useState<unknown>();
   const [retry, setRetry] = useState(0);
@@ -81,16 +117,14 @@ export function useProjectChecks(
     retry: false,
     refetchInterval: (q) => poll(q.state.data === null ? 3000 : false),
   });
-  const queryKey = useMemo(() => ["project-check-state", identity], [identity]);
+  const stateQuery = useCheckStateQuery(identity, pull, local);
+  const { queryKey } = stateQuery;
   const state = useQuery({
-    queryKey,
-    queryFn: () =>
-      local
-        ? api.localCheckState(local.id, local.head)
-        : api.projectCheckState(pull!, pull!.head.sha),
+    ...stateQuery,
     enabled: !!(pull || local),
     refetchInterval: poll(enabled && !asleep ? (paused ? 5000 : 1000) : false),
     retry: false,
+    select: withoutHeapUsed,
   });
   const target =
     info.data?.targets.find((t) => t.id === selection) ?? info.data?.targets[0];
@@ -135,14 +169,6 @@ export function useProjectChecks(
       .then(() => qc.invalidateQueries({ queryKey }))
       .catch(() => {});
   }, [identity, enabled, asleep, paused]);
-  const toggle = (value: boolean) => {
-    writeText(preference, value ? "on" : "off");
-    setPreferenceVersion((n) => n + 1);
-  };
-  const choose = (value: string) => {
-    writeText(preference + ":target", value);
-    setPreferenceVersion((n) => n + 1);
-  };
   const buffer = useCallback(
     (path: string, text: string | null) => {
       if ((!pull && !local) || !enabled) return Promise.resolve();
@@ -159,7 +185,9 @@ export function useProjectChecks(
     /** Checks a project's workspace rather than a PR's linked folder. */
     local: !!local,
     info: info.data,
+    /** Without the heap in use; `useCheckerHeapUsed` reads that. */
     state: state.data,
+    stateQuery,
     enabled,
     paused,
     /** Quit to free memory while Relay is in the background. */
@@ -176,3 +204,20 @@ export function useProjectChecks(
 }
 
 export type ChecksController = ReturnType<typeof useProjectChecks>;
+
+/**
+ * The checker reports its heap every few seconds, a new number nearly each
+ * time. Left in, every report would re-render whatever holds the checks: in
+ * the main window, the whole shell.
+ */
+function withoutHeapUsed(state: ProjectCheckState | null) {
+  return state && { ...state, memory: { limit: state.memory.limit } };
+}
+
+const heapUsed = (state: ProjectCheckState | null) => state?.memory.used;
+
+/** The checker's heap in use, re-rendering only the component that shows it. */
+export function useCheckerHeapUsed(checks: ChecksController) {
+  return useQuery({ ...checks.stateQuery, enabled: false, select: heapUsed })
+    .data;
+}

@@ -44,6 +44,8 @@ export class Dictation {
   private worker?: UtilityProcess;
   /** The worker couldn't load the model; the next use starts a fresh one. */
   private broken = false;
+  /** A session is running in the worker; it stays loaded until that ends. */
+  private busy = false;
   private idle?: NodeJS.Timeout;
   private readonly dir: string;
   private readonly appleHelper = appleSpeechHelper(__dirname);
@@ -197,10 +199,11 @@ export class Dictation {
   private startWorker() {
     if (this.worker && this.broken) this.stopWorker();
     if (this.worker) {
-      this.touch(true);
+      if (!this.busy) this.touch(true);
       return this.worker;
     }
     this.broken = false;
+    this.busy = false;
     const worker = utilityProcess.fork(
       join(__dirname, "dictation-worker.cjs"),
       [],
@@ -210,8 +213,10 @@ export class Dictation {
     );
     this.worker = worker;
     worker.on("message", (notice: WorkerNotice) => {
-      if (notice.type === "busy") this.touch(!notice.busy);
-      else if (notice.type === "failed") {
+      if (notice.type === "busy") {
+        this.busy = notice.busy;
+        this.touch(!notice.busy);
+      } else if (notice.type === "failed") {
         // The page hears it over its port; this worker won't be reused.
         console.error("Dictation engine failed to load:", notice.message);
         this.broken = true;

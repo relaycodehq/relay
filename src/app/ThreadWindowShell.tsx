@@ -70,7 +70,8 @@ export default function ThreadWindowShell({
     document.title = chat?.title ?? "Relay";
   }, [chat?.title]);
   // A thread that's gone, archived away or its project removed, goes back.
-  const gone = !!nav.chats.data && !chat;
+  const projectGone = !!projects.data && !project;
+  const gone = projectGone || (!!nav.chats.data && !chat);
   useEffect(() => {
     if (gone) void api.returnThreadWindow(thread.chatId).catch(setError);
   }, [gone]);

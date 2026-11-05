@@ -28,6 +28,7 @@ import { HeadlessUpdater, installRoot } from "../updater";
 import { headlessVersion } from "../version";
 import { keepDistributionsUp, wslDistro } from "../wsl";
 import { errorMessage } from "../../../shared/error-message";
+import { gitTooOld, OLDEST_GIT } from "../../../shared/working-tree";
 import { agentName, type Flags, Usage } from "./args";
 import { remember, ensureRunning } from "./daemon";
 import { pair, printTailscaleHelp, deviceRow } from "./remote";
@@ -217,16 +218,7 @@ export async function setup(home: string, flags: Flags) {
           `${process.versions.node} has no node:sqlite, so a restart forgets running turns; 22.13 or newer has it`,
         ),
   );
-  const git = gitVersion();
-  ui.print(
-    git
-      ? row("ok", "Git", dim(git.replace(/^git version /, "")))
-      : row(
-          "fail",
-          "Git",
-          "not installed; threads in worktrees and handoffs need it",
-        ),
-  );
+  ui.print(gitRow(gitVersion()));
   let spin = ui.spin("Looking for Tailscale…");
   const tailnet = await tailnetProbe()(true);
   spin.stop();
@@ -411,6 +403,22 @@ export async function update(home: string, flags: Flags) {
       `Relay update did not finish (${result.status}); try again.`,
     );
   }
+}
+
+function gitRow(versionLine: string | undefined) {
+  if (!versionLine)
+    return row(
+      "fail",
+      "Git",
+      "not installed; threads in worktrees and handoffs need it",
+    );
+  const version = versionLine.replace(/^git version /, "");
+  if (!gitTooOld(versionLine)) return row("ok", "Git", dim(version));
+  return row(
+    "fail",
+    "Git",
+    `${version} is too old; Relay needs ${OLDEST_GIT.major}.${OLDEST_GIT.minor} or newer`,
+  );
 }
 
 function gitVersion() {

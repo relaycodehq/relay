@@ -86,7 +86,8 @@ const respellings = [
   `\\$(?!['"]?(?:[\\s;&|]|$)|p['"])`,
 ];
 
-const braceList = `\\{[^\\s}]*(?:,|\\.\\.)`;
+// Not past another `{`: from each one to the end, a long run took minutes.
+const braceList = `\\{[^\\s{}]*(?:,|\\.\\.)`;
 export const disguisedFlag = [...respellings, braceList].join("|");
 const respelled = new RegExp(respellings.join("|"));
 const braces = new RegExp(braceList);
@@ -182,8 +183,10 @@ export const allowedFlags: Record<string, string> = {
     ),
   ].join("|"),
   // Not -o, which writes, nor -R, which writes a listing into each folder.
+  // tree reads on through a cluster after a letter taking a value, which
+  // takes the next word (-Io x out is -I x -o out), so that letter ends it.
   tree: [
-    shorts("acdfghilnpqstuvxACDFJNQSUX", "ILP"),
+    "-[acdfghilnpqstuvxACDFJNQSUX]*(?:[IP]|L\\d*)?",
     longs(
       ["noreport", "dirsfirst", "gitignore", "prune", "du", "si", "matchdirs",
         "ignore-case", "version", "help"],
@@ -219,18 +222,132 @@ export function readsOnly(command: string): boolean {
     /(^|\s)(?:[12]?>\s*\/dev\/null|2>&1)(?=\s|$)/g,
     "$1",
   );
-  // Writes, substitutions and here-documents; quoting isn't parsed, so a
-  // quoted one counts too and the command is turned down.
+  // Writes, substitutions and here-documents; a quoted one counts too and
+  // the command is turned down.
   if (/[<>`]|\$\(/.test(bare)) return false;
-  const segments = bare.split(/&&|\|\||[;|\n]/).map((s) => s.trim());
-  return segments.every((s) => !!s && !s.includes("&") && segmentReads(s));
+  const commands = commandsIn(bare);
+  return !!commands && commands.every((c) => !!c.text && segmentReads(c));
 }
 
-function segmentReads(segment: string) {
+/** One command of a line, as the shell reads it. */
+type ShellCommand = {
+  text: string;
+  /** A `$` that does more than read a variable: bash's `${x@P}` and `$[x]`, zsh's `${(e)x}`. */
+  expands: boolean;
+  /** A word starts with an unquoted wildcard, which may expand to a file named like a flag. */
+  globbed: boolean;
+};
+
+/** Wildcards bash and zsh expand at the start of a word; `{` for zsh's brace_ccl, `^` for extended_glob. */
+const wildcards = "*?[{^";
+
+/**
+ * `$NAME` or `${NAME}`, which only read a variable. Not a subscript: it's
+ * arithmetic, which runs code a value holds, and `$_` holds the last word.
+ */
+const variable = /\$(?:[A-Za-z]\w*(?![\w[])|\{[A-Za-z]\w*\})/y;
+
+/** Whether the `$` at `at` expands more than a variable; one before a blank or the end is a `$`. */
+function expandsAt(line: string, at: number, ends: string) {
+  variable.lastIndex = at;
+  if (variable.test(line)) return false;
+  const next = line[at + 1];
+  return next !== undefined && !ends.includes(next);
+}
+
+/** Whether a `$` in the double-quoted `"…"` at `open` to `close` expands more than a variable. */
+function expandsQuoted(line: string, open: number, close: number) {
+  for (let i = open + 1; i < close; i++) {
+    if (line[i] === "\\") i++;
+    else if (line[i] === "$" && expandsAt(line, i, ' \t\n"')) return true;
+  }
+  return false;
+}
+
+/**
+ * The commands of `line`, split where bash and zsh split them: a `;`, `|` or
+ * newline inside quotes doesn't end one, and a backslash-newline joins two
+ * lines. Undefined for what no read needs and this doesn't follow: a
+ * subshell or zsh's `*(e:…:)` and `=(…)`, which run code, a command sent to
+ * the background, or an unclosed quote.
+ */
+function commandsIn(line: string): ShellCommand[] | undefined {
+  const commands: ShellCommand[] = [];
+  let command: ShellCommand = { text: "", expands: false, globbed: false };
+  /** Nothing of the word being read so far; empty quotes don't count. */
+  let newWord = true;
+  /** How far a comment has been checked for quotes, so each line is read once. */
+  let commentChecked = -1;
+  const endCommand = () => {
+    commands.push({ ...command, text: command.text.trim() });
+    command = { text: "", expands: false, globbed: false };
+  };
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]!;
+    const next = line[i + 1];
+    const startsWord: boolean = newWord;
+    newWord = c === " " || c === "\t";
+    if (c === "\n" || c === ";") {
+      endCommand();
+      newWord = true;
+    } else if (c === "|" || c === "&") {
+      const doubled = next === c;
+      if (!doubled && (c === "&" || next === "&")) return undefined;
+      if (doubled) i++;
+      endCommand();
+      newWord = true;
+    } else if (c === "(" || c === ")") {
+      return undefined;
+    } else if (c === "\\" && next === "\n") {
+      // Removed, as if the two lines were one.
+      i++;
+      newWord = startsWord;
+    } else if (c === "\\") {
+      command.text += c + (next ?? "");
+      i++;
+    } else if (c === "'" || c === '"' || (c === "$" && next === "'")) {
+      const open = c === "$" ? i + 1 : i;
+      const close = quoteEnd(line, open, open > i || c === '"');
+      if (close < 0) return undefined;
+      if (c === '"' && expandsQuoted(line, open, close)) command.expands = true;
+      command.text += line.slice(i, close + 1);
+      newWord = startsWord && close === open + 1;
+      i = close;
+    } else {
+      // A comment where the shell has them on, words where it hasn't: a quote
+      // in it would split the line differently between the two.
+      if (c === "#" && startsWord && i > commentChecked) {
+        const eol = line.indexOf("\n", i);
+        commentChecked = eol < 0 ? line.length : eol;
+        if (/['"\\]/.test(line.slice(i, commentChecked))) return undefined;
+      }
+      if (startsWord && wildcards.includes(c)) command.globbed = true;
+      if (c === "$" && expandsAt(line, i, " \t\n;|&")) command.expands = true;
+      command.text += c;
+    }
+  }
+  endCommand();
+  return commands;
+}
+
+/** Where the quote opening at `open` closes, or -1. */
+function quoteEnd(line: string, open: number, escapes: boolean) {
+  const quote = line[open]!;
+  for (let i = open + 1; i < line.length; i++) {
+    if (escapes && line[i] === "\\") i++;
+    else if (line[i] === quote) return i;
+  }
+  return -1;
+}
+
+function segmentReads({ text: segment, expands, globbed }: ShellCommand) {
   const [name, ...args] = segment.split(/\s+/);
+  if (expands) return false;
   // Their flags decide whether they write, so a flag has to be spelled plainly.
-  if (["git", ...Object.keys(allowedFlags)].includes(name) && disguised.test(segment))
-    return false;
+  // GNU sed reads a flag anywhere, so a quoted `'-i'` after the script still edits.
+  const flagged = ["git", "sed", ...Object.keys(allowedFlags)];
+  const flagHidden = globbed || disguised.test(segment);
+  if (flagged.includes(name!) && flagHidden) return false;
   const flags = flagRules[name];
   if (flags) return args.every((a) => !a.startsWith("-") || flags.test(a));
   switch (name) {
@@ -243,15 +360,59 @@ function segmentReads(segment: string) {
   }
 }
 
-/** `git` with these arguments, as words after `git`, only reads. */
-export function gitReadsOnly(args: string[]) {
+/** Where the subcommand is in `git`'s words, past `--no-pager` and `-C <dir>`. */
+export function subcommandAt(args: string[]) {
   let i = 0;
   while (args[i] === "--no-pager" || args[i] === "-C")
     i += args[i] === "-C" ? 2 : 1;
-  const [sub, ...rest] = args.slice(i);
+  return i;
+}
+
+/** Git subcommands that run a checkout's textconv or external diff command unless told not to. */
+export const diffShowing = new Set([
+  "diff",
+  "log",
+  "show",
+  "diff-tree",
+  "range-diff",
+  "blame",
+]);
+
+export const diffDriversOff = ["--no-textconv", "--no-ext-diff"];
+
+const diffCommand = new RegExp(
+  `(^|[\\s;&|])(git(?:\\s+(?:--no-pager|-C\\s+[^\\s;&|]+))*\\s+(?:${[...diffShowing].join("|")}))(?=[\\s;&|]|$)`,
+  "g",
+);
+
+/**
+ * `command` with `--no-textconv --no-ext-diff` after each git subcommand
+ * that shows a diff: a checkout's own `.git/config` can name a command that
+ * turns a file into text for one, or that shows the diff itself.
+ */
+function withoutDiffDrivers(command: string) {
+  return command.replace(diffCommand, `$1$2 ${diffDriversOff.join(" ")}`);
+}
+
+/** Whether every git in `command` that shows a diff has its drivers off. */
+function diffDriversOffThroughout(command: string) {
+  return (commandsIn(command) ?? []).every(({ text }) => {
+    const [name, ...args] = text.split(/\s+/);
+    const at = subcommandAt(args);
+    if (name !== "git" || !diffShowing.has(args[at]!)) return true;
+    const end = args.indexOf("--");
+    const options = end < 0 ? args : args.slice(0, end);
+    return diffDriversOff.every((flag) => options.includes(flag));
+  });
+}
+
+/** `git` with these arguments, as words after `git`, only reads. */
+export function gitReadsOnly(args: string[]) {
+  const [sub, ...rest] = args.slice(subcommandAt(args));
   if (
-    // git takes a long flag cut short (`--open-fi`) and clustered short ones (`-lO`).
-    rest.some((a) => /^(--(ou|op|ext)|-[^-]*O)/.test(a))
+    // git takes a long flag cut short (`--open-fi`) and clustered short ones (`-lO`);
+    // `--textconv` would undo a caller's `--no-textconv`, and `--filters` runs smudge filters.
+    rest.some((a) => /^(--(ou|op|ext|textc|filters)|-[^-]*O)/.test(a))
   )
     return false;
   if (gitReads.has(sub)) return true;
@@ -279,7 +440,20 @@ export async function readOnlyBashHook(input: unknown) {
   };
   if (tool_name !== "Bash") return {};
   const command = tool_input?.command;
-  if (typeof command === "string" && readsOnly(command)) return {};
+  if (typeof command === "string" && readsOnly(command)) {
+    const rewritten = withoutDiffDrivers(command);
+    // A git diff the rewrite missed is turned down below.
+    if (diffDriversOffThroughout(rewritten))
+      return rewritten === command
+        ? {}
+        : {
+            hookSpecificOutput: {
+              hookEventName: "PreToolUse" as const,
+              permissionDecision: "allow" as const,
+              updatedInput: { ...tool_input, command: rewritten },
+            },
+          };
+  }
   return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse" as const,

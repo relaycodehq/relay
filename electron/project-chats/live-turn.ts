@@ -11,6 +11,26 @@ import type { ChatMessage, ProjectChat } from "../../shared/projects";
  */
 const checking = () => process.env.RELAY_CHECK_CHECKPOINTS === "1";
 
+/** Answers' edits waiting to be published, by thread; see `holdBack`. */
+const heldBack = new WeakMap<ProjectChat, Set<() => void>>();
+
+/**
+ * Marks an answer as holding back an edit for a moment: its version moves
+ * only on `publish`, so a checkpoint from anyone else meanwhile, such as a
+ * seen mark, publishes it first. Returns the release, for once it published.
+ */
+export function holdBack(chat: ProjectChat, publish: () => void) {
+  const held = heldBack.get(chat) ?? new Set<() => void>();
+  heldBack.set(chat, held);
+  held.add(publish);
+  return () => held.delete(publish);
+}
+
+/** Publishes every edit `chat`'s answers hold back, so a checkpoint sees it by version. */
+export function publishHeldBack(chat: ProjectChat) {
+  for (const publish of [...(heldBack.get(chat) ?? [])]) publish();
+}
+
 /** What a full save wrote, to tell a checkpoint which messages changed since. */
 export interface SavedBase {
   /** The full file's mark; a live turn applies only over the file it was written for. */

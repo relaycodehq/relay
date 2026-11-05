@@ -82,8 +82,15 @@ export function anonymizer(identity: Identity) {
       "<host>",
     ]);
   // Short names would hit ordinary words.
+  // Not \b either: it doesn't see the end of a name like "Jiří".
   if (identity.user.length >= 3)
-    rules.push([new RegExp(`\\b${escape(identity.user)}\\b`, "gi"), "<user>"]);
+    rules.push([
+      new RegExp(
+        `(?<![\\p{L}\\p{N}_])${escape(identity.user)}(?![\\p{L}\\p{N}_])`,
+        "giu",
+      ),
+      "<user>",
+    ]);
   return (text: string) => {
     // Emails first: a user name inside one would leave the rest behind.
     let out = redacted(text).replace(email, "<email>");

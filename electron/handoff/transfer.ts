@@ -11,22 +11,51 @@ import type {
   ProjectChat,
   ProjectChatSend,
 } from "../../shared/projects";
-import { skillsBridge, type HandoffPart } from "../../shared/remote";
+import type { RuntimeMode } from "../../shared/agent-modes";
+import {
+  readOnlyModeBridge,
+  skillsBridge,
+  type HandoffPart,
+} from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
 import { sentAgent } from "../../shared/recipient";
 import type { ComputerInfos } from "./computer-infos";
 import { keepYourFiles, receivePastes, sendPastes } from "./pastes";
 
+/** The computer a thread or a send goes to, as far as what it takes. */
+type There = { name: string; bridge: number };
+
+/**
+ * A computer before `readOnlyModeBridge` refuses Read only, and any mode it
+ * runs instead could change files: the user updates it or picks another mode.
+ */
+export function refuseReadOnlyOnOlder(
+  mode: RuntimeMode,
+  there: There,
+  doing: string,
+) {
+  if (mode === "read-only" && there.bridge < readOnlyModeBridge)
+    throw new Error(`Update Relay on ${there.name} to ${doing}.`);
+}
+
 /** The agent and settings a thread's next turn there runs with: its last send's. */
-export const settingsOf = (
+export function settingsOf(
   input: NonNullable<ProjectChat["lastInput"]>,
-): HandoffThread["settings"] => ({
-  provider: sentAgent(input),
-  choice: input.choice,
-  runtimeMode: input.runtimeMode,
-  interactionMode: input.interactionMode,
-  ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
-});
+  there: There,
+): HandoffThread["settings"] {
+  refuseReadOnlyOnOlder(
+    input.runtimeMode,
+    there,
+    "hand off a Read only thread",
+  );
+  return {
+    provider: sentAgent(input),
+    choice: input.choice,
+    runtimeMode: input.runtimeMode,
+    interactionMode: input.interactionMode,
+    ...(input.contextWindow ? { contextWindow: input.contextWindow } : {}),
+  };
+}
 
 /**
  * The send a thread nothing answered yet starts with on the computer it went
@@ -65,20 +94,29 @@ export const readMirrored = (messages: unknown) =>
 /**
  * A send as the computer takes it: with the files it names copied there,
  * and without its pills' skills on one before `skillsBridge`, which refuses them.
+ * One before `readOnlyModeBridge` gets no Read only send at all.
  */
 export async function sendFor(
   infos: ComputerInfos,
-  computerId: string,
+  computer: { id: string; name: string },
   client: RemoteClient,
   send: ProjectChatSend,
 ) {
+  const bridge = async () =>
+    (await infos.get(computer.id, client))?.bridge ?? 0;
+  if (send.runtimeMode === "read-only")
+    refuseReadOnlyOnOlder(
+      send.runtimeMode,
+      { name: computer.name, bridge: await bridge() },
+      "send a Read only message there",
+    );
   const [carried] = await sendPastes(
     await keepYourFiles([send]),
     client,
-    async () => (await infos.get(computerId, client))?.bridge ?? 0,
+    bridge,
   );
   if (!send.skills) return carried!;
-  const info = await infos.get(computerId, client).catch(() => null);
+  const info = await infos.get(computer.id, client).catch(() => null);
   if ((info?.bridge ?? 0) >= skillsBridge) return carried!;
   const { skills: _, ...older } = carried!;
   return older;

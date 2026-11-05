@@ -27,7 +27,8 @@ export interface ProjectChatsEvent {
 
 /** What the main process pushes to the window, by channel. */
 export interface RelayEvents {
-  "relay:project-chat": ProjectChatEvent;
+  /** A message, or a streaming answer's patch; see shared/chat-pushes. */
+  "relay:project-chat": import("./chat-pushes").ProjectChatPush;
   "relay:project-chats": ProjectChatsEvent;
   "relay:thread-news": import("./thread-news").NewsItem;
   "relay:read-aloud": ReadAloudEvent;

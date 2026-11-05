@@ -175,16 +175,17 @@ export function focusGroup(layout: EditorLayout, group: string): EditorLayout {
   return { ...layout, focused: group };
 }
 
-/** A file or folder moved: tabs on it or under it follow, in every split. */
+/** A file or folder moved: tabs on it or under it follow, in every split, bar those whose new path is in `stayed`. */
 export const renameInGroups = (
   layout: EditorLayout,
   from: string,
   to: string,
   outside = false,
+  stayed?: ReadonlySet<string>,
 ) => ({
   ...layout,
   groups: layout.groups.map((g) => ({
-    ...renameTabs(g, from, to, outside),
+    ...renameTabs(g, from, to, outside, stayed),
     id: g.id,
   })),
 });

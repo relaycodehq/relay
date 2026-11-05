@@ -29,6 +29,16 @@ class ImagesTest {
         assertEquals("/work/relay/shots/my shot.webp", localImagePath("shots/my%20shot.webp", root))
     }
 
+    @Test fun resolvesOnAWindowsComputerToADrivePath() {
+        val windows = "C:\\Users\\me\\proj"
+        listOf(
+            "shots/a.png" to "C:\\Users\\me\\proj\\shots\\a.png",
+            "..\\b.png" to "C:\\Users\\me\\b.png",
+            "file:///C:/Users/me/a.png" to "C:/Users/me/a.png",
+            "D:\\shots\\a.png" to "D:\\shots\\a.png",
+        ).forEach { (src, path) -> assertEquals(src, path, localImagePath(src, windows)) }
+    }
+
     @Test fun leavesOutWhatIsntALocalImage() {
         assertNull(localImagePath("https://example.com/a.png", root))
         assertNull(localImagePath("data:image/png;base64,AAAA", root))

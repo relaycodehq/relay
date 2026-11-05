@@ -24,7 +24,11 @@ const pillText = (node: PMNode) =>
 
 // A quote is a Markdown blockquote, so one that follows text on the same line
 // starts a line of its own; promptContent drops that break again.
-export function serialize(content: Fragment, end = content.size) {
+export function serialize(
+  content: Fragment,
+  end = content.size,
+  pill = pillText,
+) {
   let out = "",
     first = true;
   content.nodesBetween(0, end, (node, pos) => {
@@ -35,7 +39,7 @@ export function serialize(content: Fragment, end = content.size) {
     else if (node.isLeaf) {
       if (node.type.name === "relayQuote" && out && !out.endsWith("\n"))
         out += "\n";
-      out += pillText(node);
+      out += pill(node);
     }
   });
   return out;
@@ -44,6 +48,12 @@ export function serialize(content: Fragment, end = content.size) {
 /** The draft's text, up to `end` for the caret's offset in it. */
 export const promptText = (doc: PMNode, end = doc.content.size) =>
   serialize(doc.content, end);
+
+/** The draft's text with each pill's letters blotted out, so a search finds only typed words, at promptText's offsets. */
+export const typedText = (doc: PMNode) =>
+  serialize(doc.content, doc.content.size, (node) =>
+    pillText(node).replace(/\w/g, "￼"),
+  );
 
 /** The document position at `offset` in the draft's text; inside a pill's text is after the pill. */
 export function positionAt(doc: PMNode, offset: number) {

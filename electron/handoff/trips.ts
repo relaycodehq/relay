@@ -35,6 +35,7 @@ import {
   firstSendOf,
   readReturned,
   receivePastesFrom,
+  refuseReadOnlyOnOlder,
   settingsOf,
   upload,
 } from "./transfer";
@@ -99,10 +100,11 @@ export class HandoffTrips {
       const thread = await handedThread(chat, client, info!.bridge, {
         repositories,
         tip,
+        name,
       });
       const start = !!thread.start;
       const first = start ? await this.firstSend(chat) : undefined;
-      await carry(client, id, folder, root, thread);
+      if (!(await carry(client, id, folder, root, thread, still))) return;
       await this.chats.handoffs.updateSentTo(chatId, id, {
         state: "away",
         error: undefined,
@@ -217,6 +219,7 @@ export class HandoffTrips {
 /**
  * Refuses a computer whose Relay is too old to take the thread in. One
  * nothing answered yet starts there, and its first message goes after it.
+ * A Read only thread needs a Relay that knows the mode.
  */
 function takesThreads(
   info: ComputerInfo | null,
@@ -228,6 +231,13 @@ function takesThreads(
     throw new Error(
       `${name} runs an older Relay. Update it from Settings → Computers, then try again.`,
     );
+  // Before anything here stops: a Read only thread needs a Relay that has it.
+  if (chat.lastInput)
+    refuseReadOnlyOnOlder(
+      chat.lastInput.runtimeMode,
+      { name, bridge: info!.bridge },
+      "hand off a Read only thread",
+    );
 }
 
 /** The thread as the other computer takes it in, its branch at `tip`. */
@@ -235,7 +245,11 @@ async function handedThread(
   chat: ProjectChat,
   client: RemoteClient,
   bridge: number,
-  { repositories, tip }: { repositories: string[]; tip: string },
+  {
+    repositories,
+    tip,
+    name,
+  }: { repositories: string[]; tip: string; name: string },
 ): Promise<HandoffThread> {
   const worktree = chat.worktree!;
   const input = chat.lastInput;
@@ -247,7 +261,7 @@ async function handedThread(
     repositories,
     title: chat.title,
     scope: chat.scope,
-    settings: settingsOf(input),
+    settings: settingsOf(input, { name, bridge }),
     messages: start ? [] : await carriedMessages(chat, client, bridge),
     git: {
       branch: worktree.branch!,
@@ -262,7 +276,9 @@ async function handedThread(
 
 /**
  * Hands the thread and its branch, as a bundle, to the other computer to
- * take in. A full bundle when it lacks what a lean one builds on.
+ * take in. A full bundle when it lacks what a lean one builds on. False when
+ * the thread was taken back on the way: the other computer may have heard
+ * that before the upload began, so it isn't asked to take the thread in.
  */
 async function carry(
   client: RemoteClient,
@@ -270,6 +286,7 @@ async function carry(
   folder: string,
   root: string,
   thread: HandoffThread,
+  still: () => boolean,
 ) {
   await mkdir(folder, { recursive: true, mode: 0o700 });
   const bundle = join(folder, "bundle");
@@ -281,13 +298,20 @@ async function carry(
     await writeFile(json, JSON.stringify(thread), { mode: 0o600 });
     await upload(client, id, "thread", json);
     if (thread.git.bundle) await upload(client, id, "bundle", bundle);
+    if (!still()) {
+      // It let go of this handoff before the upload came, so it drops it again.
+      await client.call("handoffAbandoned", id).catch(() => {});
+      await rm(folder, { recursive: true, force: true });
+      return false;
+    }
     await client.call("receiveHandoff", id);
+    return true;
   };
   try {
-    await across(false);
+    return await across(false);
   } catch (e) {
     if (errorMessage(e) !== needsFullBundle) throw e;
-    await across(true);
+    return across(true);
   }
 }
 

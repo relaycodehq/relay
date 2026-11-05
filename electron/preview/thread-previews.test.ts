@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { AppWindow } from "../app/window";
 import type { DevServerState } from "../../shared/preview";
-import { ThreadPreviews, type PreviewTarget } from "./thread-previews";
+import type { PreviewTarget } from "./preview-state";
+import { ThreadPreviews } from "./thread-previews";
 import { SavedPreviews } from "./saved-previews";
 import type { Store } from "../app/store";
 import { answerPreviewTool } from "./agent-tools";
@@ -520,4 +521,29 @@ it("saves a launch command through open_preview and reuses it on the next launch
   expect(next.current("chat")?.url).toBe(
     "http://localhost:3000/previews/example/",
   );
+});
+
+it("lets go of every page a deleted thread had, open or saved", async () => {
+  const store = memoryStore();
+  const resolve = vi.fn<ConstructorParameters<typeof ThreadPreviews>[1]>(
+    async (_p, chat, url) => ({ ...target(chat), url }),
+  );
+  const { previews } = setup(resolve, new SavedPreviews(store));
+  await previews.navigate("project", "kept", "http://localhost:3000/");
+  for (let i = 0; i < 5; i++) {
+    const chatId = `thread${i}`;
+    await previews.navigate("project", chatId, "http://localhost:3000/own");
+    await previews.navigate("project", chatId, "http://localhost:3000/other", {
+      page: "p1",
+    });
+    await vi.waitFor(() =>
+      expect(Object.keys(store.get().previews ?? {})).toContain(`${chatId}~p1`),
+    );
+    await previews.closeThread(chatId);
+  }
+  expect(Object.keys(store.get().previews ?? {})).toEqual(["kept"]);
+  expect(mock.views.filter((v) => !v.webContents.closed)).toHaveLength(1);
+  expect(previews.current("thread0")).toBeUndefined();
+  expect(previews.current("thread0~p1")).toBeUndefined();
+  expect(previews.current("kept")?.url).toBe("http://localhost:3000/");
 });

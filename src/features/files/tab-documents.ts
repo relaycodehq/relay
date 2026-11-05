@@ -35,7 +35,8 @@ export function closeTabDocument(
 /**
  * Tabs on a moved file or folder, or under it, keep their documents, with
  * their unsaved edits, at the new path; a file outside the project whose
- * folder moved goes with it to the new folder.
+ * folder moved goes with it to the new folder. Returns the new paths whose
+ * tabs stay where they were, as `renameTabs` takes them.
  */
 export function moveTabDocuments(
   tabs: EditorTab[],
@@ -44,13 +45,20 @@ export function moveTabDocuments(
   to: string,
   outside: boolean,
 ) {
+  const stayed = new Set<string>();
   for (const tab of tabs) {
     if (!tabIsWithin(tab, from, outside)) continue;
     const moved = { ...tab, path: to + tab.path.slice(from.length) };
     const before = tabDocument(tab, home);
     const after = tabDocument(moved, home);
-    documents.rename(before.source, before.path, after.path, after.source);
+    // A tab left open on a deleted file at the new path gives up its
+    // document, unless that has unsaved edits: then neither tab moves,
+    // so neither shows the other's file or loses its edits.
+    documents.close(after.source, after.path);
+    if (documents.find(after.source, after.path)) stayed.add(moved.path);
+    else documents.rename(before.source, before.path, after.path, after.source);
   }
+  return stayed;
 }
 
 export function hasUnsavedEdits(tab: EditorTab, home: TabHome) {

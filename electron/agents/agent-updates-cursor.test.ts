@@ -144,3 +144,48 @@ describe("Cursor's SDK in the agent list", () => {
     ).toMatch(/no Cursor SDK/);
   });
 });
+
+describe("agents from the ACP registry", () => {
+  it("keeps one installed or removed while a check was running", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const sdk = (version: string, wait?: Promise<void>): SdkIo => ({
+      source: "the ACP registry",
+      installed: async () => {
+        await wait;
+        return version;
+      },
+      newest: async () => version,
+      install: async () => {},
+      account: async () => undefined,
+    });
+    let providers: `acp:${string}`[] = ["acp:old"];
+    const io: AgentUpdatesIo = {
+      platform: "darwin",
+      find: async (name) => {
+        throw new Error(`${name} was not found.`);
+      },
+      realpath: async (path) => path,
+      exists: async () => false,
+      exec: async () => ({ code: 1, stdout: "", output: "", timedOut: false }),
+      fetch: async () => new Response("{}"),
+      claudeChannel: async () => "latest",
+      registry: {
+        providers: () => providers,
+        sdk: (provider) =>
+          provider === "acp:old" ? sdk("1.0.0", held) : sdk("2.0.0"),
+      },
+    };
+    const updates = new AgentUpdates(() => {}, io);
+    const listed = () => updates.current.agents.map((a) => a.provider);
+    const checked = updates.check();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    providers = ["acp:new"];
+    await updates.sync();
+    expect(listed()).toContain("acp:new");
+    release();
+    await checked;
+    expect(listed()).toContain("acp:new");
+    expect(listed()).not.toContain("acp:old");
+  });
+});

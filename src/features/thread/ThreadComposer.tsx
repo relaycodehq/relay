@@ -10,6 +10,8 @@ import type { ChatMessage, ChatScope, Project } from "../../../shared/projects";
 import { threadContextAgent } from "../../../shared/recipient";
 import { api } from "../../lib/api";
 import { threadDraftKey } from "../../lib/thread-storage";
+import { useStableCallback } from "../../lib/useStableCallback";
+import { useSteadyValue } from "./useSteadyValue";
 import type { TurnDiffTarget } from "../changes/turn-diff";
 import type { BackgroundWork } from "./useBackgroundWork";
 import type { ChatThread } from "./useChatThread";
@@ -43,7 +45,7 @@ import { DetourNote } from "./NewThreadBranch";
 import { ThreadWhere, type ProjectCheckout } from "./ThreadWhere";
 import "../changes/branch-picker.css";
 import { threadCost } from "../../../shared/thread-cost";
-import { lastComposerSettings } from "../../../shared/projects";
+import { lastComposerSettings, lastSentIn } from "../../../shared/projects";
 
 /** What goes out with the main conversation's next message besides its text. */
 function AttachedContext({
@@ -157,6 +159,22 @@ function composerPlaceholder({
   return undefined;
 }
 
+/** Where the open conversation keeps its draft and its settings. */
+function composerKeys(id: string, root: ChatThread["root"]) {
+  return {
+    draft: threadDraftKey(id, root?.id),
+    // A side conversation keeps its own agent and opens on the one that wrote its message.
+    settings: root ? `${id}:${root.id}` : id,
+    inherit: root
+      ? {
+          settingsKey: id,
+          provider:
+            root.role === "assistant" || root.side ? root.provider : undefined,
+        }
+      : undefined,
+  };
+}
+
 /** The guess the last answer left, while it is the last word and wasn't put away. */
 function nextGuess(view: ChatMessage[]) {
   const last = view.at(-1);
@@ -182,7 +200,7 @@ export function ThreadComposer({
   handle: { chat, id, busy, setError },
   project,
   scope,
-  thread: { history, root, messages, shown, running, mainRunning },
+  thread: { history, root, messages, roots, shown, running, mainRunning },
   councils: { reviewing },
   background: {
     agentBatch,
@@ -209,6 +227,7 @@ export function ThreadComposer({
   notesChip,
   links,
   commandOptions,
+  commandListings,
   onProjectSettings,
   onSend,
   onEditQueued,
@@ -238,6 +257,8 @@ export function ThreadComposer({
     command: RelayCommand,
     query: string,
   ) => CommandOption[] | undefined;
+  /** Goes up as listings `commandOptions` waited on arrive, so an open menu asks again. */
+  commandListings: number;
   onProjectSettings: () => void;
   onSend: (
     value: ComposedSend,
@@ -258,7 +279,7 @@ export function ThreadComposer({
     queryFn: () => api.composerPredictions(),
   });
   const savedReport = useMemo(() => latestContextReport(shown), [shown]);
-  const cost = useMemo(() => threadCost(shown), [shown]);
+  const cost = useSteadyValue(useMemo(() => threadCost(shown), [shown]));
   const cacheExpired = useCacheExpired(context?.usage.cache);
   // useCacheExpired renders again once the cache runs out.
   const compactOffer = cacheExpired
@@ -276,7 +297,7 @@ export function ThreadComposer({
     root?.id ?? null,
     context?.provider,
   );
-  const draftKey = threadDraftKey(id, root?.id);
+  const keys = useSteadyValue(composerKeys(id, root));
   const { selection, workItem, codeRefs } = attachments;
   // While a thread handed to another computer waits on its setup, the
   // composer talks to the setup's agent: its answer is what runs.
@@ -305,45 +326,48 @@ export function ThreadComposer({
     pending,
     scratch: !!project.scratch,
   });
+  // Steady across streamed pieces, so the composer skips them: see ProjectComposer.
+  const conversation = useSteadyValue({
+    running: answerComing,
+    busy: sendBlocked,
+    agent: chat && threadContextAgent(chat),
+    lastSent:
+      (setup &&
+        lastComposerSettings({
+          ...history.data!,
+          messages: setup.messages,
+          lastInput: undefined,
+        })) ??
+      lastSentIn(messages, roots, history.data?.lastInput, root?.id),
+    planner: running ? undefined : openPlan(messages, shown),
+    prediction:
+      running || root || !predictions.data ? undefined : nextGuess(shown),
+    chatId: chat?.id,
+    accounts: chat?.accounts,
+    compactOffer,
+  });
+  const send = useStableCallback(onSend);
+  const editQueued = useStableCallback(onEditQueued);
+  const latestOptions = useStableCallback(commandOptions);
+  // The composer skips renders that hand it the same props: a new function has its menu ask again.
+  const options = useMemo(
+    () => (command: RelayCommand, query: string) =>
+      latestOptions(command, query),
+    [latestOptions, commandListings],
+  );
+  const command = useStableCallback(runCommand);
+  const nextThread = useStableCallback(() => void runCommand("new", ""));
+  const stop = useStableCallback((steers: boolean) => {
+    if (chat) void api.cancelProjectChat(chat.id, { steers }).catch(setError);
+  });
   return (
     <ProjectComposer
       ref={ref}
       projectId={project.id}
       computer={project.computer}
       files={worktree.where}
-      keys={{
-        draft: draftKey,
-        // A side conversation keeps its own agent and opens on the one that wrote its message.
-        settings: root ? `${id}:${root.id}` : id,
-        inherit: root
-          ? {
-              settingsKey: id,
-              provider:
-                root.role === "assistant" || root.side
-                  ? root.provider
-                  : undefined,
-            }
-          : undefined,
-      }}
-      conversation={{
-        running: answerComing,
-        busy: sendBlocked,
-        agent: chat && threadContextAgent(chat),
-        lastSent:
-          (setup &&
-            lastComposerSettings({
-              ...history.data!,
-              messages: setup.messages,
-              lastInput: undefined,
-            })) ??
-          lastComposerSettings(history.data, root?.id),
-        planner: running ? undefined : openPlan(messages, shown),
-        prediction:
-          running || root || !predictions.data ? undefined : nextGuess(shown),
-        chatId: chat?.id,
-        accounts: chat?.accounts,
-        compactOffer,
-      }}
+      keys={keys}
+      conversation={conversation}
       context={
         <>
           {scopeButtons}
@@ -445,20 +469,13 @@ export function ThreadComposer({
       }
       placeholder={placeholder}
       sent={sent}
-      onSend={onSend}
-      onEditQueued={onEditQueued}
+      onSend={send}
+      onEditQueued={editQueued}
       // A thread not made yet opens itself once its first message is in.
-      onNextThread={chat ? () => void runCommand("new", "") : undefined}
-      onStop={
-        compacting
-          ? undefined
-          : (steers) => {
-              if (chat)
-                void api.cancelProjectChat(chat.id, { steers }).catch(setError);
-            }
-      }
-      onCommand={runCommand}
-      commandOptions={commandOptions}
+      onNextThread={chat ? nextThread : undefined}
+      onStop={compacting ? undefined : stop}
+      onCommand={command}
+      commandOptions={options}
     />
   );
 }

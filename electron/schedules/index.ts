@@ -131,8 +131,12 @@ export class Schedules {
     if (this.closed) return;
     for (const schedule of this.list()) {
       this.arm(schedule);
-      for (const run of schedule.runs)
-        if (run.outcome === "running" && run.chatId) void this.follow(run.chatId);
+      for (const run of schedule.runs) {
+        if (run.outcome !== "running" || !run.chatId) continue;
+        void this.follow(run.chatId);
+        // Its agent may have kept going while Relay was closed; its limit still holds.
+        this.watch();
+      }
     }
   }
 
@@ -168,12 +172,9 @@ export class Schedules {
     const schedule = this.list().find((s) => s.id === id);
     if (!schedule?.enabled || this.closed) return;
     const now = Date.now();
-    const owed = dueBetween(schedule, schedule.handledUntil, now);
-    if (!owed.length) return this.arm(schedule);
-    await this.update((list) => {
-      const s = list.find((x) => x.id === id);
-      if (s) s.handledUntil = now;
-    });
+    if (!dueBetween(schedule, schedule.handledUntil, now).length) return this.arm(schedule);
+    const owed = await this.claimDue(id, now);
+    if (!owed.length) return; // another wake took them, or it was turned off or removed
     const last = schedule.runs.find((r) => !r.test);
     if (owed.length > 1)
       await this.record(id, {
@@ -192,6 +193,21 @@ export class Schedules {
     else await this.run(schedule, false);
     const fresh = this.list().find((s) => s.id === id);
     if (fresh) this.arm(fresh);
+  }
+
+  /**
+   * Marks what came due up to `now` as handled, against the saved state so
+   * two calls can't both take the same times; the times this one took.
+   */
+  private async claimDue(id: string, now: number) {
+    let owed: number[] = [];
+    await this.update((list) => {
+      const s = list.find((x) => x.id === id);
+      if (!s?.enabled) return;
+      owed = dueBetween(s, s.handledUntil, now);
+      if (owed.length) s.handledUntil = now;
+    });
+    return owed;
   }
 
   private async run(schedule: Schedule, test: boolean): Promise<ScheduleRun> {

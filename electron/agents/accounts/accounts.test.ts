@@ -1,6 +1,9 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { StoredAccounts } from "../../../shared/agent-accounts";
-import type { Store } from "../../app/store";
+import { Store } from "../../app/store";
 
 const signedIn = new Set<string>();
 
@@ -81,4 +84,24 @@ it("lists the usual sign-in's folder first however the accounts are ordered", as
     "/profiles/claude/work",
     "/profiles/claude/client",
   ]);
+});
+
+it("keeps both of two account changes made at once", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-accounts-"));
+  try {
+    const store = new Store(dir);
+    await store.load();
+    await store.update((s) => {
+      s.agentAccounts = three;
+    });
+    const accounts = new AgentAccounts(store, () => {});
+    await Promise.all([
+      accounts.remove("claude", "work"),
+      accounts.use("claude", "client"),
+    ]);
+    expect(accounts.list().map((a) => a.id)).not.toContain("work");
+    expect(accountFor("claude")).toBe("client");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

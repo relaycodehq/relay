@@ -107,6 +107,20 @@ describe("project language support", () => {
     ]);
   });
 
+  it("checks the projects a solution still has when one of its references is gone", async () => {
+    const root = await mkdtemp(join(tmpdir(), "relay-detect-"));
+    roots.push(root);
+    await mkdir(join(root, "app"));
+    await writeFile(join(root, "app/tsconfig.json"), "{}");
+    await writeFile(
+      join(root, "tsconfig.json"),
+      '{"files":[],"references":[{"path":"./removed"},{"path":"./app"}]}',
+    );
+    expect((await detectProject(root)).targets.map((t) => t.config)).toEqual([
+      "app/tsconfig.json",
+    ]);
+  });
+
   it("rejects config traversal, invalid metadata and symlink escape", async () => {
     const root = await mkdtemp(join(tmpdir(), "relay-detect-"));
     const outside = await mkdtemp(join(tmpdir(), "relay-outside-"));
@@ -311,6 +325,43 @@ describe("project language support", () => {
       now.mockRestore();
     }
   });
+
+  it.each([
+    ["TypeScript's project service", "project’s TypeScript 5.9.3."],
+    ["TypeScript 7's language server", "TypeScript 7.0.2 language server"],
+  ])(
+    "keeps %s checking when the editor opens a file inside node_modules",
+    async (_, engine) => {
+      const { root, head } = await languageProject(server);
+      roots.push(root);
+      if (engine.includes("language server")) await useTypeScript7(root);
+      const dependency = "packages/app/node_modules/thing/index.d.ts";
+      await mkdir(join(root, "packages/app/node_modules/thing"), {
+        recursive: true,
+      });
+      await writeFile(join(root, dependency), "export declare const a: 1;\n");
+      const service = new ProjectChecks(resolve("electron/checks/worker.mjs"));
+      services.push(service);
+      await service.start(
+        "pr",
+        root,
+        null,
+        null,
+        head,
+        "typescript:tsconfig.json",
+      );
+      expect((await ready(service, head)).engine).toContain(engine);
+      await service.update(
+        "pr",
+        head,
+        dependency,
+        "export declare const a: 2;\n",
+      );
+      await ready(service, head);
+      await service.update("pr", head, dependency, null);
+      await ready(service, head);
+    },
+  );
 
   it("leaves a working tree's checkout to the window for 30 s before looking itself", async () => {
     const { root: made, head, git } = await languageProject(server);

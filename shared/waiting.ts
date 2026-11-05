@@ -1,5 +1,6 @@
 // The line under a finished turn about what Claude left behind, shared by the
 // desktop's WaitingStrip and the phone's.
+import { calendarDays } from "./chat-activity";
 import { formatDate } from "./date-format";
 import type { ChatPending } from "./projects";
 
@@ -15,6 +16,17 @@ function span(ms: number) {
 
 export const clock = (at: number) =>
   formatDate(at, { hour: "2-digit", minute: "2-digit" });
+
+/**
+ * "14:30" today, "Mon 14:30" this week, "Nov 12, 14:30" a week out, where
+ * the weekday alone would read as today's: weekly limits lift days out.
+ */
+export function resetClock(at: number, now: number) {
+  const ahead = calendarDays(new Date(now), new Date(at));
+  if (ahead <= 0) return clock(at);
+  if (ahead < 7) return `${formatDate(at, { weekday: "short" })} ${clock(at)}`;
+  return `${formatDate(at, { month: "short", day: "numeric" })}, ${clock(at)}`;
+}
 
 export function wakeupTitle(item: Extract<ChatPending, { kind: "wakeup" }>) {
   if (!item.at) return "Claude checks back on a schedule";

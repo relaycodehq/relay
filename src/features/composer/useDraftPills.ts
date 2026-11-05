@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { promptContent } from "./prompt-content";
 import { draftChips } from "../../lib/thread-storage";
 import type { CopiedPills } from "./prompt/pill-clipboard";
@@ -8,48 +8,38 @@ export type DraftPills = ReturnType<typeof useDraftPills>;
 /**
  * The skills, quotes and files this draft made pills of, kept beside it. Only
  * these come back as pills, so the same text typed by hand stays text.
+ * Read from storage each time: a phone or another window showing the same
+ * draft adds pills there too.
  */
 export function useDraftPills(draftKey: string) {
-  const chips = useMemo(() => draftChips(draftKey), [draftKey]);
-  const labels = useRef<Record<string, string>>(null!);
-  const quotes = useRef<string[]>(null!);
-  const files = useRef<string[]>(null!);
-  labels.current ??= chips.skills.load();
-  quotes.current ??= chips.quotes.load();
-  files.current ??= chips.files.load();
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const chips = draftChips(draftKey);
+    const addFiles = (paths: string[]) =>
+      chips.files.save([...new Set([...chips.files.load(), ...paths])]);
+    return {
       /** The editor document showing `value`, with this draft's pills. */
       content: (value: string) =>
-        promptContent(value, labels.current, quotes.current, files.current),
+        promptContent(
+          value,
+          chips.skills.load(),
+          chips.quotes.load(),
+          chips.files.load(),
+        ),
       addSkill(token: string, label: string) {
-        labels.current[token] = label;
-        chips.skills.save(labels.current);
+        chips.skills.save({ ...chips.skills.load(), [token]: label });
       },
       setQuotes(list: string[]) {
-        quotes.current = list;
         chips.quotes.save(list);
       },
-      addFiles(paths: string[]) {
-        files.current = [...new Set([...files.current, ...paths])];
-        chips.files.save(files.current);
-      },
+      addFiles,
       /** Takes on pills copied from another draft or message, so pasting them makes pills. */
       adopt({ skills, quotes: copied, files: paths }: CopiedPills) {
-        if (Object.keys(skills).length) {
-          Object.assign(labels.current, skills);
-          chips.skills.save(labels.current);
-        }
-        if (copied.length) {
-          quotes.current = [...new Set([...quotes.current, ...copied])];
-          chips.quotes.save(quotes.current);
-        }
-        if (paths.length) {
-          files.current = [...new Set([...files.current, ...paths])];
-          chips.files.save(files.current);
-        }
+        if (Object.keys(skills).length)
+          chips.skills.save({ ...chips.skills.load(), ...skills });
+        if (copied.length)
+          chips.quotes.save([...new Set([...chips.quotes.load(), ...copied])]);
+        if (paths.length) addFiles(paths);
       },
-    }),
-    [chips],
-  );
+    };
+  }, [draftKey]);
 }

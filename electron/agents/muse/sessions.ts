@@ -36,6 +36,7 @@ const metaSchema = z
       .loose()
       .optional(),
     run: z.object({ turnId: z.string() }).optional(),
+    readOnly: z.boolean().optional(),
   })
   .loose();
 type MuseMeta = z.infer<typeof metaSchema>;
@@ -47,6 +48,8 @@ export class MuseAgent extends HostedAgent<MuseConnection, { turnId: string }> {
   session?: { id: string } & MuseSettings;
   /** Experimental MSP (permission profiles, sign-in) is on for this connection. */
   experimental = false;
+  /** Started for a Read only thread: its session opened without Relay's tools. */
+  readOnly = false;
 
   constructor(
     connection: MuseConnection,
@@ -66,6 +69,7 @@ export class MuseAgent extends HostedAgent<MuseConnection, { turnId: string }> {
       provider: "muse",
       session: this.session,
       run: this.inflight,
+      readOnly: this.readOnly,
     } satisfies MuseMeta);
   }
 }
@@ -131,18 +135,26 @@ export async function initialize(agent: MuseAgent) {
  * The process for a thread's session, started and initialized if it isn't
  * running. A thread's runs in the agent host; without a key it's a private
  * one that ends with its turn, and keeps no session log when `ephemeral`.
+ * A thread switched to or from Read only gets a new one: a session keeps
+ * the MCP servers it opened with for as long as the process runs it.
  */
-export function acquireMuse(
+export async function acquireMuse(
   key: string | undefined,
-  cwd: string,
-  env?: Record<string, string>,
+  turn: { cwd: string; env?: Record<string, string>; readOnly?: boolean; job?: { kind: string } },
   ephemeral = false,
 ): Promise<MuseAgent> {
-  return sessions.acquire(key, async () =>
-    new MuseAgent(await launch(key, cwd, env, ephemeral), ephemeral).start(
-      initialize,
-    ),
-  );
+  const { cwd, env } = turn;
+  const readOnly = !!turn.readOnly;
+  const previous = key ? sessions.get(key) : undefined;
+  // Picking up a turn a restart cut off gives it nothing new, so it stays where it runs.
+  const adopting = turn.job?.kind === "adopt";
+  const otherMode = !!previous && !adopting && previous.readOnly !== readOnly;
+  if (otherMode && !previous.busy) await sessions.close(key!);
+  return sessions.acquire(key, async () => {
+    const agent = new MuseAgent(await launch(key, cwd, env, ephemeral), ephemeral);
+    agent.readOnly = readOnly;
+    return agent.start(initialize);
+  });
 }
 
 /** Runs `call`, reading Muse's "sign in first" as Relay's signed out. */
@@ -323,6 +335,7 @@ export function reattachMuse(owns: (key: string) => boolean) {
       approvalMode: meta.session.approvalMode as MuseSettings["approvalMode"],
     };
     agent.inflight = meta.run;
+    agent.readOnly = !!meta.readOnly;
     if (!info.open) child.release();
     return agent;
   });

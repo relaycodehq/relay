@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { plainText, timelineTurns } from "./timeline";
+import { plainText, sameTimeline, timelineTurns } from "./timeline";
 import type { ChatMessage } from "../../../shared/projects";
 
 const message = (
@@ -68,6 +68,23 @@ it("reads Markdown as the sentence it says", () => {
     ),
   ).toBe("Found it The fix is in bridge.ts: one ahead");
   expect(plainText("x".repeat(400), 10)).toBe("xxxxxxxxxx…");
+});
+
+it("leaves out a code block fenced with tildes too", () => {
+  expect(plainText("Run this:\n\n~~~sh\nnpm test\n~~~\n\nthen ~~stop~~")).toBe(
+    "Run this: then stop",
+  );
+});
+
+it.each([
+  ["Keep `a < b` and `x > y`", "Keep a < b and x > y"],
+  ["Is `i<n` or `n>0`?", "Is i<n or n>0?"],
+  ["Use a <details> fold<br/>here", "Use a fold here"],
+  ['A <span class="x">tag</span>', "A tag"],
+  ['<?xml version="1.0"?><xs:element name="a"/>B', "B"],
+  ["A <!-- note --> B <!DOCTYPE html>", "A B"],
+])("keeps comparisons but drops tags: %s", (markdown, text) => {
+  expect(plainText(markdown)).toBe(text);
 });
 
 it("shows a prompt's opening @mention as the agent, not as text", () => {
@@ -166,4 +183,15 @@ it("says what an answer that wrote nothing did instead of no answer", () => {
     "The ping is late.",
     "Ran 1 command and edited 1 file",
   ]);
+});
+
+it("reads the same while a streamed answer grows past what the rail previews", () => {
+  const prompt = message("p1", "user", "Why?");
+  const answer = (body: string, status: ChatMessage["status"] = "streaming") =>
+    timelineTurns([prompt, message("a1", "assistant", body, { status })]);
+  const long = "Because. ".repeat(60);
+  expect(sameTimeline(answer(long), answer(`${long} more`))).toBe(true);
+  // Its opening, and whether it's still coming, show in the peek.
+  expect(sameTimeline(answer("Bec"), answer("Because"))).toBe(false);
+  expect(sameTimeline(answer(long), answer(long, "complete"))).toBe(false);
 });

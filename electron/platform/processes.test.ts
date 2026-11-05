@@ -1,5 +1,35 @@
-import { describe, expect, it } from "vitest";
-import { CpuRates, parsePs, parseWindows, type ProcessRow } from "./processes";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  CpuRates,
+  parsePs,
+  parseWindows,
+  processTable,
+  type ProcessRow,
+} from "./processes";
+
+/** The PowerShells the Windows reader started, oldest first. */
+const shells = vi.hoisted(() => [] as { stdout: NodeJS.EventEmitter }[]);
+
+vi.mock("node:child_process", async () => {
+  const { EventEmitter } = await import("node:events");
+  return {
+    execFile: () => {},
+    spawn: () => {
+      const stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
+      const stdin = Object.assign(new EventEmitter(), {
+        write() {},
+        end() {},
+      });
+      const child = Object.assign(new EventEmitter(), {
+        stdout,
+        stdin,
+        kill() {},
+      });
+      shells.push(child);
+      return child;
+    },
+  };
+});
 
 describe("process tables", () => {
   it("reads ps's columns, a command line with spaces included", () => {
@@ -64,5 +94,30 @@ describe("CpuRates", () => {
     const reused = [row(100, 9)];
     rates.fill(reused, 12_000);
     expect(reused[0].cpu).toBeUndefined();
+  });
+});
+
+describe("Windows process table", () => {
+  const platform = process.platform;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    Object.defineProperty(process, "platform", { value: platform });
+  });
+
+  it("doesn't answer a look with what a PowerShell it gave up on printed late", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(process, "platform", { value: "win32" });
+    const row = (pid: number) =>
+      `${pid}\t1\t0\t\t\tnode.exe\tnode\n--relay-processes-end--\n`;
+    const stuck = processTable();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(await stuck).toEqual([]);
+
+    const next = processTable();
+    await vi.advanceTimersByTimeAsync(0);
+    shells[0].stdout.emit("data", row(111));
+    shells[1].stdout.emit("data", row(222));
+    expect((await next).map((p) => p.pid)).toEqual([222]);
   });
 });

@@ -160,7 +160,7 @@ class PullsModel(private val remote: Remote) : ViewModel() {
         for (p in mine) launch {
             runCatching {
                 val detail = remote.call { pull(p.ref) }
-                val ci = async { runCatching { remote.call { pullCiStatus(p.ref, detail.head.ref) } }.getOrNull() }
+                val ci = async { runCatching { remote.call { pullCiStatus(p.ref, detail.head) } }.getOrNull() }
                 val reviews = runCatching { remote.call { pullReviews(p.ref) }.items }.getOrDefault(emptyList())
                 val state = ci.await()?.let { ciSummary(it.runs)?.state }
                 signals.update { it + (p.key to PullSignals(state, verdictOf(reviews))) }

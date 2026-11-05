@@ -61,6 +61,21 @@ it("lays a feature branch and its merge out on two lanes", async () => {
   expect(limited.more).toBe(true);
 });
 
+it("counts the lines of a file with a tab in its name", async () => {
+  await writeFile(join(root, "a\tb.txt"), "one\ntwo\n");
+  const sha = commit("Tabbed");
+
+  expect((await commitDetail(root, sha)).files).toEqual([
+    {
+      path: "a\tb.txt",
+      status: "A",
+      additions: 2,
+      deletions: 0,
+      binary: false,
+    },
+  ]);
+});
+
 it("shows what a commit changed against its first parent", async () => {
   await writeFile(join(root, "old.txt"), "same\nlines\nhere\n");
   await writeFile(join(root, "gone.txt"), "bye\n");

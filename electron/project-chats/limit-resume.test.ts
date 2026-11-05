@@ -3,6 +3,10 @@ import type { ProjectChat } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { threadControl } from "./control";
 import { LimitResumes } from "./limit-resume";
+import { AgentError } from "../agents/errors";
+import { usageResetsAt } from "../agents/usage-limit";
+
+vi.mock("../agents/usage-limit", () => ({ usageResetsAt: vi.fn() }));
 
 const MINUTE = 60_000;
 let chat: ProjectChat;
@@ -89,4 +93,33 @@ it("puts the pause back on the queue when carrying on fails to start", async () 
   ).rejects.toThrow("Relay is closing.");
   expect(chat.queuePaused).toBe(true);
   expect(chat.limitResume).toBeUndefined();
+});
+
+/** The thread's answer was just stopped by a limit the agent said lifted a minute ago. */
+async function stoppedOnStaleReset(usageSays: number) {
+  vi.setSystemTime(new Date("2026-11-05T14:00:00+01:00"));
+  chat = stopped(0);
+  delete chat.limitResume;
+  vi.mocked(usageResetsAt).mockReset().mockResolvedValue(usageSays);
+  const { limits } = planner();
+  const past = Date.now() - MINUTE;
+  await limits.stopped(
+    "chat",
+    "a",
+    new AgentError("claude", "usageLimit", "limit", past),
+  );
+  return limits;
+}
+
+it("reads usage for the reset when the agent's own reset has already passed", async () => {
+  const lifts = new Date("2026-11-05T16:00:00+01:00").getTime();
+  await stoppedOnStaleReset(lifts);
+  expect(chat.limitResume?.at).toBe(lifts);
+});
+
+it("reads usage once and plans nothing when it also reports a passed reset", async () => {
+  await stoppedOnStaleReset(new Date("2026-11-05T13:00:00+01:00").getTime());
+  await vi.advanceTimersByTimeAsync(10 * 60 * MINUTE);
+  expect(chat.limitResume).toBeUndefined();
+  expect(usageResetsAt).toHaveBeenCalledTimes(1);
 });

@@ -58,6 +58,24 @@ struct MathDelimitersTests {
             #expect(normalizeMath(normalizeMath(text)) == normalizeMath(text))
         }
     }
+
+    @Test func readsALongLineOfUnclosedOpenersInLinearTime() {
+        let texts = [
+            String(repeating: "\\( a", count: 20_000), String(repeating: "\\(", count: 25_000),
+            String(repeating: "\\[a", count: 20_000),
+        ]
+        for text in texts {
+            let started = ContinuousClock.now
+            #expect(normalizeMath(text) == text)
+            #expect(ContinuousClock.now - started < .milliseconds(500))
+        }
+    }
+
+    @Test func pairsAnOpenerWithTheCloserAfterTheLastOpener() {
+        #expect(normalizeMath("a \\( b \\(x^2\\) c") == "a \\( b $$x^2$$ c")
+        #expect(normalizeMath("so \\(  x^2  \\) holds") == "so $$x^2$$ holds")
+        #expect(normalizeMath("so \\(   \\) holds") == "so $$   $$ holds")
+    }
 }
 
 // Android's TexPlainTest: the cases of shared/tex-plain.test.ts.

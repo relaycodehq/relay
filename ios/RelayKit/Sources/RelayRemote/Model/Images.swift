@@ -67,16 +67,22 @@ public func localImagePath(_ src: String, root: String) -> String? {
         guard let decoded = path.contains("%") ? path.removingPercentEncoding : path else { return nil }
         path = decoded
     }
+    // A file URL's path keeps a slash before the drive: `/C:/Users/…`.
+    if matches(path, #"^/[a-z]:[\\/]"#) { path.removeFirst() }
     if matches(path, drive) { return isImagePath(path) ? path : nil }
+    let joined = path.hasPrefix("/") ? path : "\(root)/\(path)"
+    let windows = matches(joined, drive)
+    // A drive is the top; `..` can't climb past it.
+    let top = windows ? 1 : 0
     var parts: [String] = []
-    for part in (path.hasPrefix("/") ? path : "\(root)/\(path)").split(separator: "/", omittingEmptySubsequences: true) {
+    for part in joined.split(omittingEmptySubsequences: true, whereSeparator: { $0 == "/" || (windows && $0 == "\\") }) {
         if part == ".." {
-            _ = parts.popLast()
+            if parts.count > top { parts.removeLast() }
         } else if part != "." {
             parts.append(String(part))
         }
     }
-    let full = "/" + parts.joined(separator: "/")
+    let full = windows ? parts.joined(separator: "\\") : "/" + parts.joined(separator: "/")
     return isImagePath(full) ? full : nil
 }
 

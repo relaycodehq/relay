@@ -126,9 +126,10 @@ export class RemoteDevices {
       if (++open.failures >= maxFailures) this.pairing = undefined;
       throw new Error("Wrong pairing code.");
     }
-    this.pairing = undefined;
+    // A refusal here leaves the code shown, for after a device is removed.
     if (this.list().length >= maxDevices)
       throw new Error("Remove a paired phone or computer in Relay first.");
+    this.pairing = undefined;
     const token = randomToken(32);
     const device: RemoteDevice = {
       id: randomUUID(),

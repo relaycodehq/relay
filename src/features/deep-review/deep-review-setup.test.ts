@@ -5,11 +5,13 @@ import {
   firstSetup,
   nextReviewer,
   reviewBranches,
+  reviewerAgents,
   reviewTarget,
   swapReviewer,
   withOpus,
 } from "./deep-review-setup";
 import type { ReviewAgent } from "../../../shared/deep-review";
+import { defaultAISettings, type AISettings } from "../../../shared/settings";
 
 const store = new Map<string, string>();
 
@@ -117,6 +119,22 @@ describe("setup", () => {
     const swapped = swapReviewer(reviewers, 0, choice, "claude");
     expect(swapped[0]!.prompt).toBe("/code-review");
     expect(swapped[1]).toBe(reviewers[1]);
+  });
+
+  it("offers reviewers in Settings' order, without switched-off agents but those in use", () => {
+    const cursor: ReviewAgent = { provider: "cursor", choice };
+    const prefs: AISettings = {
+      ...defaultAISettings,
+      agentOrder: ["cursor", "claude"],
+      agentsOff: ["cursor", "amp"],
+    };
+    const offered = reviewerAgents([codex], prefs);
+    expect(offered.slice(0, 2)).toEqual(["claude", "codex"]);
+    expect(offered).not.toContain("cursor");
+    expect(offered).not.toContain("amp");
+    const kept = reviewerAgents([codex, cursor], prefs);
+    expect(kept.slice(0, 3)).toEqual(["cursor", "claude", "codex"]);
+    expect(kept).not.toContain("amp");
   });
 });
 

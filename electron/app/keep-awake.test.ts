@@ -78,3 +78,17 @@ it("reads the battery every couple of minutes, not on every refresh", async () =
   expect(held.size).toBe(0);
   expect(power.batteryLevel).toHaveBeenCalledTimes(2);
 });
+
+it("keeps checking after one check of the power fails", async () => {
+  const state = { enabled: true, busy: false, battery: false };
+  const { awake, held, power } = setup(state);
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  power.onBattery = () => {
+    throw new Error("no power source");
+  };
+  await awake.refresh();
+  power.onBattery = () => state.battery;
+  await awake.refresh();
+  expect(held.size).toBe(1);
+  warn.mockRestore();
+});

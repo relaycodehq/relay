@@ -7,6 +7,7 @@ import { triageState } from "../../shared/chat-activity";
 import { applyChatPatch, type ChatSummary } from "../../shared/projects";
 import { ChatSummaryFeed } from "./chat-summaries";
 import * as titleHelpers from "../agents/thread-titles";
+import { readOnlyGitEnv } from "../agents/read-only-git";
 import {
   root,
   store,
@@ -307,6 +308,22 @@ it("runs a Read only turn in Codex's read-only sandbox, never asking", async () 
     sandboxPolicy: { type: "readOnly" },
   });
   expect((await chats.get(chat.id)).lastInput?.runtimeMode).toBe("read-only");
+});
+
+it("keeps git in a Read only turn from opening a bare repository it finds", async () => {
+  vi.stubEnv("GIT_CONFIG_PARAMETERS", "'user.name'='Someone'");
+  const chat = await chats.create(projectId, { kind: "project" });
+  await chats.send(chat.id, {
+    ...input("@codex Explain the cache guard"),
+    runtimeMode: "read-only",
+  });
+  await vi.waitFor(async () =>
+    expect((await chats.get(chat.id)).messages.at(-1)?.status).toBe("complete"),
+  );
+  const started = JSON.parse((await agentCalls()).trim().split("\n")[0]);
+  expect(started.gitConfig).toEqual(
+    readOnlyGitEnv({ GIT_CONFIG_PARAMETERS: "'user.name'='Someone'" }),
+  );
 });
 
 it("names a thread from its first message while the answer is still running", async () => {

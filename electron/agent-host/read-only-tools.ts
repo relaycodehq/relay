@@ -26,29 +26,33 @@ const deny = (reason: string) => ({
   },
 });
 
+/**
+ * Why a read-only turn may not make this call, or undefined when it may.
+ * Bash goes through its own allowlist in the hook instead.
+ */
+export function readOnlyRefusal(tool: string, input: unknown) {
+  // PowerShell, or whatever shell comes next: the allowlist only parses bash.
+  const runsCommand =
+    typeof (input as { command?: unknown } | undefined)?.command === "string";
+  if (runsCommand && !tool.startsWith("mcp__"))
+    return "This thread only reads. Use Read, Grep and Glob, or a read-only command like git diff in Bash, and report what should change instead of changing files.";
+  if (writes.has(tool))
+    return "This thread only reads. Report what should change instead of changing files.";
+  if (!tool.startsWith("mcp__")) return undefined;
+  const relayTool = tool.startsWith(`mcp__${RELAY_SERVER}__`)
+    ? tool.slice(`mcp__${RELAY_SERVER}__`.length)
+    : undefined;
+  if (relayTool && sideTools.has(relayTool)) return undefined;
+  return "This thread only reads, and this tool could act. Say what you'd do with it instead.";
+}
+
 /** The PreToolUse hook: anything that could change something is turned down. */
 export async function readOnlyHook(input: unknown) {
   const { tool_name: tool = "", tool_input } = (input ?? {}) as {
     tool_name?: string;
-    tool_input?: { command?: unknown };
+    tool_input?: unknown;
   };
   if (tool === "Bash") return readOnlyBashHook(input);
-  // PowerShell, or whatever shell comes next: the allowlist only parses bash.
-  const runsCommand = typeof tool_input?.command === "string";
-  if (runsCommand && !tool.startsWith("mcp__"))
-    return deny(
-      "This thread only reads. Use Read, Grep and Glob, or a read-only command like git diff in Bash, and report what should change instead of changing files.",
-    );
-  if (writes.has(tool))
-    return deny(
-      "This thread only reads. Report what should change instead of changing files.",
-    );
-  if (!tool.startsWith("mcp__")) return {};
-  const relayTool = tool.startsWith(`mcp__${RELAY_SERVER}__`)
-    ? tool.slice(`mcp__${RELAY_SERVER}__`.length)
-    : undefined;
-  if (relayTool && sideTools.has(relayTool)) return {};
-  return deny(
-    "This thread only reads, and this tool could act. Say what you'd do with it instead.",
-  );
+  const refusal = readOnlyRefusal(tool, tool_input);
+  return refusal ? deny(refusal) : {};
 }

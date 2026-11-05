@@ -1,13 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  copyFile,
-  mkdir,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import type {
   BugReportDraft,
@@ -21,15 +13,15 @@ import type {
   BugReportWriter,
 } from "../../shared/bug-report";
 import { anonymizer, type Identity } from "./anonymize";
+import { writeReportBundle } from "./bundle";
 import { crashedRunLog } from "./crash-log";
+import { DraftStore } from "./draft-store";
 import { cleanPng } from "./png";
 import {
   attachments,
   buildReport,
   digestOf,
   occasionText,
-  perfLogName,
-  recordingName,
   reportMarker,
   screenshotFile,
   systemFacts,
@@ -37,7 +29,7 @@ import {
 } from "./report";
 import {
   ghCanAttach,
-  ghCreateIssue,
+  ghSendIssue,
   surelyNotPosted,
   type Exec,
   type IssueHost,
@@ -120,8 +112,7 @@ class ChangedSinceShown extends Error {
  * post only what the last preview showed.
  */
 export class BugReports {
-  private draft?: Promise<BugReportDraft>;
-  private queue: Promise<unknown> = Promise.resolve();
+  private drafts: DraftStore;
   private gathered?: Promise<{ facts: BugReportFact[]; log: string }>;
   private via?: Promise<{ via: "gh" | "api"; gh: string | null }>;
   private signedIn?: Promise<
@@ -143,82 +134,12 @@ export class BugReports {
   constructor(
     private deps: BugReportDeps,
     private desktop?: DesktopActions,
-  ) {}
+  ) {
+    this.drafts = new DraftStore(deps.dir, () => this.now);
+  }
 
   private get now() {
     return this.deps.now?.() ?? Date.now();
-  }
-
-  private get file() {
-    return join(this.deps.dir, "draft.json");
-  }
-
-  private shot(id: string) {
-    return join(this.deps.dir, "screenshots", `${id}.png`);
-  }
-
-  private get recordingPath() {
-    return join(this.deps.dir, recordingName);
-  }
-
-  /** Runs one change at a time, each on the draft as the last left it. */
-  private change(fn: (draft: BugReportDraft) => Promise<void> | void) {
-    const task = this.queue.then(async () => {
-      const draft = structuredClone(await this.load());
-      await fn(draft);
-      draft.updatedAt = this.now;
-      await this.write(draft);
-      this.draft = Promise.resolve(draft);
-      return draft;
-    });
-    this.queue = task.catch(() => {});
-    return task;
-  }
-
-  private load() {
-    this.draft ??= this.read();
-    return this.draft;
-  }
-
-  private async read(): Promise<BugReportDraft> {
-    try {
-      const saved = JSON.parse(
-        await readFile(this.file, "utf8"),
-      ) as BugReportDraft;
-      if (typeof saved.id !== "string") throw new Error("Not a draft");
-      saved.kind = saved.kind === "feature" ? "feature" : "bug";
-      saved.description ??= "";
-      // A screenshot whose file is gone can't be shown or sent.
-      const present = new Set(
-        await readdir(join(this.deps.dir, "screenshots")).catch(() => []),
-      );
-      saved.screenshots = (saved.screenshots ?? []).filter((s) =>
-        present.has(`${s.id}.png`),
-      );
-      if (saved.recording && !(await exists(this.recordingPath)))
-        delete saved.recording;
-      return saved;
-    } catch {
-      return this.fresh({ kind: "asked" });
-    }
-  }
-
-  private fresh(occasion: BugReportOccasion): BugReportDraft {
-    return {
-      id: randomUUID(),
-      kind: "bug",
-      title: "",
-      description: "",
-      occasion,
-      includeLog: true,
-      removedFacts: [],
-      screenshots: [],
-      updatedAt: this.now,
-    };
-  }
-
-  private async write(draft: BugReportDraft) {
-    await writeFileAtomic(this.file, JSON.stringify(draft), { mkdir: 0o700 });
   }
 
   /** Marks that a prompt wants the report shown once a window can. */
@@ -238,9 +159,9 @@ export class BugReports {
    */
   async begin(occasion: BugReportOccasion) {
     if (occasion.kind !== "asked")
-      await this.change((draft) => {
+      await this.drafts.change((draft) => {
         if (draft.submission?.status === "sent" || isEmpty(draft))
-          Object.assign(draft, this.fresh(occasion));
+          Object.assign(draft, this.drafts.fresh(occasion));
         else draft.occasion = occasion;
       });
     this.forget();
@@ -253,12 +174,12 @@ export class BugReports {
   async prefill(
     fields: Pick<BugReportDraft, "kind" | "title" | "description">,
   ) {
-    await this.change((draft) => {
+    await this.drafts.change((draft) => {
       if (draft.submission?.status !== "sent" && !isEmpty(draft))
         throw new Error(
           "The user is already writing a report on Relay's Report a problem page. Ask them to send or discard it first, or give them your write-up to paste in.",
         );
-      Object.assign(draft, this.fresh({ kind: "asked" }), fields);
+      Object.assign(draft, this.drafts.fresh({ kind: "asked" }), fields);
     });
     this.forget();
   }
@@ -274,11 +195,13 @@ export class BugReports {
   }
 
   save(id: string, fields: BugReportFields) {
-    return this.change((draft) => {
-      if (draft.id !== id) throw new Error("That report is no longer open.");
-      if (locked(draft)) return;
-      Object.assign(draft, fields);
-    }).then(() => this.preview());
+    return this.drafts
+      .change((draft) => {
+        if (draft.id !== id) throw new Error("That report is no longer open.");
+        if (locked(draft)) return;
+        Object.assign(draft, fields);
+      })
+      .then(() => this.preview());
   }
 
   /**
@@ -286,7 +209,7 @@ export class BugReports {
    * description and what Relay saw go to it: no log, facts or screenshots.
    */
   async writeWithAgent() {
-    const draft = await this.load();
+    const draft = await this.drafts.load();
     const id = draft.id;
     if (locked(draft)) throw new Error("This report was already sent.");
     if (!draft.description.trim())
@@ -297,7 +220,7 @@ export class BugReports {
       draft.kind,
       occasionText(draft.occasion),
     );
-    await this.change((next) => {
+    await this.drafts.change((next) => {
       if (next.id !== id) throw new Error("That report is no longer open.");
       if (locked(next)) return;
       next.beforeTidy = { title: next.title, description: next.description };
@@ -308,7 +231,7 @@ export class BugReports {
 
   /** Puts back the title and description the last tidy-up replaced. */
   async undoTidy() {
-    await this.change((draft) => {
+    await this.drafts.change((draft) => {
       if (locked(draft)) throw new Error("This report was already sent.");
       if (!draft.beforeTidy) return;
       Object.assign(draft, draft.beforeTidy);
@@ -332,7 +255,7 @@ export class BugReports {
     if (png.bytes.length > screenshotLimit)
       throw new Error("Screenshots can be up to 10 MB on GitHub.");
     const id = randomUUID();
-    await this.change(async (draft) => {
+    await this.drafts.change(async (draft) => {
       if (draft.id !== draftId)
         throw new Error("That report is no longer open.");
       if (locked(draft)) throw new Error("This report was already sent.");
@@ -344,7 +267,7 @@ export class BugReports {
       if (!replacing && at >= maxScreenshots)
         throw new Error(`A report holds up to ${maxScreenshots} screenshots.`);
       // The file lands first, so a draft never names one that isn't there.
-      await writeFileAtomic(this.shot(id), png.bytes, { mkdir: true });
+      await writeFileAtomic(this.drafts.shot(id), png.bytes, { mkdir: true });
       draft.screenshots.splice(at, replacing ? 1 : 0, {
         id,
         name: name.slice(0, 120) || "Screenshot",
@@ -353,24 +276,24 @@ export class BugReports {
         height: png.height,
       });
     });
-    if (replacing) await rm(this.shot(replacing), { force: true });
+    if (replacing) await rm(this.drafts.shot(replacing), { force: true });
     return this.preview();
   }
 
   async removeScreenshot(id: string) {
-    await this.change((draft) => {
+    await this.drafts.change((draft) => {
       if (locked(draft)) throw new Error("This report was already sent.");
       draft.screenshots = draft.screenshots.filter((s) => s.id !== id);
     });
-    await rm(this.shot(id), { force: true });
+    await rm(this.drafts.shot(id), { force: true });
     return this.preview();
   }
 
   async screenshotBytes(id: string) {
-    const draft = await this.load();
+    const draft = await this.drafts.load();
     if (!draft.screenshots.some((s) => s.id === id))
       throw new Error("That screenshot is no longer in the report.");
-    return new Uint8Array(await readFile(this.shot(id)));
+    return new Uint8Array(await readFile(this.drafts.shot(id)));
   }
 
   /**
@@ -382,7 +305,7 @@ export class BugReports {
     if (!performance)
       throw new Error("This Relay can't record its performance.");
     if (this.recording) throw new Error("Relay is recording already.");
-    const draft = await this.load();
+    const draft = await this.drafts.load();
     if (locked(draft)) throw new Error("This report was already sent.");
     const stop = new AbortController();
     const startedAt = this.now;
@@ -397,7 +320,7 @@ export class BugReports {
           },
           stop.signal,
         );
-        await this.change((next) => {
+        await this.drafts.change((next) => {
           next.recording = recording;
         });
       } catch (error) {
@@ -435,11 +358,11 @@ export class BugReports {
   }
 
   async removeRecording() {
-    await this.change((draft) => {
+    await this.drafts.change((draft) => {
       if (locked(draft)) throw new Error("This report was already sent.");
       delete draft.recording;
     });
-    await rm(this.recordingPath, { force: true });
+    await rm(this.drafts.recordingPath, { force: true });
     return this.preview();
   }
 
@@ -449,21 +372,13 @@ export class BugReports {
     recording?.stop.abort();
     // Its zip and its draft would land in, or bring back, the folder.
     await recording?.done.catch(() => {});
-    // Reserve our place before awaiting filesystem work. A later save must
-    // resolve against the replacement draft, not write beside this removal.
-    const task = this.queue.then(async () => {
-      await rm(this.deps.dir, { recursive: true, force: true });
-      this.draft = Promise.resolve(this.fresh({ kind: "asked" }));
-      this.forget();
-    });
-    this.queue = task.catch(() => {});
-    await task;
+    await this.drafts.discard(() => this.forget());
     return this.preview();
   }
 
   private gather() {
     this.gathered ??= (async () => {
-      const draft = await this.load();
+      const draft = await this.drafts.load();
       const anonymize = anonymizer(this.deps.identity());
       const [system, performance] = await Promise.all([
         this.deps.system(),
@@ -511,7 +426,7 @@ export class BugReports {
   }
 
   async preview(): Promise<BugReportPreview> {
-    const draft = await this.load();
+    const draft = await this.drafts.load();
     const { facts, log } = await this.gather();
     const { account, accountError, visibility } = await this.github();
     // Without a `gh` login Send opens GitHub's own form. Without screenshots
@@ -582,7 +497,7 @@ export class BugReports {
     submission: BugReportSubmission | undefined,
     error?: string,
   ) {
-    return this.change((draft) => {
+    return this.drafts.change((draft) => {
       if (submission) draft.submission = submission;
       else delete draft.submission;
       if (error) draft.error = error;
@@ -603,58 +518,52 @@ export class BugReports {
     return { preview: await this.post(shown) };
   }
 
+  /**
+   * Looks for the issue an earlier send may have posted, and records it as
+   * sent when it's there. A pasted browser report carries the marker too.
+   */
+  private async earlierSendLanded(host: IssueHost, draft: BugReportDraft) {
+    const earlier = draft.submission;
+    if (!earlier) return false;
+    let found;
+    try {
+      found = await host.findIssue(
+        this.deps.repo,
+        reportMarker(draft.id),
+        earlier.at - 60_000,
+      );
+    } catch (error) {
+      throw new Error(
+        `Relay couldn't check whether the last send reached GitHub, so it didn't send again. ${errorMessage(error)}`,
+      );
+    }
+    if (!found) return false;
+    await this.setSubmission({
+      status: "sent",
+      at: this.now,
+      ...found,
+      screenshots: draft.screenshots.length ? "partial" : "none",
+    });
+    return true;
+  }
+
   private async post(shown: BugReportPreview) {
     const draft = shown.draft;
     const host = await this.deps.host();
-    const marker = reportMarker(draft.id);
-    const earlier = draft.submission;
-    // A pasted browser report carries the marker too.
-    if (earlier) {
-      let found;
-      try {
-        found = await host.findIssue(
-          this.deps.repo,
-          marker,
-          earlier.at - 60_000,
-        );
-      } catch (error) {
-        throw new Error(
-          `Relay couldn't check whether the last send reached GitHub, so it didn't send again. ${errorMessage(error)}`,
-        );
-      }
-      if (found) {
-        await this.setSubmission({
-          status: "sent",
-          at: this.now,
-          ...found,
-          screenshots: draft.screenshots.length ? "partial" : "none",
-        });
-        return this.preview();
-      }
-    }
+    if (await this.earlierSendLanded(host, draft)) return this.preview();
     const at = this.now;
     // Written before posting: a crash mid-send leaves a send to look for.
     await this.setSubmission({ status: "sending", at });
     try {
       if (shown.via === "gh") {
         const { gh } = await this.route();
-        const sending = join(this.deps.dir, "sending");
-        await rm(sending, { recursive: true, force: true });
-        await mkdir(sending, { recursive: true });
-        const files = draft.screenshots.map((_, i) => screenshotFile(i));
-        await Promise.all(
-          draft.screenshots.map((s, i) =>
-            copyFile(this.shot(s.id), join(sending, files[i])),
-          ),
-        );
-        await writeFile(join(sending, "body.md"), shown.body);
-        const result = await ghCreateIssue(gh!, this.deps.exec, {
+        const result = await ghSendIssue(gh!, this.deps.exec, {
           repo: this.deps.repo,
           title: shown.title,
-          bodyFile: join(sending, "body.md"),
-          dir: sending,
-          files,
-        }).finally(() => rm(sending, { recursive: true, force: true }));
+          body: shown.body,
+          dir: this.deps.dir,
+          shots: draft.screenshots.map((s) => this.drafts.shot(s.id)),
+        });
         if (result.status === "refused") {
           await this.setSubmission(undefined, result.error);
           throw new Error(result.error);
@@ -687,7 +596,7 @@ export class BugReports {
         });
       }
     } catch (error) {
-      const current = (await this.load()).submission;
+      const current = (await this.drafts.load()).submission;
       if (current?.status === "sending") {
         if (surelyNotPosted(error)) {
           await this.setSubmission(undefined, errorMessage(error));
@@ -762,32 +671,20 @@ export class BugReports {
       .slice(0, 16)
       .replace(/[T:]/g, "-");
     const folder = join(desktop.downloads, `Relay problem report ${stamp}`);
-    await mkdir(folder, { recursive: true });
-    await writeFile(
-      join(folder, "report.md"),
-      `# ${full.title}\n\n${full.body}\n`,
-    );
-    if (draft.includeLog) await writeFile(join(folder, "log.txt"), log);
-    await Promise.all([
-      ...draft.screenshots.map((s, i) =>
-        copyFile(this.shot(s.id), join(folder, screenshotFile(i))),
-      ),
-      ...(draft.recording
-        ? [copyFile(this.recordingPath, join(folder, recordingName))]
-        : []),
-      ...(draft.attachPerfLog && this.deps.performance
-        ? [
-            this.deps.performance
-              .logText()
-              .then((text) => writeFile(join(folder, perfLogName), text)),
-          ]
-        : []),
-    ]);
+    const performance = this.deps.performance;
+    await writeReportBundle(folder, {
+      report: full,
+      draft,
+      log,
+      shot: (id) => this.drafts.shot(id),
+      recording: this.drafts.recordingPath,
+      perfLog: performance && (() => performance.logText()),
+    });
     return folder;
   }
 
   async openIssue() {
-    const submission = (await this.load()).submission;
+    const submission = (await this.drafts.load()).submission;
     if (submission?.status !== "sent")
       throw new Error("This report wasn't sent yet.");
     await this.requireDesktop().openExternal(submission.url);
@@ -816,12 +713,6 @@ function byHand(draft: BugReportDraft, via: BugReportPreview["via"]) {
     ...attachments(draft),
   ];
 }
-
-const exists = (path: string) =>
-  stat(path).then(
-    () => true,
-    () => false,
-  );
 
 const isEmpty = (d: BugReportDraft) =>
   !d.title.trim() &&

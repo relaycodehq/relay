@@ -18,8 +18,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -137,7 +137,8 @@ fun rememberImagePickers(
     val documents = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { picked ->
         if (picked.isNotEmpty()) onFiles(picked, false)
     }
-    var shot by remember { mutableStateOf<Uri?>(null) }
+    // Saved: Android may end the app while the camera is up, and the photo comes back to a new one.
+    var shot by rememberSaveable { mutableStateOf<Uri?>(null) }
     val take = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = shot ?: return@rememberLauncherForActivityResult
         shot = null

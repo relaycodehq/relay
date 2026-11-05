@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, memo, type ReactNode } from "react";
 import { Check } from "lucide-react";
 import { LineDivider } from "../../ui/LineDivider";
 
@@ -13,9 +13,10 @@ export type MessageNote = {
 /**
  * Everything worth saying under one message, on one line: where the thread
  * moved, its renamed or landed branch, where it came from. Separate lines
- * would stack.
+ * would stack. Memoized: a thread has one under every message, and a streamed
+ * piece changes none of theirs.
  */
-export function MessageNotes({
+export const MessageNotes = memo(function MessageNotes({
   notes,
   unread,
 }: {
@@ -43,4 +44,4 @@ export function MessageNotes({
       </span>
     </LineDivider>
   );
-}
+});

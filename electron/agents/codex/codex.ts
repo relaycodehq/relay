@@ -44,7 +44,7 @@ export async function runCodex(options: AgentOptions): Promise<string> {
     sessionKey,
     executable,
     appServerArgs(options, helper),
-    options.cwd,
+    options,
     {
       ...account,
       env: withWorktreeEnv(account.env, {

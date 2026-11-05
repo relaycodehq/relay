@@ -72,8 +72,11 @@ export async function remoteRefsStamp(
   remote: string,
   ref: string,
 ) {
-  const { commonDir } = await gitDirs(root);
+  const { gitDir, commonDir } = await gitDirs(root);
   const files = [
+    // A fetch writes the FETCH_HEAD of the worktree it ran in: this one's
+    // own, or the main checkout's in the common folder.
+    join(gitDir, "FETCH_HEAD"),
     join(commonDir, "FETCH_HEAD"),
     join(commonDir, "packed-refs"),
     join(commonDir, "reftable"),

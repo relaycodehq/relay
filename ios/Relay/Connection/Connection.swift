@@ -59,7 +59,7 @@ final class Connection {
     /// Threads kept for reading offline, by computer.
     @ObservationIgnored let offline = ThreadCache(root: URL.cachesDirectory.appending(path: "relay-offline"))
     /// Copies the latest threads before they're opened; one per connection.
-    @ObservationIgnored private var readAhead: ReadAhead?
+    @ObservationIgnored private(set) var readAhead: ReadAhead?
     /// How many of a thread's latest messages to hold, where Load earlier asked for more.
     private(set) var history: [String: Int] = [:]
     /// Messages on their way to a computer, shown in their threads until it has them (ConnectionSends.swift).
@@ -263,10 +263,7 @@ final class Connection {
             chats = list
             cacheSoon()
             lookForMissingProjects()
-            if let active, status.state == .online {
-                let wanted = ReadAhead.wanted(list, computer: active)
-                Task { [readAhead] in await readAhead?.want(wanted) }
-            }
+            readAheadLatest()
             // A request, a question or the queue comes with no message of its own: the list says, the thread is fetched.
             for summary in list where threads[summary.id] != nil && before[summary.id] != summary.needs {
                 Task { await load(summary.id) }
@@ -321,6 +318,7 @@ final class Connection {
         present = fresh.present
         if let active { cache.save(active, fresh) }
         lookForMissingProjects()
+        readAheadLatest()
         if status.state == .online, let active {
             await drafts.online(active, link: ClientDrafts(client: client), overview: fresh, askedAt: asked)
         }
@@ -854,7 +852,7 @@ final class Connection {
     /// The thread's agent works in the project folder from now on, as the desktop's workspace menu can.
     func useProjectFolder(_ chatId: String) async throws {
         guard let client else { throw PairingError("Not connected.") }
-        _ = try await client.desktop("selectAgentWorktree", [.string(chatId), nil])
+        _ = try await client.desktop("selectAgentWorktree", [.string(chatId), .null])
     }
 
     /// Local network or Tailscale first; the client keeps it with the pairing and moves if it's shorter.

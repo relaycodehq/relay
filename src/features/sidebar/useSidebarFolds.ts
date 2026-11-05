@@ -1,11 +1,34 @@
 import { useState } from "react";
+import { rebaseGroup } from "../../../shared/project-folders";
 import { useStoredState } from "../../lib/persisted-store";
 
 const asObject = (saved: unknown) =>
   (saved && typeof saved === "object" ? saved : {}) as Record<string, unknown>;
 
+const FOLDER = "folder:";
+
 /** A group's key among the projects' in what's open. */
-export const groupKey = (path: string) => "folder:" + path;
+export const groupKey = (path: string) => FOLDER + path;
+
+/**
+ * `expanded` with the groups inside group `from` moved under `to`, as
+ * renaming it or taking it apart moves them; `from` itself stays as it was.
+ */
+export function regroupedFolds(
+  expanded: Record<string, boolean>,
+  from: string,
+  to: string,
+): Record<string, boolean> {
+  const inside = (key: string) => key.startsWith(groupKey(from + "/"));
+  const kept = Object.entries(expanded).filter(([key]) => !inside(key));
+  const moved = Object.entries(expanded)
+    .filter(([key]) => inside(key))
+    .map(([key, open]) => {
+      const path = rebaseGroup(key.slice(FOLDER.length), from, to);
+      return [groupKey(path), open] as const;
+    });
+  return Object.fromEntries([...kept, ...moved]);
+}
 
 export type SidebarFolds = ReturnType<typeof useSidebarFolds>;
 
@@ -44,6 +67,9 @@ export function useSidebarFolds() {
       setExpanded((state) => ({ ...state, [key]: open }));
       firstPage(key);
     },
+    /** Keeps what's open of the groups in `from` once they move under `to`. */
+    regroup: (from: string, to: string) =>
+      setExpanded((state) => regroupedFolds(state, from, to)),
     folded,
     fold: (section: keyof typeof folded) => {
       setFolded((s) => ({ ...s, [section]: !s[section] }));

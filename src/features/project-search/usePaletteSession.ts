@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useReturnFocus } from "../../lib/focus-return";
 import { modeAfter, modesFor, startingMode } from "./palette-modes";
-import type { Row } from "./palette-sections";
+import type { Row, Section } from "./palette-sections";
 import { useSearchFlags } from "./search-options";
 import { flagShortcut } from "./SearchToggles";
 import type { OpenTarget, SearchMode, SearchSymbol } from "./types";
@@ -9,6 +9,46 @@ import { usePaletteResults } from "./usePaletteResults";
 
 const scrollActiveIntoView = (list: HTMLElement | null) =>
   list?.querySelector("[data-active]")?.scrollIntoView({ block: "nearest" });
+
+/**
+ * Whether the row at `index` may still be the previous query's: its section
+ * keeps the last answer on screen while the next search runs. With no row
+ * yet, any search still running may bring one.
+ */
+function rowMayBeStale(sections: Section[], index: number) {
+  let start = 0;
+  for (const section of sections) {
+    if (index < start + section.rows.length) return !!section.busy;
+    start += section.rows.length;
+  }
+  return sections.some((section) => section.busy);
+}
+
+/**
+ * Enter opens the active row, but one the previous query left on screen is
+ * not what was asked for: Enter then waits for the current query's rows and
+ * opens the active one of those. Anything else the user does forgets it.
+ */
+function useEnterOnFreshRow(
+  results: { sections: Section[]; rows: Row[] },
+  activeIndex: number,
+  choose: (row: Row | undefined) => void,
+) {
+  const [waiting, setWaiting] = useState(false);
+  const stale = rowMayBeStale(results.sections, activeIndex);
+  useEffect(() => {
+    if (!waiting || stale) return;
+    setWaiting(false);
+    choose(results.rows[activeIndex]);
+  });
+  return {
+    press: () => {
+      if (stale) setWaiting(true);
+      else choose(results.rows[activeIndex]);
+    },
+    forget: () => setWaiting(false),
+  };
+}
 
 type PaletteSessionInput = {
   where: string;
@@ -55,18 +95,22 @@ export function usePaletteSession({
     onClose();
     onOpen(row.target);
   };
+  const enter = useEnterOnFreshRow(results, activeIndex, choose);
   const switchTo = (next: SearchMode) => {
     setMode(next);
     setActive(0);
+    enter.forget();
     input.current?.focus();
   };
   const moveActive = (step: 1 | -1) => {
     const count = results.rows.length;
     if (count) setActive((activeIndex + step + count) % count);
+    enter.forget();
   };
   const changeText = (next: string) => {
     setText(next);
     setActive(0);
+    enter.forget();
   };
   function onKeyDown(e: KeyboardEvent) {
     if (e.nativeEvent.isComposing) return;
@@ -79,7 +123,7 @@ export function usePaletteSession({
       switchTo(modeAfter(modes, mode, e.shiftKey ? -1 : 1));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      choose(results.rows[activeIndex]);
+      enter.press();
     }
   }
 

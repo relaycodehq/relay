@@ -1,4 +1,5 @@
 import {
+  forwardedArgs,
   handoffChatMethods,
   handoffFolderMethods,
   handoffHereOnlyMethods,
@@ -24,6 +25,7 @@ import type { Computers } from "./computers";
 import { listed, named, stays, summaryOf } from "./away";
 import type { HandoffNotices } from "./notices";
 import type { RemoteStatuses } from "./remote-statuses";
+import { nameOf } from "./targets";
 import { sendFor } from "./transfer";
 
 const chatMethods = new Set<string>(handoffChatMethods);
@@ -295,13 +297,14 @@ export class HandoffForwarding {
     send?: ProjectChatSend,
   ) {
     const client = await this.computers.connected(computerId);
+    const there = { id: computerId, name: nameOf(this.computers, computerId) };
     return client.call(
       "handoffCall",
       handoffId,
       method as HandoffMethod,
       send
-        ? [args[0], await sendFor(this.infos, computerId, client, send)]
-        : args,
+        ? [args[0], await sendFor(this.infos, there, client, send)]
+        : forwardedArgs(args),
     );
   }
 

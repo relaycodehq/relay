@@ -6,6 +6,7 @@ import type { AgentOptions } from "../types";
 import type { AcpProfile } from "./profiles";
 import { runAcp } from "./run";
 import { disposeAcp, acquireAcpAgent } from "./sessions";
+import { readOnlyGitEnv } from "../read-only-git";
 import { antigravityBatches } from "../antigravity";
 import { signInAcp } from "./sign-in";
 
@@ -352,6 +353,82 @@ it("restarts the process when a session changes accounts, retaining the account 
   );
 });
 
+it("restarts a thread's process when it switches to Read only and back, so it runs with the read-only settings", async () => {
+  const { acp, root, sent } = await agent(
+    { resume: true, sessions: ["s1"], captureEnvKeys: ["READ_ONLY_RULES"] },
+    {
+      provider: "amp",
+      readOnlyEnv: async () => ({ env: { READ_ONLY_RULES: "on" } }),
+    },
+  );
+  const session = { key: "switch", id: "s1", onId: async () => {} };
+  const turn = (readOnly: boolean) =>
+    runAcp(
+      acp,
+      options(root, {
+        runtimeMode: "approval-required",
+        ...(readOnly ? { readOnly } : {}),
+        session,
+      }),
+    );
+  await turn(false);
+  await turn(true);
+  await turn(false);
+  expect(
+    (await sent()).flatMap((m: any) =>
+      m.environment ? [m.environment.READ_ONLY_RULES] : [],
+    ),
+  ).toEqual([null, "on", null]);
+});
+
+it("keeps the process a restart cut a turn off in when the thread's mode now differs, so the turn can be picked up", async () => {
+  const { acp, root } = await agent({});
+  const running = await acquireAcpAgent(acp, "adopt", root);
+  running.busy = false;
+  const picked = await acquireAcpAgent(acp, "adopt", root, {
+    readOnly: true,
+    keepMode: true,
+  });
+  expect(picked).toBe(running);
+  picked.busy = false;
+  const next = await acquireAcpAgent(acp, "adopt", root, { readOnly: true });
+  expect(next).not.toBe(running);
+});
+
+it("resumes a thread switched to Read only and back in a process with that mode's git settings", async () => {
+  const readOnlyEnv = readOnlyGitEnv(process.env);
+  const { acp, root, sent } = await agent({
+    resume: true,
+    sessions: ["s1"],
+    captureEnvKeys: Object.keys(readOnlyEnv),
+  });
+  const session = { key: "switch-git", id: "s1", onId: async () => {} };
+  const turn = (readOnly: boolean) =>
+    runAcp(
+      acp,
+      options(root, {
+        runtimeMode: "approval-required",
+        // What turnOptions adds for a Read only turn.
+        ...(readOnly ? { readOnly, env: readOnlyEnv } : {}),
+        session,
+      }),
+    );
+  await turn(false);
+  await turn(true);
+  await turn(false);
+  const said = await sent();
+  const set = (environment: Record<string, string | null>) =>
+    Object.values(environment).every((value) => value !== null);
+  expect(
+    said.flatMap((m: any) => (m.environment ? [set(m.environment)] : [])),
+  ).toEqual([false, true, false]);
+  expect(
+    said
+      .filter((m: any) => m.method === "session/resume")
+      .map((m: any) => m.params.sessionId),
+  ).toEqual(["s1", "s1", "s1"]);
+});
+
 it("does not merge a cleared ambient credential back into an account's process environment", async () => {
   vi.stubEnv("GEMINI_API_KEY", "inherited-fixture-key");
   const clean = { ...process.env } as Record<string, string>;
@@ -410,6 +487,37 @@ it("classifies prompt-time authentication refusals so the thread offers sign-in;
       runAcp(failed.acp, options(failed.root)),
     ).rejects.toMatchObject({ name: "AcpRequestError", code });
   }
+});
+
+it("starts a fresh process after a session refused for sign-in, so a login made since is used", async () => {
+  let loggedIn = false;
+  const launched: boolean[] = [];
+  const { acp, root, sent } = await agent(
+    {},
+    { provider: "opencode", name: "OpenCode" },
+  );
+  const command = acp.command;
+  acp.command = async (...args) => {
+    const launch = await command(...args);
+    launched.push(loggedIn);
+    const scenario = { signIn: "cli", signedIn: loggedIn };
+    return {
+      ...launch,
+      env: { ...launch.env, RELAY_ACP_SCENARIO: JSON.stringify(scenario) },
+    };
+  };
+  const session = { key: "signed-out", onId: async () => {} };
+
+  await expect(runAcp(acp, options(root, { session }))).rejects.toMatchObject({
+    kind: "signedOut",
+  });
+  loggedIn = true;
+  await expect(runAcp(acp, options(root, { session }))).resolves.toBe("");
+
+  expect(launched).toEqual([false, true]);
+  expect(
+    (await sent()).filter((m) => m.method === "session/prompt"),
+  ).toHaveLength(1);
 });
 
 const editing = {
@@ -537,6 +645,47 @@ it("asks the user when the mode does, and answers with the option they picked", 
   expect(reply?.result).toEqual({
     outcome: { outcome: "selected", optionId: "always" },
   });
+});
+
+it("offers no Always when the agent has several, rather than picking the broadest", async () => {
+  // Gemini CLI's options for an MCP tool: the whole server first, then the tool.
+  const { acp, root } = await agent({
+    turn: [
+      {
+        ask: {
+          toolCall: { ...editing, kind: "other", title: "query (db MCP)" },
+          options: [
+            {
+              optionId: "proceed_always_server",
+              name: 'Allow all "db" server tools for this session',
+              kind: "allow_always",
+            },
+            {
+              optionId: "proceed_always_tool",
+              name: 'Allow tool "query" for this session',
+              kind: "allow_always",
+            },
+            { optionId: "proceed_once", name: "Allow", kind: "allow_once" },
+            { optionId: "cancel", name: "Reject", kind: "reject_once" },
+          ],
+        },
+      },
+      say("ok"),
+    ],
+  });
+  const onRequest = vi.fn(async () => ({
+    kind: "approval" as const,
+    decision: "accept" as const,
+  }));
+  await runAcp(
+    acp,
+    options(root, { runtimeMode: "approval-required", onRequest }),
+  );
+
+  expect(onRequest).toHaveBeenCalledWith(
+    expect.objectContaining({ decisions: ["accept", "decline"] }),
+    expect.anything(),
+  );
 });
 
 it("answers on the user's behalf where the mode decides, without asking", async () => {

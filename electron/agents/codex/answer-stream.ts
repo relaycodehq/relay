@@ -22,6 +22,8 @@ export class CodexAnswerStream {
     { text: string; phase?: "commentary" | "final_answer" }
   >();
   private visibleCommentary = new Map<string, string>();
+  /** Messages Codex has finished writing. */
+  private completed = new Set<string>();
   answer = "";
 
   constructor(
@@ -36,7 +38,6 @@ export class CodexAnswerStream {
       method !== "item/completed"
     )
       return;
-    let finished: string | undefined;
     if (method === "item/agentMessage/delta") {
       if (typeof params.delta !== "string") return;
       const id = typeof params.itemId === "string" ? params.itemId : "answer";
@@ -54,20 +55,33 @@ export class CodexAnswerStream {
       if (method === "item/completed" && typeof item.text === "string")
         entry.text = item.text;
       this.messages.set(id, entry);
-      if (method === "item/completed" && entry.phase === "commentary")
-        finished = id;
+      if (method === "item/completed") this.completed.add(id);
     }
     const over = answerLimitError(
       [...this.messages.values()].reduce((n, m) => n + m.text.length, 0),
     );
     if (over) throw over;
     if (this.messages.size > 100) throw new Error("Answer size limit reached.");
-    this.publish();
-    // A finished note never changes or becomes the answer. Forget it once
-    // shown: a long turn writes hundreds, and they don't count to the limit.
-    if (finished) {
-      this.messages.delete(finished);
-      this.visibleCommentary.delete(finished);
+    const final = this.publish();
+    this.forgetNotes(final);
+  }
+
+  /**
+   * A finished note never changes or becomes the answer: a commentary one, or
+   * an unphased one a later, finished message took the answer from. Forget it
+   * once shown: a long turn writes hundreds, and they don't count to the limit.
+   */
+  private forgetNotes(final: string | undefined) {
+    // Until it has finished, the message holding the answer may still turn
+    // out to be commentary, and the answer goes back to the one before.
+    let beforeFinal = final !== undefined && this.completed.has(final);
+    for (const [id, message] of this.messages) {
+      if (id === final) beforeFinal = false;
+      const note = message.phase === "commentary" || beforeFinal;
+      if (!note || !this.completed.has(id)) continue;
+      this.messages.delete(id);
+      this.visibleCommentary.delete(id);
+      this.completed.delete(id);
     }
   }
 
@@ -75,6 +89,7 @@ export class CodexAnswerStream {
   restart() {
     this.messages.clear();
     this.visibleCommentary.clear();
+    this.completed.clear();
     this.answer = "";
   }
 
@@ -89,10 +104,12 @@ export class CodexAnswerStream {
     }
     this.messages.clear();
     this.visibleCommentary.clear();
+    this.completed.clear();
     if (this.answer) this.onText("");
     this.answer = "";
   }
 
+  /** Shows the answer and the notes; returns the answer's message id. */
   private publish() {
     const entries = [...this.messages.entries()];
     const final =
@@ -114,5 +131,6 @@ export class CodexAnswerStream {
     for (const id of this.visibleCommentary.keys())
       if (!nextCommentary.has(id)) this.onCommentary(id, null);
     this.visibleCommentary = nextCommentary;
+    return final?.[0];
   }
 }

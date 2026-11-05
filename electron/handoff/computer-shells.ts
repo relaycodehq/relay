@@ -6,6 +6,7 @@ import { z } from "zod";
 import { agentProviderSchema } from "../../shared/agents";
 import type { TerminalOp } from "../../shared/remote";
 import {
+  TERMINAL_WRITE_LIMIT,
   terminalKeySchema,
   terminalSizeSchema,
   type TerminalOpened,
@@ -56,10 +57,7 @@ export class ComputerShells {
       case "write":
         return shells.write(
           mine,
-          z
-            .string()
-            .max(1 << 20)
-            .parse(args[0]),
+          z.string().max(TERMINAL_WRITE_LIMIT).parse(args[0]),
         );
       case "resize": {
         const { cols, rows } = terminalSizeSchema.parse({

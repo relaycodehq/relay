@@ -209,6 +209,26 @@ it("reads a pull request detached, and gives it a branch of its own with the fir
   expect(git(made.path, "status", "--porcelain")).toBe("?? fix.ts");
 });
 
+it("never hands git a pull request's head branch named like an option", async () => {
+  git(repo, "update-ref", "refs/relay/pulls/4/head", head);
+  const pr = scope({
+    target: { kind: "pr", ref: { owner: "o", name: "r", number: 4 } },
+  });
+  const made = (await openReviewCheckout(
+    repo,
+    pr,
+    worktrees,
+    "c2",
+    "--set-upstream-to=main",
+  ))!;
+  const fixing = await follow(made, "c2", true);
+  expect(fixing.branch).toBe("pr/4");
+  expect(git(repo, "rev-parse", "pr/4")).toBe(head);
+  expect(
+    git(repo, "for-each-ref", "--format=%(upstream)", "refs/heads/main"),
+  ).toBe("");
+});
+
 it("moves a pull request's worktree to its new head in the next round, or reads beside edits there", async () => {
   git(repo, "update-ref", "refs/relay/pulls/7/head", head);
   const pr = scope({
@@ -438,4 +458,19 @@ it("takes back a review's worktree a discard couldn't remove when the review sta
   expect(await openReviewCheckout(repo, scope(), worktrees, "c16")).toEqual(
     branch,
   );
+});
+
+it("keeps a review's worktree Git can't read, edits and all", async () => {
+  const made = (await openReviewCheckout(repo, scope(), worktrees, "c17"))!;
+  await writeFile(join(made.path, "panel.ts"), "export const v = 9;\n");
+  const index = git(
+    made.path,
+    "rev-parse",
+    "--path-format=absolute",
+    "--git-path",
+    "index",
+  );
+  await writeFile(index, "not an index");
+  await discardReviewCheckout(made);
+  expect(await exists(join(made.path, "panel.ts"))).toBe(true);
 });

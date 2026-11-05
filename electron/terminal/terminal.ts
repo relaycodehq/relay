@@ -26,8 +26,13 @@ export async function openWindowsTerminal(dir: string, scriptPath: string) {
     "-File",
     scriptPath,
   ];
+  // wt reads every `;` as the start of another tab's command, even inside a
+  // path, unless it is escaped as `\;`.
+  const wtArgs = ["-d", dir, ...powershell].map((arg) =>
+    arg.replaceAll(";", "\\;"),
+  );
   try {
-    await start(await findExecutable("wt"), ["-d", dir, ...powershell], dir);
+    await start(await findExecutable("wt"), wtArgs, dir);
   } catch {
     await start(powershell[0], powershell.slice(1), dir);
   }

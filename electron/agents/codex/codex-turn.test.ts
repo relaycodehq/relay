@@ -5,6 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { findExecutable } from "../../platform/executables";
 import { runCodex } from "./codex";
 import { readCodexContext, closeCodexConnection } from "./codex-connection";
+import { readOnlyGitEnv } from "../read-only-git";
 import { fakeCli } from "../../../tests/fixtures/fake-cli";
 import { agentError } from "../../../shared/agent-error";
 import type { AgentActivity } from "../../../shared/projects";
@@ -72,8 +73,16 @@ require("node:readline").createInterface({ input: process.stdin }).on("line", (l
     send({ method: "turn/completed", params: { threadId: "thread", turn: { id: "turn", status: "interrupted" } } });
   }
   else if (m.method === "config/read") send({ id: m.id, result: { config: {} } });
-  else if (m.method === "thread/start")
+  else if (m.method === "thread/start" || m.method === "thread/resume") {
+    let bare = null;
+    try {
+      // Only what the app server's environment sets, not this machine's git config.
+      const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+      bare = require("node:child_process").execFileSync("git", ["config", "--get", "safe.bareRepository"], { encoding: "utf8", env }).trim();
+    } catch {}
+    require("node:fs").appendFileSync(${JSON.stringify(log + ".threads")}, JSON.stringify({ ...m.params, method: m.method, bare }) + "\\n");
     send({ id: m.id, result: ${JSON.stringify(thread)} });
+  }
   else if (m.method === "thread/items/list")
     send({ id: m.id, result: { data: ${JSON.stringify(items)}, nextCursor: null } });
   else if (m.method === "turn/start" || m.method === "review/start") {
@@ -165,6 +174,82 @@ it("estimates context through the existing live connection without another turn 
     await closeCodexConnection(key);
   }
   expect(await readCodexContext(key, usage)).toBeNull();
+});
+
+it("starts a thread's app server again when it switches to Read only and back, with the tools that mode gets", async () => {
+  const key = "codex-read-only-switch";
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-codex-")));
+  const log = join(root, "turn.json");
+  const cli = await fakeCli(join(root, "codex"), fakeCodex(log));
+  vi.mocked(findExecutable).mockResolvedValue(cli);
+  onTestFinished(() => closeCodexConnection(key));
+  const relayTools = { url: "http://127.0.0.1:1/mcp", token: "t" };
+  const turn = (more: Partial<AgentOptions>) =>
+    runCodex({
+      job: { kind: "prompt" },
+      cwd: root,
+      prompt: "Hi",
+      choice: { model: "", reasoningEffort: "", fast: false },
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+      signal: new AbortController().signal,
+      onText() {},
+      session: { key, onId: async () => {} },
+      ...more,
+    });
+  await turn({ relayTools });
+  // Read only reaches the agent as Supervised with `readOnly`, and no Relay tools.
+  await turn({ readOnly: true });
+  await turn({ relayTools });
+  const threads = (await readFile(`${log}.threads`, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(
+    threads.map((t) => [
+      t.config.features.plugins,
+      !!t.config["mcp_servers.relay.url"],
+    ]),
+  ).toEqual([
+    [true, true],
+    [false, false],
+    [true, true],
+  ]);
+});
+
+it("resumes a thread switched to Read only and back in an app server with that mode's git settings", async () => {
+  const key = "codex-read-only-git";
+  const root = await realpath(await mkdtemp(join(tmpdir(), "relay-codex-")));
+  const log = join(root, "turn.json");
+  const cli = await fakeCli(join(root, "codex"), fakeCodex(log));
+  vi.mocked(findExecutable).mockResolvedValue(cli);
+  onTestFinished(() => closeCodexConnection(key));
+  const turn = (readOnly: boolean, id?: string) =>
+    runCodex({
+      job: { kind: "prompt" },
+      cwd: root,
+      prompt: "Hi",
+      choice: { model: "", reasoningEffort: "", fast: false },
+      runtimeMode: "approval-required",
+      interactionMode: "default",
+      signal: new AbortController().signal,
+      onText() {},
+      session: { key, id, onId: async () => {} },
+      // What turnOptions adds for a Read only turn.
+      ...(readOnly ? { readOnly, env: readOnlyGitEnv(process.env) } : {}),
+    });
+  await turn(false);
+  await turn(true, "thread");
+  await turn(false, "thread");
+  const threads = (await readFile(`${log}.threads`, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(threads.map((t) => [t.method, t.threadId, t.bare])).toEqual([
+    ["thread/start", undefined, null],
+    ["thread/resume", "thread", "explicit"],
+    ["thread/resume", "thread", null],
+  ]);
 });
 
 it("says what is missing when Codex's answer to starting the thread or the turn lacks it", async () => {
@@ -605,4 +690,27 @@ it("stops waiting when Codex never acknowledges the interrupt", async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("fails a run whose app server can't be started instead of waiting forever", async () => {
+  // Like a `.cmd` Windows refuses to spawn: `spawn` throws rather than emitting `error`.
+  vi.mocked(findExecutable).mockResolvedValue("codex\0");
+  const answer = runCodex({
+    job: { kind: "prompt" },
+    cwd: tmpdir(),
+    prompt: "Hi",
+    choice: { model: "", reasoningEffort: "", fast: false },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    signal: new AbortController().signal,
+    onText() {},
+  });
+  const outcome = await Promise.race([
+    answer.then(
+      () => "answered",
+      () => "failed",
+    ),
+    new Promise((resolve) => setTimeout(() => resolve("still waiting"), 2000)),
+  ]);
+  expect(outcome).toBe("failed");
 });

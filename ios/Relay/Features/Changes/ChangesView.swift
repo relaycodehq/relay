@@ -25,7 +25,7 @@ struct ChangesView: View {
         .onAppear { model.bind(connection) }
         .whenLive { await model.load() }
         .asks(model.asks)
-        .sensoryFeedback(.success, trigger: model.tree?.revision)
+        .sensoryFeedback(.success, trigger: model.succeeded)
     }
 
     private func list(_ tree: WorkingTree) -> some View {

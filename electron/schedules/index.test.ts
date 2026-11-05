@@ -28,16 +28,22 @@ function input(patch: Partial<ScheduleInput> = {}): ScheduleInput {
   };
 }
 
-/** Schedules over threads kept in memory; `answer` ends a run's turn. */
-function setup({ busy = false } = {}) {
+/**
+ * Schedules over threads kept in memory; `answer` ends a run's turn.
+ * `writeMs` keeps each change unseen until it's written, as the real store does.
+ */
+function setup({ busy = false, writeMs = 0 } = {}) {
   let state: { schedules?: Schedule[] } = {};
+  let writes = Promise.resolve();
   const store = {
     get: () => state,
-    update: async (change: (s: typeof state) => void) => {
-      const next = structuredClone(state);
-      change(next);
-      state = next;
-    },
+    update: (change: (s: typeof state) => void) =>
+      (writes = writes.then(async () => {
+        const next = structuredClone(state);
+        change(next);
+        if (writeMs) await new Promise((done) => setTimeout(done, writeMs));
+        state = next;
+      })),
   } as unknown as Store;
   const threads = new Map<string, ProjectChat>();
   let saved: ((chat: ProjectChat) => void) | undefined;
@@ -63,11 +69,12 @@ function setup({ busy = false } = {}) {
       return () => {};
     },
   };
-  const schedules = new Schedules(store, {
+  const host = {
     chats,
     projects: { has: () => true, name: () => "Acme Web", scratch: async () => ({ id: "scratch" }) },
     changed: () => {},
-  });
+  };
+  let schedules = new Schedules(store, host);
   /** The run's answer in `chatId` as it stands now; saved as its turn ends unless it's still going. */
   const answer = (chatId: string, message: Partial<ChatMessage>) => {
     const chat = threads.get(chatId)!;
@@ -76,7 +83,13 @@ function setup({ busy = false } = {}) {
     if (message.status !== "streaming") saved?.(chat);
   };
   const runs = () => schedules.list()[0].runs;
-  return { schedules, chats, answer, runs };
+  /** Quits Relay and opens it again on the same state and threads. */
+  const relaunch = () => {
+    schedules.stop();
+    schedules = new Schedules(store, host);
+    schedules.armAll();
+  };
+  return { schedules, chats, answer, runs, relaunch };
 }
 
 beforeEach(() => {
@@ -170,6 +183,31 @@ it("gives a test run its own thread when the runs share one", async () => {
   await vi.advanceTimersByTimeAsync(7 * DAY);
   expect(chats.create).toHaveBeenCalledTimes(2);
   expect(chats.send.mock.calls.at(-1)![0]).toBe("chat-1");
+});
+
+it("keeps a run that outlived a relaunch to its token limit", async () => {
+  const { schedules, chats, answer, relaunch } = setup();
+  await schedules.save(null, input({ tokenLimit: 50_000 }));
+  await vi.advanceTimersByTimeAsync(23 * 60 * MINUTE);
+  relaunch();
+
+  answer("chat-1", { status: "streaming", context: { usedTokens: 61_000 } });
+  await vi.advanceTimersByTimeAsync(20_000);
+  expect(chats.cancel).toHaveBeenCalledWith("chat-1");
+});
+
+it("runs a due time once when the computer wakes twice while it starts", async () => {
+  const { schedules, chats } = setup({ writeMs: 5 });
+  const saving = schedules.save(null, input({ repeat: "daily", time: "02:00" }));
+  await vi.advanceTimersByTimeAsync(5);
+  await saving;
+  vi.setSystemTime(Date.now() + DAY);
+  // Resume, then unlock-screen while the catch-up is still being written down.
+  schedules.armAll();
+  await vi.advanceTimersByTimeAsync(1);
+  schedules.armAll();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(chats.create).toHaveBeenCalledTimes(1);
 });
 
 it("won't turn on a schedule that has nothing to send", async () => {

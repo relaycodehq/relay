@@ -182,3 +182,31 @@ it("takes a Windows path for an absolute one", () => {
     projectFileLink("C:\\work\\app\\src\\a.ts:3", "C:\\work\\app", true),
   ).toEqual({ path: "src/a.ts", line: 3, directory: false });
 });
+
+it("finds a Windows path in the project whatever its case", () => {
+  const root = "C:\\Users\\Bob\\proj";
+  expect(chatFileLink("c:\\users\\bob\\proj\\src\\a.ts:3", root, true)).toEqual(
+    { path: "src/a.ts", line: 3, directory: false },
+  );
+  // Case still counts outside Windows.
+  expect(
+    chatFileLink("/home/bob/proj/a.ts", "/home/Bob/proj", true),
+  ).toMatchObject({ outside: true });
+});
+
+it("reads a long run of slashes inside a folder path in linear time", () => {
+  const path = `/Users/${"/".repeat(20_000)}x/`;
+  const started = performance.now();
+  expect(chatFileLink(path, "/repo", true)).toMatchObject({
+    path: path.slice(0, -1),
+    directory: true,
+  });
+  expect(performance.now() - started).toBeLessThan(100);
+});
+
+it("drops every trailing slash of a folder outside the project", () => {
+  expect(chatFileLink("/Users/jane/notes//", "/repo")).toMatchObject({
+    path: "/Users/jane/notes",
+    directory: true,
+  });
+});

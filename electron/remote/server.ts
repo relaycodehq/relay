@@ -68,6 +68,8 @@ interface Connection {
   deviceId?: string;
   alive: boolean;
   authenticating?: boolean;
+  /** Its sign-in was turned away, so it's closing. */
+  refused?: boolean;
   /** Binary frames and patches, once both ends speak `compactBridge`. */
   link?: LinkSender;
   /** The bridge the device said it speaks; 0 for ones from before it said. */
@@ -117,6 +119,12 @@ export function makeRoom<T extends Place>(connections: Set<T>, from: string) {
   return connections.size < maxConnections;
 }
 
+/** An object naming its kind; each kind's fields are checked where they're read. */
+const looksLikeFrame = (opened: unknown): opened is ClientFrame =>
+  typeof opened === "object" &&
+  opened !== null &&
+  typeof (opened as { t?: unknown }).t === "string";
+
 export const nodeCodec: Codec = {
   deflate: (bytes) => deflateRawSync(bytes, { level: 6 }),
   // Inflated past this is no frame we'd send.
@@ -136,6 +144,12 @@ function portTaken(port: number) {
 }
 
 /** The desktop end of the phone remote; see shared/remote-crypto for the channel. */
+/** Why a phone's sign-in was turned down, in the words the phone shows. */
+function denialFor(frame: ClientFrame, error: unknown) {
+  if (frame.t === "auth") return "This phone isn't paired with Relay anymore.";
+  return error instanceof Error ? error.message : "Not allowed.";
+}
+
 export class RemoteServer {
   private server?: WebSocketServer;
   private bound?: string;
@@ -301,69 +315,70 @@ export class RemoteServer {
         return socket.terminate();
       }
       if (isTunnel(frame)) return this.tunnel(c, frame.frame);
-      void this.receive(c, frame as ClientFrame);
+      if (!looksLikeFrame(frame)) return socket.terminate();
+      void this.receive(c, frame);
     });
   }
 
-  private async receive(c: Connection, frame: ClientFrame) {
+  /** A socket's first frame: it pairs or signs in, or it's turned away. */
+  private async signIn(c: Connection, frame: ClientFrame) {
     const { devices } = this.options;
-    if (!c.deviceId) {
-      // One sign-in per socket, including while persistence is pending.
-      if (c.authenticating) return c.socket.terminate();
-      c.authenticating = true;
-      try {
-        if (frame.t === "pair") {
-          const { device, token } = await devices.pair(
-            String(frame.code),
-            String(frame.device ?? ""),
-            frame.kind === "computer" ? "computer" : undefined,
-          );
-          c.deviceId = device.id;
-          this.send(c, {
-            t: "paired",
-            deviceId: device.id,
-            token,
-            name: this.options.name(),
-            bridge: remoteBridgeVersion,
-            hosts: this.options.hosts?.() ?? [],
-          });
-        } else if (frame.t === "auth") {
-          const device = await devices.verify(
-            String(frame.deviceId),
-            String(frame.token),
-          );
-          if (!device)
-            throw new Error("This phone isn't paired with Relay anymore.");
-          c.deviceId = device.id;
-          this.send(c, {
-            t: "ready",
-            name: this.options.name(),
-            bridge: remoteBridgeVersion,
-            hosts: this.options.hosts?.() ?? [],
-          });
-        } else throw new Error("Pair this phone first.");
-        c.bridge = Number(frame.bridge) || 0;
-        // `paired` and `ready` went as text, which every client reads.
-        if (c.bridge >= compactBridge)
-          c.link = new LinkSender((f) => this.send(c, f));
-        this.options.onPresence?.();
-      } catch (e) {
-        // Only persistence after a valid token is retryable. Invalid tokens
-        // never reach it, and cryptographic failures terminate in accept().
-        if (e instanceof SignInUnavailable) {
-          console.warn("Phone remote: couldn't check a phone's sign-in:", e.cause);
-          return c.socket.close();
-        }
+    // One sign-in per socket, including while persistence is pending.
+    if (c.authenticating || c.refused) return c.socket.terminate();
+    c.authenticating = true;
+    try {
+      if (frame.t === "pair") {
+        const { device, token } = await devices.pair(
+          String(frame.code),
+          String(frame.device ?? ""),
+          frame.kind === "computer" ? "computer" : undefined,
+        );
+        c.deviceId = device.id;
         this.send(c, {
-          t: "denied",
-          reason: frame.t === "auth"
-            ? "This phone isn't paired with Relay anymore."
-            : e instanceof Error ? e.message : "Not allowed.",
+          t: "paired",
+          deviceId: device.id,
+          token,
+          name: this.options.name(),
+          bridge: remoteBridgeVersion,
+          hosts: this.options.hosts?.() ?? [],
         });
-        c.socket.close();
+      } else if (frame.t === "auth") {
+        const device = await devices.verify(
+          String(frame.deviceId),
+          String(frame.token),
+        );
+        if (!device)
+          throw new Error("This phone isn't paired with Relay anymore.");
+        c.deviceId = device.id;
+        this.send(c, {
+          t: "ready",
+          name: this.options.name(),
+          bridge: remoteBridgeVersion,
+          hosts: this.options.hosts?.() ?? [],
+        });
+      } else throw new Error("Pair this phone first.");
+      c.bridge = Number(frame.bridge) || 0;
+      // `paired` and `ready` went as text, which every client reads.
+      if (c.bridge >= compactBridge)
+        c.link = new LinkSender((f) => this.send(c, f));
+      this.options.onPresence?.();
+    } catch (e) {
+      // Its close may never finish; till then makeRoom may push it out.
+      c.authenticating = false;
+      c.refused = true;
+      // Only persistence after a valid token is retryable. Invalid tokens
+      // never reach it, and cryptographic failures terminate in accept().
+      if (e instanceof SignInUnavailable) {
+        console.warn("Phone remote: couldn't check a phone's sign-in:", e.cause);
+        return c.socket.close();
       }
-      return;
+      this.send(c, { t: "denied", reason: denialFor(frame, e) });
+      c.socket.close();
     }
+  }
+
+  private async receive(c: Connection, frame: ClientFrame) {
+    if (!c.deviceId) return this.signIn(c, frame);
     if (!this.stillPaired(c)) return;
     if (frame.t === "batchCancel") {
       c.batches?.cancel(frame.batch);

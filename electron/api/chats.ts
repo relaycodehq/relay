@@ -103,7 +103,7 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     deleteProjectChat: takes([idSchema], async (id) => {
       const gone = await projectChats.triaging.delete(id);
-      for (const chatId of gone) ctx.window.threads.closeDeleted(chatId);
+      for (const chatId of gone) letGoOfDeleted(ctx, chatId);
       return gone;
     }),
     forkProjectChat: takes([idSchema, optional(idSchema)], (id, messageId) =>
@@ -347,4 +347,13 @@ export function chatHandlers(ctx: ApiContext) {
     watchReview: () => projectChats.watchReview(7),
     judgeWatchNotes: () => projectChats.judgeWatchNotes(7),
   } satisfies Handlers;
+}
+
+/** A deleted thread's window and pages close; nothing remembers them. */
+function letGoOfDeleted(ctx: ApiContext, chatId: string) {
+  ctx.window.threads.closeDeleted(chatId);
+  ctx.drafts.forgetThreads([chatId]);
+  void ctx.previews
+    ?.closeThread(chatId)
+    .catch((e) => console.warn("Could not forget a deleted thread's pages:", e));
 }

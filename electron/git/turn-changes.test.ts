@@ -5,7 +5,6 @@ import { chmod, mkdir, readFile, readlink, rm, symlink, stat, writeFile } from "
 import { join } from "node:path";
 import {
   finishTurn,
-  ownFiles,
   parseNumstat,
   redoRevert,
   revertRef,
@@ -15,6 +14,7 @@ import {
   turnRef,
 } from "./turn-changes";
 import { gitIn, tempRepo } from "../../tests/fixtures/git-repo";
+import { writeLongPaths } from "../../tests/fixtures/long-paths";
 
 let root: string;
 const git = (...args: string[]) => gitIn(root, ...args);
@@ -101,46 +101,6 @@ it("keeps no ref when only someone else changed files during the turn", async ()
   expect(() => git("rev-parse", "--verify", "-q", turnRef(id))).toThrow();
 });
 
-it("matches the agent's paths whether relative, absolute or dotted", () => {
-  const files = [
-    { path: "app/src/x.ts", additions: 1, deletions: 0 },
-    { path: "app/src/y.ts", additions: 1, deletions: 0 },
-    { path: "app/src/z.ts", additions: 1, deletions: 0 },
-    { path: "app/src/other.ts", additions: 1, deletions: 0 },
-  ];
-  expect(
-    ownFiles(
-      files,
-      {
-        edited: ["app/src/x.ts", "/repo/app/src/y.ts"],
-        commands: ["sed -i '' 's/a/b/' ./app/src/z.ts"],
-      },
-      "/repo",
-    ).map((f) => f.path),
-  ).toEqual(["app/src/x.ts", "app/src/y.ts", "app/src/z.ts"]);
-});
-
-it("matches a file a command names from the folder it changed into", () => {
-  const files = [
-    { path: "app/src/x.ts", additions: 1, deletions: 0 },
-    { path: "app/src/y.ts", additions: 1, deletions: 0 },
-    { path: "web/z.ts", additions: 1, deletions: 0 },
-  ];
-  expect(
-    ownFiles(
-      files,
-      {
-        edited: [],
-        commands: [
-          `/bin/zsh -lc "cd app/src && sed -i '' 's/a/b/' x.ts"`,
-          "cd '/repo/web' && npx prettier --write ./z.ts",
-        ],
-      },
-      "/repo",
-    ).map((f) => f.path),
-  ).toEqual(["app/src/x.ts", "web/z.ts"]);
-});
-
 it("drops the ref when a turn changes nothing", async () => {
   const id = randomUUID();
   const before = await startTurn(root, id);
@@ -163,6 +123,42 @@ it("snapshots a repository without commits", async () => {
   expect((await finishTurn(root, id, before!)).map((f) => f.path)).toEqual([
     "a.ts",
   ]);
+});
+
+it("snapshots around a nested repository with no commits yet", async () => {
+  // `git add -A` refuses such a folder outright, and took the whole snapshot with it.
+  await mkdir(join(root, "scratch"));
+  gitIn(join(root, "scratch"), "init", "-q");
+  await writeFile(join(root, "scratch", "notes.md"), "draft\n");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  expect(before).toMatch(/^[0-9a-f]{40,64}$/);
+  await writeFile(join(root, "a.ts"), "changed\n");
+  expect((await finishTurn(root, id, before!)).map((f) => f.path)).toEqual([
+    "a.ts",
+  ]);
+});
+
+it("shows a nested repository the turn committed in as its commit ids", async () => {
+  const sub = join(root, "sub");
+  git("init", "-q", "-b", "main", "sub");
+  gitIn(sub, "config", "user.name", "Test");
+  gitIn(sub, "config", "user.email", "test@example.invalid");
+  gitIn(sub, "commit", "-q", "--allow-empty", "-m", "One");
+  const first = gitIn(sub, "rev-parse", "HEAD");
+  git("add", "sub");
+  git("commit", "-qm", "Add sub");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  gitIn(sub, "commit", "-q", "--allow-empty", "-m", "Two");
+  const second = gitIn(sub, "rev-parse", "HEAD");
+  expect((await finishTurn(root, id, before!)).map((f) => f.path)).toEqual([
+    "sub",
+  ]);
+
+  const pair = await turnDiff(root, id, "sub");
+  expect(pair.old?.contents).toBe(`Subproject commit ${first}\n`);
+  expect(pair.next?.contents).toBe(`Subproject commit ${second}\n`);
 });
 
 it("returns both sides of a changed image so the diff can show it", async () => {
@@ -516,6 +512,40 @@ it("does not replace a directory containing later or ignored files, even when fo
     expect(await read("a.ts/build/later.txt")).toBe("keep me\n");
   }
 });
+
+it("rolls back a turn that deleted more files than fit on a command line", async () => {
+  const paths = await writeLongPaths(root);
+  git("add", ".");
+  git("commit", "-qm", "Many files");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  await rm(join(root, "0".repeat(240)), { recursive: true });
+  await finishTurn(root, id, before!);
+
+  const result = await revertTurn(root, id, paths);
+
+  expect(result.conflicts).toEqual([]);
+  expect(await read(paths[1499]!)).toBe(paths[1499]);
+  expect(git("status", "--porcelain")).toBe("");
+}, 60000);
+
+it("rolls back a turn that edited 1,500 files", async () => {
+  const paths = Array.from({ length: 1500 }, (_, i) => `many/file-${i}.ts`);
+  await mkdir(join(root, "many"));
+  await Promise.all(paths.map((p) => writeFile(join(root, p), "before\n")));
+  git("add", ".");
+  git("commit", "-qm", "Many files");
+  const id = randomUUID();
+  const before = await startTurn(root, id);
+  await Promise.all(paths.map((p) => writeFile(join(root, p), "after\n")));
+  await finishTurn(root, id, before!);
+
+  const result = await revertTurn(root, id, paths);
+
+  expect(result.conflicts).toEqual([]);
+  expect(await read(paths[1499]!)).toBe("before\n");
+  expect(git("status", "--porcelain")).toBe("");
+}, 60000);
 
 it("rolls back one file and leaves the rest of the turn", async () => {
   const id = await agentTurn();

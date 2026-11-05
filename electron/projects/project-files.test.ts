@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -14,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   createEntry,
+  entryItself,
   fileInfo,
   listDirectory,
   readImage,
@@ -132,6 +134,20 @@ describe("createEntry and renameEntry", () => {
     await renameEntry(root, "a", "b");
     expect(await exists("b")).toBe(true);
     expect(await readFile(join(root, "two.txt"), "utf8")).toBe("2");
+  });
+
+  it("renames and finds a link itself, but nothing through it", async () => {
+    await put("real/file.txt");
+    await symlink(join(root, "real"), join(root, "shortcut"));
+    await renameEntry(root, "shortcut", "renamed");
+    expect((await lstat(join(root, "renamed"))).isSymbolicLink()).toBe(true);
+    expect(await entryItself(root, "renamed")).toBe(join(root, "renamed"));
+    await expect(entryItself(root, "renamed/file.txt")).rejects.toThrow(
+      /Symbolic links/,
+    );
+    await expect(
+      renameEntry(root, "renamed/file.txt", "file.txt"),
+    ).rejects.toThrow(/Symbolic links/);
   });
 
   it("allows a case-only rename", async () => {

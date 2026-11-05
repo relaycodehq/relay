@@ -68,7 +68,7 @@ struct ToolRow: View {
                             .font(.footnote)
                         }
                     } else if let detail, !detail.isEmpty {
-                        ToolOutput(text: detail)
+                        ToolOutput(text: activity.kind == "command" ? terminalText(detail) : detail)
                     }
                 }
                 .padding(.leading, 24)

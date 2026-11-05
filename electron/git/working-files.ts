@@ -36,6 +36,21 @@ export function decodeText(bytes: Buffer): string {
   return text;
 }
 
+/**
+ * A file's committed version as the text its changes are shown against, or
+ * undefined when the commit holds what isn't text (Latin-1, binary, too
+ * large) and the file on disk has since become text. An empty text would show
+ * the whole file as added, and rolling that back would empty it.
+ */
+export function committedText(bytes: Buffer): string | undefined {
+  try {
+    return decodeText(bytes);
+  } catch (e) {
+    if (e instanceof NotText) return undefined;
+    throw e;
+  }
+}
+
 export async function safeWorkingPath(
   root: string,
   path: string,

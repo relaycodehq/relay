@@ -38,7 +38,9 @@ async function linkModules(root: string, path: string) {
   // matches folders only, never the link standing in for one.
   if (!(await ignoresModules(root))) return;
   const link = join(path, "node_modules");
-  await symlink(source, link, "dir").catch(() => {});
+  // A junction needs no admin rights or Developer Mode on Windows, where a
+  // directory symlink does; elsewhere the type is ignored.
+  await symlink(source, link, "junction").catch(() => {});
   if (await ignoresModules(path)) return;
   // The repository's shared exclude keeps the link out of the thread's
   // changes; the checkout already ignores its folder, so nothing shows there.
@@ -60,6 +62,18 @@ async function linkModules(root: string, path: string) {
   }
   // A link Git still doesn't ignore would show up as the thread's own change.
   if (!(await ignoresModules(path))) await rm(link, { force: true });
+}
+
+/**
+ * Takes the `node_modules` link out of a worktree about to be removed. Git
+ * for Windows won't descend into a junction, nor delete it, so `git worktree
+ * remove` would leave the folder behind. Never fails: it runs on the way
+ * out of other failures too.
+ */
+export async function unlinkModules(path: string) {
+  const link = join(path, "node_modules");
+  if ((await lstat(link).catch(() => null))?.isSymbolicLink())
+    await rm(link, { force: true }).catch(() => {});
 }
 
 const ignoresModules = (dir: string) =>

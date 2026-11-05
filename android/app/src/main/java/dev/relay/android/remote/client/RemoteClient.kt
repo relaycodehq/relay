@@ -227,21 +227,13 @@ class RemoteClient(
     }
 
     /**
-     * One of the desktop's own calls on the phone's allowlist. Trailing nulls
-     * go (JSON would turn a left-out argument into null, which the desktop
-     * refuses), and a send's `to` goes for desktops that don't know it.
+     * One of the desktop's own calls on the phone's allowlist. A null argument is
+     * left out, [JsonNull] is a null the desktop gets; see [desktopArgs].
      */
     suspend fun desktop(method: String, args: List<JsonElement?> = emptyList()): JsonElement {
-        val sent = args.toMutableList()
-        while (sent.isNotEmpty() && (sent.last() == null || sent.last() is JsonNull)) sent.removeAt(sent.lastIndex)
-        if (method == "sendProjectChat" && (bridgeVersion ?: 0) < Bridge.RECIPIENT) {
-            val send = sent.getOrNull(1) as? JsonObject
-            if (send != null) sent[1] = JsonObject(send - "to")
-        }
         val wait = if (method in Bridge.slowPhoneMethods) options.slowTimeoutMs else options.timeoutMs
-        return withContext(dispatcher) {
-            request("desktop", JsonArray(listOf(JsonPrimitive(method), JsonArray(sent.map { it ?: JsonNull }))), wait)
-        }
+        val sent = desktopArgs(method, args, bridgeVersion)
+        return withContext(dispatcher) { request("desktop", JsonArray(listOf(JsonPrimitive(method), sent)), wait) }
     }
 
     private var nextBatch = 1L
@@ -548,3 +540,19 @@ class RemoteClient(
 }
 
 private const val NO_NETWORK = "This phone has no network."
+
+/**
+ * A desktop call's arguments as they go, as shared/remote-client sends them. Left-out
+ * (null) ones at the end go: JSON would turn them into nulls, which an optional
+ * parameter refuses. An explicit [JsonNull] stays, for a parameter that takes null,
+ * such as `selectAgentWorktree`'s "the project folder". A send's `to` goes for
+ * desktops that don't know it.
+ */
+internal fun desktopArgs(method: String, args: List<JsonElement?>, bridge: Int?): JsonArray {
+    val sent = args.dropLastWhile { it == null }.toMutableList()
+    if (method == "sendProjectChat" && (bridge ?: 0) < Bridge.RECIPIENT) {
+        val send = sent.getOrNull(1) as? JsonObject
+        if (send != null) sent[1] = JsonObject(send - "to")
+    }
+    return JsonArray(sent.map { it ?: JsonNull })
+}

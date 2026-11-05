@@ -22,6 +22,7 @@ import type { AgentActivity } from "../../../../shared/projects";
 import { readCode } from "../../../../shared/read-code";
 import { callActions, isScratch, shownCommand, type CallAction } from "../../../../shared/call-actions";
 import { baseName } from "../../../../shared/shell-words";
+import { terminalText } from "../../../lib/terminal-text";
 import {
   actionVerb,
   rowFailed,
@@ -157,7 +158,7 @@ function CallsOpened({ rows, onChanges }: { rows: TraceRow[]; onChanges: () => v
             {!read && call.kind === "command" && (
               <pre className="trace-output">
                 <span className="trace-output-command">{shownCommand(call.label)}</span>
-                {printed && call.detail ? `\n${call.detail}` : ""}
+                {printed && call.detail ? `\n${terminalText(call.detail)}` : ""}
               </pre>
             )}
             {!read && call.kind !== "command" && printed && showsDetail(call) && (

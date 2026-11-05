@@ -465,11 +465,9 @@ export async function startLanguageServer({
       return;
     }
     seq = m.seq;
-    if (m.path) {
-      const path = resolve(root, m.path);
-      if (!local(path)) throw new Error("Invalid overlay path");
-      update(path, m.text);
-    }
+    const path = m.path ? resolve(root, m.path) : undefined;
+    // A dependency's file open in the editor isn't the project's to check.
+    if (path && local(path)) update(path, m.text);
     send({ type: "invalidated", seq });
     schedule();
   });

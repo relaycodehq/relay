@@ -72,8 +72,14 @@ export class LimitResumes {
     const account = hasAccounts(provider)
       ? accountFor(provider, chat.accounts?.[provider])
       : undefined;
+    // A reset the agent reported earlier that has since passed says nothing
+    // about this refusal, so usage is read once instead.
+    const saidResetsAt =
+      limit.resetsAt && limit.resetsAt > Date.now()
+        ? limit.resetsAt
+        : undefined;
     const at =
-      limit.resetsAt ??
+      saidResetsAt ??
       (await usageResetsAt(provider, account).catch(() => undefined));
     // A reset already past is stale: resuming on it would hit the limit again.
     if (!at || at <= Date.now() || at > Date.now() + LONGEST) return;

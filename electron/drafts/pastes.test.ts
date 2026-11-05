@@ -1,8 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { afterEach, beforeEach, expect, it } from "vitest";
-import { readPaste, savePaste, setPastesRoot, sweepPastes } from "./pastes";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import {
+  readPaste,
+  savePaste,
+  setPastesRoot,
+  sweepPastes,
+  sweepPastesSoon,
+} from "./pastes";
 
 let root: string;
 
@@ -45,4 +51,23 @@ it("sweeps old pastes that no saved thread names, and keeps the rest", async () 
   } finally {
     await rm(chats, { recursive: true, force: true });
   }
+});
+
+it("leaves the sweep, and the threads it reads, until a minute after launch", async () => {
+  const old = await savePaste("old", 1);
+  const longAgo = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
+  await utimes(dirname(old), longAgo, longAgo);
+  const realTimeout = setTimeout;
+  const realWait = (ms: number) =>
+    new Promise((resolve) => realTimeout(resolve, ms));
+  vi.useFakeTimers({ toFake: ["setTimeout"] });
+  try {
+    sweepPastesSoon([]);
+    await realWait(100);
+    expect(await readFile(old, "utf8")).toBe("old");
+    vi.advanceTimersByTime(60_000);
+  } finally {
+    vi.useRealTimers();
+  }
+  await vi.waitFor(() => expect(readFile(old, "utf8")).rejects.toThrow());
 });

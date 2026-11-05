@@ -474,9 +474,10 @@ async function startProjectService(fallbackReason) {
       return;
     }
     seq = m.seq;
-    if (m.path) {
-      const path = resolve(root, m.path);
-      if (!local(path)) throw new Error("Invalid overlay path");
+    const path = m.path ? resolve(root, m.path) : undefined;
+    // A dependency's file open in the editor isn't the project's to check;
+    // the recheck still runs, as the service waits for a result.
+    if (path && local(path)) {
       if (m.text === null) {
         overlays.delete(path);
         service.closeClientFile(path);

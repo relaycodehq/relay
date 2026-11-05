@@ -10,6 +10,7 @@ import {
 import { api } from "../../lib/api";
 import {
   clockifyKey,
+  clockifyProjectsKey,
   useClockifyStatus,
   useClockifyWorkspaces,
   useTrackableProjects,
@@ -68,7 +69,7 @@ export function ClockifySettings() {
   const connected = !!status.data?.hasToken;
   const workspaces = useClockifyWorkspaces(settings?.host ?? "", connected);
   const clockifyProjects = useQuery({
-    queryKey: ["clockify-projects", settings?.host, settings?.workspaceId],
+    queryKey: clockifyProjectsKey(settings),
     queryFn: () => api.clockifyProjects(),
     enabled: connected && !!settings?.workspaceId,
   });
@@ -96,10 +97,10 @@ export function ClockifySettings() {
     try {
       const result = await api.saveClockifySettings(next, secrets);
       if (seq === latest.current) qc.setQueryData(clockifyKey, result);
-      if (secrets.token !== undefined) {
+      if (secrets.token !== undefined)
         await qc.invalidateQueries({ queryKey: ["clockify-workspaces"] });
+      if (secrets.token !== undefined || "workspaceId" in patch)
         await qc.invalidateQueries({ queryKey: ["clockify-projects"] });
-      }
       saved();
       return result;
     } catch (e) {

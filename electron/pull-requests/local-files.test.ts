@@ -45,6 +45,19 @@ afterEach(async () => {
 });
 
 describe("local code editing", () => {
+  it("loads a file whose PR head version isn't text with nothing to compare it to", async () => {
+    // Latin-1, as the file was before it was converted to UTF-8.
+    await writeFile(join(root, path), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
+    git("commit", "--quiet", "-am", "latin-1");
+    head = git("rev-parse", "HEAD");
+    await writeFile(join(root, path), "café\n");
+
+    const file = await read();
+
+    expect(file.contents).toBe("café\n");
+    expect(file.original).toBeUndefined();
+  });
+
   it("loads existing work, preserves BOM/EOL/mode, and saves without staging or committing", async () => {
     const local = original.replace("1;", "2;");
     await writeFile(join(root, path), local);

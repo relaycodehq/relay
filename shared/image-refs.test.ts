@@ -8,6 +8,7 @@ import {
   onlyImageTokens,
   pastedImages,
   shortImageName,
+  withoutImageTokens,
 } from "./image-refs";
 import { pasteMarkdown } from "./pasted-texts";
 
@@ -119,4 +120,18 @@ it("knows a pasted or timestamped screenshot's name from one somebody chose", ()
     expect(isPastedImageName(name)).toBe(true);
   for (const name of ["settings-mock.png", "image-diff.png", "screen.png"])
     expect(isPastedImageName(name)).toBe(false);
+});
+
+it("takes tokens out with the spaces before them", () => {
+  expect(withoutImageTokens("Look \t[Image #1] here\n\n\n[Image #2]\n")).toBe(
+    "Look here",
+  );
+  expect(withoutImageTokens("[Image #1]\n\nwhy?  ")).toBe("why?");
+});
+
+it("takes tokens out of text with a long run of spaces at once", () => {
+  const text = `a${" ".repeat(40_000)}b`;
+  const started = performance.now();
+  expect(withoutImageTokens(`${text} [Image #1]`)).toBe(text);
+  expect(performance.now() - started).toBeLessThan(500);
 });

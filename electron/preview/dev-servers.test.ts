@@ -60,6 +60,50 @@ describe("DevServers", () => {
     await expect.poll(() => listening(port)).toBe(false);
   });
 
+  it("keeps a server awake that a preview shows across a port change", async () => {
+    let now = Date.now();
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async () => new Set(),
+    );
+    cleanup.push(() => servers.dispose());
+    const folder = await mkdtemp(join(tmpdir(), "relay-dev-watched-"));
+    await servers.ensure(folder, serve, await freePort(), {});
+    servers.watch(folder, true);
+
+    const port = await freePort();
+    await servers.ensure(folder, serve, port, {});
+    now += IDLE_MS * 2;
+    await servers.sleepIdle();
+    expect(servers.state(folder)).toEqual({
+      state: "running",
+      port,
+      ours: true,
+    });
+  });
+
+  it("counts a preview shown before its folder's server exists", async () => {
+    let now = Date.now();
+    const servers = new DevServers(
+      () => {},
+      () => now,
+      async () => new Set(),
+    );
+    cleanup.push(() => servers.dispose());
+    const folder = await mkdtemp(join(tmpdir(), "relay-dev-early-"));
+    servers.watch(folder, true);
+    const port = await freePort();
+    await servers.ensure(folder, serve, port, {});
+    now += IDLE_MS * 2;
+    await servers.sleepIdle();
+    expect(servers.state(folder)).toEqual({
+      state: "running",
+      port,
+      ours: true,
+    });
+  });
+
   it("keeps a server something is connected to, and sleeps it half an hour after the last", async () => {
     let now = Date.now();
     let open = true;
@@ -168,6 +212,18 @@ describe("DevServers", () => {
     cleanup.push(() => servers.dispose());
     const state = await servers.ensure("/nowhere", "exit 1", port, {});
     expect(state).toEqual({ state: "running", port, ours: false });
+  });
+
+  it("doesn't take another folder's server on the same port for its own", async () => {
+    const servers = new DevServers(() => {});
+    cleanup.push(() => servers.dispose());
+    const first = await mkdtemp(join(tmpdir(), "relay-dev-first-"));
+    const second = await mkdtemp(join(tmpdir(), "relay-dev-second-"));
+    const port = await freePort();
+    await servers.ensure(first, serve, port, {});
+    const state = await servers.ensure(second, serve, port, {});
+    expect(state.state).toBe("failed");
+    expect(state.state === "failed" && state.output).toContain(first);
   });
 
   it("fails with what the command printed when it exits", async () => {

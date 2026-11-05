@@ -1,30 +1,14 @@
-import {
-  diagnosticSummary,
-  diagnosticSeverity,
-  type ProjectCheckState,
-} from "../../../shared/checks";
+import type { ProjectCheckState } from "../../../shared/checks";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  Check,
-  CheckCheck,
-  ChevronDown,
-  ChevronRight,
-  FileCode2,
-  Info,
-  Layers3,
-} from "lucide-react";
 import type { ChangedFile, Progress } from "../../../shared/types";
 import type { ChangeGroup, TriageResult } from "../../../shared/triage";
-import { Modal } from "../../ui/ui";
-import { agentName } from "../../../shared/agents";
+import { foldedPaths, listRows, rowHeight, rowKey } from "./file-list-rows";
+import { FileRow, GroupRow, ViewedFold } from "./FileListRows";
+import { GroupInspect } from "./GroupInspect";
 import type { FileSelection } from "./usePullSelection";
+import { useRevealSelected } from "./useRevealSelected";
 
-type Row =
-  | { type: "file"; file: ChangedFile; grouped: boolean }
-  | { type: "group"; group: ChangeGroup }
-  | { type: "label"; text: string }
-  | { type: "fold"; count: number };
 interface Props {
   checks?: ProjectCheckState | null;
   files: ChangedFile[];
@@ -73,142 +57,49 @@ export function GroupedFileList({
   }, [revision]);
   const grouping = !plain && groups.length > 0;
   /** Paths that sit in the Viewed section: viewed files, and complete groups. */
-  const folded = useMemo(() => {
-    const settled = (p: string) => held.get(p) ?? progress.read[p] === revision;
-    const result = new Set<string>(),
-      grouped = new Set<string>();
-    if (grouping)
-      for (const group of groups) {
-        group.paths.forEach((p) => grouped.add(p));
-        if (group.paths.every(settled))
-          group.paths.forEach((p) => result.add(p));
-      }
-    for (const f of files)
-      if (!grouped.has(f.filename) && settled(f.filename))
-        result.add(f.filename);
-    return result;
-  }, [files, groups, grouping, progress.read, revision, held]);
-  const rows = useMemo(() => {
-    const matches = (f: ChangedFile) =>
-      f.filename.toLowerCase().includes(filter.toLowerCase());
-    const fileRow = (file: ChangedFile, grouped: boolean): Row => ({
-      type: "file",
-      file,
-      grouped,
-    });
-    const top: Row[] = [],
-      bottom: Row[] = [];
-    let count = 0;
-    if (!grouping)
-      for (const file of files.filter(matches)) {
-        const done = folded.has(file.filename);
-        (done ? bottom : top).push(fileRow(file, false));
-        if (done) count++;
-      }
-    else {
-      const grouped = new Set(groups.flatMap((g) => g.paths)),
-        byPath = new Map(files.map((f) => [f.filename, f]));
-      for (const group of groups) {
-        const members = group.paths
-          .map((p) => byPath.get(p))
-          .filter((f): f is ChangedFile => !!f && matches(f));
-        if (!members.length) continue;
-        const done = group.paths.every((p) => folded.has(p)),
-          section = done ? bottom : top;
-        if (done) count += members.length;
-        section.push({ type: "group", group });
-        if (open.has(group.id) || filter)
-          section.push(...members.map((file) => fileRow(file, true)));
-      }
-      const normal = files.filter(
-        (f) => !grouped.has(f.filename) && matches(f),
-      );
-      const unviewed = normal.filter((f) => !folded.has(f.filename)),
-        viewed = normal.filter((f) => folded.has(f.filename));
-      if (unviewed.length)
-        top.push(
-          { type: "label", text: `Individual changes · ${unviewed.length}` },
-          ...unviewed.map((file) => fileRow(file, false)),
-        );
-      bottom.push(...viewed.map((file) => fileRow(file, false)));
-      count += viewed.length;
-    }
-    if (!bottom.length) return top;
-    return [
-      ...top,
-      { type: "fold", count } as Row,
-      ...(viewedOpen || filter ? bottom : []),
-    ];
-  }, [files, groups, grouping, folded, filter, open, viewedOpen]);
+  const folded = useMemo(
+    () =>
+      foldedPaths(
+        files,
+        grouping ? groups : null,
+        (p) => held.get(p) ?? progress.read[p] === revision,
+      ),
+    [files, groups, grouping, progress.read, revision, held],
+  );
+  const rows = useMemo(
+    () =>
+      listRows({
+        files,
+        groups: grouping ? groups : null,
+        folded,
+        filter,
+        open,
+        viewedOpen,
+      }),
+    [files, groups, grouping, folded, filter, open, viewedOpen],
+  );
   const parent = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parent.current,
-    estimateSize: (i) =>
-      rows[i].type === "group"
-        ? 77
-        : rows[i].type === "label"
-          ? 33
-          : rows[i].type === "fold"
-            ? 40
-            : 49,
+    estimateSize: (i) => rowHeight(rows[i]),
     overscan: 8,
-    getItemKey: (i) =>
-      rows[i].type === "file"
-        ? rows[i].file.filename
-        : rows[i].type === "group"
-          ? rows[i].group.id
-          : rows[i].type === "fold"
-            ? "viewed-fold"
-            : "individual-label",
+    getItemKey: (i) => rowKey(rows[i]),
   });
-  const revealed = useRef<{
-    selection: FileSelection;
-    revision: string;
-  } | null>(null);
-  useEffect(() => {
-    // Row changes are not navigation. Keep a request pending only until its
-    // metadata/group becomes available, then consume it once.
-    if (
-      !selection.reveal ||
-      !selected ||
-      (revealed.current?.selection === selection &&
-        revealed.current.revision === revision)
-    )
-      return;
-    if (folded.has(selected) && !viewedOpen && !filter) {
-      setViewedOpen(true);
-      return;
-    }
-    const group = !plain && groups.find((g) => g.paths.includes(selected));
-    if (group && !open.has(group.id) && !filter) {
-      setOpen((prev) => new Set([...prev, group.id]));
-      return;
-    }
-    const index = rows.findIndex(
-      (r) => r.type === "file" && r.file.filename === selected,
-    );
-    if (index >= 0) {
-      revealed.current = { selection, revision };
-      // A new selection can resize the controls above the list; wait a frame
-      // so the virtualizer has seen the list's new height before scrolling.
-      requestAnimationFrame(() =>
-        virtual.scrollToIndex(index, { align: "auto" }),
-      );
-    }
-  }, [
+  useRevealSelected({
     selection,
-    selected,
     revision,
     rows,
     groups,
-    open,
     plain,
+    open,
     filter,
     folded,
     viewedOpen,
+    setOpen,
+    setViewedOpen,
     virtual,
-  ]);
+  });
   const reviewGroup = async (group: ChangeGroup) => {
     if (busy) return;
     setBusy(group.id);
@@ -265,145 +156,61 @@ export function GroupedFileList({
                   {row.text}
                 </div>
               );
-            if (row.type === "fold") {
-              const expanded = viewedOpen || !!filter;
+            if (row.type === "fold")
               return (
-                <div key={v.key} className="viewed-fold-row" style={style}>
-                  <button
-                    className="viewed-fold"
-                    aria-expanded={expanded}
-                    disabled={!!filter}
-                    onClick={() => setViewedOpen((o) => !o)}
-                  >
-                    {expanded ? (
-                      <ChevronDown size={13} />
-                    ) : (
-                      <ChevronRight size={13} />
-                    )}
-                    Viewed
-                    <span>{row.count}</span>
-                  </button>
-                </div>
-              );
-            }
-            if (row.type === "group") {
-              const { group } = row,
-                viewed = group.paths.filter(
-                  (p) => progress.read[p] === revision,
-                ).length,
-                expanded = open.has(group.id) || !!filter;
-              return (
-                <div
+                <ViewedFold
                   key={v.key}
-                  className={`change-group ${viewed === group.paths.length ? "is-viewed" : ""}`}
                   style={style}
-                >
-                  <div className="group-heading-row">
-                    <button
-                      className="group-heading"
-                      aria-expanded={expanded}
-                      title={group.description}
-                      onClick={() =>
-                        setOpen((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(group.id)) next.delete(group.id);
-                          else next.add(group.id);
-                          return next;
-                        })
-                      }
-                    >
-                      {expanded ? (
-                        <ChevronDown size={14} />
-                      ) : (
-                        <ChevronRight size={14} />
-                      )}
-                      <strong>{group.name}</strong>
-                      <span>{group.paths.length}</span>
-                    </button>
-                    <button
-                      className="group-info icon-button"
-                      aria-label={`About ${group.name}`}
-                      title="Group description and files"
-                      disabled={!!busy}
-                      onClick={() => {
-                        setInspect(group);
-                        setError("");
-                      }}
-                    >
-                      <Info size={15} />
-                    </button>
-                  </div>
-                  <div className="group-bottom">
-                    <span>
-                      {viewed === group.paths.length ? (
-                        <CheckCheck size={12} />
-                      ) : (
-                        <Layers3 size={12} />
-                      )}{" "}
-                      {viewed}/{group.paths.length} viewed
-                    </span>
-                    <button
-                      disabled={!!busy}
-                      onClick={() => void reviewGroup(group)}
-                    >
-                      {busy === group.id
-                        ? "Checking…"
-                        : viewed === group.paths.length
-                          ? "Mark as unviewed"
-                          : "Mark as viewed"}
-                    </button>
-                  </div>
-                </div>
+                  count={row.count}
+                  expanded={viewedOpen || !!filter}
+                  filtering={!!filter}
+                  onToggle={() => setViewedOpen((o) => !o)}
+                />
+              );
+            if (row.type === "group") {
+              const { group } = row;
+              return (
+                <GroupRow
+                  key={v.key}
+                  style={style}
+                  group={group}
+                  viewed={
+                    group.paths.filter((p) => progress.read[p] === revision)
+                      .length
+                  }
+                  expanded={open.has(group.id) || !!filter}
+                  busy={busy}
+                  onToggle={() =>
+                    setOpen((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(group.id)) next.delete(group.id);
+                      else next.add(group.id);
+                      return next;
+                    })
+                  }
+                  onInspect={() => {
+                    setInspect(group);
+                    setError("");
+                  }}
+                  onReview={() => void reviewGroup(group)}
+                />
               );
             }
             const f = row.file,
-              parts = f.filename.split("/"),
-              name = parts.pop(),
-              read = progress.read[f.filename] === revision,
-              changed = !read && !!changedSinceViewed?.has(f.filename),
-              checked =
-                checks?.status === "ready"
-                  ? checks.files[f.filename]
-                  : undefined;
+              read = progress.read[f.filename] === revision;
             return (
-              <button
+              <FileRow
                 key={v.key}
-                className={`file-row ${row.grouped ? "group-member" : ""} ${selected === f.filename ? "active" : ""} ${read ? "read" : ""}`}
                 style={style}
-                title={
-                  result?.ordinary[f.filename]
-                    ? `${f.filename}\nIndividual review: ${result.ordinary[f.filename]}`
-                    : f.filename
-                }
-                onClick={() => onSelect(f.filename)}
-              >
-                {read ? <Check size={15} /> : <FileCode2 size={15} />}
-                <div>
-                  <strong>{name}</strong>
-                  <small>
-                    {changed && "Changed since viewed · "}
-                    {parts.join("/") || "Repository root"}
-                  </small>
-                </div>
-                {checked && diagnosticSeverity(checked) && (
-                  <span
-                    className={`diagnostic-badge ${diagnosticSeverity(checked)}`}
-                    title={`${diagnosticSummary(checked)} in local checkout`}
-                    aria-label={diagnosticSummary(checked)}
-                  >
-                    {checked.errors || checked.warnings || checked.suggestions}
-                  </span>
-                )}
-                <span className={`file-status ${f.status}`}>
-                  {f.status === "added"
-                    ? "A"
-                    : f.status === "deleted"
-                      ? "D"
-                      : f.status === "renamed"
-                        ? "R"
-                        : "M"}
-                </span>
-              </button>
+                file={f}
+                grouped={row.grouped}
+                active={selected === f.filename}
+                read={read}
+                changed={!read && !!changedSinceViewed?.has(f.filename)}
+                checks={checks}
+                note={result?.ordinary[f.filename]}
+                onSelect={() => onSelect(f.filename)}
+              />
             );
           })}
         </div>
@@ -415,61 +222,21 @@ export function GroupedFileList({
         </div>
       )}
       {inspect && (
-        <Modal
-          title={inspect.name}
+        <GroupInspect
+          group={inspect}
+          provider={result?.provider ?? "codex"}
+          isRead={(path) => progress.read[path] === revision}
+          busy={!!busy}
+          error={error}
+          onOpenFile={(path) => {
+            onSelect(path);
+            setInspect(null);
+          }}
+          onReview={() => void reviewGroup(inspect)}
           onClose={() => {
             if (!busy) setInspect(null);
           }}
-        >
-          <p className="group-description">{inspect.description}</p>
-          <p className="field-note">
-            {agentName(result?.provider ?? "codex")} suggests these files
-            contain only this repeated change. Inspect any file, then mark the
-            group viewed for this PR revision. Files with extra edits stay in
-            Individual changes.
-          </p>
-          <div className="group-inspect-files">
-            {inspect.paths.map((path) => (
-              <button
-                key={path}
-                title={path}
-                onClick={() => {
-                  onSelect(path);
-                  setInspect(null);
-                }}
-              >
-                {progress.read[path] === revision ? (
-                  <Check size={14} />
-                ) : (
-                  <FileCode2 size={14} />
-                )}
-                <span>{path}</span>
-                <ChevronRight size={14} />
-              </button>
-            ))}
-          </div>
-          {error && (
-            <p className="group-error" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="group-dialog-actions">
-            <span className="muted">
-              Saved locally · the review on the host stays unchanged
-            </span>
-            <button
-              className="primary"
-              disabled={!!busy}
-              onClick={() => void reviewGroup(inspect)}
-            >
-              {busy
-                ? "Checking…"
-                : inspect.paths.every((p) => progress.read[p] === revision)
-                  ? "Mark group unviewed"
-                  : `Mark ${inspect.paths.length} files viewed`}
-            </button>
-          </div>
-        </Modal>
+        />
       )}
     </>
   );

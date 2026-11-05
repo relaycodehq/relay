@@ -61,6 +61,7 @@ import dev.relay.android.remote.outbox.outboxLink
 import dev.relay.android.remote.outbox.outgoingMessage
 import dev.relay.android.remote.outbox.uploadPercent
 import java.util.UUID
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import dev.relay.android.features.git.CiStatusButton
 import dev.relay.android.features.home.chatSettled
@@ -399,7 +400,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                             }
                         },
                         onUseProjectFolder = if (bridge >= Bridge.WORKSPACE) { o ->
-                            remote.desktop("selectAgentWorktree", id, null)
+                            remote.desktop("selectAgentWorktree", id, JsonNull)
                             outbox.retry(outboxLink(remote.client.value), o.send.id)
                         } else null,
                     )

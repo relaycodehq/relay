@@ -13,6 +13,15 @@ const stepFrom = (at: number, dir: number) =>
     ? Math.ceil(at / STEP) * STEP - STEP
     : Math.floor(at / STEP) * STEP + STEP;
 
+/** A time typed on the start's day, when the service would take it as the start. */
+function typedStart(text: string, start: number, latest: number) {
+  const at = parseClock(text, start);
+  if (at === undefined) return undefined;
+  const tooEarly = at < Date.now() - FURTHEST;
+  const tooLate = at > latest;
+  return tooEarly || tooLate ? undefined : at;
+}
+
 /**
  * When the day started, editable where it's shown: drag it sideways or
  * scroll on it to move it 5 minutes at a time, double-click to type it.
@@ -59,9 +68,7 @@ export function ClockifyStart({
   };
 
   if (typing !== undefined) {
-    const parsed = parseClock(typing, start);
-    const valid =
-      parsed !== undefined && parsed <= latest() ? parsed : undefined;
+    const valid = typedStart(typing, start, latest());
     const close = (keep: boolean) => {
       // Enter unmounts the field, which can fire its blur too.
       if (closed.current) return;
@@ -81,8 +88,7 @@ export function ClockifyStart({
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => {
           setTyping(e.target.value);
-          const at = parseClock(e.target.value, start);
-          onPreview(at !== undefined && at <= latest() ? at : undefined);
+          onPreview(typedStart(e.target.value, start, latest()));
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") {

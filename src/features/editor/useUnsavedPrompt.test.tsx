@@ -36,7 +36,7 @@ const saveAndClose = () =>
 it("keeps asking when edits were typed while saving, instead of closing over them", async () => {
   const doc = editedDocument(true);
   const onClose = vi.fn();
-  await act(() =>
+  act(() =>
     root.render(<Prompt doc={doc} closeRequest={1} onClose={onClose} />),
   );
   await act(async () => saveAndClose().click());
@@ -47,7 +47,7 @@ it("keeps asking when edits were typed while saving, instead of closing over the
 it("closes once the save leaves nothing unsaved", async () => {
   const doc = editedDocument(false);
   const onClose = vi.fn();
-  await act(() =>
+  act(() =>
     root.render(<Prompt doc={doc} closeRequest={1} onClose={onClose} />),
   );
   await act(async () => saveAndClose().click());

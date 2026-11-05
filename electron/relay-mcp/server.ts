@@ -29,13 +29,15 @@ const toolsAt: Record<string, ToolList> = {
   [SIDE_PATH]: sideToolList,
 };
 
-const toolsFor = (url: URL) => {
-  let tools: ToolList | undefined = toolsAt[url.pathname];
-  if (tools && url.searchParams.get(PAGES_PARAM) === "off")
-    tools = withoutPages(tools);
-  if (tools && url.searchParams.get(DEV_PARAM) !== "on")
-    tools = withoutDev(tools);
-  if (tools && url.searchParams.get(IMPORT_PARAM) !== "on")
+/** Who a bearer token speaks for: a thread, or a side conversation of it. */
+export type RelayIdentity = { chatId: string; side: boolean };
+
+const toolsFor = (url: URL, path: ToolList, caller: RelayIdentity) => {
+  // A side conversation's token reaches only its tools, whatever the path.
+  let tools = caller.side ? sideToolList : path;
+  if (url.searchParams.get(PAGES_PARAM) === "off") tools = withoutPages(tools);
+  if (url.searchParams.get(DEV_PARAM) !== "on") tools = withoutDev(tools);
+  if (url.searchParams.get(IMPORT_PARAM) !== "on")
     tools = withoutImports(tools);
   return tools;
 };
@@ -48,8 +50,8 @@ const toolsFor = (url: URL) => {
 export const BODY_LIMIT = RENDER_MAX_PAGES * RENDER_MAX_CHARS * 3 + (1 << 20);
 
 export interface McpHandlers {
-  /** The thread a bearer token belongs to, or undefined for none. */
-  verify: (token: string) => string | undefined;
+  /** Who a bearer token speaks for, or undefined for nobody. */
+  verify: (token: string) => RelayIdentity | undefined;
   call: (
     chatId: string,
     name: string,
@@ -196,14 +198,16 @@ export function serveRelayTools(port: number, handlers: McpHandlers) {
       res.end(body === undefined ? undefined : JSON.stringify(body));
     };
     const url = new URL(req.url ?? "/", "http://relay");
-    const tools = toolsFor(url);
-    if (!tools) return send(404);
+    const pathTools = toolsAt[url.pathname];
+    if (!pathTools) return send(404);
     if (req.method !== "POST") return send(405, undefined, { allow: "POST" });
     const token = /^Bearer\s+(\S+)$/i.exec(
       req.headers.authorization ?? "",
     )?.[1];
-    const chatId = token ? handlers.verify(token) : undefined;
-    if (!chatId) return send(401, failure(null, -32001, "Not a Relay thread."));
+    const caller = token ? handlers.verify(token) : undefined;
+    if (!caller) return send(401, failure(null, -32001, "Not a Relay thread."));
+    const { chatId } = caller;
+    const tools = toolsFor(url, pathTools, caller);
     // A call the agent gave up on, like a wait it was interrupted in, stops here too.
     const abort = new AbortController();
     res.on("close", () => {

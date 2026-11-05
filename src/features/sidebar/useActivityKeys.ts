@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ChatSummary } from "../../../shared/projects";
 import { modifierCode } from "../../../shared/shortcuts";
 import { mac } from "../../lib/mod-key";
+import { keyboardPopups } from "../../lib/popup-keyboard";
 import { digitOf, holdsModifiersOf, useShortcut } from "../../lib/shortcuts";
 import type { ThreadActions } from "./useThreadActions";
 import { noteUsed } from "../../lib/used";
@@ -9,6 +10,12 @@ import { noteUsed } from "../../lib/used";
 const CMD_HINT_DELAY_MS = 500;
 /** How long a jump asked for from a thread's window waits for the cards. */
 const ASKED_JUMP_TTL_MS = 10_000;
+
+/**
+ * Whether a dialog is open, which keeps the digit keys for itself. Settings
+ * is a page, not a dialog: a jump leaves it.
+ */
+const dialogOpen = () => keyboardPopups(false).length > 0;
 
 let askedJump: { index: number; at: number } | undefined;
 const askedListeners = new Set<() => void>();
@@ -24,8 +31,8 @@ export function askJump(index: number) {
 
 /**
  * The `settle` shortcut on the open thread, `next-thread` and `prev-thread`
- * through Activity's cards, and `jump-thread`'s digits onto its first nine
- * cards while `jumping`. Returns whether their hints
+ * through Activity's cards (see useThreadSteps), and `jump-thread`'s digits
+ * onto its first nine cards while `jumping`. Returns whether their hints
  * show: holding ⌘ on its own for a beat on the activity view shows ⌘1–⌘9 on
  * the first nine cards (or whichever modifiers open them). ⌘ used as part of
  * another shortcut or a ⌘-click never shows them.
@@ -54,22 +61,7 @@ export function useActivityKeys({
 }) {
   const [held, setHeld] = useState(false);
   const jumpTo = useRef<(index: number) => boolean>(() => false);
-  useShortcut("settle", true, () => {
-    const c = active.find((a) => a.id === chatId);
-    if (c && !c.waiting) settle(c);
-  });
-  const step = (by: 1 | -1) => {
-    // A started thread steps on from its lead's card.
-    const lead = active.find((c) => c.id === chatId)?.startedBy?.chatId;
-    const at = threads.findIndex((t) => t.id === chatId || t.id === lead);
-    threads.at(at < 0 ? (by > 0 ? 0 : -1) : (at + by) % threads.length)?.open();
-  };
-  useShortcut("next-thread", threads.length > 0, () => step(1), {
-    repeat: true,
-  });
-  useShortcut("prev-thread", threads.length > 0, () => step(-1), {
-    repeat: true,
-  });
+  useThreadSteps(active, threads, chatId, settle);
   useEffect(() => {
     let reveal: number | undefined;
     const cancel = () => {
@@ -93,7 +85,7 @@ export function useActivityKeys({
       else if (reveal === undefined)
         reveal = window.setTimeout(() => setHeld(true), CMD_HINT_DELAY_MS);
       const digit = digitOf("jump-thread", e);
-      if (digit && jumpTo.current(digit - 1)) {
+      if (digit && !dialogOpen() && jumpTo.current(digit - 1)) {
         e.preventDefault();
         noteUsed("shortcut:jump-thread");
       }
@@ -139,4 +131,29 @@ export function useActivityKeys({
   }, []);
   useEffect(() => takeAsked.current(), [cards.length, loaded]);
   return held;
+}
+
+/** `settle` on the open thread, and `next-thread` and `prev-thread` through Activity's cards. */
+function useThreadSteps(
+  active: ChatSummary[],
+  threads: { id: string; open: () => void }[],
+  chatId: string | undefined,
+  settle: ThreadActions["settle"],
+) {
+  useShortcut("settle", true, () => {
+    const c = active.find((a) => a.id === chatId);
+    if (c && !c.waiting) settle(c);
+  });
+  const step = (by: 1 | -1) => {
+    // A started thread steps on from its lead's card.
+    const lead = active.find((c) => c.id === chatId)?.startedBy?.chatId;
+    const at = threads.findIndex((t) => t.id === chatId || t.id === lead);
+    threads.at(at < 0 ? (by > 0 ? 0 : -1) : (at + by) % threads.length)?.open();
+  };
+  useShortcut("next-thread", threads.length > 0, () => step(1), {
+    repeat: true,
+  });
+  useShortcut("prev-thread", threads.length > 0, () => step(-1), {
+    repeat: true,
+  });
 }

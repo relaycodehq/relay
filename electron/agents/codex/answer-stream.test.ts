@@ -119,6 +119,53 @@ it("lets a long turn write any number of progress notes", () => {
   expect(commentary.get("note-149")).toBe("Checking step 149.");
 });
 
+it("lets a long turn write any number of unphased notes", () => {
+  const commentary = new Map<string, string>();
+  const stream = new CodexAnswerStream(
+    () => {},
+    (id, text) =>
+      text === null ? commentary.delete(id) : commentary.set(id, text),
+  );
+  // A model that names no phase: each message is the answer until the next one.
+  for (let i = 0; i < 150; i++) {
+    const item = { id: `note-${i}`, type: "agentMessage" };
+    stream.update("item/started", { item });
+    stream.update("item/agentMessage/delta", {
+      itemId: item.id,
+      delta: `Checking step ${i}.`,
+    });
+    stream.update("item/completed", {
+      item: { ...item, text: `Checking step ${i}.` },
+    });
+  }
+  stream.update("item/completed", {
+    item: { id: "final", type: "agentMessage", text: "Done." },
+  });
+  expect(stream.answer).toBe("Done.");
+  expect(commentary.get("note-149")).toBe("Checking step 149.");
+  expect(commentary.has("final")).toBe(false);
+});
+
+it("gives the answer back to an earlier message when the next one finishes as commentary", () => {
+  const stream = new CodexAnswerStream(
+    () => {},
+    () => {},
+  );
+  const item = (id: string) => ({ id, type: "agentMessage" });
+  stream.update("item/started", { item: item("answer") });
+  stream.update("item/completed", {
+    item: { ...item("answer"), text: "Checks passed." },
+  });
+  // Its phase is only known once it finishes.
+  stream.update("item/started", { item: item("note") });
+  stream.update("item/agentMessage/delta", { itemId: "note", delta: "Also" });
+  expect(stream.answer).toBe("Also");
+  stream.update("item/completed", {
+    item: { ...item("note"), phase: "commentary", text: "Also, a note." },
+  });
+  expect(stream.answer).toBe("Checks passed.");
+});
+
 it("keeps each goal turn's answer above as a note once Codex goes on", () => {
   const bodies: string[] = [];
   const commentary = new Map<string, string>();

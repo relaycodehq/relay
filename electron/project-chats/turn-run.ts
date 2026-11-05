@@ -16,6 +16,7 @@ import type { ActiveChat } from "./active";
 import type { ChatCore } from "./core";
 import { agentSession, dropSession, sessionFor } from "./sessions";
 import type { ThreadTitles } from "./titles";
+import { holdQueueBack } from "./queue";
 import { judgeGuess } from "./turn-check";
 import { turnOptions, type TurnOptions } from "./turn-options";
 import { TurnSnapshot } from "./turn-snapshot";
@@ -314,8 +315,7 @@ export class TurnRunner {
     // A Stop that was asked to leave the queue going.
     const stoppedKeepingQueue =
       stopped && active?.abort === abort && !!active.keepsQueue;
-    if (rules.pausesQueue(failed) && !stoppedKeepingQueue)
-      chat.queuePaused = true;
+    if (rules.pausesQueue(failed) && !stoppedKeepingQueue) holdQueueBack(chat);
   }
 
   /** Says why the turn failed, and clears up what the failure left behind. */

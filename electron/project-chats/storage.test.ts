@@ -15,6 +15,7 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 import { Store } from "../app/store";
 import { ChatStorage } from "./storage";
+import { AnswerRecorder } from "./answer-recorder";
 import { chatSummary, queueMark } from "./chat-summaries";
 import type { ChatMessage, ProjectChat } from "../../shared/projects";
 
@@ -115,7 +116,7 @@ it("writes the summary when a save changes what the sidebar lists, and only then
   await storage.save(chat);
   expect(listed(chat)).toMatchObject({ provider: "codex", empty: false });
 
-  const write = vi.spyOn(store, "update");
+  const write = vi.spyOn(store, "updateSoon");
   changed.length = 0;
   for (const body of ["Hello", "Hello wor", "Hello world"]) {
     chat.messages[0]!.body = body;
@@ -164,7 +165,7 @@ it("changes the queue mark for pause, errors and schedules, but stays quiet duri
   await storage.add(chat);
   const initial = queueMark(chat);
   changed.length = 0;
-  const update = vi.spyOn(store, "update");
+  const update = vi.spyOn(store, "updateSoon");
   chat.messages[0].body += " token";
   chat.messages[0].version++;
   await storage.save(chat);
@@ -425,6 +426,34 @@ it("checkpoints a streaming answer beside the thread, and a restart reads it bac
   ]);
   expect(back.updated).toBe(2);
   expect("rev" in back).toBe(false);
+});
+
+it("publishes a streaming answer's held-back edits before another caller's checkpoint, so it doesn't leave them out", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  const chat = thread();
+  const earlier = {
+    ...answer("x".repeat(50_000)),
+    status: "complete" as const,
+  };
+  const streaming = answer("Start");
+  chat.messages = [earlier, streaming];
+  await storage.add(chat);
+  const recorder = new AnswerRecorder(
+    chat,
+    streaming,
+    () => {},
+    () => storage.checkpoint(chat),
+  );
+
+  recorder.text("Start, then more");
+  // A seen mark, or the next send, checkpoints before the 40ms publish.
+  await storage.checkpoint(chat);
+
+  await open();
+  const back = await storage.load(chat.id);
+  expect(back.messages.at(-1)!.body).toBe("Start, then more");
+  recorder.end();
+  vi.useRealTimers();
 });
 
 it("keeps a steer's move of the answer: the new answer below it, the read steer, and the one above dropped", async () => {

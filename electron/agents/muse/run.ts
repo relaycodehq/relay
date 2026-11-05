@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { projectInstructions, sideInstructions } from "../instructions";
 import { renderPrompt } from "../../../shared/html-render";
-import { signedOutError, usageLimitError } from "../errors";
+import { isAgentError, signedOutError, usageLimitError } from "../errors";
 import { CANCEL_GRACE_MS, cancelledByYou, guardSteer } from "../turn-kit";
 import type { AgentOptions } from "../types";
 import { MuseRequestError } from "./connection";
@@ -10,6 +10,7 @@ import {
   acquireMuse,
   openSession,
   signedIn,
+  type MuseAgent,
   type MuseMcpServer,
   type MuseSettings,
 } from "./sessions";
@@ -111,6 +112,14 @@ function failure(done: MuseTurnCompleted): Error {
   );
 }
 
+/** What a failed turn throws. A refused sign-in also ends the thread's process. */
+function turnFailure(error: unknown, agent: MuseAgent): unknown {
+  const thrown = error instanceof MuseRequestError && error.kind === "authRequired" ? signedOutError("muse") : error;
+  // Its process keeps the sign-in it started with; a login made since needs a new one.
+  if (isAgentError(thrown, "signedOut")) agent.close();
+  return thrown;
+}
+
 /** Runs one turn on Muse Code, starting or picking up the thread's session in its own `muse serve`. */
 export async function runMuse(options: AgentOptions): Promise<string> {
   const { signal, job } = options;
@@ -121,7 +130,7 @@ export async function runMuse(options: AgentOptions): Promise<string> {
   const helper = job.kind === "helper";
   // A helper job is one bare question in a process of its own, never the thread's.
   const key = helper ? undefined : options.session?.key;
-  const agent = await acquireMuse(key, options.cwd, options.env, helper);
+  const agent = await acquireMuse(key, options, helper);
   const { connection } = agent;
   const adopted = job.kind === "adopt" ? agent.inflight : undefined;
   if (job.kind === "adopt" && (!adopted || !agent.session)) {
@@ -248,8 +257,7 @@ export async function runMuse(options: AgentOptions): Promise<string> {
     if (options.interactionMode === "plan" && answer.trim()) options.onPlan?.(answer);
     return answer;
   } catch (error) {
-    if (error instanceof MuseRequestError && error.kind === "authRequired") throw signedOutError("muse");
-    throw error;
+    throw turnFailure(error, agent);
   } finally {
     clearTimeout(cancelTimer);
     signal.removeEventListener("abort", interrupt);

@@ -45,5 +45,11 @@ export function serveRenders(read: ReadPage) {
     });
   };
   session.defaultSession.protocol.handle(RENDER_SCHEME, serve);
-  shotSession().protocol.handle(RENDER_SCHEME, serve);
+  const shots = shotSession();
+  shots.protocol.handle(RENDER_SCHEME, serve);
+  // Without handlers Electron grants every permission, the microphone included.
+  shots.setPermissionRequestHandler((_wc, _permission, callback) =>
+    callback(false),
+  );
+  shots.setPermissionCheckHandler(() => false);
 }

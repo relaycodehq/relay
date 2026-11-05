@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -89,6 +90,24 @@ it("copies a listed ignored folder whole, and reaches into one only by name", as
   // `**/config.json` doesn't name node_modules, so Relay never walks it.
   expect(existsSync(join(target, "node_modules"))).toBe(false);
 });
+
+// Windows ignores a chmod that takes read access away.
+it.skipIf(process.platform === "win32")(
+  "copies the rest when one listed file can't be read",
+  async () => {
+    await put(".worktreeinclude", ".env*\nvendor/\n");
+    await put(".env.a", "unreadable");
+    await chmod(join(source, ".env.a"), 0o000);
+    await put(".env.local", "LOCAL=1");
+    await put("vendor/lib/a.php", "a");
+
+    expect((await copyIncluded(source, target)).sort()).toEqual([
+      ".env.local",
+      "vendor/",
+    ]);
+    expect(await readFile(join(target, ".env.local"), "utf8")).toBe("LOCAL=1");
+  },
+);
 
 it("leaves files already in the worktree alone", async () => {
   await put(".worktreeinclude", ".env\n");

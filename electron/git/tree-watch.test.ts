@@ -479,12 +479,16 @@ it("tells which of the folders that appeared together Git ignores", async () => 
   temp = await realpath(await mkdtemp(join(tmpdir(), "relay-watch-")));
   execFileSync("git", ["init", "-q", "-b", "main", temp]);
   await writeFile(join(temp, ".gitignore"), "dist/\nbuild/\n");
-  for (const dir of ["dist", "build", "src", "src/dist"])
-    await mkdir(join(temp, dir), { recursive: true });
+  const folders = ["dist", "src", "src/dist", "build", 'we"ird/dist'];
+  for (const dir of folders) await mkdir(join(temp, dir), { recursive: true });
   const ignored = askedTogether(temp);
-  expect(
-    await Promise.all(["dist", "src", "src/dist", "build"].map(ignored)),
-  ).toEqual([true, false, true, true]);
+  expect(await Promise.all(folders.map(ignored))).toEqual([
+    true,
+    false,
+    true,
+    true,
+    true,
+  ]);
   // Git exits 1 when it ignores none of them.
   expect(await Promise.all(["src"].map(ignored))).toEqual([false]);
 });

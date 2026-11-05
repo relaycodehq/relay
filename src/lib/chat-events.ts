@@ -7,6 +7,8 @@ import {
   type Project,
   type ProjectChat,
 } from "../../shared/projects";
+import { ChatPushReceiver } from "../../shared/chat-pushes";
+import type { ProjectChatEvent } from "../../shared/events";
 import { api } from "./api";
 
 /** Under "project-chats", so every refresh of the chat lists reaches it too. */
@@ -19,7 +21,8 @@ export const chatKey = (id: string | undefined) => ["project-chat", id];
  * cached copy is all the window believes about it. Thread lists arrive whole,
  * so nothing polls for them. A pushed message goes straight into the cached
  * thread; the history refetches when a message settles, or when one it
- * doesn't hold yet starts streaming.
+ * doesn't hold yet starts streaming. A streaming answer comes as patches on
+ * the copy before (shared/chat-pushes).
  */
 export function followChatEvents(qc: QueryClient) {
   const lists = api.onProjectChats(({ projectId, chats }) => {
@@ -41,28 +44,41 @@ export function followChatEvents(qc: QueryClient) {
           .sort((a, b) => b.updated - a.updated),
       );
   });
-  const messages = api.onProjectChat((e) => {
-    const key = chatKey(e.chatId);
-    if (e.setup) {
-      const held = qc.getQueryData<ProjectChat>(key);
-      const next = held && withSetupMessage(held, e.message);
-      if (next && next !== held) qc.setQueryData(key, next);
-      return;
-    }
-    // A thread that isn't open isn't fetched; it refetches as it opens.
-    const held = qc.getQueryData<ProjectChat>(key);
-    const known = held?.messages.some((m) => m.id === e.message.id);
-    const next = held && withMessage(held, e.message);
-    if (next !== held) qc.setQueryData(key, next);
-    // One that shows up through an event alone, like the answer after a
-    // handoff note, would otherwise leave its approvals unfetched.
-    if (e.message.status !== "streaming" || !known)
-      void qc.invalidateQueries({ queryKey: key, exact: true });
+  const streamed = new ChatPushReceiver(() => {
+    // Subscribing again asks the desktop for every streaming answer whole.
+    stopMessages();
+    stopMessages = followMessages();
   });
+  const followMessages = () =>
+    api.onProjectChat((push) => {
+      const event = streamed.take(push);
+      if (event) cacheMessage(qc, event);
+    });
+  let stopMessages = followMessages();
   return () => {
     lists();
-    messages();
+    stopMessages();
   };
+}
+
+/** A pushed message into its cached thread. */
+function cacheMessage(qc: QueryClient, e: ProjectChatEvent) {
+  const key = chatKey(e.chatId);
+  if (e.setup) {
+    const held = qc.getQueryData<ProjectChat>(key);
+    const next = held && withSetupMessage(held, e.message);
+    if (next && next !== held) qc.setQueryData(key, next);
+    return;
+  }
+  // A thread that isn't open isn't fetched; it refetches as it opens.
+  const held = qc.getQueryData<ProjectChat>(key);
+  const known = held?.messages.some((m) => m.id === e.message.id);
+  const next = held && withMessage(held, e.message);
+  if (next !== held) qc.setQueryData(key, next);
+  // One that shows up through an event alone, like the answer after a
+  // handoff note, would otherwise leave its approvals unfetched.
+  if (e.message.status !== "streaming" || !known)
+    void qc.invalidateQueries({ queryKey: key, exact: true });
 }
 
 /**

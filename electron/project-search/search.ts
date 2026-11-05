@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   defaultMatchLimit,
   type ProjectSearchFile,
+  type ProjectSearchMatch,
   type ProjectSearchQuery,
   type ProjectSearchResult,
 } from "../../shared/project-search";
@@ -55,6 +56,19 @@ const writtenSince = (mtimeMs: number, since: number) => {
   return written > since && written <= Date.now();
 };
 
+const startsWithBom = (bytes: Buffer) =>
+  bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+
+/** ripgrep drops a UTF-8 BOM before matching; the editor's first line starts with it. */
+const pastBom = (match: ProjectSearchMatch): ProjectSearchMatch =>
+  match.line === 1
+    ? {
+        ...match,
+        column: match.column + 1,
+        previewStart: match.previewStart + 1,
+      }
+    : match;
+
 /**
  * The digest of each found file's bytes. A file that cannot be read any
  * more, or was written since the search began, is dropped: its digest would
@@ -76,7 +90,10 @@ async function withVersions(root: string, found: FoundFile[], since: number) {
         const bytes = await handle.readFile();
         // Asked after the read, so a write during it counts too.
         if (writtenSince((await handle.stat()).mtimeMs, since)) continue;
-        out[i] = { ...found[i], version: digest(bytes) };
+        const matches = startsWithBom(bytes)
+          ? found[i].matches.map(pastBom)
+          : found[i].matches;
+        out[i] = { path: found[i].path, matches, version: digest(bytes) };
       } finally {
         await handle.close();
       }

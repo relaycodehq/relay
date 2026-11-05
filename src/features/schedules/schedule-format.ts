@@ -15,11 +15,12 @@ export const dayMonth = (at: number) =>
 export function fromNow(at: number, now = Date.now()) {
   const minutes = Math.round((at - now) / MINUTE);
   if (minutes < 60) return `in ${Math.max(minutes, 1)}min`;
-  if (minutes < 18 * 60) return `in ${Math.round(minutes / 60)}h`;
   const days = Math.round(
     (new Date(at).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / DAY,
   );
-  return days <= 1 ? "tomorrow" : `in ${days} days`;
+  // Later today stays in hours, however far off.
+  if (minutes < 18 * 60 || days === 0) return `in ${Math.round(minutes / 60)}h`;
+  return days === 1 ? "tomorrow" : `in ${days} days`;
 }
 
 /** "38k". */

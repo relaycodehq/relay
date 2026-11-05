@@ -138,5 +138,11 @@ function serve(port: MessagePortMain) {
       );
     }
   });
+  // A page that closes mid-dictation sends no cancel; its session ends here.
+  port.on("close", () => {
+    if (!current) return;
+    current.over = true;
+    finish();
+  });
   port.start();
 }

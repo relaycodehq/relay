@@ -177,3 +177,14 @@ export const slowForwardedMethods = new Set<string>([
   "checkAgentVersions",
   "installAgent",
 ] satisfies ApiMethod[]);
+
+/**
+ * The arguments a forwarded call sends. JSON turns a left-out argument into
+ * null, which a computer on an older Relay refuses where it takes only
+ * undefined; trailing ones simply go.
+ */
+export function forwardedArgs(args: readonly unknown[]) {
+  const sent = [...args];
+  while (sent.length && sent.at(-1) === undefined) sent.pop();
+  return sent;
+}

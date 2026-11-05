@@ -31,41 +31,112 @@ const tokens: [name: string, pattern: RegExp][] = [
 /** A value that names its secret instead of holding it, or is already gone. */
 const reference = String.raw`(?![$<{%*]|\[redacted|process\.env|os\.environ)`;
 
-/** Keeps the name or header, drops the value after it. */
-const values: RegExp[] = [
-  new RegExp(
-    String.raw`(\bAuthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic|token)\s+)${reference}([A-Za-z0-9._~+/=-]{12,})`,
-    "gi",
-  ),
-  new RegExp(
-    String.raw`(\bBearer\s+)${reference}([A-Za-z0-9._~+/-]{20,}=*)`,
-    "g",
-  ),
-  new RegExp(
-    String.raw`(\b[a-z][a-z0-9+.-]*://[^\s:/@]+:)${reference}([^\s@/]+)(?=@)`,
-    "gi",
-  ),
+/**
+ * Keeps the name or header, drops the value after it. `start` is where a
+ * match can begin and `run` the name it begins: a pattern that fails from
+ * the first start in a run fails from every later start in it too,
+ * so the rest of the run is skipped instead of retried at each `\b` (a long
+ * `a-a-a-…` run was quadratic). The rest go through a plain replace.
+ */
+type ValueRule = { pattern: RegExp; start?: RegExp; run?: RegExp };
+
+const scheme = { start: /\b[a-z]/iy, run: /[a-z0-9+.-]+/iy };
+
+const values: ValueRule[] = [
+  {
+    pattern: new RegExp(
+      String.raw`(\bAuthorization["']?\s*[:=]\s*["']?(?:Bearer|Basic|token)\s+)${reference}([A-Za-z0-9._~+/=-]{12,})`,
+      "gi",
+    ),
+  },
+  {
+    pattern: new RegExp(
+      String.raw`(\bBearer\s+)${reference}([A-Za-z0-9._~+/-]{20,}=*)`,
+      "g",
+    ),
+  },
+  {
+    pattern: new RegExp(
+      String.raw`(\b[a-z][a-z0-9+.-]*://[^\s:/@]+:)${reference}([^\s@/]+)(?=@)`,
+      "iy",
+    ),
+    ...scheme,
+  },
+  // https://<PAT>@dev.azure.com: a token as the whole user part. Plain
+  // usernames are shorter or have no digits.
+  {
+    pattern: new RegExp(
+      String.raw`(\b[a-z][a-z0-9+.-]*://)${reference}(?=[^\s:/@]*\d)([A-Za-z0-9_-]{32,})(?=@)`,
+      "iy",
+    ),
+    ...scheme,
+  },
+  // X-API-Key: …, PRIVATE-TOKEN: …, Ocp-Apim-Subscription-Key: …, always
+  // hyphenated, so code's `apiKey: config.key` stays. A quoted name is code
+  // too, whose secret is quoted: `"x-api-key": this.key` stays.
+  {
+    pattern: new RegExp(
+      String.raw`(\b(?:[A-Za-z]+-)*(?:API-Key|Auth-Token|Access-Token|Private-Token|Subscription-Key|Functions-Key)(?:\s*:\s*["']?|["']\s*:\s*["']))${reference}([A-Za-z0-9._~+/=-]{12,})`,
+      "iy",
+    ),
+    start: /\b[a-z]/iy,
+    run: /[a-z]+(?:-[a-z]+)*/iy,
+  },
   // SECRET=…, export GITHUB_TOKEN=…, API_KEY: …
-  new RegExp(
-    String.raw`^([ \t]*(?:export[ \t]+)?(?:[A-Z0-9]+_)*(?:SECRET|PASSWORD|PASSWD|TOKEN|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY)[ \t]*[=:][ \t]*["']?)${reference}([^\s"'\x60]{8,})`,
-    "gm",
-  ),
+  {
+    pattern: new RegExp(
+      String.raw`^([ \t]*(?:export[ \t]+)?(?:[A-Z0-9]+_)*(?:SECRET|PASSWORD|PASSWD|TOKEN|API_?KEY|ACCESS_?KEY|PRIVATE_?KEY)[ \t]*[=:][ \t]*["']?)${reference}([^\s"'\x60]{8,})`,
+      "gm",
+    ),
+  },
   // "api_key": "…", password = '…', apiKey: "…"
-  new RegExp(
-    String.raw`(\b[\w-]*(?:secret|password|passwd|token|api[_-]?key|access[_-]?key|private[_-]?key)["']?\s*[:=]\s*["'])${reference}([^"'\s]{8,})(?=["'])`,
-    "gi",
-  ),
+  {
+    pattern: new RegExp(
+      String.raw`(\b[\w-]*(?:secret|password|passwd|token|api[_-]?key|access[_-]?key|private[_-]?key)["']?\s*[:=]\s*["'])${reference}([^"'\s]{8,})(?=["'])`,
+      "iy",
+    ),
+    start: /\b[\w-]/y,
+    run: /[\w-]+/y,
+  },
 ];
+
+/** What `text.replace(rule.pattern, …)` gives, trying each run once. */
+function replaceValues(
+  text: string,
+  { pattern, start, run }: ValueRule,
+  replace: (kept: string) => string,
+) {
+  if (!start || !run)
+    return text.replace(pattern, (_, kept: string) => replace(kept));
+  let result = "";
+  let copied = 0;
+  let at = 0;
+  while (at < text.length) {
+    start.lastIndex = at;
+    if (!start.test(text)) {
+      at++;
+      continue;
+    }
+    pattern.lastIndex = at;
+    const match = pattern.exec(text);
+    if (match) {
+      result += text.slice(copied, at) + replace(match[1]);
+      copied = at = pattern.lastIndex;
+      continue;
+    }
+    run.lastIndex = at;
+    run.test(text);
+    at = run.lastIndex;
+  }
+  return result + text.slice(copied);
+}
 
 export function redactSecrets(text: string) {
   let found = 0;
   for (const [name, pattern] of tokens)
     text = text.replace(pattern, () => (found++, `[redacted ${name}]`));
-  for (const pattern of values)
-    text = text.replace(
-      pattern,
-      (_, kept: string) => (found++, `${kept}[redacted]`),
-    );
+  for (const rule of values)
+    text = replaceValues(text, rule, (kept) => (found++, `${kept}[redacted]`));
   return { text, found };
 }
 

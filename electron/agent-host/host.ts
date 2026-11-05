@@ -6,14 +6,10 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   appendFileSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
-  renameSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -25,8 +21,8 @@ import {
   type Asks,
   type ClientMessage,
   type HostMessage,
-  type HostRecord,
 } from "./protocol";
+import { hostSocket, writeRecord } from "./host-endpoint";
 import {
   readRelayMcp,
   relayToolsWhere,
@@ -82,6 +78,9 @@ type Ask = {
 };
 
 const sessions = new Map<string, HostSession>();
+/** Sessions closed but not ended yet: the host waits for them before it exits,
+ * so a child that ignores its stop is still killed when its grace runs out. */
+const stopping = new Set<HostSession>();
 const asks = new Map<number, Ask>();
 let nextAsk = 1;
 let client: Socket | undefined;
@@ -264,6 +263,8 @@ function closeSession(id: string) {
   if (!session) return;
   sessions.delete(id);
   session.close();
+  for (const each of stopping) if (each.ended) stopping.delete(each);
+  if (!session.ended) stopping.add(session);
   for (const [askId, pending] of asks)
     if (pending.message.session === id) {
       asks.delete(askId);
@@ -405,20 +406,7 @@ function greet(socket: Socket, message: ClientMessage) {
 }
 
 const token = randomBytes(24).toString("hex");
-// A folder only this user can enter; Linux prefers its per-user runtime dir.
-const socketDir =
-  process.platform === "win32"
-    ? undefined
-    : mkdtempSync(
-        join(
-          (process.platform === "linux" && process.env.XDG_RUNTIME_DIR) ||
-            tmpdir(),
-          "relay-",
-        ),
-      );
-const socketPath = socketDir
-  ? join(socketDir, "host.sock")
-  : `\\\\.\\pipe\\relay-agent-host-${randomBytes(8).toString("hex")}`;
+const { folder: socketDir, path: socketPath } = hostSocket();
 const recordFile = join(dir, `host-${process.pid}.json`);
 
 const server = createServer((socket) => {
@@ -441,17 +429,30 @@ const server = createServer((socket) => {
   });
 });
 
+/** How long a stopped session gets to end: its 3s grace, then the kill. */
+const closingMs = 4000;
+let shuttingDown = false;
+
 function shutdown(reason: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
   log(`exit: ${reason}`);
   for (const call of [...toolCalls.values()])
     call.resolve(toolText("Relay's agent host closed.", true));
   stopTools();
   for (const id of [...sessions.keys()]) closeSession(id);
+  server.close();
+  client?.destroy();
   try {
     rmSync(recordFile, { force: true });
     if (socketDir) rmSync(socketDir, { recursive: true, force: true });
   } catch {}
-  process.exit(0);
+  // Exiting at once would skip the kill a child ignoring its stop gets after the grace.
+  const deadline = Date.now() + closingMs;
+  setInterval(() => {
+    const ended = [...stopping].every((s) => s.ended);
+    if (ended || Date.now() > deadline) process.exit(0);
+  }, 100);
 }
 
 function settle() {
@@ -483,17 +484,14 @@ try {
 } catch {}
 
 server.listen(socketPath, () => {
-  const record: HostRecord = {
+  writeRecord(recordFile, {
     pid: process.pid,
     socket: socketPath,
     token,
     version,
     protocol: protocolVersion,
     started: Date.now(),
-  };
-  const temp = `${recordFile}.tmp`;
-  writeFileSync(temp, JSON.stringify(record), { mode: 0o600 });
-  renameSync(temp, recordFile);
+  });
   log(`listening, version ${version}`);
   serveTools();
 });

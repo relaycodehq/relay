@@ -248,6 +248,9 @@ export class RemoteBridge {
       // including after sending has removed the draft and its desktop extras.
       if (!chatId)
         return this.sends.once(`draft:${key}`, send.id, async () => {
+          // It went after the phone gave up on it; the draft went with it.
+          const late = drafts.sentLate(key, send);
+          if (late) return late;
           if (!drafts.holds(key))
             throw new Error(
               "This draft changed on the computer. Check it and send it again.",

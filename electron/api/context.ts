@@ -3,7 +3,7 @@ import { chatIsEmpty } from "../../shared/chat-activity";
 import type { ChatSummary } from "../../shared/projects";
 import { parseWorkspaceId, workspaceIdSchema } from "../../shared/workspaces";
 import { idSchema } from "../../shared/validation";
-import type { Api, ApiMethod, Repo } from "../../shared/types";
+import type { Api, ApiMethod, PullRef, Repo } from "../../shared/types";
 import type { AgentUpdates } from "../agents/agent-updates";
 import type { AppLinks } from "../app/links";
 import type { GiteaLogin } from "../app/login";
@@ -115,10 +115,21 @@ export type Handlers = {
     ArgTypes<Parameters<Api[M]>, Parameters<Api[M]>>;
 };
 
-/** `value` as `schema` reads it; the error is the first problem in words, not Zod's JSON list of them. */
+/**
+ * `value` as `schema` reads it; the error is the first problem in words, not
+ * Zod's JSON list of them. A left-out argument is null or undefined depending
+ * on the way it came: JSON from a phone or a paired computer turns undefined
+ * into null, and phones leave trailing nulls out. Either one stands for the
+ * other where the schema takes only one.
+ */
 function parsed(schema: z.ZodType, value: unknown) {
   const result = schema.safeParse(value);
   if (result.success) return result.data;
+  const missing = value === null || value === undefined;
+  if (missing) {
+    const otherMissing = schema.safeParse(value === null ? undefined : null);
+    if (otherMissing.success) return otherMissing.data;
+  }
   throw new Error(result.error.issues[0]?.message ?? "Invalid request.");
 }
 
@@ -152,6 +163,17 @@ export function remoteProjects(ctx: Pick<ApiContext, "handoffs">) {
   const handoffs = ctx.handoffs();
   if (!handoffs) throw new Error("Relay is still starting.");
   return handoffs.remote;
+}
+
+/** The key of the pull request a thread reviews; none for other threads. */
+function pullKeyOf(chat: ChatSummary, prKey: (r: PullRef) => string) {
+  if (chat.scope.kind !== "pr") return undefined;
+  try {
+    return prKey(chat.scope.ref);
+  } catch {
+    // A Gitea PR while signed out of Gitea keys by an account it can't name.
+    return undefined;
+  }
 }
 
 /** The services, plus the lookups most handlers share. */
@@ -220,16 +242,11 @@ export function apiContext(services: Services) {
     };
   }
   const placeRoot = async (where: unknown) => (await place(where)).root;
+  const threadPrKey = (chat: ChatSummary) => pullKeyOf(chat, prKey);
   /** An unused PR thread is still a review in the making once files are viewed or drafted. */
   function reviewStarted(chat: ChatSummary) {
-    if (chat.scope.kind !== "pr") return false;
-    let key: string;
-    try {
-      key = prKey(chat.scope.ref);
-    } catch {
-      // A Gitea PR while signed out of Gitea keys by an account it can't name.
-      return false;
-    }
+    const key = threadPrKey(chat);
+    if (!key) return false;
     const p = store.get().progress[key];
     return (
       !!p &&
@@ -254,6 +271,7 @@ export function apiContext(services: Services) {
     clientFor,
     repoKey,
     prKey,
+    threadPrKey,
     linkedFolder,
     requireFolder,
     place,

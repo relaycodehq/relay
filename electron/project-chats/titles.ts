@@ -175,6 +175,7 @@ export class ThreadTitles {
       );
     if (!answer)
       throw new Error("Wait for the first answer to name the thread.");
+    const previous = chat.title;
     const abort = new AbortController();
     const job = (async () => {
       const choice = sessionInput(
@@ -188,7 +189,7 @@ export class ThreadTitles {
       ]) {
         try {
           const title = await regenerateThreadTitle({
-            previous: chat.title,
+            previous,
             messages: chat.messages,
             provider,
             choice:
@@ -211,6 +212,8 @@ export class ThreadTitles {
     if (abort.signal.aborted) throw new Error("Relay is closing.");
     if (!title) throw new Error("No agent could name this thread.");
     const fresh = await this.core.storage.load(id);
+    // Renamed while the agent thought: the name you typed is the newer one.
+    if (fresh.title !== previous) return chatSummary(fresh);
     fresh.title = title;
     delete fresh.renamed;
     await this.core.storage.save(fresh);

@@ -132,7 +132,7 @@ export function useMemePicker({
         return "Pick a meme from the list, or type its name after /meme.";
       if (!meme) return `No meme matches "${args.trim()}".`;
       pick(meme);
-      return true;
+      return false; // `send` clears the draft once the meme goes out
     },
   };
 }

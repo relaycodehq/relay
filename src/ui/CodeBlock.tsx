@@ -24,6 +24,7 @@ import { blockCommand } from "../lib/shell-command";
 import { useCopy } from "../lib/useCopy";
 import { MermaidDiagram } from "./MermaidDiagram";
 import { useFlash } from "../lib/useFlash";
+import { SizedCache } from "../lib/sized-cache";
 
 // Tokenizing runs on the main thread; past this a block stays plain.
 const MAX_HIGHLIGHT_LENGTH = 200_000;
@@ -76,6 +77,16 @@ export async function highlight(
 ): Promise<Highlighted> {
   return { code, lang, theme, lines: await tokenize(code, lang, theme) };
 }
+
+/**
+ * Finished blocks' colours, so a thread opened again paints them on its
+ * first frame instead of plain text that recolours a moment later. Tokens
+ * take about 20 bytes per character of code.
+ */
+const coloured = new SizedCache<Highlighted>(500_000);
+
+const colouredKey = (code: string, lang: string, theme: string) =>
+  `${theme}\0${lang}\0${code}`;
 
 export function tokenStyle(token: ThemedToken): CSSProperties | undefined {
   const style = token.fontStyle ?? 0;
@@ -173,37 +184,29 @@ const TokenLine = memo(function TokenLine({
   );
 });
 
-/** A fenced code block, coloured with the active syntax theme when its language is known. */
-export const CodeBlock = memo(function CodeBlock({
-  code,
-  lang,
-  closed = true,
-  tools,
-}: {
-  code: string;
-  lang?: string;
-  /** False while the fence is still streaming in: nothing is offered for half a block. */
-  closed?: boolean;
-  /** More buttons beside Copy, like the pin that keeps the block in notes. */
-  tools?: ReactNode;
-}) {
+/**
+ * The colours of `code` in the active syntax theme, or null while there are
+ * none. While a streamed block grows they cover a prefix of it: the rest
+ * shows plainly until the next pass catches up.
+ */
+function useHighlighted(
+  code: string,
+  lang: string | undefined,
+  closed: boolean,
+) {
   const theme = useSyncExternalStore(
     subscribeSyntaxTheme,
     syntaxTheme,
     () => null,
   );
-  const [highlighted, setHighlighted] = useState<Highlighted | null>(null);
-  const latest = useRef<Highlighted | null>(null);
-  const lastRun = useRef(0);
-  const [copied, copy] = useCopy();
-  const [showSource, setShowSource] = useState(false);
-  const [diagramError, setDiagramError] = useState<string>();
-  const diagram = lang === "mermaid" && closed && !diagramError;
-  const command = useMemo(
-    () => (closed ? blockCommand(code, lang) : null),
-    [code, lang, closed],
-  );
   const enabled = !!lang && !!theme && code.length <= MAX_HIGHLIGHT_LENGTH;
+  const [highlighted, setHighlighted] = useState<Highlighted | null>(() =>
+    enabled && closed && lang && theme
+      ? (coloured.get(colouredKey(code, lang, theme)) ?? null)
+      : null,
+  );
+  const latest = useRef(highlighted);
+  const lastRun = useRef(0);
   // While the fence is open only whole lines are tokenized, so a half-typed
   // token doesn't flash the wrong colour.
   const target = closed
@@ -223,6 +226,7 @@ export const CodeBlock = memo(function CodeBlock({
       lastRun.current = performance.now();
       highlight(target, lang, theme).then(
         (next) => {
+          if (closed) coloured.set(colouredKey(target, lang, theme), next);
           if (cancelled) return;
           latest.current = next;
           setHighlighted(next);
@@ -235,18 +239,40 @@ export const CodeBlock = memo(function CodeBlock({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [target, lang, theme, enabled]);
+  }, [target, lang, theme, enabled, closed]);
 
-  // While a streamed block grows, keep the highlighted prefix and append
-  // the new text plainly until the next pass catches up.
-  const usable =
-    enabled &&
+  return enabled &&
     highlighted &&
     highlighted.lang === lang &&
     highlighted.theme === theme &&
     code.startsWith(highlighted.code)
-      ? highlighted
-      : null;
+    ? highlighted
+    : null;
+}
+
+/** A fenced code block, coloured with the active syntax theme when its language is known. */
+export const CodeBlock = memo(function CodeBlock({
+  code,
+  lang,
+  closed = true,
+  tools,
+}: {
+  code: string;
+  lang?: string;
+  /** False while the fence is still streaming in: nothing is offered for half a block. */
+  closed?: boolean;
+  /** More buttons beside Copy, like the pin that keeps the block in notes. */
+  tools?: ReactNode;
+}) {
+  const [copied, copy] = useCopy();
+  const [showSource, setShowSource] = useState(false);
+  const [diagramError, setDiagramError] = useState<string>();
+  const diagram = lang === "mermaid" && closed && !diagramError;
+  const command = useMemo(
+    () => (closed ? blockCommand(code, lang) : null),
+    [code, lang, closed],
+  );
+  const usable = useHighlighted(code, lang, closed);
   const source = (
     <pre>
       <code className={lang ? `language-${lang}` : undefined}>

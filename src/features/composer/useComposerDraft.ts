@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type RefObject } from "react";
 import { agentMentionPattern } from "../../../shared/agents";
 import { pastedTexts } from "../../../shared/pasted-texts";
 import { pickedSkills } from "../../../shared/skill-mentions";
+import { unsent } from "../../../shared/drafts";
 import { draftChips } from "../../lib/thread-storage";
 import type { DraftImage } from "../images/draft-images";
 import { useImagePills } from "../images/image-pills";
@@ -82,7 +83,8 @@ export function useComposerDraft(
       return {
         dispatch() {
           taken = text;
-          set("");
+          // Typed while the message was being readied: it stays for the next one.
+          set(unsent(readDraft(key), text.trim()));
           outgoingImages?.dispatch();
         },
         restore() {

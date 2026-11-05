@@ -9,6 +9,7 @@ import {
 import type { Node, Slice } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import { fitCase, fitEnd } from "../../../../shared/dictation";
+import type { DictationTarget } from "../../dictation/audio/session";
 
 /**
  * The words being dictated: `from`–`to` in the draft, tentative from
@@ -165,6 +166,22 @@ function padding(doc: Node, from: number, to: number) {
   return {
     lead: before && !/\s/.test(before) ? " " : "",
     trail: after && !/[\s.,!?;:)\]]/.test(after) ? " " : "",
+  };
+}
+
+/** Where dictated words go in `editor`: live at the caret, greyed while they may still change. */
+export function dictationTarget(editor: Editor | null): DictationTarget {
+  return {
+    begin: () => {
+      if (editor?.isDestroyed !== false) return;
+      beginDictation(editor);
+      // The words land here, so Enter sends them.
+      editor.view.focus();
+    },
+    update: (settled, tentative) =>
+      editor?.isDestroyed === false &&
+      updateDictation(editor, settled, tentative),
+    end: (text) => editor?.isDestroyed === false && endDictation(editor, text),
   };
 }
 

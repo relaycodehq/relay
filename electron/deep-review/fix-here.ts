@@ -78,6 +78,10 @@ export async function checkOutRound(
   );
   if (!checkout) throw new Error(`Relay can't check out ${round.scope.label}.`);
   round.scope.checkout = checkout;
+  // The thread works where its latest checked-out round does, so later
+  // rounds give it up: their findings get checked out again to be fixed.
+  const later = chat.reviews!.slice(chat.reviews!.indexOf(round) + 1);
+  for (const r of later) delete r.scope.checkout;
   return checkout;
 }
 

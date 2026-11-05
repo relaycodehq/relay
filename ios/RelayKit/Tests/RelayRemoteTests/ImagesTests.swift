@@ -15,6 +15,16 @@ struct ImagesTests {
         #expect(localImagePath("shots/my%20shot.webp", root: root) == "/work/relay/shots/my shot.webp")
     }
 
+    @Test(arguments: [
+        ("shots/a.png", "C:\\Users\\me\\proj\\shots\\a.png"),
+        ("..\\b.png", "C:\\Users\\me\\b.png"),
+        ("file:///C:/Users/me/a.png", "C:/Users/me/a.png"),
+        ("D:\\shots\\a.png", "D:\\shots\\a.png"),
+    ])
+    func resolvesOnWindowsToADrivePath(src: String, path: String) {
+        #expect(localImagePath(src, root: "C:\\Users\\me\\proj") == path)
+    }
+
     @Test func leavesOutWhatIsntALocalImage() {
         #expect(localImagePath("https://example.com/a.png", root: root) == nil)
         #expect(localImagePath("data:image/png;base64,AAAA", root: root) == nil)

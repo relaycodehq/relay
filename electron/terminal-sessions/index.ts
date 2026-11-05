@@ -55,6 +55,18 @@ type SessionFilter = { provider: TerminalAgent; session?: string };
 
 const real = (path: string) => realpath(path).catch(() => undefined);
 
+/**
+ * The ways a session can name the project's folder: as given, resolved, and
+ * composed, as Claude Code names it even when the folder's name on disk is
+ * decomposed ("i" and an accent for "í", as Finder may write it).
+ */
+async function projectRoots(root: string) {
+  const resolved = (await real(root)) ?? root;
+  return new Set(
+    [root, resolved].flatMap((path) => [path, path.normalize("NFC")]),
+  );
+}
+
 async function files(
   dir: string,
   keep: (name: string) => boolean,
@@ -64,11 +76,19 @@ async function files(
   return names.filter(keep).map((name) => join(dir, name));
 }
 
-/** Codex's day folders from today back `CODEX_DAYS`, by local date as it names them. */
+/**
+ * Codex's day folders from today back `CODEX_DAYS`, by local date as it names
+ * them. Stepped by calendar day: a day the clocks change on isn't 24 hours.
+ */
 function codexDays(sessions: string, now: number) {
   const pad = (n: number) => String(n).padStart(2, "0");
+  const today = new Date(now);
   return Array.from({ length: CODEX_DAYS + 1 }, (_, i) => {
-    const day = new Date(now - i * 86_400_000);
+    const day = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() - i,
+    );
     return join(
       sessions,
       String(day.getFullYear()),
@@ -97,7 +117,7 @@ export class TerminalSessions {
     most = MOST_ROWS,
     provider?: TerminalAgent,
   ): Promise<FoundSession[]> {
-    const roots = new Set([root, (await real(root)) ?? root]);
+    const roots = await projectRoots(root);
     const only = provider ? { provider } : undefined;
     const [found, stored] = await Promise.all([
       this.candidates(roots, most, only),
@@ -146,7 +166,7 @@ export class TerminalSessions {
 
   /** A listed session found again by its id, as it stands now; never by a path from the page. */
   async find(root: string, pick: TerminalSessionPick) {
-    const roots = new Set([root, (await real(root)) ?? root]);
+    const roots = await projectRoots(root);
     const [stored] = await this.stored(roots, 1, pick);
     if (stored) return stored;
     const found = (await this.candidates(roots, Infinity, pick)).find(

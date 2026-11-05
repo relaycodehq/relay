@@ -180,9 +180,14 @@ class Remote(
         persist()
     }
 
-    suspend fun switchTo(id: String) = withContext(dispatcher) {
-        val credentials = _saved.value.find { it.key == id }
-        if (credentials != null && id != wanted) attach(id, RemoteStart.Saved(credentials))
+    /** Switches to [id] once the saved pairings are read; false when it isn't paired. */
+    suspend fun switchTo(id: String): Boolean {
+        _ready.first { it }
+        return withContext(dispatcher) {
+            val credentials = _saved.value.find { it.key == id } ?: return@withContext false
+            if (id != wanted) attach(id, RemoteStart.Saved(credentials))
+            true
+        }
     }
 
     /**

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
 import { defaultAISettings } from "../../../shared/settings";
 import type {
@@ -8,7 +8,7 @@ import type {
 } from "../../../shared/projects";
 import type { CodeReference } from "../../../shared/code-references";
 import type { DraftImage } from "../images/draft-images";
-import { threadStorage } from "../../lib/thread-storage";
+import { threadDraftKey, threadStorage } from "../../lib/thread-storage";
 import { readDraft, writeDraft } from "./drafts";
 import { sendDraft, unsent } from "./draft-send";
 import { api } from "../../lib/api";
@@ -18,8 +18,16 @@ import {
 } from "../agents/composer-settings";
 
 const images = new Map<string, DraftImage[]>();
-const sends: (ProjectChatSend & { resolve: () => void })[] = [];
+
+type Sent = ProjectChatSend & {
+  thread: string;
+  resolve: () => void;
+  reject: (e: Error) => void;
+};
+
+const sends: Sent[] = [];
 let lastInput: ProjectChatSend | undefined;
+let made = 0;
 
 vi.mock("../images/draft-images", () => ({
   loadDraftImages: async (key: string) => images.get(key) ?? [],
@@ -36,8 +44,14 @@ vi.mock("../../lib/api", () => ({
     aiSettings: async () => defaultAISettings,
     agentModels: async () => [],
     projectChat: async () => ({ ...chat, messages: [], lastInput }),
-    sendProjectChat: (_id: string, send: ProjectChatSend) =>
-      new Promise<void>((resolve) => sends.push({ resolve, ...send })),
+    createProjectChat: async () => ({ ...chat, id: `made-${++made}` }),
+    // Every thread a send made is still there.
+    projectChats: async () =>
+      Array.from({ length: made }, (_, i) => ({ id: `made-${i + 1}` })),
+    sendProjectChat: (thread: string, send: ProjectChatSend) =>
+      new Promise<void>((resolve, reject) =>
+        sends.push({ ...send, thread, resolve, reject }),
+      ),
   },
 }));
 
@@ -48,6 +62,7 @@ beforeEach(() => {
   images.clear();
   sends.length = 0;
   lastInput = undefined;
+  made = 0;
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => store.set(key, value),
@@ -224,4 +239,38 @@ it("keeps browser feedback with its screenshot and preserves a newer edit while 
   ]);
   await pending.finish();
   expect(images.get(key)?.[0].browser?.comment).toBe("Use a larger font too");
+});
+
+describe("a new thread's draft whose send failed", () => {
+  const id = "new:p1";
+  const slot = threadDraftKey(id);
+  const qc = () =>
+    new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+  async function failedSend() {
+    writeDraft(slot, "Fix the flaky test");
+    const sent = sendDraft(qc(), { key: slot, id, project, reply: false });
+    await vi.waitFor(() => expect(sends).toHaveLength(1));
+    sends[0].reject(new Error("Claude isn't signed in"));
+    await expect(sent).rejects.toThrow("signed in");
+  }
+
+  async function sendAgain() {
+    const sent = sendDraft(qc(), { key: slot, id, project, reply: false });
+    await vi.waitFor(() => expect(sends).toHaveLength(2));
+    sends[1].resolve();
+    await sent;
+    return sends[1].thread;
+  }
+
+  it("retries in the thread it made", async () => {
+    await failedSend();
+    expect(await sendAgain()).toBe("made-1");
+  });
+
+  it("starts the slot's next draft in a thread of its own", async () => {
+    await failedSend();
+    writeDraft(slot, "Rename the settings page");
+    expect(await sendAgain()).toBe("made-2");
+  });
 });

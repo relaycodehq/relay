@@ -89,6 +89,21 @@ describe("PathIndex.rank", () => {
     // A generous bound: keystrokes should rank well under a frame or two.
     expect(each).toBeLessThan(250);
   });
+
+  it("marks the matched characters of a name whose lower case is longer", () => {
+    // "İ" lower-cases to two characters, "i" and a combining dot.
+    const [hit] = new PathIndex(["İİ/notes.md"]).rank("notes");
+    expect(hit.indices.map((i) => hit.path[i]).join("")).toBe("notes");
+  });
+
+  it("finds a name with İ typed either way", () => {
+    const index = new PathIndex(["src/İstanbul.ts", "src/other.ts"]);
+    for (const query of ["İstan", "istan"]) {
+      const [hit] = index.rank(query);
+      expect(hit?.path, query).toBe("src/İstanbul.ts");
+      expect(hit.indices.map((i) => hit.path[i]).join("")).toBe("İstan");
+    }
+  });
 });
 
 describe("parseFileQuery", () => {

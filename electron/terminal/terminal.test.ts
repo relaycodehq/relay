@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { spawn } from "node:child_process";
 import { findExecutable } from "../platform/executables";
-import { openLinuxTerminal } from "./terminal";
+import { openLinuxTerminal, openWindowsTerminal } from "./terminal";
 
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 vi.mock("../platform/executables");
@@ -53,4 +53,26 @@ it("reports a missing terminal instead of claiming a handoff succeeded", async (
     "xdg-terminal-exec",
   );
   expect(spawn).not.toHaveBeenCalled();
+});
+
+it("escapes semicolons Windows Terminal would read as another tab", async () => {
+  vi.mocked(findExecutable).mockResolvedValue("C:\\WindowsApps\\wt.exe");
+  vi.mocked(spawn).mockImplementation(() => spawned());
+  const root = "C:\\Users\\bob\\a;b";
+  const script = "C:\\Users\\bob\\Relay;data\\handoffs\\task.ps1";
+  await openWindowsTerminal(root, script);
+  expect(spawn).toHaveBeenCalledWith(
+    "C:\\WindowsApps\\wt.exe",
+    [
+      "-d",
+      "C:\\Users\\bob\\a\\;b",
+      "powershell.exe",
+      "-NoExit",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      "C:\\Users\\bob\\Relay\\;data\\handoffs\\task.ps1",
+    ],
+    { cwd: root, detached: true, stdio: "ignore" },
+  );
 });

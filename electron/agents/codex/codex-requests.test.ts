@@ -164,3 +164,22 @@ it("asks for a command approval with every optional field left out", async () =>
   ]);
   expect(answer).toEqual({ decision: "decline" });
 });
+
+it("shows the folder a file change asks to write for the session, beside the changes", async () => {
+  let asked: any;
+  await codexRequest(
+    "item/fileChange/requestApproval",
+    {
+      itemId: "i1",
+      changes: [{ path: "/p/a.ts", kind: "update" }],
+      grantRoot: "/Users/me",
+    },
+    async (request) => {
+      asked = request;
+      return { kind: "approval", decision: "decline" };
+    },
+  );
+
+  expect(asked.detail).toContain("/p/a.ts");
+  expect(asked.detail).toContain("/Users/me");
+});

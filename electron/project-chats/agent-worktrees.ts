@@ -38,7 +38,7 @@ function assigned(before: string) {
 /** Whether a command is a `git worktree add` naming `path`, by its folder name since agents write it relative or without macOS's /private. */
 export function addsWorktree(command: string, path: string) {
   const target = new RegExp(
-    `(^|[\\s/'"=])${escape(basename(path))}($|[\\s/'";&|)])`,
+    `(^|[\\s/\\\\'"=])${escape(basename(path))}($|[\\s/\\\\'";&|)])`,
   );
   // Search output and other statements mentioning a path aren't creation evidence.
   const adds =

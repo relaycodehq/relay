@@ -4,6 +4,30 @@ export const CANCEL_GRACE_MS = 5000;
 /** What a turn the user stopped fails with. */
 export const cancelledByYou = () => new Error("Cancelled by you.");
 
+/**
+ * Fails `CANCEL_GRACE_MS` after `signal` aborts, for an agent that never
+ * reports the cancel. A turn stopped before this is called gets no abort
+ * event any more, so its wait starts at once. `clear` once the turn is over.
+ */
+export function cancelGrace(signal: AbortSignal) {
+  let timer: NodeJS.Timeout | undefined;
+  let giveUpLater!: () => void;
+  const cancelled = new Promise<never>((_, reject) => {
+    giveUpLater = () => {
+      timer = setTimeout(() => reject(cancelledByYou()), CANCEL_GRACE_MS);
+      timer.unref();
+    };
+  });
+  void cancelled.catch(() => {});
+  if (signal.aborted) giveUpLater();
+  else signal.addEventListener("abort", giveUpLater, { once: true });
+  const clear = () => {
+    signal.removeEventListener("abort", giveUpLater);
+    clearTimeout(timer);
+  };
+  return { cancelled, clear };
+}
+
 /** The most an agent's answer, plan or review may hold before the turn is stopped. */
 export const ANSWER_LIMIT = 100_000;
 

@@ -282,6 +282,7 @@ export const relayToolSchemas = {
     .object({
       ids: z
         .array(threadId)
+        .min(1)
         .max(50)
         .optional()
         .describe("Any threads. Left out: every thread you started."),
@@ -730,19 +731,4 @@ export const relayToolList = Object.entries(relayToolSchemas).map(
   },
 );
 
-/** An MCP tool result. */
-export interface ToolResult {
-  content: (
-    | { type: "text"; text: string }
-    | { type: "image"; data: string; mimeType: string }
-  )[];
-  isError?: boolean;
-}
-
-/** The result's text, its pictures left out. */
-export const resultText = (result: ToolResult) =>
-  result.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("\n");
-export const toolText = (text: string, isError = false): ToolResult => ({
-  content: [{ type: "text", text }],
-  ...(isError ? { isError: true } : {}),
-});
+export { resultText, toolText, type ToolResult } from "./tool-result";

@@ -1,22 +1,9 @@
 import { app, net } from "electron";
-import { spawn, execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createWriteStream, existsSync } from "node:fs";
-import {
-  access,
-  chmod,
-  copyFile,
-  mkdir,
-  readdir,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { constants } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { createWriteStream } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { promisify } from "node:util";
 import {
   manifestSchema,
   newerVersion,
@@ -25,69 +12,29 @@ import {
   type UpdateFile,
   type UpdateManifest,
   type UpdateState,
-  type UpdateTarget,
 } from "../../shared/updates";
 import { signedByAny } from "../../shared/update-signature";
+import { apply, detectInstall, prepare, type Install } from "./install-update";
 
-const run = promisify(execFile);
 const checkEvery = 4 * 60 * 60 * 1000;
 // Coming back to Relay checks again once the last check is this old.
 const staleAfter = 30 * 60 * 1000;
 const checkTimeout = 20_000;
 const stallTimeout = 60_000;
 
-interface Install {
-  target: UpdateTarget;
-  /** Set when this copy can't replace itself; the button opens the download page instead. */
-  manual?: string;
-}
-
-/** Works out which download fits the running copy and whether it can swap itself in. */
-async function detectInstall(): Promise<Install | null> {
-  const arch = process.arch;
-  if (process.platform === "darwin") {
-    if (arch !== "arm64") return null;
-    const target = "mac-arm64";
-    const bundle = resolve(process.execPath, "../../..");
-    if (!app.isPackaged || !bundle.endsWith(".app"))
-      return { target, manual: "Development build" };
-    if (bundle.includes("/AppTranslocation/"))
-      return {
-        target,
-        manual: "Move Relay to Applications to enable automatic updates.",
-      };
-    try {
-      await access(dirname(bundle), constants.W_OK);
-    } catch {
-      return { target, manual: "Relay's folder isn't writable." };
-    }
-    return { target };
-  }
-  if (process.platform === "win32") {
-    if (arch !== "x64") return null;
-    return app.isPackaged
-      ? { target: "win-x64" }
-      : { target: "win-x64", manual: "Development build" };
-  }
-  if (process.platform === "linux" && arch === "x64") {
-    if (process.env.APPIMAGE) return { target: "linux-x64-appimage" };
-    if (existsSync(join(dirname(process.execPath), ".installer")))
-      return { target: "linux-x64-omarchy" };
-    return {
-      target: "linux-x64-omarchy",
-      manual: app.isPackaged
-        ? "Installed without the Relay installer."
-        : "Development build",
-    };
-  }
-  return null;
-}
-
 export class Updater {
   private state: UpdateState;
   private install: Install | null = null;
   private manifest?: UpdateManifest;
-  private staged?: { version: string; path: string; dir: string };
+
+  private staged?: {
+    version: string;
+    path: string;
+    dir: string;
+    /** The installer waits for Relay to quit; the next quit installs this one. */
+    handedOff?: boolean;
+  };
+
   private busy = false;
   private checking?: Promise<UpdateState>;
   private checkedAt = 0;
@@ -102,8 +49,9 @@ export class Updater {
     private readonly hooks: {
       /** Claude's background work still running; the restart waits for it. */
       runningTasks: () => number;
-      beforeQuit: () => void;
-    } = { runningTasks: () => 0, beforeQuit: () => {} },
+      /** Quits for the restart; `cancelled` runs when Relay is kept open instead. */
+      quit: (cancelled: () => void) => void;
+    } = { runningTasks: () => 0, quit: () => app.quit() },
   ) {
     const current = app.getVersion();
     // Development builds stay quiet unless a feed is set to exercise the UI.
@@ -160,6 +108,8 @@ export class Updater {
   private async lookUp() {
     const current = app.getVersion();
     if (this.state.status === "off" || this.busy) return this.state;
+    // The installer is already waiting to install the staged release.
+    if (this.staged?.handedOff) return this.state;
     // A download under way or a restart asked for shouldn't be reset by a timer.
     if (["downloading", "waiting", "installing"].includes(this.state.status))
       return this.state;
@@ -393,109 +343,22 @@ export class Updater {
     this.waiting = undefined;
     if (this.state.status === "installing") return this.state;
     const current = app.getVersion();
-    this.set({ status: "installing", current, version: staged.version });
+    const version = staged.version;
+    this.set({ status: "installing", current, version });
     try {
-      await apply(install.target, staged.path);
-      this.hooks.beforeQuit();
-      app.quit();
+      // A second installer would race the first over the same bundle.
+      if (!staged.handedOff) await apply(install.target, staged.path);
+      staged.handedOff = true;
+      // Keeping Relay open (unsaved edits, a failed save) offers Restart again.
+      this.hooks.quit(() => this.set({ status: "ready", current, version }));
     } catch (error) {
       this.set({
         status: "error",
         current,
-        version: staged.version,
+        version,
         message: error instanceof Error ? error.message : "Update failed.",
       });
     }
     return this.state;
-  }
-}
-
-/** Unpacks what needs unpacking while the app is still running normally. */
-async function prepare(target: UpdateTarget, path: string, dir: string) {
-  if (target === "mac-arm64") {
-    const out = join(dir, "unpacked");
-    await run("/usr/bin/ditto", ["-x", "-k", path, out]);
-    const bundle = (await readdir(out)).find((n) => n.endsWith(".app"));
-    if (!bundle) throw new Error("The download doesn't contain Relay.app.");
-    // Downloads made by the app aren't quarantined, but be sure Gatekeeper won't block the relaunch.
-    await run("/usr/bin/xattr", [
-      "-dr",
-      "com.apple.quarantine",
-      join(out, bundle),
-    ]).catch(() => {});
-    await rm(path, { force: true });
-    return join(out, bundle);
-  }
-  if (target === "linux-x64-omarchy") {
-    const out = join(dir, "unpacked");
-    await mkdir(out);
-    await run("tar", ["-xzf", path, "-C", out]);
-    const bundle = (await readdir(out)).find((n) =>
-      existsSync(join(out, n, "install.py")),
-    );
-    if (!bundle) throw new Error("The download doesn't contain the installer.");
-    return join(out, bundle);
-  }
-  return path;
-}
-
-async function apply(target: UpdateTarget, staged: string) {
-  switch (target) {
-    case "mac-arm64": {
-      // Swap the bundle once this process has exited, then open the new copy.
-      const bundle = resolve(process.execPath, "../../..");
-      const script = join(dirname(dirname(staged)), "swap.sh");
-      await writeFile(
-        script,
-        [
-          "#!/bin/sh",
-          'pid="$1"; old="$2"; new="$3"',
-          'while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done',
-          'rm -rf "$old.previous"',
-          'if mv "$old" "$old.previous"; then',
-          '  if mv "$new" "$old"; then rm -rf "$old.previous"; else mv "$old.previous" "$old"; fi',
-          "fi",
-          'open "$old"',
-          'rm -rf "$(dirname "$0")"',
-          "",
-        ].join("\n"),
-        { mode: 0o700 },
-      );
-      spawn("/bin/sh", [script, String(process.pid), bundle, staged], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-      return;
-    }
-    case "win-x64":
-      // electron-builder's NSIS installer waits for Relay to exit and relaunches it.
-      spawn(staged, ["--updated", "/S", "--force-run"], {
-        detached: true,
-        stdio: "ignore",
-      }).unref();
-      return;
-    case "linux-x64-appimage": {
-      const current = process.env.APPIMAGE!;
-      const next = `${current}.update`;
-      await copyFile(staged, next);
-      await chmod(next, 0o755);
-      await rename(next, current);
-      app.relaunch({ execPath: current, args: process.argv.slice(1) });
-      return;
-    }
-    case "linux-x64-omarchy": {
-      // The bundled installer replaces ~/.local/lib/relay-experimental in place.
-      const prefix = resolve(dirname(process.execPath), "../..");
-      const args = [join(staged, "install.py")];
-      if (prefix !== join(homedir(), ".local")) args.push("--prefix", prefix);
-      try {
-        await run("python3", args);
-      } catch (error) {
-        const detail = (error as { stderr?: string }).stderr?.trim();
-        throw new Error(detail || "The Relay installer failed.");
-      }
-      app.relaunch({ execPath: process.execPath, args: process.argv.slice(1) });
-      return;
-    }
   }
 }

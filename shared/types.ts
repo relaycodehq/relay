@@ -307,7 +307,7 @@ export interface LocalFile {
   branch: string;
   head: string;
   contents: string;
-  original: string;
+  original?: string; // undefined: the committed version isn't text, nothing to compare with
   version: string;
 }
 

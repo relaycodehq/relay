@@ -186,6 +186,8 @@ const handlers = {
     if (scenario.compact === "noop") return { commandId: params.commandId, status: "noop", reason: "no_compactable_history" };
     reply(id, { commandId: params.commandId, status: "accepted" });
     notify("item/started", { item: { itemId: "compaction-1", kind: "compaction", status: "inProgress", revision: 1, turnId: null } });
+    if (scenario.compact === "fail")
+      return notify("item/completed", { item: { itemId: "compaction-1", kind: "compaction", status: "failed", revision: 2, turnId: null, reason: "summary_model_error" } });
     notify("item/completed", { item: { itemId: "compaction-1", kind: "compaction", status: "completed", revision: 2, turnId: null, tokensBefore: 120000, tokensAfter: 9000 } });
   },
   "approval/decide": (params) => ({ approvalId: params.approvalId, commandId: params.commandId, status: "accepted", terminal: true }),

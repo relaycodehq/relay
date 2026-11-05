@@ -27,32 +27,37 @@ const hidden = new Set([".git", ".DS_Store"]);
 
 /**
  * A file or folder inside the checkout ("" is the checkout itself), without
- * following a link on the way. `null` when nothing is there yet.
+ * following a link on the way. `null` when nothing is there yet. With
+ * `linkAtEnd`, the entry may be a link itself: moved, trashed or shown, never
+ * read through.
  */
 async function resolveEntry(
   root: string,
   path: string,
+  linkAtEnd = false,
 ): Promise<{ full: string; stat: Stats | null }> {
   if (path) workingPathSchema.parse(path);
   if ((await realpath(root)) !== root)
     throw new Error("The checkout path changed. Relink it first.");
+  const parts = path ? path.split("/") : [];
   let full = root,
     stat: Stats | null = await lstat(root);
-  for (const part of path ? path.split("/") : []) {
+  for (const [at, part] of parts.entries()) {
     if (!stat?.isDirectory()) throw new Error("That folder doesn’t exist.");
     full = join(full, part);
     stat = await lstat(full).catch((e: NodeJS.ErrnoException) => {
       if (e.code !== "ENOENT") throw e;
       return null;
     });
-    if (stat?.isSymbolicLink())
+    const linkAllowed = linkAtEnd && at === parts.length - 1;
+    if (stat?.isSymbolicLink() && !linkAllowed)
       throw new Error("Symbolic links cannot be opened or changed here.");
   }
   return { full, stat };
 }
 
-async function existing(root: string, path: string) {
-  const entry = await resolveEntry(root, path);
+async function existing(root: string, path: string, linkAtEnd = false) {
+  const entry = await resolveEntry(root, path, linkAtEnd);
   if (!entry.stat) throw new Error("That is gone from disk.");
   return { full: entry.full, stat: entry.stat };
 }
@@ -181,8 +186,8 @@ export async function createEntry(
 
 /** Moves a file or folder to a new path in the same checkout, without replacing anything. */
 export async function renameEntry(root: string, from: string, to: string) {
-  const source = await existing(root, from);
-  const target = await resolveEntry(root, to);
+  const source = await existing(root, from, true);
+  const target = await resolveEntry(root, to, true);
   // A case-only rename on a case-insensitive disk finds itself at the target.
   if (target.stat && target.stat.ino !== source.stat.ino)
     throw new Error("Something with that name already exists.");
@@ -201,4 +206,9 @@ async function parentFolder(root: string, path: string) {
 /** Where an entry is on disk, for Finder and the default app. */
 export async function entryPath(root: string, path: string) {
   return (await existing(root, path)).full;
+}
+
+/** Where an entry is on disk, a link itself rather than what it points at, to show or trash it. */
+export async function entryItself(root: string, path: string) {
+  return (await existing(root, path, true)).full;
 }

@@ -101,15 +101,26 @@ fun localImagePath(src: String, root: String): String? {
         SCHEME.containsMatchIn(path) && !DRIVE.containsMatchIn(path) -> return null
         else -> decodeOrNull(path) ?: return null
     }
+    // A file URL's path keeps a slash before the drive: `/C:/Users/…`.
+    if (SLASH_DRIVE.containsMatchIn(path)) path = path.substring(1)
     if (DRIVE.containsMatchIn(path)) return path.takeIf(::isImagePath)
+    val joined = if (path.startsWith("/")) path else "$root/$path"
+    val windows = DRIVE.containsMatchIn(joined)
+    // A drive is the top; `..` can't climb past it.
+    val top = if (windows) 1 else 0
     val parts = ArrayList<String>()
-    for (part in (if (path.startsWith("/")) path else "$root/$path").split("/")) {
-        if (part == "..") parts.removeLastOrNull()
-        else if (part.isNotEmpty() && part != ".") parts += part
+    for (part in joined.split(if (windows) WINDOWS_SEPARATORS else POSIX_SEPARATOR)) {
+        if (part == "..") {
+            if (parts.size > top) parts.removeAt(parts.lastIndex)
+        } else if (part.isNotEmpty() && part != ".") parts += part
     }
-    val full = "/" + parts.joinToString("/")
+    val full = if (windows) parts.joinToString("\\") else "/" + parts.joinToString("/")
     return full.takeIf(::isImagePath)
 }
+
+private val SLASH_DRIVE = Regex("^/[a-z]:[\\\\/]", RegexOption.IGNORE_CASE)
+private val WINDOWS_SEPARATORS = Regex("[\\\\/]")
+private val POSIX_SEPARATOR = Regex("/")
 
 /** The local image files an answer embeds, so only those can be read for it. */
 fun answerImagePaths(body: String, root: String): List<String> =

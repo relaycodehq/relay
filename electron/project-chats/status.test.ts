@@ -194,3 +194,16 @@ it("builds each project's live list once for explicit and started-thread batches
     clone.mockRestore();
   }
 });
+
+it("leaves a lead's second opinions out of the threads it started", async () => {
+  const lead = await chats.create(projectId, { kind: "project" });
+  const task = await chats.create(projectId, { kind: "project" }, "checkout", {
+    startedBy: { chatId: lead.id, agent: "codex" },
+  });
+  await chats.create(projectId, { kind: "project" }, "checkout", {
+    startedBy: { chatId: lead.id, agent: "codex", secondOpinionOn: "answer" },
+  });
+  expect(
+    (await chats.statuses({ startedBy: lead.id })).map((s) => s.summary.id),
+  ).toEqual([task.id]);
+});

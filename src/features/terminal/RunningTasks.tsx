@@ -154,6 +154,9 @@ function useProjectTasks(project: Project, collapsed: boolean) {
     queryKey: ["project-tasks", project.id],
     queryFn: () => api.projectTasks(project.id, costed),
     refetchInterval: focused ? 3000 : 30_000,
+    // Every fetch is a new point on the open card's CPU lines; folded, the
+    // card changes only with the list.
+    notifyOnChangeProps: costed ? ["data", "dataUpdatedAt"] : ["data"],
   });
   const { refetch } = tasks;
   // One list for both shapes, so the stripe and the card count the same tasks.

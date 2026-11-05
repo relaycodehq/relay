@@ -102,13 +102,48 @@ interface State {
   workspaces?: Record<string, WorkspaceState>;
 }
 
+const STATE_FILE = "state.json";
+export const BACKUP_FILE = "state.json.bak";
+/** How long `updateSoon` gathers changes before it writes them. */
+const WRITE_SOON_MS = 1000;
+
+/** The saved state, or undefined when the text isn't a saved state at all (empty, cut off). */
+function parseState(text: string): State | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const version = (parsed as { version?: unknown } | null)?.version;
+  if (typeof version === "number" && version > 1)
+    throw new Error(
+      "Relay's saved data was written by a newer version of Relay. Update Relay to open it.",
+    );
+  return version === 1 ? (parsed as State) : undefined;
+}
+
+const damagedError = (path: string) =>
+  new Error(
+    `Relay's saved data (${path}) is damaged, and there is no readable earlier copy to fall back on. It was left as it is; moving it elsewhere starts Relay without your projects and settings.`,
+  );
+
 export class Store {
   private state: State = { version: 1, folders: {}, progress: {} };
   private queue: Promise<void> = Promise.resolve();
   private writeError: unknown;
+  /** The launch's copy of state.json, written while Relay starts rather than before. */
+  private backup: Promise<void> = Promise.resolve();
+
+  /** Changes `updateSoon` made that no write has carried to the file yet. */
+  private unwritten = false;
+  private writeTimer?: ReturnType<typeof setTimeout>;
 
   async flush() {
-    await this.queue;
+    // An updateSoon queued behind a write under way changes nothing until
+    // its turn comes, so what it leaves unwritten is only known after.
+    await Promise.all([this.queue, this.backup]);
+    if (this.unwritten) await this.writeUnwritten().catch(() => {});
     if (this.writeError) throw this.writeError;
   }
 
@@ -117,20 +152,43 @@ export class Store {
 
   async load() {
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
-    try {
-      const parsed = JSON.parse(
-        await readFile(join(this.dir, "state.json"), "utf8"),
+    const path = join(this.dir, STATE_FILE);
+    const text = await readFile(path, "utf8").catch((e) => {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") return undefined;
+      throw new Error(
+        `Relay's saved data (${path}) could not be read (${code}).`,
       );
-      if (parsed.version !== 1)
-        throw new Error("Unsupported saved data version.");
-      this.state = parsed;
-      this.savedAtLoad = (await stat(join(this.dir, "state.json"))).mtimeMs;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== "ENOENT")
-        throw new Error(
-          "Saved review data could not be read. It has been preserved; restore state.json from backup before continuing.",
-        );
+    });
+    if (text === undefined) return; // first run
+
+    const saved = parseState(text);
+    if (saved) {
+      this.state = saved;
+      this.savedAtLoad = (await stat(path)).mtimeMs;
+      this.backup = this.keepBackup(text);
+      return;
     }
+
+    const backup = await readFile(join(this.dir, BACKUP_FILE), "utf8")
+      .then(parseState)
+      .catch(() => undefined);
+    if (!backup) throw damagedError(path);
+    console.warn(
+      `[store] ${STATE_FILE} could not be read; starting from ${BACKUP_FILE}, the copy kept at the last good launch`,
+    );
+    this.state = backup;
+    // Threads that changed after the copy was made get their summaries back from their own files.
+    this.savedAtLoad = 0;
+  }
+
+  /** The copy load falls back to when a power cut leaves state.json empty; made once a launch. */
+  private async keepBackup(text: string) {
+    await writeFileAtomic(join(this.dir, BACKUP_FILE), text, {
+      sync: true,
+    }).catch((e) =>
+      console.warn(`[store] Could not keep a copy of ${STATE_FILE}:`, e),
+    );
   }
 
   get() {
@@ -149,13 +207,57 @@ export class Store {
     const task = this.queue.then(async () => {
       const next = structuredClone(this.state);
       fn(next);
-      await writeFileAtomic(join(this.dir, "state.json"), JSON.stringify(next));
+      await this.write(next);
       this.state = next;
-      this.writeError = undefined;
     });
-    this.queue = task.catch((error) => {
-      this.writeError = error;
-    });
+    // A change its caller refused never reached the file, so nothing waits to be saved.
+    this.queue = task.catch(() => {});
     await task;
+  }
+
+  /**
+   * Changes the state now and writes the file a moment later, with whatever
+   * else changed meanwhile: a turn starting changes a thread's summary a few
+   * times at once. Only for what a crash may lose, like thread summaries,
+   * which launch reads back from the threads' own files.
+   */
+  async updateSoon(fn: (s: State) => void) {
+    const task = this.queue.then(() => {
+      const next = structuredClone(this.state);
+      fn(next);
+      this.state = next;
+      this.unwritten = true;
+      this.writeTimer ??= setTimeout(
+        () => void this.writeUnwritten().catch(() => {}),
+        WRITE_SOON_MS,
+      );
+      this.writeTimer.unref?.();
+    });
+    this.queue = task.catch(() => {});
+    await task;
+  }
+
+  private writeUnwritten() {
+    clearTimeout(this.writeTimer);
+    this.writeTimer = undefined;
+    const task = this.queue.then(async () => {
+      if (this.unwritten) await this.write(this.state);
+    });
+    this.queue = task.catch(() => {});
+    return task;
+  }
+
+  /** Writes `state` whole; it holds every change `updateSoon` made before it. */
+  private async write(state: State) {
+    try {
+      await writeFileAtomic(join(this.dir, STATE_FILE), JSON.stringify(state));
+    } catch (error) {
+      this.writeError = error;
+      throw error;
+    }
+    this.writeError = undefined;
+    this.unwritten = false;
+    clearTimeout(this.writeTimer);
+    this.writeTimer = undefined;
   }
 }

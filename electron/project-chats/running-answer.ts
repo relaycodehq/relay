@@ -21,6 +21,17 @@ export function askInTurn(
   return active.requests.ask(request, signal);
 }
 
+/**
+ * A session started before the user turned pages off keeps the page tools it
+ * was given, so the setting is checked when a page is shown, too.
+ */
+function refuseWhenPagesOff(core: ChatCore) {
+  if (core.store.get().renderMode === "off")
+    throw new Error(
+      "The user turned pages off in Settings; answer in text instead.",
+    );
+}
+
 /** Adds a page the thread's agent showed to the answer it is writing; see electron/html-renders. */
 export async function showRender(
   core: ChatCore,
@@ -28,6 +39,7 @@ export async function showRender(
   render: HtmlRender,
   pages: string[],
 ) {
+  refuseWhenPagesOff(core);
   const active = core.active.get(id);
   if (!active?.render || core.active.windingDown(active))
     throw new Error("This thread has no running answer to show it in.");
@@ -73,6 +85,7 @@ export async function askWithPage(
   html: string,
   ask: string,
 ) {
+  refuseWhenPagesOff(core);
   const active = core.active.get(id);
   if (!active?.askPage || core.active.windingDown(active))
     throw new Error("This thread has no running answer to ask in.");

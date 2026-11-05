@@ -260,6 +260,14 @@ describe("control", () => {
       "Compacted the conversation from 120,000 to 9,000 tokens.",
     );
   });
+
+  it("fails a compaction Muse couldn't finish instead of calling it done", async () => {
+    await scenario({ compact: "fail" });
+    await turn().answer();
+    await expect(turn({ job: { kind: "compact" }, session: { key: "thread-1", id: "session-1", onId: async () => {} } }).answer()).rejects.toThrow(
+      "Muse Code couldn't compact the conversation: summary_model_error",
+    );
+  });
 });
 
 describe("failures", () => {
@@ -267,6 +275,16 @@ describe("failures", () => {
     await scenario({ signedOut: true });
     const error = await turn().answer().catch((e) => e);
     expect(isAgentError(error, "signedOut")).toBe(true);
+  });
+
+  it("starts a fresh process after a refused sign-in, so a login made since is used", async () => {
+    await scenario({ signedOut: true });
+    const refused = await turn().answer().catch((e) => e);
+    expect(isAgentError(refused, "signedOut")).toBe(true);
+    // The fake reads its sign-in when it starts, as a running `muse serve` keeps its own.
+    await scenario({});
+    await expect(turn().answer()).resolves.toBe("Done.");
+    expect(await calls("initialize")).toHaveLength(2);
   });
 
   it("reads a spent quota as a usage limit with its reset time", async () => {
@@ -302,6 +320,19 @@ describe("sessions", () => {
     expect((await calls("session/resume")).map((m) => m.params.sessionId)).toEqual(["session-1"]);
     // A resumed conversation already heard Relay's instructions.
     expect((await calls("turn/start")).at(-1)!.params.input[0].text).not.toMatch(/^Help the requesting user/);
+  });
+
+  it("opens the session in a new process when the thread switches to Read only and back, with the tools that mode gets", async () => {
+    await scenario({});
+    const relayTools = { url: "http://127.0.0.1:1/mcp", token: "t" };
+    const session = { key: "thread-1", id: "session-1", onId: async () => {} };
+    await turn({ relayTools }).answer();
+    // Read only reaches the agent as Supervised with `readOnly`, and no Relay tools.
+    await turn({ readOnly: true, session }).answer();
+    await turn({ relayTools, session }).answer();
+    expect(await calls("initialize")).toHaveLength(3);
+    const opened = [...(await calls("session/start")), ...(await calls("session/resume"))];
+    expect(opened.map((m) => !!m.params.config?.mcpServers?.relay)).toEqual([true, false, true]);
   });
 
   it("forks for a side question, read-only", async () => {

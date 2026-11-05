@@ -63,3 +63,19 @@ it("declines what an approval card can't answer, and everything a reviewer is as
   expect(await reviewer.ask()).toEqual({ action: "decline" });
   expect(reviewer.onRequest).not.toHaveBeenCalled();
 });
+
+it("turns down writes and other MCP tools in a read-only session, even one that runs without the read-only hook", async () => {
+  const { canUseTool } = sessionCallbacks({
+    options: { readOnly: true } as unknown as ClaudeRunOptions,
+    plan: "",
+  });
+  const use = async (tool: string, input: Record<string, unknown> = {}) =>
+    (await canUseTool(tool, input, { signal } as never))?.behavior;
+  expect(await use("Edit", { file_path: "/a.ts" })).toBe("deny");
+  expect(await use("Write", { file_path: "/a.ts" })).toBe("deny");
+  expect(await use("NotebookEdit")).toBe("deny");
+  expect(await use("mcp__github__create_issue")).toBe("deny");
+  expect(await use("mcp__relay__start_threads")).toBe("deny");
+  expect(await use("mcp__relay__read_thread")).toBe("allow");
+  expect(await use("Read", { file_path: "/a.ts" })).toBe("allow");
+});

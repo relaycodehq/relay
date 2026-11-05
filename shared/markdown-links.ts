@@ -225,8 +225,18 @@ export function isOutsideFolderPath(path: string) {
     path.startsWith("~/") || OS_ROOTS.some((r) => path.startsWith(r));
   if (!unix && !WINDOWS_ABSOLUTE.test(path)) return false;
   if (!/[/\\]$/.test(path)) return false;
-  const named = path.replace(/[/\\]+$/, "");
+  const named = withoutTrailingSlashes(path);
   return named !== "~" && !/^[A-Za-z]:$/.test(named);
+}
+
+/**
+ * `path` without the slashes it ends in. A loop, not `/[/\\]+$/`, which
+ * reads a run of slashes before the end once per slash.
+ */
+export function withoutTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && (path[end - 1] === "/" || path[end - 1] === "\\")) end--;
+  return path.slice(0, end);
 }
 
 /** `path` has its position removed, `written` still carries it. */

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { threadKeyOf } from "../../shared/preview";
 import type { Store } from "../app/store";
 
 const settings = z.object({
@@ -48,6 +49,18 @@ export class SavedPreviews {
       if (this.latest.get(key) === value) this.latest.delete(key);
       throw error;
     }
+  }
+
+  /** Every page saved for the thread: its own and the ones beside it. */
+  async forgetThread(chatId: string) {
+    const ofThread = (key: string) => threadKeyOf(key) === chatId;
+    for (const key of [...this.latest.keys()])
+      if (ofThread(key)) this.latest.delete(key);
+    // Queued behind any save still being written, so none outlives the thread.
+    await this.store.update((s) => {
+      for (const key of Object.keys(s.previews ?? {}))
+        if (ofThread(key)) delete s.previews![key];
+    });
   }
 
   async forget(key: string) {

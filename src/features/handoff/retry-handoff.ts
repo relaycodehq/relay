@@ -18,12 +18,13 @@ export async function retryHandoff(qc: QueryClient, chatId: string) {
     await api.retryHandoff(chatId);
   } catch (e) {
     if (first && !(await fetchChat(qc, chatId)).messages.length)
-      putBack(chatId, first);
+      putFirstInDraft(chatId, first);
     throw e;
   }
 }
 
-function putBack(chatId: string, text: string) {
+/** Puts `text` ahead of the thread's draft, unless it already leads it. */
+export function putFirstInDraft(chatId: string, text: string) {
   const key = threadDraftKey(chatId);
   const draft = readDraft(key).trim();
   if (draft === text || draft.startsWith(`${text}\n\n`)) return;

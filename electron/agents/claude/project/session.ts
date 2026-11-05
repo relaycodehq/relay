@@ -28,6 +28,7 @@ import { SideQueue } from "./side-queue";
 import {
   claudePermissionMode,
   linksSignature,
+  sessionSignature,
   type ClaudeRunOptions,
 } from "./config";
 import { readOnlyHook } from "../../../agent-host/read-only-tools";
@@ -210,7 +211,8 @@ export function closeClaudeSession(key: string) {
 /**
  * Moves a live session to new settings instead of restarting it, which
  * would end the background work and wake-ups it holds. False when it can't:
- * another folder, or full access for a session launched without it.
+ * another folder, Read only on or off, or full access for a session
+ * launched without it.
  */
 export async function retune(
   session: ClaudeSession,
@@ -225,6 +227,8 @@ export async function retune(
     options.contextWindow !== before.contextWindow ||
     // Folders it reaches are fixed when Claude Code starts.
     linksSignature(options.links) !== linksSignature(before.links) ||
+    // So are its tools, MCP servers and hooks, which Read only cuts down.
+    !!options.readOnly !== !!before.readOnly ||
     (mode === "bypassPermissions" && !session.skipsPermissions)
   )
     return false;
@@ -424,7 +428,6 @@ function restoreSession(
         onUnprompted: show,
       },
     },
-    signature: meta.signature,
     relayPrompt: meta.relayPrompt,
     skipsPermissions: meta.skipsPermissions,
     account: meta.options.account,
@@ -438,6 +441,9 @@ function restoreSession(
     threadId: info.threadId,
     ready: { promise, resolve },
   } as unknown as ClaudeSession;
+  // Signed again: an older Relay left Read only out, so a read-only session
+  // would pass for a Supervised one.
+  holder.signature = sessionSignature(holder.options);
   if (info.open) holdOpen(holder, info.split);
   useHosted(holder, found.attach(hostedHandlers(holder)));
   watchWindow(holder);

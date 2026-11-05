@@ -56,7 +56,7 @@ export function SubagentThread({
   const tabs = batchOf(runs, openId).sort(bySubagentStanding);
   // Stays pressed until the run reports it stopped, which takes the button away.
   const [stopping, setStopping] = useState<string>();
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<{ runId: string; text: string }>();
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
@@ -86,8 +86,8 @@ export function SubagentThread({
         qc.invalidateQueries({ queryKey: ["project-chat-agents", chatId] }),
       ]);
     } catch (e) {
-      setStopping(undefined);
-      setError(errorMessage(e));
+      setStopping((id) => (id === openId ? undefined : id));
+      setError({ runId: openId, text: errorMessage(e) });
     }
   };
   return (
@@ -146,7 +146,7 @@ export function SubagentThread({
           Read-only. Agents take instructions from{" "}
           {run ? leadName(run) : "the thread's agent"}, not from you.
         </span>
-        {error && <span role="alert">{error}</span>}
+        {error?.runId === openId && <span role="alert">{error.text}</span>}
         {run?.status === "running" && run.canStop !== false && (
           <button
             type="button"

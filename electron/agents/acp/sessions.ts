@@ -10,6 +10,7 @@ import { withWorktreeEnv } from "../worktree-env";
 import { hearCommands } from "./commands";
 import { AcpConnection, AcpRequestError } from "./connection";
 import type { AcpProfile, AcpProvider } from "./profiles";
+import type { AgentOptions } from "../types";
 import {
   ACP_VERSION,
   AUTH_REQUIRED,
@@ -45,6 +46,7 @@ const metaSchema = z
     accountKey: z.string().optional(),
     credentialsRevision: z.string().optional(),
     home: z.string().optional(),
+    readOnly: z.boolean().optional(),
     caps: capsSchema.optional(),
     session: z
       .object({
@@ -68,6 +70,8 @@ export class AcpAgent extends HostedAgent<
   { id: number; compaction?: boolean }
 > {
   caps?: AcpCaps;
+  /** Started for a Read only thread: with the profile's `readOnlyEnv`, without Relay's tools. */
+  readOnly = false;
   /**
    * `base`: the settings it opened with, which Default goes back to. `cost`:
    * what the session had cost at the agent's last report, which the next one
@@ -94,6 +98,7 @@ export class AcpAgent extends HostedAgent<
       accountKey: this.profile.accountKey,
       credentialsRevision: this.profile.credentialsRevision,
       home: this.profile.home,
+      readOnly: this.readOnly,
       caps: this.caps,
       session: this.session,
       run,
@@ -214,31 +219,45 @@ async function initialize(agent: AcpAgent) {
 /**
  * The process for a thread's session, started and initialized if it isn't
  * running. A thread's runs in the agent host; without a key it's a private
- * one that ends with its turn.
+ * one that ends with its turn. A thread switched to or from Read only gets
+ * a new one: its environment and MCP servers are fixed when it starts.
  */
 export async function acquireAcpAgent(
   profile: AcpProfile,
   key: string | undefined,
   cwd: string,
-  env?: Record<string, string>,
+  {
+    env,
+    readOnly = false,
+    keepMode = false,
+  }: {
+    env?: Record<string, string>;
+    readOnly?: boolean;
+    /** The turn finds the process as it is: `readOnly` only starts a missing one. */
+    keepMode?: boolean;
+  } = {},
 ): Promise<AcpAgent> {
   const sessions = sessionsOf(profile);
   const previous = key ? sessions.get(key) : undefined;
-  if (
-    key &&
-    previous &&
+  const otherAccount =
+    !!previous &&
     (previous.profile.accountKey !== profile.accountKey ||
-      previous.profile.credentialsRevision !== profile.credentialsRevision)
-  ) {
+      previous.profile.credentialsRevision !== profile.credentialsRevision);
+  const otherMode = !!previous && !keepMode && previous.readOnly !== readOnly;
+  if (key && previous && (otherAccount || otherMode)) {
     if (previous.busy)
-      throw new Error("Stop the running answer before changing its account.");
+      throw new Error(
+        otherAccount
+          ? "Stop the running answer before changing its account."
+          : "Stop the running answer before changing its mode.",
+      );
     await sessions.close(key);
   }
-  return sessions.acquire(key, async () =>
-    new AcpAgent(profile, await launch(profile, key, cwd, env)).start(
-      initialize,
-    ),
-  );
+  return sessions.acquire(key, async () => {
+    const agent = new AcpAgent(profile, await launch(profile, key, cwd, env));
+    agent.readOnly = readOnly;
+    return agent.start(initialize);
+  });
 }
 
 /**
@@ -252,9 +271,11 @@ async function signedIn<T>(
   try {
     return await call();
   } catch (error) {
-    if (error instanceof AcpRequestError && error.code === AUTH_REQUIRED)
-      throw signedOutError(agent.profile.provider);
-    throw error;
+    if (!(error instanceof AcpRequestError && error.code === AUTH_REQUIRED))
+      throw error;
+    // Its process holds the refused credentials; a login made since needs a new one.
+    agent.close();
+    throw signedOutError(agent.profile.provider);
   }
 }
 
@@ -329,6 +350,35 @@ export function disposeAcp(profile: AcpProfile) {
 }
 
 /**
+ * Picking up a turn the agent runs gives it nothing new, and a compaction only
+ * summarizes the conversation the process holds, refused any tool at the turn.
+ * Neither should restart the thread's process for its mode.
+ */
+const turnKeepsMode = (options: AgentOptions) =>
+  options.job.kind === "adopt" || options.job.kind === "compact";
+
+/**
+ * The agent process a turn runs in. A Read only thread's starts with the
+ * profile's read-only environment; switching mode starts another.
+ */
+export async function acquireTurnAgent(
+  profile: AcpProfile,
+  options: AgentOptions,
+  key: string | undefined,
+) {
+  const readOnly = options.readOnly
+    ? await profile.readOnlyEnv?.(options.cwd)
+    : undefined;
+  if (readOnly?.warning)
+    options.onCommentary?.(`${profile.provider}-read-only`, readOnly.warning);
+  return acquireAcpAgent(profile, key, options.cwd, {
+    env: { ...options.env, ...readOnly?.env },
+    readOnly: !!options.readOnly,
+    keepMode: turnKeepsMode(options),
+  });
+}
+
+/**
  * Takes back the processes the agent host kept running while Relay
  * restarted. One in a turn waits, holding what it said meanwhile, for an
  * `adopt` turn.
@@ -362,6 +412,7 @@ export function reattachAcp(
       connection,
     );
     agent.caps = meta.caps;
+    agent.readOnly = !!meta.readOnly;
     if (meta.session)
       agent.session = {
         id: meta.session.id,

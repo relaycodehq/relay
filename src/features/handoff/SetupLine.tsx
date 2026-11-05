@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type SubmitEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorOff, MonitorUp } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
@@ -41,7 +41,7 @@ export function SetupLine({
         void qc.invalidateQueries({ queryKey: ["project-chat", chat.id] });
       });
   };
-  const choose = (e: FormEvent) => {
+  const choose = (e: SubmitEvent) => {
     e.preventDefault();
     const typed = folder.trim();
     if (!typed) return;
