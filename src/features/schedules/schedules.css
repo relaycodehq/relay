@@ -154,6 +154,11 @@
 .schedule-prompt {
   margin-bottom: 18px;
 }
+/* The composer caps itself at the chat width; here it spans the page like
+   the name above and the card below. */
+.schedule-prompt .thread-compose-wrap {
+  max-width: none;
+}
 /* The buttons above the prompt line up with its edges, the project first. */
 .schedule-prompt .thread-context-controls {
   padding-left: 0;
