@@ -94,7 +94,6 @@ export const bigFunctions: Record<string, number> = {
   "electron/remote/server.ts › receive": 117,
   "electron/started-threads/index.ts › answer": 118,
   "electron/started-threads/project-folder.ts › folderVerdict": 93,
-  "electron/startup/index.ts › remoteServices": 81,
   "electron/startup/index.ts › threadServices": 96,
   "electron/terminal/tasks.ts › read": 158,
   "electron/triage/classifier.ts › classifyChanges": 284,

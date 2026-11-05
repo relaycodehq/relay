@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CommandOption } from "../../../shared/commands";
 import type { Project } from "../../../shared/projects";
+import type { TerminalSession } from "../../../shared/terminal-sessions";
 import { api } from "../../lib/api";
 import { useResumeCommand } from "./useResumeCommand";
 
@@ -26,28 +27,37 @@ const remote: Project = {
 let container: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 let shown: CommandOption[] = [];
-let errors: unknown[] = [];
+let resume: ReturnType<typeof useResumeCommand>;
 
 /** Asks for the `/resume` options on every render, as the composer's menu does. */
-function Menu({ project }: { project: Project }) {
-  const resume = useResumeCommand({
+function Menu({
+  project,
+  workspace,
+}: {
+  project: Project;
+  workspace: "checkout" | "worktree";
+}) {
+  resume = useResumeCommand({
     project,
     settingsKey: "t1",
-    workspace: "checkout",
+    workspace,
     onContinued: async () => {},
     onOpenThread: async () => {},
-    onError: (e) => errors.push(e),
+    onError: () => {},
   });
   shown = resume.options("resume", "") ?? [];
   return null;
 }
 
-async function open(project: Project) {
+async function open(
+  project: Project,
+  workspace: "checkout" | "worktree" = "checkout",
+) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root.render(
       <QueryClientProvider client={qc}>
-        <Menu project={project} />
+        <Menu project={project} workspace={workspace} />
       </QueryClientProvider>,
     );
   });
@@ -60,7 +70,6 @@ beforeEach(() => {
   container = document.createElement("div");
   root = createRoot(container);
   shown = [];
-  errors = [];
   listed.mockReset();
 });
 
@@ -74,11 +83,21 @@ it("says the lookup failed instead of looking forever, and asks once", async () 
   expect(shown[0].description).toBe("Couldn't read the sessions folder");
 });
 
-it("doesn't look on this computer for a project on another one", async () => {
+it("lists a project's sessions on its own computer, which a worktree here can't continue", async () => {
+  listed.mockResolvedValue([
+    {
+      provider: "codex",
+      id: "0199aaaa-bbbb",
+      title: "Fix the login",
+      updated: Date.now(),
+      turns: 3,
+    } as TerminalSession,
+  ]);
   await open(remote);
-  expect(listed).not.toHaveBeenCalled();
-  expect(errors).toEqual([]);
-  expect(shown[0].label).toBe(
-    "Open Sample on remote-computer to resume its sessions",
+  expect(listed).toHaveBeenCalledWith("p1");
+  expect(shown[0].description).toMatch(/^Runs on remote-computer · Codex/);
+  await open(remote, "worktree");
+  expect(resume.command("resume", "codex:0199aaaa-bbbb")).toBe(
+    "A session on remote-computer goes on in its checkout: pick Current checkout first.",
   );
 });

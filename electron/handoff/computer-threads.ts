@@ -12,9 +12,14 @@ import type {
   ComputerThreads as ListedThreads,
 } from "../../shared/computer-threads";
 import { errorMessage } from "../../shared/error-message";
-import { computerThreadsBridge } from "../../shared/remote";
-import type { ChatTriage } from "../../shared/projects";
+import {
+  computerThreadsBridge,
+  projectSessionsBridge,
+} from "../../shared/remote";
+import type { ChatTriage, Project } from "../../shared/projects";
+import type { TerminalSessionPick } from "../../shared/terminal-sessions";
 import type { Store } from "../app/store";
+import { summaryOf } from "./away";
 import type { ProjectChats } from "../project-chats";
 import type { Projects } from "../projects/projects";
 import type { ComputerInfos } from "./computer-infos";
@@ -121,6 +126,28 @@ export class ComputerThreads {
     });
     await this.following.follow(computerId, chat.id);
     return { projectId: project.id, chatId: chat.id, peek: true };
+  }
+
+  /**
+   * Resumes a saved session of a project that lives on the computer, there,
+   * and opens the thread that carries it on. It was asked for, so it shows in
+   * Threads at once rather than as a peek.
+   */
+  async resume(project: Project, pick: TerminalSessionPick) {
+    const { id: computerId, projectId } = project.computer!;
+    const { name } = this.computers.get(computerId);
+    const client = await this.computers.connected(computerId);
+    const info = await this.infos.get(computerId, client, true);
+    if (!info || info.bridge < projectSessionsBridge)
+      throw new Error(`Update Relay on ${name} to resume its sessions here.`);
+    const there = await client.call("resumeInProject", projectId, pick);
+    const here = await this.open(computerId, there.chatId);
+    const sentTo = summaryOf(this.store, here.chatId).sentTo;
+    if (sentTo?.peek)
+      await this.chats.handoffs.updateSentTo(here.chatId, sentTo.id, {
+        peek: undefined,
+      });
+    return { chat: summaryOf(this.store, here.chatId), created: there.created };
   }
 
   /** A page one of the thread's answers showed there, no bigger than a page may be. */

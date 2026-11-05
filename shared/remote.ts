@@ -57,6 +57,7 @@ import type { DeviceKind } from "./remote-pairing";
 import type { RemoteSite } from "./remote-tunnel";
 import type { SubagentDetail, SubagentRun } from "./subagents";
 import type { TerminalEvent, TerminalOpened } from "./terminals";
+import type { TerminalSessionPick } from "./terminal-sessions";
 import type { NewsCatchUp, NewsCursor, NewsItem } from "./thread-news";
 import type { UpdateState } from "./updates";
 
@@ -243,6 +244,14 @@ export interface RemoteApi {
     projectId: string,
     thread: HomeThread,
   ): Promise<{ chatId: string }>;
+  /**
+   * Resumes a saved session of the project here in a thread of its own, in
+   * the project's checkout, or finds the thread that already continues it.
+   */
+  resumeInProject(
+    projectId: string,
+    pick: TerminalSessionPick,
+  ): Promise<{ chatId: string; created: boolean }>;
   /** Runs one of `computerCallMethods` here, as this computer answers it for itself. */
   computerCall(method: ComputerCallMethod, args: unknown[]): Promise<unknown>;
   /** Runs one of `remoteProjectMethods` on the project here, its id in place of the first argument. */

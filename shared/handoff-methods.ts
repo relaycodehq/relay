@@ -98,6 +98,8 @@ export const remoteProjectMethods = [
   "projectTasks",
   "stopProjectTask",
   "restartProjectTask",
+  // From `projectSessionsBridge`.
+  "terminalSessions",
 ] as const satisfies readonly ApiMethod[];
 
 export type RemoteProjectMethod = (typeof remoteProjectMethods)[number];

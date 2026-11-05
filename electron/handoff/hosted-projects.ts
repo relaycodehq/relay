@@ -14,10 +14,15 @@ import {
   type HomeThread,
   terminalOps,
 } from "../../shared/remote";
+import {
+  terminalSessionPickSchema,
+  type TerminalSessionPick,
+} from "../../shared/terminal-sessions";
 import { idSchema } from "../../shared/validation";
 import { repositoryNames } from "../git/bundles";
 import { expandHome, listFolders } from "../projects/folder-inspect";
 import { ComputerShells } from "./computer-shells";
+import { followedBy } from "./live-threads";
 import type { ReceiverHost } from "./receiver";
 import { folderSchema, homeThreadSchema } from "./schemas";
 import { fromHome } from "./setup-agent";
@@ -26,6 +31,7 @@ const hostedMethods = new Set<string>([
   "computerFolders",
   "computerAddProject",
   "startInProject",
+  "resumeInProject",
   "computerCall",
   "projectCall",
   "projectTerminal",
@@ -72,6 +78,12 @@ export class HostedProjects {
         }
         return job;
       }
+      case "resumeInProject":
+        return this.resume(
+          idSchema.parse(args[0]),
+          terminalSessionPickSchema.parse(args[1]),
+          device.id,
+        );
       case "computerCall": {
         const method = z.enum(computerCallMethods).parse(args[0]);
         const rest = z.array(z.unknown()).max(9).parse(args[1]);
@@ -152,6 +164,29 @@ export class HostedProjects {
       `Thread ${id.slice(0, 8)} from ${device.name}: started in ${project.name}.`,
     );
     return { chatId: chat.id };
+  }
+
+  /**
+   * A session saved in the project's folder here, carried on in its checkout
+   * for the computer asking, which follows its thread by the id it lists it by.
+   */
+  private async resume(
+    projectId: string,
+    pick: TerminalSessionPick,
+    deviceId: string,
+  ) {
+    const project = await this.own(projectId);
+    const { chat, created } = await this.host.chats.continueTerminalSession(
+      project.id,
+      pick,
+      "checkout",
+    );
+    const chatId = followedBy(chat, deviceId);
+    if (!chatId)
+      throw new Error(
+        "That session goes on in a thread here that can't be opened from another computer.",
+      );
+    return { chatId, created };
   }
 
   private async describe(project: Project): Promise<ComputerProject> {

@@ -14,7 +14,15 @@ import type {
   ComputerFolders,
   TerminalOp,
 } from "../../shared/remote";
-import { computerAddingMethods, remoteAddingBridge } from "../../shared/remote";
+import {
+  computerAddingMethods,
+  projectSessionsBridge,
+  remoteAddingBridge,
+} from "../../shared/remote";
+import {
+  terminalSessionPickSchema,
+  type TerminalSessionPick,
+} from "../../shared/terminal-sessions";
 import { draftTerminalKey, terminalSlotKey } from "../../shared/terminals";
 import type { Api } from "../../shared/types";
 import type { Projects } from "../projects/projects";
@@ -41,6 +49,12 @@ const shellOps = new Map<string, TerminalOp>([
  */
 const whileAsleep = new Map<string, unknown>([["projectIcon", null]]);
 const addingMethods = new Set<string>(computerAddingMethods);
+
+/** Project calls an older Relay refuses, and the bridge that brought them. */
+const projectCallBridges = new Map<string, number>([
+  ["terminalSessions", projectSessionsBridge],
+]);
+
 type Client = Awaited<ReturnType<Computers["connected"]>>;
 /** What a Relay from before `remoteProjectsBridge` answers a call it doesn't know. */
 const unknownCall = (e: unknown) =>
@@ -51,12 +65,17 @@ export class RemoteProjects {
   private shells: RemoteShells;
   /** The last answers to `whileAsleep` calls, by method and project. */
   private answered = new Map<string, unknown>();
-  /** Connections to a Relay new enough for setup calls; an older one may update, so it's asked again. */
-  private canAdd = new WeakSet<Client>();
+  /** The bridge each connection's Relay speaks, once one was needed; an older one may update, so it's asked again. */
+  private bridges = new WeakMap<Client, number>();
 
   constructor(
     private computers: Computers,
     private projects: Projects,
+    /** Carries on a saved session of a project there, in a thread followed from here. */
+    private resumeThere?: (
+      project: Project,
+      pick: TerminalSessionPick,
+    ) => ReturnType<Api["continueTerminalSession"]>,
   ) {
     this.shells = new RemoteShells(computers, (id, run) => this.call(id, run));
   }
@@ -131,14 +150,19 @@ export class RemoteProjects {
     }) as ReturnType<Api[M]>;
   }
 
-  private async requireAdding(client: Client) {
-    if (this.canAdd.has(client)) return;
+  private requireAdding(client: Client) {
+    return this.requireBridge(
+      client,
+      remoteAddingBridge,
+      "Update Relay on the other computer in Settings → Computers, then try again.",
+    );
+  }
+
+  private async requireBridge(client: Client, bridge: number, problem: string) {
+    if ((this.bridges.get(client) ?? 0) >= bridge) return;
     const info = await client.call("computerInfo");
-    if (info.bridge < remoteAddingBridge)
-      throw new Error(
-        "Update Relay on the other computer in Settings → Computers, then try again.",
-      );
-    this.canAdd.add(client);
+    if (info.bridge < bridge) throw new Error(problem);
+    this.bridges.set(client, info.bridge);
   }
 
   /** Whether the call is about a project on another computer, by its id. */
@@ -147,6 +171,7 @@ export class RemoteProjects {
     if (
       method !== "openTerminal" &&
       method !== "adoptTerminal" &&
+      method !== "continueTerminalSession" &&
       !projectMethods.has(method) &&
       !hereOnlyMethods.has(method) &&
       method !== "watchWorkingTree"
@@ -174,24 +199,43 @@ export class RemoteProjects {
         String(args[1]),
       );
     if (method === "watchWorkingTree") return unwatch();
+    if (method === "continueTerminalSession") return this.resume(project, args);
     if (hereOnlyMethods.has(method))
       throw new Error(onComputerMessage(project));
-    const { id, projectId } = project.computer;
+    const { id, projectId, name } = project.computer;
     const kept = whileAsleep.has(method) && `${method}:${project.id}`;
     if (kept && this.computers.asleep(id))
       return this.answered.has(kept)
         ? this.answered.get(kept)
         : whileAsleep.get(method);
-    const answer = await this.call(id, (client) =>
-      client.call(
+    const answer = await this.call(id, async (client) => {
+      const bridge = projectCallBridges.get(method);
+      if (bridge)
+        await this.requireBridge(
+          client,
+          bridge,
+          `Update Relay on ${name} in Settings → Computers, then try again.`,
+        );
+      return client.call(
         "projectCall",
         projectId,
         method as RemoteProjectMethod,
         args,
-      ),
-    );
+      );
+    });
     if (kept) this.answered.set(kept, answer);
     return answer;
+  }
+
+  /** `/resume` in a project there: the session goes on in its checkout, as a worktree here can't hold its files. */
+  private resume(project: Project, args: unknown[]) {
+    const [, pick, workspace] = args;
+    if (workspace === "worktree")
+      throw new Error(
+        `A session on ${project.computer!.name} goes on in its checkout: pick Current checkout first.`,
+      );
+    if (!this.resumeThere) throw new Error(onComputerMessage(project));
+    return this.resumeThere(project, terminalSessionPickSchema.parse(pick));
   }
 
   /** Opens the thread's shell in the project's folder there, as `openTerminal` would here. */

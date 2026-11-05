@@ -67,7 +67,6 @@ export const sessionKey = (session: Pick<TerminalSession, "provider" | "id">) =>
 export const NONE = ":none";
 export const LOOKING = ":looking";
 export const FAILED = ":failed";
-export const ELSEWHERE = ":elsewhere";
 
 export const notice = (
   value: string,

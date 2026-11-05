@@ -304,16 +304,14 @@ export function remoteServices({
 }) {
   const handoffDir = join(dir, "handoffs");
   const computers = new Computers(store, seal, unseal, computerOptions);
+  const outbox = join(handoffDir, "out");
+  const sender = new Handoffs(store, computers, chats, projects, outbox);
   const handoffs = {
     computers,
-    remote: new RemoteProjects(computers, projects),
-    sender: new Handoffs(
-      store,
-      computers,
-      chats,
-      projects,
-      join(handoffDir, "out"),
+    remote: new RemoteProjects(computers, projects, (project, pick) =>
+      sender.threads.resume(project, pick),
     ),
+    sender,
   };
   const receiver = new HandoffReceiver({
     projects: () => projects.list(login.client),

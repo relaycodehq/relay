@@ -191,3 +191,28 @@ it("clones through the receiving service with the chosen folder and forwards set
   );
   expect(clone).toHaveBeenCalledTimes(1);
 });
+
+it("asks an older remote to update before listing its sessions, rather than sending a call it refuses", async () => {
+  const call = vi.fn(async (_method: string) => ({ bridge: 39 }));
+  const computers = {
+    onEvent: () => {},
+    onOnline: () => {},
+    get: () => ({ id: "pc", name: "Studio" }),
+    status: () => "online",
+    list: () => [],
+    connected: async () => ({ call }),
+  } as unknown as Computers;
+  const project = {
+    id: "here",
+    name: "Web",
+    computer: { id: "pc", name: "Studio", projectId: "there" },
+  };
+  const remote = new RemoteProjects(computers, {
+    get: () => project,
+  } as unknown as Projects);
+  expect(remote.forwards("terminalSessions", ["here"])).toBe(true);
+  await expect(
+    remote.forward("terminalSessions", ["here"], () => {}),
+  ).rejects.toThrow("Update Relay on Studio");
+  expect(call.mock.calls.map(([m]) => m)).toEqual(["computerInfo"]);
+});

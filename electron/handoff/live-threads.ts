@@ -204,7 +204,8 @@ const ownThread = (chat: ChatSummary) =>
  * computer's own, or one that device handed here. Not a thread another
  * computer handed here, nor one this computer handed on, nor a deep review.
  */
-function followedBy(chat: ChatSummary, deviceId: string) {
+/** The id the device follows the thread by, when it may follow it. */
+export function followedBy(chat: ChatSummary, deviceId: string) {
   if (chat.archivedAt || chat.scope.kind === "review") return;
   if (ownThread(chat)) return chat.id;
   const from = chat.cameFrom;

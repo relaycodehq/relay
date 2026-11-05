@@ -158,6 +158,7 @@ export const computerMethods = [
   "computerFolders",
   "computerAddProject",
   "startInProject",
+  "resumeInProject",
   "computerCall",
   "projectCall",
   "projectTerminal",

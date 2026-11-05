@@ -40,6 +40,11 @@ import { defaultAISettings } from "../../shared/settings";
 import { RemoteClient } from "../../shared/remote-client";
 import { parsePairingUrl } from "../../shared/remote";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
+import {
+  claudeTurns,
+  writeClaudeSession,
+} from "../../tests/fixtures/terminal-sessions";
+
 vi.mock("../platform/executables");
 
 let root: string;
@@ -187,6 +192,8 @@ async function pairedComputers() {
             return mini.chats.files.image(id, rest[0] as string);
           if (method === "triageProjectChat")
             return mini.chats.triage(id, rest[0] as never);
+          if (method === "terminalSessions")
+            return mini.chats.terminalSessions(id);
           if (method === "createScratch")
             return mini.projects.scratch(
               join(mini.dir, "scratch"),
@@ -2515,4 +2522,81 @@ it("shows a page the other computer's thread showed, fetched from there and kept
   expect(
     await laptop.chats.liveHandoff.renderPage(here.chatId, renderId, 0),
   ).toBe("<p>Dirt tyre loops</p>");
+});
+
+it("resumes a session saved on a remote project's computer there, and follows its thread from here", async () => {
+  const { laptop, mini, sender, computers, computerId } =
+    await pairedComputers();
+  const home = join(root, "claude-home");
+  vi.stubEnv("CLAUDE_CONFIG_DIR", home);
+  const turns = [{ prompt: "TERMINAL fix the login", answer: "Fixed it" }];
+  await writeClaudeSession(
+    home,
+    mini.clone,
+    "claude-mini-1",
+    claudeTurns(turns),
+    {
+      ago: 3_600_000,
+    },
+  );
+  const remote = new RemoteProjects(computers, laptop.projects, (p, pick) =>
+    sender.threads.resume(p, pick),
+  );
+  const project = await laptop.projects.addRemote(
+    { id: computerId, name: "Mini" },
+    { id: mini.projectId, name: "App", path: mini.clone },
+  );
+  const unwatch = vi.fn();
+
+  // Listed from the computer's own session files, not this one's.
+  expect(remote.forwards("terminalSessions", [project.id])).toBe(true);
+  const listed = (await remote.forward(
+    "terminalSessions",
+    [project.id],
+    unwatch,
+  )) as { id: string }[];
+  expect(listed.map((s) => s.id)).toEqual(["claude-mini-1"]);
+
+  const pick = { provider: "claude", session: "claude-mini-1" };
+  await expect(
+    remote.forward(
+      "continueTerminalSession",
+      [project.id, pick, "worktree"],
+      unwatch,
+    ),
+  ).rejects.toThrow("goes on in its checkout");
+  const resumed = (await remote.forward(
+    "continueTerminalSession",
+    [project.id, pick, "checkout"],
+    unwatch,
+  )) as { chat: { id: string; projectId: string }; created: boolean };
+  expect(resumed.created).toBe(true);
+  expect(resumed.chat.projectId).toBe(project.id);
+  const [there] = mini.chats.list(mini.projectId);
+  expect(there).toMatchObject({ fromTerminal: { session: "claude-mini-1" } });
+  // Asked for, it's in Threads at once rather than only looked at.
+  expect((await laptop.chats.get(resumed.chat.id)).sentTo).toMatchObject({
+    computerId,
+    id: there!.id,
+    live: true,
+    home: true,
+  });
+  expect(
+    (await laptop.chats.get(resumed.chat.id)).sentTo?.peek,
+  ).toBeUndefined();
+  await vi.waitFor(async () =>
+    expect(
+      (await laptop.chats.get(resumed.chat.id)).messages.map((m) => m.body),
+    ).toEqual(["TERMINAL fix the login", "Fixed it"]),
+  );
+
+  // Resumed again, it's the same thread on both computers.
+  expect(
+    await remote.forward(
+      "continueTerminalSession",
+      [project.id, pick, "checkout"],
+      unwatch,
+    ),
+  ).toMatchObject({ created: false, chat: { id: resumed.chat.id } });
+  expect(mini.chats.list(mini.projectId)).toHaveLength(1);
 });

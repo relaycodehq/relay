@@ -10,31 +10,40 @@ import { api } from "../../lib/api";
 import { noteUsed } from "../../lib/used";
 import { forkThreadSettings } from "../agents/composer-settings";
 import {
-  ELSEWHERE,
   FAILED,
   listingOptions,
   LOOKING,
   matchingSessions,
   NONE,
-  notice,
   sessionKey,
 } from "./rows";
 import { useSessionListing } from "./useSessionListing";
 
-/** Why a project on another computer has nothing to resume here: its sessions are in that computer's home folder. */
-const sessionsElsewhere = (project: Project) =>
-  project.computer &&
-  `Open ${project.name} on ${project.computer.name} to resume its sessions`;
-
 const OFF_BRANCH =
   "A session from a terminal or an agent's app goes on from the project folder, not another branch: pick New worktree or Current checkout first";
 
+/** Why a picked session can't go on where the composer would start the thread, when it can't. */
+function refusalFor(
+  project: Project,
+  workspace: "checkout" | "worktree",
+  start: WorktreeStart | undefined,
+) {
+  // A worktree here can't hold the files of a session on that computer.
+  if (project.computer && workspace === "worktree")
+    return `A session on ${project.computer.name} goes on in its checkout: pick Current checkout first`;
+  // The session's files are the project folder's, so its worktree copies those.
+  if (workspace === "worktree" && start) return OFF_BRANCH;
+  return undefined;
+}
+
 /** What the menu says about where a picked session goes on. */
 function whereItContinues(
+  project: Project,
   workspace: "checkout" | "worktree",
-  offBranch: boolean,
+  refusal: string | undefined,
 ) {
-  if (offBranch) return `${OFF_BRANCH} · `;
+  if (refusal) return `${refusal} · `;
+  if (project.computer) return `Runs on ${project.computer.name} · `;
   if (workspace === "worktree") return "Continues in a new worktree · ";
   return "";
 }
@@ -69,9 +78,7 @@ export function useResumeCommand({
   onError: (error: unknown) => void;
 }) {
   const listing = useSessionListing(project.id);
-  const elsewhere = sessionsElsewhere(project);
-  // The session's files are the project folder's, so its worktree copies those.
-  const offBranch = workspace === "worktree" && !!start;
+  const refusal = refusalFor(project, workspace, start);
 
   async function resume(session: TerminalSession) {
     // A session some thread already continues opens that thread.
@@ -94,8 +101,7 @@ export function useResumeCommand({
     command(command: RelayCommand, args: string): boolean | string | undefined {
       if (command !== "resume") return undefined;
       if (project.scratch) return "Scratchpad has no sessions to resume.";
-      if (elsewhere) return `${elsewhere}.`;
-      if (offBranch) return `${OFF_BRANCH}.`;
+      if (refusal) return `${refusal}.`;
       const typed = args.trim();
       if (typed === LOOKING) return "Still looking for sessions.";
       if (typed === FAILED) return "Couldn't look for sessions.";
@@ -111,8 +117,7 @@ export function useResumeCommand({
     },
     options(command: RelayCommand, query: string): CommandOption[] | undefined {
       if (command !== "resume" || project.scratch) return undefined;
-      if (elsewhere) return [notice(ELSEWHERE, elsewhere)];
-      const where = whereItContinues(workspace, offBranch);
+      const where = whereItContinues(project, workspace, refusal);
       return listingOptions(listing.current(), query, where, project.name);
     },
   };
