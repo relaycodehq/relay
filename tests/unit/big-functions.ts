@@ -190,7 +190,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/composer/useComposerSettings.ts › useComposerSettings": 120,
   "src/features/composer/useDraftImages.ts › useDraftImages": 184,
   "src/features/composer/useSettingCommands.ts › useSettingCommands": 131,
-  "src/features/continue-session/useResumeCommand.ts › useResumeCommand": 112,
+  "src/features/continue-session/useResumeCommand.ts › useResumeCommand": 90,
   "src/features/deep-review/Council.tsx › DeepReviewCouncil": 105,
   "src/features/deep-review/FindingRow.tsx › FindingRow": 123,
   "src/features/deep-review/Report.tsx › FindingsTray": 88,
