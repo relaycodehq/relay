@@ -7,6 +7,7 @@ import { z } from "zod";
 import { codexActivity } from "../agents/activity";
 import { codexSessionOrigin, codexText } from "./codex";
 import { Transcript } from "./transcript";
+import { sessionFolderQuery } from "./folders";
 
 const threadSchema = z.object({
   id: z.string(),
@@ -49,6 +50,7 @@ export async function storedCodexSessions(
   const path = join(home, "thread_history_1.sqlite");
   const present = await Promise.all([exists(statePath), exists(path)]);
   if (present.some((value) => !value)) return [];
+  const { paths: folders, collation } = sessionFolderQuery(roots);
   const state = new DatabaseSync(statePath, { readOnly: true });
   try {
     const history = new DatabaseSync(path, { readOnly: true });
@@ -58,11 +60,11 @@ export async function storedCodexSessions(
           `SELECT id, cwd, COALESCE(NULLIF(name, ''), title) AS title,
              originator, source, COALESCE(updated_at_ms, updated_at * 1000) AS updated
            FROM threads
-           WHERE cwd IN (${[...roots].map(() => "?").join(",")})
+           WHERE cwd COLLATE ${collation} IN (${folders.map(() => "?").join(",")})
              AND archived = 0 ${only ? "AND id = ?" : ""}
            ORDER BY updated_at DESC, id DESC`,
         )
-        .iterate(...roots, ...(only ? [only] : []));
+        .iterate(...folders, ...(only ? [only] : []));
       const count = history.prepare(
         `SELECT COUNT(*) AS turns FROM thread_items i
          WHERE thread_id = ? AND item_type = 'userMessage'
