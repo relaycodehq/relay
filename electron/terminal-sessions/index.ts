@@ -21,6 +21,7 @@ import { codexHistory, codexNames, codexOrigin, codexSummary } from "./codex";
 import { storedCodexHistory, storedCodexSessions } from "./codex-store";
 import { FileCache, head } from "./scan";
 import { discoverSessionFolders } from "./discovery";
+import { sessionFolderMatches } from "./folders";
 
 /** An agent's config folder for one account: where its sessions are kept. */
 export interface SessionHome {
@@ -259,7 +260,10 @@ export class TerminalSessions {
         })),
       );
       for (const { file, origin } of checked)
-        if ((origin?.terminal || origin?.app) && roots.has(origin.cwd))
+        if (
+          (origin?.terminal || origin?.app) &&
+          sessionFolderMatches(roots, origin.cwd)
+        )
           out.push({ file, origin });
     }
     return out.slice(0, most);

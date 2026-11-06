@@ -16,6 +16,28 @@ afterEach(() => rm(home, { recursive: true, force: true }));
 const turns = [{ prompt: "Find the guard", answer: "In cache.ts." }];
 const roots = new Set(["/repo"]);
 
+it("finds namespaced Windows histories only in the selected project", async () => {
+  const cwd = "\\\\?\\C:\\WORK\\project";
+  await writeStoredCodexSession(home, cwd, "windows-01", turns);
+  await writeStoredCodexSession(home, cwd + "-other", "other-01", turns);
+  const selected = new Set(["C:\\work\\project"]);
+  expect(
+    (await storedCodexSessions(home, selected, 30)).map((row) => row.id),
+  ).toEqual(["windows-01"]);
+  expect(
+    await storedCodexSessions(home, selected, 1, "windows-01"),
+  ).toHaveLength(1);
+  expect(await storedCodexSessions(home, selected, 1, "other-01")).toEqual([]);
+});
+
+it("does not conflate POSIX folders that differ in case", async () => {
+  await writeStoredCodexSession(home, "/Repo", "other-case-01", turns);
+  await writeStoredCodexSession(home, "/repo", "selected-01", turns);
+  expect(
+    (await storedCodexSessions(home, roots, 30)).map((row) => row.id),
+  ).toEqual(["selected-01"]);
+});
+
 it("lists older desktop chats by their app names, excluding missing, archived, other-folder and Relay histories", async () => {
   const { statePath } = await writeStoredCodexSession(
     home,
