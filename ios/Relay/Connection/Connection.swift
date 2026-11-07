@@ -446,12 +446,7 @@ final class Connection {
     /// thread last sent with, on the agent holding this conversation when that went elsewhere.
     func settings(of chatId: String, rootId: String? = nil) -> ResumeSettings? {
         guard let thread = threads[chatId] else { return nil }
-        guard let last = thread.settings else {
-            return thread.messages.last(where: { $0.sentSettings != nil })?.sentSettings
-        }
-        let conversation = self.conversation(chatId, rootId: rootId)
-        return conversationSettings(
-            last, lastParentId: thread.lastParentId, rootId: rootId, holder: contextAgent(conversation, rootId: rootId))
+        return threadComposerSettings(thread, rootId: rootId)
     }
 
     /// A side conversation's messages, or the main one's.
