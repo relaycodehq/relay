@@ -93,17 +93,23 @@ describe("summarizeUsage", () => {
   });
 
   it("tells a model's speed by its median run, skipping runs too short to time", () => {
+    const later = new Date(2026, 10, 10, 12).getTime();
     const timed = (output: number, ms: number) => ({
       "claude-opus-5-5": { ...spend(10, output), streamed: { output, ms } },
     });
-    const s = summary([
-      run({ models: timed(1000, 10_000) }),
-      run({ models: timed(900, 10_000) }),
-      // One run stuck behind a slow stream doesn't drag the median down.
-      run({ models: timed(1000, 100_000) }),
-      run({ models: timed(20, 50) }),
-      run({ models: { "claude-opus-5-5": spend(10, 500) } }),
-    ]);
+    const s = summary(
+      [
+        run({ at: later, models: timed(1000, 10_000) }),
+        run({ at: later, models: timed(900, 10_000) }),
+        // One run stuck behind a slow stream doesn't drag the median down.
+        run({ at: later, models: timed(1000, 100_000) }),
+        run({ at: later, models: timed(20, 50) }),
+        run({ at: later, models: { "claude-opus-5-5": spend(10, 500) } }),
+        // Timed by the old clock, which took bursts for speed.
+        run({ at: later - 4 * 86_400_000, models: timed(1000, 1000) }),
+      ],
+      { now: later },
+    );
     expect(s.models.find((m) => m.model === "Opus 5.5")?.speed).toEqual({
       tps: 90,
       runs: 3,

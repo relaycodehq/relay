@@ -282,6 +282,13 @@ function addBusy(
 /** A run that wrote less than this is too short for its speed to mean much. */
 const TIMED_OUTPUT = 100;
 
+/**
+ * Speeds logged before this timed output that had been held back and
+ * arrived in one burst (text behind Claude's hidden thinking, Codex's
+ * parallel tool calls), so they read several times too fast.
+ */
+const SPEEDS_TIMED_RIGHT_FROM = Date.UTC(2026, 10, 7, 18);
+
 function median(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = sorted.length >> 1;
@@ -362,7 +369,7 @@ export function summarizeUsage(
       row.usd += spend.usd ?? 0;
       if (spend.usd === undefined && n) row.unpriced = totals.unpriced = true;
       models.set(key, row);
-      const timed = spend.streamed;
+      const timed = e.at >= SPEEDS_TIMED_RIGHT_FROM && spend.streamed;
       if (timed && timed.output >= TIMED_OUTPUT && timed.ms > 0) {
         const rates = speeds.get(key) ?? [];
         rates.push(tokensPerSecond(timed));
