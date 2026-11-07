@@ -14,6 +14,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { promptTitle } from "../../shared/prompt-title";
+import { sentSettingsOf } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
 import { awaitsReturn } from "./handoff";
@@ -30,6 +31,20 @@ function mirrorOf(
   return m.parentId && carriedIds[m.parentId]
     ? { ...m, parentId: carriedIds[m.parentId] }
     : m;
+}
+
+/** Older threads kept the latest send's settings outside its message. */
+function restoreLastSentSettings(chat: ProjectChat) {
+  const input = chat.lastInput;
+  if (!input) return false;
+  const message = chat.messages.find((m) => m.id === input.id);
+  if (!message || message.role !== "user" || message.sentSettings) return false;
+  const settings = sentSettingsOf(input);
+  if (!settings) return false;
+  message.sentSettings = settings;
+  // A follower may already hold this message without its settings.
+  message.version++;
+  return true;
 }
 
 /** Saves of a streaming mirror wait this long; what's in memory is current. */
@@ -138,6 +153,8 @@ export class LiveHandoff {
   /** What was written here since the thread came; those it holds at the same version as their ids. */
   async writtenHere(id: string, known: KnownMessages = {}) {
     const chat = await this.core.storage.load(id);
+    // Mirrors carry messages, so put legacy settings on their message first.
+    if (restoreLastSentSettings(chat)) await this.core.storage.save(chat);
     const carried = chat.carriedIds ?? {};
     return chat.messages
       .slice(chat.cameFrom?.carried ?? 0)

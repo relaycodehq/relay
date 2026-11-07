@@ -70,3 +70,103 @@ it("keeps the reconnect snapshot when an older live push arrives afterward", asy
     live.dispose();
   }
 });
+
+function legacyThread() {
+  const input = {
+    id: "question",
+    body: "@codex Keep working",
+    provider: "codex" as const,
+    choice: {
+      model: "gpt-6-sol",
+      fast: true,
+      reasoningEffort: "high" as const,
+    },
+    runtimeMode: "read-only" as const,
+    interactionMode: "plan" as const,
+  };
+  const message: ChatMessage = {
+    id: input.id,
+    role: "user",
+    provider: "codex",
+    body: input.body,
+    status: "complete",
+    created: 1,
+    version: 3,
+  };
+  const chat: ProjectChat = {
+    id: "chat",
+    projectId: "project",
+    title: "Older thread",
+    scope: { kind: "project" },
+    created: 1,
+    updated: 2,
+    lastInput: input,
+    messages: [message],
+  };
+  const save = vi.fn(async () => {});
+  const core = {
+    storage: { load: async () => chat, save },
+  } as unknown as ChatCore;
+  return { chat, message, save, live: new LiveHandoff(core, () => []) };
+}
+
+it("exports an older send's settings on its message, including to a follower holding its old version", async () => {
+  const { chat, message, save, live } = legacyThread();
+  const before = structuredClone(chat);
+  const mirrored = await live.writtenHere(chat.id, {
+    question: message.version,
+  });
+  expect(mirrored).toEqual([
+    {
+      ...before.messages[0],
+      sentSettings: {
+        provider: "codex",
+        choice: before.lastInput!.choice,
+        runtimeMode: "read-only",
+        interactionMode: "plan",
+      },
+      version: 4,
+    },
+  ]);
+  expect(save).toHaveBeenCalledExactlyOnceWith(chat);
+  expect(chat.lastInput).toEqual(before.lastInput);
+  expect(chat.updated).toBe(before.updated);
+  expect(await live.writtenHere(chat.id, { question: 4 })).toEqual([
+    "question",
+  ]);
+  expect(message.version).toBe(4);
+  expect(save).toHaveBeenCalledOnce();
+});
+
+it("preserves a message's own settings rather than overwriting them from lastInput", async () => {
+  const { chat, message, save, live } = legacyThread();
+  message.sentSettings = {
+    provider: "claude",
+    choice: { model: "opus", fast: false, reasoningEffort: "max" },
+    contextWindow: "200k",
+    runtimeMode: "auto",
+    interactionMode: "default",
+  };
+  const before = structuredClone(chat);
+  expect(await live.writtenHere(chat.id, { question: 3 })).toEqual([
+    "question",
+  ]);
+  expect(chat).toEqual(before);
+  expect(save).not.toHaveBeenCalled();
+});
+
+it.each(["note", "missing", "assistant"])(
+  "does not invent send settings for a %s",
+  async (kind) => {
+    const { chat, message, save, live } = legacyThread();
+    if (kind === "note") chat.lastInput!.body = "A note without an agent";
+    if (kind === "missing") chat.lastInput!.id = "other-question";
+    if (kind === "assistant") message.role = "assistant";
+    const before = structuredClone(chat);
+    expect(await live.writtenHere(chat.id, { question: 3 })).toEqual([
+      "question",
+    ]);
+    expect(chat).toEqual(before);
+    expect(save).not.toHaveBeenCalled();
+  },
+);
