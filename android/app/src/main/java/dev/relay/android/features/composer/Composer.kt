@@ -15,10 +15,10 @@ import androidx.compose.ui.platform.LocalContext
 import dev.relay.android.features.composer.logic.agentName
 import dev.relay.android.features.composer.logic.composeSend
 import dev.relay.android.features.composer.logic.contextAgent
-import dev.relay.android.features.composer.logic.conversationSettings
 import dev.relay.android.features.composer.logic.latestContext
 import dev.relay.android.features.composer.logic.mainConversation
 import dev.relay.android.features.composer.logic.sentSettings
+import dev.relay.android.features.composer.logic.switchAgent
 import dev.relay.android.features.composer.logic.takesOver
 import dev.relay.android.features.composer.logic.threadCost
 import dev.relay.android.lib.navigation.LocalNavigator
@@ -27,6 +27,7 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.remote.drafts.Sends
 import dev.relay.android.remote.model.ChatMessage
 import dev.relay.android.remote.client.LinkState
+import dev.relay.android.remote.model.ModelChoice
 import dev.relay.android.remote.model.RemoteChat
 import dev.relay.android.remote.model.ResumeSettings
 import dev.relay.android.remote.outbox.outboxLink
@@ -73,16 +74,21 @@ fun Composer(
     val holder = remember(listed, rootId) { contextAgent(listed, rootId) }
     val outgoing = queued.filter { it.computer == computer && it.chatId == chatId }
 
-    // Starts from what the thread last sent, on the agent holding this conversation
-    // when that send was a reply elsewhere; before its first message, as a new thread would.
-    var settings by remember(chatId, rootId) { mutableStateOf<ResumeSettings?>(null) }
-    val startsOn = chat?.settings?.let { conversationSettings(it, chat.lastParentId, rootId, holder) }
-        ?: outgoing.lastOrNull { it.send.parentId == rootId }?.let { sentSettings(it.send) }
-    if (settings == null && startsOn != null) settings = startsOn
-    LaunchedEffect(chat != null, settings == null, client) {
+    val startsOn = lastThreadSettings(chat, listed, rootId, holder)
+        ?: outgoing.lastOrNull { it.send.parentId == rootId }?.let {
+            SentThreadSettings(it.send.id, sentSettings(it.send))
+        }
+    val picks = rememberThreadSettings(computer, chatId, rootId, startsOn)
+    val settings = picks.settings
+    LaunchedEffect(picks, chat != null, settings == null, client) {
         val cl = client ?: return@LaunchedEffect
         if (chat == null || settings != null) return@LaunchedEffect
-        runCatching { cl.desktopNewThread().first }.onSuccess { s -> if (settings == null) settings = s }
+        runCatching { cl.desktopNewThread().first }.onSuccess { defaults ->
+            // With no saved model, keep the conversation's agent rather than another thread's.
+            picks.start(if (holder != null) switchAgent(defaults, holder).copy(
+                choice = ModelChoice(""), contextWindow = null,
+            ) else defaults)
+        }
     }
 
     val running = if (rootId != null) listed.any { it.status == "streaming" } else chat?.running ?: summary?.running ?: false
@@ -101,7 +107,7 @@ fun Composer(
     val handle = remember { ComposerHandle() }
     state.handle = handle
     SideEffect { state.settings = settings }
-    state.setSettings = { settings = it }
+    state.setSettings = picks::pick
     state.confirmSwitch = ::confirmSwitch
 
     val using = settings ?: return
@@ -110,7 +116,7 @@ fun Composer(
         remote = remote,
         projectId = projectId,
         settings = using,
-        onSettings = { settings = it },
+        onSettings = picks::pick,
         running = running,
         modifier = modifier,
         handle = handle,
@@ -155,6 +161,7 @@ fun Composer(
                 sendAt = composed.attempt.sendAt,
                 images = composed.images.map { it.pasted() },
             )
+            picks.noteSent(message.id)
             state.onSent()
             outbox.deliver(outboxLink(client), pc, chatId, message, if (composed.held) draftKey else null, composed.files)
             true
