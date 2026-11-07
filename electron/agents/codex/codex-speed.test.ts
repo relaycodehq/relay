@@ -45,4 +45,28 @@ describe("CodexRequestSpeed", () => {
     speed.observe(started("fileChange"));
     expect(speed.finish({ outputTokens: 800 })).toBeUndefined();
   });
+
+  // Timings from a real `codex app-server` turn: parallel tool calls arrive
+  // a millisecond apart, each long written by then.
+  it("can't time a request whose first tool call arrived before anything streamed", () => {
+    let clock = 0;
+    const speed = new CodexRequestSpeed(() => clock);
+    const at = (s: number, n: CodexNotification) => {
+      clock = s * 1000;
+      speed.observe(n);
+    };
+    at(24.031, started("fileChange"));
+    at(24.142, started("commandExecution"));
+    at(24.143, started("commandExecution"));
+    expect(
+      speed.finish({ outputTokens: 520, reasoningOutputTokens: 0 }),
+    ).toBeUndefined();
+
+    // The next request starts afresh.
+    at(26.662, started("agentMessage"));
+    at(31.9, delta);
+    expect(
+      speed.finish({ outputTokens: 228, reasoningOutputTokens: 35 }),
+    ).toEqual({ output: 193, ms: 5238 });
+  });
 });
