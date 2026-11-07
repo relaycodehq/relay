@@ -75,39 +75,25 @@ describe("RequestUsage", () => {
     ]);
   });
 
-  // Block timings from a real Opus request that thought before answering.
-  it("leaves thinking out, the way Codex has to leave out reasoning", () => {
+  // Frame timings from a real Opus request: its hidden thinking stayed open
+  // while it wrote the answer, which then arrived in one 7ms burst.
+  it("times the whole request, thinking included, since hidden thinking holds back the text", () => {
     let clock = 0;
     const reports: UsageReport[] = [];
     const requests = new RequestUsage(() => clock);
-    const report = (u: UsageReport) => reports.push(u);
     const at = (ms: number, event: Parameters<typeof frame>[0]) => {
       clock = ms;
-      requests.observe(frame(event), report);
+      requests.observe(frame(event), (u) => reports.push(u));
     };
-    const thinkThenAnswer = (details?: { thinking_tokens: number }) => {
-      at(0, { type: "message_start", message: { model: "claude-opus-5-5" } });
-      at(1368, {
-        type: "content_block_start",
-        content_block: { type: "thinking" },
-      });
-      at(5749, { type: "content_block_stop" });
-      at(5749, {
-        type: "content_block_start",
-        content_block: { type: "text" },
-      });
-      at(6111, { type: "content_block_stop" });
-      at(6123, {
-        type: "message_delta",
-        usage: { output_tokens: 495, output_tokens_details: details },
-      });
-    };
-    thinkThenAnswer({ thinking_tokens: 461 });
-    // An older CLI that doesn't say how much was thinking.
-    thinkThenAnswer();
-    expect(reports.map((r) => r.streamed)).toEqual([
-      { output: 34, ms: 362 },
-      undefined,
-    ]);
+    at(0, { type: "message_start", message: { model: "claude-opus-5-5" } });
+    at(0, { type: "content_block_start", content_block: { type: "thinking" } });
+    at(3244, { type: "content_block_stop" });
+    at(3244, { type: "content_block_start", content_block: { type: "text" } });
+    at(3251, { type: "content_block_stop" });
+    at(3252, {
+      type: "message_delta",
+      usage: { output_tokens: 353 },
+    });
+    expect(reports.map((r) => r.streamed)).toEqual([{ output: 353, ms: 3251 }]);
   });
 });

@@ -8,8 +8,6 @@ type Counts = {
   output_tokens?: number | null;
   /** "fast" when the request ran in fast mode. */
   speed?: string | null;
-  /** How much of the output was thinking; older CLIs leave it out. */
-  output_tokens_details?: { thinking_tokens?: number | null } | null;
 };
 
 /** A stream frame as both the SDK and `claude --print` send it. */
@@ -31,23 +29,21 @@ const defined = (c: Counts | undefined): Counts =>
     ),
   );
 
-const thinking = new Set(["thinking", "redacted_thinking"]);
-
 type OpenRequest = {
   model: string;
   usage: Counts;
-  /** Time spent in the blocks that aren't thinking, and when the open one began. */
-  shownMs: number;
-  showing?: number;
-  thought?: boolean;
+  /** When the first block began and the last one ended: the time it spent writing. */
+  writingFrom?: number;
+  writingTo?: number;
 };
 
 /**
  * Claude's requests as each one finishes, the main thread's and every
  * subagent's: `message_start` names the model and counts the input,
- * `message_delta` brings the final counts. Its speed counts only what it
- * showed, text and tool calls, the way Codex's has to: Codex can't time its
- * reasoning, so Claude's thinking is left out too.
+ * `message_delta` brings the final counts. Its speed is all the output over
+ * the time from the first block to the last, thinking included: hidden
+ * thinking holds back the text after it, which then arrives in one burst, so
+ * the text alone can't be timed.
  */
 export class RequestUsage {
   /** The request each stream (main, or a subagent's call) has open. */
@@ -63,32 +59,21 @@ export class RequestUsage {
       this.open.set(key, {
         model: event.message.model,
         usage: defined(event.message.usage),
-        shownMs: 0,
       });
     const start = this.open.get(key);
     if (!start) return;
-    if (event.type === "content_block_start") {
-      if (thinking.has(event.content_block?.type ?? "")) start.thought = true;
-      else start.showing = this.now();
-    }
-    if (
-      (event.type === "content_block_stop" || event.type === "message_delta") &&
-      start.showing !== undefined
-    ) {
-      start.shownMs += this.now() - start.showing;
-      start.showing = undefined;
-    }
+    if (event.type === "content_block_start") start.writingFrom ??= this.now();
+    if (event.type === "content_block_stop") start.writingTo = this.now();
     if (event.type === "message_delta") {
       this.open.delete(key);
       // Older CLIs send only the output in the delta.
       const u = { ...start.usage, ...defined(event.usage) };
       const output = u.output_tokens ?? 0;
-      const thought = event.usage?.output_tokens_details?.thinking_tokens;
-      // A CLI that doesn't say how much was thinking can't be timed.
+      const { writingFrom, writingTo = this.now() } = start;
       const timed =
-        start.thought && thought == null
+        writingFrom === undefined
           ? undefined
-          : streamedIfReal(output - (thought ?? 0), start.shownMs);
+          : streamedIfReal(output, writingTo - writingFrom);
       report?.({
         model: start.model,
         tokens: {
