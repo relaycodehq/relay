@@ -1552,6 +1552,19 @@
 .sb-note.error {
   color: var(--danger);
 }
+.sb-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.sb-error > span {
+  flex: 1;
+  min-width: 0;
+}
+.sb-error .icon-button {
+  flex: none;
+  color: var(--muted);
+}
 /* No projects yet: the ways to add one, quiet until pointed at. */
 .sb .sb-add-ways .sb-thread {
   color: var(--muted);

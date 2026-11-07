@@ -72,27 +72,25 @@ export class ThreadTriage {
         .catch((e) => console.warn("Could not drop an archived worktree:", e));
       return chatSummary(chat);
     }
-    if (triage.kind === "settle-when-done" && chat.waiting)
+    const settling =
+      triage.kind === "settle" || triage.kind === "settle-when-done";
+    // A card can be a couple of seconds behind the live turn: a plain settle
+    // sent while an answer still runs waits for it like settle-when-done.
+    const waitsForRun =
+      triage.kind === "settle-when-done" ||
+      (triage.kind === "settle" && this.answering(chat));
+    if (settling && chat.waiting)
       throw new Error("Answer the waiting request before settling.");
-    // A phone's card can be a couple of seconds behind the live turn.
-    if (
-      triage.kind === "settle" &&
-      (this.core.active.has(id) || this.councils.busy(chat) || chat.waiting)
-    )
-      throw new Error(
-        "Wait for the running answer and its requests before settling.",
-      );
     // Before anything changes: the loaded thread is the one kept in memory.
     if (triage.kind === "snooze" && triage.until <= now)
       throw new Error("Choose a future wake time.");
     delete chat.snoozedAt;
     delete chat.snoozedUntil;
     delete chat.settleWhenDone;
-    if (triage.kind === "settle" || triage.kind === "settle-when-done") {
+    if (settling) {
       chat.settledAt = now;
       // Done already, it is a plain settle.
-      if (triage.kind === "settle-when-done" && this.going(chat))
-        chat.settleWhenDone = now;
+      if (waitsForRun && this.going(chat)) chat.settleWhenDone = now;
     } else if (triage.kind === "unsettle" || triage.kind === "snooze")
       delete chat.settledAt;
     // Settled by hand or automatically, moving it back keeps it out until something new happens.
@@ -103,11 +101,7 @@ export class ThreadTriage {
     }
     await this.core.storage.save(chat);
     // Settle-when-done that waits for the run settles them once it ends.
-    if (
-      triage.kind === "settle" ||
-      (triage.kind === "settle-when-done" && !chat.settleWhenDone)
-    )
-      await this.settleStarted(id, now);
+    if (settling && !chat.settleWhenDone) await this.settleStarted(id, now);
     return chatSummary(chat);
   }
 
@@ -263,11 +257,15 @@ export class ThreadTriage {
     return undefined;
   }
 
+  /** An answer runs in the thread, or its deep review's reviewers do. */
+  private answering(chat: ProjectChat) {
+    return this.core.active.has(chat.id) || this.councils.busy(chat);
+  }
+
   /** Something runs in the thread now, or is about to go on by itself. */
   private going(chat: ProjectChat) {
     return (
-      this.core.active.has(chat.id) ||
-      this.councils.busy(chat) ||
+      this.answering(chat) ||
       this.core.sessions.pending(chat.id).length > 0 ||
       (!!chat.queue?.length && !chat.queuePaused) ||
       !!nextSend(chat.scheduled)

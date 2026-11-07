@@ -51,7 +51,7 @@ import { ThreadDialogs } from "./ThreadDialogs";
 import { onOpenThreadSearch } from "./thread-search";
 import { FilterMenu } from "./FilterMenu";
 import { ActivityView } from "./SidebarActivity";
-import { ProjectsSection, Scratchpad } from "./SidebarProjects";
+import { ProjectsSection, Scratchpad, SidebarError } from "./SidebarProjects";
 import { HoverMark } from "./HoverMark";
 import type { AddProjectPage } from "../add-project/AddProjectPalette";
 import "./sidebar.css";
@@ -110,6 +110,7 @@ export function ProjectSidebar({
   const folds = useSidebarFolds();
   const shelves = useShelves();
   const [error, setError] = useState<string>();
+  const dismissError = () => setError(undefined);
   // The open thread's import offer stands its new projects in the tree.
   const plan = useShownPlan();
   const treeProjects = plan
@@ -297,7 +298,7 @@ export function ProjectSidebar({
         {activity ? (
           <>
             {/* The Threads view shows it under its projects instead. */}
-            {error && <p className="sb-note error">{error}</p>}
+            <SidebarError error={error} onDismiss={dismissError} />
             <ActivityView
               rows={rows}
               sections={sections}
@@ -338,6 +339,7 @@ export function ProjectSidebar({
                 importing: plan && plannedChats(plan),
               }}
               error={error}
+              onDismissError={dismissError}
               empty={!realProjects.length}
               onAdd={onAdd}
             />

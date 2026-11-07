@@ -533,31 +533,43 @@ it("keeps a manual unread mark until the thread is opened again at the same upda
   ).toBeUndefined();
 });
 
-it("rejects settle against live state without changing saved marks, but snoozes a waiting thread", async () => {
-  const chat = await chats.create(projectId, scope);
-  const save = vi.fn();
-  let working = true,
-    waiting = false;
+it("a settle sent while an answer runs settles once it ends", async () => {
+  // A summary stands in for the stored thread, which has messages.
+  const chat = Object.assign(await chats.create(projectId, scope), {
+    messages: [],
+  });
   const triage = new ThreadTriage(
     {
-      storage: { load: async () => chat, save },
-      active: { has: () => working, requests: () => (waiting ? [{}] : []) },
+      storage: { load: async () => chat, save: vi.fn() },
+      active: { has: () => true },
+      sessions: { pending: () => [] },
     } as unknown as ChatCore,
     {} as ThreadWorktrees,
     { busy: () => false } as unknown as Councils,
   );
-  await expect(triage.triage(chat.id, { kind: "settle" })).rejects.toThrow(
-    "running answer",
+  const summary = await triage.triage(chat.id, { kind: "settle" });
+  expect(summary.settledAt).toBeDefined();
+  expect(summary.settleWhenDone).toBeDefined();
+});
+
+it("refuses to settle a waiting thread without changing saved marks, but snoozes it", async () => {
+  const chat = await chats.create(projectId, scope);
+  const save = vi.fn();
+  const triage = new ThreadTriage(
+    {
+      storage: { load: async () => chat, save },
+      active: { has: () => false, requests: () => [{}] },
+    } as unknown as ChatCore,
+    {} as ThreadWorktrees,
+    { busy: () => false } as unknown as Councils,
   );
-  working = false;
   chat.waiting = true;
   await expect(triage.triage(chat.id, { kind: "settle" })).rejects.toThrow(
-    "running answer",
+    "waiting request",
   );
   expect(save).not.toHaveBeenCalled();
   expect(chat.settledAt).toBeUndefined();
   // Answering later is what snoozing a question means.
-  waiting = true;
   // A summary stands in for the stored thread, which has messages.
   Object.assign(chat, { messages: [] });
   const until = Date.now() + 3_600_000;

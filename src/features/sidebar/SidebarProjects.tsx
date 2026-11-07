@@ -7,6 +7,7 @@ import {
   Plus,
   Monitor,
   Import as ImportIcon,
+  X,
 } from "lucide-react";
 import type { ChatSummary } from "../../../shared/projects";
 import { useShortcutLabel } from "../../lib/shortcuts";
@@ -149,11 +150,13 @@ function AddWays({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
 export function ProjectsSection({
   tree,
   error,
+  onDismissError,
   empty,
   onAdd,
 }: {
   tree: ProjectTree;
   error: string | undefined;
+  onDismissError: () => void;
   /** There are no projects yet. */
   empty: boolean;
   onAdd: (page: AddProjectPage) => void;
@@ -185,11 +188,30 @@ export function ProjectsSection({
           <AddMenu onAdd={onAdd} />
         </div>
       </div>
-      {error && <p className="sb-note error">{error}</p>}
+      <SidebarError error={error} onDismiss={onDismissError} />
       {!folds.folded.projects && (
         <GroupContents node={tree.shown} tree={tree} root />
       )}
       {!folds.folded.projects && empty && <AddWays onAdd={onAdd} />}
     </>
+  );
+}
+
+/** What a sidebar action couldn't do; it stays until dismissed or the next action. */
+export function SidebarError({
+  error,
+  onDismiss,
+}: {
+  error: string | undefined;
+  onDismiss: () => void;
+}) {
+  if (!error) return null;
+  return (
+    <div className="sb-note error sb-error" role="alert">
+      <span>{error}</span>
+      <IconButton label="Dismiss" onClick={onDismiss}>
+        <X size={12} />
+      </IconButton>
+    </div>
   );
 }
