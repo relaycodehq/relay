@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { execFileSync } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -6,6 +7,7 @@ import {
   projects,
   root,
   projectId,
+  repo,
   input,
   useProjectChats,
   waitForChatEvent,
@@ -18,8 +20,8 @@ vi.mock("../platform/executables");
 
 useProjectChats();
 
-async function completedThread() {
-  const chat = await chats.create(projectId, { kind: "project" });
+async function completedThread(workspace?: "worktree") {
+  const chat = await chats.create(projectId, { kind: "project" }, workspace);
   await chats.send(chat.id, input("@codex Check the status"));
   await waitForChatEvent(
     chat.id,
@@ -93,13 +95,26 @@ it("reports async questions while work continues, then needs input once the turn
 });
 
 it("uses the other computer's live requests and queue instead of saved state here", async () => {
-  const chat = await completedThread();
+  // Only a thread in its own worktree can be handed off, and a worktree needs a commit.
+  execFileSync("git", [
+    "-C",
+    repo,
+    "-c",
+    "user.name=T",
+    "-c",
+    "user.email=t@example.invalid",
+    "commit",
+    "-q",
+    "--allow-empty",
+    "-m",
+    "Initial",
+  ]);
+  const chat = await completedThread("worktree");
   await chats.handoffs.mark(chat.id, {
     id: "handoff",
     computerId: "other",
     computer: "Other computer",
     at: Date.now(),
-    home: true,
     live: true,
   });
   await chats.handoffs.updateSentTo(chat.id, "handoff", { state: "away" });
