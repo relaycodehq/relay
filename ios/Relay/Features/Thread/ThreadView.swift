@@ -132,6 +132,9 @@ struct ThreadView: View {
                         composing = false
                         TextSelection.clear()
                     })
+            } else if connection.status.state == .connecting {
+                // Still connecting isn't a failure yet: wait for it rather than saying the copy is missing.
+                Spinner.page
             } else if connection.status.state != .online {
                 ContentUnavailableView(
                     "Not on this phone yet", systemImage: "icloud.slash",

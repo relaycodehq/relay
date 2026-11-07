@@ -137,7 +137,8 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
     val loadedHistory by model.loadedHistory.collectAsState()
     val historyResult by model.historyResult.collectAsState()
     val overview by remote.overview.collectAsState()
-    val online = remote.status.collectAsState().value.state == LinkState.Online
+    val linkState = remote.status.collectAsState().value.state
+    val online = linkState == LinkState.Online
     val summary = overview?.chats?.find { it.id == id }
     val bridge = overview?.bridge ?: 1
     val computerLabel = computerName(remote)
@@ -353,7 +354,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                 Modifier.weight(1f).fillMaxWidth().dismissKeyboardOnTap().scrollGeometry(trace, "scroll_view"),
                 restorationComplete = fetched > 0 || error != null || (!online && t != null),
                 historyResult = historyResult,
-                empty = if (t == null && listed.isEmpty()) ({ Empty(error, online, computerName(remote)) { scope.launchLoad(model) } }) else null,
+                empty = if (t == null && listed.isEmpty()) ({ Empty(error, linkState, computerName(remote)) { scope.launchLoad(model) } }) else null,
                 dock = {
                     Strips(t, summary, rootId, running, actions)
                     if (rootId == null) SubagentStrip(
@@ -366,7 +367,7 @@ private fun ThreadBody(id: String, rootId: String?, remote: Remote, locked: Bool
                     val pressing = waitingShown || (summary?.limitResume != null && !running) || !t?.stopped?.items.isNullOrEmpty()
                     if (rootId == null && settled && !pressing) SettledStrip(summary?.settleWhenDone != null, actions::unsettle)
                     // The saved copy shows while a refresh fails: without this a question the agent asked since looks like none.
-                    if (t != null && error != null) Row(
+                    if (t != null && error != null && online) Row(
                         Modifier.fillMaxWidth().pressable(onClick = { scope.launchLoad(model) }, scale = false).padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
                         Hint("Couldn't refresh this thread, so it may be out of date. Tap to try again.", color = c.destructive)
@@ -574,7 +575,7 @@ private fun kotlinx.coroutines.CoroutineScope.launchLoad(model: ThreadModel) {
 }
 
 @Composable
-private fun ColumnScope.Empty(error: String?, online: Boolean, computer: String, onRetry: () -> Unit) {
+private fun ColumnScope.Empty(error: String?, link: LinkState, computer: String, onRetry: () -> Unit) {
     val c = RelayTheme.colors
     Column(
         Modifier.weight(1f).fillMaxWidth().padding(24.dp),
@@ -582,11 +583,13 @@ private fun ColumnScope.Empty(error: String?, online: Boolean, computer: String,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when {
-            error != null -> {
+            link == LinkState.Online && error != null -> {
                 Text(error, color = c.mutedForeground, textAlign = TextAlign.Center)
                 Button("Try again", onClick = onRetry)
             }
-            !online -> Text(
+            // Still connecting isn't a failure yet: wait for it rather than saying the copy is missing.
+            link == LinkState.Connecting -> Spinner(color = c.mutedForeground)
+            link != LinkState.Online -> Text(
                 "This thread hasn’t been opened on this phone, so there’s no copy to read until $computer is back.",
                 color = c.mutedForeground,
                 textAlign = TextAlign.Center,

@@ -37,6 +37,7 @@ class ThreadModel(
     private val fetch: suspend (RemoteChat?, Int) -> RemoteChat? = { known, history ->
         remote.client.value?.chat(id, known, history)
     },
+    private val linkUp: () -> Boolean = { remote.status.value.state == LinkState.Online },
 ) {
     private val computer = remote.active.value
     private val _thread = MutableStateFlow(cache.now(computer, id))
@@ -82,6 +83,8 @@ class ThreadModel(
     private suspend fun fetchOnce() {
         val history = _history.value
         val request = ++requestSequence
+        // A fetch sent while still connecting fails for that alone; the connection line already says so.
+        val upWhenAsked = linkUp()
         try {
             val started = stamp()
             val asked = _thread.value
@@ -105,7 +108,8 @@ class ThreadModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _error.value = e.message ?: e.toString()
+            val linkStayedUp = upWhenAsked && linkUp()
+            if (linkStayedUp) _error.value = e.message ?: e.toString()
             historyFailed(request, history)
         }
     }

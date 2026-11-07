@@ -20,7 +20,7 @@ class ThreadModelHistoryTest {
     @get:Rule val folder = TemporaryFolder()
     private val thread = RemoteChat("thread", "project", "Sample", scope = ChatScope("project"))
 
-    private fun model(fetch: suspend (RemoteChat?, Int) -> RemoteChat?): ThreadModel {
+    private fun model(linkUp: () -> Boolean = { true }, fetch: suspend (RemoteChat?, Int) -> RemoteChat?): ThreadModel {
         val remote = Remote(
             CredentialStore(folder.newFolder(), object : SecretBox {
                 override fun seal(plain: ByteArray) = plain
@@ -29,7 +29,7 @@ class ThreadModelHistoryTest {
             OfflineCache(folder.newFolder()), ComputerSeen(folder.root.resolve("seen.json")),
             "test", deviceName = "Test phone", warn = { _, _ -> },
         )
-        return ThreadModel(remote, thread.id, ThreadCache(folder.newFolder()), fetch)
+        return ThreadModel(remote, thread.id, ThreadCache(folder.newFolder()), fetch, linkUp)
     }
 
     @Test fun failedPageRetriesTheSameAmountThenSuccessfulPageAllowsProgress() = runTest {
@@ -60,6 +60,20 @@ class ThreadModelHistoryTest {
         assertNull(model.error.value)
         assertEquals(listOf(Bridge.REMOTE_HISTORY, Bridge.REMOTE_HISTORY * 2, Bridge.REMOTE_HISTORY * 2), amounts)
         assertEquals(Bridge.REMOTE_HISTORY * 3, model.nextHistory)
+    }
+
+    @Test fun fetchFailingWhileStillConnectingIsNoRefreshError() = runTest {
+        var up = false
+        val model = model(linkUp = { up }) { _, _ -> error("Not connected") }
+        model.load()
+        assertNull(model.error.value)
+        assertFalse(model.historyResult.value!!.succeeded)
+        // Came up mid-fetch: the failure still belongs to the attempt sent while connecting.
+        val midway = model(linkUp = { up }) { _, _ -> up = true; error("Connection lost") }
+        midway.load()
+        assertNull(midway.error.value)
+        midway.load()
+        assertEquals("Connection lost", midway.error.value)
     }
 
     @Test fun offlineResponseCompletesWithFailureWithoutInventingARefreshError() = runTest {

@@ -392,6 +392,8 @@ final class Connection {
         openSaved(id)
         let fetched = OutboxClock.stamp()
         let asked = threads[id]
+        // A fetch sent while still connecting fails for that alone; the connection line already says so.
+        let upWhenAsked = status.state == .online
         do {
             let chat: RemoteChat
             do {
@@ -409,7 +411,8 @@ final class Connection {
             took(id, merged, fetched: fetched)
         } catch {
             log.error("Couldn't load thread \(id, privacy: .public): \(String(describing: error), privacy: .public)")
-            loadErrors[id] = "Couldn't load this thread: \(error)"
+            let linkStayedUp = upWhenAsked && status.state == .online
+            if linkStayedUp { loadErrors[id] = "Couldn't load this thread: \(error)" }
         }
     }
 
