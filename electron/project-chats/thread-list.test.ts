@@ -4,6 +4,8 @@ import { ThreadList } from "./thread-list";
 import type { ChatCore } from "./core";
 import { ActiveTurns } from "./active";
 import type { ChatSummary, ProjectChatSend } from "../../shared/projects";
+import type { HandoffTriage } from "../../shared/handoff-triage";
+import { chatActivitySection } from "../../shared/chat-activity";
 
 it("counts blocking requests from helpers even when the parent keeps running", () => {
   const parent: ChatSummary = {
@@ -129,3 +131,44 @@ it("keeps settling, pending work and remote approval state in a batch", () => {
   });
   expect(summaries.get("away")?.autoSettled).toBeUndefined();
 });
+
+it.each([
+  [{ updated: 100, settledAt: 101 }, "settled"],
+  [{ updated: 100, settledAt: 100, autoSettled: true }, "settled"],
+  [{ updated: 100, unsettledAt: 102 }, "active"],
+] as const)(
+  "uses remote activity marks with their own clock: %j",
+  (triage, section) => {
+    const chat: ChatSummary = {
+      id: "remote",
+      projectId: "p",
+      title: "Remote work",
+      scope: { kind: "project" },
+      created: 1,
+      updated: Date.now(),
+      settledAt: Date.now(),
+      snoozedUntil: Date.now() + 3_600_000,
+      markedUnread: true,
+      sentTo: {
+        id: "handoff",
+        computerId: "other",
+        computer: "Other computer",
+        state: "away",
+        live: true,
+        at: 1,
+      },
+    };
+    const core = {
+      store: { get: () => ({ chats: [chat] }) },
+      prefs: () => ({ ...defaultPrefs, autoSettleDays: 0 }),
+      projects: { get: () => ({ settings: {} }) },
+      active: new ActiveTurns(() => {}),
+      sessions: { pending: () => [], onPending: () => () => {} },
+      away: new Map([[chat.id, { triage: triage as HandoffTriage }]]),
+    } as unknown as ChatCore;
+    const [summary] = new ThreadList(core).list("p");
+    expect(chatActivitySection(summary!, Date.now())).toBe(section);
+    expect(summary!.snoozedUntil).toBeUndefined();
+    expect(summary).toMatchObject({ updated: 100, markedUnread: true });
+  },
+);

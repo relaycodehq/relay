@@ -12,11 +12,14 @@ import {
   type HeldSend,
 } from "../../shared/handoff";
 import {
+  chatTriageSchema,
   projectChatSendSchema,
   type ChatSummary,
+  type ChatTriage,
   type ProjectChatSend,
 } from "../../shared/projects";
 import { errorMessage } from "../../shared/error-message";
+import { sharedHandoffTriage } from "../../shared/handoff-triage";
 import { parseWorkspaceId } from "../../shared/workspaces";
 import type { Store } from "../app/store";
 import type { ProjectChats } from "../project-chats";
@@ -96,6 +99,10 @@ export class HandoffForwarding {
     )
       return false;
     const chat = this.liveAwayIn(args[0]);
+    if (method === "triageProjectChat") {
+      const action = chatTriageSchema.safeParse(args[1]);
+      if (!action.success || !sharedHandoffTriage(action.data)) return false;
+    }
     return !!chat && (liveAway(chat) || setupMethods.has(method));
   }
 
@@ -115,6 +122,8 @@ export class HandoffForwarding {
     const chatId = chat.id;
     const sentTo = chat.sentTo!;
     if (inSetup(chat)) return this.toSetup(chat, method, args);
+    if (method === "triageProjectChat")
+      return this.triage(chat, chatTriageSchema.parse(args[1]));
     if (hereOnly(method))
       throw new Error(
         `This thread's files are on ${sentTo.computer}; the copy here is as it left.`,
@@ -194,6 +203,33 @@ export class HandoffForwarding {
     } finally {
       this.flushing.delete(chatId);
     }
+  }
+
+  /** Shelf actions run on the thread's computer; undo never changes its local archive mark. */
+  private async triage(chat: ChatSummary, action: ChatTriage) {
+    if (action.kind === "restore") {
+      if (chat.archivedAt !== action.from.archivedAt)
+        throw new Error(
+          "This thread changed since, so there's nothing to undo.",
+        );
+      const { archivedAt: _from, ...from } = action.from;
+      const { archivedAt: _to, ...to } = action.to;
+      action = { kind: "restore", from, to };
+    }
+    const sentTo = chat.sentTo!;
+    const summary = (await this.callThere(
+      sentTo.computerId,
+      sentTo.id,
+      "triageProjectChat",
+      [chat.id, action],
+    )) as ChatSummary;
+    this.chats.liveHandoff.triaged(chat.id, summary);
+    const mirrored = this.chats
+      .list(chat.projectId)
+      .find((c) => c.id === chat.id);
+    if (!mirrored)
+      throw new Error("This thread was removed while its action ran.");
+    return mirrored;
   }
 
   /**
@@ -281,7 +317,9 @@ export class HandoffForwarding {
       throw new Error(`${sentTo.computer} sent the image back unreadable.`);
     await this.chats.files
       .keepImage(...args, image)
-      .catch((e) => console.warn("A thread's image from there wasn't kept:", e));
+      .catch((e) =>
+        console.warn("A thread's image from there wasn't kept:", e),
+      );
     return image;
   }
 

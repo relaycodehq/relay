@@ -20,7 +20,7 @@ import { PhoneRemote } from "../remote/phone-remote";
 import { Computers } from "./computers";
 import { ProjectAdding } from "../project-add";
 import { savePaste, setPastesRoot, writeUploadChunk } from "../drafts";
-import type { ChatMessage } from "../../shared/projects";
+import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { NewsItem } from "../../shared/thread-news";
 
 type ChatEvent = Parameters<ConstructorParameters<typeof ProjectChats>[3]>[0];
@@ -45,6 +45,7 @@ import { defaultAISettings } from "../../shared/settings";
 import { RemoteClient } from "../../shared/remote-client";
 import { parsePairingUrl } from "../../shared/remote";
 import { fakeCli } from "../../tests/fixtures/fake-cli";
+import { chatActivitySection, triageState } from "../../shared/chat-activity";
 import {
   claudeTurns,
   writeClaudeSession,
@@ -2645,6 +2646,102 @@ it("settles and snoozes the other computer's own thread there, from here", async
     mini.chats.list(mini.projectId).find((c) => c.id === own.id)?.snoozedUntil,
   ).toBe(until);
 });
+
+async function controlledRemoteThread(kind: "handed-off" | "remote-owned") {
+  if (kind === "handed-off") {
+    const pair = await liveThread();
+    const here = { projectId: pair.laptop.projectId, chatId: pair.thread.id };
+    await vi.waitFor(async () =>
+      expect(await mirrored(pair.laptop.chats, here.chatId, pair.kept)).toEqual(
+        await writtenThere(pair.mini, pair.there),
+      ),
+    );
+    return { ...pair, here };
+  }
+  const pair = await pairedComputers();
+  const { mini, sender, computerId } = pair;
+  const own = await mini.chats.create(mini.projectId, { kind: "project" });
+  await mini.chats.send(own.id, input("@codex Tidy the README"));
+  await finished(mini.chats, own.id, 2);
+  const here = await sender.threads.open(computerId, own.id);
+  return { ...pair, here, there: own.id };
+}
+
+it.each(["handed-off", "remote-owned"] as const)(
+  "syncs settlement in both directions for a %s thread, including reconnects and undo",
+  async (kind) => {
+    const { laptop, mini, sender, computers, computerId, here, there } =
+      await controlledRemoteThread(kind);
+    const summary = () =>
+      laptop.chats.list(here.projectId).find((c) => c.id === here.chatId)!;
+    const section = () => chatActivitySection(summary(), Date.now());
+    const remoteSection = () =>
+      chatActivitySection(
+        mini.chats.list(mini.projectId).find((c) => c.id === there)!,
+        Date.now(),
+      );
+    await vi.waitFor(() => expect(section()).toBe("active"));
+
+    await mini.chats.triage(there, { kind: "settle" });
+    await vi.waitFor(() => expect(section()).toBe("settled"));
+    const before = triageState(summary());
+    expect(
+      sender.forwards("triageProjectChat", [here.chatId, { kind: "unsettle" }]),
+    ).toBe(true);
+    const after = (await sender.forward("triageProjectChat", [
+      here.chatId,
+      { kind: "unsettle" },
+    ])) as ChatSummary;
+    expect(after).toMatchObject({ id: here.chatId, projectId: here.projectId });
+    expect(remoteSection()).toBe("active");
+    expect(section()).toBe("active");
+    await sender.forward("triageProjectChat", [
+      here.chatId,
+      { kind: "restore", from: triageState(after), to: before },
+    ]);
+    expect(remoteSection()).toBe("settled");
+    expect(section()).toBe("settled");
+
+    computers.close();
+    await mini.chats.triage(there, { kind: "unsettle" });
+    await computers.start();
+    await vi.waitFor(() => expect(computers.status(computerId)).toBe("online"));
+    await vi.waitFor(() => expect(section()).toBe("active"));
+    computers.close();
+    await mini.chats.triage(there, { kind: "settle" });
+    await computers.start();
+    await vi.waitFor(() => expect(computers.status(computerId)).toBe("online"));
+    await vi.waitFor(() => expect(section()).toBe("settled"));
+
+    await sender.forward("sendProjectChat", [
+      here.chatId,
+      input("@codex One more thing"),
+    ]);
+    await finished(mini.chats, there);
+    await vi.waitFor(() => expect(section()).toBe("active"));
+    expect(remoteSection()).toBe("active");
+
+    const until = Date.now() + 3_600_000;
+    await sender.forward("triageProjectChat", [
+      here.chatId,
+      { kind: "snooze", until },
+    ]);
+    expect(section()).toBe("snoozed");
+    expect(remoteSection()).toBe("snoozed");
+    await mini.chats.triage(there, { kind: "wake" });
+    await vi.waitFor(() => expect(section()).toBe("active"));
+    for (const action of [
+      { kind: "archive" },
+      { kind: "unread" },
+      { kind: "pin", pinned: true },
+      { kind: "auto-settle", enabled: false },
+      { kind: "restore", from: { archivedAt: 10 }, to: {} },
+    ])
+      expect(sender.forwards("triageProjectChat", [here.chatId, action])).toBe(
+        false,
+      );
+  },
+);
 
 it("shows a page the other computer's thread showed, fetched from there and kept here", async () => {
   const { laptop, mini, sender, computerId, computers } =

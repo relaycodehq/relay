@@ -3,9 +3,10 @@ import type { ApiMethod } from "./types";
 
 /**
  * Calls on a thread, its id first, that a live handoff runs on the computer
- * the thread is on. The rest (reading it, triage, notes, its name) stay here.
+ * the thread is on. Reading it, archiving, notes and its name stay here.
  */
 export const handoffChatMethods = [
+  "triageProjectChat",
   "sendProjectChat",
   "resumeProjectChat",
   "compactProjectChat",

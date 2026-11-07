@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { agentProviderSchema, type AgentProvider } from "./agents";
+import type { HandoffTriage } from "./handoff-triage";
 import type { UpdateState } from "./updates";
 import type {
   AgentActivity,
@@ -136,6 +137,8 @@ export type HandoffLive = Pick<
     runningFor?: number;
     waiting?: true;
     queuePaused?: true;
+    /** Activity marks and the clock they are compared against, from the thread's computer. */
+    triage?: HandoffTriage;
   };
 
 /** The thread runs on the computer it was handed to and is followed live from here. */

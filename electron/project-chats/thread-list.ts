@@ -4,7 +4,8 @@ import type {
   ChatSummary,
   ProjectSettings,
 } from "../../shared/projects";
-import { inSetup } from "../../shared/handoff";
+import { inSetup, liveAway } from "../../shared/handoff";
+import { handoffTriage } from "../../shared/handoff-triage";
 import { working, type Turn } from "../../shared/turns";
 import type { AwayLive, ChatCore } from "./core";
 import { ListeningWork } from "./listening-work";
@@ -27,11 +28,13 @@ function awaySummary(
     stopped,
     limitResume,
     goal,
+    triage,
   }: AwayLive,
 ): ChatSummary {
   const { asking: _a, stopped: _s, limitResume: _l, goal: _g, ...rest } = c;
   return {
     ...rest,
+    ...(liveAway(c) && triage ? handoffTriage(triage) : {}),
     ...(running
       ? { running, runningSince, runningAgents, waiting: !!waiting }
       : {}),
@@ -77,6 +80,9 @@ export class ThreadList {
     const now = Date.now();
     const { days, onCommit } = this.settling(settings);
     return this.live(projectId).map((listed) => {
+      // The thread's computer decides its shelves, including automatic settling.
+      if (liveAway(listed) && this.core.away?.get(listed.id)?.triage)
+        return listed;
       const settledAt = autoSettledAt(listed, now, days, onCommit);
       return settledAt
         ? { ...listed, settledAt, autoSettled: true as const }

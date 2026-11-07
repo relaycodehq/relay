@@ -14,6 +14,7 @@ import type {
   ProjectChatSend,
 } from "../../shared/projects";
 import { promptTitle } from "../../shared/prompt-title";
+import { handoffTriage } from "../../shared/handoff-triage";
 import { sentSettingsOf } from "../../shared/projects";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
@@ -191,6 +192,7 @@ export class LiveHandoff {
     const listed = this.list(chat.projectId).find((c) => c.id === id);
     const requests = this.core.active.requests(id);
     return structuredClone({
+      triage: handoffTriage(listed ?? chatSummary(chat)),
       ...(listed?.running
         ? {
             running: true as const,
@@ -300,6 +302,15 @@ export class LiveHandoff {
     if (next) away.set(id, next);
     else away.delete(id);
     this.core.storage.chatChanged(id);
+  }
+
+  /** A shelf action completed there: show its result before the live push arrives. */
+  triaged(id: string, summary: ChatSummary) {
+    const away = this.core.away;
+    if (away) {
+      away.set(id, { ...away.get(id), triage: handoffTriage(summary) });
+      this.core.storage.chatChanged(id);
+    }
   }
 
   /** Sends that wait for the computer the thread is live on. */
