@@ -18,7 +18,13 @@ import {
 } from "../../../shared/project-folders";
 import { api } from "../../lib/api";
 import { ghostKey } from "../../../shared/import-offer";
-import { realBefore } from "../import-offer/import-plan";
+import {
+  movePlanned,
+  plannedProjects,
+  realBefore,
+  regroupPlanned,
+  useShownPlan,
+} from "../import-offer/import-plan";
 import { errorMessage } from "../../../shared/error-message";
 import { groupKey, type SidebarFolds } from "./useSidebarFolds";
 
@@ -198,4 +204,25 @@ export function useProjectGroups(
     reveal: (id: string) =>
       void api.revealProject(id).catch((e) => setError(errorMessage(e))),
   };
+}
+
+/** The projects' groups, with the open thread's import offer standing its new projects in the tree. */
+export function useProjectTree(
+  projects: Project[],
+  folds: SidebarFolds,
+  setError: (message: string | undefined) => void,
+) {
+  const plan = useShownPlan();
+  const treeProjects = plan ? plannedProjects(projects, plan) : projects;
+  const groups = useProjectGroups(
+    treeProjects,
+    folds,
+    setError,
+    plan && {
+      move: (id, folder, before) =>
+        movePlanned(plan, treeProjects, id, folder, before),
+      regroup: (from, to) => regroupPlanned(plan, from, to),
+    },
+  );
+  return { plan, treeProjects, groups };
 }

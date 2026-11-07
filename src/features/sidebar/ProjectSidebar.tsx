@@ -15,14 +15,8 @@ import { useNow } from "../../lib/useNow";
 import { useSidebarView } from "./useSidebarView";
 import { useSidebarFolds } from "./useSidebarFolds";
 import { useShelves } from "./useShelves";
-import { useProjectGroups } from "./useProjectGroups";
-import {
-  movePlanned,
-  plannedChats,
-  plannedProjects,
-  regroupPlanned,
-  useShownPlan,
-} from "../import-offer/import-plan";
+import { useProjectTree } from "./useProjectGroups";
+import { plannedChats } from "../import-offer/import-plan";
 import { useProjectDrag } from "./useProjectDrag";
 import { useSidebarThreads } from "./useSidebarThreads";
 import { useUnread } from "./useUnread";
@@ -111,21 +105,7 @@ export function ProjectSidebar({
   const shelves = useShelves();
   const [error, setError] = useState<string>();
   const dismissError = () => setError(undefined);
-  // The open thread's import offer stands its new projects in the tree.
-  const plan = useShownPlan();
-  const treeProjects = plan
-    ? plannedProjects(realProjects, plan)
-    : realProjects;
-  const groups = useProjectGroups(
-    treeProjects,
-    folds,
-    setError,
-    plan && {
-      move: (id, folder, before) =>
-        movePlanned(plan, treeProjects, id, folder, before),
-      regroup: (from, to) => regroupPlanned(plan, from, to),
-    },
-  );
+  const { plan, groups } = useProjectTree(realProjects, folds, setError);
   const drag = useProjectDrag(groups, folds.setOpen);
   const autoSettleDays = useQuery({
     queryKey: ["auto-settle-days"],
