@@ -1,4 +1,4 @@
-import { access } from "node:fs/promises";
+import { access, open } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import {
   threadWorktree,
@@ -10,6 +10,8 @@ import {
   answerImagePaths,
   answerVideoPaths,
   embedsImages,
+  videoPartBytes,
+  type VideoPart,
 } from "../../shared/answer-images";
 import {
   dropRevert,
@@ -106,6 +108,25 @@ export class TurnFiles {
     )
       throw new Error("This answer doesn't play that video.");
     return linkedFileOnDisk(path);
+  }
+
+  /** A piece of the video the answer `messageId` plays, for a phone to download it by. */
+  async videoPart(
+    chatId: string,
+    messageId: string,
+    path: string,
+    offset: number,
+  ): Promise<VideoPart> {
+    const file = await open(await this.turnVideoPath(chatId, messageId, path));
+    try {
+      const { size } = await file.stat();
+      const length = Math.max(0, Math.min(videoPartBytes, size - offset));
+      const chunk = Buffer.alloc(length);
+      const { bytesRead } = await file.read(chunk, 0, length, offset);
+      return { size, data: chunk.subarray(0, bytesRead).toString("base64") };
+    } finally {
+      await file.close();
+    }
   }
 
   async readImage(chatId: string, messageId: string, path: string) {

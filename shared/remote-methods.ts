@@ -43,6 +43,7 @@ export const phoneDesktopMethods = [
   "closeWatchNote",
   "projectChatImage",
   "projectChatReadImage",
+  "projectChatVideoPart",
   "projectChatQueuedImages",
   "threadNotes",
   "tickThreadNote",

@@ -632,6 +632,14 @@ final class Connection {
 
     var canShrinkImages: Bool { (overview?.bridge ?? 1) >= Bridge.image }
 
+    /// Binds an answer video's piece reads to this connection, for `VideoFiles` to download it by.
+    func videoPartRequest(chatId: String, messageId: String, path: String) throws -> @Sendable (Int64) async throws -> VideoPart {
+        guard let client else { throw PairingError("Not connected.") }
+        return { try await client.videoPart(chatId: chatId, messageId: messageId, path: path, offset: $0) }
+    }
+
+    var canPlayVideos: Bool { (overview?.bridge ?? 1) >= Bridge.video }
+
     /// An unused Scratchpad folder, or a fresh one: where a new Scratchpad chat starts.
     /// Whether the computer tunnels its localhost to the phone's browser.
     var canTunnel: Bool { overview?.tunnels == true }

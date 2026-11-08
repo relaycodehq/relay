@@ -2,7 +2,9 @@
 // version may use it. Bump `remoteBridgeVersion` when the bridge gains calls.
 
 /** Bumped when the bridge gains calls; a phone asks for an update of an older desktop. */
-export const remoteBridgeVersion = 41;
+export const remoteBridgeVersion = 42;
+/** Phones may download a video an answer plays, a piece at a time (`projectChatVideoPart`). */
+export const videoBridge = 42;
 /**
  * A paired computer makes a new thread of its own in a project it hosts, for
  * the computer asking to follow and write in (`newThreadInProject`). A thread

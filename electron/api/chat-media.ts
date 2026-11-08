@@ -32,6 +32,11 @@ export function chatMediaHandlers({ projectChats }: ApiContext) {
         return mediaUrl(full, dirname(full));
       },
     ),
+    projectChatVideoPart: takes(
+      [idSchema, idSchema, mediaPathSchema, z.number().int().min(0)],
+      (id, messageId, path, offset) =>
+        projectChats.files.videoPart(id, messageId, path, offset),
+    ),
     projectChatPreviewShot: takes(
       [idSchema, messageIdSchema],
       (id, messageId) => projectChats.files.previewShot(id, messageId),

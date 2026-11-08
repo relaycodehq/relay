@@ -12,7 +12,8 @@
 // streamed answer back, and dictation hears the same sentence whatever is said.
 // Either way the first project runs a stand-in dev server on a free 127.0.0.1
 // port, which Sites lists as "Dev server" and the phone's tunnel opens.
-import { readFileSync, watchFile } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, watchFile } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
@@ -621,6 +622,26 @@ if (seeded) {
     answered,
   ]);
 }
+// An answer that plays a short clip, made with ffmpeg when it's here; phones download it in pieces.
+const clip = join(tmpdir(), "relay-stand-in-run.mp4");
+if (seeded && !existsSync(clip)) {
+  try {
+    execFileSync("ffmpeg", ["-loglevel", "error", "-f", "lavfi", "-i", "testsrc=duration=4:size=640x360:rate=30", "-pix_fmt", "yuv420p", clip]);
+  } catch {
+    console.error("No ffmpeg, so no video thread.");
+  }
+}
+if (seeded && existsSync(clip)) {
+  thread(relay, "Record the gameplay", 6, [
+    message("user", "Record a short run and show me.", 8),
+    message("assistant", `Here's the run:\n\n![the run](${clip})\n\nIt holds 30fps the whole way.`, 6, { ended: now - 6 * min }),
+  ]);
+}
+const videoPart = async (offset: number) => {
+  const whole = await readFile(clip);
+  return { size: whole.length, data: whole.subarray(offset, offset + 1024 * 1024).toString("base64") };
+};
+
 const pictureOf = (key: string) => {
   const url = pictures.get(key);
   if (!url) throw new Error("That image isn't there any more.");
@@ -708,6 +729,7 @@ const host = {
     if (method === "projectChatQueuedImages") return [];
     if (method === "projectChatImage") return pictureOf(args[1]);
     if (method === "projectChatReadImage") return pictureOf(args[2]);
+    if (method === "projectChatVideoPart") return videoPart(args[3]);
     if (method === "projectChatPreviewShot") return pictureOf(`shot:${args[1]}`);
     if (method === "triageProjectChat") return triaged(args[0], args[1]);
     if (method === "markProjectChatSeen") seenUpTo(args[0], args[1]);

@@ -54,6 +54,21 @@ private func matches(_ text: String, _ pattern: String) -> Bool {
 /// The image file `src` of an answer's `![alt](src)` points at, or nil when it isn't one on
 /// that computer. Relative paths resolve against the thread's folder.
 public func localImagePath(_ src: String, root: String) -> String? {
+    localPath(src, root: root).flatMap { isImagePath($0) ? $0 : nil }
+}
+
+/// A video Relay can play, by its name.
+public func isVideoPath(_ path: String) -> Bool {
+    path.range(of: #"\.(?:mp4|m4v|webm|mov)$"#, options: [.regularExpression, .caseInsensitive]) != nil
+}
+
+/// The video file an answer's `![alt](src)` plays, or nil when it isn't one on that computer.
+public func localVideoPath(_ src: String, root: String) -> String? {
+    localPath(src, root: root).flatMap { isVideoPath($0) ? $0 : nil }
+}
+
+/// The file on the computer `src` points at, or nil when it's remote.
+private func localPath(_ src: String, root: String) -> String? {
     var path = src.trimmingCharacters(in: .whitespacesAndNewlines)
     let drive = #"^[a-z]:[\\/]"#
     if matches(path, "^file://") {
@@ -69,7 +84,7 @@ public func localImagePath(_ src: String, root: String) -> String? {
     }
     // A file URL's path keeps a slash before the drive: `/C:/Users/…`.
     if matches(path, #"^/[a-z]:[\\/]"#) { path.removeFirst() }
-    if matches(path, drive) { return isImagePath(path) ? path : nil }
+    if matches(path, drive) { return path }
     let joined = path.hasPrefix("/") ? path : "\(root)/\(path)"
     let windows = matches(joined, drive)
     // A drive is the top; `..` can't climb past it.
@@ -82,8 +97,7 @@ public func localImagePath(_ src: String, root: String) -> String? {
             parts.append(String(part))
         }
     }
-    let full = windows ? parts.joined(separator: "\\") : "/" + parts.joined(separator: "/")
-    return isImagePath(full) ? full : nil
+    return windows ? parts.joined(separator: "\\") : "/" + parts.joined(separator: "/")
 }
 
 /// The local image files an answer embeds, so only those can be read for it.

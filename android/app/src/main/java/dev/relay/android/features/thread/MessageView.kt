@@ -33,12 +33,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dev.relay.android.features.images.AnswerImage
+import dev.relay.android.features.images.AnswerVideo
 import dev.relay.android.features.images.ImageSource
 import dev.relay.android.features.images.LightboxImage
 import dev.relay.android.features.images.MessageImageList
 import dev.relay.android.features.images.MessageImages
 import dev.relay.android.features.images.imageFailed
 import dev.relay.android.features.images.localImagePath
+import dev.relay.android.features.images.localVideoPath
 import dev.relay.android.features.images.messageImages
 import dev.relay.android.features.markdown.FileLinkTarget
 import dev.relay.android.features.markdown.MarkdownBlock
@@ -162,8 +164,10 @@ internal fun MessageView(
     val openImage = { source: ImageSource -> view(images.all, source) }
     val showImage: ShowImage = remember(chatId, m.id, m.status, root, remote, images, computer) {
         val show: ShowImage = { src, alt ->
+            val video = root?.let { localVideoPath(src, it) }
             val path = root?.let { localImagePath(src, it) }
-            if (path != null && remote != null) AnswerImage(remote, ImageSource.Read(chatId, m.id, path), alt, openImage,
+            if (video != null && remote != null) AnswerVideo(remote, chatId, m.id, video, alt, ready = m.status != "streaming")
+            else if (path != null && remote != null) AnswerImage(remote, ImageSource.Read(chatId, m.id, path), alt, openImage,
                 ready = m.status != "streaming")
         }
         show

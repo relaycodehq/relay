@@ -8,6 +8,17 @@ export const isImagePath = (path: string) =>
 export const isVideoPath = (path: string) =>
   /\.(?:mp4|m4v|webm|mov)$/i.test(path);
 
+/** A piece of an answer's video, for a phone that downloads it before playing. */
+export interface VideoPart {
+  /** The whole file's size in bytes. */
+  size: number;
+  /** Up to `videoPartBytes` from the offset asked for, base64. */
+  data: string;
+}
+
+/** How much of a video one `projectChatVideoPart` call carries, before base64. */
+export const videoPartBytes = 1024 * 1024;
+
 /** Tells an agent its answers can show pictures; they rarely think to on their own. */
 export const ANSWER_IMAGE_PROMPT =
   "To show the user a PNG, JPEG, GIF or WebP file on this computer, like a screenshot you took or an image they asked to see, embed it in your reply as ![short description](/absolute/path.png); it renders inline. Wrap a path with spaces in angle brackets: ![shot](</path/with spaces/shot.png>). An MP4, WebM or MOV video embeds the same way and plays inline. A screenshot tool that returned only the picture left no file: have it save one (some take save_to_disk) or write the image to a file yourself first. Save screenshots in the system temp folder, never inside the project, so they don't show up in the user's changes. Web image URLs show only as links.";

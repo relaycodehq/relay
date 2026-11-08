@@ -164,6 +164,9 @@ struct MessageView: View {
         guard let root else { return nil }
         let chatId = chatId, message = message
         return { image in
+            if let video = localVideoPath(image.source, root: root) {
+                return AnyView(AnswerVideo(chatId: chatId, messageId: message.id, path: video, alt: image.alt, ready: !message.streaming))
+            }
             guard !message.streaming, let path = localImagePath(image.source, root: root) else { return AnyView(EmptyView()) }
             return AnyView(
                 AnswerImage(source: .read(chatId: chatId, messageId: message.id, path: path), alt: image.alt, among: among))

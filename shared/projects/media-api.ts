@@ -1,3 +1,4 @@
+import type { VideoPart } from "../answer-images";
 import type { ProjectChatSend } from "./send";
 
 /** The pictures and videos a thread's messages hold, read or show. */
@@ -20,6 +21,16 @@ export interface ChatMediaApi {
     messageId: string,
     path: string,
   ): Promise<string>;
+  /**
+   * `videoPartBytes` of that video from `offset` (base64), and its whole size,
+   * for a phone that can't stream it from here.
+   */
+  projectChatVideoPart(
+    id: string,
+    messageId: string,
+    path: string,
+    offset: number,
+  ): Promise<VideoPart>;
   /** The thread's preview as the turn `messageId` left it, as a JPEG data URL. */
   projectChatPreviewShot(id: string, messageId: string): Promise<string>;
   /** Shows that image file in Finder. */

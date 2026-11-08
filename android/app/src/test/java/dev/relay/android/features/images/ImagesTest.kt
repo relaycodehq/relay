@@ -29,6 +29,13 @@ class ImagesTest {
         assertEquals("/work/relay/shots/my shot.webp", localImagePath("shots/my%20shot.webp", root))
     }
 
+    @Test fun tellsAnAnswersVideoFromItsImages() {
+        assertEquals("/tmp/clip.mp4", localVideoPath("/tmp/clip.mp4", root))
+        assertEquals("/work/relay/out/run.MOV", localVideoPath("out/run.MOV", root))
+        assertNull(localImagePath("/tmp/clip.mp4", root))
+        assertNull(localVideoPath("/tmp/shot.png", root))
+    }
+
     @Test fun resolvesOnAWindowsComputerToADrivePath() {
         val windows = "C:\\Users\\me\\proj"
         listOf(

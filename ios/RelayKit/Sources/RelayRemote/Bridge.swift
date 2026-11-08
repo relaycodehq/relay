@@ -40,6 +40,8 @@ public enum Bridge {
     public static let branchMoves = 37
     /// Threads come with only their latest turn's steps, and a finished turn's arrive when its fold opens (`messageSteps`).
     public static let stepsOnOpen = 38
+    /// Phones may download a video an answer plays, a piece at a time (`projectChatVideoPart`).
+    public static let video = 42
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22
@@ -56,6 +58,6 @@ public enum Bridge {
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
         "regenerateProjectChatTitle", "search", "pullCiStatus", "pullMergeReadiness", "mergePull",
-        "submitReview", "comment", "askSecondOpinion",
+        "submitReview", "comment", "askSecondOpinion", "projectChatVideoPart",
     ]
 }

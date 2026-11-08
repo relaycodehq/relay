@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { triageState } from "../../shared/chat-activity";
 import { applyChatPatch, type ChatSummary } from "../../shared/projects";
+import { videoPartBytes } from "../../shared/answer-images";
 import { ChatSummaryFeed } from "./chat-summaries";
 import * as titleHelpers from "../agents/thread-titles";
 import { readOnlyGitEnv } from "../agents/read-only-git";
@@ -611,6 +612,39 @@ it("keeps the images an answer shows as they were, also in a fork", async () => 
   const fork = await chats.get((await chats.fork(chat.id)).id);
   const copied = fork.messages.find((m) => m.body === answer.body)!;
   expect(await chats.files.readImage(fork.id, copied.id, shot)).toBe(shown);
+});
+
+it("hands out an answer's video in pieces, and no other file", async () => {
+  const chat = await chats.create(projectId, { kind: "project" });
+  const clip = join(root, "clip.mp4");
+  const bytes = Buffer.alloc(videoPartBytes + 10, 7);
+  await writeFile(clip, bytes);
+  await chats.send(
+    chat.id,
+    input(`@codex fixture echo: Here ![the run](${clip})`),
+  );
+  const answer = await vi.waitFor(async () => {
+    const last = (await chats.get(chat.id)).messages.at(-1)!;
+    expect(last).toMatchObject({ role: "assistant", status: "complete" });
+    return last;
+  });
+  const first = await chats.files.videoPart(chat.id, answer.id, clip, 0);
+  const rest = await chats.files.videoPart(
+    chat.id,
+    answer.id,
+    clip,
+    videoPartBytes,
+  );
+  expect(first.size).toBe(bytes.length);
+  expect(
+    Buffer.concat([
+      Buffer.from(first.data, "base64"),
+      Buffer.from(rest.data, "base64"),
+    ]),
+  ).toEqual(bytes);
+  await expect(
+    chats.files.videoPart(chat.id, answer.id, join(root, "other.mp4"), 0),
+  ).rejects.toThrow("doesn't play that video");
 });
 
 it("recovers an interrupted on-disk stream without discarding its partial answer or restarting the agent", async () => {

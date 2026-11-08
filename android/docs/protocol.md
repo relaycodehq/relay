@@ -240,6 +240,7 @@ toServer = okm[0..32), toClient = okm[32..64)
 | 36 | `secondOpinionBridge` | `askSecondOpinion`, `sendSecondOpinion` |
 | 37 | `branchMovesBridge` | `projectChatWorkOn`: move a started thread to any branch |
 | 38 | `stepsOnOpenBridge` | `chat`'s `steps:"latest"` folds finished turns (`stepsLeftOut`); `messageSteps` fetches one's steps |
+| 42 | `videoBridge` | `desktop("projectChatVideoPart", [chatId, messageId, path, offset])` → `{size, data}`: an answer's video, 1MB (`videoPartBytes`) of base64 at a time, for the phone to download and play |
 
 ### ClientFrame (phone → desktop)
 - `{t:"pair", code, device, kind?:"computer", bridge?}`. Phones omit `kind`.

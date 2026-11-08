@@ -7,6 +7,13 @@ import Testing
 struct ImagesTests {
     let root = "/work/relay"
 
+    @Test func tellsAnAnswersVideoFromItsImages() {
+        #expect(localVideoPath("/tmp/clip.mp4", root: root) == "/tmp/clip.mp4")
+        #expect(localVideoPath("out/run.MOV", root: root) == "/work/relay/out/run.MOV")
+        #expect(localImagePath("/tmp/clip.mp4", root: root) == nil)
+        #expect(localVideoPath("/tmp/shot.png", root: root) == nil)
+    }
+
     @Test func resolvesTheFormsAnAgentWritesAnImageIn() {
         #expect(localImagePath("/tmp/after.png", root: root) == "/tmp/after.png")
         #expect(localImagePath("docs/shot.png", root: root) == "/work/relay/docs/shot.png")

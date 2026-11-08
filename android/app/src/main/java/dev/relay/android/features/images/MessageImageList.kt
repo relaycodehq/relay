@@ -92,7 +92,15 @@ private fun decodeOrNull(text: String): String? {
  * The image file `src` of an answer's `![alt](src)` points at, or null when it
  * isn't one on this computer. Relative paths resolve against the thread's folder.
  */
-fun localImagePath(src: String, root: String): String? {
+fun localImagePath(src: String, root: String): String? = localPath(src, root)?.takeIf(::isImagePath)
+
+private val VIDEO_FILE = Regex("""\.(?:mp4|m4v|webm|mov)$""", RegexOption.IGNORE_CASE)
+
+/** The video file an answer's `![alt](src)` plays, or null when it isn't one on this computer. */
+fun localVideoPath(src: String, root: String): String? = localPath(src, root)?.takeIf { VIDEO_FILE.containsMatchIn(it) }
+
+/** The file on the computer `src` points at, or null when it's remote. */
+private fun localPath(src: String, root: String): String? {
     var path = src.trim()
     path = when {
         FILE_URL.containsMatchIn(path) ->
@@ -103,7 +111,7 @@ fun localImagePath(src: String, root: String): String? {
     }
     // A file URL's path keeps a slash before the drive: `/C:/Users/…`.
     if (SLASH_DRIVE.containsMatchIn(path)) path = path.substring(1)
-    if (DRIVE.containsMatchIn(path)) return path.takeIf(::isImagePath)
+    if (DRIVE.containsMatchIn(path)) return path
     val joined = if (path.startsWith("/")) path else "$root/$path"
     val windows = DRIVE.containsMatchIn(joined)
     // A drive is the top; `..` can't climb past it.
@@ -114,8 +122,7 @@ fun localImagePath(src: String, root: String): String? {
             if (parts.size > top) parts.removeAt(parts.lastIndex)
         } else if (part.isNotEmpty() && part != ".") parts += part
     }
-    val full = if (windows) parts.joinToString("\\") else "/" + parts.joinToString("/")
-    return full.takeIf(::isImagePath)
+    return if (windows) parts.joinToString("\\") else "/" + parts.joinToString("/")
 }
 
 private val SLASH_DRIVE = Regex("^/[a-z]:[\\\\/]", RegexOption.IGNORE_CASE)

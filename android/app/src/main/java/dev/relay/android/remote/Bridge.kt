@@ -19,6 +19,8 @@ object Bridge {
     const val BRANCH_MOVES = 37
     /** Threads come with only their latest turn's steps, and a finished turn's arrive when its fold opens (`messageSteps`). */
     const val STEPS_ON_OPEN = 38
+    /** Phones may download a video an answer plays, a piece at a time (`projectChatVideoPart`). */
+    const val VIDEO = 42
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11
@@ -61,7 +63,7 @@ object Bridge {
         "sendProjectChat", "createProjectChat", "projectGitAction", "projectCommitMessage",
         "projectMergePlan", "projectMergeBranch", "projectCiStatus", "providerUsage",
         "regenerateProjectChatTitle", "search", "pullCiStatus", "pullMergeReadiness", "mergePull",
-        "submitReview", "comment", "askSecondOpinion",
+        "submitReview", "comment", "askSecondOpinion", "projectChatVideoPart",
     )
 
     /** `phoneDesktopMethods`: the desktop's own calls a phone may make through `desktop`. */
@@ -73,6 +75,7 @@ object Bridge {
         "projectChatAgent", "stopProjectChatAgent", "triageProjectChat", "renameProjectChat",
         "regenerateProjectChatTitle", "markProjectChatSeen", "forkProjectChat", "rewindProjectTurn",
         "setLimitResume", "closeWatchNote", "projectChatImage", "projectChatReadImage",
+        "projectChatVideoPart",
         "projectChatQueuedImages", "threadNotes", "tickThreadNote", "removeThreadNote", "agentModels", "agentDefaults", "aiSettings", "newThreadAgent",
         "saveNewThreadAgent", "newThreadModels", "saveNewThreadModel", "newThreadRuntimeMode",
         "saveNewThreadRuntimeMode", "projectWorktree",
