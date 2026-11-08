@@ -1,6 +1,5 @@
 import { openPath } from "./open-path";
 import { existsSync } from "node:fs";
-import { dirname } from "node:path";
 import { shell } from "electron";
 import { z } from "zod";
 import { agentResponseSchema } from "../../shared/agent-modes";
@@ -21,9 +20,7 @@ import { workingPathSchema } from "../../shared/working-tree";
 import { workspaceId } from "../../shared/workspaces";
 import { rememberSent } from "../agents/new-thread-models";
 import { checkNewLinks } from "../projects/folder-inspect";
-import { mediaUrl } from "../media";
 import {
-  messageIdSchema,
   optional,
   takes,
   type ApiContext,
@@ -31,7 +28,6 @@ import {
 } from "./context";
 
 const agentIdSchema = z.string().min(1).max(200);
-const imagePathSchema = z.string().min(1).max(500);
 const branchSchema = z.string().trim().min(1).max(250);
 
 /** Project threads: their turns, agents, worktrees and sharing. */
@@ -225,40 +221,6 @@ export function chatHandlers(ctx: ApiContext) {
     ),
     stopProjectChatAgent: takes([idSchema, agentIdSchema], (id, agentId) =>
       projectChats.stopAgent(id, agentId),
-    ),
-    projectChatImage: takes([idSchema, idSchema], (id, imageId) =>
-      projectChats.files.image(id, imageId),
-    ),
-    projectChatQueuedImages: takes([idSchema, idSchema], (id, messageId) =>
-      projectChats.queuedImages(id, messageId),
-    ),
-    projectChatReadImage: takes(
-      [idSchema, idSchema, imagePathSchema],
-      (id, messageId, path) =>
-        projectChats.files.readImage(id, messageId, path),
-    ),
-    projectChatVideo: takes(
-      [idSchema, idSchema, imagePathSchema],
-      async (id, messageId, path) => {
-        const full = await projectChats.files.turnVideoPath(
-          id,
-          messageId,
-          path,
-        );
-        return mediaUrl(full, dirname(full));
-      },
-    ),
-    projectChatPreviewShot: takes(
-      [idSchema, messageIdSchema],
-      (id, messageId) => projectChats.files.previewShot(id, messageId),
-    ),
-    revealProjectChatReadImage: takes(
-      [idSchema, idSchema, imagePathSchema],
-      async (id, messageId, path) => {
-        shell.showItemInFolder(
-          await projectChats.files.revealImagePath(id, messageId, path),
-        );
-      },
     ),
     projectTurnDiff: takes(
       [idSchema, idSchema, workingPathSchema],

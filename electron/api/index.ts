@@ -7,6 +7,7 @@ import { openCodeHandlers } from "./opencode";
 import { agentToolHandlers } from "./agent-tools";
 import { accountHandlers as agentAccountHandlers } from "./accounts";
 import { chatHandlers } from "./chats";
+import { chatMediaHandlers } from "./chat-media";
 import { deepReviewHandlers } from "./deep-reviews";
 import { bugReportHandlers } from "./bug-reports";
 import { checkHandlers } from "./checks";
@@ -73,6 +74,7 @@ export function createDispatch(
     commitMessageHandlers(ctx),
     elsewhereHandlers(ctx),
     chatHandlers(ctx),
+    chatMediaHandlers(ctx),
     threadNoteHandlers(ctx),
     deepReviewHandlers(ctx),
     secondOpinionHandlers(ctx),

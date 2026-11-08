@@ -28,6 +28,7 @@ import type { ProjectChatPush } from "../chat-pushes";
 import type { NewsItem } from "../thread-news";
 import type { CommitDetail, CommitLog, HistoryScope } from "../history";
 import type { DirListing, FileInfo, FilePreview } from "../project-files";
+import type { ChatMediaApi } from "./media-api";
 import type {
   BranchPull,
   CreatedPullRequest,
@@ -82,6 +83,7 @@ export interface ProjectApi
     ProjectListApi,
     ProjectFoldersApi,
     ProjectChatApi,
+    ChatMediaApi,
     ThreadNotesApi,
     ProjectCouncilApi,
     ProjectWorktreeApi,
@@ -282,32 +284,6 @@ export interface ProjectChatApi {
   projectChatAgent(id: string, agentId: string): Promise<SubagentDetail | null>;
   /** Stops one agent; Claude hears it was stopped. */
   stopProjectChatAgent(id: string, agentId: string): Promise<void>;
-  projectChatImage(id: string, imageId: string): Promise<string>;
-  /** The screenshots of a queued or scheduled message, to take it back with them. */
-  projectChatQueuedImages(
-    id: string,
-    messageId: string,
-  ): Promise<NonNullable<ProjectChatSend["images"]>>;
-  /** An image file the agent read during the turn `messageId`, as a data URL. */
-  projectChatReadImage(
-    id: string,
-    messageId: string,
-    path: string,
-  ): Promise<string>;
-  /** Where the player streams a video the answer `messageId` embeds from. */
-  projectChatVideo(
-    id: string,
-    messageId: string,
-    path: string,
-  ): Promise<string>;
-  /** The thread's preview as the turn `messageId` left it, as a JPEG data URL. */
-  projectChatPreviewShot(id: string, messageId: string): Promise<string>;
-  /** Shows that image file in Finder. */
-  revealProjectChatReadImage(
-    id: string,
-    messageId: string,
-    path: string,
-  ): Promise<void>;
   /** One file as an agent turn left it, against how the turn found it. */
   projectTurnDiff(
     chatId: string,
