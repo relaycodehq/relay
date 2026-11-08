@@ -15,6 +15,7 @@ import type { ComposerAttachments } from "./useComposerAttachments";
 import type { NewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
 import type { HeldWrite } from "./write-gate";
+import { showWhileSending } from "./sending-messages";
 
 /** The message as it leaves: a side conversation leaves the thread's attachments waiting. */
 function outgoing(
@@ -93,10 +94,14 @@ export function useThreadSend({
         onSent();
       }
       return await write.run(async () => {
-        if (chat) {
-          await post(chat);
-          await refetch();
-        } else
+        // Shown until the refetch has it: right after a Stop, the send waits
+        // for the agent to let go.
+        if (chat)
+          await showWhileSending(chat.id, input, async () => {
+            await post(chat);
+            await refetch();
+          });
+        else
           await newThread(async (thread) => {
             await post(thread, startOn);
             clearDraftWorkspace(id);

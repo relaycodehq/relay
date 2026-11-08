@@ -28,6 +28,8 @@ import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
 import { HeldSends } from "./HeldSends";
+import { SendingMessages } from "./SendingMessages";
+import { useSendingMessages } from "./sending-messages";
 import { SideQuestion } from "./SideQuestion";
 import { ThreadSetup } from "./ThreadSetup";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
@@ -250,6 +252,7 @@ export function ThreadMessages({
   const held = history.data?.outbox?.filter(
     (h) => inView(h) && !listed.some((m) => m.id === h.input.id),
   );
+  const sending = useSendingMessages(chat?.id, history.data, root?.id);
   return (
     <div
       className="project-messages"
@@ -395,6 +398,14 @@ export function ThreadMessages({
           <HeldSends
             chat={chat}
             held={held}
+            projectRoot={worktree.folder}
+            onOpenFile={openFile}
+          />
+        )}
+        {chat && sending.length > 0 && (
+          <SendingMessages
+            chat={chat}
+            sending={sending}
             projectRoot={worktree.folder}
             onOpenFile={openFile}
           />
