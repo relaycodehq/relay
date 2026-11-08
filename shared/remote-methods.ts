@@ -251,6 +251,8 @@ export const slowPhoneMethods: readonly PhoneDesktopMethod[] = [
   "comment",
   // Makes a thread, maybe a worktree, and carries the question's screenshots.
   "askSecondOpinion",
+  // A megabyte of video, which a slow link takes longer than a quarter to carry.
+  "projectChatVideoPart",
 ];
 
 /** A desktop call's arguments and result, as the phone sees them. */
