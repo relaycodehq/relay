@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
 import { awayDuring, unreadStart } from "../../../shared/chat-activity";
@@ -8,7 +8,6 @@ import { api } from "../../lib/api";
 import { chatKey } from "../../lib/chat-events";
 import type {
   ChatMessage,
-  ChatSummary,
   ProjectChat as ProjectChatData,
 } from "../../../shared/projects";
 import { useArrival } from "./arrival";
@@ -28,21 +27,17 @@ import { reviewRounds } from "../deep-review/rounds";
 import type { RenderCompose } from "../html-render/HtmlRenders";
 import { Message, drawsLine } from "./ProjectMessage";
 import { QueuedMessages } from "./QueuedMessages";
-import { HeldSends, ranHereNote } from "./HeldSends";
+import { HeldSends } from "./HeldSends";
 import { SideQuestion } from "./SideQuestion";
 import { ThreadSetup } from "./ThreadSetup";
 import { UnreadDivider, UnreadMark } from "./UnreadDivider";
 import { useAnswerEdges } from "./answer-edges";
 import { ErrorBox, Loading } from "../../ui/ui";
-import { landedNote, renamedNote } from "./WorktreeControls";
-import { MessageNotes, type MessageNote } from "./MessageNotes";
-import { terminalOriginNote } from "../continue-session/TerminalOrigin";
+import { landedNote } from "./WorktreeControls";
+import { MessageNotes, NO_NOTES, notesUnderMessage } from "./MessageNotes";
 import { agentError } from "../../../shared/agent-error";
-import { questionResponses, type QuestionResponse } from "./question-responses";
-import {
-  shownWorkspaceMoves,
-  workspaceMoveLine,
-} from "../../../shared/workspace-moves";
+import { useQuestionResponses } from "./question-responses";
+import { shownWorkspaceMoves } from "../../../shared/workspace-moves";
 
 const isAnswer = (m: ChatMessage) =>
   m.role === "assistant" &&
@@ -67,51 +62,6 @@ function resumable(
     (lastInput.parentId ?? null) === rootId
     ? last
     : undefined;
-}
-
-/** The same empty list under every message with nothing to say, so its
- * memoized notes line skips each streamed piece. */
-const NO_NOTES: MessageNote[] = [];
-
-/** What happened under `m`, said on one line. */
-function notesUnderMessage(
-  m: ChatMessage,
-  chat: ChatSummary,
-  {
-    renamedAfter,
-    moves,
-    landed,
-    last,
-  }: {
-    renamedAfter: string | undefined;
-    moves: ReturnType<typeof shownWorkspaceMoves>;
-    landed: MessageNote | undefined | false | null;
-    last: ChatMessage | undefined;
-  },
-): MessageNote[] {
-  const notes = [
-    ...(m.id === chat.fromTerminal?.through
-      ? [{ key: "terminal-origin", ...terminalOriginNote(chat.fromTerminal) }]
-      : []),
-    ...(m.id === renamedAfter && chat.worktree
-      ? [renamedNote(chat.worktree)]
-      : []),
-    ...moves
-      .filter((move) => move.after === m.id)
-      .map((move) => ({
-        key: `workspace-move-${move.at}`,
-        text: workspaceMoveLine(move),
-        title: move.to,
-      })),
-    ...(chat.abandonedHandoffs ?? [])
-      .filter((a) => a.ranHere?.after === m.id)
-      .map((a) => ({
-        key: `ran-here-${a.id}`,
-        text: ranHereNote(a.computer, a.ranHere!.since),
-      })),
-    ...(m.id === last?.id ? [landed] : []),
-  ].filter((note): note is MessageNote => !!note);
-  return notes.length ? notes : NO_NOTES;
 }
 
 /**
@@ -235,19 +185,9 @@ export function ThreadMessages({
     resume?.error && !resume.side && agentError(resume.error).connectionFailed
       ? resume.id
       : undefined;
-  const responseCache = useRef(new Map<string, QuestionResponse>());
-  const responses = useMemo(() => {
-    const next = questionResponses(onScreen, responseCache.current);
-    responseCache.current = next;
-    return next;
-  }, [listed, visible]);
-  const [expandedResponses, setExpandedResponses] = useState<
-    Record<string, boolean>
-  >({});
-  const toggleResponse = useCallback(
-    (id: string, expanded: boolean) =>
-      setExpandedResponses((previous) => ({ ...previous, [id]: expanded })),
-    [],
+  const { responses, expandedResponses, toggleResponse } = useQuestionResponses(
+    listed,
+    visible,
   );
   const moves = shownWorkspaceMoves(chat?.workspaceMoves);
   const landed = worktree.status && landedNote(worktree.status);

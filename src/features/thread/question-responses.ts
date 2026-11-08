@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 
 export interface QuestionResponse {
@@ -120,4 +121,23 @@ export function questionResponses(
     for (const part of parts) result.set(part.id, response);
   }
   return result;
+}
+
+/** The responses among the last `visible` messages, and which of them are unfolded. */
+export function useQuestionResponses(listed: ChatMessage[], visible: number) {
+  const cache = useRef(new Map<string, QuestionResponse>());
+  const responses = useMemo(() => {
+    const next = questionResponses(listed.slice(-visible), cache.current);
+    cache.current = next;
+    return next;
+  }, [listed, visible]);
+  const [expandedResponses, setExpandedResponses] = useState<
+    Record<string, boolean>
+  >({});
+  const toggleResponse = useCallback(
+    (id: string, expanded: boolean) =>
+      setExpandedResponses((previous) => ({ ...previous, [id]: expanded })),
+    [],
+  );
+  return { responses, expandedResponses, toggleResponse };
 }

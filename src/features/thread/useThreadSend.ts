@@ -16,6 +16,28 @@ import type { NewThread } from "./useNewThread";
 import type { ThreadHandle } from "./useThreadHandle";
 import type { HeldWrite } from "./write-gate";
 
+/** The message as it leaves: a side conversation leaves the thread's attachments waiting. */
+function outgoing(
+  value: ComposedSend,
+  id: string,
+  {
+    root,
+    attachments,
+    viewing,
+  }: {
+    root: ChatMessage | undefined;
+    attachments: ComposerAttachments;
+    viewing: string | null;
+  },
+) {
+  return {
+    ...withAttachments(value, root ? { codeRefs: [] } : attachments),
+    id,
+    ...(root ? { parentId: root.id } : {}),
+    ...(viewing ? { viewing } : {}),
+  };
+}
+
 /**
  * What the composer sends: a message to the open conversation, a `/btw` on
  * the side, or the stopped answer carried on. An unsent thread is made by
@@ -62,14 +84,8 @@ export function useThreadSend({
       if (chat) markDraftSent(chat.id);
       const messageId = crypto.randomUUID();
       dispatch?.(messageId);
+      const input = outgoing(value, messageId, { root, attachments, viewing });
       async function post(target: ChatSummary, elsewhere?: { id: string }) {
-        const input = {
-          // A side conversation leaves the thread's attachments waiting.
-          ...withAttachments(value, root ? { codeRefs: [] } : attachments),
-          id: messageId,
-          ...(root ? { parentId: root.id } : {}),
-          ...(viewing ? { viewing } : {}),
-        };
         if (elsewhere)
           await api.startProjectChatOn(target.id, input, elsewhere.id);
         else await api.sendProjectChat(target.id, input);
