@@ -5,24 +5,15 @@ import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.calculateCentroid
-import androidx.compose.foundation.gestures.calculatePan
-import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -45,14 +36,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.input.pointer.util.VelocityTracker
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -67,7 +55,6 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.ui.Haptic
 import dev.relay.android.ui.Icon
 import dev.relay.android.ui.LocalToasts
-import dev.relay.android.ui.Spinner
 import dev.relay.android.ui.Text
 import dev.relay.android.ui.pressable
 import dev.relay.android.ui.rememberHaptics
@@ -77,23 +64,17 @@ import io.github.lyxnx.compose.ui.tablericons.outline.Copy
 import io.github.lyxnx.compose.ui.tablericons.outline.X
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.hypot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private const val MAX_SCALE = 5f
-private const val TAP_SCALE = 2.5f
-// Fingers never land together: a lone finger only swipes once it clearly
-// moves, so a second one has time to join it for a pinch.
-private const val LONE_SLOP_DP = 24
 private const val MAX_DOTS = 12
 
 /**
  * A message's images over the whole screen, like the desktop's viewer: swipe
  * between them, pinch or double-tap to zoom, drag around once zoomed, and swipe
- * down to close. Paging waits while an image is zoomed, so a drag moves it.
+ * down to close. A zoomed image pans until a new swipe starts at its edge.
  */
 @Composable
 fun Lightbox(remote: Remote, images: List<LightboxImage>, index: Int, onClose: () -> Unit) {
@@ -108,7 +89,6 @@ fun Lightbox(remote: Remote, images: List<LightboxImage>, index: Int, onClose: (
         val drop = remember { Animatable(0f) }
         val scope = rememberCoroutineScope()
         val density = LocalDensity.current
-        LaunchedEffect(pager.settledPage) { zoomed = false }
 
         Box(Modifier.fillMaxSize()) {
             val fade = 1f - 0.8f * (abs(drop.value) / with(density) { 400.dp.toPx() }).coerceIn(0f, 1f)
@@ -139,14 +119,14 @@ fun Lightbox(remote: Remote, images: List<LightboxImage>, index: Int, onClose: (
                 HorizontalPager(
                     pager,
                     Modifier.fillMaxSize(),
-                    userScrollEnabled = !zoomed,
                     key = { images[it].source.toString() },
                 ) { page ->
-                    Page(
+                    LightboxPage(
                         remote,
                         images[page],
                         active = page == pager.settledPage,
                         onZoom = { zoomed = it },
+                        onPinchStart = { pager.requestScrollToPage(page) },
                         onTap = { bar = !bar },
                     )
                 }
@@ -268,142 +248,5 @@ private fun CopyImage(remote: Remote, source: ImageSource) {
             .padding(4.dp),
     ) {
         Icon(if (copied) TablerIcons.Outline.Check else TablerIcons.Outline.Copy, if (copied) "Image copied" else "Copy image", tint = Color.White, size = 20.dp)
-    }
-}
-
-/** One image, fitted to the screen, that zooms around the fingers and drags within its edges. */
-@Composable
-private fun Page(remote: Remote, image: LightboxImage, active: Boolean, onZoom: (Boolean) -> Unit, onTap: () -> Unit) {
-    val loaded = rememberImage(remote, image.source)
-    val bitmap = loaded.bitmap
-    val picture = rememberPicture(loaded)
-    val scale = remember { Animatable(1f) }
-    val x = remember { Animatable(0f) }
-    val y = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    var wasZoomed by remember { mutableStateOf(false) }
-    fun report(s: Float) {
-        val now = s > 1.01f
-        if (now != wasZoomed) {
-            wasZoomed = now
-            onZoom(now)
-        }
-    }
-    // Swiped away from, it's fitted again for when it comes back.
-    LaunchedEffect(active) {
-        if (!active) {
-            scale.snapTo(1f); x.snapTo(0f); y.snapTo(0f)
-            wasZoomed = false
-        }
-    }
-
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        val width = constraints.maxWidth.toFloat()
-        val height = constraints.maxHeight.toFloat()
-        val ratio = bitmap?.let { it.width.toFloat() / it.height } ?: 0f
-        val limits = { s: Float -> imageLimits(ratio, width, height, s) }
-        fun zoomTo(s: Float, toX: Float, toY: Float) {
-            val edge = limits(s)
-            x.updateBounds(null, null)
-            y.updateBounds(null, null)
-            scope.launch { scale.animateTo(s) }
-            scope.launch { x.animateTo(toX.coerceIn(-edge.x, edge.x)) }
-            scope.launch { y.animateTo(toY.coerceIn(-edge.y, edge.y)) }
-            report(s)
-        }
-        // A turned or unfolded phone keeps the image within its edges.
-        LaunchedEffect(ratio, width, height) {
-            val edge = limits(scale.value)
-            x.snapTo(x.value.coerceIn(-edge.x, edge.x))
-            y.snapTo(y.value.coerceIn(-edge.y, edge.y))
-        }
-
-        if (picture == null) {
-            if (loaded.failed) Text("This image couldn’t be loaded.", color = Color.White.copy(alpha = 0.7f), style = androidx.compose.ui.text.TextStyle(fontSize = 14.sp))
-            else Spinner(color = Color.White)
-            return@BoxWithConstraints
-        }
-        val loneSlop = with(LocalDensity.current) { LONE_SLOP_DP.dp.toPx() }
-        Image(
-            picture,
-            image.name,
-            Modifier
-                .fillMaxSize()
-                .pointerInput(width, height) {
-                    detectTapGestures(
-                        onTap = { onTap() },
-                        onDoubleTap = { at ->
-                            if (scale.value > 1.01f) zoomTo(1f, 0f, 0f)
-                            // Zooms in on the point tapped.
-                            else zoomTo(TAP_SCALE, -(at.x - width / 2) * (TAP_SCALE - 1), -(at.y - height / 2) * (TAP_SCALE - 1))
-                        },
-                    )
-                }
-                .pointerInput(width, height, ratio) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val tracker = VelocityTracker()
-                        var pinched = false
-                        var dragging = false
-                        do {
-                            val event = awaitPointerEvent()
-                            val pressed = event.changes.count { it.pressed }
-                            if (pressed >= 2) {
-                                // The point between the fingers stays under them.
-                                pinched = true
-                                val zoom = event.calculateZoom()
-                                val pan = event.calculatePan()
-                                val centroid = event.calculateCentroid(useCurrent = true)
-                                if (centroid != Offset.Unspecified) {
-                                    val from = scale.value
-                                    val s = (from * zoom).coerceIn(0.8f, MAX_SCALE)
-                                    val fx = centroid.x - width / 2
-                                    val fy = centroid.y - height / 2
-                                    val nx = fx - (fx - x.value) * (s / from) + pan.x
-                                    val ny = fy - (fy - y.value) * (s / from) + pan.y
-                                    scope.launch { scale.snapTo(s); x.snapTo(nx); y.snapTo(ny) }
-                                }
-                                event.changes.forEach { if (it.positionChanged()) it.consume() }
-                            } else if (!pinched && scale.value > 1.01f) {
-                                // Zoomed, one finger drags the image instead of the pager.
-                                val change = event.changes.first()
-                                if (!dragging) dragging = hypot(change.position.x - down.position.x, change.position.y - down.position.y) > viewConfiguration.touchSlop
-                                if (dragging) {
-                                    val pan = event.calculatePan()
-                                    val edge = limits(scale.value)
-                                    tracker.addPosition(change.uptimeMillis, change.position)
-                                    scope.launch {
-                                        x.snapTo((x.value + pan.x).coerceIn(-edge.x, edge.x))
-                                        y.snapTo((y.value + pan.y).coerceIn(-edge.y, edge.y))
-                                    }
-                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
-                                }
-                            } else if (!pinched) {
-                                // A lone finger that clearly moves is a swipe, left to the pager or the dismiss.
-                                val change = event.changes.first()
-                                if (hypot(change.position.x - down.position.x, change.position.y - down.position.y) > loneSlop) break
-                            }
-                        } while (event.changes.any { it.pressed })
-                        if (pinched) {
-                            val s = scale.value.coerceIn(1f, MAX_SCALE)
-                            zoomTo(s, if (s == 1f) 0f else x.value, if (s == 1f) 0f else y.value)
-                        } else if (dragging) {
-                            val velocity = tracker.calculateVelocity()
-                            val edge = limits(scale.value)
-                            x.updateBounds(-edge.x, edge.x)
-                            y.updateBounds(-edge.y, edge.y)
-                            scope.launch { x.animateDecay(velocity.x, exponentialDecay()) }
-                            scope.launch { y.animateDecay(velocity.y, exponentialDecay()) }
-                        }
-                    }
-                }
-                .graphicsLayer {
-                    translationX = x.value
-                    translationY = y.value
-                    scaleX = scale.value
-                    scaleY = scale.value
-                },
-            contentScale = ContentScale.Fit,
-        )
     }
 }
