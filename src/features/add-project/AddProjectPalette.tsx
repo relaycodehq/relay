@@ -244,7 +244,7 @@ export function AddProjectPalette({
   return (
     <dialog
       ref={dialog}
-      className="modal palette add-palette"
+      className={`modal palette add-palette${page === "folder" ? " add-folder-palette" : ""}`}
       aria-label="Add a project"
       onCancel={(e) => {
         e.preventDefault();

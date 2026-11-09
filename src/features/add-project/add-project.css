@@ -311,6 +311,12 @@
 .modal.palette.add-palette {
   width: 640px;
 }
+/* A fixed height, so the dialog doesn't resize as you browse in and out of folders. */
+.modal.palette.add-palette.add-folder-palette[open] {
+  width: 880px;
+  height: min(760px, calc(100vh - 14vh - 40px));
+  max-height: none;
+}
 .add-project-heading {
   display: flex;
   align-items: center;
@@ -488,7 +494,7 @@
 }
 .add-folder-browser {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
+  grid-template-columns: minmax(0, 1fr) 240px;
   min-height: 220px;
   margin: 0 16px 12px;
   border: 1px solid var(--border);
@@ -514,7 +520,7 @@
   padding: 5px;
   overflow-y: auto;
   min-height: 0;
-  max-height: 280px;
+  flex: 1;
 }
 .add-folder-row {
   display: flex;
