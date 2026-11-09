@@ -152,7 +152,8 @@ verify_feed() {
     const key = createPublicKey({ key: Buffer.concat([prefix, Buffer.from(raw, "base64")]), format: "der", type: "spki" });
     return signatures.some(s => verify(null, bytes, key, Buffer.from(s, "base64")));
   });
-  if (!valid) throw new Error("The release feed signature does not match a trusted Relay key.");
+  // An exit code, not stderr: PowerShell 5.1 stops when a native command writes to stderr.
+  if (!valid) process.exit(1);
 ' "$tmp/latest.json" "$tmp/latest.json.sig"
 }
 read_feed() { # <url>: the feed and its signature, once they check out

@@ -50,7 +50,7 @@ try {
     const key = createPublicKey({ key: Buffer.concat([prefix, Buffer.from(raw, "base64")]), format: "der", type: "spki" });
     return signatures.some(s => verify(null, bytes, key, Buffer.from(s, "base64")));
   });
-  // An exit code, not stderr: PowerShell 5.1 stops on a native command's stderr.
+  // An exit code, not stderr: PowerShell 5.1 stops when a native command writes to stderr.
   if (!valid) process.exit(1);
 '@
   $found = $false

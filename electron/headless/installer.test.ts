@@ -176,7 +176,7 @@ it("ships matching pinned-key verifiers in both self-contained installers", asyn
   const verifiers = scripts.map((source) =>
     source
       .match(
-        /  const fs = require\("node:fs"\);[\s\S]*?if \(!valid\) throw new Error\([^\n]*\);/,
+        /  const fs = require\("node:fs"\);[\s\S]*?if \(!valid\) process\.exit\(1\);/,
       )![0]
       .replace(/\r\n/g, "\n"),
   );

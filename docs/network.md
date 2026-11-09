@@ -16,7 +16,8 @@ organization, and the computers and phones you pair.
 | Host | What, and when | Turning it off |
 | --- | --- | --- |
 | `ping.relaycode.io` | Once a UTC day, "a copy of Relay is in use": `{ kind, version, platform }` and nothing else, no ID. The [Worker](../ping/worker.js) counts it and keeps no address. `electron/app/daily-ping.test.ts` pins the body to those three keys. | **Count me as a user** in Settings → About, `relay settings set usage-ping off`, `"usagePing": false` in settings.json, or `DO_NOT_TRACK=1` |
-| `github.com` | Update check: downloads the latest release's `latest.json` 15s after launch and every 4h. A plain download; nothing is sent. | Builds from source don't check. A headless Relay with auto-update off still checks, but only says an update is out. |
+| `dl.relaycode.io` | Update check: downloads the latest release's `latest.json` 15s after launch and every 4h, then the update itself when you install it. A plain download from Relay's copy of the release on Cloudflare; nothing is sent. | Builds from source don't check. A headless Relay with auto-update off still checks, but only says an update is out. |
+| `github.com` | The same update check and download, only when `dl.relaycode.io` can't answer. | As above. |
 | `registry.npmjs.org` | Every few hours, the newest version of each installed agent, to offer updates. | **Agent update checks** in Settings → Agents |
 
 ## When you use a feature
