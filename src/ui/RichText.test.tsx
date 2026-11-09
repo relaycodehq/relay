@@ -36,6 +36,15 @@ describe("RichText file citations", () => {
     expect(out).toContain("sklad.png</span>");
   });
 
+  it.each(["C:\\Users\\jan\\Temp\\clip.mp4", "C:/Users/jan/Temp/clip.mp4"])(
+    "hands a Windows drive path to the answer's image: %s",
+    (src) => {
+      const image = vi.fn(() => null);
+      renderToStaticMarkup(<RichText text={`![clip](${src})`} image={image} />);
+      expect(image).toHaveBeenCalledWith(src.replaceAll("\\", "%5C"), "clip");
+    },
+  );
+
   it("keeps a file link without an opener as text, not an href", () => {
     expect(render("[photo](file:///C:/Users/jan/sklad.png)")).toBe(
       '<div class="markdown"><p><span>photo</span></p></div>',

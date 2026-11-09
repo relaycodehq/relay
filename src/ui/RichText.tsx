@@ -232,15 +232,18 @@ function MarkdownQuote({ children }: { children?: ReactNode }) {
 }
 
 // The default drops data: and file: URLs, and reads a Windows drive as a
-// protocol. An image may use data: or file:. A link keeps a file: URL or a drive
-// path for `a` to show as a file chip; only http(s) and mailto become a real href.
-// Markdown hands over a drive path's backslashes as %5C.
+// protocol, which blanked every image and video an answer embedded on Windows.
+// An image may use data:, file: or a drive path. A link keeps a file: URL or a
+// drive path for `a` to show as a file chip; only http(s) and mailto become a
+// real href. Markdown hands over a drive path's backslashes as %5C.
+const localFile = /^(?:file:|[A-Za-z]:(?:\/|%5C))/i;
+
 const urlTransform: UrlTransform = (url, key, node) => {
   if (key === "src" && node.tagName === "img")
-    return /^(?:data:image\/|file:)/i.test(url)
+    return /^data:image\//i.test(url) || localFile.test(url)
       ? url
       : defaultUrlTransform(url);
-  if (key === "href" && /^(?:file:|[A-Za-z]:(?:\/|%5C))/i.test(url)) return url;
+  if (key === "href" && localFile.test(url)) return url;
   return defaultUrlTransform(url);
 };
 
