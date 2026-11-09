@@ -23,7 +23,11 @@ CLOUDFLARE="$HOME/.config/relay-ci/cloudflare.env"
 MIRROR="https://dl.relaycode.io"
 MIRROR_BUCKET="relay-releases"
 # The newest releases kept on the mirror; older ones only stay on GitHub.
+# About 0.8GB each, well inside R2's free 10GB.
 MIRROR_KEEP=3
+# A release won't start above this, so its upload can't take the bucket
+# past the free 10GB.
+MIRROR_LIMIT_GB=7
 
 dry_run=0
 args=()
@@ -69,6 +73,18 @@ mirror_put() { # <file> <key> <cache-control>
     --content-type "$type" --cache-control "$3" >/dev/null
 }
 
+# What the bucket holds, in GB. wrangler reports it the way pretty-bytes
+# writes it ("2.31 GB"), from Cloudflare's metrics, which lag a little.
+mirror_stored_gb() {
+  wrangler r2 bucket info "$MIRROR_BUCKET" --json | node -e '
+    const out = require("fs").readFileSync(0, "utf8");
+    const info = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
+    const size = /^([\d.]+)\s*(B|kB|MB|GB|TB)$/.exec(String(info.bucket_size).trim());
+    if (!size) process.exit(1);
+    console.log((size[1] * 1000 ** ["B", "kB", "MB", "GB", "TB"].indexOf(size[2])) / 1e9);
+  '
+}
+
 step "Checking out $tag"
 checkout "$tag"
 rm -rf "$out" && mkdir -p "$out"
@@ -100,8 +116,12 @@ fi
 # The feed points downloads at the mirror, so a release can't go out without it.
 if ((!dry_run)); then
   [[ -f "$CLOUDFLARE" ]] || fail "has no mirror to go to: there's no Cloudflare token at $CLOUDFLARE."
-  wrangler r2 bucket info "$MIRROR_BUCKET" >/dev/null ||
-    fail "can't reach the $MIRROR_BUCKET bucket; the Cloudflare token needs R2 edit."
+  stored="$(mirror_stored_gb)" ||
+    fail "can't read the $MIRROR_BUCKET bucket; the Cloudflare token needs R2 edit."
+  if awk -v gb="$stored" -v limit="$MIRROR_LIMIT_GB" 'BEGIN { exit !(gb > limit) }'; then
+    fail "would overfill the mirror: $MIRROR_BUCKET holds ${stored}GB. Delete old versions from it first."
+  fi
+  echo "The mirror holds ${stored}GB."
 fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
@@ -271,17 +291,18 @@ for name in install-relay.sh install-relay.ps1 Relay-Android.apk latest.json.sig
   mirror_put "$out/$name" "latest/$name" "public, max-age=60"
 done
 
-# Only the release that just fell out of the kept ones; it shares this one's
-# file names but for the version. The mirror is up by now, so a miss is logged.
-dropped="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n "$((MIRROR_KEEP + 1))p")"
-if [[ -n "$dropped" ]]; then
+# The three releases just past the kept ones, so a delete that failed last
+# time gets another go. They share this one's file names but for the
+# version. The release is out by now, so a miss is only logged.
+for dropped in $(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' |
+  sed -n "$((MIRROR_KEEP + 1)),$((MIRROR_KEEP + 3))p"); do
   step "Removing $dropped from the mirror"
   for name in $(ls "$out"); do
     key="$dropped/${name//$version/${dropped#v}}"
     wrangler r2 object delete "$MIRROR_BUCKET/$key" --remote >/dev/null 2>&1 ||
       echo "Couldn't remove $key from the mirror."
   done
-fi
+done
 rm -rf "$out"
 
 # The site is built from the tag: it names this version and links its files.
