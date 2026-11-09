@@ -61,6 +61,15 @@ class ApkInstallerTest {
     private var pending = "0.9.1"
     private fun TestScope.installer() = ApkInstaller(native, backgroundScope, { pending }, warn = { _, _ -> })
 
+    @Test fun downloadsGitHubsCopyWhenTheMirrorFails() = runTest(UnconfinedTestDispatcher()) {
+        val i = installer()
+        val mirrored = feed.copy(fallbackUrl = "https://github.test/feed.apk")
+        native.downloadFails = Exception("The download failed (HTTP 503).")
+        i.install(mirrored)
+        assertEquals(listOf(mirrored.url, "https://github.test/feed.apk"), native.downloads.map { it.first })
+        assertTrue(i.state.value is ApkInstall.Allow)
+    }
+
     @Test fun opensOnePermissionScreenAndLeavesOneListenerForSimultaneousTaps() = runTest(UnconfinedTestDispatcher()) {
         val i = installer()
         val finish = CompletableDeferred<String>().also { native.held += it }

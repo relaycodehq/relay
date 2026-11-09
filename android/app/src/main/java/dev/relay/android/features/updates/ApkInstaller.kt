@@ -11,9 +11,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class ApkOffer(val version: String, val url: String, val sha512: String? = null)
+data class ApkOffer(
+    val version: String,
+    val url: String,
+    val sha512: String? = null,
+    /** GitHub's copy, tried when the download from [url] fails. */
+    val fallbackUrl: String? = null,
+)
 
-fun NewestApp.apkOffer() = ApkOffer(version, url, sha512)
+fun NewestApp.apkOffer() = ApkOffer(version, url, sha512, fallbackUrl)
 
 sealed interface ApkInstall {
     data object Idle : ApkInstall
@@ -102,7 +108,7 @@ class ApkInstaller(
         val path = scope.async(start = CoroutineStart.LAZY) {
             current = ApkInstall.Downloading(version, 0f, quiet)
             try {
-                val path = native.download(offer.url, version, offer.sha512 ?: "") { done ->
+                val path = fetchApk(offer) { done ->
                     val s = current
                     if (s is ApkInstall.Downloading) current = s.copy(done = done)
                 }
@@ -124,6 +130,21 @@ class ApkInstaller(
         fetching = Fetch(offer, path)
         path.start()
         return path.await()
+    }
+
+    /** The mirror's copy, or GitHub's when that one fails or doesn't match. */
+    private suspend fun fetchApk(offer: ApkOffer, onProgress: (Float) -> Unit): String {
+        var failure: Exception? = null
+        for (url in listOfNotNull(offer.url, offer.fallbackUrl)) {
+            try {
+                return native.download(url, offer.version, offer.sha512 ?: "", onProgress)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failure = e
+            }
+        }
+        throw failure!!
     }
 
     /** Downloads the APK without installing it, so a tap later goes straight to Android's prompt. */

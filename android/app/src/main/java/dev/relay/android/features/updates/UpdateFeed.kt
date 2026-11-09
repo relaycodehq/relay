@@ -1,6 +1,7 @@
 package dev.relay.android.features.updates
 
 import dev.relay.android.remote.model.newerVersion
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.Serializable
@@ -14,7 +15,15 @@ import kotlinx.serialization.json.longOrNull
 /** shared/updates: where releases live and the keys that sign their feed. */
 object Releases {
     const val REPO = "relaycodehq/relay"
-    const val FEED = "https://github.com/$REPO/releases/latest/download/latest.json"
+
+    /** Cloudflare's copy of every release, which keeps updates going while GitHub is down. */
+    const val MIRROR = "https://dl.relaycode.io"
+
+    /** The feed in the order to read it: the mirror, then GitHub when the mirror can't answer. */
+    val FEEDS = listOf(
+        "$MIRROR/latest/latest.json",
+        "https://github.com/$REPO/releases/latest/download/latest.json",
+    )
     const val PAGE = "https://github.com/$REPO/releases/latest"
     val keys = listOf("83EmHV/Q5V1spYrUP+1S8Kuke5rUt2gAPVQJ1r45YL4=")
 
@@ -38,11 +47,14 @@ data class NewestApp(
     val sha512: String? = null,
     val size: Long? = null,
     val applicationId: String? = null,
+    /** The same APK on GitHub, for when the mirror at [url] can't serve it. */
+    val fallbackUrl: String? = null,
 ) {
     fun installableBy(packageName: String) = (applicationId ?: Releases.EXPO_APP_ID) == packageName
 
     /** Whether it would survive the feed checks again; a damaged saved copy doesn't. */
     fun wellFormed() = versionRe.matches(release) && versionRe.matches(version) && httpsUrl(url) &&
+        (fallbackUrl == null || httpsUrl(fallbackUrl)) &&
         (sha512 == null || sha512Re.matches(sha512)) && (size == null || size > 0)
 }
 
@@ -61,15 +73,38 @@ private fun httpsUrl(url: String) = try {
 }
 
 /**
- * Reads the release feed and its signature; throws unless the feed is signed
- * by a pinned key. Null when the release carries no APK of [packageName]'s.
+ * Reads the first of [feeds] that answers with a feed signed by a pinned key;
+ * throws the last one's failure when none does. Null when the release
+ * carries no APK of [packageName]'s.
  */
 suspend fun fetchNewestApp(
     fetch: suspend (String) -> FeedResponse,
     packageName: String,
-    feed: String = Releases.FEED,
+    feeds: List<String> = Releases.FEEDS,
     keys: List<String> = Releases.keys,
 ): NewestApp? {
+    var failure: Exception = FeedException("There's nowhere to read the release feed from.")
+    for (feed in feeds) {
+        val bytes = try {
+            signedFeed(fetch, feed, keys)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // A mirror that's down, failing or unsigned: the next feed gets its turn.
+            failure = e
+            continue
+        }
+        return parseFeed(bytes, packageName)
+    }
+    throw failure
+}
+
+/** [feed]'s exact bytes, once its signature checks out against [keys]. */
+private suspend fun signedFeed(
+    fetch: suspend (String) -> FeedResponse,
+    feed: String,
+    keys: List<String>,
+): ByteArray {
     val (response, signed) = coroutineScope {
         val body = async { fetch(feed) }
         val sig = async { fetch("$feed.sig") }
@@ -79,7 +114,7 @@ suspend fun fetchNewestApp(
     if (!signed.ok) throw FeedException("The release feed's signature answered ${signed.status}.")
     if (!signedByAny(response.body, signed.body.decodeToString(), keys))
         throw FeedException("The release feed's signature doesn't check out.")
-    return parseFeed(response.body, packageName)
+    return response.body
 }
 
 /**
@@ -109,6 +144,8 @@ private fun androidEntry(value: JsonElement, release: String): NewestApp? {
     val o = value as? JsonObject ?: return null
     o.string("name")?.takeIf { nameRe.matches(it) } ?: return null
     val url = o.string("url")?.takeIf(::httpsUrl) ?: return null
+    val fallbackUrl = o.string("fallbackUrl")
+    if (o.containsKey("fallbackUrl") && (fallbackUrl == null || !httpsUrl(fallbackUrl))) return null
     val sha512 = o.string("sha512")?.takeIf { sha512Re.matches(it) } ?: return null
     val size = (o["size"] as? JsonPrimitive)?.takeIf { !it.isString }?.longOrNull?.takeIf { it > 0 } ?: return null
     val version = o.string("version")?.takeIf { versionRe.matches(it) } ?: return null
@@ -118,6 +155,7 @@ private fun androidEntry(value: JsonElement, release: String): NewestApp? {
         release = release,
         version = version,
         url = url,
+        fallbackUrl = fallbackUrl,
         runtime = o.string("runtime"),
         sha512 = sha512,
         size = size,

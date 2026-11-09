@@ -69,6 +69,38 @@ class UpdateFeedTest {
         )
     }
 
+    @Test fun readsGitHubsFeedWhenTheMirrorIsDownOrUnsigned() = runBlocking {
+        val mirror = "https://mirror.test/latest.json"
+        val github = "https://github.test/latest.json"
+        val signedFeed = serve(feed("android" to with(apk, "applicationId" to str(me))))
+        for (broken in listOf<suspend (String) -> FeedResponse>(
+            { throw java.io.IOException("Unable to resolve host") },
+            { FeedResponse(false, 502, ByteArray(0)) },
+            serve(feed("android" to apk), null),
+        )) {
+            val asked = mutableListOf<String>()
+            val newest = fetchNewestApp(
+                { url -> asked += url; if (url.startsWith(mirror)) broken(url) else signedFeed(url) },
+                me,
+                feeds = listOf(mirror, github),
+                keys = listOf(key),
+            )
+            assertEquals("0.10.0", newest!!.version)
+            assertTrue(asked.toString(), asked.containsAll(listOf(github, "$github.sig")))
+        }
+    }
+
+    @Test fun keepsGitHubsCopyOfTheApkAsItsFallback() = runBlocking {
+        val fallback = "https://github.com/relaycodehq/relay/releases/download/v0.10.2/Relay-Android.apk"
+        val entry = with(apk, "url" to str("https://dl.relaycode.io/v0.10.2/Relay-Android.apk"), "fallbackUrl" to str(fallback))
+        val newest = fetchNewestApp(serve(feed("android" to entry)), expo, keys = listOf(key))!!
+        assertEquals(fallback, newest.fallbackUrl)
+        assertEquals(fallback, newest.apkOffer().fallbackUrl)
+        fails("can't read") {
+            fetchNewestApp(serve(feed("android" to with(apk, "fallbackUrl" to str("http://x.test/a.apk")))), expo, keys = listOf(key))
+        }
+    }
+
     @Test fun anOldFeedWithoutAndroidEntriesHasNothingForThisApp() = runBlocking {
         assertNull(fetchNewestApp(serve(JsonObject(mapOf("version" to str("0.9.1")))), me, keys = listOf(key)))
     }
