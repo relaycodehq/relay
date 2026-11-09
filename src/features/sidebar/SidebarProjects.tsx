@@ -81,7 +81,7 @@ export function Scratchpad({
         </IconButton>
       </div>
       {!folds.folded.scratchpad && (
-        <div className="sb-thread-list flat">
+        <div className="sb-thread-list">
           {draft && (
             <div className="sb-thread-row">
               <button className="sb-thread selected" disabled>
@@ -121,7 +121,7 @@ function AddMenu({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
 /** With no projects yet, the + menu's ways in, spelled out under the heading. */
 function AddWays({ onAdd }: { onAdd: (page: AddProjectPage) => void }) {
   return (
-    <div className="sb-thread-list flat sb-add-ways">
+    <div className="sb-thread-list sb-add-ways">
       <button className="sb-thread" onClick={() => onAdd("new")}>
         <FolderPlus size={14} />
         <span className="sb-thread-title">New project</span>

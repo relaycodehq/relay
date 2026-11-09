@@ -367,7 +367,7 @@
   }
 }
 
-/* Projects and threads (Codex-like: title-only rows, aligned to the name). */
+/* Projects and threads: title-only rows, lined up with the project's icon. */
 .sb-project {
   margin-bottom: 4px;
 }
@@ -540,10 +540,7 @@
   text-transform: none;
 }
 .sb-thread-input {
-  padding: 2px 6px 2px 31px;
-}
-.sb-thread-list.flat .sb-thread-input {
-  padding-left: 6px;
+  padding: 2px 6px;
 }
 .sb-card-title-input,
 .sb-compact-title-input {
@@ -584,12 +581,9 @@
   gap: 8px;
   width: 100%;
   height: 30px;
-  padding: 0 10px 0 35px;
+  padding: 0 10px;
   color: color-mix(in srgb, var(--text) 88%, var(--muted));
   font-size: 12.5px;
-}
-.sb-thread-list.flat .sb-thread {
-  padding-left: 10px;
 }
 .sb .sb-thread:hover:not(:disabled),
 .sb .sb-thread.highlighted {
