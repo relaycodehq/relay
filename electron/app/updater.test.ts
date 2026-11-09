@@ -264,6 +264,28 @@ it("rejects a download that doesn't match the release", async () => {
   );
 });
 
+it("downloads from GitHub when the mirror's copy is missing or damaged", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "relay-update-"));
+  const file = {
+    ...release(),
+    fallbackUrl: "https://github.test/Relay.zip",
+  };
+  for (const mirror of [
+    new Response("Not Found", { status: 404 }),
+    new Response(new Uint8Array(Buffer.from("tampered"))),
+  ]) {
+    vi.mocked(net.fetch).mockReset();
+    vi.mocked(net.fetch).mockImplementation(async (url) =>
+      url === file.url ? mirror : new Response(new Uint8Array(bytes)),
+    );
+    expect(await readFile(await fetchFile(file, dir))).toEqual(bytes);
+    expect(vi.mocked(net.fetch).mock.calls.map(([url]) => url)).toEqual([
+      file.url,
+      file.fallbackUrl,
+    ]);
+  }
+});
+
 it("reports a disk error instead of crashing on an unhandled stream error", async () => {
   serve(bytes);
   await expect(

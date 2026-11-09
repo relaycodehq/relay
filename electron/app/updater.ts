@@ -5,15 +5,16 @@ import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { pipeline } from "node:stream/promises";
 import {
+  downloadSources,
   manifestSchema,
   newerVersion,
-  updateFeed,
+  updateFeeds,
   updateKeys,
   type UpdateFile,
   type UpdateManifest,
   type UpdateState,
 } from "../../shared/updates";
-import { signedByAny } from "../../shared/update-signature";
+import { firstThatWorks, readSignedFeed } from "../../shared/update-feed";
 import { apply, detectInstall, prepare, type Install } from "./install-update";
 
 const checkEvery = 4 * 60 * 60 * 1000;
@@ -38,7 +39,8 @@ export class Updater {
   private busy = false;
   private checking?: Promise<UpdateState>;
   private checkedAt = 0;
-  private readonly feed: string;
+  /** Where the feed is read from, in order. */
+  private readonly feeds: readonly string[];
   /** Public keys whose signature over the feed Relay trusts. */
   private readonly keys: readonly string[];
 
@@ -56,7 +58,7 @@ export class Updater {
     const current = app.getVersion();
     // Development builds stay quiet unless a feed is set to exercise the UI.
     const override = process.env.RELAY_UPDATE_FEED;
-    this.feed = override || updateFeed;
+    this.feeds = override ? [override] : updateFeeds;
     // A test feed may bring its own key, but only to a development build;
     // a packaged copy trusts the pinned keys and nothing else.
     const testKey = process.env.RELAY_UPDATE_KEY;
@@ -127,27 +129,11 @@ export class Updater {
     // Pressing Update or Restart mid-check hands the state to that instead.
     const asked = this.state;
     try {
-      const [response, signed] = await Promise.all([
-        this.fetchFeed(this.feed),
-        this.fetchFeed(`${this.feed}.sig`),
-      ]);
-      if (!response.ok)
-        throw new Error(`The update feed answered ${response.status}.`);
-      if (!signed.ok && signed.status !== 404)
-        throw new Error(
-          `The update feed's signature answered ${signed.status}.`,
-        );
-      // Nothing in the feed counts until its exact bytes check out.
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const signature = signed.ok ? await signed.text() : "";
-      if (!signature.trim())
-        throw new Error(
-          "The update feed isn't signed, so Relay won't install from it.",
-        );
-      if (!signedByAny(bytes, signature, this.keys))
-        throw new Error(
-          "The update feed's signature doesn't check out, so Relay won't install from it.",
-        );
+      const bytes = await readSignedFeed(
+        this.feeds,
+        (url) => this.fetchFeed(url),
+        this.keys,
+      );
       let data: unknown;
       try {
         data = JSON.parse(new TextDecoder().decode(bytes));
@@ -245,7 +231,19 @@ export class Updater {
     return this.state;
   }
 
-  private async fetchFile(
+  /** The mirror's copy, or GitHub's when the mirror's fails or doesn't match. */
+  private fetchFile(
+    file: UpdateFile,
+    dir: string,
+    progress: (fraction: number) => void,
+  ) {
+    return firstThatWorks(downloadSources(file), (url) =>
+      this.fetchFileFrom(url, file, dir, progress),
+    );
+  }
+
+  private async fetchFileFrom(
+    url: string,
     file: UpdateFile,
     dir: string,
     progress: (fraction: number) => void,
@@ -258,7 +256,7 @@ export class Updater {
     const stalled = new AbortController();
     let idle = setTimeout(() => stalled.abort(), stallTimeout);
     try {
-      const response = await net.fetch(file.url, {
+      const response = await net.fetch(url, {
         cache: "no-store",
         signal: stalled.signal,
       });

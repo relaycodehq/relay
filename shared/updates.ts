@@ -1,8 +1,19 @@
 import { z } from "zod";
 
-/** Public feed written by the release workflow. */
 export const releasesRepo = "relaycodehq/relay";
-export const updateFeed = `https://github.com/${releasesRepo}/releases/latest/download/latest.json`;
+
+/** Cloudflare's copy of every release, which keeps updates going while GitHub is down. */
+export const downloadsMirror = "https://dl.relaycode.io";
+
+/**
+ * The feed the release build writes, in the order installs read it: the
+ * mirror, then the GitHub release when the mirror can't answer.
+ */
+export const updateFeeds: readonly string[] = [
+  `${downloadsMirror}/latest/latest.json`,
+  `https://github.com/${releasesRepo}/releases/latest/download/latest.json`,
+];
+
 export const releasesPage = `https://github.com/${releasesRepo}/releases/latest`;
 
 /**
@@ -23,13 +34,17 @@ export const androidAppDownload = `https://github.com/${releasesRepo}/releases/l
 export type UpdateTarget =
   "mac-arm64" | "win-x64" | "linux-x64-appimage" | "linux-x64-omarchy";
 
+// Plain HTTP only for a feed served on this machine while testing.
+const downloadUrl = z.url({ protocol: /^https?$/ }).refine((u) => {
+  const { protocol, hostname } = new URL(u);
+  return protocol === "https:" || hostname === "127.0.0.1";
+});
+
 export const updateFileSchema = z.object({
   name: z.string().regex(/^[\w.-]+$/),
-  // Plain HTTP only for a feed served on this machine while testing.
-  url: z.url({ protocol: /^https?$/ }).refine((u) => {
-    const { protocol, hostname } = new URL(u);
-    return protocol === "https:" || hostname === "127.0.0.1";
-  }),
+  url: downloadUrl,
+  /** The same file on GitHub, for when the mirror at `url` can't serve it. */
+  fallbackUrl: downloadUrl.optional(),
   sha512: z.string().regex(/^[A-Za-z0-9+/]{86}==$/),
   size: z.number().int().positive(),
 });
@@ -46,6 +61,10 @@ export const manifestSchema = z.object({
 
 export type UpdateManifest = z.infer<typeof manifestSchema>;
 export type UpdateFile = z.infer<typeof updateFileSchema>;
+
+/** Where a release file downloads from, in the order to try them. */
+export const downloadSources = (file: UpdateFile) =>
+  file.fallbackUrl ? [file.url, file.fallbackUrl] : [file.url];
 
 export type UpdateState =
   /** Development builds and platforms without a download never show the button. */

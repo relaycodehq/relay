@@ -3,13 +3,14 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { z } from "zod";
 import {
+  downloadSources,
   newerVersion,
-  updateFeed,
+  updateFeeds,
   updateFileSchema,
   updateKeys,
   type UpdateState,
 } from "../../shared/updates";
-import { signedByAny } from "../../shared/update-signature";
+import { firstThatWorks, readSignedFeed } from "../../shared/update-feed";
 import { replaceInstallation } from "./install";
 import { download, extract } from "./archive";
 import { errorMessage } from "../../shared/error-message";
@@ -88,34 +89,16 @@ export class HeadlessUpdater {
     this.state = { status: "checking", current };
     try {
       // RELAY_UPDATE_FEED stands in a feed served on this machine, as for the desktop.
-      const url =
-        this.options.feed ?? (process.env.RELAY_UPDATE_FEED || updateFeed);
+      const override = this.options.feed ?? process.env.RELAY_UPDATE_FEED;
       const get = (at: string) =>
         (this.options.fetch ?? fetch)(at, {
           signal: AbortSignal.timeout(20_000),
         });
-      const [response, signed] = await Promise.all([
-        get(url),
-        get(`${url}.sig`),
-      ]);
-      if (!response.ok)
-        throw new Error(`The update feed answered ${response.status}.`);
-      if (!signed.ok && signed.status !== 404)
-        throw new Error(
-          `The update feed's signature answered ${signed.status}.`,
-        );
-      // As on the desktop, nothing in the feed counts until its exact bytes
-      // check out; a headless Relay installs updates with nobody watching.
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      const signature = signed.ok ? await signed.text() : "";
-      if (!signature.trim())
-        throw new Error(
-          "The update feed isn't signed, so Relay won't install from it.",
-        );
-      if (!signedByAny(bytes, signature, this.options.keys ?? updateKeys))
-        throw new Error(
-          "The update feed's signature doesn't check out, so Relay won't install from it.",
-        );
+      const bytes = await readSignedFeed(
+        override ? [override] : updateFeeds,
+        get,
+        this.options.keys ?? updateKeys,
+      );
       const feed = feedSchema.parse(
         JSON.parse(new TextDecoder().decode(bytes)),
       );
@@ -161,22 +144,21 @@ export class HeadlessUpdater {
     try {
       staging = await mkdtemp(`${root}.update-${version}-`);
       const archive = join(staging, found.headless.name);
-      const received = await download(
-        found.headless.url,
-        archive,
-        found.headless.sha512,
-        {
-          ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
-          size: found.headless.size,
-          progress: (received, total) => {
-            this.state = {
-              status: "downloading",
-              current,
-              version,
-              progress: Math.min(1, received / total),
-            };
-          },
-        },
+      const received = await firstThatWorks(
+        downloadSources(found.headless),
+        (url) =>
+          download(url, archive, found.headless.sha512, {
+            ...(this.options.fetch ? { fetch: this.options.fetch } : {}),
+            size: found.headless.size,
+            progress: (received, total) => {
+              this.state = {
+                status: "downloading",
+                current,
+                version,
+                progress: Math.min(1, received / total),
+              };
+            },
+          }),
       );
       if (received !== found.headless.size)
         throw new Error(
