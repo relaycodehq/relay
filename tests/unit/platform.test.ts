@@ -42,6 +42,7 @@ describe("update feed", () => {
       dir,
       "0.1.7",
       "relaycodehq/relay",
+      "https://dl.relaycode.io",
       'Fix "quotes" & more',
     ]);
     const manifest = manifestSchema.parse(
@@ -56,9 +57,13 @@ describe("update feed", () => {
     expect(manifest.files["linux-x64-omarchy"]?.name).toBe(
       "Relay-0.1.7-omarchy-x86_64.tar.gz",
     );
-    expect(manifest.files["win-x64"]?.url).toBe(
-      "https://github.com/relaycodehq/relay/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
-    );
+    // Cloudflare first; installs that know the fallback try GitHub after it.
+    const feed = JSON.parse(await readFile(join(dir, "latest.json"), "utf8"));
+    expect(feed.files["win-x64"]).toMatchObject({
+      url: "https://dl.relaycode.io/v0.1.7/Relay-0.1.7-win-x64.exe",
+      fallbackUrl:
+        "https://github.com/relaycodehq/relay/releases/download/v0.1.7/Relay-0.1.7-win-x64.exe",
+    });
   });
 
   it("puts the phone's APK beside the files, at the release's version", async () => {
@@ -76,11 +81,14 @@ describe("update feed", () => {
       dir,
       "0.1.8",
       "relaycodehq/relay",
+      "https://dl.relaycode.io",
     ]);
     const feed = JSON.parse(await readFile(join(dir, "latest.json"), "utf8"));
     expect(feed.android).toEqual({
       name: "Relay-Android.apk",
-      url: "https://github.com/relaycodehq/relay/releases/download/v0.1.8/Relay-Android.apk",
+      url: "https://dl.relaycode.io/v0.1.8/Relay-Android.apk",
+      fallbackUrl:
+        "https://github.com/relaycodehq/relay/releases/download/v0.1.8/Relay-Android.apk",
       sha512: expect.stringMatching(/^[A-Za-z0-9+/]{86}==$/),
       size: "Relay-Android.apk".length,
       version: "0.1.8",

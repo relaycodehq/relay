@@ -1,14 +1,33 @@
 // Writes latest.json, the update feed the app polls, from a folder of release files.
-// Usage: node scripts/release-manifest.mjs <dir> <version> <owner/repo> [notes]
+// Usage: node scripts/release-manifest.mjs <dir> <version> <owner/repo> <mirror> [notes]
+// Every file downloads from <mirror>/v<version>/, with the GitHub release as
+// its fallbackUrl: installs from before the fallback only read `url`.
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const [dir, version, repo, notes = ""] = process.argv.slice(2);
-if (!dir || !/^\d+\.\d+\.\d+$/.test(version ?? "") || !repo)
+const [dir, version, repo, mirror, notes = ""] = process.argv.slice(2);
+if (
+  !dir ||
+  !/^\d+\.\d+\.\d+$/.test(version ?? "") ||
+  !repo ||
+  !mirror?.startsWith("https://")
+)
   throw new Error(
-    "Usage: release-manifest.mjs <dir> <version> <owner/repo> [notes]",
+    "Usage: release-manifest.mjs <dir> <version> <owner/repo> <mirror> [notes]",
   );
+
+/** One release file as the feed lists it: where to get it and how to check it. */
+function entry(name) {
+  const bytes = readFileSync(join(dir, name));
+  return {
+    name,
+    url: `${mirror}/v${version}/${name}`,
+    fallbackUrl: `https://github.com/${repo}/releases/download/v${version}/${name}`,
+    sha512: createHash("sha512").update(bytes).digest("base64"),
+    size: bytes.length,
+  };
+}
 
 // Keep in step with UpdateTarget in shared/updates.ts.
 const targets = {
@@ -20,14 +39,7 @@ const targets = {
 const present = new Set(readdirSync(dir));
 const files = {};
 for (const [target, name] of Object.entries(targets)) {
-  if (!present.has(name)) continue;
-  const path = join(dir, name);
-  files[target] = {
-    name,
-    url: `https://github.com/${repo}/releases/download/v${version}/${name}`,
-    sha512: createHash("sha512").update(readFileSync(path)).digest("base64"),
-    size: statSync(path).size,
-  };
+  if (present.has(name)) files[target] = entry(name);
 }
 for (const required of [
   "mac-arm64",
@@ -41,33 +53,14 @@ for (const required of [
 // The headless Relay's archive sits beside `files`, never in them: desktops
 // reject a feed whose files name a target they don't know.
 const headlessName = `Relay-${version}-headless.tar.gz`;
-const headless = present.has(headlessName)
-  ? {
-      name: headlessName,
-      url: `https://github.com/${repo}/releases/download/v${version}/${headlessName}`,
-      sha512: createHash("sha512")
-        .update(readFileSync(join(dir, headlessName)))
-        .digest("base64"),
-      size: statSync(join(dir, headlessName)).size,
-    }
-  : undefined;
+const headless = present.has(headlessName) ? entry(headlessName) : undefined;
 
 // The phone app sits beside `files` too, for phones that update without their
 // desktop. The mini builds it at the release's own version, and it's named by
 // its applicationId: the retired Expo app (dev.relay.remote) can't take it.
 const androidName = "Relay-Android.apk";
 const android = present.has(androidName)
-  ? (() => {
-      const bytes = readFileSync(join(dir, androidName));
-      return {
-        name: androidName,
-        url: `https://github.com/${repo}/releases/download/v${version}/${androidName}`,
-        sha512: createHash("sha512").update(bytes).digest("base64"),
-        size: bytes.length,
-        version,
-        applicationId: "dev.relay.android",
-      };
-    })()
+  ? { ...entry(androidName), version, applicationId: "dev.relay.android" }
   : undefined;
 
 writeFileSync(

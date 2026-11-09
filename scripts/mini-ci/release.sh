@@ -15,8 +15,15 @@ SIGNING="$HOME/.config/relay-android/signing.env"
 TOKEN_FILE="$HOME/.config/relay-ci/releases-token"
 # Signs latest.json; installs refuse a feed without a signature from it.
 UPDATE_KEY="$HOME/.config/relay-ci/update-signing-key.pem"
-# CLOUDFLARE_API_TOKEN (Workers edit) and CLOUDFLARE_ACCOUNT_ID, for relaycode.io.
+# CLOUDFLARE_API_TOKEN (Workers edit, R2 edit) and CLOUDFLARE_ACCOUNT_ID, for
+# relaycode.io and the download mirror.
 CLOUDFLARE="$HOME/.config/relay-ci/cloudflare.env"
+# Every release is copied here too, so updates and installs keep working while
+# GitHub is down. The feed downloads from it first, GitHub second.
+MIRROR="https://dl.relaycode.io"
+MIRROR_BUCKET="relay-releases"
+# The newest releases kept on the mirror; older ones only stay on GitHub.
+MIRROR_KEEP=3
 
 dry_run=0
 args=()
@@ -40,6 +47,27 @@ elif ((!dry_run)); then
 fi
 
 out="$ROOT/out"
+
+# Runs a command with the Cloudflare token and nothing else of this script's:
+# the signing passwords and GH_TOKEN stay out of packages fetched from npm.
+with_cloudflare() {
+  (. "$CLOUDFLARE" && env -i PATH="$PATH" HOME="$HOME" \
+    CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}" \
+    CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-}" \
+    "$@")
+}
+wrangler() { with_cloudflare npx -y wrangler@4.151.1 "$@"; }
+
+mirror_put() { # <file> <key> <cache-control>
+  local type=application/octet-stream
+  case "$1" in
+    *.json) type=application/json ;;
+    *.sig | *.sh | *.ps1) type="text/plain; charset=utf-8" ;;
+    *.apk) type=application/vnd.android.package-archive ;;
+  esac
+  wrangler r2 object put "$MIRROR_BUCKET/$2" --file "$1" --remote \
+    --content-type "$type" --cache-control "$3" >/dev/null
+}
 
 step "Checking out $tag"
 checkout "$tag"
@@ -68,6 +96,12 @@ grep -q '[^[:space:]]' "$ROOT/notes.md" || fail "has an empty message; it's the 
 # A dry run without the key builds unsigned; a real one fails here, before the build.
 if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
   node scripts/sign-update-feed.mjs --check --key "$UPDATE_KEY"
+fi
+# The feed points downloads at the mirror, so a release can't go out without it.
+if ((!dry_run)); then
+  [[ -f "$CLOUDFLARE" ]] || fail "has no mirror to go to: there's no Cloudflare token at $CLOUDFLARE."
+  wrangler r2 bucket info "$MIRROR_BUCKET" >/dev/null ||
+    fail "can't reach the $MIRROR_BUCKET bucket; the Cloudflare token needs R2 edit."
 fi
 echo "$version" >"$ROOT/state/version"
 cat "$ROOT/notes.md"
@@ -199,7 +233,7 @@ set -a && . "$SIGNING" && set +a
 )
 cp android/app/build/outputs/apk/release/app-release.apk "$out/Relay-Android.apk"
 
-node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$(cat "$ROOT/notes.md")"
+node scripts/release-manifest.mjs "$out" "$version" "$RELEASES_REPO" "$MIRROR" "$(cat "$ROOT/notes.md")"
 if [[ -f "$UPDATE_KEY" ]] || ((!dry_run)); then
   node scripts/sign-update-feed.mjs "$out/latest.json" --key "$UPDATE_KEY"
 fi
@@ -211,18 +245,44 @@ if ((dry_run)); then
   exit 0
 fi
 
+# Before GitHub's feed names these URLs. A version's files are never
+# replaced, so a download under way can't change halfway through.
+step "Mirroring $version to $MIRROR"
+[[ -s "$out/latest.json.sig" ]] || fail "has no latest.json.sig; installs would refuse latest.json."
+for name in $(ls "$out" | grep -v -E '^latest\.json(\.sig)?$') latest.json.sig latest.json; do
+  mirror_put "$out/$name" "v$version/$name" "public, max-age=31536000, immutable"
+done
+
 step "Publishing $version"
 gh release view "$tag" --repo "$RELEASES_REPO" >/dev/null 2>&1 ||
   gh release create "$tag" --repo "$RELEASES_REPO" --draft --title "Relay $version" --notes ""
 # Nobody sees the draft until the edit below publishes it.
 (cd "$out" && gh release upload "$tag" --repo "$RELEASES_REPO" --clobber $(ls | grep -v -E '^latest\.json(\.sig)?$'))
 # The feed goes up only with its signature, after the files it points at.
-[[ -s "$out/latest.json.sig" ]] || fail "has no latest.json.sig; installs would refuse latest.json."
 gh release upload "$tag" "$out/latest.json.sig" "$out/latest.json" --repo "$RELEASES_REPO" --clobber
 gh release edit "$tag" --repo "$RELEASES_REPO" --draft=false --latest \
   --title "Relay $version" --notes-file "$ROOT/notes.md"
-rm -rf "$out"
 step "Published $version"
+
+# After GitHub, so the mirror never offers a release GitHub doesn't have.
+# Short-lived in caches: these names are replaced with every release.
+step "Pointing $MIRROR/latest at $version"
+for name in install-relay.sh install-relay.ps1 Relay-Android.apk latest.json.sig latest.json; do
+  mirror_put "$out/$name" "latest/$name" "public, max-age=60"
+done
+
+# Only the release that just fell out of the kept ones; it shares this one's
+# file names but for the version. The mirror is up by now, so a miss is logged.
+dropped="$(git tag -l 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n "$((MIRROR_KEEP + 1))p")"
+if [[ -n "$dropped" ]]; then
+  step "Removing $dropped from the mirror"
+  for name in $(ls "$out"); do
+    key="$dropped/${name//$version/${dropped#v}}"
+    wrangler r2 object delete "$MIRROR_BUCKET/$key" --remote >/dev/null 2>&1 ||
+      echo "Couldn't remove $key from the mirror."
+  done
+fi
+rm -rf "$out"
 
 # The site is built from the tag: it names this version and links its files.
 # The release is public by now, so a failed deploy only shows in the status.
@@ -230,12 +290,7 @@ step "Deploying relaycode.io"
 if [[ ! -f "$CLOUDFLARE" ]]; then
   echo "No Cloudflare token at $CLOUDFLARE; the site keeps its old version."
   echo skipped >"$ROOT/state/website"
-# Only what npm and wrangler need: the signing passwords and GH_TOKEN this
-# script exported stay out of a package fetched from npm.
-elif (. "$CLOUDFLARE" && env -i PATH="$PATH" HOME="$HOME" \
-  CLOUDFLARE_API_TOKEN="${CLOUDFLARE_API_TOKEN:-}" \
-  CLOUDFLARE_ACCOUNT_ID="${CLOUDFLARE_ACCOUNT_ID:-}" \
-  npm run deploy:website); then
+elif with_cloudflare npm run deploy:website; then
   echo deployed >"$ROOT/state/website"
 else
   echo failed >"$ROOT/state/website"
