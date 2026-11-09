@@ -10,6 +10,8 @@
 # startup file alone, RELAY_NODE picks the Node.js to run with.
 set -eu
 repo=relaycodehq/relay
+# Cloudflare's copy of every release; GitHub is the fallback.
+mirror=https://dl.relaycode.io
 dest=${RELAY_INSTALL:-$HOME/.local/share/relay}
 bindir=${RELAY_BIN:-$HOME/.local/bin}
 home=${RELAY_HOME:-$HOME/.relay}
@@ -126,17 +128,17 @@ if [ -z "$node" ]; then
     fail "Relay needs Node.js 22.13 or newer: https://nodejs.org/en/download"
   fi
 fi
+# The mirror keeps only the newest releases, so an older RELAY_VERSION comes from GitHub.
 if [ -n "${RELAY_UPDATE_FEED:-}" ]; then
-  feed=$RELAY_UPDATE_FEED
+  feeds=$RELAY_UPDATE_FEED
 elif [ -n "${RELAY_VERSION:-}" ]; then
-  feed="https://github.com/$repo/releases/download/v${RELAY_VERSION#v}/latest.json"
+  feeds="$mirror/v${RELAY_VERSION#v}/latest.json https://github.com/$repo/releases/download/v${RELAY_VERSION#v}/latest.json"
 else
-  feed="https://github.com/$repo/releases/latest/download/latest.json"
+  feeds="$mirror/latest/latest.json https://github.com/$repo/releases/latest/download/latest.json"
 fi
-fetch "$feed" "$tmp/latest.json" || fail "Couldn't reach $feed."
-fetch "$feed.sig" "$tmp/latest.json.sig" || fail "Couldn't fetch the release feed signature."
 # Authenticate the exact feed bytes before accepting any metadata or archive.
-"$node" -e '
+verify_feed() {
+  "$node" -e '
   const fs = require("node:fs");
   const { createPublicKey, verify } = require("node:crypto");
   // Keep these raw Ed25519 public keys in sync with shared/updates.ts.
@@ -151,7 +153,19 @@ fetch "$feed.sig" "$tmp/latest.json.sig" || fail "Couldn't fetch the release fee
     return signatures.some(s => verify(null, bytes, key, Buffer.from(s, "base64")));
   });
   if (!valid) throw new Error("The release feed signature does not match a trusted Relay key.");
-' "$tmp/latest.json" "$tmp/latest.json.sig" || fail "Couldn't verify the release feed."
+' "$tmp/latest.json" "$tmp/latest.json.sig"
+}
+read_feed() { # <url>: the feed and its signature, once they check out
+  fetch "$1" "$tmp/latest.json" && fetch "$1.sig" "$tmp/latest.json.sig" && verify_feed
+}
+found=
+for feed in $feeds; do
+  if read_feed "$feed" 2>/dev/null; then
+    found=1
+    break
+  fi
+done
+[ -n "$found" ] || fail "Couldn't read a signed release feed from $feeds."
 # The feed names the headless download and its SHA-512.
 metadata=$("$node" -e '
   const feed = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
@@ -159,18 +173,25 @@ metadata=$("$node" -e '
   const file = feed.headless;
   if (!file) { console.log("missing=1"); process.exit(); }
   const q = (s) => "\x27" + String(s).replace(/\x27/g, "") + "\x27";
-  console.log(`version=${q(feed.version)} url=${q(file.url)} sha512=${q(file.sha512)} name=${q(file.name)}`);
+  console.log(`version=${q(feed.version)} url=${q(file.url)} fallback=${q(file.fallbackUrl ?? "")} sha512=${q(file.sha512)} name=${q(file.name)}`);
 ' "$tmp/latest.json") || fail "Couldn't read the release feed."
 eval "$metadata"
 [ -z "${missing:-}" ] || fail "That release has no headless Relay yet."
 
+matches_release() {
+  "$node" -e '
+    const [file, want] = process.argv.slice(1);
+    const got = require("crypto").createHash("sha512").update(require("fs").readFileSync(file)).digest("base64");
+    if (got !== want) process.exit(1);
+  ' "$tmp/$name" "$sha512"
+}
 say "Downloading Relay ${version}…"
-fetch "$url" "$tmp/$name" || fail "Couldn't download $url."
-"$node" -e '
-  const [file, want] = process.argv.slice(1);
-  const got = require("crypto").createHash("sha512").update(require("fs").readFileSync(file)).digest("base64");
-  if (got !== want) { console.error("The download does not match the release."); process.exit(1); }
-' "$tmp/$name" "$sha512"
+# GitHub's copy when the mirror's is missing or damaged.
+if ! { fetch "$url" "$tmp/$name" 2>/dev/null && matches_release; }; then
+  [ -n "$fallback" ] || fail "Couldn't download $url, or it does not match the release."
+  fetch "$fallback" "$tmp/$name" || fail "Couldn't download $fallback."
+  matches_release || fail "The download does not match the release."
+fi
 tar -xzf "$tmp/$name" -C "$tmp"
 
 mkdir -p "$(dirname "$dest")" "$bindir"

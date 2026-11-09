@@ -7,17 +7,15 @@ export const REPO = "https://github.com/relaycodehq/relay";
 export const ISSUES = `${REPO}/issues`;
 export const BUILD_GUIDE = `${REPO}#for-contributors`;
 export const LICENSE = `${REPO}/blob/main/LICENSE`;
-export const RELEASES =
-  "https://github.com/relaycodehq/relay/releases/latest";
+export const RELEASES = "https://github.com/relaycodehq/relay/releases/latest";
 export const EMAIL = "hello@relaycode.io";
 // The build sets the version from the latest v* tag (previews/website/vite.config.ts).
 declare const __RELAY_VERSION__: string | undefined;
 export const VERSION =
   typeof __RELAY_VERSION__ === "string" ? __RELAY_VERSION__ : "dev";
+// From Cloudflare's copy of the release, which stays up when GitHub is down.
 const download = (file: string) =>
-  VERSION === "dev"
-    ? RELEASES
-    : `https://github.com/relaycodehq/relay/releases/download/v${VERSION}/${file}`;
+  VERSION === "dev" ? RELEASES : `https://dl.relaycode.io/v${VERSION}/${file}`;
 
 export const releaseNotes =
   VERSION === "dev"

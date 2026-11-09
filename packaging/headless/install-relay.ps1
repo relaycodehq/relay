@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 $repo = "relaycodehq/relay"
+# Cloudflare's copy of every release; GitHub is the fallback.
+$mirror = "https://dl.relaycode.io"
 $dest = if ($env:RELAY_INSTALL) { $env:RELAY_INSTALL } else { Join-Path $env:LOCALAPPDATA "Programs\Relay Headless" }
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -18,9 +20,13 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 $sqlite = & node --no-warnings -p "try { require('node:sqlite'); 'yes' } catch { 'no' }"
 if ($sqlite -ne "yes") { throw "Relay needs Node.js 22.13 or newer; this is $(& node --version)." }
 
-if ($env:RELAY_UPDATE_FEED) { $feed = $env:RELAY_UPDATE_FEED }
-elseif ($env:RELAY_VERSION) { $feed = "https://github.com/$repo/releases/download/v$($env:RELAY_VERSION.TrimStart('v'))/latest.json" }
-else { $feed = "https://github.com/$repo/releases/latest/download/latest.json" }
+# The mirror keeps only the newest releases, so an older RELAY_VERSION comes from GitHub.
+if ($env:RELAY_UPDATE_FEED) { $feeds = @($env:RELAY_UPDATE_FEED) }
+elseif ($env:RELAY_VERSION) {
+  $v = $env:RELAY_VERSION.TrimStart('v')
+  $feeds = @("$mirror/v$v/latest.json", "https://github.com/$repo/releases/download/v$v/latest.json")
+}
+else { $feeds = @("$mirror/latest/latest.json", "https://github.com/$repo/releases/latest/download/latest.json") }
 
 # Unpacked beside the install: Move-Item can't move a folder to another drive.
 New-Item -ItemType Directory -Path (Split-Path $dest) -Force | Out-Null
@@ -29,8 +35,6 @@ New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
   $feedPath = Join-Path $tmp "latest.json"
   $signaturePath = Join-Path $tmp "latest.json.sig"
-  Invoke-WebRequest -Uri $feed -OutFile $feedPath -UseBasicParsing
-  Invoke-WebRequest -Uri "$feed.sig" -OutFile $signaturePath -UseBasicParsing
   # Authenticate exact bytes before parsing or executing any release contents.
   $verifyFeed = @'
   const fs = require("node:fs");
@@ -46,21 +50,36 @@ try {
     const key = createPublicKey({ key: Buffer.concat([prefix, Buffer.from(raw, "base64")]), format: "der", type: "spki" });
     return signatures.some(s => verify(null, bytes, key, Buffer.from(s, "base64")));
   });
-  if (!valid) throw new Error("The release feed signature does not match a trusted Relay key.");
+  // An exit code, not stderr: PowerShell 5.1 stops on a native command's stderr.
+  if (!valid) process.exit(1);
 '@
-  $verifyFeed | & node - $feedPath $signaturePath
-  if ($LASTEXITCODE) { throw "Couldn't verify the release feed." }
+  $found = $false
+  foreach ($feed in $feeds) {
+    try {
+      Invoke-WebRequest -Uri $feed -OutFile $feedPath -UseBasicParsing
+      Invoke-WebRequest -Uri "$feed.sig" -OutFile $signaturePath -UseBasicParsing
+    } catch { continue }
+    $verifyFeed | & node - $feedPath $signaturePath
+    if (-not $LASTEXITCODE) { $found = $true; break }
+  }
+  if (-not $found) { throw "Couldn't read a signed release feed from $($feeds -join ' or ')." }
   $release = Get-Content -LiteralPath $feedPath -Raw -Encoding UTF8 | ConvertFrom-Json
   if ($release.version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid Relay version." }
   if (-not $release.headless) { throw "That release has no headless Relay yet." }
   $file = $release.headless
   $archive = Join-Path $tmp $file.name
   Write-Host "Downloading Relay $($release.version)..."
-  Invoke-WebRequest -Uri $file.url -OutFile $archive -UseBasicParsing
-  $sha = [Security.Cryptography.SHA512]::Create()
-  $stream = [IO.File]::OpenRead($archive)
-  try { $hash = [Convert]::ToBase64String($sha.ComputeHash($stream)) } finally { $stream.Dispose() }
-  if ($hash -cne $file.sha512) { throw "The download does not match the release." }
+  # GitHub's copy when the mirror's is missing or damaged.
+  $sources = @($file.url, $file.fallbackUrl) | Where-Object { $_ }
+  $downloaded = $false
+  foreach ($source in $sources) {
+    try { Invoke-WebRequest -Uri $source -OutFile $archive -UseBasicParsing } catch { continue }
+    $sha = [Security.Cryptography.SHA512]::Create()
+    $stream = [IO.File]::OpenRead($archive)
+    try { $hash = [Convert]::ToBase64String($sha.ComputeHash($stream)) } finally { $stream.Dispose() }
+    if ($hash -ceq $file.sha512) { $downloaded = $true; break }
+  }
+  if (-not $downloaded) { throw "Couldn't download Relay $($release.version), or it does not match the release." }
   # Windows' own tar: a GNU tar from Git earlier on PATH reads C: as a host.
   & (Join-Path $env:SystemRoot "System32\tar.exe") -xzf $archive -C $tmp
   if ($LASTEXITCODE) { throw "Couldn't unpack $archive." }

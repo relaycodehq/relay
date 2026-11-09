@@ -28,7 +28,7 @@ export const updateKeys: readonly string[] = [
 ];
 
 /** The phone app, built with every release; the unversioned name always points at the newest. */
-export const androidAppDownload = `https://github.com/${releasesRepo}/releases/latest/download/Relay-Android.apk`;
+export const androidAppDownload = `${downloadsMirror}/latest/Relay-Android.apk`;
 
 /** How the running copy was installed decides which download replaces it. */
 export type UpdateTarget =
