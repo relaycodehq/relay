@@ -122,10 +122,10 @@ export function PullRequestsPage({
   const context: PullContext = { verdicts, started, onOpen };
   const projectOf = (r: Repo) => projectFor(projects, r);
   const group = repo ? board.groups.find((g) => g.key === repo) : undefined;
-  // A quiet project has no card, but its page still opens from the quiet line.
+  // A quiet project has no card, and one whose list is still loading is on
+  // no card either, but its page opens all the same.
   const pageProject =
-    group?.project ??
-    board.quiet.find((p) => p.repository && repoKey(p.repository) === repo);
+    group?.project ?? (repo ? projectOf(keyRepo(repo)) : undefined);
   const repoName = pageProject?.name ?? group?.repo ?? repo;
   const needs = board.pulls.filter((p) =>
     needsYou(p, verdicts.get(pullKey(p.ref))),

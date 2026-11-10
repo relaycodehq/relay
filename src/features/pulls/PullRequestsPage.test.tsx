@@ -3,11 +3,15 @@ import { afterEach, expect, it, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { Project } from "../../../shared/projects";
 import type { Account, Issue } from "../../../shared/types";
 import { api } from "../../lib/api";
+import { repoKey } from "./pull-board";
 import { PullRequestsPage } from "./PullRequestsPage";
 
-vi.mock("../../lib/api", () => ({ api: { search: vi.fn() } }));
+vi.mock("../../lib/api", () => ({
+  api: { search: vi.fn(), projectPulls: vi.fn() },
+}));
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -129,6 +133,55 @@ it("loads search results after the first fifty and keeps loaded rows when the ne
         .mock.calls.filter(([filter]) => filter === "all")
         .map(([, , , page]) => page),
     ).toEqual([1, 2, 2]);
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
+
+it("opens a cloned project's page as that project while its list is still loading", async () => {
+  vi.mocked(api.search).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.projectPulls).mockReturnValue(new Promise(() => {}));
+  const project: Project = {
+    id: "repo",
+    name: "repo",
+    path: "/Users/me/repo",
+    added: 0,
+    repository: { server: account.server, owner: "team", name: "repo" },
+  };
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <PullRequestsPage
+            accounts={[account]}
+            onRecheckHosts={noop}
+            projects={[project]}
+            repo={repoKey(project.repository!)}
+            onRepo={noop}
+            query=""
+            onQuery={noop}
+            state="open"
+            onState={noop}
+            onOpen={noop}
+            onOpenUrl={noop}
+            onOpenProject={noop}
+            onAddProject={noop}
+          />
+        </QueryClientProvider>,
+      ),
+    );
+    await tick();
+    const text = container.textContent;
+    expect(text).toContain("Loading its pull requests…");
+    expect(text).toContain("Open project");
+    expect(text).not.toContain("not cloned here");
+    expect(text).not.toContain("Add its folder…");
   } finally {
     await act(async () => root.unmount());
     client.clear();
