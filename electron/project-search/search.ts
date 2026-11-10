@@ -158,7 +158,8 @@ async function regexMatches(run: RipgrepRun) {
   });
   const read = await nodeSearch({
     root: target.root,
-    files: paths,
+    // ripgrep names files as its threads finish; a capped search must list the same ones each time.
+    files: paths.sort(),
     query,
     limit,
     deadline: started + timeoutMs,
