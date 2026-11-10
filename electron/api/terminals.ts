@@ -14,6 +14,33 @@ import { projectTasks } from "../terminal/tasks";
 import { threadTerminals } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
 
+/** Opens the thread's shell (the draft's with no chat) in its folder. */
+function openShell(ctx: ApiContext) {
+  const { projects, projectChats } = ctx;
+  return takes(
+    [
+      idSchema,
+      idSchema.nullable(),
+      terminalSizeSchema,
+      z.boolean().optional(),
+      terminalSlotSchema.optional(),
+    ],
+    async (projectId, chatId, size, fresh, slot) => {
+      const cwd = chatId
+        ? await projectChats.worktrees.terminalFolder(projectId, chatId)
+        : await projects.root(projectId);
+      return threadTerminals.open(
+        terminalSlotKey(chatId ?? draftTerminalKey(projectId), slot ?? ""),
+        cwd,
+        size.cols,
+        size.rows,
+        fresh,
+        chatId ? await projectChats.worktreeEnv(chatId) : {},
+      );
+    },
+  );
+}
+
 /** A thread's shell, and the project's long-running tasks. */
 export function terminalHandlers(ctx: ApiContext) {
   const { projects, projectChats } = ctx;
@@ -37,28 +64,7 @@ export function terminalHandlers(ctx: ApiContext) {
     ),
     stopProjectTask: changeTask("stop"),
     restartProjectTask: changeTask("restart"),
-    openTerminal: takes(
-      [
-        idSchema,
-        idSchema.nullable(),
-        terminalSizeSchema,
-        z.boolean().optional(),
-        terminalSlotSchema.optional(),
-      ],
-      async (projectId, chatId, size, fresh, slot) => {
-        const cwd = chatId
-          ? await projectChats.worktrees.terminalFolder(projectId, chatId)
-          : await projects.root(projectId);
-        return threadTerminals.open(
-          terminalSlotKey(chatId ?? draftTerminalKey(projectId), slot ?? ""),
-          cwd,
-          size.cols,
-          size.rows,
-          fresh,
-          chatId ? await projectChats.worktreeEnv(chatId) : {},
-        );
-      },
-    ),
+    openTerminal: openShell(ctx),
     closeTerminal: takes([terminalKeySchema], (key) =>
       threadTerminals.close(key),
     ),
