@@ -39,7 +39,7 @@ import { NoProject } from "../features/projects/NoProject";
 import { useEveryThread } from "../features/sidebar/useSidebarThreads";
 import type { ComposerControls } from "../features/composer/ProjectComposer";
 import { ProjectSidebar } from "../features/sidebar/ProjectSidebar";
-import { PullsTitle } from "../features/pulls/PullRequestsPage";
+import { PullsTitle } from "../features/pulls/PullsTitle";
 import { UsagePage, UsageTitle } from "../features/usage/UsagePage";
 import {
   SchedulesPage,

@@ -32,7 +32,7 @@ export const bigFiles: Record<string, number> = {
   "src/features/composer/ProjectComposer.tsx": 615,
   "src/features/images/ImageViewer.tsx": 592,
   "src/features/images/sketch.ts": 661,
-  "src/features/pulls/PullRequestsPage.tsx": 821,
+  "src/features/pulls/PullRequestsPage.tsx": 738,
   "src/features/quick-switch/QuickSwitchHud.tsx": 614,
   "src/features/sidebar/ProjectTree.tsx": 657,
   "src/features/sidebar/SidebarActivity.tsx": 592,

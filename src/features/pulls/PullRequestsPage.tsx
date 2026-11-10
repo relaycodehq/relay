@@ -1,11 +1,10 @@
 // The Pull requests page: what needs you, then a card per project. A card
 // opens that project's page, sorted the same way: waiting on you, yours,
 // everyone else's.
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Popover } from "@base-ui/react/popover";
 import {
-  ArrowLeft,
   AlertCircle,
   ChevronRight,
   FolderGit2,
@@ -13,8 +12,6 @@ import {
   GitPullRequest,
   Link2,
   RefreshCw,
-  Search,
-  X,
 } from "lucide-react";
 import { tildePath, type Project } from "../../../shared/projects";
 import type { Account, Repo } from "../../../shared/types";
@@ -30,8 +27,6 @@ import {
   type Board,
   type BoardPull,
   type ListedPull,
-  type PullsLocation,
-  type PullsTarget,
   type Relation,
 } from "./pull-board";
 import {
@@ -48,64 +43,13 @@ import {
   RepoMark,
   type PullContext,
 } from "./PullRows";
-import { ErrorBox, IconButton, Loading } from "../../ui/ui";
+import { ErrorBox, Loading } from "../../ui/ui";
 import { hostKindOf, pullHostName } from "../../../shared/source-control";
 import { errorMessage } from "../../../shared/error-message";
 import { accountOn } from "./usePullHosts";
 import { useProjectPulls } from "./project-pulls";
+import { PullSearchBox } from "./PullSearchBox";
 import "./pull-requests.css";
-
-/** The window title's trail back from a PR or a project's page. Back goes up
- *  one crumb, and from the board leaves the page. */
-export function PullsTitle({
-  where,
-  onNav,
-  onLeave,
-}: {
-  where: PullsLocation;
-  onNav: (target: PullsTarget) => void;
-  onLeave: () => void;
-}) {
-  const { repo, pull } = where;
-  const back = () => {
-    if (pull && repo) onNav({ to: "repo", repo: repo.key });
-    else if (pull || repo) onNav({ to: "board" });
-    else onLeave();
-  };
-  return (
-    <div className="project-window-title pulls-title">
-      <IconButton label="Back" onClick={back}>
-        <ArrowLeft size={15} />
-      </IconButton>
-      {repo || pull ? (
-        <button onClick={() => onNav({ to: "board" })}>Pull requests</button>
-      ) : (
-        <strong>Pull requests</strong>
-      )}
-      {repo && (
-        <>
-          <span className="breadcrumb-slash">/</span>
-          {pull ? (
-            <button onClick={() => onNav({ to: "repo", repo: repo.key })}>
-              {repo.label}
-            </button>
-          ) : (
-            <strong>{repo.label}</strong>
-          )}
-        </>
-      )}
-      {pull && (
-        <>
-          <span className="breadcrumb-slash">/</span>
-          <strong>
-            #{pull.number}
-            {pull.title && ` ${pull.title}`}
-          </strong>
-        </>
-      )}
-    </div>
-  );
-}
 
 export function PullRequestsPage({
   accounts,
@@ -168,11 +112,6 @@ export function PullRequestsPage({
       : []),
   ];
   const waiting = `Waiting for ${pending.map(pullHostName).join(", ")}…`;
-  const [typed, setTyped] = useState(query);
-  useEffect(() => {
-    const t = setTimeout(() => onQuery(typed.trim()), 250);
-    return () => clearTimeout(t);
-  }, [typed]);
   const searchRef = useRef<HTMLInputElement>(null);
   useShortcut("find", true, () => {
     searchRef.current?.focus();
@@ -245,34 +184,12 @@ export function PullRequestsPage({
           <p>{head.summary}</p>
         </div>
         <div className="pulls-tools">
-          <label className="pulls-search">
-            <Search size={13} />
-            <input
-              ref={searchRef}
-              aria-label="Search pull requests"
-              placeholder="Search pull requests"
-              value={typed}
-              maxLength={500}
-              onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape" && typed) {
-                  e.stopPropagation();
-                  setTyped("");
-                }
-              }}
-            />
-            {typed ? (
-              <button
-                className="pulls-search-clear"
-                aria-label="Clear search"
-                onClick={() => setTyped("")}
-              >
-                <X size={12} />
-              </button>
-            ) : (
-              searchKeys && <kbd>{searchKeys}</kbd>
-            )}
-          </label>
+          <PullSearchBox
+            query={query}
+            onQuery={onQuery}
+            inputRef={searchRef}
+            keys={searchKeys}
+          />
           <div className="pulls-states" role="radiogroup" aria-label="State">
             {(["open", "closed", "all"] as const).map((s) => (
               <button
