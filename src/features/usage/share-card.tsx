@@ -5,8 +5,8 @@ import { forwardRef } from "react";
 import type { UsageSummary } from "../../../shared/usage";
 import { relayMarkSvg, svgDataUrl } from "../../lib/relay-icon";
 import type { ThemeKind } from "../../lib/themes";
-import { clock, dayLabel, hours } from "./format";
-import { average, headline, inStretch, rhythmLine } from "./rhythm";
+import { answerCount, clock, hours, periodLabel } from "./format";
+import { average, headline, inStretch, ledeFor, rhythmLine } from "./rhythm";
 
 const sans = `-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif`;
 
@@ -42,6 +42,18 @@ function mix(a: string, b: string, t: number) {
 const clip = (text: string, most: number) =>
   text.length > most ? `${text.slice(0, most - 1).trimEnd()}…` : text;
 
+/** The words in lines of at most `most` characters. */
+function wrapWords(text: string, most: number) {
+  const lines: string[] = [];
+  for (const word of text.split(" ")) {
+    const last = lines.length - 1;
+    if (last >= 0 && lines[last].length + 1 + word.length <= most)
+      lines[last] += ` ${word}`;
+    else lines.push(word);
+  }
+  return lines;
+}
+
 export type CardOptions = { names: boolean; dollars: boolean };
 
 export const UsageCard = forwardRef<
@@ -53,6 +65,10 @@ export const UsageCard = forwardRef<
   const W = 1200;
   const H = 630;
   const line = rhythmLine(summary, m);
+  const lede = ledeFor(summary, m);
+  const sentenceLines = lede.rhythm ? [] : wrapWords(lede.sentence, 46);
+  const twoLines = lede.rhythm ? !!lede.weekdays : sentenceLines.length > 1;
+  const factsY = twoLines ? 284 : 220;
   const values = summary.hours.map((h) => average(h, m));
   const max = Math.max(1e-9, ...values);
   const left = 60;
@@ -83,36 +99,52 @@ export const UsageCard = forwardRef<
         Relay
       </text>
       <text x={W - left} y={72} fill={c.muted} fontSize={17} textAnchor="end">
-        {dayLabel(summary.days[0]?.day ?? summary.from)} –{" "}
-        {dayLabel(summary.to)}, {new Date(summary.to).getFullYear()}
+        {periodLabel(summary, true)}
       </text>
 
-      <text
-        x={left - 2}
-        y={170}
-        fill={c.text}
-        fontSize={52}
-        fontWeight={600}
-        letterSpacing={-1.2}
-      >
-        You vibe hardest <tspan fill={c.accent}>{line.stretch}</tspan>
-        {line.weekdays ? "," : "."}
-      </text>
-      {line.weekdays && (
+      {lede.rhythm ? (
+        <>
+          <text
+            x={left - 2}
+            y={170}
+            fill={c.text}
+            fontSize={52}
+            fontWeight={600}
+            letterSpacing={-1.2}
+          >
+            You vibe hardest <tspan fill={c.accent}>{lede.stretch}</tspan>
+            {lede.weekdays ? "," : "."}
+          </text>
+          {lede.weekdays && (
+            <text
+              x={left - 2}
+              y={234}
+              fill={c.text}
+              fontSize={52}
+              fontWeight={600}
+              letterSpacing={-1.2}
+            >
+              and most on <tspan fill={c.accent}>{lede.weekdays}</tspan>.
+            </text>
+          )}
+        </>
+      ) : (
         <text
           x={left - 2}
-          y={234}
           fill={c.text}
-          fontSize={52}
+          fontSize={40}
           fontWeight={600}
-          letterSpacing={-1.2}
+          letterSpacing={-0.8}
         >
-          and most on <tspan fill={c.accent}>{line.weekdays}</tspan>.
+          {sentenceLines.map((words, i) => (
+            <tspan key={i} x={left - 2} y={166 + i * 56}>
+              {words}
+            </tspan>
+          ))}
         </text>
       )}
-      <text x={left} y={line.weekdays ? 284 : 220} fill={c.muted} fontSize={20}>
-        {headline(summary, m)} ·{" "}
-        {summary.totals.answers.toLocaleString("en-US")} answers ·{" "}
+      <text x={left} y={factsY} fill={c.muted} fontSize={20}>
+        {headline(summary, m)} · {answerCount(summary.totals.answers)} ·{" "}
         {hours(summary.totals.agentMs)} of agents working
       </text>
 

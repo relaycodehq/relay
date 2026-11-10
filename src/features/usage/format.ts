@@ -2,6 +2,7 @@ import {
   providersIn,
   type UsageDay,
   type UsageMeasure,
+  type UsageSummary,
 } from "../../../shared/usage";
 
 /** 1.2K, 34M, 2.1B. */
@@ -31,6 +32,29 @@ export function longDay(at: number) {
     month: "short",
     day: "numeric",
   });
+}
+
+/** "1 answer", "2,310 answers". */
+export const answerCount = (n: number) =>
+  `${n.toLocaleString("en-US")} ${n === 1 ? "answer" : "answers"}`;
+
+/**
+ * "Oct 2 – Oct 11", or one date when the period is one day. A period that
+ * crosses New Year names the year at both ends; `withYear` names it at the end.
+ */
+export function periodLabel(summary: UsageSummary, withYear = false) {
+  const first = new Date(summary.days[0]?.day ?? summary.from);
+  const last = new Date(summary.to);
+  const crossesNewYear = first.getFullYear() !== last.getFullYear();
+  const label = (at: Date, yearOn: boolean) =>
+    at.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: yearOn ? "numeric" : undefined,
+    });
+  const lastLabel = label(last, crossesNewYear || withYear);
+  if (first.toDateString() === last.toDateString()) return lastLabel;
+  return `${label(first, crossesNewYear)} – ${lastLabel}`;
 }
 
 /** Hours with one decimal under ten, whole above. */

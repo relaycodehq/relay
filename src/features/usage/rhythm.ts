@@ -80,3 +80,28 @@ export function headline(summary: UsageSummary, m: UsageMeasure) {
     return `${compact(totals.fresh)} tokens, ${compact(totals.tokens - totals.fresh)} more re-read from cache`;
   return `${usd(totals.usd)}${totals.unpriced ? " + unpriced" : ""} at API prices`;
 }
+
+/**
+ * What the lede says: the busiest stretch (and weekday) when there is one,
+ * otherwise why there is nothing to chart by this measure.
+ */
+export function ledeFor(summary: UsageSummary, m: UsageMeasure) {
+  const line = rhythmLine(summary, m);
+  if (line.stretch)
+    return {
+      rhythm: true as const,
+      stretch: line.stretch,
+      weekdays: line.weekdays,
+    };
+  return { rhythm: false as const, sentence: nothingToChart(summary, m) };
+}
+
+function nothingToChart({ totals }: UsageSummary, m: UsageMeasure) {
+  if (totals.answers === 0)
+    return "A quiet stretch: nothing counted in these days.";
+  if (m === "fresh")
+    return "These answers came without token counts, so there's nothing to chart.";
+  if (totals.tokens > 0)
+    return "These answers came without a price; Tokens shows what they used.";
+  return "These answers came without a price or token counts, so there's nothing to chart.";
+}

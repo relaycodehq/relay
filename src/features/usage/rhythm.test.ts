@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { UsageSlot } from "../../../shared/usage";
-import { busiestStretch, rhythm } from "./rhythm";
+import {
+  summarizeUsage,
+  type UsageEntry,
+  type UsageSlot,
+} from "../../../shared/usage";
+import { busiestStretch, ledeFor, rhythm } from "./rhythm";
 
 const slot = (usd: number, days: number): UsageSlot => ({
   usd,
@@ -35,5 +39,47 @@ describe("rhythm", () => {
   it("names no weekday under two weeks counted", () => {
     const week = [0, 1, 2, 3, 4, 5, 6].map((d) => slot(d, d < 6 ? 2 : 1));
     expect(rhythm(hours, week, "usd").weekday).toBeNull();
+  });
+});
+
+describe("ledeFor", () => {
+  const now = new Date(2026, 10, 10, 12).getTime();
+  const answer = (usd?: number): UsageEntry => ({
+    at: new Date(2026, 10, 10, 9).getTime(),
+    ms: 0,
+    provider: "claude",
+    job: "thread",
+    answer: true,
+    models: {
+      mystery: {
+        tokens: { input: 100, cacheWrite: 0, cacheRead: 0, output: 10 },
+        usd,
+        requests: 1,
+      },
+    },
+  });
+  const summary = (entries: UsageEntry[]) =>
+    summarizeUsage(entries, { range: "7d", now, chats: [] });
+
+  it("names the stretch when there is one", () => {
+    expect(ledeFor(summary([answer(2)]), "usd")).toMatchObject({
+      rhythm: true,
+      stretch: "06:00–10:00",
+    });
+  });
+
+  it("says why there is nothing to chart in dollars when no model had a price", () => {
+    expect(ledeFor(summary([answer()]), "usd")).toEqual({
+      rhythm: false,
+      sentence:
+        "These answers came without a price; Tokens shows what they used.",
+    });
+  });
+
+  it("says a stretch was quiet when nothing was counted", () => {
+    expect(ledeFor(summary([]), "usd")).toMatchObject({
+      rhythm: false,
+      sentence: "A quiet stretch: nothing counted in these days.",
+    });
   });
 });

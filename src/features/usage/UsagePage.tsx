@@ -13,8 +13,8 @@ import { relayJobLabels, usageRanges } from "../../../shared/usage";
 import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
-import { columnsOf, dayLabel, hours, measured } from "./format";
-import { DAYS_FOR_A_WEEKDAY, headline, rhythmLine } from "./rhythm";
+import { answerCount, columnsOf, hours, measured, periodLabel } from "./format";
+import { DAYS_FOR_A_WEEKDAY, headline, ledeFor, rhythmLine } from "./rhythm";
 import { RoomLeft } from "./room/RoomLeft";
 import { useRoom } from "./room/useRoom";
 import { ShareDialog } from "./ShareDialog";
@@ -158,21 +158,6 @@ export function UsagePage({
   );
 }
 
-/** "Oct 2 – Oct 11", one day once, and when counting began inside the range. */
-function periodLabel(summary: UsageSummary) {
-  const first = dayLabel(summary.days[0]?.day ?? summary.from);
-  const last = dayLabel(summary.to);
-  const since =
-    summary.since !== undefined &&
-    new Date(summary.since).setHours(0, 0, 0, 0) > summary.from
-      ? dayLabel(summary.since)
-      : undefined;
-  return (
-    (first === last ? first : `${first} – ${last}`) +
-    (since && since !== first ? `, counted since ${since}` : "")
-  );
-}
-
 function Block({
   title,
   aside,
@@ -212,6 +197,7 @@ function Rhythmic({
 }) {
   const { totals } = summary;
   const line = rhythmLine(summary, m);
+  const lede = ledeFor(summary, m);
   const counted = summary.days.length;
   const models = [...summary.models]
     .filter((x) => x[m] > 0)
@@ -235,31 +221,23 @@ function Rhythmic({
   return (
     <div className="us-rhythmic">
       <p className="us-lede">
-        {line.stretch ? (
+        {lede.rhythm ? (
           <>
-            You vibe hardest <em>{line.stretch}</em>
-            {line.weekdays && (
+            You vibe hardest <em>{lede.stretch}</em>
+            {lede.weekdays && (
               <>
-                , and most on <em>{line.weekdays}</em>
+                , and most on <em>{lede.weekdays}</em>
               </>
             )}
             .
           </>
-        ) : totals.answers > 0 ? (
-          m === "fresh" ? (
-            "These answers came without token counts, so there's nothing to chart."
-          ) : totals.tokens > 0 ? (
-            "These answers came without a price; Tokens shows what they used."
-          ) : (
-            "These answers came without a price or token counts, so there's nothing to chart."
-          )
         ) : (
-          "A quiet stretch: nothing counted in these days."
+          lede.sentence
         )}
       </p>
       <p className="us-lede-facts">
-        {headline(summary, m)} · {totals.answers.toLocaleString("en-US")}{" "}
-        answers · {hours(totals.agentMs)} of agents working
+        {headline(summary, m)} · {answerCount(totals.answers)} ·{" "}
+        {hours(totals.agentMs)} of agents working
       </p>
 
       <div

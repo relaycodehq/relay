@@ -325,7 +325,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/tips/TipPeek.tsx › Peek": 144,
   "src/features/updates/Changelog.tsx › Changelog": 123,
   "src/features/updates/UpdateToasts.tsx › Stack": 122,
-  "src/features/usage/UsagePage.tsx › Rhythmic": 205,
+  "src/features/usage/UsagePage.tsx › Rhythmic": 198,
   "src/features/usage/usage-charts.tsx › Bars": 92,
   "src/features/watch/WatchNotes.tsx › WatchNotes": 96,
   "src/lib/useDragSort.ts › onPointerDown": 83,

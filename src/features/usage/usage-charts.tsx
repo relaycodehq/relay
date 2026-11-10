@@ -29,6 +29,7 @@ import { CursorGlyph } from "../agents/CursorGlyph";
 import { RegistryGlyph } from "../agents/RegistryGlyph";
 import {
   clock,
+  answerCount,
   dayLabel,
   dayTotal,
   longDay,
@@ -234,7 +235,7 @@ export function DayColumns({
                 </span>
               ))}
             <span className="us-tip-total">
-              {day.answers} answers
+              {answerCount(day.answers)}
               <b>{measured(dayTotal(day, measure), measure)}</b>
             </span>
           </>
