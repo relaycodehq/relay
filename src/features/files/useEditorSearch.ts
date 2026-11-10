@@ -12,8 +12,8 @@ export type FindRequest = { replace: boolean; query?: string; key: number };
 /**
  * The editor's project-wide search: the Search Everywhere palette, Find in
  * Files under the editor, and the `host` commands that open them from the
- * editor's keys. Double Shift opens the palette, and ⌘⇧F Find in Files, from
- * anywhere in the pane.
+ * editor's keys. Double Shift opens the palette, and Find in Files' own key
+ * opens it, from anywhere in the pane.
  */
 export function useEditorSearch({
   active,

@@ -305,7 +305,7 @@ const shortcutCommands = {
     title: "Find in files",
     group: "Editor",
     description:
-      "Opens Find in Files in the Files pane when no editor has the cursor. With the cursor in an editor, ⌘⇧F does the same and starts from the selected text.",
+      "Opens Find in Files in the Files pane. With the cursor in an editor it starts from the selected text.",
     keywords: "search text project grep replace",
     defaults: one("mod+shift+KeyF"),
   },
