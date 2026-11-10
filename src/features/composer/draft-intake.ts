@@ -56,6 +56,17 @@ function clipboardFiles(data: DataTransfer): File[] {
     .filter((file): file is File => !!file);
 }
 
+/**
+ * Files copied in Finder or Explorer paste like they drop. Files that aren't
+ * on disk can't be mentioned, so the text they came with pastes instead.
+ */
+function pastesAsFiles(files: File[], plain: string) {
+  const placeable = files.some(
+    (file) => isScreenshot(file) || api.pathForFile(file),
+  );
+  return files.length > 0 && (placeable || !plain.trim());
+}
+
 /** Files and pasted text entering one draft; queued work keeps its original key. */
 export function draftIntake({
   key,
@@ -273,13 +284,8 @@ export function draftIntake({
         return;
       }
       const files = clipboardFiles(event.clipboardData);
-      // Files copied in Finder or Explorer paste like they drop. Files that
-      // aren't on disk can't be mentioned, so the text they came with pastes.
-      const placeable = files.some(
-        (file) => isScreenshot(file) || api.pathForFile(file),
-      );
       const plain = event.clipboardData.getData("text/plain");
-      if (files.length && (placeable || !plain.trim())) {
+      if (pastesAsFiles(files, plain)) {
         event.preventDefault();
         event.stopPropagation();
         addFiles(files);

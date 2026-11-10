@@ -172,7 +172,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/composer/ProjectComposer.tsx › ComposerBody": 496,
   "src/features/composer/UsageRing.tsx › UsageRing": 102,
   "src/features/composer/draft-intake.ts › attachImages": 105,
-  "src/features/composer/draft-intake.ts › draftIntake": 249,
+  "src/features/composer/draft-intake.ts › draftIntake": 244,
   "src/features/composer/draft-send.ts › sendDraft": 119,
   "src/features/composer/useAgentRuns.ts › useAgentRuns": 273,
   "src/features/composer/useComposerDraft.ts › useComposerDraft": 86,
