@@ -38,7 +38,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/api/reviews.ts › reviewHandlers": 164,
   "electron/api/settings.ts › settingsHandlers": 321,
   "electron/app/menu.ts › setApplicationMenu": 104,
-  "electron/app/window.ts › build": 121,
+  "electron/app/window.ts › build": 110,
   "electron/checks/detect.ts › detectProject": 98,
   "electron/deep-review/scope.ts › resolveScope": 116,
   "electron/dictation/apple.ts › serveAppleSpeech": 83,

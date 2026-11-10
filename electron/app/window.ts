@@ -35,6 +35,24 @@ const pageErrorLimit = 100;
  */
 const MAIN_MIN_WIDTH = { sidebar: 560 + 180 + 52, alone: 560 };
 
+/**
+ * The page's errors land in main.log too, so a report after a blank window
+ * says what broke. Capped: a render loop can throw every frame.
+ */
+function logPageErrors(win: BrowserWindow) {
+  let pageErrors = 0;
+  win.webContents.on("console-message", (details) => {
+    if (details.level !== "error" || pageErrors > pageErrorLimit) return;
+    pageErrors++;
+    const where = `${details.sourceId.split(/[\\/]/).pop()}:${details.lineNumber}`;
+    console.warn(
+      pageErrors > pageErrorLimit
+        ? "Window error: over 100 in this window; the rest aren't logged"
+        : `Window error: ${details.message.slice(0, 4000)} (${where})`,
+    );
+  });
+}
+
 /** Where the main window's size and state are kept between runs. */
 export interface MainWindowStore {
   load(): SavedMainWindow | null;
@@ -409,19 +427,7 @@ export class AppWindow {
       },
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    // The page's errors land in main.log too, so a report after a blank
-    // window says what broke. Capped: a render loop can throw every frame.
-    let pageErrors = 0;
-    win.webContents.on("console-message", (details) => {
-      if (details.level !== "error" || pageErrors > pageErrorLimit) return;
-      pageErrors++;
-      const where = `${details.sourceId.split(/[\\/]/).pop()}:${details.lineNumber}`;
-      console.warn(
-        pageErrors > pageErrorLimit
-          ? "Window error: over 100 in this window; the rest aren't logged"
-          : `Window error: ${details.message.slice(0, 4000)} (${where})`,
-      );
-    });
+    logPageErrors(win);
     // The renderer's caption buttons swap maximize for restore.
     const sendMaximized = () =>
       win.webContents.send("relay:maximized", win.isMaximized());
