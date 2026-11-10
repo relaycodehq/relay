@@ -11,8 +11,43 @@ export function pasteText(text: string) {
   return severalLines ? text : command;
 }
 
-/** Copy on select, right-click to copy or paste, and paste without a lone line's line break. */
-export function wireClipboard(term: Terminal, element: HTMLElement) {
+/** A paste held back until the user says to go on. */
+export interface HeldPaste {
+  text: string;
+  /** How many lines the shell would run, one after the other. */
+  lines: number;
+}
+
+/**
+ * Whether `clipboard` goes to the shell now. Several lines pasted to a
+ * program that didn't ask for bracketed paste (a Python prompt, `cat`, an
+ * older shell) each run as they arrive, so the user is asked first.
+ */
+export function pasteDecision(
+  clipboard: string,
+  bracketedPaste: boolean,
+): { hold: false; text: string } | ({ hold: true } & HeldPaste) {
+  const text = pasteText(clipboard);
+  const lines = text.replace(/[\r\n]+$/, "").split(/\r\n|\r|\n/).length;
+  if (bracketedPaste || lines === 1) return { hold: false, text };
+  return { hold: true, text, lines };
+}
+
+/**
+ * Copy on select, right-click to copy or paste, and paste without a lone
+ * line's line break. `hold` gets a paste that wants the user's go-ahead.
+ */
+export function wireClipboard(
+  term: Terminal,
+  element: HTMLElement,
+  hold: (paste: HeldPaste) => void,
+) {
+  const paste = (clipboard: string) => {
+    const decision = pasteDecision(clipboard, term.modes.bracketedPasteMode);
+    if (decision.hold) hold(decision);
+    else term.paste(decision.text);
+  };
+
   // Once the mouse lets go rather than on every step of the drag.
   element.addEventListener("mouseup", (e) => {
     if (e.button === 0 && term.hasSelection())
@@ -20,8 +55,7 @@ export function wireClipboard(term: Terminal, element: HTMLElement) {
   });
 
   // Right-click copies a selection, or pastes when there's none, the way
-  // Windows Terminal does. paste() keeps bracketed paste, so a clipboard of
-  // several lines doesn't run in the shell line by line.
+  // Windows Terminal does.
   element.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     if (term.hasSelection()) {
@@ -30,7 +64,7 @@ export function wireClipboard(term: Terminal, element: HTMLElement) {
     } else {
       void api
         .readClipboard()
-        .then((text) => text && term.paste(pasteText(text)))
+        .then((text) => text && paste(text))
         .catch(() => {});
     }
     term.focus();
@@ -44,7 +78,7 @@ export function wireClipboard(term: Terminal, element: HTMLElement) {
       if (!text) return;
       e.preventDefault();
       e.stopPropagation();
-      term.paste(pasteText(text));
+      paste(text);
     },
     { capture: true },
   );

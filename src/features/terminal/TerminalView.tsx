@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import { useAppearance } from "../../lib/appearance";
 import { useShortcut } from "../../lib/shortcuts";
 import { terminalFont, useTypography } from "../../lib/typography";
+import { PasteAsk } from "./PasteAsk";
 import { terminalTheme } from "./terminal-theme";
 import {
   setTerminalFont,
@@ -52,6 +53,12 @@ export function TerminalView({
   return (
     <div className="terminal-view">
       <div className="terminal-drawer-body" ref={body} />
+      {terminal.heldPaste && (
+        <PasteAsk
+          paste={terminal.heldPaste}
+          onAnswer={(paste) => terminal.answerHeldPaste(paste)}
+        />
+      )}
       {terminal.error && (
         <div className="terminal-drawer-error" role="alert">
           <p>{terminal.error}</p>

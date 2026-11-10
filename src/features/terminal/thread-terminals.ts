@@ -19,7 +19,7 @@ import {
   newTerminalSlot,
   setTerminalOpen,
 } from "./terminal-dock";
-import { wireClipboard } from "./terminal-clipboard";
+import { wireClipboard, type HeldPaste } from "./terminal-clipboard";
 import { errorMessage } from "../../../shared/error-message";
 
 export type TerminalStatus = "idle" | "starting" | "running" | "exited";
@@ -35,6 +35,8 @@ export class ThreadTerminal {
   status: TerminalStatus = "idle";
   cwd?: string;
   error?: string;
+  /** Several lines the user is asked about before they reach a shell that would run each. */
+  heldPaste?: HeldPaste;
   /** Focus the terminal when the drawer next shows it. */
   focusOnShow = false;
   private fit = new FitAddon();
@@ -73,7 +75,10 @@ export class ThreadTerminal {
       // would ask with confirm() and then window.open, which goes nowhere here.
       linkHandler: { activate: (_event, uri) => void api.openExternal(uri) },
     });
-    wireClipboard(this.term, this.element);
+    wireClipboard(this.term, this.element, (paste) => {
+      this.heldPaste = paste;
+      this.emit();
+    });
     this.element.addEventListener("focusin", () => (lastFocused = this));
     this.term.loadAddon(this.fit);
     this.term.loadAddon(
@@ -180,6 +185,15 @@ export class ThreadTerminal {
       this.typed = "";
       this.error = errorMessage(e);
     }
+    this.emit();
+  }
+
+  /** The user answered the question about `heldPaste`. */
+  answerHeldPaste(paste: boolean) {
+    const held = this.heldPaste;
+    this.heldPaste = undefined;
+    if (held && paste) this.term.paste(held.text);
+    this.term.focus();
     this.emit();
   }
 
