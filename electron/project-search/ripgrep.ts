@@ -16,13 +16,18 @@ export interface FoundFile {
   matches: ProjectSearchMatch[];
 }
 
+/**
+ * `output` is each match as JSON, or only the names of the files that have
+ * one, separated by NUL.
+ */
 export function ripgrepArgs(
   query: ProjectSearchQuery,
   globs: Globs,
   plain: boolean,
+  output: "matches" | "files" = "matches",
 ) {
   return [
-    "--json",
+    ...(output === "matches" ? ["--json"] : ["--files-with-matches", "--null"]),
     "--no-config",
     // Dotfiles are code too; Git's own folder is not.
     "--hidden",
@@ -78,6 +83,10 @@ function unitOffsets(line: string, bytes: number[]) {
   return units;
 }
 
+/** A path as ripgrep prints it (`./src\\a.ts`) in the project's own form (`src/a.ts`). */
+const projectPath = (printed: string) =>
+  printed.replace(/^\.[\\/]/, "").replaceAll("\\", "/");
+
 export interface FoundLine extends FoundFile {
   /** The line had more matches than `room`, which were not read. */
   more: boolean;
@@ -109,7 +118,7 @@ export function parseRipgrepLine(
     wanted.flatMap((m) => [m.start, m.end]),
   );
   return {
-    path: path.text.replace(/^\.[\\/]/, "").replaceAll("\\", "/"),
+    path: projectPath(path.text),
     matches: wanted.map((_, i) =>
       matchPreview(
         text,
@@ -140,23 +149,59 @@ function failureFor(stderr: string) {
   return undefined;
 }
 
+/** What a run of ripgrep hands its output to, and what it makes of it. */
+interface Collector<T> {
+  feed(chunk: string): void;
+  /** The last piece, which has no separator after it. */
+  finish(): void;
+  readonly count: number;
+  result(): T;
+}
+
+/** What a collector may do to the run it is part of. */
+interface RunControl {
+  stopped(): boolean;
+  /** Ends the run early; what it has so far is `truncated`. */
+  stopTruncated(): void;
+}
+
+/** Cuts ripgrep's output into pieces at `separator`, scanning each new chunk only once. */
+function splitter(
+  separator: string,
+  stopped: () => boolean,
+  take: (piece: string) => void,
+) {
+  let unfinished = "";
+  return {
+    feed(chunk: string) {
+      // The text before the chunk has no separator, so it is not searched again.
+      const fresh = unfinished.length;
+      unfinished += chunk;
+      let end = unfinished.indexOf(separator, fresh);
+      while (end >= 0 && !stopped()) {
+        take(unfinished.slice(0, end));
+        unfinished = unfinished.slice(end + separator.length);
+        end = unfinished.indexOf(separator);
+      }
+    },
+    finish: () => take(unfinished),
+  };
+}
+
 /**
- * Takes ripgrep's output a chunk at a time and keeps its matches, grouped by
- * file, in the files `keep` lets through. Once `limit` matches are in,
- * `onFull` is called and later lines are ignored, as they are whenever
- * `stopped()` says so.
+ * Keeps ripgrep's matches, grouped by file, in the files `keep` lets
+ * through. Once `limit` matches are in the run is stopped, and later lines
+ * are ignored.
  */
-function collectMatches(
+function matchCollector(
   limit: number,
   keep: ((path: string) => boolean) | undefined,
-  stopped: () => boolean,
-  onFull: () => void,
-) {
+  control: RunControl,
+): Collector<FoundFile[]> {
   const files = new Map<string, ProjectSearchMatch[]>();
   let count = 0;
-  let unfinishedLine = "";
   const take = (raw: string) => {
-    if (stopped()) return;
+    if (control.stopped()) return;
     const found = raw ? parseRipgrepLine(raw, limit - count) : null;
     if (!found) return;
     if (keep && !keep(found.path)) return;
@@ -165,48 +210,59 @@ function collectMatches(
     count += found.matches.length;
     // A file goes in only with a match, so the cap never leaves one empty.
     if (list.length) files.set(found.path, list);
-    if (found.more) onFull();
+    if (found.more) control.stopTruncated();
   };
   return {
+    ...splitter("\n", control.stopped, take),
     get count() {
       return count;
     },
-    feed(chunk: string) {
-      // The text before the chunk has no newline, so it is not searched again.
-      const fresh = unfinishedLine.length;
-      unfinishedLine += chunk;
-      let end = unfinishedLine.indexOf("\n", fresh);
-      while (end >= 0 && !stopped()) {
-        take(unfinishedLine.slice(0, end));
-        unfinishedLine = unfinishedLine.slice(end + 1);
-        end = unfinishedLine.indexOf("\n");
-      }
+    result: () => [...files].map(([path, matches]) => ({ path, matches })),
+  };
+}
+
+/** Keeps the names of the files ripgrep says have a match, in the ones `keep` lets through. */
+function nameCollector(
+  keep: ((path: string) => boolean) | undefined,
+  control: RunControl,
+): Collector<string[]> {
+  const paths: string[] = [];
+  const take = (printed: string) => {
+    if (control.stopped() || !printed) return;
+    const path = projectPath(printed);
+    if (!keep || keep(path)) paths.push(path);
+  };
+  return {
+    ...splitter("\0", control.stopped, take),
+    get count() {
+      return paths.length;
     },
-    /** The last line, which has no newline after it. */
-    finish: () => take(unfinishedLine),
-    files: (): FoundFile[] =>
-      [...files].map(([path, matches]) => ({ path, matches })),
+    result: () => paths,
   };
 }
 
 /**
- * Runs ripgrep and collects its matches as they stream in, from the files
- * `keep` lets through. Stops it once `limit` matches are in, when `signal`
- * fires, or after `timeoutMs`; the first two and the last are `truncated`
- * unless the signal is the reason.
+ * Runs ripgrep and hands its output to a collector as it streams in. Stops it
+ * when the collector says so, when `signal` fires, or after `timeoutMs`; all
+ * but the signal are `truncated`.
  */
-export function ripgrepSearch(options: {
-  rg: string;
-  root: string;
-  args: string[];
-  keep?: (path: string) => boolean;
-  limit: number;
-  timeoutMs: number;
-  signal: AbortSignal;
-}): Promise<{ files: FoundFile[]; truncated: boolean }> {
-  const { rg, root, args, keep, limit, timeoutMs, signal } = options;
+function runRipgrep<T>(
+  options: {
+    rg: string;
+    root: string;
+    args: string[];
+    timeoutMs: number;
+    signal: AbortSignal;
+  },
+  collect: (control: RunControl) => Collector<T>,
+): Promise<{ found: T; truncated: boolean }> {
+  const { rg, root, args, timeoutMs, signal } = options;
   return new Promise((resolve, reject) => {
-    if (signal.aborted) return resolve({ files: [], truncated: false });
+    if (signal.aborted)
+      return resolve({
+        found: collect({ stopped: () => true, stopTruncated() {} }).result(),
+        truncated: false,
+      });
     const child = spawnExecutable(rg, args, {
       cwd: root,
       env: process.env,
@@ -217,15 +273,13 @@ export function ripgrepSearch(options: {
     let stderr = "";
     let spawnError: Error | undefined;
     const stop = () => terminate(child, { graceMs: 500 });
-    const collected = collectMatches(
-      limit,
-      keep,
-      () => truncated,
-      () => {
+    const collected = collect({
+      stopped: () => truncated,
+      stopTruncated() {
         truncated = true;
         stop();
       },
-    );
+    });
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", collected.feed);
     child.stderr?.setEncoding("utf8");
@@ -251,9 +305,49 @@ export function ripgrepSearch(options: {
       const failure = failed ? failureFor(stderr) : undefined;
       if (failure) return reject(failure);
       resolve({
-        files: collected.files(),
+        found: collected.result(),
         truncated: truncated && !signal.aborted,
       });
     });
   });
+}
+
+interface RipgrepRun {
+  rg: string;
+  root: string;
+  args: string[];
+  keep?: (path: string) => boolean;
+  timeoutMs: number;
+  signal: AbortSignal;
+}
+
+/**
+ * Runs ripgrep and collects its matches as they stream in, from the files
+ * `keep` lets through. Stops it once `limit` matches are in, when `signal`
+ * fires, or after `timeoutMs`; the first two and the last are `truncated`
+ * unless the signal is the reason.
+ */
+export async function ripgrepSearch(
+  options: RipgrepRun & { limit: number },
+): Promise<{ files: FoundFile[]; truncated: boolean }> {
+  const { limit, keep, ...run } = options;
+  const { found, truncated } = await runRipgrep(run, (control) =>
+    matchCollector(limit, keep, control),
+  );
+  return { files: found, truncated };
+}
+
+/**
+ * Runs ripgrep for the names of the files it finds a match in (the `args`
+ * come from `ripgrepArgs` with output "files"), from the ones `keep` lets
+ * through.
+ */
+export async function ripgrepFiles(
+  options: RipgrepRun,
+): Promise<{ paths: string[]; truncated: boolean }> {
+  const { keep, ...run } = options;
+  const { found, truncated } = await runRipgrep(run, (control) =>
+    nameCollector(keep, control),
+  );
+  return { paths: found, truncated };
 }

@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProjectSearchQuery } from "../../shared/project-search";
 import { digest } from "../util/hash";
+import { replaceProjectText } from "./replace";
 import { searchProjectText, type SearchTarget } from "./search";
 import { SearchSlots } from "./slots";
 
@@ -351,6 +352,32 @@ describe.skipIf(!rgPath)("ripgrep", () => {
     const r = await run(find("foo(?=\\d)", { regex: true }), "rg");
     expect(r.engine).toBe("node");
     expect(summary(r)).toEqual([["regex.txt", [[1, 0, 3]]]]);
+  });
+
+  it("lists a regex's matches as JavaScript finds them, so replace rewrites the same ones", async () => {
+    await put("uni.txt", "héllo wörld\n");
+    // Rust's \d takes an Arabic-Indic digit; JavaScript's does not.
+    await put("arabic.txt", "٣\n");
+    const word = find("\\w+", { regex: true });
+    const r = await run({ ...word, include: "*.txt" }, "rg");
+    expect(r.engine).toBe("ripgrep");
+    const uni = r.files.find((f) => f.path === "uni.txt");
+    expect(uni?.matches.map((m) => [m.column, m.length])).toEqual([
+      [0, 1],
+      [2, 3],
+      [6, 1],
+      [8, 3],
+    ]);
+    const digits = await run(
+      { ...find("\\d", { regex: true }), include: "*.txt" },
+      "rg",
+    );
+    expect(digits.files.map((f) => f.path)).not.toContain("arabic.txt");
+
+    const done = await replaceProjectText(root, word, "X", [
+      { path: "uni.txt", version: uni?.version ?? "" },
+    ]);
+    expect(done.replaced[0].count).toBe(uni?.matches.length);
   });
 
   it("falls back when the executable is gone", async () => {

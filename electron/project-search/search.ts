@@ -14,6 +14,7 @@ import { maxFileBytes, nodeSearch } from "./node-search";
 import {
   PatternRejected,
   ripgrepArgs,
+  ripgrepFiles,
   ripgrepSearch,
   type FoundFile,
 } from "./ripgrep";
@@ -108,32 +109,67 @@ function byPath(a: { path: string }, b: { path: string }) {
   return a.path < b.path ? -1 : 1;
 }
 
-/** Searches with ripgrep, or returns undefined when it can't: Rust's regex has no lookaround (JavaScript's does), or the install is gone. */
-async function ripgrepResult(run: {
+interface RipgrepRun {
   rg: string;
   target: SearchTarget;
   query: ProjectSearchQuery;
   globs: Globs;
   limit: number;
+  started: number;
   timeoutMs: number;
   signal: AbortSignal;
-}) {
+}
+
+/** ripgrep's own matches, read again for the digest of the bytes they were found in. */
+async function ripgrepMatches(run: RipgrepRun) {
   const { rg, target, query, globs, limit, timeoutMs, signal } = run;
+  const since = Date.now();
+  const { files, truncated } = await ripgrepSearch({
+    rg,
+    root: target.root,
+    args: ripgrepArgs(query, globs, target.plain),
+    keep: pathFilter(globs),
+    limit,
+    timeoutMs,
+    signal,
+  });
+  const versioned = signal.aborted
+    ? []
+    : await withVersions(target.root, files, since);
+  return { files: versioned, truncated };
+}
+
+/**
+ * The matches of a regex, which replace will run as JavaScript: ripgrep only
+ * names the files worth reading, and the JavaScript matcher lists the
+ * matches in them. Rust and JavaScript disagree on `\w`, `\d` and `\b` for
+ * text that isn't ASCII, and the list must be what replace rewrites.
+ */
+async function regexMatches(run: RipgrepRun) {
+  const { rg, target, query, globs, limit, started, timeoutMs, signal } = run;
+  const { paths, truncated } = await ripgrepFiles({
+    rg,
+    root: target.root,
+    args: ripgrepArgs(query, globs, target.plain, "files"),
+    keep: pathFilter(globs),
+    timeoutMs,
+    signal,
+  });
+  const read = await nodeSearch({
+    root: target.root,
+    files: paths,
+    query,
+    limit,
+    deadline: started + timeoutMs,
+    signal,
+  });
+  return { files: read.files, truncated: truncated || read.truncated };
+}
+
+/** Searches with ripgrep, or returns undefined when it can't: Rust's regex has no lookaround (JavaScript's does), or the install is gone. */
+async function ripgrepResult(run: RipgrepRun) {
   try {
-    const since = Date.now();
-    const { files, truncated } = await ripgrepSearch({
-      rg,
-      root: target.root,
-      args: ripgrepArgs(query, globs, target.plain),
-      keep: pathFilter(globs),
-      limit,
-      timeoutMs,
-      signal,
-    });
-    const versioned = signal.aborted
-      ? []
-      : await withVersions(target.root, files, since);
-    return { files: versioned, truncated };
+    return await (run.query.regex ? regexMatches(run) : ripgrepMatches(run));
   } catch (e) {
     const uninstalled = (e as NodeJS.ErrnoException).code === "ENOENT";
     if (uninstalled || e instanceof PatternRejected) return undefined;
@@ -143,7 +179,8 @@ async function ripgrepResult(run: {
 
 /**
  * Finds `query` in the workspace's text files: with ripgrep when it is
- * installed, else by reading the files Git lists. Both read a line at a time
+ * installed (for a regex, to pick the files), else by reading the files Git
+ * lists. Both read a line at a time
  * and skip binaries and anything over 2 MiB. `signal` stops it early; what
  * was found by then is dropped (`cancelled`).
  */
@@ -178,6 +215,7 @@ export async function searchProjectText(
       query,
       globs,
       limit,
+      started,
       timeoutMs,
       signal,
     });
