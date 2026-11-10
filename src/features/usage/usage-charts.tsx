@@ -288,7 +288,7 @@ export function HourColumns({
   return (
     <Bars
       values={hours.map((h) => average(h, measure))}
-      busy={hours.map((h) => h.minutes)}
+      busy={hours.map((h) => (h.days ? h.minutes / h.days : 0))}
       height={height}
       label="An average day"
       tick={(i) => (i % 6 === 0 ? clock(i) : null)}
