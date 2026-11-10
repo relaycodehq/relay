@@ -40,10 +40,53 @@ export function countedDays(
   return days;
 }
 
-/** Busy minutes of a run spread over the hours and days it covered. */
+/**
+ * How many times each hour has come up in the days counted. Today only holds
+ * the hours up to now, and the day counting began only the hours from then on.
+ */
+export function addHourDays(
+  hours: UsageSlot[],
+  days: UsageDay[],
+  since: number | undefined,
+  now: number,
+) {
+  const today = midnight(now);
+  const firstDay = since === undefined ? undefined : midnight(since);
+  for (const { day } of days) {
+    const lastHour = day === today ? new Date(now).getHours() : 23;
+    const firstHour = day === firstDay ? new Date(since!).getHours() : 0;
+    for (let h = firstHour; h <= lastHour; h++) hours[h].days++;
+  }
+}
+
+/**
+ * When the weekdays stop counting, so an average is over whole days. Today
+ * is unfinished: it stays out of its weekday unless the period holds no
+ * other one (always so on 7 days), where leaving it out would empty the column.
+ */
+export function weekdaysCountUntil(days: UsageDay[], today: number) {
+  const another = days.some(
+    (d) => d.day !== today && weekday(d.day) === weekday(today),
+  );
+  return another ? today : Infinity;
+}
+
+export function addWeekdayDays(
+  weekdays: UsageSlot[],
+  days: UsageDay[],
+  until: number,
+) {
+  for (const { day } of days) if (day < until) weekdays[weekday(day)].days++;
+}
+
+/**
+ * Busy minutes of a run spread over the hours and days it covered; the
+ * weekdays take only the time before `weekdaysUntil`.
+ */
 export function addBusy(
   hours: UsageSlot[],
   weekdays: UsageSlot[],
+  weekdaysUntil: number,
   at: number,
   ms: number,
 ) {
@@ -56,7 +99,7 @@ export function addBusy(
     const stop = Math.min(end, next.getTime());
     const minutes = (stop - t) / 60_000;
     hours[d.getHours()].minutes += minutes;
-    weekdays[weekday(t)].minutes += minutes;
+    if (t < weekdaysUntil) weekdays[weekday(t)].minutes += minutes;
     t = stop;
   }
 }

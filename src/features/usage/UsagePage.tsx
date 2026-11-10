@@ -286,7 +286,7 @@ function Rhythmic({
             busiest={line.weekday}
             height={170}
           />
-          {counted < DAYS_FOR_A_WEEKDAY && (
+          {counted <= DAYS_FOR_A_WEEKDAY && (
             <p className="us-rhythm-note">
               {counted} {counted === 1 ? "day" : "days"} so far; names a day
               after two weeks

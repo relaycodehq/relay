@@ -4,11 +4,14 @@
 import type { AgentProvider } from "./agents";
 import {
   addBusy,
+  addHourDays,
+  addWeekdayDays,
   countedDays,
   midnight,
   perProvider,
   slots,
   weekday,
+  weekdaysCountUntil,
 } from "./usage-days";
 
 export type UsageTokens = {
@@ -134,7 +137,7 @@ export type UsageSlot = {
   fresh: number;
   /** Agent-minutes busy; threads working side by side pass 60 an hour. */
   minutes: number;
-  /** How many of this slot the period held, to average by. */
+  /** How many of this slot the period held, to average by: whole days only, and for an hour not the ones still to come today. */
   days: number;
 };
 
@@ -285,8 +288,9 @@ export function summarizeUsage(
 
   const hours = slots(24);
   const weekdays = slots(7);
-  for (const h of hours) h.days = days.length;
-  for (const d of days) weekdays[weekday(d.day)].days++;
+  const weekdaysUntil = weekdaysCountUntil(days, today);
+  addHourDays(hours, days, since, now);
+  addWeekdayDays(weekdays, days, weekdaysUntil);
 
   const models = new Map<string, UsageSummary["models"][number]>();
   const speeds = new Map<string, number[]>();
@@ -344,14 +348,13 @@ export function summarizeUsage(
       day.usd[e.provider] = (day.usd[e.provider] ?? 0) + usd;
       if (e.answer) day.answers++;
     }
-    for (const slot of [
-      hours[new Date(e.at).getHours()],
-      weekdays[weekday(e.at)],
-    ]) {
+    const slotsHit = [hours[new Date(e.at).getHours()]];
+    if (e.at < weekdaysUntil) slotsHit.push(weekdays[weekday(e.at)]);
+    for (const slot of slotsHit) {
       slot.fresh += fresh;
       slot.usd += usd;
     }
-    if (e.ms) addBusy(hours, weekdays, e.at, e.ms);
+    if (e.ms) addBusy(hours, weekdays, weekdaysUntil, e.at, e.ms);
     // Old "room" runs still count above, but aren't one of Relay's jobs.
     if (e.job !== "thread" && Object.hasOwn(relayJobLabels, e.job)) {
       totals.relayFresh += fresh;

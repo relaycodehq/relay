@@ -7,7 +7,10 @@ import type {
 } from "../../../shared/usage";
 import { clock, compact, usd } from "./format";
 
-/** A weekday is only called the busiest once each has come round twice. */
+/**
+ * A weekday is only called the busiest once each has come round twice. Today
+ * is left out of its weekday, so the 14 days counted take a 15th to get there.
+ */
 export const DAYS_FOR_A_WEEKDAY = 14;
 
 /** Hours in the stretch the page calls the busiest. */

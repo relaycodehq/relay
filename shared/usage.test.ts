@@ -170,10 +170,69 @@ describe("summarizeUsage", () => {
     expect(s.hours[10]).toMatchObject({ usd: 1, fresh: 7, minutes: 30 });
     expect(s.hours[11]).toMatchObject({ usd: 0, minutes: 30 });
     expect(s.weekdays[0]).toMatchObject({ usd: 1, minutes: 60, days: 1 });
-    // Counted Oct 5 and 6, so every hour came round twice.
-    expect(s.hours[3].days).toBe(2);
+    // Counted Oct 5 from 10:00 and Oct 6 up to noon.
+    expect(s.hours[3].days).toBe(1);
+    expect(s.hours[10].days).toBe(2);
     expect(s.weekdays[1].days).toBe(1);
     expect(s.totals.agentMs).toBe(3_600_000);
+  });
+
+  describe("on a Tuesday morning", () => {
+    // Tuesday, Nov 10 2026, 09:00, with $7 at 20:00 on each earlier day.
+    const morning = new Date(2026, 10, 10, 9).getTime();
+    const evening = (day: number) => new Date(2026, 10, day, 20).getTime();
+    const evenings = (from: number) =>
+      Array.from({ length: 10 - from }, (_, i) =>
+        run({
+          at: evening(from + i),
+          ms: 60 * 60_000,
+          models: { m: spend(1, 0, 7) },
+        }),
+      );
+    const over = (entries: UsageEntry[], range: "7d" | "30d") =>
+      summarizeUsage(entries, { range, now: morning, chats: [] });
+
+    it("averages an hour over the days it has come up, not today's to-come", () => {
+      const s = over(evenings(-19), "30d");
+      // Oct 12 to Nov 9 is 29 evenings; today's 20:00 hasn't happened.
+      expect(s.hours[20]).toMatchObject({ usd: 203, days: 29 });
+      // Counting began at 20:00 on Oct 12; this morning has reached 09:00.
+      expect(s.hours[9].days).toBe(29);
+      expect(s.hours[10].days).toBe(28);
+    });
+
+    it("counts the first day only from the hour counting began", () => {
+      const entries = [
+        run({ at: new Date(2026, 10, 4, 15, 30).getTime(), models: {} }),
+        ...evenings(4),
+      ];
+      const s = over(entries, "7d");
+      expect(s.hours[14].days).toBe(5);
+      expect(s.hours[15].days).toBe(6);
+      expect(s.hours[9].days).toBe(6);
+      expect(s.hours[10].days).toBe(5);
+    });
+
+    it("leaves today out of its weekday when another one is in the period", () => {
+      const early = run({
+        at: new Date(2026, 10, 10, 8).getTime(),
+        ms: 60 * 60_000,
+        models: { m: spend(1, 0, 3) },
+      });
+      const s = over([...evenings(-19), early], "30d");
+      // Four earlier Tuesdays; this morning's $3 is in the hours only.
+      expect(s.weekdays[1]).toMatchObject({ usd: 28, minutes: 240, days: 4 });
+      expect(s.hours[8]).toMatchObject({ usd: 3, minutes: 60, days: 29 });
+    });
+
+    it("keeps today as its weekday when it is the only one", () => {
+      const early = run({
+        at: new Date(2026, 10, 10, 8).getTime(),
+        models: { m: spend(1, 0, 3) },
+      });
+      const s = over([...evenings(4), early], "7d");
+      expect(s.weekdays[1]).toMatchObject({ usd: 3, days: 1 });
+    });
   });
 
   it("starts All at the first thing counted", () => {
