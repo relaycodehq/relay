@@ -12,13 +12,11 @@ import {
 } from "react";
 import type { ChatMessage } from "../../../shared/projects";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
+import { railPitch, tickAt } from "./rail-scrub";
 import { sameTimeline, timelineTurns, type Timeline } from "./timeline";
 import type { ThreadScroll } from "./useThreadScroll";
 import "./thread-timeline.css";
 
-/** Pixels between ticks while they fit; past that they close up to fit the
- * view, and on a long thread run together into a bar the pointer reads. */
-const PITCH = 9;
 /** How many ticks either side of the pointer the lens widens. */
 const LENS = 4;
 /** The widest strip the rail answers the pointer in. */
@@ -116,6 +114,15 @@ function useRailPlace(
   return { active, room };
 }
 
+/** The strip lies over the view but isn't inside it, so a wheel over it
+ * would otherwise scroll nothing. */
+function wheelInto(view: HTMLElement | null, e: WheelEvent<HTMLElement>) {
+  if (!view) return;
+  const unit =
+    e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.clientHeight : 1;
+  view.scrollBy(e.deltaX * unit, e.deltaY * unit);
+}
+
 /**
  * A rail of one tick per prompt beside the thread: the turn being read is
  * lit, hovering one shows its prompt and how the answer starts, and clicking
@@ -139,17 +146,13 @@ export function ThreadTimeline({
   const [pointer, setPointer] = useState<number | null>(null);
   const rail = useRef<HTMLDivElement>(null);
   const ids = useId();
+  const pitch = railPitch(room.height, turns.length);
 
   if (turns.length < 2) return null;
-  const pitch = Math.max(
-    0.5,
-    Math.min(PITCH, (room.height - 48) / (turns.length - 1)),
-  );
   const height = pitch * (turns.length - 1);
   const at = (clientY: number) => {
-    const box = rail.current!.getBoundingClientRect();
-    const i = Math.round((clientY - box.top - 8) / pitch);
-    return Math.min(turns.length - 1, Math.max(0, i));
+    const y = clientY - rail.current!.getBoundingClientRect().top - 8;
+    return tickAt(y, pitch, turns.length);
   };
   const onMove = (e: PointerEvent) => setPointer(at(e.clientY));
   const onKey = (e: KeyboardEvent) => {
@@ -162,15 +165,6 @@ export function ThreadTimeline({
       onJump(turns[pointer]!.id);
     } else if (e.key === "Escape") setPointer(null);
   };
-  // The strip lies over the view but isn't inside it, so a wheel over it
-  // would otherwise scroll nothing.
-  const onWheel = (e: WheelEvent<HTMLElement>) => {
-    const view = scroll.current;
-    if (!view) return;
-    const unit =
-      e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.clientHeight : 1;
-    view.scrollBy(e.deltaX * unit, e.deltaY * unit);
-  };
   const turn = pointer === null ? undefined : turns[pointer];
   return (
     // The nav is the whole strip down the view's edge, so the rail shows as
@@ -178,7 +172,7 @@ export function ThreadTimeline({
     <nav
       className="thread-timeline"
       aria-label="Prompts in this thread"
-      onWheel={onWheel}
+      onWheel={(e) => wheelInto(scroll.current, e)}
       style={
         {
           "--timeline-top": `${room.top}px`,

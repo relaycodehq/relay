@@ -306,7 +306,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/thread/ThreadComposer.tsx › ThreadComposer": 285,
   "src/features/thread/ThreadMessages.tsx › ThreadMessages": 365,
   "src/features/thread/ThreadScope.tsx › ScopeButtons": 82,
-  "src/features/thread/ThreadTimeline.tsx › ThreadTimeline": 123,
+  "src/features/thread/ThreadTimeline.tsx › ThreadTimeline": 120,
   "src/features/thread/UserMessage.tsx › UserMessage": 134,
   "src/features/thread/WorktreeCommandRow.tsx › WorktreeCommandRow": 89,
   "src/features/thread/CheckoutControl.tsx › CheckoutControl": 131,
