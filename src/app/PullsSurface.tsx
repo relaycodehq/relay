@@ -95,7 +95,6 @@ export function PullsSurface({
     [state, setState] = useState(initialWorkspace.state),
     [repo, setRepo] = usePullsRepo(),
     [filesHidden, setFilesHidden] = useStoredFlag("relay-files-hidden"),
-    [urlOpen, setUrlOpen] = useState(false),
     [error, setError] = useState<unknown>();
   const [editing, setEditing] = useState<{
     pull: Pull;
@@ -144,17 +143,11 @@ export function PullsSurface({
       ),
     );
   }, [selected, repo, pull.data?.title]);
-  const openUrl = async (url: string) => {
-    try {
-      open(await api.parseUrl(url));
-      setUrlOpen(false);
-    } catch (e) {
-      setError(e);
-    }
-  };
-  useEffect(() => {
-    if (incomingLink?.url) void openUrl(incomingLink.url);
-  }, [incomingLink]);
+  const { urlOpen, setUrlOpen, openUrl } = useOpenByUrl(
+    open,
+    setError,
+    incomingLink,
+  );
   useShortcut("pr-open", true, () => setUrlOpen((v) => !v));
   useShortcut("review-files", true, () => setFilesHidden((v) => !v));
   const localProject = selected ? projectOf(located(selected)) : undefined;
@@ -224,27 +217,56 @@ export function PullsSurface({
         <OpenPullUrl onOpen={openUrl} onClose={() => setUrlOpen(false)} />
       )}
       {editing && (
-        <Suspense
-          fallback={
-            <Modal
-              title="Opening local editor"
-              onClose={() => setEditing(null)}
-            >
-              <Loading />
-            </Modal>
-          }
-        >
-          <PullFileEditor
-            checks={review.checks}
-            {...editing}
-            onClose={() => {
-              setEditing(null);
-              void qc.invalidateQueries({ queryKey: ["folder"] });
-            }}
-          />
-        </Suspense>
+        <LocalEditor
+          checks={review.checks}
+          {...editing}
+          onLoadingClose={() => setEditing(null)}
+          onClose={() => {
+            setEditing(null);
+            void qc.invalidateQueries({ queryKey: ["folder"] });
+          }}
+        />
       )}
     </>
+  );
+}
+
+/** "Open by URL": the box asking for a link, and a link that arrived from outside. */
+function useOpenByUrl(
+  open: (ref: PullRef) => void,
+  onError: (error: unknown) => void,
+  incomingLink?: { url: string },
+) {
+  const [urlOpen, setUrlOpen] = useState(false);
+  const openUrl = async (url: string) => {
+    try {
+      open(await api.parseUrl(url));
+      setUrlOpen(false);
+    } catch (e) {
+      onError(e);
+    }
+  };
+  useEffect(() => {
+    if (incomingLink?.url) void openUrl(incomingLink.url);
+  }, [incomingLink]);
+  return { urlOpen, setUrlOpen, openUrl };
+}
+
+/** The open PR's file in the local editor, which loads on first use. */
+function LocalEditor({
+  onLoadingClose,
+  ...file
+}: ComponentProps<typeof PullFileEditor> & { onLoadingClose: () => void }) {
+  return (
+    <Suspense
+      fallback={
+        <Modal title="Opening local editor" onClose={onLoadingClose}>
+          <Loading />
+        </Modal>
+      }
+    >
+      <PullFileEditor {...file} />
+    </Suspense>
   );
 }
 
