@@ -11,8 +11,8 @@ const STORAGE_KEY = "relay-terminal-dock";
 const REMEMBERED = 200;
 const FIRST: DockTabs = { slots: [""], front: "" };
 
-/** Tabs per thread key; the shells outlive a reload, so the tabs do too. */
-const docks = (() => {
+/** What's saved: tabs per thread key; the shells outlive a reload, so the tabs do too. */
+function readDocks() {
   const saved = readJson(STORAGE_KEY);
   return new Map<string, DockTabs>(
     Array.isArray(saved)
@@ -26,7 +26,23 @@ const docks = (() => {
         )
       : [],
   );
-})();
+}
+
+let docks = readDocks();
+
+/** Keeps `from`'s tabs where they are unchanged, so what shows them doesn't redraw. */
+function sameTabs(from: Map<string, DockTabs>, to: Map<string, DockTabs>) {
+  for (const [key, tabs] of to) {
+    const was = from.get(key);
+    if (
+      was &&
+      was.front === tabs.front &&
+      was.slots.join() === tabs.slots.join()
+    )
+      to.set(key, was);
+  }
+  return to;
+}
 
 /** Whether each thread's dock shows; only for as long as the window lives. */
 const openKeys = new Set<string>();
@@ -47,16 +63,30 @@ export const newTerminalSlot = () =>
 
 export const dockTabs = (key: string) => docks.get(key) ?? FIRST;
 
-export function setDockTabs(key: string, tabs: DockTabs) {
-  docks.delete(key);
-  if (tabs.slots.length !== 1 || tabs.slots[0] !== "") docks.set(key, tabs);
-  for (const oldest of docks.keys()) {
-    if (docks.size <= REMEMBERED) break;
-    docks.delete(oldest);
+/**
+ * Applies one change to what's saved rather than to this window's copy, which
+ * may lack what another window saved since: the thread it's about changes,
+ * the others stay as they are.
+ */
+function changeDocks(change: (saved: Map<string, DockTabs>) => void) {
+  const saved = readDocks();
+  change(saved);
+  for (const oldest of saved.keys()) {
+    if (saved.size <= REMEMBERED) break;
+    saved.delete(oldest);
   }
-  writeJson(STORAGE_KEY, [...docks]);
+  writeJson(STORAGE_KEY, [...saved]);
+  docks = sameTabs(docks, saved);
   emit();
 }
+
+function putTabs(saved: Map<string, DockTabs>, key: string, tabs: DockTabs) {
+  saved.delete(key);
+  if (tabs.slots.length !== 1 || tabs.slots[0] !== "") saved.set(key, tabs);
+}
+
+export const setDockTabs = (key: string, tabs: DockTabs) =>
+  changeDocks((saved) => putTabs(saved, key, tabs));
 
 /** Puts `slot` in the dock as its front tab, adding it when it isn't there. */
 export function frontInDock(key: string, slot: string) {
@@ -76,11 +106,12 @@ export function setTerminalOpen(key: string, open: boolean) {
 
 /** A draft's dock becomes the new thread's. */
 export function moveDock(from: string, to: string) {
-  const tabs = docks.get(from);
-  if (tabs && !docks.has(to)) {
-    docks.delete(from);
-    setDockTabs(to, tabs);
-  }
+  changeDocks((saved) => {
+    const tabs = saved.get(from);
+    if (!tabs || saved.has(to)) return;
+    saved.delete(from);
+    putTabs(saved, to, tabs);
+  });
   if (openKeys.delete(from)) openKeys.add(to);
   emit();
 }
@@ -93,3 +124,11 @@ export function useTerminalOpen(key: string) {
 export function useDockTabs(key: string) {
   return useSyncExternalStore(subscribe, () => dockTabs(key));
 }
+
+// Another window saved its tabs: this one shows them too.
+if (typeof window !== "undefined")
+  window.addEventListener("storage", (event) => {
+    if (event.key !== null && event.key !== STORAGE_KEY) return;
+    docks = sameTabs(docks, readDocks());
+    emit();
+  });
