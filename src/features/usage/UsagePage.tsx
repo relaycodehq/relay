@@ -14,7 +14,13 @@ import { api } from "../../lib/api";
 import { useStoredChoice } from "../../lib/persisted-store";
 import { ErrorBox, IconButton, Loading } from "../../ui/ui";
 import { answerCount, columnsOf, hours, measured, periodLabel } from "./format";
-import { DAYS_FOR_A_WEEKDAY, headline, ledeFor, rhythmLine } from "./rhythm";
+import {
+  DAYS_FOR_A_WEEKDAY,
+  headline,
+  ledeFor,
+  rhythmLine,
+  weekdayDays,
+} from "./rhythm";
 import { RoomLeft } from "./room/RoomLeft";
 import { useRoom } from "./room/useRoom";
 import { ShareDialog } from "./ShareDialog";
@@ -198,7 +204,7 @@ function Rhythmic({
   const { totals } = summary;
   const line = rhythmLine(summary, m);
   const lede = ledeFor(summary, m);
-  const counted = summary.days.length;
+  const counted = weekdayDays(summary.weekdays);
   const models = [...summary.models]
     .filter((x) => x[m] > 0)
     .sort((a, b) => b[m] - a[m]);
@@ -264,7 +270,7 @@ function Rhythmic({
             busiest={line.weekday}
             height={170}
           />
-          {counted <= DAYS_FOR_A_WEEKDAY && (
+          {counted < DAYS_FOR_A_WEEKDAY && (
             <p className="us-rhythm-note">
               {counted} {counted === 1 ? "day" : "days"} so far; names a day
               after two weeks

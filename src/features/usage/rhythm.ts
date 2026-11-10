@@ -7,14 +7,15 @@ import type {
 } from "../../../shared/usage";
 import { clock, compact, usd } from "./format";
 
-/**
- * A weekday is only called the busiest once each has come round twice. Today
- * is left out of its weekday, so the 14 days counted take a 15th to get there.
- */
+/** A weekday is only called the busiest once each has come round twice. */
 export const DAYS_FOR_A_WEEKDAY = 14;
 
 /** Hours in the stretch the page calls the busiest. */
 export const STRETCH = 4;
+
+/** The whole days the weekdays hold; today is left out of its weekday once another one is there. */
+export const weekdayDays = (weekdays: UsageSlot[]) =>
+  weekdays.reduce((n, d) => n + d.days, 0);
 
 export const average = (slot: UsageSlot, m: UsageMeasure) =>
   slot.days ? slot[m] / slot.days : 0;
@@ -41,7 +42,7 @@ export function rhythm(
   m: UsageMeasure,
 ) {
   const start = busiestStretch(hours.map((h) => average(h, m)));
-  const counted = weekdays.reduce((n, d) => n + d.days, 0);
+  const counted = weekdayDays(weekdays);
   const week = weekdays.map((d) => average(d, m));
   const top = Math.max(...week);
   return {
