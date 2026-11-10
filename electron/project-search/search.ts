@@ -10,6 +10,7 @@ import {
 import { digest } from "../util/hash";
 import { findExecutable } from "../platform/executables";
 import { parseGlobs, pathFilter, type Globs } from "./glob";
+import { searchRegExp } from "./matcher";
 import { maxFileBytes, nodeSearch } from "./node-search";
 import {
   PatternRejected,
@@ -166,10 +167,22 @@ async function regexMatches(run: RipgrepRun) {
   return { files: read.files, truncated: truncated || read.truncated };
 }
 
+/** Whether replace, which runs a regex as JavaScript, can read the pattern; `(?i)` and `\\A` it can't. */
+function javaScriptReads(query: ProjectSearchQuery) {
+  try {
+    searchRegExp(query);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Searches with ripgrep, or returns undefined when it can't: Rust's regex has no lookaround (JavaScript's does), or the install is gone. */
 async function ripgrepResult(run: RipgrepRun) {
   try {
-    return await (run.query.regex ? regexMatches(run) : ripgrepMatches(run));
+    // A regex goes through JavaScript only when JavaScript can read it; ripgrep's own matches show the rest, and replace refuses them.
+    const viaJavaScript = run.query.regex && javaScriptReads(run.query);
+    return await (viaJavaScript ? regexMatches(run) : ripgrepMatches(run));
   } catch (e) {
     const uninstalled = (e as NodeJS.ErrnoException).code === "ENOENT";
     if (uninstalled || e instanceof PatternRejected) return undefined;

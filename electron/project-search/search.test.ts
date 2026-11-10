@@ -380,6 +380,16 @@ describe.skipIf(!rgPath)("ripgrep", () => {
     expect(done.replaced[0].count).toBe(uni?.matches.length);
   });
 
+  it("still lists the matches of a pattern only Rust reads", async () => {
+    await put("hello.txt", "Hello there\n");
+    const r = await run(
+      { ...find("(?i)hello", { regex: true }), include: "hello.txt" },
+      "rg",
+    );
+    expect(r.engine).toBe("ripgrep");
+    expect(summary(r)).toEqual([["hello.txt", [[1, 0, 5]]]]);
+  });
+
   it("falls back when the executable is gone", async () => {
     const r = await searchProjectText(target(), find("nope"), live, {
       rg: join(root, "no-such-rg"),
