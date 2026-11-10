@@ -102,14 +102,7 @@ export function usePullBoard(
   const started = useStarted(
     board.pulls.filter((p) => p.relation === "review" && p.state === "open"),
   );
-  const failures = accounts.flatMap((account, i) => {
-    const error =
-      searches.slice(i * 3, i * 3 + 3).find((q) => q.error)?.error ??
-      lists.find(
-        (q, j) => q.error && linked[j].repository?.server === account.server,
-      )?.error;
-    return error ? [{ server: account.server, error }] : [];
-  });
+  const failures = hostFailures(accounts, searches, lists, linked);
   return {
     board,
     verdicts,
@@ -137,6 +130,23 @@ export function usePullBoard(
       });
     },
   };
+}
+
+/** Each host with a search or project list that failed, and the first error. */
+function hostFailures(
+  accounts: Account[],
+  searches: { error: unknown }[],
+  lists: { error: unknown }[],
+  linked: Project[],
+) {
+  return accounts.flatMap((account, i) => {
+    const error =
+      searches.slice(i * 3, i * 3 + 3).find((q) => q.error)?.error ??
+      lists.find(
+        (q, j) => q.error && linked[j].repository?.server === account.server,
+      )?.error;
+    return error ? [{ server: account.server, error }] : [];
+  });
 }
 
 function pendingHosts(
