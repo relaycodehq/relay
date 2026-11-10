@@ -45,7 +45,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function renderPalette(onOpen: (target: { path: string }) => void) {
+function renderPalette(
+  onOpen: (target: { path: string }) => void,
+  initialMode: "text" | "all" = "text",
+) {
   const host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -55,7 +58,7 @@ function renderPalette(onOpen: (target: { path: string }) => void) {
         <SearchEverywhere
           where="/repo"
           open
-          initialMode="text"
+          initialMode={initialMode}
           recent={[]}
           onOpen={onOpen}
           onClose={() => {}}
@@ -117,3 +120,12 @@ it("drops a waiting Enter once the text changes again", async () => {
   expect(document.body.textContent).toContain("later.ts:3");
   expect(onOpen).not.toHaveBeenCalled();
 });
+
+it.each(["text", "all"] as const)(
+  "searches `z-index:10` as text on the %s tab",
+  async (mode) => {
+    const { type } = renderPalette(vi.fn(), mode);
+    type("z-index:10");
+    await vi.waitFor(() => expect(searches.has("z-index:10")).toBe(true));
+  },
+);

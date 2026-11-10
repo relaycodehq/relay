@@ -65,9 +65,9 @@ export function usePaletteResults(input: {
   const { where, mode, text, flags, recent, activePath, symbols } = input;
   const shown = sectionsShownIn(mode, !!symbols);
   const { fileList, jump, fileHits } = useFileHits(where, text);
-  // A file name with a line number (`Foo.ts:42`) is never searched as text.
+  // Searched as typed even when it reads as a file and a line: `z-index:10` is as likely text.
   const textQuery = useSearchQuery(
-    shown.text && jump.line === undefined ? text : "",
+    shown.text ? text : "",
     mode === "text" ? flags : flagsOff,
     { limit: mode === "text" ? TEXT_ROWS * 2 : 120 },
     TEXT_MIN_CHARS,
