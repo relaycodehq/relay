@@ -40,7 +40,7 @@ export class ThreadTerminal {
   private fit = new FitAddon();
   private opened = false;
   /** Output that arrived while the shell was still being opened. */
-  private early: string[] = [];
+  private early: { data: string; seq?: number }[] = [];
   /** Keys typed while it was, sent once it runs. */
   private typed = "";
   private drawn = 0;
@@ -167,7 +167,10 @@ export class ThreadTerminal {
         void api
           .resizeTerminal(this.key, this.term.cols, this.term.rows)
           .catch(() => {});
-      for (const data of this.early.splice(0)) this.output(data);
+      // The backlog already holds what arrived before its position.
+      for (const { data, seq } of this.early.splice(0))
+        if (seq === undefined || opened.seq === undefined || seq > opened.seq)
+          this.output(data);
       if (this.typed && opened.exitCode === undefined) this.send(this.typed);
       this.typed = "";
       if (opened.exitCode !== undefined) this.exited(opened.exitCode);
@@ -188,7 +191,8 @@ export class ThreadTerminal {
 
   receive(event: TerminalEvent) {
     if (event.data !== undefined) {
-      if (this.status === "starting") this.early.push(event.data);
+      if (this.status === "starting")
+        this.early.push({ data: event.data, seq: event.seq });
       else this.output(event.data);
     } else {
       this.exited(event.exitCode);

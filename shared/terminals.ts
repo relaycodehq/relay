@@ -3,15 +3,22 @@ import type { AgentProvider } from "./agents";
 import { sliceWhole } from "./truncate";
 import { idSchema } from "./validation";
 
-/** Output from a thread's shell, or its exit; -1 when Relay ended it. */
+/**
+ * Output from a thread's shell, or its exit; -1 when Relay ended it. `seq` is
+ * how much output the shell has printed in all once `data` is in, so a window
+ * can tell what a backlog it asked for already holds. A computer that doesn't
+ * number its output sends none.
+ */
 export type TerminalEvent =
-  | { key: string; data: string; exitCode?: undefined }
-  | { key: string; exitCode: number; data?: undefined };
+  | { key: string; data: string; seq?: number; exitCode?: undefined }
+  | { key: string; exitCode: number; data?: undefined; seq?: undefined };
 
 export interface TerminalOpened {
   cwd: string;
   /** Recent output, when the shell was already running. */
   backlog: string;
+  /** What the backlog reaches, in the numbering of `TerminalEvent.seq`. */
+  seq?: number;
   exitCode?: number;
 }
 

@@ -97,3 +97,25 @@ it("lets go of a deleted thread's shells, each delete leaving none behind", () =
   }
   expect(new Set(kept).size).toBe(1);
 });
+
+it("draws output that came in while it opened once, not again after the backlog", async () => {
+  let opened!: (value: TerminalOpened) => void;
+  vi.mocked(api.openTerminal).mockReturnValueOnce(
+    new Promise((resolve) => (opened = resolve)),
+  );
+  const terminal = terminalFor("project", "printing");
+  const drawn: string[] = [];
+  vi.spyOn(terminal.term, "write").mockImplementation((data) => {
+    drawn.push(String(data));
+  });
+  const starting = terminal.start();
+  // The shell prints "A" and "B" while the window waits for its backlog.
+  terminal.receive({ key: "printing", data: "A", seq: 1 });
+  terminal.receive({ key: "printing", data: "B", seq: 2 });
+
+  opened({ cwd: "/repo", backlog: "AB", seq: 2 });
+  await starting;
+  terminal.receive({ key: "printing", data: "C", seq: 3 });
+
+  expect(drawn.join("")).toBe("ABC");
+});

@@ -33,6 +33,8 @@ interface Session {
   backlog: string[];
   backlogSize: number;
   trimmed: boolean;
+  /** Everything the shell has printed, backlog trimmed or not. */
+  printed: number;
   pending: string;
   flush?: NodeJS.Timeout;
   /** The windows drawing this shell, each with the output it hasn't drawn yet. */
@@ -96,6 +98,7 @@ export class ThreadTerminals {
       const backlog = session.backlog.join("");
       return {
         cwd: session.cwd,
+        seq: session.printed,
         // Trimmed output may start mid-sequence; start at a line instead.
         backlog: session.trimmed
           ? backlog.slice(backlog.indexOf("\n") + 1)
@@ -129,6 +132,7 @@ export class ThreadTerminals {
       backlog: [],
       backlogSize: 0,
       trimmed: false,
+      printed: 0,
       pending: "",
       viewers: new Map([...drawn, viewer].map((v) => [v, 0])),
       paused: false,
@@ -147,7 +151,7 @@ export class ThreadTerminals {
       created.exitCode = exitCode;
       this.sendToViewers(created, { key: created.key, exitCode });
     });
-    return { cwd, backlog: "" };
+    return { cwd, backlog: "", seq: 0 };
   }
 
   write(key: string, data: string) {
@@ -276,6 +280,7 @@ export class ThreadTerminals {
       off = seen.lastIndexOf("\x1b[?2004l");
     if (on !== off) session.bracketedPaste = on > off;
     session.outputTail = seen.slice(-7);
+    session.printed += data.length;
     session.backlog.push(data);
     session.backlogSize += data.length;
     while (session.backlogSize > backlogLimit && session.backlog.length > 1) {
@@ -296,7 +301,11 @@ export class ThreadTerminals {
     session.pending = "";
     for (const [viewer, undrawn] of session.viewers)
       session.viewers.set(viewer, undrawn + data.length);
-    this.sendToViewers(session, { key: session.key, data });
+    this.sendToViewers(session, {
+      key: session.key,
+      data,
+      seq: session.printed,
+    });
     this.keepUp(session);
   }
 

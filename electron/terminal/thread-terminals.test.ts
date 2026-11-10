@@ -106,7 +106,7 @@ it("keeps sending a draft's shell output once its thread has adopted it", () => 
   terminals.adopt("draft:p", "thread-c");
   shell.print("still here\r\n");
   vi.advanceTimersByTime(10);
-  expect(sent).toEqual([{ key: "thread-c", data: "still here\r\n" }]);
+  expect(sent).toEqual([{ key: "thread-c", data: "still here\r\n", seq: 12 }]);
 });
 
 /** Opens a shell for each viewer and records what each was sent. */
@@ -182,4 +182,22 @@ it("sends output still waiting to the windows already drawing when another opens
   shell.print("waiting");
   terminals.open("thread-d", "/p", 80, 24, false, {}, 2);
   expect(sent.get(1)?.map((e) => e.data)).toEqual(["waiting"]);
+});
+
+it("numbers output so a window can tell what its backlog already holds", () => {
+  const { terminals, shell, sent } = shared(1);
+  shell.print("A");
+  vi.advanceTimersByTime(10);
+  shell.print("B");
+  vi.advanceTimersByTime(10);
+  expect(sent.get(1)?.map((e) => e.seq)).toEqual([1, 2]);
+
+  const reopened = terminals.open("thread-d", "/p", 80, 24, false, {}, 2);
+  expect(reopened).toMatchObject({ backlog: "AB", seq: 2 });
+});
+
+it("counts output still waiting when a window opens as part of its backlog", () => {
+  const { terminals, shell } = shared(1);
+  shell.print("AB");
+  expect(terminals.open("thread-d", "/p", 80, 24, false, {}, 2).seq).toBe(2);
 });
