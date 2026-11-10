@@ -593,7 +593,7 @@ app
     presence.watch(() => phoneRemote?.presenceChanged());
     void phoneRemote.start();
     void handoffs.computers.start();
-    threadTerminals.connect((event) => window.send("relay:terminal", event));
+    window.connectTerminals();
     serveApi(window, dispatch);
     // Before the window comes back.
     await resumeThreads({

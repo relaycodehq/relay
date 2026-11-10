@@ -10,7 +10,6 @@ import {
 } from "electron";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { join } from "node:path";
-import { threadTerminals } from "../terminal/thread-terminals";
 import type { RelayEvents } from "../../shared/events";
 import {
   placeOnScreen,
@@ -24,6 +23,7 @@ import { ThreadWindows } from "./thread-windows";
 import { EditorWindows } from "./editor-windows";
 import { rememberPlace } from "./main-window-place";
 import { show as showWindow } from "./popped-windows";
+import { connectTerminals, detachTerminalsWhenGone } from "./window-terminals";
 
 /** The window whose page made the API call running now. */
 const callers = new AsyncLocalStorage<BrowserWindow | null>();
@@ -148,6 +148,11 @@ export class AppWindow {
   ) {
     for (const win of this.all())
       if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+
+  /** Shells' output starts going to the windows that open them. */
+  connectTerminals() {
+    connectTerminals(this);
   }
 
   /** The main window, every thread's own and every editor's. */
@@ -342,11 +347,6 @@ export class AppWindow {
     this.win = win;
     this.holdMinWidth(win);
     win.on("resize", () => this.holdMinWidth(win));
-    // A reloaded window starts without terminals; shells keep their output until it asks.
-    win.webContents.on("did-start-navigation", (details) => {
-      if (details.isMainFrame && !details.isSameDocument)
-        threadTerminals.detach();
-    });
     win.webContents.on("render-process-gone", (_event, details) =>
       this.hooks.rendererGone(details),
     );
@@ -428,6 +428,7 @@ export class AppWindow {
     });
     win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
     logPageErrors(win);
+    detachTerminalsWhenGone(win);
     // The renderer's caption buttons swap maximize for restore.
     const sendMaximized = () =>
       win.webContents.send("relay:maximized", win.isMaximized());

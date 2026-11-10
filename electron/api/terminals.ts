@@ -11,8 +11,11 @@ import {
 } from "../../shared/terminals";
 import { signInCommand } from "../agents/sign-in";
 import { projectTasks } from "../terminal/tasks";
-import { threadTerminals } from "../terminal/thread-terminals";
+import { threadTerminals, type Viewer } from "../terminal/thread-terminals";
 import { takes, type ApiContext, type Handlers } from "./context";
+
+/** The window whose page is calling, which draws the shells it opens. */
+const viewerOf = (ctx: ApiContext): Viewer => ctx.window.caller()?.id ?? 0;
 
 /** Opens the thread's shell (the draft's with no chat) in its folder. */
 function openShell(ctx: ApiContext) {
@@ -36,6 +39,7 @@ function openShell(ctx: ApiContext) {
         size.rows,
         fresh,
         chatId ? await projectChats.worktreeEnv(chatId) : {},
+        viewerOf(ctx),
       );
     },
   );
@@ -93,7 +97,7 @@ export function terminalHandlers(ctx: ApiContext) {
     ),
     ackTerminal: takes(
       [terminalKeySchema, z.number().int().nonnegative()],
-      (key, bytes) => threadTerminals.ack(key, bytes),
+      (key, bytes) => threadTerminals.ack(key, bytes, viewerOf(ctx)),
     ),
     adoptTerminal: takes([idSchema, idSchema], async (projectId, chatId) => {
       // A thread in its own worktree starts its own shell there.

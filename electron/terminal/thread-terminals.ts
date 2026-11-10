@@ -16,9 +16,15 @@ const loadPty = (): typeof NodePty =>
 
 /** Output kept per shell, replayed when a reloaded window attaches again. */
 const backlogLimit = 512 * 1024;
-/** Output the window hasn't drawn yet; above `pauseAt` the shell waits for it. */
+/**
+ * Output a window hasn't drawn yet; above `pauseAt` the shell waits for the
+ * window furthest behind.
+ */
 const pauseAt = 1024 * 1024,
   resumeAt = 256 * 1024;
+
+/** The window a shell's output goes to, by its id; 0 for a caller that isn't one. */
+export type Viewer = number;
 
 interface Session {
   key: string;
@@ -29,7 +35,8 @@ interface Session {
   trimmed: boolean;
   pending: string;
   flush?: NodeJS.Timeout;
-  unacked: number;
+  /** The windows drawing this shell, each with the output it hasn't drawn yet. */
+  viewers: Map<Viewer, number>;
   paused: boolean;
   exitCode?: number;
   /** The shell's own name, to tell its prompt from a command running in it. */
@@ -48,21 +55,21 @@ interface Session {
  */
 export class ThreadTerminals {
   private sessions = new Map<string, Session>();
-  private attached = false;
-  private send: (event: TerminalEvent) => void = () => {};
+  private send: (event: TerminalEvent, viewer?: Viewer) => void = () => {};
 
-  connect(send: (event: TerminalEvent) => void) {
+  /** `send` gets the window an event is for; without one, it goes to every window. */
+  connect(send: (event: TerminalEvent, viewer?: Viewer) => void) {
     this.send = send;
   }
 
-  /** Output of a shell on another computer, for the window to draw as these. */
+  /** Output of a shell on another computer, for every window to draw as these. */
   pass(event: TerminalEvent) {
     this.send(event);
   }
 
   /**
-   * Attaches to the key's shell, starting one in `cwd` with `extraEnv` if
-   * there's none or `fresh` asks for a new one.
+   * Attaches `viewer` to the key's shell, starting one in `cwd` with
+   * `extraEnv` if there's none or `fresh` asks for a new one.
    */
   open(
     key: string,
@@ -71,20 +78,20 @@ export class ThreadTerminals {
     rows: number,
     fresh = false,
     extraEnv: Record<string, string> = {},
+    viewer: Viewer = 0,
   ): TerminalOpened {
-    this.attached = true;
     let session = this.sessions.get(key);
+    // A new shell under the key stays with the windows that drew the old one.
+    const drawn = session ? [...session.viewers.keys()] : [];
     if (session && (fresh || session.cwd !== cwd)) {
       this.kill(session);
       session = undefined;
     }
     if (session) {
-      // The backlog already holds what was waiting to be sent.
-      clearTimeout(session.flush);
-      session.flush = undefined;
-      session.pending = "";
-      session.unacked = 0;
-      this.resume(session);
+      // The windows already drawing it get what was waiting; the backlog holds it too.
+      this.drain(session);
+      session.viewers.set(viewer, 0);
+      this.keepUp(session);
       if (session.exitCode === undefined) session.pty.resize(cols, rows);
       const backlog = session.backlog.join("");
       return {
@@ -123,7 +130,7 @@ export class ThreadTerminals {
       backlogSize: 0,
       trimmed: false,
       pending: "",
-      unacked: 0,
+      viewers: new Map([...drawn, viewer].map((v) => [v, 0])),
       paused: false,
       shell: basename(file).toLowerCase(),
       lastOutput: Date.now(),
@@ -138,7 +145,7 @@ export class ThreadTerminals {
       if (this.sessions.get(created.key) !== created) return;
       this.drain(created);
       created.exitCode = exitCode;
-      this.send({ key: created.key, exitCode });
+      this.sendToViewers(created, { key: created.key, exitCode });
     });
     return { cwd, backlog: "" };
   }
@@ -198,11 +205,12 @@ export class ThreadTerminals {
   }
 
   /** The window drew `bytes` of output. */
-  ack(key: string, bytes: number) {
+  ack(key: string, bytes: number, viewer: Viewer = 0) {
     const session = this.sessions.get(key);
-    if (!session) return;
-    session.unacked = Math.max(0, session.unacked - bytes);
-    if (session.paused && session.unacked < resumeAt) this.resume(session);
+    const undrawn = session?.viewers.get(viewer);
+    if (!session || undrawn === undefined) return;
+    session.viewers.set(viewer, Math.max(0, undrawn - bytes));
+    this.keepUp(session);
   }
 
   /** A draft's shells carry over to the thread its first message started. */
@@ -247,12 +255,11 @@ export class ThreadTerminals {
     );
   }
 
-  /** The window reloaded: nothing draws output until it opens a terminal again. */
-  detach() {
-    this.attached = false;
+  /** The window reloaded or closed: it draws nothing until it opens a terminal again. */
+  detach(viewer: Viewer) {
     for (const session of this.sessions.values()) {
-      session.unacked = 0;
-      this.resume(session);
+      session.viewers.delete(viewer);
+      this.keepUp(session);
     }
   }
 
@@ -275,7 +282,7 @@ export class ThreadTerminals {
       session.backlogSize -= session.backlog.shift()!.length;
       session.trimmed = true;
     }
-    if (!this.attached) return;
+    if (!session.viewers.size) return;
     // A busy shell writes in small pieces; one message per few milliseconds is plenty.
     session.pending += data;
     session.flush ??= setTimeout(() => this.drain(session), 4);
@@ -287,18 +294,26 @@ export class ThreadTerminals {
     if (!session.pending) return;
     const data = session.pending;
     session.pending = "";
-    session.unacked += data.length;
-    this.send({ key: session.key, data });
-    if (!session.paused && session.unacked > pauseAt) {
-      session.paused = true;
-      session.pty.pause();
-    }
+    for (const [viewer, undrawn] of session.viewers)
+      session.viewers.set(viewer, undrawn + data.length);
+    this.sendToViewers(session, { key: session.key, data });
+    this.keepUp(session);
   }
 
-  private resume(session: Session) {
-    if (!session.paused) return;
-    session.paused = false;
-    session.pty.resume();
+  private sendToViewers(session: Session, event: TerminalEvent) {
+    for (const viewer of session.viewers.keys()) this.send(event, viewer);
+  }
+
+  /** Pauses the shell while a window is far behind, and lets it go once none is. */
+  private keepUp(session: Session) {
+    const behind = Math.max(0, ...session.viewers.values());
+    if (!session.paused && behind > pauseAt) {
+      session.paused = true;
+      session.pty.pause();
+    } else if (session.paused && behind < resumeAt) {
+      session.paused = false;
+      session.pty.resume();
+    }
   }
 
   /** `notify` tells the window the shell is gone. */
@@ -310,7 +325,7 @@ export class ThreadTerminals {
     try {
       session.pty.kill();
     } catch {}
-    if (notify) this.send({ key: session.key, exitCode: -1 });
+    if (notify) this.sendToViewers(session, { key: session.key, exitCode: -1 });
   }
 }
 

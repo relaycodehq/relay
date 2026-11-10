@@ -287,7 +287,8 @@ let currentFont = { family: "", size: 12 };
 api.onTerminal((event) => {
   const terminal = terminals.get(event.key);
   if (terminal) terminal.receive(event);
-  // Nothing here draws it, so nothing should hold the shell back.
+  // Output of a shell this window never opened: the main process doesn't count
+  // it against this window, so acking it only costs a message.
   else if (event.data !== undefined)
     void api.ackTerminal(event.key, event.data.length).catch(() => {});
 });
