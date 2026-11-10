@@ -1,7 +1,6 @@
 // The Pull requests page: what needs you, then a card per project. A card
 // opens that project's page, sorted the same way: waiting on you, yours,
 // everyone else's.
-import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ChevronRight,
@@ -33,7 +32,7 @@ import {
   usePullSearch,
   type PullState,
 } from "./usePullBoard";
-import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
+import { useShortcutLabel } from "../../lib/shortcuts";
 import {
   NeedsTile,
   ProjectCard,
@@ -98,12 +97,6 @@ export function PullRequestsPage({
   const incomplete = !!pending.length || !!failures.length || !!hostError;
   const problems = loadProblems(failures, hostError, onRecheckHosts, retry);
   const waiting = `Waiting for ${pending.map(pullHostName).join(", ")}…`;
-  const searchRef = useRef<HTMLInputElement>(null);
-  useShortcut("find", true, () => {
-    searchRef.current?.focus();
-    searchRef.current?.select();
-  });
-  const searchKeys = useShortcutLabel("find");
   const openKeys = useShortcutLabel("pr-open");
   const context: PullContext = { verdicts, started, onOpen };
   const projectOf = (r: Repo) => projectFor(projects, r);
@@ -170,12 +163,7 @@ export function PullRequestsPage({
           <p>{head.summary}</p>
         </div>
         <div className="pulls-tools">
-          <PullSearchBox
-            query={query}
-            onQuery={onQuery}
-            inputRef={searchRef}
-            keys={searchKeys}
-          />
+          <PullSearchBox query={query} onQuery={onQuery} />
           <div className="pulls-states" role="radiogroup" aria-label="State">
             {(["open", "closed", "all"] as const).map((s) => (
               <button

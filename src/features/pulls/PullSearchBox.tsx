@@ -1,19 +1,21 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { useShortcut, useShortcutLabel } from "../../lib/shortcuts";
 
 /** The page's search field; the query it reports is trimmed, 250ms after typing stops. */
 export function PullSearchBox({
   query,
   onQuery,
-  inputRef,
-  keys,
 }: {
   query: string;
   onQuery: (query: string) => void;
-  inputRef: RefObject<HTMLInputElement | null>;
-  /** The shortcut that focuses it, shown while it's empty. */
-  keys?: string;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useShortcut("find", true, () => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  });
+  const keys = useShortcutLabel("find");
   const [typed, setTyped] = useState(query);
   // The query this box last reported; a different one came from outside
   // (Back clearing a search), and the box shows it.
