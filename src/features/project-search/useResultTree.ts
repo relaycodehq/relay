@@ -32,6 +32,8 @@ export function useResultTree(files: readonly ProjectSearchFile[]) {
     setCollapsed(new Set());
     setExcluded(new Set());
     setSelected(0);
+    // The selected row is the first, so the list must show it.
+    if (scroller.current) scroller.current.scrollTop = 0;
   }, [files]);
 
   const rows = useMemo(
