@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ProjectSearchQuery } from "../../shared/project-search";
 import { digest } from "../util/hash";
 import { hitsIn, searchRegExp } from "./matcher";
-import { matchPreview } from "./preview";
+import { matchPreview, withoutLineEnd } from "./preview";
 import type { FoundFile } from "./ripgrep";
 
 /** Files past this are not searched, as ripgrep's `--max-filesize 2M`. */
@@ -51,9 +51,10 @@ function matchesIn(text: string, re: RegExp, room: number) {
   const matches = [];
   // A CRLF line ends before its \r, as ripgrep's --crlf and replace read it.
   for (const [i, line] of text.split(/\r?\n/).entries()) {
+    const shown = withoutLineEnd(line);
     for (const hit of hitsIn(re, line)) {
       if (matches.length >= room) return { matches, full: true };
-      matches.push(matchPreview(line, i + 1, hit.index, hit.length));
+      matches.push(matchPreview(shown, i + 1, hit.index, hit.length));
     }
   }
   return { matches, full: false };

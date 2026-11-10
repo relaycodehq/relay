@@ -28,6 +28,7 @@ describe("parseRipgrepLine", () => {
           previewStart: 2,
         },
       ],
+      more: false,
     });
   });
 
@@ -42,6 +43,57 @@ describe("parseRipgrepLine", () => {
     );
     expect(found?.matches[0]).toMatchObject({ column: 4, length: 3 });
     expect(line.slice(4, 7)).toBe("foo");
+  });
+
+  it("keeps columns right across 1-, 2-, 3- and 4-byte characters", () => {
+    // a, é (2 bytes), € (3), 😀 (4 bytes, 2 units): one foo after each.
+    const line = "afoo é foo € foo 😀 foo 😀😀foo\n";
+    const submatches: { start: number; end: number }[] = [];
+    const bytes = Buffer.from(line);
+    for (
+      let at = bytes.indexOf("foo");
+      at >= 0;
+      at = bytes.indexOf("foo", at + 3)
+    )
+      submatches.push({ start: at, end: at + 3 });
+    const found = parseRipgrepLine(
+      event({ lines: { text: line }, submatches }),
+    );
+    const expected = [...line.matchAll(/foo/g)].map((m) => m.index);
+    expect(found?.matches.map((m) => m.column)).toEqual(expected);
+    expect(expected).toHaveLength(5);
+    for (const m of found?.matches ?? [])
+      expect(line.slice(m.column, m.column + m.length)).toBe("foo");
+  });
+
+  it("reads only as many matches as are still wanted, and says there were more", () => {
+    const submatches = [0, 3, 6].map((start) => ({ start, end: start + 2 }));
+    const lines = { text: "ab ab ab\n" };
+    const some = parseRipgrepLine(event({ lines, submatches }), 2);
+    expect(some?.matches.map((m) => m.column)).toEqual([0, 3]);
+    expect(some?.more).toBe(true);
+    const all = parseRipgrepLine(event({ lines, submatches }), 3);
+    expect(all?.more).toBe(false);
+    const none = parseRipgrepLine(event({ lines, submatches }), 0);
+    expect(none).toMatchObject({ matches: [], more: true });
+  });
+
+  it("converts a long non-ASCII line with thousands of matches quickly", () => {
+    const unit = '{"id":123,"name":"abcdéf"},';
+    const text = unit.repeat(11_000);
+    const bytes = Buffer.from(text);
+    const submatches: { start: number; end: number }[] = [];
+    for (let i = 0; i < bytes.length; i++)
+      if (bytes[i] === 0x65) submatches.push({ start: i, end: i + 1 });
+    expect(submatches.length).toBeGreaterThan(10_000);
+    const raw = event({ lines: { text: text + "\n" }, submatches });
+    const started = Date.now();
+    const found = parseRipgrepLine(raw);
+    // Decoding the line again for every offset took ~5s here.
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(found?.matches).toHaveLength(submatches.length);
+    const last = found?.matches.at(-1);
+    expect(text.slice(last?.column, (last?.column ?? 0) + 1)).toBe("e");
   });
 
   it("gives every match in a line", () => {

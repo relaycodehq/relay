@@ -6,7 +6,7 @@ import type {
 import { spawnExecutable } from "../platform/executables";
 import { terminate } from "../platform/terminate";
 import { ripgrepExcludeArgs, type Globs } from "./glob";
-import { matchPreview } from "./preview";
+import { matchPreview, withoutLineEnd } from "./preview";
 
 /** ripgrep refused the pattern, which another regex engine may still take (lookaround, backreferences). */
 export class PatternRejected extends Error {}
@@ -57,15 +57,40 @@ const matchEvent = z.object({
   }),
 });
 
-/** Offsets in `line` as ripgrep counts them (UTF-8 bytes), as UTF-16 units. */
-function unitOffsets(line: string) {
-  if (line.length === Buffer.byteLength(line)) return (byte: number) => byte;
-  const bytes = Buffer.from(line);
-  return (byte: number) => bytes.subarray(0, byte).toString("utf8").length;
+/**
+ * ripgrep counts offsets in UTF-8 bytes; this gives the same positions as
+ * UTF-16 units. `bytes` must be ascending, and the line is read once however
+ * many there are.
+ */
+function unitOffsets(line: string, bytes: number[]) {
+  if (line.length === Buffer.byteLength(line)) return bytes;
+  const units: number[] = [];
+  let byte = 0;
+  let unit = 0;
+  for (const wanted of bytes) {
+    while (byte < wanted && unit < line.length) {
+      const point = line.codePointAt(unit) as number;
+      byte += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+      unit += point > 0xffff ? 2 : 1;
+    }
+    units.push(unit);
+  }
+  return units;
 }
 
-/** The matches in one line of ripgrep's `--json` output; none for any other event or a name that isn't text. */
-export function parseRipgrepLine(raw: string): FoundFile | null {
+export interface FoundLine extends FoundFile {
+  /** The line had more matches than `room`, which were not read. */
+  more: boolean;
+}
+
+/**
+ * The matches in one line of ripgrep's `--json` output, at most `room` of
+ * them; none for any other event or a name that isn't text.
+ */
+export function parseRipgrepLine(
+  raw: string,
+  room = Infinity,
+): FoundLine | null {
   let event: unknown;
   try {
     event = JSON.parse(raw);
@@ -75,23 +100,25 @@ export function parseRipgrepLine(raw: string): FoundFile | null {
   const parsed = matchEvent.safeParse(event);
   if (!parsed.success) return null;
   const { path, lines, line_number, submatches } = parsed.data.data;
-  const unit = unitOffsets(lines.text);
-  const matches = submatches.flatMap((m) =>
-    m.end > m.start
-      ? [
-          matchPreview(
-            lines.text,
-            line_number,
-            unit(m.start),
-            unit(m.end) - unit(m.start),
-          ),
-        ]
-      : [],
+  const hits = submatches.filter((m) => m.end > m.start);
+  if (!hits.length) return null;
+  const wanted = hits.slice(0, room);
+  const text = withoutLineEnd(lines.text);
+  const offsets = unitOffsets(
+    lines.text,
+    wanted.flatMap((m) => [m.start, m.end]),
   );
-  if (!matches.length) return null;
   return {
     path: path.text.replace(/^\.[\\/]/, "").replaceAll("\\", "/"),
-    matches,
+    matches: wanted.map((_, i) =>
+      matchPreview(
+        text,
+        line_number,
+        offsets[2 * i],
+        offsets[2 * i + 1] - offsets[2 * i],
+      ),
+    ),
+    more: hits.length > wanted.length,
   };
 }
 
@@ -130,28 +157,25 @@ function collectMatches(
   let unfinishedLine = "";
   const take = (raw: string) => {
     if (stopped()) return;
-    const found = raw ? parseRipgrepLine(raw) : null;
+    const found = raw ? parseRipgrepLine(raw, limit - count) : null;
     if (!found) return;
     if (keep && !keep(found.path)) return;
     const list = files.get(found.path) ?? [];
-    let full = false;
-    for (const match of found.matches) {
-      full = count >= limit;
-      if (full) break;
-      list.push(match);
-      count++;
-    }
+    list.push(...found.matches);
+    count += found.matches.length;
     // A file goes in only with a match, so the cap never leaves one empty.
     if (list.length) files.set(found.path, list);
-    if (full) onFull();
+    if (found.more) onFull();
   };
   return {
     get count() {
       return count;
     },
     feed(chunk: string) {
+      // The text before the chunk has no newline, so it is not searched again.
+      const fresh = unfinishedLine.length;
       unfinishedLine += chunk;
-      let end = unfinishedLine.indexOf("\n");
+      let end = unfinishedLine.indexOf("\n", fresh);
       while (end >= 0 && !stopped()) {
         take(unfinishedLine.slice(0, end));
         unfinishedLine = unfinishedLine.slice(end + 1);

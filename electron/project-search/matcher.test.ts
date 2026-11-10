@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { hitsIn, replaceInText, searchRegExp } from "./matcher";
-import { matchPreview } from "./preview";
+import { matchPreview, withoutLineEnd } from "./preview";
 
 const query = (pattern: string, over = {}) => ({
   pattern,
@@ -124,9 +124,19 @@ describe("replaceInText", () => {
   });
 });
 
+describe("withoutLineEnd", () => {
+  it("drops one terminator, however the line ends", () => {
+    expect(withoutLineEnd("a\n")).toBe("a");
+    expect(withoutLineEnd("a\r\n")).toBe("a");
+    expect(withoutLineEnd("a\r")).toBe("a");
+    expect(withoutLineEnd("a\r\r\n")).toBe("a");
+    expect(withoutLineEnd("a\rb")).toBe("a\rb");
+  });
+});
+
 describe("matchPreview", () => {
-  it("drops the indentation and the carriage return", () => {
-    expect(matchPreview("    return foo;\r", 7, 11, 3)).toEqual({
+  it("drops the indentation", () => {
+    expect(matchPreview("    return foo;", 7, 11, 3)).toEqual({
       line: 7,
       column: 11,
       length: 3,

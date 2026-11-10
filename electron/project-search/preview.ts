@@ -5,17 +5,24 @@ const previewMax = 240;
 /** Characters kept before a match that is far into its line. */
 const lead = 40;
 
+/** The line without its terminator, `\n`, `\r\n` or a last line's `\r`. */
+export function withoutLineEnd(line: string) {
+  let text = line;
+  if (text.endsWith("\r\n")) text = text.slice(0, -2);
+  else if (text.endsWith("\n")) text = text.slice(0, -1);
+  return text.endsWith("\r") ? text.slice(0, -1) : text;
+}
+
 /**
- * A match as the results show it: the line without its indentation, and for
- * a long line only a window around the match.
+ * A match as the results show it: the line (already `withoutLineEnd`) without
+ * its indentation, and for a long line only a window around the match.
  */
 export function matchPreview(
-  line: string,
+  text: string,
   number: number,
   column: number,
   length: number,
 ): ProjectSearchMatch {
-  const text = line.replace(/\r?\n$/, "").replace(/\r$/, "");
   let start = Math.min(text.length - text.trimStart().length, column);
   if (column - start > lead + 20) start = column - lead;
   const end = Math.min(
