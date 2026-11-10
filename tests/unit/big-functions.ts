@@ -245,7 +245,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/pulls/ProjectPullPicker.tsx › ProjectPullPicker": 233,
   "src/features/pulls/PullRequestsPage.tsx › BoardView": 118,
   "src/features/pulls/PullRequestsPage.tsx › ProjectPulls": 97,
-  "src/features/pulls/PullRequestsPage.tsx › PullRequestsPage": 232,
+  "src/features/pulls/PullRequestsPage.tsx › PullRequestsPage": 220,
   "src/features/pulls/pull-board.ts › buildBoard": 108,
   "src/features/pulls/usePullBoard.ts › usePullBoard": 102,
   "src/features/quick-switch/QuickSwitchHud.tsx › Revolver": 85,
