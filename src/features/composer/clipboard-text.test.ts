@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { textIsTheContent, type ClipboardFile } from "./clipboard-text";
+import {
+  textIsTheContent,
+  textPasteRoute,
+  type ClipboardFile,
+} from "./clipboard-text";
 
 const picture: ClipboardFile = { image: true, onDisk: false };
 const none = { plain: "", html: "", rtf: "" };
@@ -65,5 +69,29 @@ describe("textIsTheContent", () => {
         files: [picture, { image: false, onDisk: false }],
       }),
     ).toBe(false);
+  });
+});
+
+describe("textPasteRoute", () => {
+  const text = { hasBlocks: false, huge: false, long: false };
+
+  it("leaves short text to the editor, unless files on the clipboard make it step aside", () => {
+    expect(textPasteRoute({ ...text, hasFiles: false })).toBe("editor");
+    expect(textPasteRoute({ ...text, hasFiles: true })).toBe("insert");
+  });
+
+  it("takes text with paste blocks over only when files are there", () => {
+    const blocks = { ...text, hasBlocks: true };
+    expect(textPasteRoute({ ...blocks, hasFiles: false })).toBe("editor");
+    expect(textPasteRoute({ ...blocks, hasFiles: true })).toBe("insert");
+  });
+
+  it("makes a pill of long text and a file of huge text, files or not", () => {
+    for (const hasFiles of [false, true]) {
+      expect(textPasteRoute({ ...text, hasFiles, long: true })).toBe("pill");
+      expect(
+        textPasteRoute({ ...text, hasFiles, long: true, huge: true }),
+      ).toBe("file");
+    }
   });
 });

@@ -34,3 +34,29 @@ export function textIsTheContent({
   if (!files.every((file) => file.image && !file.onDisk)) return false;
   return rtf.trim().length > 0 || htmlHoldsWords(html);
 }
+
+export type TextPaste = "editor" | "insert" | "pill" | "file";
+
+/**
+ * Who puts pasted text in. The editor's own paste does it for text that
+ * carries paste blocks or is short, but it steps aside whenever files are on
+ * the clipboard, so then the composer inserts the text itself. A long text
+ * goes in as a pill and a huge one as a file either way.
+ */
+export function textPasteRoute({
+  hasFiles,
+  hasBlocks,
+  huge,
+  long,
+}: {
+  hasFiles: boolean;
+  hasBlocks: boolean;
+  huge: boolean;
+  long: boolean;
+}): TextPaste {
+  const byEditor = hasFiles ? "insert" : "editor";
+  if (hasBlocks) return byEditor;
+  if (huge) return "file";
+  if (long) return "pill";
+  return byEditor;
+}

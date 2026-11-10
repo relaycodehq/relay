@@ -566,8 +566,9 @@ it("gives each of two copied messages' #1 its own screenshot, and a repeated one
 it("pastes the words that came with a file that isn't on disk, and mentions one that is", async () => {
   const { useComposerDraft } = await import("./useComposerDraft");
   const insertFiles = vi.fn();
+  const pasteText = vi.fn(() => true);
   const editor = {
-    current: { insertFiles, adoptPills } as unknown as DraftEditor,
+    current: { insertFiles, pasteText, adoptPills } as unknown as DraftEditor,
   };
   const draft = mount(() => useComposerDraft(KEY, editor));
   await settle();
@@ -581,7 +582,10 @@ it("pastes the words that came with a file that isn't on disk, and mentions one 
   });
   const pathless = paste({});
   update(() => draft().paste(pathless as never));
-  expect(pathless.preventDefault).not.toHaveBeenCalled();
+  // The editor leaves a clipboard that holds files alone, so the composer puts the words in.
+  expect(pathless.preventDefault).toHaveBeenCalled();
+  expect(pasteText).toHaveBeenCalledWith("notes");
+  expect(insertFiles).not.toHaveBeenCalled();
   expect(draft().error).toBeUndefined();
   const saved = paste({ path: "/docs/notes.pdf" });
   update(() => draft().paste(saved as never));

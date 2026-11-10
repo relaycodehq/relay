@@ -20,7 +20,7 @@ import { draftChips } from "../../lib/thread-storage";
 import { isScreenshot, prepareScreenshot } from "../images/draft-images";
 import { copiedImages } from "../images/image-clipboard";
 import { droppedImage } from "../images/image-drag";
-import { textIsTheContent } from "./clipboard-text";
+import { textIsTheContent, textPasteRoute } from "./clipboard-text";
 import { appendToDraft, readDraft } from "./drafts";
 import { fileMarkdown } from "./prompt-text";
 import type { useDraftImages } from "./useDraftImages";
@@ -79,6 +79,18 @@ function pastesAsFiles(files: File[], data: DataTransfer, html: string) {
     return false;
   const placeable = onClipboard.some((file) => file.image || file.onDisk);
   return files.length > 0 && (placeable || !plain.trim());
+}
+
+/** The text on the clipboard, cleaned, and who puts it in. */
+function textPasted(data: DataTransfer, files: File[]) {
+  const pasted = cleanPaste(data.getData("text/plain"));
+  const route = textPasteRoute({
+    hasFiles: files.length > 0,
+    hasBlocks: pastedTexts(pasted).length > 0,
+    huge: isFilePaste(pasted),
+    long: isLongPaste(pasted),
+  });
+  return { pasted, route };
 }
 
 /** Files and pasted text entering one draft; queued work keeps its original key. */
@@ -304,16 +316,16 @@ export function draftIntake({
         addFiles(files);
         return;
       }
-      const plain = event.clipboardData.getData("text/plain");
       // A long paste becomes a pill at the caret instead of flooding the
       // draft, and a huge one, or one the message can't hold, a file.
-      const pasted = cleanPaste(plain);
-      if (pastedTexts(pasted).length) return;
-      const huge = isFilePaste(pasted);
-      if (!huge && !isLongPaste(pasted)) return;
+      const { pasted, route } = textPasted(event.clipboardData, files);
+      if (route === "editor") return;
       event.preventDefault();
       event.stopPropagation();
-      if (!huge && editor.current?.insertPaste(pasted)) setError(undefined);
+      if (route === "pill" && editor.current?.insertPaste(pasted))
+        setError(undefined);
+      else if (route === "insert" && editor.current?.pasteText(pasted))
+        setError(undefined);
       else queuePreparation(() => spillPaste(pasted));
     },
     drop(event: DragEvent) {
