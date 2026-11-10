@@ -99,7 +99,7 @@ export const bigFunctions: Record<string, number> = {
   "src/app/ProjectShell.tsx › ProjectShell": 362,
   "src/app/ProjectShell.tsx › page": 102,
   "src/app/ProjectShell.tsx › surfaceBody": 103,
-  "src/app/PullsSurface.tsx › PullsSurface": 193,
+  "src/app/PullsSurface.tsx › PullsSurface": 179,
   "src/app/ThreadPanes.tsx › ThreadPanel": 168,
   "src/app/ThreadWindowShell.tsx › ThreadWindowShell": 105,
   "src/app/ThreadWorkspace.tsx › ThreadWorkspace": 179,

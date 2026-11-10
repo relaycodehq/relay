@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Search, X } from "lucide-react";
 
 /** The page's search field; the query it reports is trimmed, 250ms after typing stops. */
@@ -15,8 +15,21 @@ export function PullSearchBox({
   keys?: string;
 }) {
   const [typed, setTyped] = useState(query);
+  // The query this box last reported; a different one came from outside
+  // (Back clearing a search), and the box shows it.
+  const reported = useRef(query);
   useEffect(() => {
-    const t = setTimeout(() => onQuery(typed.trim()), 250);
+    if (query === reported.current) return;
+    reported.current = query;
+    setTyped(query);
+  }, [query]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const next = typed.trim();
+      if (next === reported.current) return;
+      reported.current = next;
+      onQuery(next);
+    }, 250);
     return () => clearTimeout(t);
   }, [typed]);
   return (

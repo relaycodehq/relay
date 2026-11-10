@@ -10,7 +10,7 @@ import {
   type PullsTarget,
 } from "./pull-board";
 
-const NOWHERE: PullsLocation = { repo: null, pull: null };
+const NOWHERE: PullsLocation = { repo: null, pull: null, search: false };
 
 /**
  * The Pull requests page reports where it is for the title; the title and

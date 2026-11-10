@@ -288,30 +288,49 @@ it("names the page's place after the project a repository is cloned to", () => {
     projectFor([portal], r);
   const ref = { server, owner: "web", name: "portal", number: 7 };
   const key = `${server}|web/portal`;
-  expect(pullsLocation(ref, "Fix it", "other/repo", projectOf)).toEqual({
+  expect(pullsLocation(ref, "Fix it", "other/repo", projectOf, false)).toEqual({
     repo: { key, label: "Portal" },
     pull: { number: 7, title: "Fix it" },
+    search: false,
   });
   expect(
-    pullsLocation({ ...ref, owner: "Ops" }, undefined, null, projectOf),
+    pullsLocation({ ...ref, owner: "Ops" }, undefined, null, projectOf, false),
   ).toEqual({
     repo: { key: `${server}|ops/portal`, label: "Ops/portal" },
     pull: { number: 7, title: undefined },
+    search: false,
   });
-  expect(pullsLocation(null, undefined, key, projectOf).repo).toEqual({
+  expect(pullsLocation(null, undefined, key, projectOf, false).repo).toEqual({
     key,
     label: "Portal",
   });
   expect(
-    pullsLocation(null, undefined, `${server}|ops/tools`, projectOf),
+    pullsLocation(null, undefined, `${server}|ops/tools`, projectOf, false),
   ).toEqual({
     repo: { key: `${server}|ops/tools`, label: "ops/tools" },
     pull: null,
+    search: false,
   });
-  expect(pullsLocation(null, undefined, null, projectOf)).toEqual({
+  expect(pullsLocation(null, undefined, null, projectOf, false)).toEqual({
     repo: null,
     pull: null,
+    search: false,
   });
+});
+
+it("says a search is showing, and still names the page under it", () => {
+  const portal = project("Portal", "web", "portal");
+  const projectOf = (r: { server?: string; owner: string; name: string }) =>
+    projectFor([portal], r);
+  const key = `${server}|web/portal`;
+  expect(pullsLocation(null, undefined, key, projectOf, true)).toEqual({
+    repo: { key, label: "Portal" },
+    pull: null,
+    search: true,
+  });
+  expect(pullsLocation(null, undefined, null, projectOf, true).search).toBe(
+    true,
+  );
 });
 
 it("reads a repository back from its key, server and all", () => {

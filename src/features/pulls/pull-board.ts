@@ -89,21 +89,27 @@ export const onServer = <T extends Issue>(item: T, server: string): T =>
     ? item
     : { ...item, repository: { ...item.repository, server } };
 
-/** Where the page is: a project's page, an open PR, both or neither. */
+/**
+ * Where the page is: a project's page, an open PR, both or neither. A search
+ * covers whatever page is under it, which `repo` still names for Back.
+ */
 export interface PullsLocation {
   repo: { key: string; label: string } | null;
   pull: { number: number; title?: string } | null;
+  search: boolean;
 }
 
 /**
  * Where the page is, for the window title: the open PR in its repository,
  * or a repository's page. A project's name stands in for its repository's.
+ * `searching` is a search showing in place of the page.
  */
 export function pullsLocation(
   selected: PullRef | null,
   title: string | undefined,
   repo: string | null,
   projectOf: (repo: Repo) => Project | undefined,
+  searching: boolean,
 ): PullsLocation {
   const label = (key: string) => {
     const repo = keyRepo(key);
@@ -120,6 +126,7 @@ export function pullsLocation(
         ? { key: repo, label: label(repo) }
         : null,
     pull: selected ? { number: selected.number, title } : null,
+    search: searching,
   };
 }
 

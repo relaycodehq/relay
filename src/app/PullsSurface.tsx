@@ -127,9 +127,11 @@ export function PullsSurface({
     if (project) onOpenInProject(project, r);
     else select(r);
   };
+  const searching = !selected && !!query;
   useImperativeHandle(ref, () => ({
     go(target) {
       setRepo(target.to === "repo" ? target.repo : null);
+      setQuery("");
       deselect();
     },
   }));
@@ -140,9 +142,10 @@ export function PullsSurface({
         pull.data?.title,
         repo,
         projectOf,
+        searching,
       ),
     );
-  }, [selected, repo, pull.data?.title]);
+  }, [selected, repo, searching, pull.data?.title]);
   const { urlOpen, setUrlOpen, openUrl } = useOpenByUrl(
     open,
     setError,

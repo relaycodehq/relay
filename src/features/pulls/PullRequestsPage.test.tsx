@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from "vitest";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Project } from "../../../shared/projects";
@@ -185,5 +185,76 @@ it("opens a cloned project's page as that project while its list is still loadin
   } finally {
     await act(async () => root.unmount());
     client.clear();
+  }
+});
+
+it("empties the search box when the query is cleared from outside, without sending it back", async () => {
+  vi.useFakeTimers();
+  vi.mocked(api.search).mockReturnValue(new Promise(() => {}));
+  const reported: string[] = [];
+  let clear!: () => void;
+  function Page() {
+    const [query, setQuery] = useState("fixture");
+    clear = () => setQuery("");
+    return (
+      <PullRequestsPage
+        accounts={[account]}
+        onRecheckHosts={noop}
+        projects={[]}
+        repo={null}
+        onRepo={noop}
+        query={query}
+        onQuery={(next) => {
+          reported.push(next);
+          setQuery(next);
+        }}
+        state="open"
+        onState={noop}
+        onOpen={noop}
+        onOpenUrl={noop}
+        onOpenProject={noop}
+        onAddProject={noop}
+      />
+    );
+  }
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const container = document.createElement("div");
+  const root = createRoot(container);
+  const box = () =>
+    container.querySelector<HTMLInputElement>(
+      "input[aria-label='Search pull requests']",
+    )!;
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Page />
+        </QueryClientProvider>,
+      ),
+    );
+    expect(box().value).toBe("fixture");
+    await act(async () => clear());
+    expect(box().value).toBe("");
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(reported).toEqual([]);
+    expect(box().value).toBe("");
+
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    await act(async () => {
+      setValue.call(box(), "bug");
+      box().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => vi.advanceTimersByTime(300));
+    expect(reported).toEqual(["bug"]);
+    expect(box().value).toBe("bug");
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
+    vi.useRealTimers();
   }
 });
