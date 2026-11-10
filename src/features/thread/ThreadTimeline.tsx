@@ -14,6 +14,7 @@ import type { ChatMessage } from "../../../shared/projects";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { railPitch, tickAt } from "./rail-scrub";
 import { sameTimeline, timelineTurns, type Timeline } from "./timeline";
+import { useRailScrub } from "./useRailScrub";
 import type { ThreadScroll } from "./useThreadScroll";
 import "./thread-timeline.css";
 
@@ -125,28 +126,30 @@ function wheelInto(view: HTMLElement | null, e: WheelEvent<HTMLElement>) {
 
 /**
  * A rail of one tick per prompt beside the thread: the turn being read is
- * lit, hovering one shows its prompt and how the answer starts, and clicking
- * jumps there, however far up it is.
+ * lit, hovering one shows its prompt and how the answer starts, clicking
+ * jumps there, however far up it is, and dragging scrolls the thread along.
  */
 export function ThreadTimeline({
   listed,
-  view: { scroll, following, jumpTo: onJump },
+  view,
   bottomInset,
 }: {
   listed: ChatMessage[];
   /** The thread's scrolling view, which says which turn is being read, and
    * jumps to one. The rail sits beside it, in the same positioned parent. */
-  view: Pick<ThreadScroll, "scroll" | "following" | "jumpTo">;
+  view: Pick<ThreadScroll, "scroll" | "following" | "jumpTo" | "followAnswer">;
   /** The composer docked over the view's end; the rail centres above it. */
   bottomInset: number;
 }) {
   const { turns, turnOf } = useSteadyTimeline(listed);
   const lastTurn = turnOf.get(listed.at(-1)?.id ?? "") ?? -1;
+  const { scroll, following, jumpTo: onJump } = view;
   const { active, room } = useRailPlace(scroll, { following, lastTurn }, turnOf, bottomInset);
   const [pointer, setPointer] = useState<number | null>(null);
   const rail = useRef<HTMLDivElement>(null);
   const ids = useId();
   const pitch = railPitch(room.height, turns.length);
+  const scrub = useRailScrub({ rail, pitch, turns, view });
 
   if (turns.length < 2) return null;
   const height = pitch * (turns.length - 1);
@@ -154,7 +157,10 @@ export function ThreadTimeline({
     const y = clientY - rail.current!.getBoundingClientRect().top - 8;
     return tickAt(y, pitch, turns.length);
   };
-  const onMove = (e: PointerEvent) => setPointer(at(e.clientY));
+  const onMove = (e: PointerEvent<HTMLElement>) => {
+    setPointer(at(e.clientY));
+    scrub.onPointerMove(e);
+  };
   const onKey = (e: KeyboardEvent) => {
     const from = pointer ?? Math.max(0, active);
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
@@ -173,6 +179,7 @@ export function ThreadTimeline({
       className="thread-timeline"
       aria-label="Prompts in this thread"
       onWheel={(e) => wheelInto(scroll.current, e)}
+      data-scrubbing={scrub.scrubbing || undefined}
       style={
         {
           "--timeline-top": `${room.top}px`,
@@ -193,7 +200,11 @@ export function ThreadTimeline({
           aria-activedescendant={
             pointer === null ? undefined : `${ids}-${pointer}`
           }
+          onPointerDown={scrub.onPointerDown}
           onPointerMove={onMove}
+          onPointerUp={scrub.onPointerUp}
+          onPointerCancel={scrub.onPointerCancel}
+          onClickCapture={scrub.onClickCapture}
           onPointerLeave={() => setPointer(null)}
           onBlur={() => setPointer(null)}
           onKeyDown={onKey}

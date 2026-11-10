@@ -26,7 +26,7 @@ const FIRST_MESSAGES = 6,
  * opens padded for it, so it needn't render a second time once measured. */
 let lastDockHeight = 0;
 /** A message jumped to lands this far below the top of the view. */
-const JUMP_OFFSET = 12;
+export const JUMP_OFFSET = 12;
 /** How long a message or passage jumped to stays lit, matching their CSS animations. */
 export const FLASH_MS = 1400;
 

@@ -13,6 +13,8 @@
   top: var(--timeline-top);
   width: var(--timeline-reach);
   height: var(--timeline-room);
+  /* A drag along the rail scrolls; it mustn't select the thread's text. */
+  user-select: none;
 }
 /* A selection dragged past the text's left edge would otherwise end in the
    strip, which the browser reads as the end of the thread. */
@@ -29,8 +31,10 @@
   /* Leaving lingers a moment, so a pointer that slips off doesn't blink it. */
   transition: opacity 160ms ease-out 220ms;
 }
+/* A drag keeps the rail up when the pointer drifts off the strip. */
 .thread-timeline:hover > .thread-timeline-body,
-.thread-timeline:focus-within > .thread-timeline-body {
+.thread-timeline:focus-within > .thread-timeline-body,
+.thread-timeline[data-scrubbing] > .thread-timeline-body {
   opacity: 1;
   transition-delay: 0ms;
 }
