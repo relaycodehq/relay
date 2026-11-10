@@ -244,6 +244,9 @@
   gap: 7px;
   font-size: 12px;
 }
+.project-editor-empty .shortcut-hint {
+  opacity: 0.55;
+}
 .editor-bar > .file-list-toggle {
   margin-left: -6px;
   margin-right: 2px;

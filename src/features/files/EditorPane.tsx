@@ -109,7 +109,12 @@ export function EditorPane({
         deleted={deleted}
         changeOf={(path) => tree?.changes.find((c) => c.path === path)}
         editor={editor}
-        empty={<NoFileOpen onFind={browsing.focusFilter} />}
+        empty={
+          <NoFileOpen
+            onFind={browsing.focusFilter}
+            onFindInFiles={search.findInFiles}
+          />
+        }
         onRevealInList={(group, tab) => {
           workspace.activate(group, tab);
           browsing.revealInList(tab.path);

@@ -1,5 +1,6 @@
 import { useState, type RefObject } from "react";
 import type { EditorView } from "@codemirror/view";
+import { useShortcut } from "../../lib/shortcuts";
 import { useDoubleShift, type SearchMode } from "../project-search";
 
 /** Asks the Search Everywhere palette to open on `mode`; `key` makes each ask a fresh one. */
@@ -11,7 +12,8 @@ export type FindRequest = { replace: boolean; query?: string; key: number };
 /**
  * The editor's project-wide search: the Search Everywhere palette, Find in
  * Files under the editor, and the `host` commands that open them from the
- * editor's keys. Double Shift opens the palette from anywhere in the pane.
+ * editor's keys. Double Shift opens the palette, and ⌘⇧F Find in Files, from
+ * anywhere in the pane.
  */
 export function useEditorSearch({
   active,
@@ -41,20 +43,30 @@ export function useEditorSearch({
   };
 
   // Not while the chat beside the files has focus.
-  useDoubleShift(() => {
+  const focusIsOutsidePane = () => {
     const focused = document.activeElement;
-    const focusIsOutsidePane =
-      !!focused &&
-      focused !== document.body &&
-      !pane.current?.contains(focused);
-    if (focusIsOutsidePane) return;
+    return (
+      !!focused && focused !== document.body && !pane.current?.contains(focused)
+    );
+  };
+  useDoubleShift(() => {
+    if (focusIsOutsidePane()) return;
     setPalette({ mode: "all", key: Date.now() });
   }, active && !palette);
+  // An editor with the caret takes the key first and seeds the query from its
+  // selection; the window only hears a key the editor left alone.
+  useShortcut(
+    "find-in-files",
+    active && !palette,
+    () => setFinding({ replace: false, key: Date.now() }),
+    { meant: () => !focusIsOutsidePane() },
+  );
 
   return {
     palette,
     closePalette: () => setPalette(undefined),
     finding,
+    findInFiles: () => setFinding({ replace: false, key: Date.now() }),
     closeFinding: () => setFinding(undefined),
     host: {
       searchEverywhere: openPaletteOn("all"),
