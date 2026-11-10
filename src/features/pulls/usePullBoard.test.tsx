@@ -191,6 +191,57 @@ it("keeps the last board up while another state loads, then swaps it whole", asy
   }
 });
 
+it("says which state the held board was built for, and holds again on every switch", async () => {
+  vi.useFakeTimers();
+  const github: Account = {
+    ...account,
+    id: "github",
+    server: "https://github.com",
+  };
+  const byState = { open: 10, closed: 11, all: 12 };
+  vi.mocked(api.search).mockImplementation(
+    async (filter, _q, state, _page, server) => {
+      if (state !== "open" && server === account.server)
+        await new Promise(() => {});
+      const number = server === github.server ? byState[state] : 20;
+      return {
+        items: filter === "assigned" ? [{ ...issue("someone"), number }] : [],
+        nextPage: null,
+      };
+    },
+  );
+  const settle = () => act(async () => vi.advanceTimersByTimeAsync(0));
+  const numbers = () =>
+    view.current.board.pulls.map((p) => p.ref.number).sort();
+  const view = await observe([account, github]);
+  try {
+    await settle();
+    expect(numbers()).toEqual([10, 20]);
+    expect(view.current.boardState).toBe("open");
+
+    await view.show("closed");
+    await settle();
+    expect(numbers()).toEqual([10, 20]);
+    expect(view.current.boardState).toBe("open");
+
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(numbers()).toEqual([11]);
+    expect(view.current.boardState).toBe("closed");
+
+    await view.show("all");
+    await settle();
+    expect(numbers()).toEqual([10, 20]);
+    expect(view.current.boardState).toBe("open");
+
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    expect(numbers()).toEqual([12]);
+    expect(view.current.boardState).toBe("all");
+  } finally {
+    await view.close();
+    vi.useRealTimers();
+  }
+});
+
 it("doesn't treat an empty healthy host as an empty board while another is pending", async () => {
   const github: Account = {
     ...account,

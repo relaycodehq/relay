@@ -93,7 +93,11 @@ export function usePullBoard(
     return buildBoard({ hosts, projects, lists: input });
   }, [accounts, projects, searchesKey, listsKey]);
   const pending = pendingHosts(accounts, searches, lists, linked);
-  const { board, holding } = useSettledBoard(fresh, !pending.length);
+  const { board, holding, shows } = useSettledBoard(
+    fresh,
+    !pending.length,
+    state,
+  );
   const verdicts = useVerdicts(
     board.pulls.filter(
       (p) => p.relation === "mine" && p.state === "open" && !p.draft,
@@ -105,6 +109,8 @@ export function usePullBoard(
   const failures = hostFailures(accounts, searches, lists, linked);
   return {
     board,
+    /** The state `board` was built for: the last one's while it is held. */
+    boardState: shows,
     verdicts,
     started,
     // A slow host mustn't hide the PRs another search or project already found.
@@ -172,20 +178,31 @@ const HOLD_MS = 1500;
 /**
  * Switching Open, Closed and All asks every host again. Until they have all
  * answered, the last full board stays up, so cards don't pop in and reshuffle
- * one host at a time. A slow host gets 1.5s before the partial board shows.
+ * one host at a time. A slow host gets 1.5s, from each switch, before the
+ * partial board shows. `shows` is the state of the board returned.
  */
-function useSettledBoard(fresh: Board, settled: boolean) {
-  const last = useRef<Board | null>(null);
+function useSettledBoard(fresh: Board, settled: boolean, state: PullState) {
+  const last = useRef<{ board: Board; state: PullState } | null>(null);
   const [waitedOut, setWaitedOut] = useState(false);
+  const [switchedTo, setSwitchedTo] = useState(state);
+  // Cleared while rendering, so the first render of a switch already holds.
+  if (switchedTo !== state) {
+    setSwitchedTo(state);
+    setWaitedOut(false);
+  }
   useEffect(() => {
     setWaitedOut(false);
     if (settled) return;
     const timer = setTimeout(() => setWaitedOut(true), HOLD_MS);
     return () => clearTimeout(timer);
-  }, [settled]);
-  if (settled) last.current = fresh;
-  const holding = !settled && !waitedOut && !!last.current;
-  return { board: holding ? last.current! : fresh, holding };
+  }, [settled, state]);
+  if (settled) last.current = { board: fresh, state };
+  const held = !settled && !waitedOut ? last.current : null;
+  return {
+    board: held?.board ?? fresh,
+    holding: !!held,
+    shows: held?.state ?? state,
+  };
 }
 
 function useVerdicts(pulls: BoardPull[]) {

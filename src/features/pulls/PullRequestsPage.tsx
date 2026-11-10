@@ -86,6 +86,7 @@ export function PullRequestsPage({
   const qc = useQueryClient();
   const {
     board,
+    boardState,
     verdicts,
     started,
     loading,
@@ -145,7 +146,7 @@ export function PullRequestsPage({
             <BoardSummary
               board={board}
               needs={needs.length}
-              state={state}
+              state={boardState}
               incomplete={incomplete}
             />
           ),
@@ -246,7 +247,7 @@ export function PullRequestsPage({
         <BoardView
           board={board}
           needs={needs}
-          state={state}
+          state={boardState}
           context={context}
           projectOf={projectOf}
           onRepo={onRepo}
