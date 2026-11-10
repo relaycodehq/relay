@@ -55,7 +55,10 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import dev.relay.android.ui.SectionHeader
 
-private const val SHELF_PAGE = 5
+private const val SHELF_PAGE = 30
+
+/** A shelf longer than a page counts that page, so years of threads read "30+". */
+internal fun shelfCount(size: Int) = if (size > SHELF_PAGE) "$SHELF_PAGE+" else "$size"
 
 /** Resolves the thread as the desktop left it, or null when it refused (and said why). */
 typealias Triage = suspend (RemoteChatSummary, TriageAction) -> JsonObject?
@@ -153,7 +156,7 @@ fun ActivityList(
                 label,
                 Modifier.padding(top = 8.dp).clip(RoundedCornerShape(9.dp))
                     .pressable(onClick = { shelves[kind] = if (shown > 0) 0 else SHELF_PAGE }, scale = false),
-                count = items.size,
+                countText = shelfCount(items.size),
             ) {
                 Icon(TablerIcons.Outline.ChevronRight, if (shown > 0) "Fold $label" else "Show $label", Modifier.rotate(if (shown > 0) 90f else 0f), tint = c.faint, size = 13.dp)
             }

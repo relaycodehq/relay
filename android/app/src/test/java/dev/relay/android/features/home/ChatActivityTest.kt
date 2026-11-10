@@ -45,14 +45,14 @@ class ChatActivityTest {
     }
 
     @Test
-    fun sectionsSplitAndKeepTheLatestFifteenSettledNewestSettleFirst() {
+    fun sectionsSplitAndListEverySettledNewestSettleFirst() {
         val settled = (1..20).map { i -> chat("s$i", updated = 100) { copy(settledAt = 100L + i) } }
         val snoozed = chat("z") { copy(snoozedUntil = 10_000) }
         val woke = chat("w") { copy(snoozedUntil = 900) }
         val s = chatActivitySections(settled + snoozed + woke, now = 1_000)
         assertEquals(listOf("w"), s.active.map { it.id })
         assertEquals(listOf("z"), s.snoozed.map { it.id })
-        assertEquals(15, s.settled.size)
+        assertEquals(20, s.settled.size)
         assertEquals("s20", s.settled.first().id)
     }
 

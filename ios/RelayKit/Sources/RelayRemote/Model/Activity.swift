@@ -19,9 +19,6 @@ public func chatSettled(_ chat: RemoteChatSummary) -> Bool {
 
 public func chatSnoozed(_ chat: RemoteChatSummary, now: Int64) -> Bool { (chat.snoozedUntil ?? 0) > now }
 
-/// Only the latest settled threads stay in Activity; Projects lists them all.
-private let settledShelf = 15
-
 public func chatActivitySections(_ chats: [RemoteChatSummary], now: Int64) -> ActivitySections {
     var out = ActivitySections()
     for chat in chats {
@@ -29,8 +26,8 @@ public func chatActivitySections(_ chats: [RemoteChatSummary], now: Int64) -> Ac
         else if chatSnoozed(chat, now: now) { out.snoozed.append(chat) }
         else { out.active.append(chat) }
     }
-    // Latest settled first: one settled just now stays there to undo.
-    out.settled = Array(out.settled.sorted { ($0.settledAt ?? 0) > ($1.settledAt ?? 0) }.prefix(settledShelf))
+    // Latest settled first: one settled just now sits on top to undo.
+    out.settled.sort { ($0.settledAt ?? 0) > ($1.settledAt ?? 0) }
     return out
 }
 

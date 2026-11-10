@@ -45,16 +45,13 @@ fun chatActivitySection(chat: RemoteChatSummary, now: Long): ActivitySection = w
     else -> ActivitySection.Active
 }
 
-/** Only the latest settled threads stay in Activity; Projects lists them all. */
-private const val SETTLED_SHELF_SIZE = 15
-
 fun chatActivitySections(chats: List<RemoteChatSummary>, now: Long): ActivitySections {
     val by = chats.groupBy { chatActivitySection(it, now) }
     return ActivitySections(
         active = by[ActivitySection.Active].orEmpty(),
         snoozed = by[ActivitySection.Snoozed].orEmpty(),
-        // Latest settled first: one settled just now stays there to undo.
-        settled = by[ActivitySection.Settled].orEmpty().sortedByDescending { it.settledAt }.take(SETTLED_SHELF_SIZE),
+        // Latest settled first: one settled just now sits on top to undo.
+        settled = by[ActivitySection.Settled].orEmpty().sortedByDescending { it.settledAt },
     )
 }
 

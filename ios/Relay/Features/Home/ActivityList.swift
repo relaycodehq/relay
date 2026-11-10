@@ -1,7 +1,11 @@
 import RelayRemote
 import SwiftUI
 
-private let shelfPage = 5
+private let shelfPage = 30
+
+/// A shelf longer than a page counts that page, so years of threads read "30+".
+private func shelfCount(_ count: Int) -> String { count > shelfPage ? "\(shelfPage)+" : "\(count)" }
+
 private let snoozeColor = Color(red: 0xD9 / 255, green: 0x9A / 255, blue: 0x2B / 255)
 
 /// The desktop sidebar's Activity view (Android's ActivityList.kt): one card per open thread,
@@ -185,7 +189,7 @@ struct ActivityList: View {
             Section {
                 // A group label like the ones above, that folds its rows away.
                 Button { shelves[kind] = shown > 0 ? 0 : shelfPage } label: {
-                    SectionLabel(title: label, count: items.count, folded: shown == 0)
+                    SectionLabel(title: label, count: shelfCount(items.count), folded: shown == 0)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(shown > 0 ? "Fold \(label)" : "Show \(label)")
@@ -242,7 +246,8 @@ struct ActivityList: View {
 
 struct SectionLabel: View {
     let title: String
-    let count: Int
+    /// The count as shown: a number, or "30+" on a long shelf.
+    let count: String
     /// A shelf's fold, when it has one.
     var folded: Bool?
     @Environment(\.colors) private var colors
@@ -251,7 +256,7 @@ struct SectionLabel: View {
         HStack(spacing: 6) {
             Text(title).fontWeight(.medium).foregroundStyle(colors.muted)
             Spacer()
-            Text("\(count)").foregroundStyle(colors.faint)
+            Text(count).foregroundStyle(colors.faint)
             if let folded {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 10, weight: .semibold))
@@ -262,6 +267,12 @@ struct SectionLabel: View {
         .font(.caption)
         .textCase(nil)
         .contentShape(.rect)
+    }
+}
+
+extension SectionLabel {
+    init(title: String, count: Int, folded: Bool? = nil) {
+        self.init(title: title, count: "\(count)", folded: folded)
     }
 }
 

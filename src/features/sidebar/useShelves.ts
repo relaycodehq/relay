@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-export const SHELF_PAGE = 5;
+export const SHELF_PAGE = 30;
+
+/** A shelf longer than a page counts that page, so years of threads read "30+". */
+export const shelfCount = (length: number) =>
+  length > SHELF_PAGE ? `${SHELF_PAGE}+` : `${length}`;
 
 type Shelf = "snoozed" | "settled";
 

@@ -41,14 +41,14 @@ private func local(_ ms: Int64) -> DateComponents {
     #expect(chatSettled(chat(["settledAt": 4_000, "running": true, "settleWhenDone": 4_000])))
 }
 
-@Test func sectionsSplitAndKeepTheLatestFifteenSettledNewestSettleFirst() {
+@Test func sectionsSplitAndListEverySettledNewestSettleFirst() {
     let settled = (1...20).map { i in chat("s\(i)", updated: 100, ["settledAt": .number(Double(100 + i))]) }
     let snoozed = chat("z", ["snoozedUntil": 10_000])
     let woke = chat("w", ["snoozedUntil": 900])
     let s = chatActivitySections(settled + [snoozed, woke], now: 1_000)
     #expect(s.active.map(\.id) == ["w"])
     #expect(s.snoozed.map(\.id) == ["z"])
-    #expect(s.settled.count == 15)
+    #expect(s.settled.count == 20)
     #expect(s.settled.first?.id == "s20")
 }
 

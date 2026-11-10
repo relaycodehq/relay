@@ -91,7 +91,7 @@ describe("chat activity", () => {
     expect(chatActivitySection(thread, 20_000)).toBe("active");
   });
 
-  it("keeps the latest settled threads on the shelf, not the latest updated", () => {
+  it("lists every settled thread, latest settled first, not latest updated", () => {
     const hour = 3_600_000;
     const recent = Array.from({ length: 16 }, (_, i) =>
       chat({
@@ -110,9 +110,9 @@ describe("chat activity", () => {
       [...recent, justSettled],
       102 * hour,
     );
-    expect(settled).toHaveLength(15);
+    expect(settled).toHaveLength(17);
     expect(settled[0].id).toBe("old");
-    expect(settled.map((c) => c.id)).not.toContain("recent-15");
+    expect(settled.at(-1)!.id).toBe("recent-15");
   });
 
   it("treats unused threads as empty", () => {

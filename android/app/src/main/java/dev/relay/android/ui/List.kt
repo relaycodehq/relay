@@ -56,6 +56,8 @@ fun SectionHeader(
     text: String,
     modifier: Modifier = Modifier,
     count: Int? = null,
+    /** The count as shown, when it isn't just the number ("30+"). */
+    countText: String? = count?.toString(),
     action: (@Composable () -> Unit)? = null,
 ) {
     val c = RelayTheme.colors
@@ -65,7 +67,7 @@ fun SectionHeader(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text, Modifier.weight(1f), style = RelayTheme.type.xs.copy(fontWeight = FontWeight.Medium), color = c.mutedForeground, maxLines = 1)
-        if (count != null) Text("$count", style = RelayTheme.type.xs, color = c.faint)
+        if (countText != null) Text(countText, style = RelayTheme.type.xs, color = c.faint)
         if (action != null) action()
     }
 }

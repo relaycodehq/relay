@@ -195,9 +195,6 @@ export function setTriageState(chat: ChatTriageState, state: ChatTriageState) {
     else chat[key] = state[key];
 }
 
-/** Only the latest settled threads stay in Activity; Projects lists them all. */
-const SETTLED_SHELF_SIZE = 15;
-
 export function chatActivitySections<C extends Triaged>(
   chats: C[],
   now: number,
@@ -208,11 +205,9 @@ export function chatActivitySections<C extends Triaged>(
     settled: [],
   };
   for (const c of chats) sections[chatActivitySection(c, now)].push(c);
-  // Latest settled first: a thread settled just now stays there to undo, even
+  // Latest settled first: a thread settled just now sits on top to undo, even
   // when its last message is older than the rest.
-  sections.settled = sections.settled
-    .sort((a, b) => b.settledAt! - a.settledAt!)
-    .slice(0, SETTLED_SHELF_SIZE);
+  sections.settled.sort((a, b) => b.settledAt! - a.settledAt!);
   return sections;
 }
 

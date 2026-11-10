@@ -26,7 +26,7 @@ import {
   familySettled,
   type StartedFamilies,
 } from "../../../shared/started-families";
-import { SHELF_PAGE, type Shelves } from "./useShelves";
+import { SHELF_PAGE, shelfCount, type Shelves } from "./useShelves";
 import { AwayWhere } from "./AwayCard";
 import {
   DraftCard,
@@ -478,7 +478,7 @@ function Shelf({
         }}
       >
         <span>
-          {label} <b>{items.length}</b>
+          {label} <b>{shelfCount(items.length)}</b>
         </span>
         <hr />
         <ChevronRight size={12} />
