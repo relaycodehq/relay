@@ -14,6 +14,43 @@ import type { EditorWorkspace } from "./useEditorWorkspace";
 import type { useEditorSearch } from "./useEditorSearch";
 import type { FileBrowsing } from "./useFileBrowsing";
 
+/** What each editor in the splits needs from the pane around it. */
+function editorFor({
+  workspace,
+  where,
+  source,
+  tree,
+  checks,
+  browsing,
+  search,
+  onAsk,
+}: {
+  workspace: EditorWorkspace;
+  where: string;
+  source: Extract<DocumentSource, { kind: "project" }>;
+  tree: WorkingTree | undefined;
+  checks: ChecksController;
+  browsing: FileBrowsing;
+  search: ReturnType<typeof useEditorSearch>;
+  onAsk?: (ref: CodeReference) => void;
+}) {
+  return {
+    source,
+    target: { projectId: where, head: { sha: tree?.head ?? "" } },
+    checks,
+    stamp: tree?.revision,
+    onOpenLink: (target: FileTarget) =>
+      target.directory
+        ? browsing.showFolder(target.path)
+        : workspace.open({ path: target.path }),
+    onOpenFile: (target: OpenTarget) => workspace.open(...editorJump(target)),
+    host: search.host,
+    onBack: workspace.back,
+    onForward: workspace.forward,
+    onAsk,
+  };
+}
+
 /** The editor's splits with Find in Files docked under them. */
 export function EditorPane({
   workspace,
@@ -42,24 +79,19 @@ export function EditorPane({
   onPopOut?: () => void;
 }) {
   const { open } = workspace;
-  const editorReady = !!tree || source.plain;
-  const editor = editorReady
-    ? {
-        source,
-        target: { projectId: where, head: { sha: tree?.head ?? "" } },
-        checks,
-        stamp: tree?.revision,
-        onOpenLink: (target: FileTarget) =>
-          target.directory
-            ? browsing.showFolder(target.path)
-            : open({ path: target.path }),
-        onOpenFile: (target: OpenTarget) => open(...editorJump(target)),
-        host: search.host,
-        onBack: workspace.back,
-        onForward: workspace.forward,
-        onAsk,
-      }
-    : undefined;
+  const editor =
+    tree || source.plain
+      ? editorFor({
+          workspace,
+          where,
+          source,
+          tree,
+          checks,
+          browsing,
+          search,
+          onAsk,
+        })
+      : undefined;
   return (
     <div className="files-main">
       <EditorGroups
