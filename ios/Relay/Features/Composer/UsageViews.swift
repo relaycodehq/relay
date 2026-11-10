@@ -113,8 +113,7 @@ struct UsageRings: View {
     @Environment(\.colors) private var colors
 
     var body: some View {
-        let all = usageMeters(connection.usage[provider], now: nowMs())
-        let meters = ["weekly", "session"].compactMap { kind in all.filter { $0.kind == kind }.min { $0.leftPercent < $1.leftPercent } }
+        let meters = ringMeters(connection.usage[provider], now: nowMs())
         ZStack {
             ForEach(0..<max(1, meters.count), id: \.self) { i in
                 let inset = CGFloat(i) * 4

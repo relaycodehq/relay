@@ -26,6 +26,18 @@ struct UsageTests {
         presentWindow(w, now: now, activeHours: hours, zone: prague)
     }
 
+    @Test func leavesAModelsOwnLimitOutOfTheRings() throws {
+        let json = """
+            {"provider":"claude","windows":[
+              {"kind":"weekly","usedPercent":50,"resetsAt":null,"periodMs":\(week)},
+              {"kind":"weekly","usedPercent":90,"resetsAt":null,"periodMs":\(week),"model":"Fable","label":"Fable · Weekly"}
+            ]}
+            """
+        let usage = try JSONDecoder().decode(ProviderUsage.self, from: Data(json.utf8))
+        #expect(ringMeters(usage, now: at(21, 0), zone: prague).map(\.leftPercent) == [50])
+        #expect(usageMeters(usage, now: at(21, 0), zone: prague).count == 2)
+    }
+
     @Test func holdsThePaceMarkStillOvernight() {
         let evening = present(weekly(10), at(21, 20), nineToFive)
         let morning = present(weekly(10), at(22, 8), nineToFive)

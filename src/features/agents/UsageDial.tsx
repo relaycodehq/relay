@@ -15,8 +15,10 @@ const RINGS: Record<UsageMeter["kind"], { radius: number }> = {
 export function UsageDial({
   meters,
 }: {
-  meters: Pick<UsageMeter, "kind" | "leftPercent" | "pace">[];
+  meters: Pick<UsageMeter, "kind" | "leftPercent" | "pace" | "model">[];
 }) {
+  // A single model's own limit isn't the plan's, so it gets no ring.
+  const plan = meters.filter((m) => !m.model);
   return (
     <svg
       className="usage-ring-dial"
@@ -28,9 +30,9 @@ export function UsageDial({
       {(["weekly", "session"] as const).map((kind) => {
         const { radius } = RINGS[kind];
         const circumference = 2 * Math.PI * radius;
-        const meter = meters
+        const meter = plan
           .filter((m) => m.kind === kind)
-          .reduce<(typeof meters)[number] | undefined>(
+          .reduce<(typeof plan)[number] | undefined>(
             (worst, m) =>
               !worst || m.leftPercent < worst.leftPercent ? m : worst,
             undefined,

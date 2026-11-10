@@ -16,7 +16,16 @@ import kotlin.math.roundToLong
 // (shared/usage-history.ts); the phone only paces the week by them.
 
 @Serializable
-data class UsageWindow(val kind: String, val usedPercent: Double, val resetsAt: Long? = null, val periodMs: Long, val id: String? = null, val label: String? = null)
+data class UsageWindow(
+    val kind: String,
+    val usedPercent: Double,
+    val resetsAt: Long? = null,
+    val periodMs: Long,
+    val id: String? = null,
+    val label: String? = null,
+    /** Only this model's turns count against it; the rings leave it out. */
+    val model: String? = null,
+)
 
 @Serializable
 data class UsageCredits(val balance: Double, val unlimited: Boolean, val messages: List<Double>? = null)

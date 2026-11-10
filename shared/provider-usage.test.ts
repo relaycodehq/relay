@@ -45,6 +45,21 @@ describe("provider usage windows", () => {
     ).toEqual(["weekly"]);
   });
 
+  it("adds Claude's per-model weekly limits after the plan's", () => {
+    expect(
+      mapClaudeUsage({
+        seven_day: { utilization: 49 },
+        model_scoped: [
+          { display_name: "Fable", utilization: 12, resets_at: null },
+          { display_name: "Unknown", utilization: null, resets_at: null },
+        ],
+      }).map((window) => [window.model, window.label, window.usedPercent]),
+    ).toEqual([
+      [undefined, undefined, 49],
+      ["Fable", "Fable · Weekly", 12],
+    ]);
+  });
+
   it("classifies Codex windows by duration and keeps a weekly-only limit weekly", () => {
     expect(
       mapCodexUsage(

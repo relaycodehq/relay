@@ -13,6 +13,8 @@ const usageWindowSchema = z.object({
   /** Providers with independent model pools name their individual windows. */
   id: z.string().max(200).optional(),
   label: z.string().max(160).optional(),
+  /** Only this model's turns count against it; the rings leave it out. */
+  model: z.string().max(120).optional(),
   kind: z.enum(["session", "weekly"]),
   usedPercent: z.number().min(0).max(100),
   resetsAt: z.number().nullable(),
@@ -74,6 +76,7 @@ export type UsageMeter = {
   kind: UsageKind;
   id?: string;
   label: string;
+  model?: string;
   leftPercent: number;
   /** Percent that would be left now at an even burn to the reset, if known. */
   paceLeftPercent: number | null;
@@ -132,7 +135,7 @@ export function presentWindow(
   const leftPercent = clamp(Math.round(100 - used), 0, 100);
   const label =
     window.label ?? (window.kind === "session" ? "Session" : "Weekly");
-  const base = { id: window.id, kind: window.kind, label };
+  const base = { id: window.id, kind: window.kind, label, model: window.model };
   const fresh =
     window.kind === "session" && window.resetsAt == null && used <= 0;
   const resetLabel = fresh
@@ -344,7 +347,7 @@ function usageWindow(
 export function mapClaudeUsage(body: unknown): UsageWindow[] {
   const record = asRecord(body);
   if (!record) return [];
-  return (
+  const plan = (
     [
       ["session", record.five_hour, SESSION_MS],
       ["weekly", record.seven_day, WEEK_MS],
@@ -354,6 +357,27 @@ export function mapClaudeUsage(body: unknown): UsageWindow[] {
     const used = num(window?.utilization);
     if (used == null) return [];
     return [usageWindow(kind, used, parseReset(window?.resets_at), periodMs)];
+  });
+  return [...plan, ...claudeModelWeeks(record.model_scoped)];
+}
+
+/** Weekly limits a single model has on top of the plan's, such as Fable's. */
+function claudeModelWeeks(value: unknown): UsageWindow[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const window = asRecord(item);
+    const name = window?.display_name;
+    const used = num(window?.utilization);
+    if (typeof name !== "string" || !name.trim() || used == null) return [];
+    const model = name.trim().slice(0, 120);
+    return [
+      {
+        ...usageWindow("weekly", used, parseReset(window?.resets_at), WEEK_MS),
+        id: `model:${model}`,
+        label: `${model} · Weekly`,
+        model,
+      },
+    ];
   });
 }
 

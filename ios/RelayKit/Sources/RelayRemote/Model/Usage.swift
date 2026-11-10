@@ -7,15 +7,18 @@ import Foundation
 public struct UsageWindow: Codable, Sendable, Equatable {
     public var id: String?
     public var label: String?
+    /// Only this model's turns count against it; the rings leave it out.
+    public var model: String?
     /// "session" | "weekly"
     public var kind: String
     public var usedPercent: Double
     public var resetsAt: Int64?
     public var periodMs: Int64
 
-    public init(kind: String, usedPercent: Double, resetsAt: Int64?, periodMs: Int64, id: String? = nil, label: String? = nil) {
+    public init(kind: String, usedPercent: Double, resetsAt: Int64?, periodMs: Int64, id: String? = nil, label: String? = nil, model: String? = nil) {
         self.id = id
         self.label = label
+        self.model = model
         self.kind = kind
         self.usedPercent = usedPercent
         self.resetsAt = resetsAt
@@ -236,6 +239,16 @@ public func paceGap(_ meter: UsageMeter) -> String? {
 /// The meters for what an agent reported.
 public func usageMeters(_ usage: ProviderUsage?, now: Int64, zone: TimeZone = .current) -> [UsageMeter] {
     usage?.windows.map { presentWindow($0, now: now, activeHours: usage?.activeHours, zone: zone) } ?? []
+}
+
+/// The tightest plan limit of each kind, week first, as the rings draw them.
+public func ringMeters(_ usage: ProviderUsage?, now: Int64, zone: TimeZone = .current) -> [UsageMeter] {
+    var plan = usage
+    plan?.windows.removeAll { $0.model != nil }
+    let all = usageMeters(plan, now: now, zone: zone)
+    return ["weekly", "session"].compactMap { kind in
+        all.filter { $0.kind == kind }.min { $0.leftPercent < $1.leftPercent }
+    }
 }
 
 /// "Session 40% left, Weekly 80% left", and whether it runs hot, for a screen reader.

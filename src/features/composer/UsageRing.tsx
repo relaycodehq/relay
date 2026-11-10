@@ -35,10 +35,13 @@ export function ringState(
   const meters = usage.windows.map((window) =>
     presentWindow(window, now, usage.activeHours),
   );
-  const pace = meters.reduce<MeterPace>(
-    (worst, m) => (PACE_RANK[m.pace] > PACE_RANK[worst] ? m.pace : worst),
-    "ok",
-  );
+  // The flame goes with the rings, which leave out a model's own limit.
+  const pace = meters
+    .filter((m) => !m.model)
+    .reduce<MeterPace>(
+      (worst, m) => (PACE_RANK[m.pace] > PACE_RANK[worst] ? m.pace : worst),
+      "ok",
+    );
   const label = meters
     .map((m) =>
       [`${m.label} ${m.leftPercent}% left`, m.limitLabel, m.resetLabel]
