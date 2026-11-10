@@ -20,6 +20,7 @@ import { draftChips } from "../../lib/thread-storage";
 import { isScreenshot, prepareScreenshot } from "../images/draft-images";
 import { copiedImages } from "../images/image-clipboard";
 import { droppedImage } from "../images/image-drag";
+import { textIsTheContent } from "./clipboard-text";
 import { appendToDraft, readDraft } from "./drafts";
 import { fileMarkdown } from "./prompt-text";
 import type { useDraftImages } from "./useDraftImages";
@@ -58,12 +59,25 @@ function clipboardFiles(data: DataTransfer): File[] {
 
 /**
  * Files copied in Finder or Explorer paste like they drop. Files that aren't
- * on disk can't be mentioned, so the text they came with pastes instead.
+ * on disk can't be mentioned, so the text they came with pastes instead, and
+ * so does text that a picture of it came along with.
  */
-function pastesAsFiles(files: File[], plain: string) {
-  const placeable = files.some(
-    (file) => isScreenshot(file) || api.pathForFile(file),
-  );
+function pastesAsFiles(files: File[], data: DataTransfer, html: string) {
+  const plain = data.getData("text/plain");
+  const onClipboard = files.map((file) => ({
+    image: isScreenshot(file),
+    onDisk: !!api.pathForFile(file),
+  }));
+  if (
+    textIsTheContent({
+      plain,
+      html,
+      rtf: data.getData("text/rtf"),
+      files: onClipboard,
+    })
+  )
+    return false;
+  const placeable = onClipboard.some((file) => file.image || file.onDisk);
   return files.length > 0 && (placeable || !plain.trim());
 }
 
@@ -284,13 +298,13 @@ export function draftIntake({
         return;
       }
       const files = clipboardFiles(event.clipboardData);
-      const plain = event.clipboardData.getData("text/plain");
-      if (pastesAsFiles(files, plain)) {
+      if (pastesAsFiles(files, event.clipboardData, html)) {
         event.preventDefault();
         event.stopPropagation();
         addFiles(files);
         return;
       }
+      const plain = event.clipboardData.getData("text/plain");
       // A long paste becomes a pill at the caret instead of flooding the
       // draft, and a huge one, or one the message can't hold, a file.
       const pasted = cleanPaste(plain);
