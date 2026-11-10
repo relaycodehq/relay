@@ -132,6 +132,19 @@ export function pullsLocation(
 
 export type PullsTarget = { to: "board" } | { to: "repo"; repo: string };
 
+/**
+ * What the page shows after `go`. A PR opened over a search only closes, so
+ * the results come back; any other move picks the repository and drops the search.
+ */
+export function pageAfterGo(
+  target: PullsTarget,
+  now: { repo: string | null; query: string; prOpen: boolean },
+) {
+  const openedOverSearch = now.prOpen && !!now.query;
+  if (openedOverSearch) return { repo: now.repo, query: now.query };
+  return { repo: target.to === "repo" ? target.repo : null, query: "" };
+}
+
 export type PullsPageHandle = {
   /** Leaves the open PR for the board or a project's page. */
   go: (target: PullsTarget) => void;

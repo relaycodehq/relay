@@ -18,6 +18,7 @@ import type {
 } from "../../shared/types";
 import { api } from "../lib/api";
 import {
+  pageAfterGo,
   projectFor,
   pullsLocation,
   type PullsLocation,
@@ -130,8 +131,9 @@ export function PullsSurface({
   const searching = !selected && !!query;
   useImperativeHandle(ref, () => ({
     go(target) {
-      setRepo(target.to === "repo" ? target.repo : null);
-      setQuery("");
+      const next = pageAfterGo(target, { repo, query, prOpen: !!selected });
+      setRepo(next.repo);
+      setQuery(next.query);
       deselect();
     },
   }));
@@ -146,12 +148,8 @@ export function PullsSurface({
       ),
     );
   }, [selected, repo, searching, pull.data?.title]);
-  const { urlOpen, setUrlOpen, openUrl } = useOpenByUrl(
-    open,
-    setError,
-    incomingLink,
-  );
-  useShortcut("pr-open", true, () => setUrlOpen((v) => !v));
+  const byUrl = useOpenByUrl(open, setError, incomingLink);
+  useShortcut("pr-open", true, () => byUrl.setUrlOpen((v) => !v));
   useShortcut("review-files", true, () => setFilesHidden((v) => !v));
   const localProject = selected ? projectOf(located(selected)) : undefined;
   return (
@@ -169,7 +167,7 @@ export function PullsSurface({
           state={state}
           onState={setState}
           onOpen={(p) => open(p.ref)}
-          onOpenUrl={() => setUrlOpen(true)}
+          onOpenUrl={() => byUrl.setUrlOpen(true)}
           onOpenProject={onOpenProject}
           onAddProject={onAddProject}
         />
@@ -216,8 +214,11 @@ export function PullsSurface({
       {!!error && (
         <ErrorToast error={error} onDismiss={() => setError(undefined)} />
       )}
-      {urlOpen && (
-        <OpenPullUrl onOpen={openUrl} onClose={() => setUrlOpen(false)} />
+      {byUrl.urlOpen && (
+        <OpenPullUrl
+          onOpen={byUrl.openUrl}
+          onClose={() => byUrl.setUrlOpen(false)}
+        />
       )}
       {editing && (
         <LocalEditor

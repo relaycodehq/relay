@@ -4,6 +4,7 @@ import {
   keyRepo,
   needsYou,
   projectFor,
+  pageAfterGo,
   pullsLocation,
   repoKey,
   verdictOf,
@@ -344,4 +345,21 @@ it("reads a repository back from its key, server and all", () => {
     owner: "web",
     name: "portal",
   });
+});
+
+it("closes a PR opened over a search and keeps the search, else clears it", () => {
+  const key = `${server}|web/portal`;
+  const repoPage = { to: "repo", repo: key } as const;
+  expect(
+    pageAfterGo({ to: "board" }, { repo: key, query: "bug", prOpen: true }),
+  ).toEqual({ repo: key, query: "bug" });
+  expect(
+    pageAfterGo(repoPage, { repo: null, query: "bug", prOpen: true }),
+  ).toEqual({ repo: null, query: "bug" });
+  expect(
+    pageAfterGo({ to: "board" }, { repo: key, query: "bug", prOpen: false }),
+  ).toEqual({ repo: null, query: "" });
+  expect(
+    pageAfterGo(repoPage, { repo: null, query: "", prOpen: true }),
+  ).toEqual({ repo: key, query: "" });
 });
