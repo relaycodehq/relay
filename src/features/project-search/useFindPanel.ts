@@ -23,6 +23,7 @@ export function useFindPanel({
   onOpen,
   onClose,
   onReplaced,
+  unsavedPaths,
 }: {
   where: string;
   initialQuery?: string;
@@ -32,6 +33,7 @@ export function useFindPanel({
   onOpen: (target: OpenTarget) => void;
   onClose: () => void;
   onReplaced?: (result: ProjectReplaceResult) => void;
+  unsavedPaths?: () => readonly string[];
 }) {
   const fields = useFindFields({ initialQuery, replace, focusKey });
   const { flags, toggle } = useSearchFlags();
@@ -56,6 +58,7 @@ export function useFindPanel({
     replacement: fields.replacement,
     files: scope.files,
     onReplaced,
+    unsavedPaths,
     searchAgain: () => setSearchRuns((n) => n + 1),
   });
   const onKeyDown = useFindKeys({

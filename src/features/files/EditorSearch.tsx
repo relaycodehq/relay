@@ -1,4 +1,5 @@
 import { documents, type DocumentSource } from "../editor/documents";
+import { keyOf } from "../editor/file-document";
 import {
   FindInFiles,
   SearchEverywhere,
@@ -87,6 +88,12 @@ export function FindDock({
         focusKey={request.key}
         onOpen={onOpen}
         onClose={onClose}
+        unsavedPaths={() =>
+          documents
+            .unsaved()
+            .filter((doc) => doc.key === keyOf(source, doc.path))
+            .map((doc) => doc.path)
+        }
         onReplaced={(result) => {
           for (const { path } of result.replaced)
             void documents.find(source, path)?.check();

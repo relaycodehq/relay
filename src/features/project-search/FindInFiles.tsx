@@ -22,6 +22,11 @@ interface FindInFilesProps {
   onClose: () => void;
   /** Files were rewritten on disk: the host should reload any it has open. */
   onReplaced?: (result: ProjectReplaceResult) => void;
+  /**
+   * The files the host holds unsaved edits in. Replace all leaves them out and
+   * says so, as the search reads the disk and the rewrite would land under the edits.
+   */
+  unsavedPaths?: () => readonly string[];
 }
 
 /**
@@ -39,6 +44,7 @@ export function FindInFiles({
   onOpen,
   onClose,
   onReplaced,
+  unsavedPaths,
 }: FindInFilesProps) {
   const { fields, flags, toggle, query, result, loading, tree, scope, flow, onKeyDown, problem } =
     useFindPanel({
@@ -50,6 +56,7 @@ export function FindInFiles({
       onOpen,
       onClose,
       onReplaced,
+      unsavedPaths,
     });
 
   return (

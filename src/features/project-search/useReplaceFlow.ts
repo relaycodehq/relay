@@ -9,6 +9,9 @@ import { api } from "../../lib/api";
 
 type Phase = "idle" | "confirm" | "running";
 
+/** Why a file with edits the editor holds is left out. */
+const unsavedReason = "Has unsaved edits. Save it, then search again.";
+
 export type ReplaceReport =
   | { kind: "done"; result: ProjectReplaceResult }
   | { kind: "failed"; message: string };
@@ -25,10 +28,20 @@ export function useReplaceFlow(input: {
   /** The files to rewrite, as the search saw them. */
   files: readonly ProjectSearchFile[];
   onReplaced?: (result: ProjectReplaceResult) => void;
+  /** The files the host holds unsaved edits in, asked when Replace all runs. */
+  unsavedPaths?: () => readonly string[];
   /** Runs the search again, to show what is left and the files that were refused. */
   searchAgain: () => void;
 }) {
-  const { where, query, replacement, files, onReplaced, searchAgain } = input;
+  const {
+    where,
+    query,
+    replacement,
+    files,
+    onReplaced,
+    unsavedPaths,
+    searchAgain,
+  } = input;
   const [phase, setPhase] = useState<Phase>("idle");
   const [report, setReport] = useState<ReplaceReport>();
   useEffect(() => {
@@ -39,15 +52,25 @@ export function useReplaceFlow(input: {
   async function replaceAll() {
     if (!query) return;
     setPhase("running");
+    const unsaved = new Set(unsavedPaths?.());
+    const left = files.filter((f) => unsaved.has(f.path));
+    const skipped = left.map(({ path }) => ({ path, reason: unsavedReason }));
     try {
-      const done = await api.replaceProjectText(
-        where,
-        query,
-        replacement,
-        files.map(({ path, version }) => ({ path, version })),
-      );
-      setReport({ kind: "done", result: done });
-      onReplaced?.(done);
+      const rewrite = files.filter((f) => !unsaved.has(f.path));
+      // The request needs at least one file.
+      const done = rewrite.length
+        ? await api.replaceProjectText(
+            where,
+            query,
+            replacement,
+            rewrite.map(({ path, version }) => ({ path, version })),
+          )
+        : { replaced: [], skipped: [] };
+      setReport({
+        kind: "done",
+        result: { ...done, skipped: [...done.skipped, ...skipped] },
+      });
+      if (rewrite.length) onReplaced?.(done);
     } catch (e) {
       setReport({ kind: "failed", message: errorMessage(e) });
     }
