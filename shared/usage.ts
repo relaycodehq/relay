@@ -2,7 +2,14 @@
 // Main keeps one line per answer (electron/usage); the Usage page reads the
 // summary built here.
 import type { AgentProvider } from "./agents";
-import { agentProviders } from "./agents";
+import {
+  addBusy,
+  countedDays,
+  midnight,
+  perProvider,
+  slots,
+  weekday,
+} from "./usage-days";
 
 export type UsageTokens = {
   input: number;
@@ -218,27 +225,6 @@ export const noTokens = (): UsageTokens => ({
   output: 0,
 });
 
-const perProvider = (): PerProvider =>
-  Object.fromEntries(agentProviders.map((p) => [p, 0])) as PerProvider;
-
-const slots = (n: number): UsageSlot[] =>
-  Array.from({ length: n }, () => ({ usd: 0, fresh: 0, minutes: 0, days: 0 }));
-
-const weekday = (at: number) => (new Date(at).getDay() + 6) % 7;
-
-function midnight(at: number) {
-  const d = new Date(at);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-/** The next local midnight, a day on even across a daylight-saving change. */
-function nextDay(day: number) {
-  const d = new Date(day);
-  d.setDate(d.getDate() + 1);
-  return d.getTime();
-}
-
 const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
 
 /**
@@ -256,27 +242,6 @@ export function modelLabel(model: string) {
       ...gpt[2].split("-").filter(Boolean).map(cap),
     ].join(" ");
   return bare;
-}
-
-/** Busy minutes of a run spread over the hours and days it covered. */
-function addBusy(
-  hours: UsageSlot[],
-  weekdays: UsageSlot[],
-  at: number,
-  ms: number,
-) {
-  let t = at;
-  const end = at + ms;
-  while (t < end) {
-    const d = new Date(t);
-    const next = new Date(d);
-    next.setMinutes(60, 0, 0);
-    const stop = Math.min(end, next.getTime());
-    const minutes = (stop - t) / 60_000;
-    hours[d.getHours()].minutes += minutes;
-    weekdays[weekday(t)].minutes += minutes;
-    t = stop;
-  }
 }
 
 /** A run that wrote less than this is too short for its speed to mean much. */
@@ -310,14 +275,7 @@ export function summarizeUsage(
       : midnight(today - (span - 1) * DAY + DAY / 2);
   const to = now;
 
-  // Days before Relay counted anything would only draw as an empty stretch.
-  const days: UsageDay[] = [];
-  for (
-    let day = Math.max(from, since === undefined ? from : midnight(since));
-    day <= today;
-    day = nextDay(day)
-  )
-    days.push({ day, usd: perProvider(), fresh: perProvider(), answers: 0 });
+  const days = countedDays(from, since, today);
   const dayOf = (at: number) => {
     const day = midnight(at);
     // Days are few; a binary search would be overkill next to the entries.

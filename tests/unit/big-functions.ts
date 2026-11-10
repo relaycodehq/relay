@@ -95,7 +95,7 @@ export const bigFunctions: Record<string, number> = {
   "electron/triage/service.ts › run": 273,
   "shared/provider-usage.ts › presentWindow": 93,
   "shared/time-attribution.ts › attributeTime": 93,
-  "shared/usage.ts › summarizeUsage": 157,
+  "shared/usage.ts › summarizeUsage": 150,
   "src/app/ProjectShell.tsx › ProjectShell": 362,
   "src/app/ProjectShell.tsx › page": 102,
   "src/app/ProjectShell.tsx › surfaceBody": 103,
