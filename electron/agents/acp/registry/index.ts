@@ -12,6 +12,7 @@ import type {
   RegistryAgentsState,
   RegistryListing,
 } from "../../../../shared/acp-registry";
+import type { AgentVersion } from "../../../../shared/agent-updates";
 import type { SdkIo } from "../../agent-updates";
 import {
   fetchIcon,
@@ -20,6 +21,7 @@ import {
   listingOf,
   machineTarget,
   planFor,
+  type AgentPlan,
   type Fetch,
   type RegistryEntry,
 } from "./catalog";
@@ -41,6 +43,15 @@ export { installInto, installedIn, type InstalledAgent } from "./install";
 const registryLifetime = 10 * 60_000;
 
 /**
+ * The newest release of `pkg` up to `version` that npm's `min-release-age`
+ * lets in, and the one it holds back.
+ */
+export type NpmRelease = (
+  pkg: string,
+  version: string,
+) => Promise<Pick<AgentVersion, "latest" | "held">>;
+
+/**
  * The agents Relay installs from the ACP registry: each in its own folder
  * under `root`, named by its registry id.
  */
@@ -51,11 +62,17 @@ export class AcpRegistry {
   private installed: InstalledRegistryAgent[] = [];
   private listeners = new Set<(state: RegistryAgentsState) => void>();
 
+  private readonly target: string;
+  private readonly npmRelease?: NpmRelease;
+
   constructor(
     private readonly root: string,
     private readonly fetch: Fetch,
-    private readonly target = machineTarget(),
-  ) {}
+    options: { target?: string; npmRelease?: NpmRelease } = {},
+  ) {
+    this.target = options.target ?? machineTarget();
+    this.npmRelease = options.npmRelease;
+  }
 
   /** Reads what's installed, and lets the rest of Relay know the agents by name. */
   async load() {
@@ -102,7 +119,7 @@ export class AcpRegistry {
     try {
       const entry = (await this.registry(true)).find((e) => e.id === id);
       if (!entry) throw new Error(`The ACP registry no longer lists ${id}.`);
-      const plan = planFor(entry, this.target);
+      const plan = await this.planOf(entry);
       const icon = await this.icon(id);
       await installInto(
         this.dirOf(id),
@@ -153,17 +170,34 @@ export class AcpRegistry {
       installed: async () => (await this.current(provider))?.version,
       newest: async () => {
         const entry = (await this.registry(false)).find((e) => e.id === id);
-        return entry && planFor(entry, this.target).version;
+        return entry && (await this.planOf(entry)).version;
       },
       install: async (version) => {
         const entry = (await this.registry(true)).find((e) => e.id === id);
-        const offered = entry && planFor(entry, this.target).version;
+        const offered = entry && (await this.planOf(entry)).version;
         if (version && offered && version !== offered)
           throw new Error(`${version} isn't offered any more; ${offered} is.`);
         await this.install(id);
       },
       account: async () => undefined,
     };
+  }
+
+  /**
+   * How to install `entry`. The registry pins an exact npm release, which
+   * npm refuses while it's younger than the user's `min-release-age`; then
+   * it's the newest release npm lets in.
+   */
+  private async planOf(entry: RegistryEntry): Promise<AgentPlan> {
+    const plan = planFor(entry, this.target);
+    if (plan.kind !== "npm" || !this.npmRelease) return plan;
+    const { latest, held } = await this.npmRelease(plan.name, plan.version);
+    if (latest) return { ...plan, version: latest };
+    if (!held) return plan;
+    const when = new Date(held.until).toLocaleString();
+    throw new Error(
+      `${entry.name} ${held.version} is newer than your npm's min-release-age allows, and there's no older release to install. It can be installed from ${when}.`,
+    );
   }
 
   private dirOf(id: string) {

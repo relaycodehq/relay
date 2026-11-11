@@ -51,7 +51,8 @@ import { Schedules } from "../schedules";
 import { chatIsEmpty } from "../../shared/chat-activity";
 import type { Schedule } from "../../shared/schedules";
 import { keepUsageLog } from "../usage";
-import type { AgentUpdates } from "../agents/agent-updates";
+import { AgentReleases } from "../agents/agent-releases";
+import { type AgentUpdates, machineIo } from "../agents/agent-updates";
 import type { Dispatch } from "../api";
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -73,7 +74,10 @@ export function downloadedAgents(
     fetch,
   });
   configureAntigravity({ root: join(dir, "antigravity"), fetch });
-  const registry = new AcpRegistry(join(dir, "acp-agents"), fetch);
+  const releases = new AgentReleases({ ...machineIo, fetch }, 15_000);
+  const registry = new AcpRegistry(join(dir, "acp-agents"), fetch, {
+    npmRelease: (pkg, version) => releases.aged(pkg, version, false),
+  });
   configureAcpRegistry(registry);
   return registry;
 }
