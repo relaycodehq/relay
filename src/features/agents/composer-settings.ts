@@ -157,6 +157,19 @@ export function saveComposerSettings(
   { provider, ...settings }: ComposerSettings,
 ) {
   writeJson(composerSettingsKey(key), { ...settings, agent: provider });
+  for (const listener of settingsListeners.get(key) ?? []) listener();
+}
+
+const settingsListeners = new Map<string, Set<() => void>>();
+
+/** Follows settings saved in this window; returns the unsubscribe. */
+export function onComposerSettingsChanged(key: string, listener: () => void) {
+  const listeners = settingsListeners.get(key) ?? new Set();
+  settingsListeners.set(key, listeners.add(listener));
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) settingsListeners.delete(key);
+  };
 }
 
 /**

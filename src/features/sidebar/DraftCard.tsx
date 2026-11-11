@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowUp, ScanSearch, Smartphone, SquarePen } from "lucide-react";
 import {
   reviewSetUp,
@@ -11,12 +11,7 @@ import {
 import { ProjectBadge } from "../projects/ProjectBadge";
 import { rowKeys } from "../../ui/ui";
 import { sendDraft } from "../composer/draft-send";
-import { newThreadAgentQuery } from "../composer/useNewThreadAgent";
-import {
-  composerProvider,
-  loadComposerSettings,
-} from "../agents/composer-settings";
-import { useAISettings } from "../agents/useAISettings";
+import { useDraftProvider } from "../composer/useDraftProvider";
 import { ProviderIcon } from "../agents/ComposerModelPicker";
 import { agentName, type AgentProvider } from "../../../shared/agents";
 import { useSharedDraft } from "../composer/draft-sync";
@@ -162,12 +157,7 @@ function ReviewLine({ id }: { id: string }) {
 
 /** The agent a new thread's draft will go to, as its composer would pick it. */
 function DraftAgent({ id }: { id: string }) {
-  const lastAgent = useQuery(newThreadAgentQuery).data;
-  const ai = useAISettings().data;
-  const provider = composerProvider(
-    lastAgent || loadComposerSettings(id).provider,
-    ai?.threadProvider,
-  );
+  const provider = useDraftProvider(id);
   return (
     <span
       className="sb-card-provider"

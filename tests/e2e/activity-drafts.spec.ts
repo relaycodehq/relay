@@ -1,4 +1,9 @@
-import { relayEnv, test, expect, _electron as electron } from "../fixtures/electron";
+import {
+  relayEnv,
+  test,
+  expect,
+  _electron as electron,
+} from "../fixtures/electron";
 import {
   mkdtemp,
   mkdir,
@@ -78,6 +83,29 @@ test("keeps several new-thread drafts in Activity and sends them from their card
     await newThread();
     await prompt.fill("First idea");
     await expect(card("First idea")).toHaveClass(/selected/);
+    // A pick elsewhere must not replace the agent this draft already kept.
+    await page.evaluate(() => window.relay.saveNewThreadAgent("claude"));
+    await page.reload();
+    await card("First idea").click();
+    const provider = card("First idea").locator(".sb-card-provider");
+    await expect(provider).toHaveAttribute("title", "Codex");
+    const picker = page.getByRole("button", {
+      name: "Choose model and provider",
+    });
+    const model = await picker.innerText();
+    await picker.click();
+    await page
+      .getByRole("button", { name: "Message only", exact: true })
+      .click();
+    await page
+      .getByRole("option", { name: "Message only", exact: true })
+      .click();
+    await expect(provider).toHaveAttribute("title", "Message only");
+    await picker.click();
+    await page.getByRole("button", { name: "Codex", exact: true }).click();
+    await page.getByRole("option", { name: model, exact: true }).click();
+    await expect(provider).toHaveAttribute("title", "Codex");
+    await page.screenshot({ path: join(tmpdir(), "relay-draft-provider.png") });
     // A new thread leaves it there and starts another.
     await newThread();
     await expect(prompt).toHaveText("");
