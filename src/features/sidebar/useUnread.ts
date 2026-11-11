@@ -39,7 +39,7 @@ export function forgetSeen(gone: string[]) {
  * only counts as seen while Relay is in front: an answer that lands while
  * you're in another app stays unread until you come back.
  */
-export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
+export function useUnread(open: ChatSummary | undefined) {
   const focused = useWindowFocused();
   const [since] = useState(() => {
     const saved = Number(readText("relay-thread-seen-since"));
@@ -57,7 +57,7 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
     window.addEventListener("storage", changed);
     return () => window.removeEventListener("storage", changed);
   }, []);
-  const current = chats.find((c) => c.id === chatId);
+  const current = open;
   /** The thread last read here; marking it unread while it's open holds until it's opened again. */
   const opened = useRef<string | undefined>(undefined);
   const wasFocused = useRef(focused);
@@ -111,6 +111,6 @@ export function useUnread(chatId: string | undefined, chats: ChatSummary[]) {
       .catch(() => {});
   }, [focused, current?.id, current?.updated, current?.snoozedUntil, woke]);
   return (c: ChatSummary) =>
-    ((c.id !== chatId || (!focused && !c.running)) && !!c.markedUnread) ||
+    ((c.id !== current?.id || (!focused && !c.running)) && !!c.markedUnread) ||
     movedSinceSeen(c, since, seen);
 }

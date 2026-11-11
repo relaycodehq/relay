@@ -56,7 +56,7 @@ export default function ThreadWindowShell({
   const realProjects = projects.data?.filter((p) => !p.scratch) ?? [];
   const everyThread = useEveryThread(realProjects);
   // Read while this window is in front, its "New" divider and all.
-  useUnread(chat?.id, nav.chats.data ?? []);
+  useUnread(chat);
   useJumpInMainWindow(setError);
   // Settings is the main window's page.
   useEffect(

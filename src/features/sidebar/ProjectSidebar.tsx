@@ -117,12 +117,12 @@ export function ProjectSidebar({
     if (p) onOpen(p, c);
   };
   const newThread = (p: Project) => onOpen(p, undefined, true);
-  const { all: listed, away, loaded } = useSidebarThreads(realProjects, chatId);
-  const unread = useUnread(chatId, listed);
+  const threads = useSidebarThreads(realProjects, chatId);
+  const unread = useUnread(threads.open);
   // A deep review shows as one thread: its reviewers open from the review,
   // which stays picked while one of them is open.
-  const everything = listed.filter((c) => !c.reviewer);
-  const shown = listed.find((c) => c.id === chatId)?.reviewer?.parent ?? chatId;
+  const everything = threads.all.filter((c) => !c.reviewer);
+  const shown = threads.open?.reviewer?.parent ?? chatId;
   const [searching, setSearching] = useState(false);
   useShortcut("search-threads", true, () => setSearching(true));
   useEffect(() => onOpenThreadSearch(() => setSearching(true)), []);
@@ -192,7 +192,7 @@ export function ProjectSidebar({
       id: c.id,
       open: () => actions.open(c),
     })),
-    loaded,
+    loaded: threads.loaded,
     chatId: shown,
     jumping: activity,
     actions,
@@ -284,7 +284,7 @@ export function ProjectSidebar({
               sections={sections}
               families={families}
               drafts={drafts}
-              away={away}
+              away={threads.away}
               hints={cmdHeld}
               shelves={shelves}
               draftId={draftId}

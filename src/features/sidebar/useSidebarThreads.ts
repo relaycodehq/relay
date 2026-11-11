@@ -36,7 +36,8 @@ function useThreadLists(projects: Project[]) {
  * Every thread the sidebar lists, newest first: the projects' and
  * Scratchpad's, not archived, and not empty unless open. Handed-off threads
  * show as the computer they're on has them, by their `away` views. Another
- * computer's thread only looked at from here waits until it's written in.
+ * computer's thread only looked at from here waits until it's written in;
+ * `open` is the open thread, whether it's listed or not.
  */
 export function useSidebarThreads(
   /** Every project but Scratchpad's. */
@@ -50,5 +51,6 @@ export function useSidebarThreads(
     .filter((c) => c.id === chatId || !chatIsEmpty(c))
     .map((c) => withAway(c, away[c.id]))
     .sort((a, b) => b.updated - a.updated);
-  return { all, away, loaded };
+  const open = threads.find((c) => c.id === chatId);
+  return { all, open, away, loaded };
 }
