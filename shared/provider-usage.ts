@@ -187,12 +187,13 @@ export function presentWindow(
     };
   }
   if (projected?.status === "onTrack") {
+    // Ending the window with room left is fine, however little; the label says how much.
     const spare = Math.round(100 - projected.projected);
     return {
       ...base,
       leftPercent,
       paceLeftPercent,
-      pace: spare >= 1 ? "warn" : "hot",
+      pace: "ok",
       limitLabel: spare >= 1 ? `~${spare}% spare` : null,
       resetLabel,
     };

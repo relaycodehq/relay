@@ -193,6 +193,20 @@ describe("provider usage windows", () => {
     expect(week(97)).toBe("ok");
     expect(week(98)).not.toBe("ok");
   });
+
+  it("keeps a meter calm when it will end the week with a little left", () => {
+    // Half the week gone at 46%: this rate ends the week at 92%.
+    const meter = presentWindow(
+      {
+        kind: "weekly",
+        usedPercent: 46,
+        resetsAt: now + WEEK_MS / 2,
+        periodMs: WEEK_MS,
+      },
+      now,
+    );
+    expect(meter).toMatchObject({ pace: "ok", limitLabel: "~8% spare" });
+  });
 });
 
 describe("Codex credits", () => {

@@ -169,8 +169,9 @@ public func presentWindow(_ window: UsageWindow, now: Int64, activeHours: [Doubl
     case .ahead?:
         return meter(left, .ok, nil)
     case .onTrack(let projected)?:
+        // Ending the window with room left is fine, however little; the label says how much.
         let spare = Int((100 - projected).rounded())
-        return meter(left, spare >= 1 ? .warn : .hot, spare >= 1 ? "~\(spare)% spare" : nil)
+        return meter(left, .ok, spare >= 1 ? "~\(spare)% spare" : nil)
     case .behind(let eta)?:
         // A few points past the pace mark is one lighter afternoon, not a fire.
         let behind = (paceLeft ?? 100) - Double(left)

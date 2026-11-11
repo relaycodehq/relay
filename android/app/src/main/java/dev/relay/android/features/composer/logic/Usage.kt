@@ -135,8 +135,9 @@ fun presentWindow(window: UsageWindow, now: Long, activeHours: List<Double>? = n
     return when (p?.status) {
         "ahead" -> UsageMeter(window.kind, label, left, paceLeft, "ok", null, resetLabel)
         "onTrack" -> {
+            // Ending the window with room left is fine, however little; the label says how much.
             val spare = (100 - p.projected).roundToInt()
-            UsageMeter(window.kind, label, left, paceLeft, if (spare >= 1) "warn" else "hot", if (spare >= 1) "~$spare% spare" else null, resetLabel)
+            UsageMeter(window.kind, label, left, paceLeft, "ok", if (spare >= 1) "~$spare% spare" else null, resetLabel)
         }
         "behind" -> {
             // A few points past the pace mark is one lighter afternoon, not a fire.
