@@ -148,12 +148,13 @@ describe("a turn", () => {
     expect(turnStart!.params.input.at(-1)).toEqual({ type: "skill", selector: "review-pr", arguments: "42 carefully" });
   });
 
-  it("reports tokens, context, the plan and a title", async () => {
+  it("reports tokens, context, the plan and a chosen title, not a codename", async () => {
     await scenario({
       turn: [
         { usage: { model: "muse-wonder-full-1.0", tokens: { inputTokens: 1000, cachedTokens: 600, outputTokens: 50, reasoningTokens: 20 } } },
         { context: { usedTokens: 40000, windowTokens: 1000000, pressure: "low" } },
         { todos: [{ text: "Read the logs", status: "completed" }, { text: "Fix it", status: "inProgress" }] },
+        { title: "tulip-iapetus", nameOrigin: "automatic" },
         { title: "Fix the build" },
         { text: "Ok." },
       ],
@@ -198,6 +199,17 @@ describe("approvals and questions", () => {
     await turn({ job: { kind: "helper", instructions: "Write a title." }, session: undefined, onRequest }).answer();
     expect(onRequest).not.toHaveBeenCalled();
     expect((await calls("approval/decide")).map((m) => m.params.choiceId)).toEqual(["no"]);
+  });
+
+  it("runs a helper job on Muse's default model, the only one a memory-only host serves", async () => {
+    await scenario({ turn: [{ text: "Title" }] });
+    await turn({
+      job: { kind: "helper", instructions: "Write a title." },
+      session: undefined,
+      choice: { model: "muse-ember-1.0", reasoningEffort: "high", fast: false },
+    }).answer();
+    const [start] = await calls("session/start");
+    expect(start!.params.modelId).toBeUndefined();
   });
 
   it("puts Muse's questions to the user, picked labels and free text apart", async () => {

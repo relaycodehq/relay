@@ -114,7 +114,7 @@ async function play(steps) {
     if (step.usage) notify("session/tokenUsage", { turnId: current.turnId, modelId: step.usage.model ?? "muse-spark-1.3", usage: step.usage.tokens });
     if (step.context) notify("session/contextUsage", step.context);
     if (step.todos) notify("session/todoListChanged", { items: step.todos, revision: 1, sourceTool: "todo_write" });
-    if (step.title) notify("session/nameChanged", { name: step.title });
+    if (step.title) notify("session/nameChanged", { name: step.title, nameOrigin: step.nameOrigin ?? "user" });
     if (step.subscription) notify("usage/changed", step.subscription);
     if (step.waitSteer) {
       const steer = await until("turn/steer");

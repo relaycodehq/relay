@@ -16,6 +16,7 @@ import {
   AUTH_REQUIRED,
   initializeResultSchema,
   sessionResultSchema,
+  signsInItself,
   type AcpSessionState,
 } from "./protocol";
 
@@ -209,9 +210,7 @@ async function initialize(agent: AcpAgent) {
     http: !!caps?.mcpCapabilities?.http,
     load: !!caps?.loadSession,
     resume: caps?.sessionCapabilities?.resume != null,
-    auth: (init.authMethods ?? [])
-      .filter((m) => !m.type || m.type === "agent")
-      .map((m) => m.id),
+    auth: (init.authMethods ?? []).filter(signsInItself).map((m) => m.id),
     logout: caps?.auth?.logout != null,
   };
 }
@@ -309,6 +308,9 @@ export async function openSession(
       },
       cost,
     };
+    // Now that the session exists, wire the agent into the update handler
+    // so config_option_update events refresh its settings (and models).
+    connection.onUpdate = (update) => hearCommands(agent.profile.provider, update, agent);
     agent.keep();
   };
   if (id && (agent.caps?.resume || agent.caps?.load)) {
@@ -401,7 +403,6 @@ export function reattachAcp(
       return replayLines(entries, info.split);
     });
     const connection = new AcpConnection(child, profile.name);
-    connection.onUpdate = (update) => hearCommands(profile.provider, update);
     const agent = new AcpAgent(
       {
         ...profile,
@@ -421,6 +422,7 @@ export function reattachAcp(
         base: meta.session.base,
         cost: meta.session.cost,
       };
+    connection.onUpdate = (update) => hearCommands(profile.provider, update, agent);
     agent.inflight = meta.run;
     if (!info.open) child.release();
     return agent;

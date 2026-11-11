@@ -136,10 +136,14 @@ export class MuseTurnEvents {
         if (row) options.onActivity?.(row);
         return;
       }
-      case "session/nameChanged":
-        if (typeof p.name === "string" && p.name.trim())
+      case "session/nameChanged": {
+        // Muse names every new session with a random codename ("tulip-iapetus");
+        // only a name someone chose says what the thread is about.
+        const chosen = p.nameOrigin !== "automatic";
+        if (chosen && typeof p.name === "string" && p.name.trim())
           options.onTitle?.(p.name.trim());
         return;
+      }
       case "usage/changed":
         museUsageSeen(params);
         return;

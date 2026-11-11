@@ -48,8 +48,10 @@ function instructions(options: AgentOptions) {
 /** The thread's mode as Muse runs it: a permission profile and when to ask. */
 export function museSettings(options: AgentOptions): MuseSettings {
   const model = options.choice.model || undefined;
+  // A helper's memory-only host answers "does not exist or you lack access"
+  // for every model but Muse's default (1.4.15), so it keeps the default.
   if (options.job.kind === "helper")
-    return { profile: profiles.readOnly, approvalMode: "denyUnmatched", model };
+    return { profile: profiles.readOnly, approvalMode: "denyUnmatched" };
   if (options.readOnly || options.job.kind === "side" || options.interactionMode === "plan")
     return {
       profile: profiles.readOnly,

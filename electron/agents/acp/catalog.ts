@@ -2,17 +2,26 @@ import { homedir } from "node:os";
 import type { AgentDefaults, AgentModel } from "../../../shared/agents";
 import type { ProviderCommand } from "../../../shared/commands";
 import { memoOnce } from "../../util/memo";
+import { signedOutMessage } from "../../../shared/agent-error";
 import { signedOutError } from "../errors";
 import { withTimeout } from "../../util/timeout";
 import { heardCommands } from "./commands";
 import { skillCommands } from "../skill-presentation";
 import type { AcpProfile } from "./profiles";
-import { acquireAcpAgent, openSession } from "./sessions";
+import { acquireAcpAgent, openSession, type AcpSettings } from "./sessions";
 import { currentOf, modelsOf } from "./settings";
 
 const probeTimeout = 60_000;
 /** Agents send their commands just after the session opens; this long is waited for them. */
 const commandsWait = 1500;
+
+/** Whether the session already has models, by config option or by the older list. */
+function hasModels(settings: AcpSettings) {
+  return (
+    settings.configOptions?.some((o) => o.category === "model") ||
+    (settings.models?.availableModels?.length ?? 0) > 0
+  );
+}
 
 /**
  * What a fresh session offers: models, the one it runs by default, and its
@@ -22,7 +31,7 @@ async function probe(profile: AcpProfile, cwd: string) {
   if ((await profile.account?.())?.signedIn === false)
     throw signedOutError(
       profile.provider,
-      `${profile.name} is signed out. Sign in under Settings → AI & agents → Agents.`,
+      `${signedOutMessage(profile.name)} Sign in under Settings → AI & agents → Agents.`,
     );
   const agent = await acquireAcpAgent(profile, undefined, cwd);
   try {
@@ -33,6 +42,10 @@ async function probe(profile: AcpProfile, cwd: string) {
     );
     const settings = agent.session!.settings;
     if (!heardCommands(profile.provider))
+      await new Promise((resolve) => setTimeout(resolve, commandsWait));
+    // Some agents send models in a config_option_update after the session
+    // opens; give them a moment to arrive.
+    if (!hasModels(settings))
       await new Promise((resolve) => setTimeout(resolve, commandsWait));
     const listed = modelsOf(settings);
     return {

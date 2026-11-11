@@ -353,9 +353,13 @@ export const reviewerProviders = agentsWith("reviewCommand").list;
 export const isAgentProvider = (value: unknown): value is AgentProvider =>
   agentProviderSchema.safeParse(value).success;
 
-/** `@codex`, `@claude`, … at the start of a message; registry agents have no mention. */
+/**
+ * `@codex`, `@claude`, `@acp:goose`, … at the start of a message. Built-in
+ * agents match by name; registry agents need the `acp:` prefix so an
+ * ordinary word like `@claudette` isn't swallowed.
+ */
 export const agentMentionPattern = new RegExp(
-  `^@(${agentProviders.join("|")})(?=\\s|$)\\s*`,
+  `^@(?:acp:([a-z0-9][a-z0-9-]*)|(${agentProviders.join("|")}))(?=\\s|$)\\s*`,
   "i",
 );
 
@@ -365,12 +369,10 @@ export function agentMention(
 ): { provider: AgentProvider; question: string } | null {
   const trimmed = text.trim();
   const m = agentMentionPattern.exec(trimmed);
-  return m
-    ? {
-        provider: m[1].toLowerCase() as BuiltinProvider,
-        question: trimmed.slice(m[0].length).trim(),
-      }
-    : null;
+  if (!m) return null;
+  const provider = (m[1] ? `acp:${m[1]}` : m[2].toLowerCase()) as AgentProvider;
+  if (!isAgentProvider(provider)) return null;
+  return { provider, question: trimmed.slice(m[0].length).trim() };
 }
 
 /** A model an agent offers, as its CLI or server lists it. */

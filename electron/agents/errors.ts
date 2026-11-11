@@ -1,5 +1,5 @@
 import type { Readable } from "node:stream";
-import { withDetails } from "../../shared/agent-error";
+import { signedOutMessage, withDetails } from "../../shared/agent-error";
 import { agentName, type AgentProvider } from "../../shared/agents";
 
 /**
@@ -77,7 +77,7 @@ export const signedOutError = (provider: AgentProvider, message?: string) =>
     provider,
     "signedOut",
     message ??
-      `${agentName(provider)} is signed out. Sign in again, then resume the answer.`,
+      `${signedOutMessage(agentName(provider))} Sign in again, then resume the answer.`,
   );
 
 /** The agent's plan, credit or rate limit stopped the turn. */

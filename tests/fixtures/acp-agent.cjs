@@ -4,6 +4,7 @@
 //
 // Scenario fields, all optional:
 //   signIn: an auth method id; sessions need `authenticate` with it first
+//   signInMetaType: that method's type, under `_meta` the way Qwen Code says it
 //   refuse: what `authenticate` fails with, as a service that turned the login down
 //   resume: offer session/resume; `sessions` lists the ids it can resume
 //   configOptions: what session/new answers, and set_config_option updates
@@ -63,7 +64,13 @@ const native = async (path, body) => {
   });
   return res.json();
 };
-let signedIn = scenario.signedIn ?? !scenario.signIn;
+// Like Antigravity, a process started after a saved Google login is signed in.
+const savedGoogleLogin = () =>
+  !!scenario.saveGoogleLogin &&
+  fs.existsSync(
+    require("node:path").join(process.env.GEMINI_HOME, "antigravity-acp", "acp_token.json"),
+  );
+let signedIn = scenario.signedIn ?? (!scenario.signIn || savedGoogleLogin());
 let nextId = 1000;
 let sessionCount = 0;
 let options = scenario.configOptions ?? [];
@@ -169,7 +176,15 @@ require("node:readline")
                 scenario.resume || scenario.nativeUrl ? { resume: {} } : {},
             },
             authMethods: scenario.signIn
-              ? [{ id: scenario.signIn, name: "Sign in" }]
+              ? [
+                  {
+                    id: scenario.signIn,
+                    name: "Sign in",
+                    _meta: scenario.signInMetaType
+                      ? { type: scenario.signInMetaType }
+                      : undefined,
+                  },
+                ]
               : [],
           },
         });

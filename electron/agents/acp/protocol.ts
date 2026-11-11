@@ -16,8 +16,17 @@ const authMethodSchema = z
     description: text,
     /** Left out or `agent`: the agent signs in itself. `terminal`/`env_var` need the user. */
     type: text,
+    /** Where agents from before `type` say it, Qwen Code among them. */
+    _meta: lenient(z.object({ type: text }).loose()),
   })
   .loose();
+type AcpAuthMethod = z.infer<typeof authMethodSchema>;
+
+/** A sign-in the agent does on its own, not one waiting on a key or a terminal. */
+export function signsInItself(method: AcpAuthMethod) {
+  const type = method.type ?? method._meta?.type;
+  return !type || type === "agent";
+}
 
 export const initializeResultSchema = z
   .object({

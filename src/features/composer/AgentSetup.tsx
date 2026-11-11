@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, TerminalSquare } from "lucide-react";
+import { Download } from "lucide-react";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   cantRun,
@@ -19,7 +19,12 @@ import { openSettings } from "../../lib/settings-page";
 import { usePoll } from "../../lib/poll";
 import { Spinner } from "../../ui/ui";
 import { InstallLog, plainOutput } from "../../ui/InstallLog";
-import { useAgentSignIn, type SignInPlace } from "../sign-in/useAgentSignIn";
+import type { SignInPlace } from "../sign-in/useAgentSignIn";
+import { signInOffer } from "../sign-in/sign-in-offer";
+import { agentModelsQuery } from "../agents/useAgentPicks";
+import { saysSignedOut } from "../../../shared/agent-error";
+import { errorMessage } from "../../../shared/error-message";
+import { AgentSignInPanel } from "./AgentSignInPanel";
 import { useAgentVersions } from "../updates/agent-updates";
 import { ProviderIcon, type PickerSetup } from "../agents/ComposerModelPicker";
 import "./agent-setup.css";
@@ -125,6 +130,7 @@ export function useAgentSetup({
       (!!computer || (accountOf(p) ?? SYSTEM_ACCOUNT) === SYSTEM_ACCOUNT)
     );
   });
+  const listedSignedOut = useListedSignedOut(providers, computer?.id);
   const signedInKey = (p: AgentProvider) => ["agent-signed-in", where, p];
   const signedIn = useQueries({
     queries: checked.map((p) => ({
@@ -161,6 +167,8 @@ export function useAgentSetup({
       };
     const i = checked.indexOf(p);
     if (i >= 0 && signedIn[i]?.data === false) return { kind: "signed-out" };
+    if (listedSignedOut(p) && signInOffer(p, { away: !!computer }))
+      return { kind: "signed-out" };
   }
 
   // An agent that just became usable lists its models: the ones that failed
@@ -202,6 +210,8 @@ export function useAgentSetup({
       await qc.refetchQueries({ queryKey: signedInKey(p) });
     },
     async stillSignedOut(p) {
+      // Its CLI can't say: the failed model list is the latest word.
+      if (!checked.includes(p)) return true;
       const status = await qc.query({
         queryKey: signedInKey(p),
         queryFn: () => api.agentSignedIn(p, computer?.id),
@@ -218,18 +228,8 @@ export function useAgentSetup({
   return (p) => {
     const setup = setupOf(p);
     if (!setup) return;
-    const name = agentName(p);
     return {
-      label:
-        setup.kind === "unpaired"
-          ? `${computer!.name} isn't paired`
-          : setup.kind === "unreachable"
-            ? `Can't reach ${computer!.name}`
-            : setup.kind === "installing"
-              ? `Installing ${name}…`
-              : setup.kind === "signed-out"
-                ? `Sign in to ${name}`
-                : `Set up ${name}`,
+      label: setupLabel(setup, p, computer),
       busy: setup.kind === "installing",
       missing:
         (setup.kind === "missing" && setup.installable) ||
@@ -251,6 +251,48 @@ export function useAgentSetup({
 }
 
 const installing = (agent: AgentVersion) => isUpdating(agent) && !agent.path;
+
+/**
+ * Whether an agent's models didn't list because it's signed out: all Relay
+ * hears from an agent whose CLI can't say. Reads the picker's own queries.
+ */
+function useListedSignedOut(
+  providers: readonly AgentProvider[],
+  computerId?: string,
+) {
+  const unasked: AgentProvider[] = providers.filter((p) => !saysSignedIn(p));
+  const listed = useQueries({
+    queries: unasked.map((p) => agentModelsQuery(p, computerId)),
+  });
+  return (provider: AgentProvider) => {
+    const i = unasked.indexOf(provider);
+    return i >= 0 && saysSignedOut(errorText(listed[i]?.error));
+  };
+}
+
+const errorText = (error: unknown) =>
+  error == null ? undefined : errorMessage(error);
+
+/** What the picker's trigger says instead of the model. */
+function setupLabel(
+  setup: AgentSetup,
+  provider: AgentProvider,
+  computer?: Computer,
+) {
+  const name = agentName(provider);
+  switch (setup.kind) {
+    case "unpaired":
+      return `${computer!.name} isn't paired`;
+    case "unreachable":
+      return `Can't reach ${computer!.name}`;
+    case "installing":
+      return `Installing ${name}…`;
+    case "signed-out":
+      return `Sign in to ${name}`;
+    default:
+      return `Set up ${name}`;
+  }
+}
 
 interface SetupActions {
   install: (p: AgentProvider) => Promise<void>;
@@ -280,8 +322,6 @@ function AgentSetupPanel({
   close: () => void;
 }) {
   const [checking, setChecking] = useState(false);
-  const signIn = useAgentSignIn(provider, place);
-  const opening = signIn.state === "waiting";
   const { cli } = agentInfo(provider);
   const name = agentName(provider);
   const on = computer ? `on ${computer.name}` : "on this computer";
@@ -426,52 +466,15 @@ function AgentSetupPanel({
       );
     case "signed-out":
       return (
-        <div className="agent-setup">
-          {glyph}
-          <h3>
-            Sign in to {name}
-            {computer ? ` on ${computer.name}` : ""}
-          </h3>
-          <p>
-            {cli} is installed {on} but not signed in, so it can't list its
-            models or run.
-          </p>
-          <div className="agent-setup-actions">
-            <button
-              type="button"
-              className="primary"
-              disabled={opening}
-              onClick={async () => {
-                // Signed in some other way meanwhile: nothing to type.
-                if (!(await actions.stillSignedOut(provider))) return;
-                if (!(await signIn.start())) return;
-                actions.watch(provider);
-                close();
-              }}
-            >
-              {opening ? (
-                <Spinner size={14} steady />
-              ) : (
-                <TerminalSquare size={14} aria-hidden />
-              )}
-              {opening
-                ? "Opening the terminal…"
-                : computer
-                  ? `Sign in on ${computer.name}`
-                  : "Sign in"}
-            </button>
-            {watching && checkAgain}
-          </div>
-          <p
-            className="agent-setup-hint"
-            role={signIn.hint ? "alert" : undefined}
-          >
-            {signIn.hint ??
-              (computer
-                ? `Opens the thread's terminal on ${computer.name} with the sign-in typed in. You finish it in your browser; the login stays on ${computer.name}.`
-                : "Opens the thread's terminal with the sign-in typed in, for you to run.")}
-          </p>
-        </div>
+        <AgentSignInPanel
+          provider={provider}
+          computer={computer}
+          place={place}
+          checkAgain={watching && checkAgain}
+          stillSignedOut={() => actions.stillSignedOut(provider)}
+          onStarted={() => actions.watch(provider)}
+          close={close}
+        />
       );
   }
 }

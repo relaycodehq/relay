@@ -161,7 +161,7 @@ export const bigFunctions: Record<string, number> = {
   "src/features/changes/useBranchSync.ts › useBranchSync": 105,
   "src/features/checks/ProjectChecks.tsx › ProjectChecksButton": 241,
   "src/features/checks/useProjectChecks.ts › useProjectChecks": 118,
-  "src/features/composer/AgentSetup.tsx › AgentSetupPanel": 214,
+  "src/features/composer/AgentSetup.tsx › AgentSetupPanel": 175,
   "src/features/composer/AgentSetup.tsx › useAgentSetup": 193,
   "src/features/composer/ComposerCommands.tsx › useComposerCommands": 359,
   "src/features/composer/ComposerEffortControl.tsx › ComposerEffortControl": 91,

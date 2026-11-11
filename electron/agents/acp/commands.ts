@@ -2,6 +2,7 @@ import type { ProviderCommand } from "../../../shared/commands";
 import type { AcpProvider } from "./profiles";
 import { parseUpdate } from "./protocol";
 import { skillCommands } from "../skill-presentation";
+import type { AcpAgent } from "./sessions";
 
 /** The slash commands each agent listed last, in any of its sessions. */
 const heard = new Map<AcpProvider, ProviderCommand[]>();
@@ -9,9 +10,15 @@ const heard = new Map<AcpProvider, ProviderCommand[]>();
 /**
  * Keeps the commands an `available_commands_update` lists. One named `$name`
  * is a skill, as T3 Code reads ACP agents' lists; the first of a name counts.
+ * A `config_option_update` refreshes the session's settings, so models that
+ * arrive after the session opens are available to the catalog.
  */
-export function hearCommands(provider: AcpProvider, raw: unknown) {
+export function hearCommands(provider: AcpProvider, raw: unknown, agent?: AcpAgent) {
   const update = parseUpdate(raw);
+  if (update?.sessionUpdate === "config_option_update") {
+    if (agent?.session) agent.session.settings.configOptions = update.configOptions;
+    return;
+  }
   if (update?.sessionUpdate !== "available_commands_update") return;
   const seen = new Set<string>();
   heard.set(

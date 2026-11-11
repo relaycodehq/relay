@@ -770,6 +770,16 @@ it("signs in from Relay the way the agent offers, and nothing else", async () =>
   );
 });
 
+it("leaves a sign-in that needs a key to the agent's CLI, however the agent marks it", async () => {
+  // Qwen Code offers only an OpenAI key, typed under _meta; asking it to authenticate fails with "Internal error".
+  const { acp, sent } = await agent({
+    signIn: "openai",
+    signInMetaType: "terminal",
+  });
+  await expect(signInAcp(acp)).rejects.toThrow("can't sign in from Relay");
+  expect((await sent()).map((m) => m.method)).not.toContain("authenticate");
+});
+
 it("picks up the thread's session, and starts over with a note when it is gone", async () => {
   const { acp, root, sent } = await agent({
     resume: true,

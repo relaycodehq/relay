@@ -18,6 +18,13 @@ const DETAILS = "\n\nTechnical details:\n";
 export const withDetails = (message: string, details?: string) =>
   details?.trim() ? `${message}${DETAILS}${details.trim()}` : message;
 
+/** How an agent's signed-out error starts; the renderer reads it back from the text, as errors cross IPC as their message. */
+export const signedOutMessage = (name: string) => `${name} is signed out.`;
+
+/** Whether an error, as text, says its agent is signed out. */
+export const saysSignedOut = (error: string | undefined) =>
+  !!error && / is signed out\./.test(error);
+
 export function agentError(error: string): {
   message: string;
   hint?: string;
