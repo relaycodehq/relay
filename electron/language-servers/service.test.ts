@@ -661,11 +661,13 @@ describe("crashes", () => {
       timing: { restartDelays: [10, 10, 10] },
     });
     await t.service.lspOpen(WHERE, "a.rs", "first text");
+    // Under load the first start can settle into "ready" before its crash
+    // lands, so wait for the second start to be ready rather than counting.
     await vi.waitFor(async () => {
-      expect(t.states().filter((s) => s === "ready")).toHaveLength(1);
+      expect(await t.startCount()).toBe(2);
+      expect(t.statuses.at(-1)?.state).toBe("ready");
     });
     expect(t.statuses.some((s) => s.message === "Restarting…")).toBe(true);
-    expect(await t.startCount()).toBe(2);
     const opens = (await t.received()).filter(
       (m) => m.method === "textDocument/didOpen",
     );
