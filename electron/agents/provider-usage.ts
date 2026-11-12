@@ -5,16 +5,18 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
-  mapClaudeUsage,
-  mapCodexCredits,
-  mapCodexResets,
-  mapCodexUsage,
   providerUsageSchema,
   type ProviderUsage,
   type SavedResets,
   type UsageCredits,
   type UsageWindow,
 } from "../../shared/provider-usage";
+import {
+  mapClaudeUsage,
+  mapCodexCredits,
+  mapCodexResets,
+  mapCodexUsage,
+} from "../../shared/provider-usage-responses";
 import { readClaudeUsage } from "./claude/project";
 import { readAntigravityUsage } from "./antigravity";
 import { readMuseUsage } from "./muse";
