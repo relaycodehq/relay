@@ -7,6 +7,7 @@ import {
   toolText,
   verifyRelayToken,
 } from ".";
+import { relayToolList } from "./listed-tools";
 import { BODY_LIMIT } from "./server";
 import { RENDER_MAX_CHARS, RENDER_MAX_PAGES } from "../../shared/html-render";
 
@@ -498,4 +499,13 @@ test("lists only request_secret as loaded up front", async () => {
   expect(upFront.map((t: { name: string }) => t.name)).toEqual([
     "request_secret",
   ]);
+});
+
+test("lists no empty choice: Gemini refuses every turn that has one among its tools", () => {
+  const withEmptyChoice = relayToolList
+    .filter((tool) =>
+      /"enum":\[[^\]]*""/.test(JSON.stringify(tool.inputSchema)),
+    )
+    .map((tool) => tool.name);
+  expect(withEmptyChoice).toEqual([]);
 });
