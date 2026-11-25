@@ -9,6 +9,7 @@ import {
   readAntigravityAccount,
   antigravityHome,
   antigravityCommand,
+  antigravityFailure,
   compactPrompt,
 } from "../antigravity";
 import { discoverAntigravitySkills } from "../antigravity";
@@ -166,6 +167,7 @@ const antigravity: AcpProfile = {
   compact: compactPrompt,
   plan: "/plan",
   skills: (cwd) => discoverAntigravitySkills(cwd),
+  failure: antigravityFailure,
   install:
     "Set Antigravity up in Settings → Agents: Relay downloads it from Google.",
 };
