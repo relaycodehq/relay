@@ -96,7 +96,7 @@ async function recording(provider: AgentProvider, scenario: string) {
     }
   }
   if (provider === "antigravity") {
-    // Its sign-in: the token file (or the Keychain item, read as is) and which kind it is.
+    // Its sign-in: the token file and which kind it is.
     env.GEMINI_HOME = clean;
     if (fresh) {
       await mkdir(join(clean, "antigravity-acp"), { recursive: true });
@@ -165,7 +165,7 @@ async function recording(provider: AgentProvider, scenario: string) {
   return s;
 }
 
-/** The Antigravity server Relay downloaded on this computer. */
+/** The Antigravity CLI Relay downloaded on this computer. */
 async function installedAntigravityHere() {
   const root = join(
     homedir(),
