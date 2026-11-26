@@ -32,6 +32,14 @@ const markState = (chat: ChatSummary): MarkState =>
   inputBlocksThread(chat) ? "asks" : chat.running ? "working" : "done";
 
 /**
+ * Whether a call's `ids` name the thread: by its id, or for one of another
+ * computer's own, by its id there, which the lead's calls there name it by.
+ */
+const namedBy = (ids: string[], chat: ChatSummary) =>
+  ids.includes(chat.id) ||
+  (!!chat.sentTo?.home && ids.includes(chat.sentTo.id));
+
+/**
  * The lead's threads, asking first, then working, then done; settled ones
  * are put away. `ids` narrows them to one call's; `live` wants any working
  * or asking, or nothing.
@@ -48,7 +56,7 @@ export function useStarted(ids: string[] | undefined, live = false) {
         !c.reviewer &&
         // A second opinion shows under the answer it checks.
         !c.startedBy?.secondOpinionOn &&
-        (!ids || ids.includes(c.id)) &&
+        (!ids || namedBy(ids, c)) &&
         !chatSettled(c),
     )
     .sort(byStanding);
