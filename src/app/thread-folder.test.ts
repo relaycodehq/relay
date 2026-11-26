@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { ChatSummary, ChatWorktree } from "../../shared/projects";
+import type { ChatSentTo } from "../../shared/handoff";
+import type { ChatSummary, ChatWorktree, Project } from "../../shared/projects";
 import {
   agentWorkingIn,
+  folderThread,
   terminalBlocked,
   worktreeThread,
 } from "./thread-folder";
@@ -157,5 +159,39 @@ describe("agentWorkingIn", () => {
   it("is quiet while nothing runs", () => {
     expect(agentWorkingIn([thread(), own], undefined)).toBe(false);
     expect(agentWorkingIn(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("folderThread", () => {
+  const project = { id: "p1", name: "App", path: "/tmp/app" } as Project;
+  const away: ChatSentTo = {
+    id: "there",
+    computerId: "mini",
+    computer: "Mini",
+    at: 0,
+    state: "away",
+    live: true,
+    kept: 0,
+    folder: true,
+    home: true,
+  };
+
+  it("names a thread live elsewhere without a worktree here, so its calls go there and not to the checkout", () => {
+    const started = { ...thread(), sentTo: away };
+    expect(folderThread(project, started)).toBe(started);
+    expect(folderThread(project, thread())).toBeUndefined();
+    // An older computer runs no folder calls: the copy here it is.
+    const older = { ...thread(), sentTo: { ...away, folder: undefined } };
+    expect(folderThread(project, older)).toBeUndefined();
+  });
+
+  it("leaves a project on another computer to name its own folder", () => {
+    const remote = {
+      ...project,
+      computer: { id: "mini", name: "Mini", projectId: "p9" },
+    } as Project;
+    expect(folderThread(remote, { ...thread(), sentTo: away })).toBeUndefined();
+    const inWorktree = { ...thread(made), sentTo: away };
+    expect(folderThread(remote, inWorktree)).toBe(inWorktree);
   });
 });

@@ -36,6 +36,21 @@ export const worktreeThread = (chat: ChatSummary | undefined) =>
   threadWorktree(chat) ? chat : undefined;
 
 /**
+ * The thread whose folder the panes name: one in its worktree, or one live
+ * on another computer from a project here, which works in its own folder
+ * there, worktree or not. Named by the project alone, its calls would run on
+ * the checkout here.
+ */
+export function folderThread(
+  project: Project | undefined,
+  chat: ChatSummary | undefined,
+) {
+  const inWorktree = worktreeThread(chat);
+  if (inWorktree || project?.computer) return inWorktree;
+  return chat?.sentTo?.folder && liveAway(chat) ? chat : undefined;
+}
+
+/**
  * Whether an agent is at work in the folder `inWorktree` (a worktree thread,
  * or the checkout without one). Another thread's worktree doesn't touch it.
  */
