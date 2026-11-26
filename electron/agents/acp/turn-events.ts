@@ -8,12 +8,14 @@ import {
   antigravityMcp,
   antigravitySteps,
   antigravitySubagents,
+  geminiCache,
   updatesSteps,
   TextSpeed,
 } from "../antigravity";
 import { acpActivity, acpEdits, checklistSteps, planText, type PlanEntry } from "./activity";
 import type { AcpProfile } from "./profiles";
 import { parseUpdate, type AcpToolCall } from "./protocol";
+import { currentOf } from "./settings";
 import type { AcpAgent } from "./sessions";
 
 /** What an ACP agent says about its session during one turn, put to the thread as it comes. */
@@ -135,6 +137,17 @@ export class AcpTurnEvents {
   }
 
   /** While Antigravity compacts, it reports the size from before; the next turn says the new one. */
+  /** When the request that just reported touched the prompt cache, where Relay knows its lifetime. */
+  private promptCache() {
+    if (this.profile.provider !== "antigravity") return {};
+    // Default leaves the choice empty; the session says what it runs.
+    const settings = this.agent.session?.settings;
+    const model =
+      this.options.choice.model || (settings && currentOf(settings).model);
+    const cache = geminiCache(model);
+    return cache ? { cache } : {};
+  }
+
   private sizeIsOld() {
     return (
       this.options.job.kind === "compact" &&
@@ -228,6 +241,7 @@ export class AcpTurnEvents {
           this.options.onContext?.({
             usedTokens: update.used,
             ...(update.size ? { maxTokens: update.size } : {}),
+            ...this.promptCache(),
           });
         // The session's cost so far, which OpenCode only reports once a
         // turn ends; a turn counts what it added since the last report.

@@ -18,6 +18,7 @@ export { AntigravitySubagents, antigravitySubagents } from "./subagents";
 export { antigravityFailure } from "./failure";
 export { antigravityOffer } from "./listed-skills";
 export { TextSpeed } from "./text-speed";
+export { geminiCache } from "./prompt-cache";
 export { antigravityMcp } from "./mcp";
 export { antigravitySteps, updatesSteps } from "./steps";
 export { antigravityHelper } from "./helper";

@@ -850,6 +850,40 @@ it("splits text before a tool call into commentary and reports edits, cost and s
   expect(prompt?.params.prompt).toEqual([{ type: "text", text: "Hi" }]);
 });
 
+it.each([
+  ["Gemini picked", "gemini-4-neon", "gemini-4-neon", true],
+  ["Gemini on Default", "", "gemini-4-neon", true],
+  ["another model", "claude-opus", "claude-opus", false],
+])(
+  "gives Antigravity's context an hour of prompt cache only for Gemini (%s)",
+  async (_, picked, running, cached) => {
+    const modelOption = {
+      id: "model",
+      name: "Model",
+      category: "model",
+      type: "select",
+      currentValue: running,
+      options: [
+        { value: "gemini-4-neon", name: "Gemini 4 Neon" },
+        { value: "claude-opus", name: "Claude Opus" },
+      ],
+    };
+    const { acp, root } = await agent({
+      configOptions: [modelOption],
+      turn: [
+        { update: { sessionUpdate: "usage_update", used: 900, size: 1000 } },
+        say("Done."),
+      ],
+    });
+    const onContext = vi.fn();
+    const choice = { model: picked, reasoningEffort: "" as const, fast: false };
+    await runAcp(acp, options(root, { choice, onContext }));
+    const context = onContext.mock.calls.at(-1)?.[0];
+    expect(context).toMatchObject({ usedTokens: 900, maxTokens: 1000 });
+    expect(context.cache?.ttlMs).toBe(cached ? 60 * 60_000 : undefined);
+  },
+);
+
 it.each([true, false])(
   "gives an agent that doesn't advertise HTTP MCP Relay's tools only when its profile takes them (%s)",
   async (takesHttpMcp) => {
