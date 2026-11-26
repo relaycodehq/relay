@@ -16,7 +16,7 @@ export interface FeedLink {
 type FeedChats = {
   liveHandoff: Pick<
     ProjectChats["liveHandoff"],
-    "outgoing" | "writtenHere" | "live"
+    "outgoing" | "writtenHere" | "live" | "started"
   >;
   handoffs: Pick<ProjectChats["handoffs"], "handedOver">;
 };
@@ -114,12 +114,21 @@ export class LiveFeed {
       });
   }
 
+  /**
+   * The project's threads may read differently, and so may what a followed
+   * thread in it says, or what a lead elsewhere says of the threads its
+   * agent started in it.
+   */
   changed(projectId: string) {
     if (!this.link || this.settling.has(projectId)) return;
     const timer = setTimeout(() => {
       this.settling.delete(projectId);
+      const leads = this.chats.liveHandoff.started.leadsIn(projectId);
       for (const [chatId, devices] of this.followed)
-        if ([...devices.values()].some((f) => f.projectId === projectId))
+        if (
+          leads.has(chatId) ||
+          [...devices.values()].some((f) => f.projectId === projectId)
+        )
           void this.update(chatId).catch((e) =>
             console.warn("A live handoff's state didn't go:", e),
           );

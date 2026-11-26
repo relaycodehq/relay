@@ -227,8 +227,11 @@ export interface RemoteApi {
     method: HandoffMethod,
     args: unknown[],
   ): Promise<unknown>;
-  /** This computer's own threads, for the one asking to list; from `computerThreadsBridge`. */
-  computerThreads(): Promise<ComputerThreadList>;
+  /**
+   * This computer's own threads, for the one asking to list; from
+   * `computerThreadsBridge`. With `ids`, just those, however old.
+   */
+  computerThreads(ids?: string[]): Promise<ComputerThreadList>;
   /** Settles, snoozes or wakes one of this computer's own threads, by the id it lists it by. */
   threadTriage(id: string, triage: ChatTriage): Promise<void>;
   /** A page one of the thread's answers showed, by the id it lists the thread by. */

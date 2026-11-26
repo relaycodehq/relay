@@ -51,6 +51,8 @@ const startedByOf = ({ lead, thread }: StartedUnder): StartedBy => ({
 export class ComputerThreads {
   /** Threads being opened, so a second click waits for the first. */
   private opening = new Map<string, Promise<ComputerThreadHere>>();
+  /** Each lead's latest pass over the threads its agent started. */
+  private startedPasses = new Map<string, Promise<void>>();
 
   constructor(
     private store: Store,
@@ -102,11 +104,16 @@ export class ComputerThreads {
    * Opened from the list it's a peek; one a lead's agent started there sits
    * under that lead instead (`under`).
    */
-  open(computerId: string, threadId: string, under?: StartedUnder) {
+  open(
+    computerId: string,
+    threadId: string,
+    under?: StartedUnder,
+    list?: () => Promise<ComputerThreadList>,
+  ) {
     const key = `${computerId}:${threadId}`;
     let job = this.opening.get(key);
     if (!job) {
-      job = this.follow(computerId, threadId, under).finally(() =>
+      job = this.follow(computerId, threadId, under, list).finally(() =>
         this.opening.delete(key),
       );
       this.opening.set(key, job);
@@ -117,51 +124,119 @@ export class ComputerThreads {
   /**
    * The threads a lead's agent started on the computer it runs on, followed
    * from here under that lead, so Activity shows them beneath it as it does
-   * the ones started here. A peek's lead isn't listed, so neither are they.
+   * the ones started here; and let go of once that computer stops naming
+   * them. A peek's lead isn't listed, so neither are they. One pass per lead
+   * at a time, so an older list never lands after a newer one.
    */
-  async followStarted(
+  followStarted(computerId: string, leadId: string, started: StartedThere[]) {
+    const pass = (this.startedPasses.get(leadId) ?? Promise.resolve())
+      .then(() => this.followStartedNow(computerId, leadId, started))
+      .catch((e) =>
+        console.warn(
+          "Threads started on another computer weren't followed:",
+          e,
+        ),
+      );
+    this.startedPasses.set(leadId, pass);
+    void pass.finally(() => {
+      if (this.startedPasses.get(leadId) === pass)
+        this.startedPasses.delete(leadId);
+    });
+    return pass;
+  }
+
+  private async followStartedNow(
     computerId: string,
     leadId: string,
     started: StartedThere[],
   ) {
-    if (!started.length) return;
     const lead = listed(this.store, leadId);
     if (!lead || lead.sentTo?.peek) return;
+    await this.letGoOfUnnamed(computerId, lead, started);
     const here = this.followedFrom(computerId);
-    for (const thread of started) {
+    const unplaced = started.filter((thread) => {
       const followed = here.get(thread.id);
-      if (followed && listed(this.store, followed.chatId)?.startedBy) continue;
-      await this.followUnder(computerId, { lead, thread }).catch((e) =>
+      const placed =
+        !!followed && !!listed(this.store, followed.chatId)?.startedBy;
+      // A settled one is followed once it wakes.
+      return !placed && !thread.settled;
+    });
+    if (!unplaced.length) return;
+    // Asked for by id, as the computer's list leaves older ones out.
+    let listing: Promise<ComputerThreadList> | undefined;
+    const list = () =>
+      (listing ??= this.threadsOn(
+        computerId,
+        unplaced.map((t) => t.id),
+      ));
+    for (const thread of unplaced)
+      await this.followUnder(computerId, { lead, thread }, list).catch((e) =>
         console.warn(
           "A thread started on another computer wasn't followed:",
           e,
         ),
       );
-    }
+  }
+
+  /**
+   * The threads here under the lead that its computer no longer names:
+   * detached, archived or gone there. Only that computer's own: one handed
+   * there from here keeps its lead.
+   */
+  private async letGoOfUnnamed(
+    computerId: string,
+    lead: ChatSummary,
+    started: StartedThere[],
+  ) {
+    const named = new Set(started.map((t) => t.id));
+    const unnamed = (this.store.get().chats ?? []).filter(
+      (c) =>
+        c.startedBy?.chatId === lead.id &&
+        c.sentTo?.home &&
+        c.sentTo.computerId === computerId &&
+        liveAway(c) &&
+        !named.has(c.sentTo.id),
+    );
+    for (const c of unnamed) await this.chats.liveHandoff.started.letGo(c.id);
   }
 
   /**
    * Follows one, or places the one already followed under its lead: it may
    * have been opened from the computer's list first, as a peek.
    */
-  private async followUnder(computerId: string, under: StartedUnder) {
-    const mirror = await this.open(computerId, under.thread.id, under);
-    await this.chats.liveHandoff.placeUnder(mirror.chatId, startedByOf(under));
+  private async followUnder(
+    computerId: string,
+    under: StartedUnder,
+    list: () => Promise<ComputerThreadList>,
+  ) {
+    const mirror = await this.open(computerId, under.thread.id, under, list);
+    await this.chats.liveHandoff.started.placeUnder(
+      mirror.chatId,
+      startedByOf(under),
+    );
+  }
+
+  /** The computer's threads, or with `ids` just those. */
+  private async threadsOn(computerId: string, ids?: string[]) {
+    const client = await this.computers.connected(computerId);
+    return ids
+      ? client.call("computerThreads", ids)
+      : client.call("computerThreads");
   }
 
   private async follow(
     computerId: string,
     threadId: string,
     under: StartedUnder | undefined,
+    list = () => this.threadsOn(computerId),
   ): Promise<ComputerThreadHere> {
     const known = this.followedFrom(computerId).get(threadId);
     if (known) return known;
     const { name } = this.computers.get(computerId);
-    const client = await this.computers.connected(computerId);
-    const list = await client.call("computerThreads");
-    const thread = list.threads.find((t) => t.id === threadId);
+    const threads = await list();
+    const thread = threads.threads.find((t) => t.id === threadId);
     if (!thread) throw new Error(`That thread isn't on ${name} anymore.`);
-    const projectId = await this.projectFor(computerId, list, thread, under);
+    const projectId = await this.projectFor(computerId, threads, thread, under);
     const peek = !under;
     const chat = await this.chats.liveHandoff.followThere(
       projectId,
@@ -264,10 +339,13 @@ export class ComputerThreads {
     const there = await client.call("resumeInProject", projectId, pick);
     const here = await this.open(computerId, there.chatId);
     const sentTo = summaryOf(this.store, here.chatId).sentTo;
-    if (sentTo?.peek)
+    if (sentTo?.peek) {
       await this.chats.handoffs.updateSentTo(here.chatId, sentTo.id, {
         peek: undefined,
       });
+      // Followed as a peek, the threads its agent started were passed over.
+      void this.following.follow(computerId, here.chatId);
+    }
     return { chat: summaryOf(this.store, here.chatId), created: there.created };
   }
 

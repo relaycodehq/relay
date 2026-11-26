@@ -110,7 +110,8 @@ export class HandoffFollowing {
 
   /**
    * Follows the threads the agent of the thread live on the computer
-   * started there, once what came reads as them.
+   * started there, once what came reads as them: a list that doesn't read
+   * would let go of every one followed so far.
    */
   private followStartedIn(computerId: string, chatId: string, live: unknown) {
     const read = liveStartedSchema.safeParse(live);

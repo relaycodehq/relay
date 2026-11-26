@@ -5,7 +5,6 @@ import {
   type ChatSentTo,
   type HandoffLive,
   type HeldSend,
-  type StartedThere,
 } from "../../shared/handoff";
 import type {
   ChatMessage,
@@ -15,14 +14,14 @@ import type {
   ProjectChatSend,
   StartedBy,
 } from "../../shared/projects";
-import { chatActivitySection } from "../../shared/chat-activity";
 import { promptTitle } from "../../shared/prompt-title";
 import { handoffTriage, type HandoffTriage } from "../../shared/handoff-triage";
-import { sentSettingsOf, workingFor } from "../../shared/projects";
+import { sentSettingsOf } from "../../shared/projects";
 import { idSchema } from "../../shared/validation";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
 import { awaitsReturn } from "./handoff";
+import { HandoffStarted } from "./handoff-started";
 
 /**
  * A message written on the computer a thread was handed to, as the computer
@@ -71,11 +70,15 @@ type RenderThere = (
 export class LiveHandoff {
   private saves = new Map<string, NodeJS.Timeout>();
   private renderThere?: RenderThere;
+  /** The threads a live handoff's agent started, from both ends. */
+  readonly started: HandoffStarted;
 
   constructor(
     private core: ChatCore,
     private list: (projectId: string) => ChatSummary[],
-  ) {}
+  ) {
+    this.started = new HandoffStarted(core, list);
+  }
 
   /**
    * For a computer following the thread: the message as it mirrors it,
@@ -204,7 +207,7 @@ export class LiveHandoff {
     const chat = await this.core.storage.load(id);
     const listed = this.list(chat.projectId).find((c) => c.id === id);
     const requests = this.core.active.requests(id);
-    const started = this.startedHere(chat);
+    const started = this.started.of(chat);
     return structuredClone({
       triage: handoffTriage(listed ?? chatSummary(chat)),
       ...(listed?.running
@@ -229,55 +232,6 @@ export class LiveHandoff {
       ...(chat.queuePaused ? { queuePaused: true as const } : {}),
       ...(started.length ? { started } : {}),
     });
-  }
-
-  /**
-   * The threads the lead's agent started here that the computer following
-   * the lead can follow too: this computer's own, not handed on, archived,
-   * settled or a deep review's. A second opinion is left out: sending it to
-   * the lead is an action of this computer's.
-   */
-  private startedHere(lead: ProjectChat): StartedThere[] {
-    const now = Date.now();
-    const lists = new Map<string, ChatSummary[]>();
-    const listedOf = (c: ChatSummary) => {
-      const list = lists.get(c.projectId) ?? this.list(c.projectId);
-      lists.set(c.projectId, list);
-      return list.find((l) => l.id === c.id) ?? c;
-    };
-    return (this.core.store.get().chats ?? []).flatMap((c) => {
-      if (!c.startedBy || !workingFor(c, lead.id)) return [];
-      const ownHere = !c.cameFrom && !c.sentTo;
-      const listed = !c.archivedAt && c.scope.kind !== "review";
-      if (!ownHere || !listed) return [];
-      // A settled one shows under no lead, and a lead may have dozens; one
-      // that wakes comes back into Activity and is followed then.
-      if (chatActivitySection(listedOf(c), now) === "settled") return [];
-      return [
-        {
-          id: c.id,
-          agent: c.startedBy.agent,
-          ...(c.projectId === lead.projectId
-            ? { inLeadsProject: true as const }
-            : {}),
-        },
-      ];
-    });
-  }
-
-  /**
-   * A thread followed from here before it was known to be one a lead's agent
-   * started there, opened from the other computer's list: listed under that
-   * lead from now on, not only looked at.
-   */
-  async placeUnder(id: string, startedBy: StartedBy) {
-    const chat = await this.core.storage.load(id);
-    if (chat.startedBy || !chat.sentTo) return;
-    const { peek: _, ...sentTo } = chat.sentTo;
-    chat.startedBy = startedBy;
-    chat.sentTo = sentTo;
-    await this.core.storage.save(chat);
-    this.core.storage.chatChanged(id);
   }
 
   /** The thread is live on `handoffId`, away and following it. */

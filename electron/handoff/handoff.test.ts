@@ -209,6 +209,7 @@ async function pairedComputers() {
             );
           if (method === "triageProjectChat")
             return mini.chats.triage(id, rest[0] as never);
+          if (method === "detachProjectChat") return mini.chats.detach(id);
           if (method === "terminalSessions")
             return mini.chats.terminalSessions(id);
           if (method === "createScratch")
@@ -2925,6 +2926,78 @@ it.each(["handed-off", "remote-owned"] as const)(
     );
     expect(underLead()).toHaveLength(1);
     expect(everyThread().some((c) => c.sentTo?.id === settled.id)).toBe(false);
+  },
+);
+
+it.each(["handed-off", "remote-owned"] as const)(
+  "keeps the threads a %s thread's agent started under it here as its computer has them",
+  async (kind) => {
+    const { laptop, mini, sender, computers, computerId, here, there } =
+      await controlledRemoteThread(kind);
+    if (kind === "remote-owned") {
+      await sender.forward("sendProjectChat", [
+        here.chatId,
+        input("@codex One more thing"),
+      ]);
+      await finished(mini.chats, there, 4);
+    }
+    const mirrorOf = (id: string) =>
+      (laptop.store.get().chats ?? []).find((c) => c.sentTo?.id === id);
+
+    // Settled in another project there while this computer was away, it's
+    // the lead's but not followed; woken while the lead sits idle, it is.
+    computers.close();
+    const other = join(mini.dir, "other");
+    git(mini.dir, "clone", "-q", join(root, "remote", "me", "app.git"), other);
+    const otherId = (await mini.projects.add(other, null)).id;
+    const elsewhere = await mini.chats.create(
+      otherId,
+      { kind: "project" },
+      "checkout",
+      { startedBy: { chatId: there, agent: "codex" } },
+    );
+    await mini.chats.send(elsewhere.id, input("@codex Read the changelog"));
+    await finished(mini.chats, elsewhere.id, 2);
+    await mini.chats.triage(elsewhere.id, { kind: "settle" });
+    await computers.start();
+    await vi.waitFor(() => expect(computers.status(computerId)).toBe("online"));
+    const client = await computers.connected(computerId);
+    // Asked for by id, it's listed however many newer ones there are.
+    const asked = await client.call("computerThreads", [elsewhere.id]);
+    expect(asked.threads.map((t) => t.id)).toEqual([elsewhere.id]);
+    expect(mirrorOf(elsewhere.id)).toBeUndefined();
+    await mini.chats.triage(elsewhere.id, { kind: "unsettle" });
+    await vi.waitFor(() =>
+      expect(mirrorOf(elsewhere.id)?.startedBy?.chatId).toBe(here.chatId),
+    );
+
+    // Detached here, it's detached there, and stays so after a reconnect.
+    const mirror = mirrorOf(elsewhere.id)!;
+    expect(sender.forwards("detachProjectChat", [mirror.id])).toBe(true);
+    await sender.forward("detachProjectChat", [mirror.id]);
+    expect((await mini.chats.get(elsewhere.id)).startedBy).toBeUndefined();
+    expect(mirrorOf(elsewhere.id)?.startedBy).toBeUndefined();
+    computers.close();
+    await computers.start();
+    await vi.waitFor(() => expect(computers.status(computerId)).toBe("online"));
+
+    // Detached there, it's let go of here.
+    const started = await mini.chats.create(
+      mini.projectId,
+      { kind: "project" },
+      "checkout",
+      { startedBy: { chatId: there, agent: "codex" } },
+    );
+    await mini.chats.send(started.id, input("@codex Check the tests"));
+    await finished(mini.chats, started.id, 2);
+    await vi.waitFor(() =>
+      expect(mirrorOf(started.id)?.startedBy?.chatId).toBe(here.chatId),
+    );
+    await mini.chats.detach(started.id);
+    await vi.waitFor(() =>
+      expect(mirrorOf(started.id)?.startedBy).toBeUndefined(),
+    );
+    expect(mirrorOf(elsewhere.id)?.startedBy).toBeUndefined();
   },
 );
 

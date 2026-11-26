@@ -150,7 +150,7 @@ export type HandoffLive = Pick<
     queuePaused?: true;
     /** Activity marks and the clock they are compared against, from the thread's computer. */
     triage?: HandoffTriage;
-    /** The threads its agent started there, which the computer following it follows too. */
+    /** The threads its agent started there, settled ones too, which the computer following it follows under it. */
     started?: StartedThere[];
   };
 
@@ -162,11 +162,13 @@ export const startedThereSchema = z.object({
   agent: agentProviderSchema,
   /** It works in the lead's project there, so it goes in the lead's here too. */
   inLeadsProject: z.literal(true).optional(),
+  /** Settled there: still the lead's, but not followed for it until it wakes. */
+  settled: z.literal(true).optional(),
 });
 
 export type StartedThere = z.infer<typeof startedThereSchema>;
 
-/** The threads a lead names as its agent's there. */
+/** Every thread the lead's agent started there; one left out is no longer the lead's. */
 export const startedThereListSchema = z.array(startedThereSchema).max(1000);
 
 /** The thread runs on the computer it was handed to and is followed live from here. */
