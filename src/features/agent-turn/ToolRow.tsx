@@ -246,13 +246,17 @@ export function ToolRow({
         )}
       </div>
     );
+  // An agent's row ends with what it reported. A message that woke one starts
+  // with what it was told, then shows what the agent did about it.
+  const reportsLast = a.kind === "agent";
   return (
     <Fold
       className={`agent-step ${a.status}`}
       summary={<summary className="agent-step-heading">{heading}</summary>}
     >
+      {!reportsLast && <CallDetail activity={a} />}
       {calls.length > 0 && <SubagentRows calls={calls} onChanges={onChanges} />}
-      <CallDetail activity={a} />
+      {reportsLast && <CallDetail activity={a} />}
       {a.kind === "file" && (
         <button onClick={onChanges}>Open working changes</button>
       )}
