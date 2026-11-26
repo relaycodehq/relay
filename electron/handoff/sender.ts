@@ -81,6 +81,8 @@ export class Handoffs {
       this.infos,
       (chatId) => void this.forwarding.flush(chatId),
       (chatId) => this.checkSetup(chatId),
+      (computerId, chatId, started) =>
+        void this.threads.followStarted(computerId, chatId, started),
     );
     this.threads = new ComputerThreads(
       store,

@@ -33,6 +33,8 @@ export const handoffChatMethods = [
   "closeWatchNote",
   "seePrediction",
   "threadSecrets",
+  // Only one of that computer's own, whose lead is there (`ChatSentTo.home`).
+  "detachProjectChat",
 ] as const satisfies readonly ApiMethod[];
 
 export type HandoffChatMethod = (typeof handoffChatMethods)[number];

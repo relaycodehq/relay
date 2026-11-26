@@ -11,6 +11,7 @@ import { api } from "../lib/api";
 import {
   agentWorkingIn,
   folderComputer,
+  folderThread,
   worktreeThread,
 } from "./thread-folder";
 import { useProjectChecks } from "../features/checks/useProjectChecks";
@@ -43,7 +44,7 @@ export function useThreadFolder({
   const where = project
     ? workspaceId(
         project.id,
-        inWorktree?.id,
+        folderThread(project, chat)?.id,
         chat?.activeAgentWorktree && !chat.worktree
           ? agentWorktreeKey(chat.activeAgentWorktree)
           : undefined,

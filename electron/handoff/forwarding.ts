@@ -103,6 +103,8 @@ export class HandoffForwarding {
     )
       return false;
     const chat = this.liveAwayIn(args[0]);
+    // One handed from here keeps its lead here; one of that computer's own has it there.
+    if (method === "detachProjectChat") return !!chat?.sentTo?.home;
     if (method === "triageProjectChat") {
       const action = chatTriageSchema.safeParse(args[1]);
       if (!action.success || !sharedHandoffTriage(action.data)) return false;
@@ -128,6 +130,7 @@ export class HandoffForwarding {
     if (inSetup(chat)) return this.toSetup(chat, method, args);
     if (method === "triageProjectChat")
       return this.triage(chat, chatTriageSchema.parse(args[1]));
+    if (method === "detachProjectChat") return this.detach(chat);
     if (hereOnly(method))
       throw new Error(
         `This thread's files are on ${sentTo.computer}; the copy here is as it left.`,
@@ -210,6 +213,18 @@ export class HandoffForwarding {
     } finally {
       this.flushing.delete(chatId);
     }
+  }
+
+  /**
+   * Detached on the thread's computer, where its lead is, which refuses
+   * while the lead works; then here, as that computer no longer names it.
+   */
+  private async detach(chat: ChatSummary) {
+    const sentTo = chat.sentTo!;
+    await this.callThere(sentTo.computerId, sentTo.id, "detachProjectChat", [
+      chat.id,
+    ]);
+    return this.chats.liveHandoff.started.letGo(chat.id);
   }
 
   /**

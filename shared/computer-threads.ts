@@ -2,7 +2,7 @@
 // live, the ones it started itself too.
 import type { AgentProvider } from "./agents";
 import type { ChatActivitySection } from "./chat-activity";
-import type { ChatScope } from "./projects";
+import type { ChatScope, Project } from "./projects";
 
 /** A thread on a paired computer, as that computer lists its own (`computerThreads`). */
 export interface ComputerThread {
@@ -27,6 +27,11 @@ export interface ComputerThread {
   /** Where its Activity there has it: settled and snoozed ones wait apart. */
   section: ChatActivitySection;
 }
+
+/** A project whose threads a computer lists for the others: its own, still added, not scratch space. */
+export const listsItsThreads = (
+  project: Pick<Project, "scratch" | "computer" | "removed">,
+) => !project.scratch && !project.computer && !project.removed;
 
 /** A project of a paired computer's own, holding threads it lists. */
 export interface ComputerThreadProject {

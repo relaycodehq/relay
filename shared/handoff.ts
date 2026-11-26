@@ -10,6 +10,7 @@ import { z } from "zod";
 import { agentProviderSchema, type AgentProvider } from "./agents";
 import type { HandoffTriage } from "./handoff-triage";
 import type { UpdateState } from "./updates";
+import { idSchema } from "./validation";
 import type {
   AgentActivity,
   ChatMessage,
@@ -149,7 +150,26 @@ export type HandoffLive = Pick<
     queuePaused?: true;
     /** Activity marks and the clock they are compared against, from the thread's computer. */
     triage?: HandoffTriage;
+    /** The threads its agent started there, settled ones too, which the computer following it follows under it. */
+    started?: StartedThere[];
   };
+
+/** A thread a live handoff's agent started on its computer, as the one following the lead sees it. */
+export const startedThereSchema = z.object({
+  /** What it's followed by: its id there. */
+  id: idSchema,
+  /** The agent that started it. */
+  agent: agentProviderSchema,
+  /** It works in the lead's project there, so it goes in the lead's here too. */
+  inLeadsProject: z.literal(true).optional(),
+  /** Settled there: still the lead's, but not followed for it until it wakes. */
+  settled: z.literal(true).optional(),
+});
+
+export type StartedThere = z.infer<typeof startedThereSchema>;
+
+/** Every thread the lead's agent started there; one left out is no longer the lead's. */
+export const startedThereListSchema = z.array(startedThereSchema).max(1000);
 
 /** The thread runs on the computer it was handed to and is followed live from here. */
 export const liveAway = (chat: Pick<ChatSummary, "sentTo">) =>

@@ -12,16 +12,16 @@ import type {
   KnownMessages,
   ProjectChat,
   ProjectChatSend,
+  StartedBy,
 } from "../../shared/projects";
 import { promptTitle } from "../../shared/prompt-title";
-import {
-  handoffTriage,
-  type HandoffTriage,
-} from "../../shared/handoff-triage";
+import { handoffTriage, type HandoffTriage } from "../../shared/handoff-triage";
 import { sentSettingsOf } from "../../shared/projects";
+import { idSchema } from "../../shared/validation";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
 import { awaitsReturn } from "./handoff";
+import { HandoffStarted } from "./handoff-started";
 
 /**
  * A message written on the computer a thread was handed to, as the computer
@@ -70,11 +70,15 @@ type RenderThere = (
 export class LiveHandoff {
   private saves = new Map<string, NodeJS.Timeout>();
   private renderThere?: RenderThere;
+  /** The threads a live handoff's agent started, from both ends. */
+  readonly started: HandoffStarted;
 
   constructor(
     private core: ChatCore,
     private list: (projectId: string) => ChatSummary[],
-  ) {}
+  ) {
+    this.started = new HandoffStarted(core, list);
+  }
 
   /**
    * For a computer following the thread: the message as it mirrors it,
@@ -113,15 +117,23 @@ export class LiveHandoff {
 
   /**
    * A thread that lives on another computer, followed from here: kept as a
-   * mirror of what's written there, which comes once it's followed.
+   * mirror of what's written there, which comes once it's followed. One a
+   * lead's agent started there sits under that lead here too (`startedBy`).
+   * It goes by its id there when that's free here, as one started there from
+   * here does, so what names it there (the lead's calls) names it here.
    */
   async followThere(
     projectId: string,
     thread: ComputerThread,
     sentTo: ChatSentTo,
+    startedBy?: StartedBy,
   ) {
+    // The other computer's id names a file here: only a free, well-formed one.
+    const idThereFits =
+      idSchema.safeParse(thread.id).success &&
+      !(this.core.store.get().chats ?? []).some((c) => c.id === thread.id);
     const chat: ProjectChat = {
-      id: randomUUID(),
+      id: idThereFits ? thread.id : randomUUID(),
       projectId,
       scope: thread.scope,
       title: thread.title,
@@ -129,6 +141,7 @@ export class LiveHandoff {
       created: Date.now(),
       updated: thread.updated,
       ...(thread.branch ? { branch: thread.branch } : {}),
+      ...(startedBy ? { startedBy } : {}),
       messages: [],
       sentTo,
     };
@@ -194,6 +207,7 @@ export class LiveHandoff {
     const chat = await this.core.storage.load(id);
     const listed = this.list(chat.projectId).find((c) => c.id === id);
     const requests = this.core.active.requests(id);
+    const started = this.started.of(chat);
     return structuredClone({
       triage: handoffTriage(listed ?? chatSummary(chat)),
       ...(listed?.running
@@ -216,6 +230,7 @@ export class LiveHandoff {
       ...(chat.queue?.length ? { queue: chat.queue } : {}),
       ...(chat.scheduled?.length ? { scheduled: chat.scheduled } : {}),
       ...(chat.queuePaused ? { queuePaused: true as const } : {}),
+      ...(started.length ? { started } : {}),
     });
   }
 

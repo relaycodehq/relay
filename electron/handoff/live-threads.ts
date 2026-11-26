@@ -6,9 +6,10 @@ import {
   handoffMethods,
   type HandoffRemoteStatus,
 } from "../../shared/handoff";
-import type {
-  ComputerThread,
-  ComputerThreadList,
+import {
+  listsItsThreads,
+  type ComputerThread,
+  type ComputerThreadList,
 } from "../../shared/computer-threads";
 import { chatActivitySection } from "../../shared/chat-activity";
 import {
@@ -59,7 +60,7 @@ export class LiveThreads {
       case "handoffStatus":
         return this.statuses(args);
       case "computerThreads":
-        return this.list(deviceId);
+        return this.list(deviceId, args);
       case "threadTriage":
         return this.triage(args, deviceId);
       case "threadRender":
@@ -67,16 +68,22 @@ export class LiveThreads {
     }
   }
 
-  /** This computer's own threads, latest first, for the device to list. */
-  private async list(deviceId: string): Promise<ComputerThreadList> {
-    const projects = (await this.host.projects()).filter(
-      (p) => !p.scratch && !p.computer && !p.removed,
-    );
+  /**
+   * This computer's own threads, latest first, for the device to list; or
+   * the ones it asks for by id, which a lead it follows names.
+   */
+  private async list(
+    deviceId: string,
+    args: unknown[],
+  ): Promise<ComputerThreadList> {
+    const ids = z.array(idSchema).max(maxListed).optional().parse(args[0]);
+    const asked = ids && new Set(ids);
+    const projects = (await this.host.projects()).filter(listsItsThreads);
     const threads = projects
       .flatMap((p) => this.host.chats.list(p.id))
       .flatMap((c) => {
         const id = followedBy(c, deviceId);
-        return id ? [listed(c, id)] : [];
+        return id && (!asked || asked.has(id)) ? [listed(c, id)] : [];
       })
       .sort((a, b) => b.updated - a.updated)
       .slice(0, maxListed);

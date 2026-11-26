@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { handoffMessageSchema } from "../../shared/handoff";
+import {
+  handoffMessageSchema,
+  startedThereListSchema,
+  type StartedThere,
+} from "../../shared/handoff";
 import type { ChatMessage, ChatSummary } from "../../shared/projects";
 import type { RemoteEvent } from "../../shared/remote";
 import type { RemoteClient } from "../../shared/remote-client";
@@ -16,6 +20,11 @@ const handoffNewsSchema = z.object({
   title: z.string().max(1000),
   body: z.string().max(4000),
   byAgent: z.literal(true).optional(),
+});
+
+/** What a live thread's state says of the threads its agent started there. */
+const liveStartedSchema = z.object({
+  started: startedThereListSchema.default([]),
 });
 
 /**
@@ -36,6 +45,12 @@ export class HandoffFollowing {
     private flush: (chatId: string) => void,
     /** The setup the thread waits on may be done: look again. */
     private checkSetup: (chatId: string) => void,
+    /** Follows the threads the thread's agent started there, under it. */
+    private followStarted: (
+      computerId: string,
+      chatId: string,
+      started: StartedThere[],
+    ) => void,
   ) {}
 
   /** Asks the computer to keep these threads up to date here, and for what's missed. */
@@ -63,6 +78,7 @@ export class HandoffFollowing {
           messages.map((m) => (typeof m === "string" ? m : carried[next++]!)),
         );
         this.chats.liveHandoff.setLive(c.id, answer.live);
+        this.followStartedIn(computerId, c.id, answer.live);
         this.flush(c.id);
       },
     );
@@ -92,6 +108,21 @@ export class HandoffFollowing {
     );
   }
 
+  /**
+   * Follows the threads the agent of the thread live on the computer
+   * started there, once what came reads as them: a list that doesn't read
+   * would let go of every one followed so far.
+   */
+  private followStartedIn(computerId: string, chatId: string, live: unknown) {
+    const read = liveStartedSchema.safeParse(live);
+    if (!read.success)
+      return console.warn(
+        "A live handoff's started threads didn't read:",
+        read.error.message,
+      );
+    this.followStarted(computerId, chatId, read.data.started);
+  }
+
   /** What a computer says about the threads live on it, or the setups threads wait on there. */
   event(computerId: string, event: RemoteEvent) {
     const handoffId =
@@ -118,6 +149,8 @@ export class HandoffFollowing {
     handoffId: string,
     event: RemoteEvent,
   ) {
+    if (event.kind === "handoff")
+      this.followStartedIn(computerId, chat.id, event.live);
     const message = this.stateOrMessage(chat, event, "A live handoff's");
     if (!message) return;
     const prior = this.mirrors.get(chat.id) ?? Promise.resolve();
