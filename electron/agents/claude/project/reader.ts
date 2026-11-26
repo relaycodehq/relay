@@ -73,7 +73,9 @@ export class ClaudeTurnReader {
     private session: ClaudeSession,
   ) {
     session.tasks ??= new ClaudeTasks(() => resumedTasks(session));
-    this.rows = new ToolRows(options, session.tasks);
+    this.rows = new ToolRows(options, session.tasks, (to, delivery) =>
+      session.agents.messaged(to, delivery),
+    );
     this.meter = new ContextMeter(options, session);
     this.goal = session.goal ??= new ClaudeGoalWatch(options.goal);
     this.goal.listen(options.onGoal);

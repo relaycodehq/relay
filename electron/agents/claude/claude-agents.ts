@@ -11,6 +11,13 @@ import type {
 } from "../../../shared/subagents";
 import { claudeActivity } from "../activity";
 import { ForkParents, forkStart } from "./forks";
+import {
+  deliveryOf,
+  heardNote,
+  sendOf,
+  type Delivery,
+  type Send,
+} from "./send-message";
 
 /**
  * How sure an ending is. The task's own word beats the Agent call's result,
@@ -22,6 +29,8 @@ type Source = keyof typeof certainty;
 type Run = {
   id: string;
   taskId?: string;
+  /** What Claude named it, to send it messages by. */
+  name?: string;
   description: string;
   type?: string;
   model?: string;
@@ -84,6 +93,9 @@ export class SubagentTracker {
   /** The SDK's live background tasks; it usually lists one before saying it started. */
   private live = new Set<string>();
   private forks = new ForkParents();
+  /** SendMessage calls waiting on their receipt, which says whether an agent here got one. */
+  private sends = new Map<string, Send>();
+
   constructor(private now = () => Date.now()) {}
 
   observe(message: SDKMessage) {
@@ -126,6 +138,27 @@ export class SubagentTracker {
     return run?.status === "running" ? run.taskId : undefined;
   }
 
+  /** The agent a delivered message went to, for the row of the call that sent it. */
+  messaged(to: string, delivery: Delivery) {
+    const run = this.recipient(to, delivery);
+    return run && { id: run.id, description: run.description };
+  }
+
+  /**
+   * The agent its receipt names, else the one Claude addressed: by its id,
+   * its name or the start of either, as Claude Code takes them.
+   */
+  private recipient(to: string, delivery: Delivery): Run | undefined {
+    if (delivery.agentId) return this.find(delivery.agentId);
+    const newestFirst = [...this.runs.values()].reverse();
+    const names = (run: Run) =>
+      [run.taskId, run.name].filter((name) => name !== undefined);
+    return (
+      newestFirst.find((run) => names(run).includes(to)) ??
+      newestFirst.find((run) => names(run).some((n) => n.startsWith(to)))
+    );
+  }
+
   private view(run: Run): SubagentRun {
     const calls = this.settled(run).flatMap((e) =>
       e.kind === "activity" ? [e.activity] : [],
@@ -158,9 +191,12 @@ export class SubagentTracker {
       (b): b is Block & { id: string; name: string } =>
         b.type === "tool_use" && !!b.id && !!b.name,
     );
-    for (const call of calls)
+    for (const call of calls) {
       if (call.name === "Agent" || call.name === "Task")
         this.launch(call.id, call.input, parent ?? undefined);
+      const send = sendOf(call.name, call.input);
+      if (send) this.sends.set(call.id, send);
+    }
     if (!owner) return;
     // What it says comes before the calls it makes, as in the main turn.
     const text = blocks
@@ -191,9 +227,26 @@ export class SubagentTracker {
       const failed = block.is_error === true;
       const output = textOf(block.content);
       if (owner) this.finishCall(owner, block.tool_use_id, failed, output);
+      // A message's result is its receipt, not the report of the agent it woke.
+      const send = this.sends.get(block.tool_use_id);
+      if (send) {
+        this.delivered(block.tool_use_id, send, output);
+        continue;
+      }
       const run = this.runs.get(block.tool_use_id);
       if (run) this.returned(run, failed, output, message.tool_use_result);
     }
+  }
+
+  /** A message's receipt came: the agent it reached shows it where it came in. */
+  private delivered(sendId: string, send: Send, receipt: string) {
+    this.sends.delete(sendId);
+    const delivery = deliveryOf(receipt);
+    const run = delivery && this.recipient(send.to, delivery);
+    // An agent Relay first saw as the message woke it has it as its brief.
+    const briefedByIt = run?.id === sendId;
+    if (!run || briefedByIt) return;
+    this.put(run, heardNote(sendId, send));
   }
 
   private system(message: Extract<SDKMessage, { type: "system" }>) {
@@ -202,13 +255,18 @@ export class SubagentTracker {
         if (message.ambient || message.skip_transcript) return;
         if (message.task_type && message.task_type !== "local_agent") return;
         const fork = forkStart(message);
-        const id = message.tool_use_id ?? (fork && this.forks.start(fork));
+        // A message woke an agent that had ended: the call that woke it is
+        // named here, but the agent carries on as the run it was.
+        const woken = this.find(message.task_id);
+        const id =
+          woken?.id ?? message.tool_use_id ?? (fork && this.forks.start(fork));
         if (!id) return;
         const run = this.launch(id, {
           description: message.description,
           subagent_type: message.subagent_type,
           prompt: message.prompt,
         });
+        if (woken) this.resume(woken);
         run.taskId = message.task_id;
         this.tasks.set(message.task_id, run.id);
         if (this.live.has(message.task_id)) run.listed = true;
@@ -274,6 +332,7 @@ export class SubagentTracker {
     const run: Run = {
       id,
       description: field("description").slice(0, 300) || "Agent",
+      name: field("name") || undefined,
       type: field("subagent_type") || undefined,
       model: field("model") || undefined,
       brief: field("prompt").slice(0, limits.brief) || undefined,
@@ -293,6 +352,20 @@ export class SubagentTracker {
       }
     }
     return run;
+  }
+
+  /** Back at work, an agent that had ended reports again once it's done. */
+  private resume(run: Run) {
+    if (run.status === "running") return;
+    run.status = "running";
+    run.endedBy = undefined;
+    run.ended = undefined;
+    // How long it works is this stint's: it may have been back for hours.
+    run.started = this.now();
+    // What it reported before stays in its trace as something it said.
+    run.answer = undefined;
+    run.returned = undefined;
+    run.listed = false;
   }
 
   private find(taskId: string, toolUseId?: string) {

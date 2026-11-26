@@ -13,6 +13,14 @@ import {
 } from "../../activity";
 import type { ClaudeRunOptions } from "./config";
 import { ForkParents, type ForkStart } from "../forks";
+import {
+  deliveryOf,
+  sendOf,
+  sentRow,
+  type Delivery,
+  type MessagedAgent,
+  type Send,
+} from "../send-message";
 import { ClaudeTasks, isTaskTool } from "./tasks";
 
 type Results = Exclude<SDKUserMessage["message"]["content"], string>;
@@ -40,15 +48,6 @@ export function advisorCallId(block: { type: string }) {
   return asksAdvisor ? part.id : undefined;
 }
 
-/** Who a SendMessage call writes to and what it says; undefined for any other call. */
-function peerSendOf(name: string, input: unknown) {
-  if (name !== "SendMessage") return undefined;
-  const { to, message } = (input ?? {}) as { to?: unknown; message?: unknown };
-  if (typeof to !== "string" || typeof message !== "string" || !message)
-    return undefined;
-  return { to, message };
-}
-
 /** The rows a turn's tool calls show as, from the call to its result. */
 export class ToolRows {
   // A tool result only carries the call id; keep the call's label for the finished row.
@@ -58,8 +57,10 @@ export class ToolRows {
   private forks = new ForkParents();
   /** Forked skills' rows, by their task. */
   private forkRows = new Map<string, string>();
-  /** SendMessage calls waiting on their result, which says whether it went out. */
-  private peerSends = new Map<string, { to: string; message: string }>();
+  /** SendMessage calls waiting on their result, which says where it went, if it did. */
+  private sends = new Map<string, Send>();
+  /** The message row that woke each agent this turn, by the agent's own row. */
+  private wokenBy = new Map<string, string>();
 
   /** Calls changing the checklist, waiting on their results. */
   private taskCalls = new Map<
@@ -72,6 +73,7 @@ export class ToolRows {
   constructor(
     private options: ClaudeRunOptions,
     private tasks = new ClaudeTasks(),
+    private messaged: MessagedAgent = () => undefined,
   ) {
     tasks.beginTurn();
   }
@@ -95,6 +97,12 @@ export class ToolRows {
     return [...this.forkRows.values()].includes(this.parentOf(parent) ?? "");
   }
 
+  /** The row a subagent's call folds under: its agent's, or the message that woke it. */
+  private rowOver(parent: string | null) {
+    const agent = this.parentOf(parent);
+    return this.wokenBy.get(agent ?? "") ?? agent;
+  }
+
   /** A forked skill ended; no Agent result will come to finish its row. */
   ended(message: SDKTaskNotificationMessage) {
     const call = this.calls.get(this.forkRows.get(message.task_id) ?? "");
@@ -113,7 +121,7 @@ export class ToolRows {
     tool: { id: string; name: string; input: unknown },
     parent: string | null,
   ) {
-    parent = this.parentOf(parent);
+    parent = this.rowOver(parent);
     if (!parent && isTaskTool(tool.name)) {
       this.taskCalls.set(tool.id, tool);
       return;
@@ -127,8 +135,8 @@ export class ToolRows {
     this.options.onActivity?.(activity);
     const edited = claudeEditedPaths(tool.name, tool.input);
     if (edited.length) this.options.onEdit?.(edited);
-    const send = peerSendOf(tool.name, tool.input);
-    if (send) this.peerSends.set(tool.id, send);
+    const send = sendOf(tool.name, tool.input);
+    if (send) this.sends.set(tool.id, send);
   }
 
   /**
@@ -157,7 +165,7 @@ export class ToolRows {
 
   /** `returned` is what the call gave back as data, where a frame holds one result. */
   results(content: Results, parent: string | null, returned?: unknown) {
-    parent = this.parentOf(parent);
+    parent = this.rowOver(parent);
     for (const result of content)
       if (result.type === "tool_result") {
         const output =
@@ -185,9 +193,9 @@ export class ToolRows {
             : "complete",
           ...(output ? { detail: output.slice(-8000) } : {}),
         };
-        this.calls.set(result.tool_use_id, finished);
-        this.options.onActivity?.(finished);
-        this.sent(result.tool_use_id, finished.status === "complete", output);
+        const shown = this.sent(finished, output);
+        this.calls.set(result.tool_use_id, shown);
+        this.options.onActivity?.(shown);
       }
   }
 
@@ -233,12 +241,30 @@ export class ToolRows {
     });
   }
 
-  private sent(id: string, complete: boolean, output: string) {
-    const send = this.peerSends.get(id);
-    if (!send) return;
-    this.peerSends.delete(id);
+  /**
+   * A finished call's row. A message says in its result where it went: one to
+   * an agent of this session reads as that, one to another session is told on.
+   */
+  private sent(finished: AgentActivity, output: string) {
+    const send = this.sends.get(finished.id);
+    if (!send) return finished;
+    this.sends.delete(finished.id);
+    if (finished.status !== "complete") return finished;
+    const delivery = deliveryOf(output);
+    if (delivery) return this.toAgent(finished, send, delivery);
     const refused = /"success"\s*:\s*false/.test(output);
-    if (complete && !refused) this.options.onPeerSend?.(send);
+    if (!refused) this.options.onPeerSend?.(send);
+    return finished;
+  }
+
+  private toAgent(row: AgentActivity, send: Send, delivery: Delivery) {
+    const agent = this.messaged(send.to, delivery);
+    // An agent Relay first saw as the message woke it has this row as its own.
+    const hasOwnRow = agent !== undefined && agent.id !== row.id;
+    // Its own row may be turns back, where what it does next would read as Claude's.
+    if (hasOwnRow && delivery.how === "resumed")
+      this.wokenBy.set(agent.id, row.id);
+    return sentRow(row, send, delivery, agent?.description ?? send.to);
   }
 
   /** A running subagent's row says what it is doing now. */
