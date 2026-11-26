@@ -19,6 +19,7 @@ import { chatActivitySection } from "../../shared/chat-activity";
 import { promptTitle } from "../../shared/prompt-title";
 import { handoffTriage, type HandoffTriage } from "../../shared/handoff-triage";
 import { sentSettingsOf, workingFor } from "../../shared/projects";
+import { idSchema } from "../../shared/validation";
 import type { ChatCore } from "./core";
 import { chatSummary } from "./chat-summaries";
 import { awaitsReturn } from "./handoff";
@@ -124,11 +125,12 @@ export class LiveHandoff {
     sentTo: ChatSentTo,
     startedBy?: StartedBy,
   ) {
-    const idTaken = (this.core.store.get().chats ?? []).some(
-      (c) => c.id === thread.id,
-    );
+    // The other computer's id names a file here: only a free, well-formed one.
+    const idThereFits =
+      idSchema.safeParse(thread.id).success &&
+      !(this.core.store.get().chats ?? []).some((c) => c.id === thread.id);
     const chat: ProjectChat = {
-      id: idTaken ? randomUUID() : thread.id,
+      id: idThereFits ? thread.id : randomUUID(),
       projectId,
       scope: thread.scope,
       title: thread.title,
