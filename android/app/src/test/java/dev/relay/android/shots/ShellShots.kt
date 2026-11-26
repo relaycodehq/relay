@@ -169,6 +169,8 @@ class ShellShots : ShotTest() {
             Shot("shell-empty", dark = dark) { Home(HomeTab.Threads, empty = true) }
             Shot("shell-wide", ShotDevice.FoldInner, dark) { Wide() }
         }
+        // Unfolded with the sidebar hidden: the list fills the screen, and the dock lines up with it.
+        Shot("shell-home-unfolded", ShotDevice.FoldInner) { Home(HomeTab.Threads) }
         Shot("shell-home-large") { LargeText { Home(HomeTab.Threads, name = "lubomirs-very-long-workstation.local") } }
     }
 

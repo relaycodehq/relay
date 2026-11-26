@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -53,8 +52,8 @@ internal val DOCK_FADE = 28.dp
 /** Between the composer and what's under it: the bar, or the keyboard. */
 private val COMPOSER_GAP = 8.dp
 
-/** The composer and the bar under it share their edges. */
-private fun Modifier.dockWidth() = widthIn(max = 720.dp).fillMaxWidth().padding(horizontal = 15.dp)
+/** The composer and the bar under it share their edges, and span the list like the thread's composer does. */
+private fun Modifier.dockWidth() = fillMaxWidth().padding(horizontal = 15.dp)
 
 internal fun homeTabs(threadsNews: Boolean) = listOf(
     BarTab(HomeTab.Threads, BarGlyph.Threads, "Threads", dot = threadsNews),

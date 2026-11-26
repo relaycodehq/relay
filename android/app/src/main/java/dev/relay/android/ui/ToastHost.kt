@@ -66,7 +66,8 @@ fun ToastHost(state: ToastState, edge: ToastEdge, modifier: Modifier = Modifier)
     val clearance by animateDpAsState(state.clearance, tween(Motion.SLIDE, easing = Motion.EaseOutQuint), label = "toast-clearance")
     val room = when (edge) {
         ToastEdge.Top -> Modifier.padding(horizontal = 16.dp)
-        ToastEdge.Bottom -> Modifier.padding(16.dp).padding(bottom = clearance)
+        // Its end in line with the composers', which sit 15dp in.
+        ToastEdge.Bottom -> Modifier.padding(horizontal = 15.dp, vertical = 16.dp).padding(bottom = clearance)
     }
     val corner = if (edge == ToastEdge.Top) Alignment.TopCenter else Alignment.BottomEnd
     Box(modifier.fillMaxWidth().then(room), contentAlignment = corner) {
