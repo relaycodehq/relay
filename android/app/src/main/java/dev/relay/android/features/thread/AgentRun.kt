@@ -194,7 +194,7 @@ fun AgentRun(
                                 is TracePart.Commentary ->
                                     Markdown(part.text, Modifier.padding(top = 6.dp, bottom = 8.dp), small = true, selectable = true, native = true)
                                 is TracePart.Run ->
-                                    RunOfCalls(part.activity, live = runIsLive(parts, index, live), only = onlyRun(parts, part))
+                                    RunOfCalls(part.activity, live = runIsLive(parts, index, live), only = onlyRun(parts, part, live))
                             }
                         }
                     }

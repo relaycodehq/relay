@@ -266,7 +266,11 @@ function TraceParts({
           index === parts.length - 1 &&
           !isQuestionCall(part.activity[0]!)
         }
-        only={parts.every((p) => p === part || p.kind === "commentary")}
+        // The heading sums up the only run once the turn ends; while it runs, a run that
+        // commentary closed folds at once, not later under the reader when the next call comes.
+        only={
+          !live && parts.every((p) => p === part || p.kind === "commentary")
+        }
         arrived={drawn}
         onChanges={onChanges}
       />

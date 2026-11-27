@@ -135,12 +135,12 @@ class TurnWordsTest {
             val parts = groupTrace(trace)
             return parts.indices.filter { parts[it] is TracePart.Run }.map { index ->
                 val run = parts[index] as TracePart.Run
-                listOfNotNull("live".takeIf { runIsLive(parts, index, live) }, "only".takeIf { onlyRun(parts, run) }).joinToString(" ")
+                listOfNotNull("live".takeIf { runIsLive(parts, index, live) }, "only".takeIf { onlyRun(parts, run, live) }).joinToString(" ")
             }
         }
-        assertEquals(listOf("live only"), runs(run, live = true))
-        // Commentary closes the run; it stays the turn's only one until the agent calls again.
-        assertEquals(listOf("only"), runs(wrote, live = true))
+        assertEquals(listOf("live"), runs(run, live = true))
+        // Commentary closes the run, which folds then rather than when the agent calls again.
+        assertEquals(listOf(""), runs(wrote, live = true))
         assertEquals(listOf("", "live"), runs(calledAgain, live = true))
         assertEquals(listOf("only"), runs(run, live = false))
         // A question waiting on the reader is its own run, never a live one.

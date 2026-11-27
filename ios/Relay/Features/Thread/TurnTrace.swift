@@ -35,7 +35,9 @@ struct TurnTrace: View {
                     .padding(.leading, 4)
             } else if open {
                 let parts = groupTrace(turn.shown)
-                let oneRun = parts.count(where: { if case .run = $0 { true } else { false } }) == 1
+                // The heading sums up the only run once the turn ends; while it runs, a run that
+                // commentary closed folds at once, not later under the reader when the next call comes.
+                let oneRun = !turn.live && parts.count(where: { if case .run = $0 { true } else { false } }) == 1
                 // A running turn shows its newest steps and folds the rest. One row thousands of points
                 // tall makes the lazy stack guess every unmeasured row that tall, and the end it scrolls
                 // to drifts past the thread when the turn folds or a steer ends it.

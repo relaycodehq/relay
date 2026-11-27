@@ -57,8 +57,12 @@ fun runIsLive(parts: List<TracePart>, index: Int, live: Boolean): Boolean {
     return live && index == parts.lastIndex && !isQuestionCall(run.activity.first())
 }
 
-/** The turn's only run, which the turn's heading already sums up. */
-fun onlyRun(parts: List<TracePart>, run: TracePart.Run) = parts.all { it === run || it is TracePart.Commentary }
+/**
+ * The turn's only run, which its heading sums up once the turn ends. While it runs, a run that
+ * commentary closed folds at once, not later under the reader when the next call comes.
+ */
+fun onlyRun(parts: List<TracePart>, run: TracePart.Run, live: Boolean) =
+    !live && parts.all { it === run || it is TracePart.Commentary }
 
 /** Everything a turn's heading and trace are drawn from. */
 data class TurnRead(
