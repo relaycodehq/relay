@@ -30,11 +30,17 @@ data class Outgoing(
     val draft: String? = null,
     /** Files that go up before it, and how far each got; the body names them once they're there. */
     val files: List<AttachedFile>? = null,
+    /** A thread this phone named that its computer hasn't made yet: it's made, as [chatId], before this goes. */
+    val make: ThreadToMake? = null,
 ) {
     /** What goes to the computer once every file is there. */
     fun withPaths(): ProjectChatSend =
         if (files.isNullOrEmpty()) send else send.copy(body = bodyWithFiles(send.body, files.map { it.path ?: error("${it.name} isn't uploaded yet.") }))
 }
+
+/** Where a thread this phone named is made; see Bridge.PHONE_THREAD_ID. */
+@Serializable
+data class ThreadToMake(val projectId: String, val workspace: String? = null)
 
 private val clock = AtomicLong()
 

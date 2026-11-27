@@ -40,10 +40,12 @@ function newThread({ projects, projectChats }: ApiContext) {
       optional(branchSchema),
       optional(linkedFoldersSchema),
       optional(worktreeStartSchema),
+      optional(z.uuid()),
     ],
-    async (id, scope, workspace, branch, links, start) => {
+    async (id, scope, workspace, branch, links, start, threadId) => {
       links = await checkNewLinks(links, undefined, projects.get(id).path);
       return projectChats.create(id, scope, workspace, {
+        id: threadId,
         branch,
         links,
         start,

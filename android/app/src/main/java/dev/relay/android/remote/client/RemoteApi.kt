@@ -4,6 +4,7 @@ import dev.relay.android.remote.Bridge
 import dev.relay.android.remote.delta.applyChatPatch
 import dev.relay.android.remote.delta.knownOf
 import dev.relay.android.remote.model.ComputerInfo
+import dev.relay.android.remote.model.CreatedChat
 import dev.relay.android.remote.model.DictationHeard
 import dev.relay.android.remote.model.DictationRequest
 import dev.relay.android.remote.model.DraftWrite
@@ -30,6 +31,7 @@ import dev.relay.android.remote.model.WrittenCode
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -140,3 +142,14 @@ suspend fun RemoteClient.setPush(registration: PushRegistration?) {
 /** `desktop("sendProjectChat", [chatId, send])`, with `to` dropped for desktops before Bridge.RECIPIENT. */
 suspend fun RemoteClient.sendProjectChat(chatId: String, send: ProjectChatSend): JsonElement =
     desktop("sendProjectChat", listOf(JsonPrimitive(chatId), j(send)))
+
+/**
+ * A thread in [projectId]; [workspace] "checkout" | "worktree", left out for
+ * plain folders. [threadId], from Bridge.PHONE_THREAD_ID, is the id this phone
+ * chose for it: asked again, the computer answers with the same thread.
+ */
+suspend fun RemoteClient.createProjectChat(projectId: String, workspace: String?, threadId: String? = null): CreatedChat {
+    val scope = buildJsonObject { put("kind", JsonPrimitive("project")) }
+    val args = listOf(JsonPrimitive(projectId), scope, workspace?.let(::JsonPrimitive), null, null, null, threadId?.let(::JsonPrimitive))
+    return RemoteJson.decodeFromJsonElement(CreatedChat.serializer(), desktop("createProjectChat", args))
+}

@@ -131,6 +131,8 @@ export interface ProjectChatApi {
     links?: LinkedFolder[],
     /** Where its worktree starts, when not off the checkout's commit. */
     start?: WorktreeStart,
+    /** Named by a phone, which opens it before the answer; asked again, the same thread comes back. */
+    threadId?: string,
   ): Promise<ChatSummary>;
   projectChat(id: string, known?: KnownMessages): Promise<ProjectChatPatch>;
   sendProjectChat(id: string, input: ProjectChatSend): Promise<void>;

@@ -353,7 +353,7 @@ Validated in `electron/remote/bridge.ts`; the schemas are at `bridge.ts`. Argume
 - **`computerInfo()`** → `{version, bridge, update}`. **`updateNow()`** → `UpdateState` (`shared/handoff.ts`). These are the only "computer" methods phones may call (`phone-remote.ts`).
 - **`desktop(method, args /* ≤10 */)`**: the method must be in `phoneDesktopMethods` (`shared/remote-methods.ts`). Args are validated by each desktop handler's `takes([...schemas])`:
   - **Threads** (`electron/api/chats.ts`):
-    - `createProjectChat`: `[id, chatScope, workspace?]`
+    - `createProjectChat`: `[id, chatScope, workspace?, branch?, links?, start?, threadId?]`; from bridge 45 the phone may name the thread (`threadId`, a UUID) and asking again answers with the same thread
     - `sendProjectChat`: `[id, ProjectChatSend]`
     - `cancelProjectChat`: `[id, {steers?}?]`
     - `respondProjectChat`

@@ -173,3 +173,6 @@ data class SubagentRun(
 @Serializable data class SubagentList(val signature: String, val runs: List<SubagentRun>)
 /** `run` is null for a session that is gone. */
 @Serializable data class SubagentRunAnswer(val signature: String, val run: SubagentRun? = null)
+
+/** What `createProjectChat` answers with, as far as the phone reads it. */
+@Serializable data class CreatedChat(val id: String, val title: String = "")

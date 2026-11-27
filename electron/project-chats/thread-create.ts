@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AgentProvider } from "../../shared/agents";
 import type {
   ChatScope,
+  ChatSummary,
   ChatWorktree,
   ChatWorkspace,
   LinkedFolder,
@@ -37,11 +38,45 @@ export class ThreadCreate {
     private worktrees: Pick<ThreadWorktrees, "inRepoSettled">,
   ) {}
 
+  /** Threads being made under an id their caller chose, so asking twice makes one. */
+  private making = new Map<string, Promise<ChatSummary>>();
+
+  /**
+   * A caller that names the thread, as a phone retrying its send does, gets
+   * the thread it already made when it asks again.
+   */
   async create(
     projectId: string,
     scope: ChatScope,
     workspace: ChatWorkspace = "checkout",
-    { branch, start, ...kept }: NewThread = {},
+    made: NewThread = {},
+  ): Promise<ChatSummary> {
+    const id = made.id;
+    if (!id) return this.make(projectId, scope, workspace, made);
+    const existing = this.madeAs(id, projectId);
+    if (existing) return existing;
+    const making =
+      this.making.get(id) ??
+      this.make(projectId, scope, workspace, made).finally(() =>
+        this.making.delete(id),
+      );
+    this.making.set(id, making);
+    return making;
+  }
+
+  private madeAs(id: string, projectId: string) {
+    const thread = (this.core.store.get().chats ?? []).find((c) => c.id === id);
+    if (!thread) return undefined;
+    if (thread.projectId !== projectId)
+      throw new Error("Another thread already goes by this id.");
+    return thread;
+  }
+
+  private async make(
+    projectId: string,
+    scope: ChatScope,
+    workspace: ChatWorkspace,
+    { branch, start, ...kept }: NewThread,
   ) {
     const project = this.core.projects.get(projectId);
     if (project.computer) {

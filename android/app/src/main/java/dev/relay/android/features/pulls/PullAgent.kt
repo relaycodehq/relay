@@ -1,6 +1,6 @@
 package dev.relay.android.features.pulls
 
-import dev.relay.android.features.composer.CreatedChat
+import dev.relay.android.remote.model.CreatedChat
 import dev.relay.android.features.composer.sendToThread
 import dev.relay.android.features.git.call
 import dev.relay.android.remote.Remote

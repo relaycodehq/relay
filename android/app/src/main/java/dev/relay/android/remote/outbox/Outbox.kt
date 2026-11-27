@@ -6,6 +6,7 @@ import dev.relay.android.remote.client.Rejected
 import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.client.Unanswered
 import dev.relay.android.remote.client.chat
+import dev.relay.android.remote.client.createProjectChat
 import dev.relay.android.remote.client.sendDraft
 import dev.relay.android.remote.client.sendProjectChat
 import dev.relay.android.remote.client.uploadFile
@@ -44,6 +45,8 @@ interface OutboxLink {
         throw NotConnected("Not connected to your computer.")
     /** Whether the computer takes files; null while that isn't known. */
     val takesFiles: Boolean? get() = null
+    /** Makes thread [chatId] as [thread] says; made already, the computer answers with it again. */
+    suspend fun make(chatId: String, thread: ThreadToMake): Unit = throw NotConnected("Not connected to your computer.")
 }
 
 fun outboxLink(client: RemoteClient?): OutboxLink = object : OutboxLink {
@@ -58,6 +61,9 @@ fun outboxLink(client: RemoteClient?): OutboxLink = object : OutboxLink {
     override suspend fun upload(id: String, name: String, size: Long, offset: Long, data: String) =
         live().uploadFile(id, name, size, offset, data)
     override val takesFiles get() = client?.bridge?.let { it >= Bridge.FILES }
+    override suspend fun make(chatId: String, thread: ThreadToMake) {
+        live().createProjectChat(thread.projectId, thread.workspace, chatId)
+    }
 }
 
 /**
@@ -82,6 +88,8 @@ class Outbox(
     private val inFlight = HashMap<String, Deferred<Unit>>()
     /** Being asked about to take back for an edit; not sent again meanwhile. */
     private val takingBack = HashSet<String>()
+    /** Threads being made, by id: the thread's other sends wait for it. */
+    private val making = HashMap<String, Deferred<Result<Unit>>>()
 
     private fun shelved(id: String) = dir?.let { File(it, "$id.json") }
 
@@ -145,11 +153,29 @@ class Outbox(
         }
     }
 
+    /** Its thread, made first when this phone named it; a send to a thread still being made waits for it. */
+    private suspend fun made(link: OutboxLink, item: Outgoing): Outgoing {
+        val thread = item.make
+        if (thread == null) {
+            making[item.chatId]?.await()
+            return item
+        }
+        // Caught inside, so a failure fails this send instead of the outbox's scope.
+        val made = making[item.chatId] ?: scope.async { runCatching { link.make(item.chatId, thread) } }.also { job ->
+            making[item.chatId] = job
+            job.invokeOnCompletion { scope.launch { if (making[item.chatId] === job) making.remove(item.chatId) } }
+        }
+        made.await().getOrThrow()
+        update(item.send.id) { it.copy(make = null) }
+        current(item.send.id)?.let { keep(it) }
+        return (current(item.send.id) ?: item).copy(make = null)
+    }
+
     private fun run(link: OutboxLink, item: Outgoing) {
         val id = item.send.id
         val sending = scope.async {
             try {
-                val ready = uploaded(link, item)
+                val ready = uploaded(link, made(link, item))
                 if (ready.draft != null) link.sendDraft(ready.draft, ready.chatId, ready.withPaths())
                 else link.send(ready.chatId, ready.withPaths())
                 unkeep(id)
@@ -173,8 +199,11 @@ class Outbox(
     }
 
     /** Sends in the background; the desktop drops a second copy of the same id, so trying again is safe. */
-    fun deliver(link: OutboxLink, computer: String, chatId: String, send: ProjectChatSend, draft: String? = null, files: List<AttachedFile>? = null) {
-        val item = Outgoing(computer, chatId, send, now(), draft = draft, files = files?.takeIf { it.isNotEmpty() })
+    fun deliver(
+        link: OutboxLink, computer: String, chatId: String, send: ProjectChatSend,
+        draft: String? = null, files: List<AttachedFile>? = null, make: ThreadToMake? = null,
+    ) {
+        val item = Outgoing(computer, chatId, send, now(), draft = draft, files = files?.takeIf { it.isNotEmpty() }, make = make)
         keep(item)
         _items.value = _items.value + item
         run(link, item)
@@ -230,6 +259,8 @@ class Outbox(
         takingBack += id
         try {
             inFlight[id]?.await()
+            // Its thread was never made, so it can't have gone.
+            if (current(id)?.make != null) return false
             val thread = link.chat(o.chatId, id)
             val has = thread.hasSend ?: throw IllegalStateException("Update Relay on the computer before taking back an unanswered send.")
             // A receipt covers the full history, including an accepted send outside this page.

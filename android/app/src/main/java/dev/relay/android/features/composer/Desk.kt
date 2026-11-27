@@ -15,11 +15,9 @@ import dev.relay.android.remote.client.RemoteClient
 import dev.relay.android.remote.model.RemoteJson
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
@@ -82,16 +80,6 @@ suspend fun RemoteClient.newThreadRuntimeMode(): String? =
 
 suspend fun RemoteClient.saveNewThreadRuntimeMode(mode: String) {
     desktop("saveNewThreadRuntimeMode", listOf(p(mode)))
-}
-
-@Serializable data class CreatedChat(val id: String, val title: String = "")
-
-/** A thread in [projectId]; [workspace] "checkout" | "worktree", left out for plain folders. */
-suspend fun RemoteClient.createProjectChat(projectId: String, workspace: String?): CreatedChat {
-    val scope = buildJsonObject { put("kind", JsonPrimitive("project")) }
-    val args = mutableListOf<JsonElement?>(p(projectId), scope)
-    if (workspace != null) args += p(workspace)
-    return desktop("createProjectChat", args).to()
 }
 
 /** The Scratchpad's own project, made when missing; its id. */

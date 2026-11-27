@@ -25,6 +25,8 @@ object Bridge {
     const val SECRET_ALWAYS = 43
     /** Phones hand over a Firebase token so the computer can tell them while away (`setPush`). */
     const val PUSH = 44
+    /** A phone names the thread it makes (`createProjectChat`'s threadId), so it opens at once and the outbox makes and sends it. */
+    const val PHONE_THREAD_ID = 45
     const val DEFAULT_PORT = 47821
 
     const val RECIPIENT = 11

@@ -27,7 +27,6 @@ import dev.relay.android.features.composer.UnsentDrafts
 import dev.relay.android.features.composer.Made
 import dev.relay.android.features.composer.MadeHere
 import dev.relay.android.features.composer.Composed
-import dev.relay.android.features.composer.createProjectChat
 import dev.relay.android.features.composer.createScratch
 import dev.relay.android.features.composer.desktopNewThread
 import dev.relay.android.features.composer.logic.NewThreadModel
@@ -50,12 +49,14 @@ import dev.relay.android.remote.Remote
 import dev.relay.android.remote.model.RemoteProject
 import dev.relay.android.remote.client.LinkState
 import dev.relay.android.remote.client.RemoteClient
+import dev.relay.android.remote.client.createProjectChat
 import dev.relay.android.remote.client.sendDraft
 import dev.relay.android.remote.client.sendProjectChat
 import dev.relay.android.remote.drafts.Sends
 import dev.relay.android.remote.drafts.newDraftProject
 import dev.relay.android.remote.drafts.scratchDraftKey
 import dev.relay.android.remote.model.ResumeSettings
+import dev.relay.android.remote.outbox.ThreadToMake
 import dev.relay.android.remote.outbox.outboxLink
 import dev.relay.android.remote.client.uploadFile
 import dev.relay.android.remote.files.FILES_NEED_UPDATE
@@ -73,6 +74,7 @@ import dev.relay.android.ui.theme.RelayTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 /**
  * mobile/src/app/new.tsx: starts a thread the way the desktop's new-thread
@@ -226,17 +228,41 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
 
     // A thread made for a scheduled message that then failed to go, used again on the next try.
     var made by remember { mutableStateOf<Pair<String, Made>?>(null) }
+    fun messageOf(out: Composed) = composeSend(
+        out.settings, out.body,
+        id = out.attempt.id,
+        sendAt = out.attempt.sendAt,
+        images = out.images.map { it.pasted() },
+    )
+    fun workspaceToSend() = if (chosen == null || chosen.plain == true) null else workspace
+
+    // A plain message to a computer that takes a thread id from the phone opens at once,
+    // however slow the link: the outbox makes the thread and sends it.
+    fun opensAtOnce(out: Composed, where: String): Boolean {
+        val namesThreads = (overview?.bridge ?: 0) >= Bridge.PHONE_THREAD_ID
+        val scheduled = out.attempt.sendAt != null
+        val startedByComputer = out.held && draftKey != null
+        val scratchToMake = where == SCRATCH
+        return namesThreads && !scheduled && !startedByComputer && !scratchToMake
+    }
+
+    fun startFromOutbox(out: Composed, where: String, computer: String): Boolean {
+        val threadId = UUID.randomUUID().toString()
+        val send = messageOf(out)
+        val thread = ThreadToMake(where, workspaceToSend())
+        outbox.deliver(outboxLink(client), computer, threadId, send, files = out.files, make = thread)
+        MadeHere.add(Made(threadId, where, promptTitle(send.body)))
+        open(threadId)
+        return true
+    }
+
     suspend fun start(out: Composed): Boolean {
         if (relayCommand(out.body)?.name == "btw") error(asideNeedsAnswer)
         val where0 = picked ?: error("Wait for your computer to list its projects.")
-        val cl: RemoteClient = client ?: error("Not connected to your computer.")
         val pc = active ?: error("Pick a computer first.")
-        fun message() = composeSend(
-            out.settings, out.body,
-            id = out.attempt.id,
-            sendAt = out.attempt.sendAt,
-            images = out.images.map { it.pasted() },
-        )
+        if (opensAtOnce(out, where0)) return startFromOutbox(out, where0, pc)
+        val cl: RemoteClient = client ?: error("Not connected to your computer.")
+        fun message() = messageOf(out)
         // These go straight to the computer, not through the outbox, so their files go up first.
         suspend fun direct(): ProjectChatSend {
             if (out.files.isEmpty()) return message()
@@ -253,7 +279,7 @@ private fun NewThreadComposer(route: Route.NewThread, remote: Remote, active: St
             return true
         }
         val where = if (where0 == SCRATCH) askScratch().await() else where0
-        val space = if (chosen == null || chosen.plain == true) null else workspace
+        val space = workspaceToSend()
         val key = "$where:${space ?: ""}"
         val chat = made?.takeIf { it.first == key }?.second
             ?: cl.createProjectChat(where, space).let { Made(it.id, where, it.title) }
