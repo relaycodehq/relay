@@ -30,6 +30,28 @@ import {
 const agentIdSchema = z.string().min(1).max(200);
 const branchSchema = z.string().trim().min(1).max(250);
 
+/** A new thread; folders linked to it before it was made are checked first. */
+function newThread({ projects, projectChats }: ApiContext) {
+  return takes(
+    [
+      idSchema,
+      chatScopeSchema,
+      optional(chatWorkspaceSchema),
+      optional(branchSchema),
+      optional(linkedFoldersSchema),
+      optional(worktreeStartSchema),
+    ],
+    async (id, scope, workspace, branch, links, start) => {
+      links = await checkNewLinks(links, undefined, projects.get(id).path);
+      return projectChats.create(id, scope, workspace, {
+        branch,
+        links,
+        start,
+      });
+    },
+  );
+}
+
 /** Project threads: their turns, agents, worktrees and sharing. */
 export function chatHandlers(ctx: ApiContext) {
   const { store, projectChats, pullMerges } = ctx;
@@ -39,28 +61,7 @@ export function chatHandlers(ctx: ApiContext) {
   );
   return {
     projectChats: takes([idSchema], (id) => ctx.listChats(id)),
-    createProjectChat: takes(
-      [
-        idSchema,
-        chatScopeSchema,
-        optional(chatWorkspaceSchema),
-        optional(branchSchema),
-        optional(linkedFoldersSchema),
-        optional(worktreeStartSchema),
-      ],
-      async (id, scope, workspace, branch, links, start) => {
-        links = await checkNewLinks(
-          links,
-          undefined,
-          ctx.projects.get(id).path,
-        );
-        return projectChats.create(id, scope, workspace, {
-          branch,
-          links,
-          start,
-        });
-      },
-    ),
+    createProjectChat: newThread(ctx),
     setProjectChatLinks: takes(
       [idSchema, linkedFoldersSchema],
       async (id, links) => {
