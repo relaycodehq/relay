@@ -8,9 +8,15 @@ public protocol OutboxLink: FileUploading {
     func sendDraft(key: String, chatId: String, _ send: ProjectChatSend) async throws
     /// The thread with a receipt for `sendId`.
     func chat(_ chatId: String, sendId: String) async throws -> RemoteChat
+    /// Makes thread `chatId` as `thread` says; made already, the computer answers with it again.
+    func make(chatId: String, _ thread: ThreadToMake) async throws
 }
 
 public extension OutboxLink {
+    func make(chatId: String, _ thread: ThreadToMake) async throws {
+        throw RemoteCallError.notConnected("Not connected to your computer.")
+    }
+
     func uploadFile(id: String, name: String, size: Int64, offset: Int64, data: String) async throws -> UploadedFile {
         throw RemoteCallError.rejected(Files.needsUpdate)
     }
@@ -37,6 +43,10 @@ public struct ClientOutboxLink: OutboxLink {
 
     public func chat(_ chatId: String, sendId: String) async throws -> RemoteChat {
         try await live().chat(chatId, history: Bridge.remoteHistory, sendId: sendId)
+    }
+
+    public func make(chatId: String, _ thread: ThreadToMake) async throws {
+        _ = try await live().createProjectChat(projectId: thread.projectId, workspace: thread.workspace, threadId: chatId)
     }
 
     public func uploadFile(id: String, name: String, size: Int64, offset: Int64, data: String) async throws -> UploadedFile {
@@ -67,6 +77,8 @@ public final class Outbox {
     @ObservationIgnored private var inFlight: [String: (token: UUID, task: Task<Void, Never>)] = [:]
     /// Being asked about to take back for an edit; not sent again meanwhile.
     @ObservationIgnored private var takingBack: Set<String> = []
+    /// Threads being made, by id: the thread's other sends wait for it.
+    @ObservationIgnored private var making: [String: Task<Result<Void, Error>, Never>] = [:]
     /// Told when the desktop took one, so the thread can be fetched for it.
     @ObservationIgnored public var onSent: ((Outgoing) -> Void)?
 
@@ -135,6 +147,8 @@ public final class Outbox {
         let task = Task { [weak self] in
             var item = item
             do {
+                try await self?.made(item, through: link)
+                item.make = nil
                 item.files = try await self?.uploaded(item, through: link) ?? item.files
             } catch {
                 // Not sent at all: only the upload failed, so nothing about the send is in doubt.
@@ -181,6 +195,28 @@ public final class Outbox {
         inFlight[id] = (token, task)
     }
 
+    /// Its thread, made first when this phone named it; a send to a thread still being made waits for it.
+    private func made(_ item: Outgoing, through link: OutboxLink) async throws {
+        guard let thread = item.make else {
+            _ = await making[item.chatId]?.value
+            return
+        }
+        let task = making[item.chatId] ?? Task { () -> Result<Void, Error> in
+            do {
+                try await link.make(chatId: item.chatId, thread)
+                return .success(())
+            } catch {
+                return .failure(error)
+            }
+        }
+        making[item.chatId] = task
+        let result = await task.value
+        if making[item.chatId] == task { making[item.chatId] = nil }
+        try result.get()
+        update(item.id) { $0.make = nil }
+        if let made = items.first(where: { $0.id == item.id }) { keep(made) }
+    }
+
     /// Its files on `link`'s computer, sending what it doesn't have yet; each step is kept, so a
     /// later try, or the next launch, carries on from there.
     private func uploaded(_ item: Outgoing, through link: OutboxLink) async throws -> [FileAttachment]? {
@@ -223,9 +259,11 @@ public final class Outbox {
     /// Sends in the background; the desktop drops a second copy of the same id, so trying again is safe.
     public func deliver(
         _ link: OutboxLink, computer: String, chatId: String, _ send: ProjectChatSend, draft: String? = nil,
-        files: [FileAttachment] = []
+        files: [FileAttachment] = [], make: ThreadToMake? = nil
     ) {
-        let item = Outgoing(computer: computer, chatId: chatId, send: send, created: now(), draft: draft, files: files)
+        let item = Outgoing(
+            computer: computer, chatId: chatId, send: send, created: now(), draft: draft, files: files, make: make
+        )
         keep(item)
         items.append(item)
         run(link, item)
@@ -281,6 +319,8 @@ public final class Outbox {
         takingBack.insert(id)
         defer { takingBack.remove(id) }
         await inFlight[id]?.task.value
+        // Its thread was never made, so it can't have gone.
+        if items.first(where: { $0.id == id })?.make != nil { return false }
         let thread = try await link.chat(o.chatId, sendId: id)
         guard let has = thread.hasSend else {
             throw RemoteCallError.rejected("Update Relay on your computer before taking back an unanswered send.")

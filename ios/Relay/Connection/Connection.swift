@@ -79,6 +79,8 @@ final class Connection {
     @ObservationIgnored var caching: Task<Void, Never>?
 
     private var client: RemoteClient?
+    /// The outbox's way to the computer: this connection, or one that refuses while there's none.
+    var outboxLink: ClientOutboxLink { ClientOutboxLink(client) }
     private var listening: Task<Void, Never>?
     /// Projects threads point at that the overview doesn't list yet, and the refetch for them.
     private var missing = MissingProjects()

@@ -2,6 +2,17 @@ import Foundation
 
 // mobile/src/remote/outbox-state.ts and Android's OutboxState.kt: the outbox's rules, apart from disk and link.
 
+/// Where a thread this phone named is made; see `Bridge.phoneThreadId`.
+public struct ThreadToMake: Codable, Sendable, Equatable {
+    public var projectId: String
+    public var workspace: String?
+
+    public init(projectId: String, workspace: String?) {
+        self.projectId = projectId
+        self.workspace = workspace
+    }
+}
+
 public struct Outgoing: Codable, Sendable, Equatable {
     /// The paired computer it's for; it only ever goes to that one.
     public var computer: String
@@ -19,13 +30,15 @@ public struct Outgoing: Codable, Sendable, Equatable {
     public var draft: String?
     /// Files it takes along, uploaded before it goes; the body names each once it's on the computer.
     public var files: [FileAttachment]?
+    /// A thread this phone named that its computer hasn't made yet: it's made, as `chatId`, before this goes.
+    public var make: ThreadToMake?
 
     public var id: String { send.id }
 
     public init(
         computer: String, chatId: String, send: ProjectChatSend, created: Int64, sent: Int64? = nil,
         error: String? = nil, unsure: Bool? = nil, refused: Bool? = nil, draft: String? = nil,
-        files: [FileAttachment]? = nil
+        files: [FileAttachment]? = nil, make: ThreadToMake? = nil
     ) {
         self.computer = computer
         self.chatId = chatId
@@ -37,6 +50,7 @@ public struct Outgoing: Codable, Sendable, Equatable {
         self.refused = refused
         self.draft = draft
         self.files = files?.isEmpty == true ? nil : files
+        self.make = make
     }
 
     /// The send as it goes out: its files named where the computer keeps them.

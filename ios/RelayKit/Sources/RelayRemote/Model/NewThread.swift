@@ -98,9 +98,13 @@ public extension RemoteClient {
     }
 
     /// A thread in the project; `workspace` "checkout" | "worktree", left out for plain folders.
-    func createProjectChat(projectId: String, workspace: String?) async throws -> CreatedChat {
-        try await desktop(
-            "createProjectChat", [.string(projectId), .object(["kind": .string("project")]), workspace.map(JSON.string)]
+    /// `threadId`, from `Bridge.phoneThreadId`, is the id this phone chose for it: asked again,
+    /// the computer answers with the same thread.
+    func createProjectChat(projectId: String, workspace: String?, threadId: String? = nil) async throws -> CreatedChat {
+        let scope = JSON.object(["kind": .string("project")])
+        return try await desktop(
+            "createProjectChat",
+            [.string(projectId), scope, workspace.map(JSON.string), nil, nil, nil, threadId.map(JSON.string)]
         ).decode()
     }
 

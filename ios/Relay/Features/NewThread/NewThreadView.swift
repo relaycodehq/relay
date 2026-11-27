@@ -114,6 +114,14 @@ struct NewThreadView: View {
                     if connection.active == computer { started(chatId) }
                     return
                 }
+                if connection.namesThreads, !scratch, sent.sendAt == nil, let projectId {
+                    let chatId = try connection.startInOutbox(
+                        in: projectId, workspace: workspace, sent.text, images: sent.images, files: sent.files,
+                        with: sent.settings, id: sent.id, on: computer)
+                    MadeHere.add(Made(id: chatId, projectId: projectId, title: promptTitle(sent.text)))
+                    started(chatId)
+                    return
+                }
                 let place = scratch ? try await scratchFolder() : projectId
                 guard connection.active == computer else { throw PairingError("The computer changed. Send again on the computer you want.") }
                 guard let place else { throw PairingError("Pick a project first.") }

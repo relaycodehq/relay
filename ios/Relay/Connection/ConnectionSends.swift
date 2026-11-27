@@ -11,6 +11,23 @@ extension Connection {
         outbox.deliver(ClientOutboxLink(client), computer: computer, chatId: chatId, send, draft: draft, files: files)
     }
 
+    /// Whether the computer takes a thread id from the phone, so a new thread opens at once (`Bridge.phoneThreadId`).
+    var namesThreads: Bool { (overview?.bridge ?? 0) >= Bridge.phoneThreadId }
+
+    /// A new thread that opens at once, however slow the link: the outbox makes it, then sends
+    /// its first message. Its id, which this phone chose.
+    func startInOutbox(
+        in projectId: String, workspace: String?, _ text: String, images: [PastedImage], files: [FileAttachment],
+        with settings: ResumeSettings, id: String, on computer: String
+    ) throws -> String {
+        guard active == computer else { throw PairingError("The computer changed. Send again on the computer you want.") }
+        let threadId = UUID().uuidString.lowercased()
+        let send = threadSend(text, images: images, to: threadId, with: settings, steer: false, rootId: nil, sendAt: nil, id: id)
+        let thread = ThreadToMake(projectId: projectId, workspace: workspace)
+        outbox.deliver(outboxLink, computer: computer, chatId: threadId, send, files: files, make: thread)
+        return threadId
+    }
+
     /// The message `send` makes of a thread composer's text.
     func threadSend(
         _ text: String, images: [PastedImage] = [], to chatId: String, with settings: ResumeSettings, steer: Bool,
@@ -78,7 +95,9 @@ extension Connection {
 
     /// The desktop took one the thread doesn't show yet: ask for it.
     func sentFromHere(_ sent: Outgoing) {
-        guard threads[sent.chatId] != nil, !heldIds(threads[sent.chatId]).contains(sent.id) else { return }
+        // A thread this phone named has no copy until the computer has made it and taken this.
+        let madeHere = MadeHere.of(sent.chatId) != nil
+        guard threads[sent.chatId] != nil || madeHere, !heldIds(threads[sent.chatId]).contains(sent.id) else { return }
         Task { await load(sent.chatId) }
     }
 

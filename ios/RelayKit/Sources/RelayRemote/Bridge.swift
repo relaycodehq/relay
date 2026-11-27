@@ -46,6 +46,8 @@ public enum Bridge {
     public static let video = 42
     /// A secret card may offer Always: `threadSecrets` says what the thread's project has saved, and the answer takes `remember`.
     public static let secretAlways = 43
+    /// A phone names the thread it makes (`createProjectChat`'s threadId), so it opens at once and the outbox makes and sends it.
+    public static let phoneThreadId = 45
 
     /// The desktop counts as outdated below this.
     public static let oldestCurrent = 22

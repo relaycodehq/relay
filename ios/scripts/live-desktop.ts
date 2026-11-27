@@ -549,11 +549,21 @@ function scratched() {
   projects.push(project);
   return project;
 }
-function created(projectId: string, workspace?: string) {
-  const chatId = thread(projectId, "New thread", 0, [], {
+// A phone from bridge 45 names the thread; asked again, it gets the same one.
+function created(projectId: string, workspace?: string, threadId?: string) {
+  const asked = threadId ? threads.get(threadId) : undefined;
+  if (asked) return asked.summary;
+  let chatId = thread(projectId, "New thread", 0, [], {
     empty: true,
     ...(workspace === "worktree" ? { worktree: true, branch: "relay/new-thread" } : {}),
   });
+  if (threadId) {
+    const made = threads.get(chatId)!;
+    threads.delete(chatId);
+    made.summary.id = threadId;
+    threads.set(threadId, made);
+    chatId = threadId;
+  }
   changed(projectId);
   return threads.get(chatId)!.summary;
 }
@@ -807,7 +817,10 @@ const host = {
     if (method === "newThreadModels") return newThreadModels;
     if (method === "saveNewThreadAgent") newThreadAgent = args[0];
     if (method === "saveNewThreadModel") newThreadModels[args[0]] = args[1];
-    if (method === "createProjectChat") return created(args[0], args[2]);
+    if (method === "createProjectChat") {
+      if (slowNew) await pause(8000);
+      return created(args[0], args[2], args[6]);
+    }
     if (method === "forkProjectChat") return forked(args[0], args[1]);
     if (method === "askSecondOpinion") return void secondOpinion(args[0], args[1], args[2].provider, args[2].model || "its default model");
     if (method === "sendSecondOpinion") return sentBack(args[0]);
